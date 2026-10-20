@@ -4,7 +4,7 @@ import { supabaseConfigured } from '@/lib/supabase/client';
 import { parseRows, reportLoadError } from './parse';
 import { contentClient } from './source';
 
-// The FAQ (Admin v2 U7, migration 0096): the ONE loader behind two things that must never
+// The FAQ (Admin v2 U7, migration 0098): the ONE loader behind two things that must never
 // disagree, the Contact page's FAQ band (FaqAccordion.astro, handed these rows as route
 // data) and the FAQPage JSON-LD in its head (ContactPage.astro builds it from the SAME
 // array). Structured data that describes questions the page does not visibly contain is a

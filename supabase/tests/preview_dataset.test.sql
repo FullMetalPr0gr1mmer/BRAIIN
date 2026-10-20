@@ -12,7 +12,7 @@
 --   2. the CMS roles read their tenant's pending changes (content_drafts); a `sales` claim
 --      and another tenant read none, and anon holds no privilege;
 --   3. anon's column grants on testimonials, media_assets, disciplines, service_cases and
---      faq_items (0096) equal the literal in _anon_columns() below, and the other 17 tables are granted to
+--      faq_items (0098) equal the literal in _anon_columns() below, and the other 17 tables are granted to
 --      anon whole; staff also read _dataset_only_columns() (a quote's consent record);
 --   4. the column defaults a pending create starts from equal _create_defaults() below;
 --   5. the policies that apply to an anon SELECT on each table equal _anon_policies() below

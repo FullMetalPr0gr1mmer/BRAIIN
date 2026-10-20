@@ -8,7 +8,7 @@ import {
   FaqTextSchema,
 } from '@schemas/faq';
 
-// The FAQ (Admin v2 U7, migration 0096): the write schema the admin API validates with
+// The FAQ (Admin v2 U7, migration 0098): the write schema the admin API validates with
 // (the database CHECK app.faq_text_ok states the same rules, proven in
 // supabase/tests/rls_faq_items.test.sql) and the ONE public loader, getFaq, that feeds the
 // Contact page's band and its FAQPage JSON-LD (tests/lib/contactPage.spec.ts holds the route
@@ -85,7 +85,7 @@ describe('the FAQ write schema (and its CHECK twin, app.faq_text_ok)', () => {
   });
 
   it('the migration states the same rules as a CHECK (the limits and the control range)', () => {
-    const sql = readFileSync('supabase/migrations/0096_faq_items.sql', 'utf8');
+    const sql = readFileSync('supabase/migrations/0098_faq_items.sql', 'utf8');
     expect(sql).toContain('check (app.faq_text_ok(question, 200))');
     expect(sql).toContain('check (app.faq_text_ok(answer, 1200))');
     expect(sql).toContain("v.x ~ '[\\u0001-\\u001F\\u007F-\\u009F]'");

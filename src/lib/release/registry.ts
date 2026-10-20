@@ -434,7 +434,7 @@ export const RELEASE_REGISTRY: Readonly<Record<ReleaseEntityType, RegistryEntry>
           : ['nav:all'],
     tagParent: { entityType: 'page', column: 'page_id' },
   }),
-  // The FAQ (Admin v2 U7, 0096): the Contact page's band and its FAQPage, both tagged
+  // The FAQ (Admin v2 U7, 0098): the Contact page's band and its FAQPage, both tagged
   // faq:all on the contact routes (CONTACT_CACHE_ENTITIES).
   faq_item: fromResource('faq_item', faqResource, {
     label: labelFrom(['question'], 'Question'),

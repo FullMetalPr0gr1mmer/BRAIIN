@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
--- 0096 — The FAQ moves into the database: public.faq_items (Admin v2 U7, slice U7a of the
+-- 0098 — The FAQ moves into the database: public.faq_items (Admin v2 U7, slice U7a of the
 -- folded U7 PR). Forward-only and EXPAND only: one new table, one new CHECK helper, the
 -- scheduled publisher restated with the table added, one new help guide. Nothing that exists
 -- changes shape.
@@ -109,7 +109,7 @@ create index if not exists faq_items_scheduled_idx
 alter table public.faq_items enable row level security;
 alter table public.faq_items force row level security;
 comment on table public.faq_items is
-  'The FAQ (Admin v2 U7, 0096): bilingual plain-text questions and answers. One loader '
+  'The FAQ (Admin v2 U7, 0098): bilingual plain-text questions and answers. One loader '
   '(src/lib/data/faq.ts getFaq) feeds both the Contact page''s FAQ band and its FAQPage '
   'JSON-LD, so the two never disagree.';
 
@@ -332,7 +332,7 @@ begin
   -- ---- 1. RLS enabled and forced --------------------------------------------------------
   if not (select relrowsecurity and relforcerowsecurity from pg_class
            where oid = 'public.faq_items'::regclass) then
-    raise exception '0096: public.faq_items is not ENABLE + FORCE row level security';
+    raise exception '0098: public.faq_items is not ENABLE + FORCE row level security';
   end if;
 
   -- ---- 2. The exact policy set ----------------------------------------------------------
@@ -345,7 +345,7 @@ begin
     into v_got
     from pg_policies where schemaname = 'public' and tablename = 'faq_items';
   if v_got is distinct from v_want then
-    raise exception '0096: faq_items policies are %, expected %', v_got, v_want;
+    raise exception '0098: faq_items policies are %, expected %', v_got, v_want;
   end if;
 
   -- ---- 3. The tenant predicate is the first conjunct of every USING and WITH CHECK -------
@@ -356,7 +356,7 @@ begin
           or (with_check is not null and with_check !~ v_tenant_first)
           or coalesce(qual, with_check) is null);
   if v_bad is not null then
-    raise exception '0096: faq_items policies that do not lead with the tenant predicate: %', v_bad;
+    raise exception '0098: faq_items policies that do not lead with the tenant predicate: %', v_bad;
   end if;
 
   -- ---- 4. Privileges, exactly ---------------------------------------------------------------
@@ -368,13 +368,13 @@ begin
        or (case when current_setting('server_version_num')::int >= 170000
                 then has_table_privilege(r::name, 'public.faq_items', 'maintain')
                 else false end) then
-      raise exception '0096: % holds a table privilege on public.faq_items', r;
+      raise exception '0098: % holds a table privilege on public.faq_items', r;
     end if;
   end loop;
   foreach r in array array['authenticated', 'service_role'] loop
     foreach pr in array array['select', 'insert', 'update', 'delete'] loop
       if not has_table_privilege(r::name, 'public.faq_items', pr) then
-        raise exception '0096: % lacks % on public.faq_items', r, pr;
+        raise exception '0098: % lacks % on public.faq_items', r, pr;
       end if;
     end loop;
     if has_table_privilege(r::name, 'public.faq_items', 'truncate, references, trigger')
@@ -383,7 +383,7 @@ begin
        or (case when current_setting('server_version_num')::int >= 170000
                 then has_table_privilege(r::name, 'public.faq_items', 'maintain')
                 else false end) then
-      raise exception '0096: % holds TRUNCATE, REFERENCES, TRIGGER or MAINTAIN on public.faq_items', r;
+      raise exception '0098: % holds TRUNCATE, REFERENCES, TRIGGER or MAINTAIN on public.faq_items', r;
     end if;
   end loop;
   -- Column level: anon SELECTs exactly the six columns and nothing else (no INSERT, UPDATE
@@ -394,11 +394,11 @@ begin
    where a.attrelid = 'public.faq_items'::regclass and a.attnum > 0 and not a.attisdropped
      and has_column_privilege('anon', a.attrelid, a.attnum, 'select');
   if v_got is distinct from array['answer', 'id', 'question', 'sort_order', 'status', 'tenant_id'] then
-    raise exception '0096: anon''s SELECT columns on faq_items are %', v_got;
+    raise exception '0098: anon''s SELECT columns on faq_items are %', v_got;
   end if;
   if has_any_column_privilege('anon', 'public.faq_items', 'insert, update, references')
      or has_any_column_privilege('public', 'public.faq_items', 'select, insert, update, references') then
-    raise exception '0096: anon or PUBLIC holds a column privilege beyond anon''s SELECT';
+    raise exception '0098: anon or PUBLIC holds a column privilege beyond anon''s SELECT';
   end if;
   select string_agg(format('%s.%s', g.grantee::regrole, a.attname), ', ') into v_bad
     from pg_attribute a
@@ -407,7 +407,7 @@ begin
      and a.attacl is not null
      and g.grantee in ('authenticated'::regrole, 'service_role'::regrole);
   if v_bad is not null then
-    raise exception '0096: column-level grants to authenticated or service_role: %', v_bad;
+    raise exception '0098: column-level grants to authenticated or service_role: %', v_bad;
   end if;
 
   -- ---- 5. The triggers: exactly these six, with their functions and timing ----------------
@@ -424,7 +424,7 @@ begin
     'faq_items_updated_at 19 app.tg_set_updated_at()',
     'faq_items_version 19 app.tg_bump_version()'];
   if v_got is distinct from v_want then
-    raise exception '0096: faq_items triggers are %, expected %', v_got, v_want;
+    raise exception '0098: faq_items triggers are %, expected %', v_got, v_want;
   end if;
   if not exists (select 1 from pg_trigger t
                   where t.tgrelid = 'public.faq_items'::regclass and t.tgname = 'faq_items_snapshot'
@@ -435,7 +435,7 @@ begin
                        and t.tgargs = convert_to('faq_item', 'UTF8') || '\x00'::bytea
                                       || convert_to('id', 'UTF8') || '\x00'::bytea
                                       || '\x00'::bytea) then
-    raise exception '0096: the snapshot or the capture trigger has the wrong arguments';
+    raise exception '0098: the snapshot or the capture trigger has the wrong arguments';
   end if;
 
   -- ---- 6. The registry row, exactly, and its columns real ---------------------------------
@@ -448,7 +448,7 @@ begin
                     and e.deferred_columns = '{}' and e.unique_flags = '{}'
                     and e.exempt_columns = '{}' and e.apply_order = 10 and e.has_status
                     and e.publish_flag is null) then
-    raise exception '0096: the faq_item registry row is missing or differs';
+    raise exception '0098: the faq_item registry row is missing or differs';
   end if;
   select string_agg(c, ', ') into v_bad
     from app.release_entities e cross join unnest(e.columns) c
@@ -457,7 +457,7 @@ begin
                       where a.attrelid = 'public.faq_items'::regclass and a.attname = c
                         and a.attnum > 0 and not a.attisdropped);
   if v_bad is not null then
-    raise exception '0096: registry columns faq_items does not have: %', v_bad;
+    raise exception '0098: registry columns faq_items does not have: %', v_bad;
   end if;
 
   -- ---- 7. publish_scheduled: definer, search_path '', names faq_items, skips an armed
@@ -467,11 +467,11 @@ begin
                     and f.proconfig = array['search_path=""']
                     and f.prosrc ~ '''faq_items'''
                     and f.prosrc ~ 'not app\.releases_enabled\(tenant_id\)') then
-    raise exception '0096: app.publish_scheduled must be SECURITY DEFINER, search_path '''', name faq_items and skip armed tenants';
+    raise exception '0098: app.publish_scheduled must be SECURITY DEFINER, search_path '''', name faq_items and skip armed tenants';
   end if;
   foreach r in array array['public', 'anon', 'authenticated', 'service_role'] loop
     if has_function_privilege(r::name, 'app.publish_scheduled()', 'execute') then
-      raise exception '0096: % can execute app.publish_scheduled()', r;
+      raise exception '0098: % can execute app.publish_scheduled()', r;
     end if;
   end loop;
 
@@ -480,13 +480,13 @@ begin
                   where f.oid = 'app.faq_text_ok(jsonb, integer)'::regprocedure
                     and f.provolatile = 'i' and not f.prosecdef
                     and f.proconfig = array['search_path=""']) then
-    raise exception '0096: app.faq_text_ok must be IMMUTABLE, INVOKER, search_path ''''';
+    raise exception '0098: app.faq_text_ok must be IMMUTABLE, INVOKER, search_path ''''';
   end if;
   if not has_function_privilege('authenticated', 'app.faq_text_ok(jsonb, integer)', 'execute')
      or not has_function_privilege('service_role', 'app.faq_text_ok(jsonb, integer)', 'execute')
      or has_function_privilege('anon', 'app.faq_text_ok(jsonb, integer)', 'execute')
      or has_function_privilege('public', 'app.faq_text_ok(jsonb, integer)', 'execute') then
-    raise exception '0096: app.faq_text_ok must be executable by authenticated and service_role only';
+    raise exception '0098: app.faq_text_ok must be executable by authenticated and service_role only';
   end if;
   -- And it says what it means (a CHECK that admits everything would pass every test above).
   if not app.faq_text_ok('{"en":"Q","ar":"س"}', 200)
@@ -498,7 +498,7 @@ begin
      or app.faq_text_ok('{"en":1,"ar":"س"}', 200)
      or app.faq_text_ok(jsonb_build_object('en', repeat('q', 201), 'ar', 'س'), 200)
      or app.faq_text_ok('"Q"', 200) then
-    raise exception '0096: app.faq_text_ok admits a shape it must refuse, or refuses a good one';
+    raise exception '0098: app.faq_text_ok admits a shape it must refuse, or refuses a good one';
   end if;
 
   -- ---- 9. The release guard: on faq_items, first among its BEFORE row triggers, and still
@@ -515,19 +515,19 @@ begin
              and tg.tgtype & 1 = 1 and tg.tgtype & 2 = 2
            order by tg.tgname collate "C" limit 1) is distinct from e.table_name || '__release_guard';
   if v_bad is not null then
-    raise exception '0096: registry tables without exactly one guard firing first: %', v_bad;
+    raise exception '0098: registry tables without exactly one guard firing first: %', v_bad;
   end if;
 
   -- ---- 10. Releases are still off everywhere (0038, 0051, 0062, 0066) ----------------------
   if exists (select 1 from app.release_tenants) then
-    raise exception '0096: releases must stay switched off (app.release_tenants is not empty)';
+    raise exception '0098: releases must stay switched off (app.release_tenants is not empty)';
   end if;
 
   -- ---- 11. The guide: in the catalog at revision 1 (a new guide), and every tenant holds it,
   -- field for field as the catalog renders it -----------------------------------------------
   if not exists (select 1 from app.help_guide_catalog c
                   where c.slug = 'collections-and-faq' and c.revision = 1 and c.sort_order = 45) then
-    raise exception '0096: the collections-and-faq guide is not in the catalog at revision 1, place 45';
+    raise exception '0098: the collections-and-faq guide is not in the catalog at revision 1, place 45';
   end if;
   select string_agg(t.id::text, ', ') into v_bad
     from public.tenants t
@@ -540,6 +540,6 @@ begin
         and h.screens = c.screens and h.caps = c.caps and h.title = c.title
         and h.title_ar = c.title_ar and h.body = c.body);
   if v_bad is not null then
-    raise exception '0096: tenants without the collections-and-faq guide as the catalog holds it: %', v_bad;
+    raise exception '0098: tenants without the collections-and-faq guide as the catalog holds it: %', v_bad;
   end if;
 end $$;

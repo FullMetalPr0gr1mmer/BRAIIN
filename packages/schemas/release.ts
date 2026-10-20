@@ -32,7 +32,7 @@ export const RELEASE_ENTITY_TYPES = [
   'redirect',
   // Admin v2 U14a (0057): who can see each page.
   'page_visibility',
-  // Admin v2 U7 (0096): the FAQ.
+  // Admin v2 U7 (0098): the FAQ.
   'faq_item',
 ] as const;
 export type ReleaseEntityType = (typeof RELEASE_ENTITY_TYPES)[number];

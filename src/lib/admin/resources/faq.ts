@@ -10,7 +10,7 @@ import {
   type Input,
 } from './shared';
 
-// The FAQ (Admin v2 U7, migration 0096): the questions on the Contact page and, word for
+// The FAQ (Admin v2 U7, migration 0098): the questions on the Contact page and, word for
 // word, in its FAQPage JSON-LD. Contact-page content, so pages.write writes it (D2: no new
 // capability; its holders are content.publish's, so a writer also publishes), and
 // content.archiveDelete (the kernel's default) archives and deletes it. The shape rules

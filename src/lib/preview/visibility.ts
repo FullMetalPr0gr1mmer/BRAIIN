@@ -87,7 +87,7 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
     'published_at',
     'updated_at',
   ],
-  // 0096 (Admin v2 U7): never the version, the schedule, the publish date or the actors.
+  // 0098 (Admin v2 U7): never the version, the schedule, the publish date or the actors.
   faq_items: ['id', 'tenant_id', 'question', 'answer', 'status', 'sort_order'],
   // 0028: never is_placeholder, the schedule, version or the actors.
   service_cases: [
@@ -407,7 +407,7 @@ export function createMirror(data: MirrorData): Mirror {
         return published(row) && visibleById('services', row['service_id']);
       // 0028 disciplines_read; 0001 portfolio_read, blog_read, pages_read,
       // team_members_read; 0005 certifications_read, statistics_read; 0021
-      // testimonials_read; 0096 faq_items_read: published.
+      // testimonials_read; 0098 faq_items_read: published.
       case 'faq_items':
       case 'disciplines':
       case 'portfolio':

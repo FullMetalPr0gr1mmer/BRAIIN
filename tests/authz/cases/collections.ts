@@ -1,7 +1,7 @@
 import { UUID, VALID_BILINGUAL, type Case } from '../harness';
 
 // Collections: clients, testimonials, team, numbers and certifications (UI v2 content
-// model, 0020–0025), and the FAQ (Admin v2 U7, 0096: pages.write, Contact-page content).
+// model, 0020–0025), and the FAQ (Admin v2 U7, 0098: pages.write, Contact-page content).
 // Each is authored by Content Creator; archiving and deleting are Admin only.
 
 export const cases: readonly Case[] = [
