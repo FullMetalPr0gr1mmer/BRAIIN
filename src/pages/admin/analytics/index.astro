@@ -166,11 +166,9 @@ const rangeHref = (days: number) => statsHref(PATH, url, { [RANGE_PARAM]: String
             )}
           </StatsConversions>
         )}
-        {
-          audience && (
-            <StatsAudience summary={audience.summary} hours={audience.hours} zone={studioTz} />
-          )
-        }
+        {audience && (
+          <StatsAudience summary={audience.summary} hours={audience.hours} zone={studioTz} />
+        )}
         {realtime && <AdminRealtime client:load initial={realtime} tz={studioTz} />}
       </>
     )

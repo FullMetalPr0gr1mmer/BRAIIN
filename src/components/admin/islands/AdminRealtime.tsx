@@ -6,7 +6,10 @@
 import Realtime, { type RealtimeProps } from '@/components/admin/screens/realtime/Realtime';
 import { ClockProvider } from '@/components/admin/kit/clock';
 
-export default function AdminRealtime({ tz, ...props }: RealtimeProps & { tz?: string | undefined }) {
+export default function AdminRealtime({
+  tz,
+  ...props
+}: RealtimeProps & { tz?: string | undefined }) {
   return (
     <ClockProvider tz={tz}>
       <Realtime {...props} />

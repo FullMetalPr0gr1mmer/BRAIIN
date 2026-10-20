@@ -353,7 +353,11 @@ describe('StatsAudience', () => {
   const hours = Array.from({ length: 24 }, (_, h) => (h === 21 ? 50 : h === 14 ? 40 : h));
 
   it('draws 24 hours, Riyadh time, its table hour for hour, and names the busiest', async () => {
-    const html = await render(StatsAudience, { summary: summary(null), hours, zone: 'Asia/Riyadh' });
+    const html = await render(StatsAudience, {
+      summary: summary(null),
+      hours,
+      zone: 'Asia/Riyadh',
+    });
     const fig = figure(html, 'stats-hours');
     expect(tableCells(fig)).toEqual(hours.map((v, h) => [String(h), formatNumber(v)]));
     expect(html).toContain('Riyadh time. Good to know when to post and when to answer.');
