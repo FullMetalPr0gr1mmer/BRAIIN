@@ -71,6 +71,9 @@ export const RELEASE_LINKS: Readonly<Partial<Record<ReleaseEntityType, readonly 
     link('author_id', 'team_members', 'authorId', 'set null'),
     link('category_id', 'categories', 'categoryId', 'set null'),
   ],
+  // U10's share images (0073: composite keys to the tenant's media, ON DELETE RESTRICT).
+  entity_seo: [media('og_media_id', 'ogMediaId')],
+  seo_defaults: [media('default_og_media_id', 'defaultOgMediaId')],
   page_section: [link('page_id', 'pages', 'pageId', 'cascade')],
   nav_item: [link('parent_id', 'navigation', 'parentId', 'cascade')],
   page_visibility: [
