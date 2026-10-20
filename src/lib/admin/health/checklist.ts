@@ -1,7 +1,7 @@
 import type { Role } from '@/lib/auth/types';
 import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
 import { reachableHrefs } from '../nav';
-import { formatDate } from '../relTime';
+import { clockFor } from '../relTime';
 import { THRESHOLDS, daysUntil } from '@/lib/health/thresholds';
 import type { ProbeReport } from './probes';
 import { securityFacts } from './security';
@@ -81,6 +81,8 @@ export interface HealthContext {
    */
   probes?: ProbeReport | null | undefined;
   now: number;
+  /** The studio's time zone (Admin v2 U9): the zone the rows' dates are printed in. */
+  tz?: string | undefined;
 }
 
 export interface HealthRule {
@@ -159,6 +161,7 @@ const days = (n: number) => `${n} ${plural(n, 'day', 'days')}`;
  * visible. No fix link: renewal is at the registrar, not in this admin.
  */
 function domainRule(ctx: HealthContext): CheckOutcome {
+  const { formatDate } = clockFor(ctx.tz);
   if (!ctx.probes) return unread('Domain renewal');
   const probe = ctx.probes.domain;
   if (!probe) {
@@ -234,6 +237,7 @@ function domainRule(ctx: HealthContext): CheckOutcome {
  * one; otherwise Cloudflare issues and renews it, and the row says so rather than guess.
  */
 function certificateRule(ctx: HealthContext): CheckOutcome {
+  const { formatDate } = clockFor(ctx.tz);
   if (!ctx.probes) return unread('Certificate');
   const probe = ctx.probes.certificate;
   const byCloudflare = 'Certificates are issued and renewed by Cloudflare';
@@ -271,9 +275,9 @@ function certificateRule(ctx: HealthContext): CheckOutcome {
       };
 }
 
-function backupLine(fact: BackupFact): string {
+function backupLine(fact: BackupFact, tz: string | undefined): string {
   const outcome = fact.status === 'ok' ? 'complete' : 'partial';
-  return `Last backup export ${formatDate(fact.at)}, ${outcome}`;
+  return `Last backup export ${clockFor(tz).formatDate(fact.at)}, ${outcome}`;
 }
 
 export const HEALTH_RULES: readonly HealthRule[] = [
@@ -450,12 +454,12 @@ export const HEALTH_RULES: readonly HealthRule[] = [
     group: 'Backups',
     title: 'Last backup export',
     needs: ['audit.view'],
-    evaluate: ({ lastBackup }) => {
+    evaluate: ({ lastBackup, tz }) => {
       if (lastBackup === undefined) return unread('Last backup export');
       return lastBackup
         ? {
             state: 'info',
-            text: backupLine(lastBackup),
+            text: backupLine(lastBackup, tz),
             detail: `${lastBackup.rows.toLocaleString('en-GB')} rows. Backups are exported by hand until they are scheduled.`,
           }
         : {

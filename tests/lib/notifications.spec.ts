@@ -6,7 +6,7 @@ import { NOTIFICATION_KINDS } from '@schemas/adminPrefs';
 import type { MaintenanceState } from '@/lib/http/maintenance';
 import { NOTIFICATION_SOURCES, loadNotifications } from '@/lib/admin/notifications';
 import { MAX_ITEMS, WINDOW_DAYS } from '@/lib/admin/notifications/types';
-import { riyadhDay } from '@/lib/admin/notifications/scheduled';
+import { studioDay as riyadhDay } from '@/lib/admin/notifications/scheduled';
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 

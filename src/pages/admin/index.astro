@@ -1,4 +1,5 @@
 ---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 import { env } from 'cloudflare:workers';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import AdminLayout from '@/layouts/AdminLayout.astro';
@@ -20,6 +21,9 @@ import type { DashboardIslandProps } from '@/components/admin/screens/dashboard/
 
 export const prerender = false;
 
+// The studio's time zone (Admin v2 U9): the greeting's hour, the chart's days.
+const studioTz = await studioTimeZone(Astro.locals);
+
 // The dashboard (Admin v2 U1, docs/admin-v2/ui.md §4 "Dashboard", AV-09): server-rendered and
 // complete without JS. The greeting in the studio's time zone, the banners, then the board
 // from the widget registry (src/lib/admin/dashboard): the person's layout, else their role's
@@ -37,7 +41,7 @@ let maintenance: MaintenanceState | null = null;
 let displayName: string | null = null;
 if (session && sb) {
   const [loaded, state, profile] = await Promise.all([
-    loadDashboard({ sb, auth: session, now, siteUrl: PUBLIC_SITE_URL }),
+    loadDashboard({ sb, auth: session, now, siteUrl: PUBLIC_SITE_URL, tz: studioTz }),
     getMaintenanceState(env).catch(() => null),
     Promise.resolve(
       sb.from('profiles').select('display_name').eq('id', session.userId).maybeSingle(),
@@ -50,7 +54,7 @@ if (session && sb) {
 }
 const preload: ShellPreload = { maintenance, displayName };
 
-const title = session ? greeting(now, displayName, session.email) : 'Dashboard';
+const title = session ? greeting(now, displayName, session.email, studioTz) : 'Dashboard';
 const shown = dashboard ? shownWidgets(dashboard.layout) : [];
 
 const island: DashboardIslandProps | null =

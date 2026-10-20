@@ -24,6 +24,23 @@ export interface Identity {
   foundedYear: number | null;
   socials: SocialLink[];
   acceptingApplications: boolean;
+  // Admin v2 U9 (0075). Each is null (or today's footer) until the owner sets it.
+  /** The tagline, both languages: Organization `slogan`, the manifest's description. */
+  tagline: { en: string; ar: string } | null;
+  phoneE164: string | null;
+  phoneDisplay: string | null;
+  /** A Google Maps or Apple Maps link (allow-listed): Organization `hasMap`. */
+  mapUrl: string | null;
+  /** The icons' media ids; the icons themselves are read apart (getSiteIcons). */
+  faviconMediaId: string | null;
+  appIconMediaId: string | null;
+  /** The footer settings E6 renders; until then the footer is today's whatever these say. */
+  footer: {
+    copyright: { en: string; ar: string } | null;
+    style: 'light' | 'dark';
+    showEmail: boolean;
+    showSocial: boolean;
+  };
 }
 
 export const IDENTITY_FALLBACK: Identity = {
@@ -41,14 +58,33 @@ export const IDENTITY_FALLBACK: Identity = {
       network: 'instagram',
       handle: '@braiinstatiion',
       url: 'https://instagram.com/braiinstatiion',
+      visible: true,
     },
     {
       network: 'linkedin',
       handle: '@braiin-statiion',
       url: 'https://linkedin.com/company/braiin-statiion',
+      visible: true,
     },
-    { network: 'behance', handle: '@braiinstatiion', url: 'https://behance.net/braiinstatiion' },
-    { network: 'youtube', handle: '@braiinstatiion', url: 'https://youtube.com/@braiinstatiion' },
+    {
+      network: 'behance',
+      handle: '@braiinstatiion',
+      url: 'https://behance.net/braiinstatiion',
+      visible: true,
+    },
+    {
+      network: 'youtube',
+      handle: '@braiinstatiion',
+      url: 'https://youtube.com/@braiinstatiion',
+      visible: true,
+    },
   ],
   acceptingApplications: false,
+  tagline: null,
+  phoneE164: null,
+  phoneDisplay: null,
+  mapUrl: null,
+  faviconMediaId: null,
+  appIconMediaId: null,
+  footer: { copyright: null, style: 'light', showEmail: true, showSocial: false },
 };

@@ -1,4 +1,5 @@
 ---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminLeadsList from '@/components/admin/islands/AdminLeadsList';
 import Icon from '@/components/admin/ui/Icon.astro';
@@ -39,19 +40,21 @@ const [frame, initial] =
   allowed && session && sb
     ? await Promise.all([
         readLeadsFrame(sb, session).catch(() => null),
-        readLeadsListInitial(sb, session, filters, now),
+        readLeadsListInitial(sb, session, filters, now, studioTz),
       ])
     : [null, null];
 const summary = initial?.summary ?? null;
 const subtitle = summary
   ? leadsSubline(summary, filters.range)
   : 'Every inquiry from the site’s forms, and the ones added by hand.';
+// The studio's time zone (Admin v2 U9): the island prints its dates in it, server and browser.
+const studioTz = await studioTimeZone(Astro.locals);
 ---
 
 <AdminLayout title="Leads" subtitle={subtitle} styles={['leads.css']}>
   {
     allowed && permissions.canExport && (
-      <a slot="actions" class="btn" href={exportHrefOf(filters, now)} data-lead-export>
+      <a slot="actions" class="btn" href={exportHrefOf(filters, now, studioTz)} data-lead-export>
         <Icon name="download" size={16} />
         Export CSV<span class="visually-hidden"> of the leads these filters show</span>
       </a>
@@ -75,6 +78,7 @@ const subtitle = summary
     ) : (
       <AdminLeadsList
         client:load
+        tz={studioTz}
         frame={frame}
         initial={{ summary, page: initial?.page ?? null }}
         filters={filters}

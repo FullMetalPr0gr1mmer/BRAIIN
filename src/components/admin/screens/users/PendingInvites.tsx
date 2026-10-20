@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { ROLE_LABELS } from '@/lib/authz/capLabels';
-import { relTime } from '@/lib/admin/relTime';
+import { useClock } from '@/components/admin/kit/clock';
 import {
   INVITES_NOT_SET_UP,
   INVITE_LINK_LIFETIME,
@@ -39,6 +39,7 @@ export default function PendingInvites({
   onInvite,
   onChanged,
 }: PendingInvitesProps) {
+  const { relTime } = useClock();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [cancelling, setCancelling] = useState<UserRow | null>(null);

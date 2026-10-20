@@ -1,7 +1,7 @@
 import { can } from '@/lib/authz/matrix';
 import { PROBE_COLUMNS } from '@schemas/healthProbe';
 import { THRESHOLDS, daysUntil } from '@/lib/health/thresholds';
-import { formatDate, formatTime } from '../relTime';
+import { clockFor } from '../relTime';
 import { reportOf } from '../health/probes';
 import { PER_SOURCE, WINDOW_DAYS, type NotificationSource, type SourceItem } from './types';
 
@@ -31,7 +31,8 @@ const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 export const health: NotificationSource = {
   kind: 'health',
   visible: (role) => can(role, 'siteHealth.view') === 'full',
-  async load({ sb, auth, now }) {
+  async load({ sb, auth, now, tz }) {
+    const { formatDate, formatTime } = clockFor(tz);
     const { data, error } = await sb
       .from('health_probes')
       .select(PROBE_COLUMNS)

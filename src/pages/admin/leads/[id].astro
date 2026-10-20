@@ -1,4 +1,5 @@
 ---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminLeadDetail from '@/components/admin/islands/AdminLeadDetail';
 import EmptyState from '@/components/admin/ui/EmptyState.astro';
@@ -6,7 +7,7 @@ import Icon from '@/components/admin/ui/Icon.astro';
 import Refused from '@/components/admin/ui/Refused.astro';
 import { can } from '@/lib/authz/matrix';
 import { NotFoundError } from '@/lib/admin/errors';
-import { formatDate } from '@/lib/admin/relTime';
+import { clockFor } from '@/lib/admin/relTime';
 import {
   readLeadDetail,
   readPeople,
@@ -19,6 +20,9 @@ import { firstPage, parseLeadFilters, withLeadFilters } from '@/lib/crm/leadUrl'
 import { interestOf } from '@/lib/crm/leadView';
 
 export const prerender = false;
+
+// The studio's time zone (Admin v2 U9): the page and the island print dates in it.
+const studioTz = await studioTimeZone(Astro.locals);
 
 // One lead (Admin v2 C4b, crm.md §11 screen 3). The tab and the history say "Lead"; the h1 is
 // the person's name, in its own direction (names stay out of titles, crm.md §11). Back,
@@ -60,7 +64,7 @@ if (allowed && session && sb) {
   } else {
     try {
       [detail, stages, people] = await Promise.all([
-        readLeadDetail(sb, session, id, filters, now, permissions.canEditServices),
+        readLeadDetail(sb, session, id, filters, now, permissions.canEditServices, studioTz),
         readStages(sb, session),
         readPeople(sb, session),
       ]);
@@ -105,7 +109,7 @@ const subtitle = lead
         },
         '',
       ) || null,
-      typeof lead.created_at === 'string' ? `received ${formatDate(lead.created_at)}` : null,
+      typeof lead.created_at === 'string' ? `received ${clockFor(studioTz).formatDate(lead.created_at)}` : null,
     ]
       .filter(Boolean)
       .join(' · ')
@@ -173,6 +177,7 @@ const me = session
     ) : (
       <AdminLeadDetail
         client:load
+        tz={studioTz}
         {...detail}
         stages={stages}
         people={people}

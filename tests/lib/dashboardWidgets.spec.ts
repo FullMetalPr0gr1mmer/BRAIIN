@@ -4,7 +4,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { WIDGET_IDS, type WidgetId } from '@schemas/dashboard';
 import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
 import { CAPABILITIES, ROLE_CAPS, type Access, type Capability } from '@/lib/authz/matrix';
-import { loadDashboard, perRiyadhDay, riyadhDate } from '@/lib/admin/dashboard/loaders';
+import {
+  loadDashboard,
+  perStudioDay as perRiyadhDay,
+  studioDate as riyadhDate,
+} from '@/lib/admin/dashboard/loaders';
 import {
   DEFAULT_LAYOUTS,
   WIDGETS,

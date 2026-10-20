@@ -1,4 +1,5 @@
 ---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminLeadsBoard from '@/components/admin/islands/AdminLeadsBoard';
 import Icon from '@/components/admin/ui/Icon.astro';
@@ -35,9 +36,11 @@ const [frame, initial] =
   allowed && session && sb
     ? await Promise.all([
         readLeadsFrame(sb, session).catch(() => null),
-        readBoardInitial(sb, session, filters, now),
+        readBoardInitial(sb, session, filters, now, studioTz),
       ])
     : [null, null];
+// The studio's time zone (Admin v2 U9): the island prints its dates in it, server and browser.
+const studioTz = await studioTimeZone(Astro.locals);
 ---
 
 <AdminLayout
@@ -63,6 +66,7 @@ const [frame, initial] =
     ) : (
       <AdminLeadsBoard
         client:load
+        tz={studioTz}
         frame={frame}
         initial={initial}
         filters={filters}

@@ -173,6 +173,7 @@ export async function loadHealthReport(
   sb: SupabaseClient,
   auth: AuthContext,
   now: number = Date.now(),
+  tz?: string,
 ): Promise<HealthReport> {
   const may = (cap: Parameters<typeof can>[1]) => can(auth.role, cap) === 'full';
   const mayHealth = may('siteHealth.view');
@@ -193,6 +194,7 @@ export async function loadHealthReport(
     lastBackup,
     probes,
     now,
+    tz,
   });
   const uptime = probes === undefined ? null : uptimeView(probes);
   const score = healthScore({
@@ -227,8 +229,9 @@ export async function loadHealthSummary(
   sb: SupabaseClient,
   auth: AuthContext,
   now: number = Date.now(),
+  tz?: string,
 ): Promise<HealthSummary> {
-  const report = await loadHealthReport(sb, auth, now);
+  const report = await loadHealthReport(sb, auth, now, tz);
   const failing = report.checks.filter((check) => check.state === 'fail');
   return {
     score: report.score,

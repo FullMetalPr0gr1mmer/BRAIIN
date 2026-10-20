@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import Avatar from '@/components/admin/kit/Avatar';
 import Icon from '@/components/admin/kit/Icon';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
-import { formatDateTime, isoOf, relTime } from '@/lib/admin/relTime';
+import { isoOf } from '@/lib/admin/relTime';
+import { useClock } from '@/components/admin/kit/clock';
 import type { LeadsFrame, StageView } from '@/lib/crm/leadPage';
 import type { BoardColumn, LeadCard } from '@/lib/crm/leadReads';
 import { boardFilters, boardQueryOf, withLeadFilters, type LeadFilters } from '@/lib/crm/leadUrl';
@@ -120,6 +121,7 @@ export default function LeadsBoard({
   permissions,
   now: renderedAt,
 }: LeadsBoardProps) {
+  const { formatDateTime, relTime, zone } = useClock();
   const { stages, people, disciplines } = frame;
   // Only what the toolbar shows: the address and the cards' links never carry a chip, sort or
   // page the board has no control for (boardFilters).
@@ -155,7 +157,7 @@ export default function LeadsBoard({
     reading.current = controller;
     adminFetch<{ columns: BoardColumn[] }>('/api/admin/leads/board', {
       method: 'POST',
-      body: { ...boardQueryOf(filters, new Date()), ...(q ? { q } : {}) },
+      body: { ...boardQueryOf(filters, new Date(), undefined, zone), ...(q ? { q } : {}) },
       signal: controller.signal,
     })
       .then((answer) => {

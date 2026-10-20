@@ -15,7 +15,7 @@ import {
   createDashboardReads,
   widgetLoaders,
 } from '@/lib/admin/dashboard/loaders';
-import { ADMIN_TIME_ZONE } from '@/lib/admin/relTime';
+import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
 import type { AuthContext } from '@/lib/auth/types';
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
@@ -79,10 +79,13 @@ describe('the attention kinds (latest public.dashboard_attention)', () => {
     }
   });
 
-  it("the Riyadh day it uses is the admin's time zone", () => {
+  // The view's day is still Riyadh's, written into its SQL (0066): it does not read the studio's
+  // zone (site_settings.timezone, Admin v2 U9) yet. A follow-up for the view's next restatement
+  // (app.studio_time_zone(tenant), 0075); until then the default zone, which this holds.
+  it("the Riyadh day it uses is the admin's default time zone", () => {
     const zones = [...text.matchAll(/at time zone '([^']+)'/g)].map((m) => m[1]);
     expect(zones.length).toBeGreaterThan(0);
-    for (const zone of zones) expect(zone).toBe(ADMIN_TIME_ZONE);
+    for (const zone of zones) expect(zone).toBe(DEFAULT_TIME_ZONE);
   });
 
   it('its thresholds are the shared constants (5 minutes, 7 days, 30 days)', () => {

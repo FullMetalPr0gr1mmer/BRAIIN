@@ -1,6 +1,6 @@
 import Icon from '@/components/admin/kit/Icon';
 import { Badge } from '@/components/admin/kit/StatusBadge';
-import { formatDate } from '@/lib/admin/relTime';
+import { clockFor } from '@/lib/admin/relTime';
 import { MODE_COPY } from '@/lib/admin/visibilityCopy';
 import type { IconName } from '@/lib/admin/icons';
 import type { BadgeTone } from '@/lib/admin/tones';
@@ -27,7 +27,10 @@ const ICON: Record<VisibilityMode, IconName> = {
 
 /** "until 8 Nov", "from 1 Nov", "1 Nov to 8 Nov": the window as the admin reads it. */
 export function windowText(hideFrom: string | null, showOn: string | null): string | null {
-  // A Riyadh day at noon in Riyadh, so every reader's clock prints the same day.
+  // Page visibility's days are Riyadh days (U14a: packages/schemas/visibility.ts stores
+  // their midnights at +03:00), not the studio's zone: printed on Riyadh's clock, at noon
+  // there, so the day is the one that was chosen whatever the studio's zone.
+  const { formatDate } = clockFor('Asia/Riyadh');
   const day = (d: string) => formatDate(`${d}T12:00:00+03:00`);
   if (hideFrom && showOn) return `${day(hideFrom)} to ${day(showOn)}`;
   if (showOn) return `until ${day(showOn)}`;

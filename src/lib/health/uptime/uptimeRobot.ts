@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { PROBE_CAPS, type Monitor, type MonitorStatus } from '@schemas/healthProbe';
+import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
 import { outboundJson, type OutboundOptions } from '@/lib/http/outbound';
+import { addDays, todayIn, zoneOffsetMs, zonedDayStart } from '@/lib/time/zone';
 import {
   UptimeProviderError,
   type UptimeIncident,
@@ -14,7 +16,8 @@ import {
 // in the URL:
 //
 //   custom_uptime_ratios=30-90          the 30- and 90-day uptime, "99.980-99.910"
-//   custom_uptime_ranges=<90 ranges>    one per Riyadh day, "<start>_<end>" in Unix seconds,
+//   custom_uptime_ranges=<90 ranges>    one per studio day (its zone, Admin v2 U9),
+//                                       "<start>_<end>" in Unix seconds,
 //                                       joined by "-"; the answer is one ratio per range
 //   logs=1&log_types=1&logs_limit=10    the 10 newest down events (type 1) per monitor
 //   response_times=1                    the time to first byte, averaged per 60 minutes over
@@ -36,8 +39,6 @@ const ENDPOINT = 'https://api.uptimerobot.com/v2/getMonitors';
 export const MONITOR_IDS = /^\d{1,12}(-\d{1,12}){0,4}$/;
 
 const DAY_MS = 86_400_000;
-/** Asia/Riyadh is UTC+3 all year (no daylight saving): the strip's days are the studio's. */
-const RIYADH_OFFSET_MS = 3 * 3_600_000;
 const STRIP_DAYS = PROBE_CAPS.days;
 const LOG_WINDOW_MS = 90 * DAY_MS;
 const RESPONSE_HOURS = PROBE_CAPS.responseTimes;
@@ -90,35 +91,51 @@ const PointSchema = z.object({ datetime: num, value: num });
 
 type RobotMonitor = z.infer<typeof MonitorSchema>;
 
-/** The start of the Riyadh day `back` days before `now`'s, in epoch ms. */
-function riyadhDayStart(now: Date, back: number): number {
-  const local = now.getTime() + RIYADH_OFFSET_MS;
-  return local - (local % DAY_MS) - back * DAY_MS - RIYADH_OFFSET_MS;
-}
-
-/** The Riyadh calendar day an instant falls in, YYYY-MM-DD. */
-export function riyadhDay(at: number): string {
-  return new Date(at + RIYADH_OFFSET_MS).toISOString().slice(0, 10);
-}
-
-/** The last 90 Riyadh days (oldest first) as [start, end) in ms; today's ends at `now`. */
-export function stripRanges(now: Date): { day: string; start: number; end: number }[] {
+/**
+ * The last 90 days of the studio's calendar (its zone, `site_settings.timezone`: Admin v2 U9),
+ * oldest first, as [start, end) in ms; today's ends at `now`.
+ *
+ * CPU (the cron has 10 ms): each Intl reading costs about 12 µs, so the days are not each
+ * asked of Intl. The zone's offset is read at both ends of the window; a listed zone changes
+ * its offset at most twice a year, months apart, so equal ends mean no change inside and every
+ * midnight is plain arithmetic. Otherwise (a window that holds London's or Cairo's change)
+ * each midnight is asked once.
+ */
+export function stripRanges(
+  now: Date,
+  tz: string = DEFAULT_TIME_ZONE,
+): { day: string; start: number; end: number }[] {
+  const today = todayIn(tz, now);
+  const days = Array.from({ length: STRIP_DAYS + 1 }, (_, i) =>
+    addDays(today, i - (STRIP_DAYS - 1)),
+  );
+  const first = Date.parse(`${days[0]}T00:00:00Z`);
+  const offsetNow = zoneOffsetMs(now.getTime(), tz);
+  const steady = zoneOffsetMs(first - offsetNow, tz) === offsetNow;
+  const startOf = (day: string) =>
+    steady ? Date.parse(`${day}T00:00:00Z`) - offsetNow : zonedDayStart(day, tz).getTime();
+  const starts = days.map(startOf);
   const out: { day: string; start: number; end: number }[] = [];
-  for (let back = STRIP_DAYS - 1; back >= 0; back -= 1) {
-    const start = riyadhDayStart(now, back);
-    out.push({ day: riyadhDay(start), start, end: Math.min(start + DAY_MS, now.getTime()) });
+  for (let i = 0; i < STRIP_DAYS; i += 1) {
+    const start = starts[i]!;
+    out.push({ day: days[i]!, start, end: Math.min(starts[i + 1]!, now.getTime()) });
   }
   return out;
 }
 
 /** The form body: the key, then the parameters above. Exported for the fixtures' test. */
-export function requestBody(key: string, ids: string | undefined, now: Date): URLSearchParams {
+export function requestBody(
+  key: string,
+  ids: string | undefined,
+  now: Date,
+  tz?: string,
+): URLSearchParams {
   const seconds = (ms: number) => String(Math.floor(ms / 1000));
   const body = new URLSearchParams({
     api_key: key,
     format: 'json',
     custom_uptime_ratios: '30-90',
-    custom_uptime_ranges: stripRanges(now)
+    custom_uptime_ranges: stripRanges(now, tz)
       .map((r) => `${seconds(r.start)}_${seconds(r.end)}`)
       .join('-'),
     logs: '1',
@@ -177,7 +194,12 @@ function monitorOf(m: RobotMonitor, siteHost: string | null): Monitor {
 const iso = (seconds: number) => new Date(seconds * 1000).toISOString();
 
 /** Normalises getMonitors' answer. Exported for the fixture tests. */
-export function readingOf(json: unknown, now: Date, siteUrl: string): UptimeReading {
+export function readingOf(
+  json: unknown,
+  now: Date,
+  siteUrl: string,
+  tz?: string,
+): UptimeReading {
   const top = ResponseSchema.safeParse(json);
   if (!top.success) throw new UptimeProviderError('shape');
   if (top.data.stat !== 'ok') throw new UptimeProviderError('api');
@@ -192,7 +214,7 @@ export function readingOf(json: unknown, now: Date, siteUrl: string): UptimeRead
 
   const ratios = live.map((m) => ratioList(m.custom_uptime_ratio));
   const ranges = live.map((m) => ratioList(m.custom_uptime_ranges));
-  const days = stripRanges(now).map((r, i) => ({
+  const days = stripRanges(now, tz).map((r, i) => ({
     day: r.day,
     ratio: lowest(ranges.map((list) => list[i])),
   }));
@@ -266,7 +288,7 @@ export interface UptimeRobotConfig {
 export function uptimeRobot(config: UptimeRobotConfig): UptimeProvider {
   return {
     name: 'UptimeRobot',
-    async read(now) {
+    async read(now, tz) {
       const ids = config.ids?.trim() || undefined;
       if (ids !== undefined && !MONITOR_IDS.test(ids)) throw new UptimeProviderError('config');
       const { json } = await outboundJson(
@@ -278,11 +300,11 @@ export function uptimeRobot(config: UptimeRobotConfig): UptimeProvider {
             'content-type': 'application/x-www-form-urlencoded',
             'cache-control': 'no-cache',
           },
-          body: requestBody(config.key, ids, now).toString(),
+          body: requestBody(config.key, ids, now, tz).toString(),
         },
         config.outbound,
       );
-      return readingOf(json, now, config.siteUrl);
+      return readingOf(json, now, config.siteUrl, tz);
     },
   };
 }

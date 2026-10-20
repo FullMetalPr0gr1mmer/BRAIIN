@@ -72,7 +72,7 @@ function backToLog(input: Parameters<typeof filterParams>[0], notice: 'limit' | 
 export const GET = defineAdminRoute({
   cap: 'export.csv',
   input: ActivityExportQuerySchema,
-  handler: async ({ auth, sb, input, request }) => {
+  handler: async ({ auth, sb, input, request, studioTimeZone }) => {
     assertCap(auth, 'audit.view', ['full']);
     // A plain-link GET with side effects (a limiter slot, two audit rows): never on another
     // site's say-so (src/lib/http/csrf.ts isSameSiteGet), and before anything is spent.
@@ -103,8 +103,9 @@ export const GET = defineAdminRoute({
     let rows: number;
     let truncated: boolean;
     try {
-      const read = await readActivityRows(sb, auth.tenantId, input, ACTIVITY_EXPORT_CAP);
-      const records = await toActivityRecords(sb, auth, read.rows);
+      const tz = await studioTimeZone();
+      const read = await readActivityRows(sb, auth.tenantId, input, ACTIVITY_EXPORT_CAP, tz);
+      const records = await toActivityRecords(sb, auth, read.rows, tz);
       // Built before the outcome row, so an `ok` outcome means the file exists.
       csv = toCsv(ACTIVITY_CSV_HEADER, records);
       rows = records.length;

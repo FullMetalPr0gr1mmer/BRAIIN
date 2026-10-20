@@ -154,12 +154,12 @@ export function boardFilters(filters: LeadFilters): LeadFilters {
 }
 
 /** When the range starts (lead_summary's and leads_list's `from`), or undefined: all time. */
-function rangeStart(filters: LeadFilters, now: Date): string | undefined {
-  return rangeToInstants(filters.range, now)?.from;
+function rangeStart(filters: LeadFilters, now: Date, tz?: string): string | undefined {
+  return rangeToInstants(filters.range, now, tz)?.from;
 }
 
 /** The filters every reader shares: whose, where from, which discipline, since when. */
-function shared(filters: LeadFilters, now: Date) {
+function shared(filters: LeadFilters, now: Date, tz?: string) {
   const out: {
     assigned?: LeadAssignedFilter;
     source?: LeadSource;
@@ -171,7 +171,7 @@ function shared(filters: LeadFilters, now: Date) {
   if (filters.source) out.source = filters.source;
   if (filters.channel) out.channel = filters.channel;
   if (filters.discipline) out.discipline = filters.discipline;
-  const from = rangeStart(filters, now);
+  const from = rangeStart(filters, now, tz);
   if (from) out.from = from;
   return out;
 }
@@ -188,10 +188,10 @@ function chipFilter(chip: LeadChip): { stage?: string; unread?: boolean; spam?: 
  * POST /api/admin/leads/query's body for these filters (the search is added by the island,
  * in the body, never from the address).
  */
-export function listQueryOf(filters: LeadFilters, now: Date) {
+export function listQueryOf(filters: LeadFilters, now: Date, tz?: string) {
   return {
     ...chipFilter(filters.chip),
-    ...shared(filters, now),
+    ...shared(filters, now, tz),
     sort: filters.sort,
     limit: LEADS_PAGE_SIZE,
     offset: (filters.page - 1) * LEADS_PAGE_SIZE,
@@ -199,21 +199,25 @@ export function listQueryOf(filters: LeadFilters, now: Date) {
 }
 
 /** public.lead_neighbours' filter: the list's, with no search and no page (decision D8). */
-export function neighboursQueryOf(filters: LeadFilters, now: Date) {
-  return { ...chipFilter(filters.chip), ...shared(filters, now), sort: filters.sort };
+export function neighboursQueryOf(filters: LeadFilters, now: Date, tz?: string) {
+  return { ...chipFilter(filters.chip), ...shared(filters, now, tz), sort: filters.sort };
 }
 
 /** The board's filter: every stage and no spam, so no chip, sort or page. */
-export function boardQueryOf(filters: LeadFilters, now: Date, perStage = 50) {
-  return { ...shared(filters, now), perStage };
+export function boardQueryOf(filters: LeadFilters, now: Date, perStage = 50, tz?: string) {
+  return { ...shared(filters, now, tz), perStage };
 }
 
 /**
  * The KPIs' range: from midnight N-1 days ago to now, and nothing else (the KPIs and the chips
  * follow the range only, decision D13). Empty for all time.
  */
-export function summaryQueryOf(filters: LeadFilters, now: Date): { from?: string; to?: string } {
-  const range = rangeToInstants(filters.range, now);
+export function summaryQueryOf(
+  filters: LeadFilters,
+  now: Date,
+  tz?: string,
+): { from?: string; to?: string } {
+  const range = rangeToInstants(filters.range, now, tz);
   return range ? { from: range.from, to: range.to } : {};
 }
 
@@ -221,10 +225,10 @@ export function summaryQueryOf(filters: LeadFilters, now: Date): { from?: string
  * The server export for the filters on screen (crm.md §11: "No client-side CSV"): a link to
  * GET /api/admin/leads/export with the list's filters in their string form. Never the search.
  */
-export function exportHrefOf(filters: LeadFilters, now: Date): string {
+export function exportHrefOf(filters: LeadFilters, now: Date, tz?: string): string {
   const params = new URLSearchParams();
   const { stage, unread, spam } = chipFilter(filters.chip);
-  const rest = shared(filters, now);
+  const rest = shared(filters, now, tz);
   if (rest.from) params.set('from', rest.from);
   if (stage) params.set('stage', stage);
   // The export leaves spam out unless asked, as the list does (src/lib/crm/exportRead.ts).

@@ -396,8 +396,10 @@ describe('the file', () => {
 
 describe('the studio clock, without Intl', () => {
   it('prints what relTime’s formatDateTime prints, across days, months and years', async () => {
-    const { riyadhDateTime } = await import('@/lib/admin/activityExport');
-    const { formatDateTime } = await import('@/lib/admin/relTime');
+    const { studioDateTimeWriter } = await import('@/lib/admin/activityExport');
+    const { clockFor } = await import('@/lib/admin/relTime');
+    const riyadhDateTime = studioDateTimeWriter('Asia/Riyadh');
+    const { formatDateTime } = clockFor('Asia/Riyadh');
     const start = Date.UTC(2025, 11, 31, 18, 0);
     for (let i = 0; i < 400; i += 1) {
       // Steps of 7 h 13 min: every hour of the day, both sides of midnight and of a new year.
@@ -406,5 +408,22 @@ describe('the studio clock, without Intl', () => {
     }
     expect(riyadhDateTime('2026-12-31T21:30:00.000+00:00')).toBe('1 Jan 2027, 00:30');
     expect(riyadhDateTime('not a time')).toBe('');
+  });
+
+  it('follows the studio’s zone, daylight saving included (Admin v2 U9)', async () => {
+    const { studioDateTimeWriter } = await import('@/lib/admin/activityExport');
+    const { clockFor } = await import('@/lib/admin/relTime');
+    const { STUDIO_TIME_ZONES } = await import('@schemas/timeZones');
+    for (const { value: tz } of STUDIO_TIME_ZONES) {
+      const write = studioDateTimeWriter(tz);
+      const { formatDateTime } = clockFor(tz);
+      // A year in 53-minute steps crosses every DST change of 2026 (London's in March and
+      // October, Cairo's in April and October) at every minute offset of the hour.
+      const start = Date.UTC(2026, 0, 1, 0, 7);
+      for (let i = 0; i < 9_920; i += 1) {
+        const at = new Date(start + i * 53 * 60_000).toISOString();
+        expect(write(at), `${tz} ${at}`).toBe(formatDateTime(at));
+      }
+    }
   });
 });

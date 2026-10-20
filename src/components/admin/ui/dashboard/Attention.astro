@@ -1,10 +1,15 @@
 ---
 import EmptyState from '../EmptyState.astro';
-import { formatDate, formatTime } from '@/lib/admin/relTime';
+import { studioClock } from '@/lib/admin/studioTimeZone';
+import { timeZoneCity } from '@schemas/timeZones';
 import type { AttentionData } from '@/lib/admin/dashboard/loaders';
 
+// The studio's clock (Admin v2 U9: `site_settings.timezone`, read once per request).
+const { formatDate, formatTime, zone } = await studioClock(Astro.locals);
+const city = timeZoneCity(zone);
+
 // What needs attention (Admin v2 U1, `attention`, the content roles): what goes live today,
-// by the Riyadh day (README U1 D9: the attention view's own "scheduled today" is UTC's, and
+// by the studio's day (its zone since Admin v2 U9) (README U1 D9: the attention view's own "scheduled today" is UTC's, and
 // filed tomorrow's 00:00 to 03:00 items under today every evening), then the attention
 // list's kinds (0028), each with its count and its first rows, linked to their editors.
 
@@ -32,7 +37,7 @@ const empty = data.goingLive.length === 0 && data.groups.length === 0;
                 <a class="data-link" href={item.href} dir="auto">
                   {item.title}
                 </a>
-                <span class="att__m">At {formatTime(item.at)}, Riyadh time</span>
+                <span class="att__m">At {formatTime(item.at)}, {city} time</span>
               </li>
             ))}
           </ul>

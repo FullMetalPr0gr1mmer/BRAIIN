@@ -904,30 +904,11 @@ export const ExportQuerySchema = z.object({
 
 // ── Settings · integrations · theme · users ─────────────────────────────────────
 
-export const SiteSettingsSchema = z.object({
-  identity: z.record(z.string(), z.unknown()).optional(),
-  retention: z
-    .object({
-      // Bounded, not free-form: retention is a PDPL commitment, and Pillar 4 pins raw
-      // telemetry at 90 days "pending legal sign-off (may go shorter, never longer)".
-      // The ceiling is that promise expressed as a constraint.
-      raw_telemetry_days: z.number().int().min(1).max(90).optional(),
-      leads_months: z.number().int().min(1).max(24).optional(),
-      spam_days: z.number().int().min(1).max(90).optional(),
-    })
-    .optional(),
-  version: SingletonVersionSchema,
-});
-
-export const MaintenanceSchema = z.object({
-  active: z.boolean(),
-  /** IPv4/IPv6 literals only — a hostname here would need DNS at request time. */
-  allowlist: z
-    .array(z.union([z.string().ip({ version: 'v4' }), z.string().ip({ version: 'v6' })]))
-    .max(50)
-    .default([]),
-  version: SingletonVersionSchema,
-});
+// Moved in Admin v2 U9: the settings row's schema to ./settings.ts (the studio's time zone
+// joined it), the maintenance value's to ./maintenance.ts (maintenance v2). Re-exported here
+// for the importers that name them from this module.
+export { SiteSettingsSchema } from './settings';
+export { MaintenanceSchema } from './maintenance';
 
 export const IntegrationsSchema = z.object({
   ga4: z.record(z.string(), z.unknown()).optional(),

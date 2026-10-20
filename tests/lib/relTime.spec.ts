@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import {
-  formatDate,
-  formatDateTime,
-  formatTime,
-  isoOf,
-  relTime,
-  toDate,
-} from '@/lib/admin/relTime';
+import { clockFor, isoOf, toDate } from '@/lib/admin/relTime';
+
+// The Riyadh clock, the default zone (Admin v2 U9 made the zone a setting: clockFor(tz)).
+const { formatDate, formatDateTime, formatTime, relTime } = clockFor('Asia/Riyadh');
 
 // The admin's clock (Admin v2 F4b): Asia/Riyadh (UTC+3, no daylight saving), en-GB words.
 // Every instant below is written in UTC, so the expectations show the +3 hours.

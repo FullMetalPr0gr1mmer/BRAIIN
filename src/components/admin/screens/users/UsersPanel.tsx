@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { ROLE_LABELS } from '@/lib/authz/capLabels';
-import { formatDateTime, relTime } from '@/lib/admin/relTime';
+import { useClock } from '@/components/admin/kit/clock';
 import { STATUS_LABEL, personName, type UserRow, type UserStatus } from '@/lib/admin/userModel';
 import type { BadgeTone } from '@/lib/admin/tones';
 import DataTable, { type DataColumn } from '@/components/admin/kit/DataTable';
@@ -57,6 +57,7 @@ const STATUS_TONE: Readonly<Record<UserStatus, BadgeTone>> = {
 };
 
 export default function UsersPanel({ selfId, isOwner, canManage, emailReady }: UsersPanelProps) {
+  const { formatDateTime, relTime } = useClock();
   const [page, setPage] = useState<Page>({ rows: [], total: 0, hasOwner: true, pending: [] });
   const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(true);
