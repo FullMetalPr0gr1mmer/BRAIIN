@@ -520,8 +520,9 @@ export async function stagedReorder(
   const { drafts } = await loadDraftsOf(sb, auth, entry.entityType, { entityIds: ids });
   const draftOf = new Map(drafts.map((d) => [d.entity_id, d]));
   // A row with a pending change has its base read over the whole allowlist; otherwise the
-  // sort order and version are all a reorder needs.
-  const narrow = `${entry.key},sort_order,version`;
+  // sort order and version are all a reorder needs, and the status where the entity has one
+  // (the archive rule below).
+  const narrow = `${entry.key},sort_order,version${config.statusOf ? ',status' : ''}`;
   const { data, error } = await sb
     .from(config.table)
     .select(drafts.length > 0 ? stagedSelect(entry, narrow) : narrow)
@@ -540,6 +541,17 @@ export async function stagedReorder(
     const op: DraftOp = draft?.op === 'create' ? 'create' : 'update';
     let stored = mergePayload(draft?.payload, { sortOrder }, entry);
     stageTransition(auth, config, stored);
+    // Hotfix H12: a row that stays archived (live archived, no pending status of its own) is an
+    // Admin's to move. The apply runs as the publisher (apply.ts), and the archive gates refuse
+    // anyone else an update that leaves a row archived, so a Content Creator's staged move
+    // would wait in a release they are told they may publish (canPublish sees no archive) and
+    // whose apply the gate refuses whole. Refused like a staged archive, before the one writer
+    // call, so nothing is written; a pending status was judged by stageTransition just above.
+    // (An id that is neither a live row of this tenant nor a pending create is still skipped,
+    // as R3 built it: the writer call is all or nothing, so no partial order can come of it.)
+    if (!('status' in stored) && live?.['status'] === 'archived') {
+      assertCap(auth, 'content.archiveDelete');
+    }
     let derived = derivePatch(entry, op, stored);
     if (op === 'update') {
       const remaining = dropNoOps(derived.patch, live!, draft?.base);

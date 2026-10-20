@@ -206,6 +206,18 @@ export const cases: readonly Case[] = [
     releases: true,
   },
   {
+    // Hotfix H12: a row that stays archived is an Admin's to move, staged as live; the apply
+    // runs as the publisher, whom the archive gates would refuse.
+    name: 'services reorder naming an archived row (releases on, Admin only)',
+    load: () => import('@/pages/api/admin/services/reorder'),
+    method: 'POST',
+    url: '/api/admin/services/reorder',
+    body: { items: [{ id: UUID, sortOrder: 10 }] },
+    row: { id: UUID, version: 1, status: 'archived' },
+    allow: ['admin'],
+    releases: true,
+  },
+  {
     name: 'testimonials publish (releases on)',
     load: () => import('@/pages/api/admin/testimonials/[id]'),
     method: 'PATCH',

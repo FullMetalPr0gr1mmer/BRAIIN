@@ -2,8 +2,15 @@
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminResourceTable from '@/components/admin/islands/AdminResourceTable';
 import { uiFor } from '@/lib/admin/uiSchema';
+import { can } from '@/lib/authz/matrix';
 
 export const prerender = false;
+
+// Move up and Move down write an archived row only for a role that may archive (hotfix H12):
+// the UX half of `content.archiveDelete`, as `canAdvanced` is on the section form. The
+// reorder route refuses such a move whatever this says.
+const role = Astro.locals.session?.role;
+const canArchive = role !== undefined && can(role, 'content.archiveDelete') === 'full';
 
 const ui = uiFor('team');
 ---
@@ -14,5 +21,5 @@ const ui = uiFor('team');
   to intersection just adds a blank frame. Public routes use visible/idle — /admin is
   exempt from the CWV budgets (CLAUDE.md §6) and is gated on bundle size instead.
 -->
-  <AdminResourceTable client:load resource="team" />
+  <AdminResourceTable client:load resource="team" canArchive={canArchive} />
 </AdminLayout>

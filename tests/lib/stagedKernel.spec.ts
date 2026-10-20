@@ -772,9 +772,10 @@ describe('releases on: reorder, the as-built departures', () => {
     expect(drafts()).toHaveLength(1);
   });
 
-  it('with no draft on a moved row the live read is the sort order and version alone', async () => {
+  it('with no draft on a moved row the live read is the sort order, version and status alone', async () => {
+    // The status for the archive rule (hotfix H12); an entity without one reads no status.
     await call(services.REORDER, 'POST', { body: { items: [{ id: S1, sortOrder: 1 }] } });
-    expect(selects()).toEqual(['id,sort_order,version']);
+    expect(selects()).toEqual(['id,sort_order,version,status']);
   });
 
   it('with a draft on a moved row it widens to the allowlist, so a missing base is read, not null', async () => {
@@ -827,6 +828,62 @@ describe('releases on: reorder judges the whole pending change', () => {
     expect(db.calls.filter((c) => c.name === 'write_drafts')).toEqual([]);
     expect(drafts()).toHaveLength(1);
     expect(audits()).toEqual([]);
+  });
+
+  // Hotfix H12: the apply runs as the publisher, and the archive gates refuse anyone but an
+  // Admin an update that leaves a row archived, so a row that stays archived is an Admin's to
+  // move, staged as live.
+  it('a Content Creator moving a row that is archived live is 403, nothing written', async () => {
+    live(S2)['status'] = 'archived';
+    const res = await call(services.REORDER, 'POST', {
+      body: {
+        items: [
+          { id: S1, sortOrder: 20 },
+          { id: S2, sortOrder: 10 },
+        ],
+      },
+      role: 'content_creator',
+    });
+    expect([res.status, res.body['capability']]).toEqual([403, 'content.archiveDelete']);
+    expect(draftTouches().filter((c) => c.name === 'write_drafts')).toEqual([]);
+    expect(drafts()).toEqual([]);
+    expect(audits()).toEqual([]);
+  });
+
+  it('an Admin stages the same move, the archived row included', async () => {
+    live(S2)['status'] = 'archived';
+    const res = await call(services.REORDER, 'POST', {
+      body: {
+        items: [
+          { id: S1, sortOrder: 20 },
+          { id: S2, sortOrder: 10 },
+        ],
+      },
+    });
+    expect(res.status).toBe(200);
+    expect(drafts().map((d) => [d['entity_id'], d['payload']])).toEqual([
+      [S1, { sortOrder: 20 }],
+      [S2, { sortOrder: 10 }],
+    ]);
+    expect(liveWrites()).toEqual([]);
+  });
+
+  it('a Content Creator may move an archived row whose pending change restores it', async () => {
+    live(S2)['status'] = 'archived';
+    drafts().push(
+      draft({
+        entity_id: S2,
+        payload: { status: 'draft' },
+        base: { status: 'archived' },
+        base_version: 1,
+      }),
+    );
+    const res = await call(services.REORDER, 'POST', {
+      body: { items: [{ id: S2, sortOrder: 5 }] },
+      role: 'content_creator',
+    });
+    expect(res.status).toBe(200);
+    expect(drafts()[0]!['payload']).toEqual({ status: 'draft', sortOrder: 5 });
   });
 });
 

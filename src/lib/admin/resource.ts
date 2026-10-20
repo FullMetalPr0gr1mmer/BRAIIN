@@ -11,6 +11,7 @@ import {
   getRow,
   insertRow,
   listRows,
+  translateWriteError,
   updateRow,
   type ConstraintFields,
   type WriteRefusals,
@@ -520,6 +521,46 @@ export function itemRoutes(config: ResourceConfig): {
   return { GET, PATCH, DELETE };
 }
 
+/** A reorder that names a row this tenant's list does not hold: nothing is moved. */
+export const REORDER_MISSING =
+  'Nothing was moved: the new order names an item this list does not have (it may have been deleted). Reload the list and try again.';
+
+/**
+ * Judges a reorder whole, before any row is written (Admin v2 hotfix H12). The updates in
+ * reorderRoute run one at a time with no transaction around them, so a refusal half way
+ * through used to leave the rows before it moved: a partial order. One tenant-scoped read of
+ * the named rows refuses up front what would be refused (or silently skipped) later:
+ *   • an id that is not a row of the caller's tenant (another tenant's, or deleted): 422,
+ *     REORDER_MISSING. Its UPDATE would have matched nothing and the reorder answered 200;
+ *   • an archived row, for a caller without content.archiveDelete: 403, as an archive is
+ *     (assertStatusTransition). The RESTRICTIVE archive gates (`app.is_admin() or status <>
+ *     'archived'`) refuse every update that leaves a row archived, a sort order included, to
+ *     everyone but an Admin.
+ * A row archived or deleted between this read and the writes is not seen; the list's next
+ * move repairs what that leaves.
+ */
+async function assertReorderable(
+  config: ResourceConfig,
+  auth: AuthContext,
+  sb: Db,
+  items: readonly { id: string }[],
+): Promise<void> {
+  const ids = [...new Set(items.map((item) => item.id))];
+  // `status` only where the entity has a lifecycle: the tables without one have no column.
+  const { data, error } = await sb
+    .from(config.table)
+    .select(config.statusOf ? 'id,status' : 'id')
+    .eq('tenant_id', auth.tenantId)
+    .in('id', ids);
+  if (error) throw new Error(`reorder ${config.table}: ${error.message}`);
+  const rows = (data ?? []) as unknown as Row[];
+  const found = new Set(rows.map((row) => String(row['id'])));
+  if (ids.some((id) => !found.has(id))) throw new ValidationError(REORDER_MISSING, 'items');
+  if (rows.some((row) => row['status'] === 'archived')) {
+    assertCap(auth, 'content.archiveDelete');
+  }
+}
+
 /** Bulk `sort_order` update — used by every drag-to-reorder list in the admin. */
 export function reorderRoute(config: ResourceConfig): APIRoute {
   return defineAdminRoute({
@@ -537,6 +578,7 @@ export function reorderRoute(config: ResourceConfig): APIRoute {
         return stagedReorder(config, entry, ctx, ctx.input.items);
       }
       const { auth, sb, input, audit } = ctx;
+      await assertReorderable(config, auth, sb, input.items);
       // Sequential, tenant-scoped updates rather than one upsert: an upsert would need
       // to send every column (PostgREST upsert replaces the row) and would happily
       // INSERT a row whose id does not exist in this tenant — turning a reorder into a
@@ -547,7 +589,18 @@ export function reorderRoute(config: ResourceConfig): APIRoute {
           .update({ sort_order: item.sortOrder })
           .eq('tenant_id', auth.tenantId)
           .eq('id', item.id);
-        if (error) throw new Error(`reorder ${config.table}: ${error.message}`);
+        // A refusal here is a row that changed since assertReorderable read it (archived by
+        // someone else): the database's answer, mapped as every other write's is (a 403 for
+        // a RESTRICTIVE gate), not a 500. The rows before it stay moved.
+        if (error) {
+          throw translateWriteError(
+            error,
+            config.table,
+            'write',
+            config.constraintFields,
+            config.writeRefusals,
+          );
+        }
       }
       audit({
         action: `${config.entity}.reorder`,
