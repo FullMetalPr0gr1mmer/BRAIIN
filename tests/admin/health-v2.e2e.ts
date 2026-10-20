@@ -198,6 +198,11 @@ test.describe('not set up (the CI stack has no monitor key)', () => {
       'AI training crawlers are blocked',
       'Domain renewal: not checked: no domain is recorded for the site',
       'Certificates are issued and renewed by Cloudflare',
+      // U17's row (security.two_step, users.manage: this is the Admin), after the website's.
+      // A count, not a number: other specs add accounts while this one runs. Never "Everyone":
+      // the four shared role accounts never set 2FA up (tests/admin/twoStep.e2e.ts uses an
+      // account of its own), so at least four, and the plural.
+      /^\d+ team members without two factor sign in$/,
     ]);
   });
 });

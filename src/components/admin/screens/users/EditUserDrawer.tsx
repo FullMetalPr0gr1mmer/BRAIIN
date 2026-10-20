@@ -3,7 +3,7 @@ import { adminFetch, describeError } from '@/lib/admin/client';
 import { ROLES, type Role } from '@/lib/auth/types';
 import { ROLE_LABELS } from '@/lib/authz/capLabels';
 import { useClock } from '@/components/admin/kit/clock';
-import { OWNER_PROTECTED, personName, type UserRow } from '@/lib/admin/userModel';
+import { OWNER_PROTECTED, canResetTwoStep, personName, type UserRow } from '@/lib/admin/userModel';
 import Drawer from '@/components/admin/kit/Drawer';
 import Modal from '@/components/admin/kit/Modal';
 import Avatar from '@/components/admin/kit/Avatar';
@@ -16,6 +16,9 @@ import { Badge } from '@/components/admin/kit/StatusBadge';
 // account owner looking at another active Admin, "Make account owner" (confirmed). The
 // e-mail is shown, never edited (a change needs delivery and confirmation). The server
 // decides everything again: your own role and access are refused, the owner is refused.
+// Since U17: the subline says whether the person uses 2FA, and "Reset 2FA" (confirmed) clears
+// a colleague's authenticator app and signs them out everywhere (never yours, never the
+// owner's: the route and public.reset_two_step refuse both).
 
 export interface EditUserDrawerProps {
   user: UserRow | null;
@@ -27,7 +30,7 @@ export interface EditUserDrawerProps {
   onChanged: (message: string, change?: { transferred?: boolean }) => void;
 }
 
-type Confirm = 'remove' | 'owner' | null;
+type Confirm = 'remove' | 'owner' | 'two-step' | null;
 
 interface PatchAnswer {
   signedOut?: boolean;
@@ -75,6 +78,7 @@ export default function EditUserDrawer({
     !user.isOwner &&
     user.role === 'admin' &&
     user.status === 'active';
+  const canReset = user !== null && canResetTwoStep(user, selfId);
   const shown = user ? personName(user) : '';
 
   async function patch(body: Record<string, unknown>): Promise<PatchAnswer> {
@@ -123,6 +127,21 @@ export default function EditUserDrawer({
     }
   }
 
+  async function resetTwoStep() {
+    if (!user) return;
+    setBusy(true);
+    setError('');
+    try {
+      await adminFetch(`/api/admin/users/${user.id}/two-step-reset`, { method: 'POST' });
+      setConfirm(null);
+      onChanged(`2FA reset. ${shown} is signed out.`);
+    } catch (err) {
+      setConfirm(null);
+      setError(describeError(err));
+      setBusy(false);
+    }
+  }
+
   async function makeOwner() {
     if (!user) return;
     setBusy(true);
@@ -155,6 +174,16 @@ export default function EditUserDrawer({
                 onClick={() => setConfirm('remove')}
               >
                 Remove access
+              </button>
+            )}
+            {canReset && (
+              <button
+                type="button"
+                data-variant="danger"
+                disabled={busy}
+                onClick={() => setConfirm('two-step')}
+              >
+                Reset 2FA
               </button>
             )}
             {canMakeOwner && (
@@ -203,6 +232,7 @@ export default function EditUserDrawer({
                   ) : (
                     'Not signed in yet'
                   )}
+                  {user.twoStep !== null && (user.twoStep ? ' · 2FA on' : ' · 2FA off')}
                 </p>
               </div>
             </div>
@@ -304,6 +334,34 @@ export default function EditUserDrawer({
         }
       >
         <p>Their account and everything they made stay. You can switch Can sign in back on.</p>
+      </Modal>
+
+      <Modal
+        open={confirm === 'two-step'}
+        onClose={() => setConfirm(null)}
+        title={`Reset 2FA for ${shown}?`}
+        sub="Their authenticator app stops working here and they are signed out everywhere."
+        dismissible={false}
+        footer={
+          <>
+            <button type="button" data-autofocus="" onClick={() => setConfirm(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-variant="danger"
+              disabled={busy}
+              onClick={() => void resetTwoStep()}
+            >
+              Reset 2FA
+            </button>
+          </>
+        }
+      >
+        <p>
+          They set 2FA up again the next time they sign in if your team requires it, or from their
+          account. This is recorded in the activity log.
+        </p>
       </Modal>
 
       <Modal

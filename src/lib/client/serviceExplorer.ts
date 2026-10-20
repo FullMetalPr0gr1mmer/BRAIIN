@@ -31,9 +31,21 @@
 //   URL in data-xp-poster, painted on an overlay <img> once decoded) and clip window
 //   (clips.ts retargetClip); leaving the list restores the discipline's. Attributes and
 //   textContent only — no inline style, no innerHTML.
+//
+//   Interest (Admin v2 G1): a panel the VISITOR opens (a card, a tab, prev/next, a hash they
+//   navigated to) and a service row they choose dispatch `bs:interest` for the site's
+//   analytics emitter (src/lib/client/analytics.ts, which sends it only with consent, once
+//   per key per page view). The panel a URL opened at load is not the visitor's choice and
+//   dispatches nothing. That dispatch is the explorer's only analytics code.
 
 import { focusablePanels, initTabs } from './tabs';
 import { retargetClip, type ClipTarget } from './clips';
+import { interest } from './analytics';
+
+/** A service's slug from its row link (`/services/<slug>`, `/ar/services/<slug>#inquiry`). */
+export function serviceSlugOf(href: string): string | null {
+  return /^(?:\/ar)?\/services\/([a-z0-9-]{1,64})(?:[/?#]|$)/.exec(href)?.[1] ?? null;
+}
 
 /** The panel a URL fragment names, or null (an unknown or empty hash opens nothing). */
 export function panelFromHash(hash: string, slugs: readonly string[]): string | null {
@@ -177,7 +189,7 @@ export function initServiceExplorer(root: HTMLElement): void {
     tabs,
     panels,
     label: tablist.dataset.xpLabel ?? '',
-    onSelect: (i) => open(slugs[i] ?? '', { focus: null, scroll: false }),
+    onSelect: (i) => open(slugs[i] ?? '', { focus: null, scroll: false, interest: true }),
   });
 
   /** Keeps the selected pill in view in its (horizontally scrolling, on phones) row. */
@@ -190,11 +202,19 @@ export function initServiceExplorer(root: HTMLElement): void {
 
   function open(
     slug: string,
-    how: { focus: 'panel' | null; scroll: boolean; animate?: boolean; hash?: boolean },
+    how: {
+      focus: 'panel' | null;
+      scroll: boolean;
+      animate?: boolean;
+      hash?: boolean;
+      /** The visitor opened it (not the URL at load): the analytics emitter hears of it. */
+      interest?: boolean;
+    },
   ): void {
     const i = slugs.indexOf(slug);
     const panel = panels[i];
     if (!panel) return;
+    if (how.interest) interest({ discipline: slug });
     const changed = current !== slug;
     current = slug;
     root.classList.add('is-open');
@@ -262,11 +282,18 @@ export function initServiceExplorer(root: HTMLElement): void {
     const href = (card ?? go)?.getAttribute('href') ?? '';
     if (!href.startsWith('#')) return;
     e.preventDefault();
-    open(slug, { focus: 'panel', scroll: true });
+    open(slug, { focus: 'panel', scroll: true, interest: true });
+  });
+
+  // A service chosen from a panel's list (its page, or its inquiry form there).
+  root.addEventListener('click', (e) => {
+    const link = e.target instanceof Element ? e.target.closest('.svc-row a[href]') : null;
+    const slug = link ? serviceSlugOf(link.getAttribute('href') ?? '') : null;
+    if (slug) interest({ service: slug });
   });
 
   addEventListener('hashchange', () => {
     const slug = panelFromHash(location.hash, slugs);
-    if (slug) open(slug, { focus: null, scroll: true });
+    if (slug) open(slug, { focus: null, scroll: true, interest: true });
   });
 }

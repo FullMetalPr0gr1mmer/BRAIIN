@@ -200,6 +200,10 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   // bell, each the drawer's twin. Every member has an account and a bell.
   { href: '/admin/account', label: 'Your account', caps: [] },
   { href: '/admin/notifications', label: 'Notifications', caps: [] },
+  // Two factor authentication (Admin v2 U17): a full session sees the admin shell with the
+  // intro (2FA off) or the manage step (on); the sign-in step itself, in the sign-in shell,
+  // is tests/admin/twoStep.e2e.ts's, on an account of its own.
+  { href: '/admin/2fa', label: 'Two factor authentication', caps: [] },
   // The component kit (Admin v2 F4b): every kit piece on made-up data, reached by its
   // address. Every member may open it; its content reads nothing (its shell reads what
   // every screen's shell reads).
@@ -224,6 +228,22 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   {
     href: '/admin/analytics?tab=pages&range=7',
     label: 'Website stats pages',
+    caps: ['analytics.read'],
+  },
+  // G1: the Conversions (funnel, events, goals), Audience (busiest hours) and Realtime tabs.
+  {
+    href: '/admin/analytics?tab=conversions&range=7',
+    label: 'Website stats conversions',
+    caps: ['analytics.read'],
+  },
+  {
+    href: '/admin/analytics?tab=audience&range=90',
+    label: 'Website stats audience',
+    caps: ['analytics.read'],
+  },
+  {
+    href: '/admin/analytics?tab=realtime',
+    label: 'Website stats realtime',
     caps: ['analytics.read'],
   },
   { href: '/admin/site-health?tab=speed', label: 'Site health speed', caps: ['siteHealth.view'] },

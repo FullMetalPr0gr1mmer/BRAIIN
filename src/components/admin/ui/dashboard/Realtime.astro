@@ -1,0 +1,27 @@
+---
+import StatRows from '../StatRows.astro';
+import { formatNumber } from '@/lib/admin/charts';
+import { peopleWord, type RealtimeView } from '@/lib/admin/stats/realtimeView';
+
+// Right now (Admin v2 G1b, `realtime`, analytics.read; the prototype's dashboard widget,
+// screens_cms.js): the people on the site now and the four pages most of them are on, from
+// the minute rollup (migration 0071). Zero JS: the figures are as of the page's load; the
+// stats' Realtime tab ("Live view") keeps them up to date.
+
+interface Props {
+  view: RealtimeView;
+}
+
+const { view } = Astro.props;
+const top = view.topPaths.slice(0, 4);
+---
+
+<p class="dash-now">
+  <span class="dash-now__n">{formatNumber(view.activeVisits)}</span>
+  <span>{peopleWord(view.activeVisits)} on the site right now</span>
+</p>
+{
+  top.length > 0 && (
+    <StatRows rows={top.map((page) => ({ label: page.path, value: page.visits }))} />
+  )
+}

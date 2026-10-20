@@ -46,6 +46,12 @@ const STATS = [
   '/admin/analytics?range=90',
   '/admin/analytics?tab=pages',
   '/admin/analytics?tab=pages&range=7',
+  // G1: the funnel, events and goals; the busiest hours; realtime (tests/admin/stats-v2.e2e.ts
+  // drives their controls).
+  '/admin/analytics?tab=conversions',
+  '/admin/analytics?tab=conversions&range=90',
+  '/admin/analytics?tab=audience&range=7',
+  '/admin/analytics?tab=realtime',
 ];
 const SEARCH = ['/admin/analytics/search', '/admin/analytics/search?range=90'];
 const HEALTH = [

@@ -10,6 +10,7 @@ import Leads from './Leads.astro';
 import Notes from './Notes.astro';
 import Pages from './Pages.astro';
 import Quick from './Quick.astro';
+import Realtime from './Realtime.astro';
 import Views from './Views.astro';
 import WidgetFrame from './WidgetFrame.astro';
 import type { DashColumn, WidgetId } from '@schemas/dashboard';
@@ -37,6 +38,7 @@ const SUB: Partial<Record<WidgetId, string>> = {
   pages: 'Page views, the last 7 days',
   disciplines: 'The last 90 days',
   leads: 'Name, interest and stage only',
+  realtime: 'Who accepted analytics cookies, active in the last 5 minutes',
 };
 const OPEN: Partial<Record<WidgetId, { href: string; label: string }>> = {
   views: { href: '/admin/analytics', label: 'Open stats' },
@@ -45,6 +47,7 @@ const OPEN: Partial<Record<WidgetId, { href: string; label: string }>> = {
   activity: { href: '/admin/audit', label: 'All activity' },
   applications: { href: '/admin/applications', label: 'Open applications' },
   pages: { href: '/admin/analytics?tab=pages', label: 'All pages' },
+  realtime: { href: '/admin/analytics?tab=realtime', label: 'Live view' },
 };
 const open = OPEN[id];
 const title = id === 'views' ? 'Page views, last 30 days' : def.label;
@@ -111,4 +114,5 @@ const data = result && result.ok ? (result.data as never) : null;
   {data && id === 'pages' && <Pages items={data} />}
   {data && id === 'disciplines' && <Disciplines data={data} />}
   {data && id === 'notes' && <Notes notes={data} now={now} />}
+  {data && id === 'realtime' && <Realtime view={data} />}
 </WidgetFrame>

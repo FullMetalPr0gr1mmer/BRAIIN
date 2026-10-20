@@ -323,3 +323,29 @@ test('the session length is read through the real embed, and never fell back', a
   expect(logError, logError?.message).toBeNull();
   expect(count).toBe(0);
 });
+
+test('two factor authentication (U17): the 2FA column, and Require 2FA asks first', async ({
+  page,
+}) => {
+  await ready(page);
+  // The prototype's column, after Role: On, Off, or Unknown when the directory is unreadable.
+  await expect(page.getByRole('columnheader', { name: '2FA' })).toBeVisible();
+  const self = page.getByRole('row', { name: /\(you\)/ });
+  await expect(self.getByText(/^(On|Off)$/)).toBeVisible();
+
+  // The Security card's first setting. Turning it on asks first, with how many have not set
+  // 2FA up; Cancel leaves it off. Never saved on here: every role session would be held at
+  // the second step mid-run (tests/admin/twoStep.e2e.ts says why).
+  const toggle = page.getByRole('switch', { name: 'Require 2FA for everyone' });
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await toggle.click();
+  const confirm = page.getByRole('dialog', { name: 'Require 2FA for everyone?' });
+  await expect(confirm).toBeVisible();
+  await expect(confirm).toContainText('They are asked to at their next click.');
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectClean(page, `the Require 2FA confirm at ${width}`);
+  }
+  await confirm.getByRole('button', { name: 'Cancel' }).click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+});

@@ -38,6 +38,14 @@ import {
 import HelpArticleBody from '@/components/admin/screens/help/HelpArticleBody';
 import HelpGuideList from '@/components/admin/screens/help/HelpGuideList';
 import { EXTRA_LINKS, pageFileFor } from '../admin/routes';
+import { MAX_GOALS } from '@schemas/analyticsGoals';
+import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
+import {
+  ACTIVE_MINUTES,
+  REALTIME_AUTO_STOP_MS,
+  REALTIME_KEEP_HOURS,
+  REALTIME_POLL_MS,
+} from '@/lib/admin/stats/realtimeView';
 import {
   helpSet,
   helpSetViolations,
@@ -529,12 +537,118 @@ describe('the guides say only what the admin does', () => {
   };
   const everything = (lang: 'en' | 'ar') => SET.map((a) => textsOf(a, lang).join('\n')).join('\n');
   const source = (path: string) => readFileSync(path, 'utf8');
+  /** U17's migration, found by its name: its number is assigned at merge. */
+  const twoStepMigration = () => {
+    const file = MIGRATION_FILES.find((f) => f.name.endsWith('_two_step_sign_in.sql'));
+    if (!file) throw new Error('no two-step migration');
+    return file;
+  };
   /** Every .ts, .tsx and .astro file below a directory, as paths from the repository root. */
   const codeIn = (dir: string) =>
     (readdirSync(dir, { recursive: true, encoding: 'utf8' }) as string[])
       .map((f) => f.replaceAll('\\', '/'))
       .filter((f) => /\.(ts|tsx|astro)$/.test(f))
       .map((f) => `${dir}/${f}`);
+
+  it('two factor authentication (U17): the guides say what /admin/2fa and Users & roles do', () => {
+    const en = guide('your-account', 'en');
+    const panel = source('src/components/admin/screens/twoStep/TwoStepPanel.astro');
+    const account = source('src/components/admin/screens/chrome/AccountPanel.tsx');
+    // The row in the account, its two links, and the setup step's words.
+    expect(account).toContain('<span className="li__t">Two factor authentication</span>');
+    expect(account).toContain("{view.twoStep.on ? 'Manage' : 'Set up'}");
+    expect(en).toContain('open Two factor authentication in your account and choose Set up');
+    expect(en).toContain('choose Manage and type a current code');
+    for (const words of ['Add it to the app', 'Turn on 2FA', 'Set up']) {
+      expect(panel, words).toContain(words);
+      expect(en, words).toContain(words);
+    }
+    // The setup step shows a key and a link, never a QR code (as-built U17): the guide too.
+    expect(panel).not.toContain('<svg');
+    expect(en).toContain('type the key the page shows');
+    expect(en).not.toMatch(/\bQR\b|scan/i);
+    // Wrong codes count as wrong passwords do (src/lib/auth/twoStepFlow.ts, lockout.ts).
+    const lockout = source('src/lib/auth/lockout.ts');
+    expect(lockout).toContain('LOCKOUT_THRESHOLD = 5;');
+    expect(lockout).toContain('LOCKOUT_WINDOW_MINUTES = 15;');
+    expect(lockout).toContain('LOCKOUT_DURATION_MINUTES = 15;');
+    expect(source('src/lib/auth/twoStepFlow.ts')).toContain('registerFailure(email, input.ip)');
+    expect(en).toContain(
+      'Five wrong codes within 15 minutes lock your account for 15 minutes, as wrong passwords do.',
+    );
+    // Turning it off is refused while the team requires it.
+    expect(panel).toContain("view.mode === 'manage' && !view.required");
+    expect(en).toContain('If your team requires 2FA, it stays on.');
+    // A lost phone: an Admin's Reset 2FA, which signs the person out everywhere.
+    expect(en).toContain('Ask an Admin to reset your 2FA in Users & roles');
+    const migration = twoStepMigration().sql;
+    expect(migration).toContain('delete from auth.sessions where user_id = p_user;');
+    const roles = guide('roles-and-access', 'en');
+    const card = source('src/components/admin/screens/users/SecurityCard.tsx');
+    expect(card).toContain('Require 2FA for everyone');
+    expect(card).toContain('People without it are asked to set it up at their next click.');
+    expect(roles).toContain('Require 2FA for everyone, on the same card, asks everyone');
+    expect(roles).toContain('to set it up at their next click');
+    expect(source('src/lib/admin/userModel.ts')).toContain(
+      "REQUIRE_MFA_SELF_FIRST = 'Turn on 2FA for your own account first.'",
+    );
+    expect(roles).toContain('Turn on 2FA for your own account first');
+    expect(source('src/components/admin/screens/users/EditUserDrawer.tsx')).toContain('Reset 2FA');
+    expect(roles).toContain('chooses Reset 2FA');
+    expect(roles).toContain('they are signed out on every device');
+    expect(migration).toContain("message = 'owner_protected'");
+    expect(migration).toContain("message = 'self'");
+    expect(roles).toContain("nor the account owner's");
+    // Both languages say it: the Arabic names the same screens and buttons.
+    for (const words of ['Two factor authentication', 'Set up', 'Turn on 2FA', 'Manage']) {
+      expect(guide('your-account', 'ar'), words).toContain(words);
+    }
+    for (const words of ['Require 2FA for everyone', 'Reset 2FA', 'Users & roles']) {
+      expect(guide('roles-and-access', 'ar'), words).toContain(words);
+    }
+  });
+
+  it('U17 puts only its two guides, and keeps their place, title, caps and tags', () => {
+    // The two-step migration (numbered at merge) changes your-account and roles-and-access
+    // with app.put_help_guide (H11) and adds no guide.
+    const name = twoStepMigration().name;
+    expect(HELP.edits.filter((e) => e.file === name)).toEqual([
+      { file: name, op: 'put', slug: 'your-account', revision: 1 },
+      { file: name, op: 'put', slug: 'roles-and-access', revision: 1 },
+    ]);
+    const base = new Map(
+      literalSet(MIGRATION_FILES.find((f) => f.name === SET_FILE)!)
+        .map((raw) => HelpArticleSeedSchema.parse(raw))
+        .map((a) => [a.slug, a]),
+    );
+    for (const slug of ['your-account', 'roles-and-access']) {
+      const before = base.get(slug)!;
+      const after = SET.find((a) => a.slug === slug)!;
+      const keep = ({ slug: s, sort_order, title, title_ar, caps, tags }: HelpArticleRow) => ({
+        s,
+        sort_order,
+        title,
+        title_ar,
+        caps,
+        tags,
+      });
+      expect(keep(after), slug).toEqual(keep(before));
+      // Only blocks added: every block the guide had stays, in order.
+      for (const lang of ['en', 'ar'] as const) {
+        const kept = after.body[lang].filter((block) =>
+          before.body[lang].some((b) => JSON.stringify(b) === JSON.stringify(block)),
+        );
+        expect(kept, `${slug} ${lang}`).toEqual(before.body[lang]);
+      }
+    }
+    // /admin/2fa is your-account's screen (corrections rule 4), offered by its page head.
+    expect(SET.find((a) => a.slug === 'your-account')?.screens).toEqual([
+      '/admin/account',
+      '/admin/notifications',
+      '/admin/2fa',
+    ]);
+    expect(pageGuideFor('/admin/2fa', 'seo')).toBe('your-account');
+  });
 
   it('the activity log names who acted, filters and exports: the guide says what the screen does', () => {
     // Since U13 (0054) the screen names the person (public.audit_people, former members
@@ -1273,6 +1387,170 @@ describe('the guides say only what the admin does', () => {
     expect(everything('ar')).not.toContain('شوركت');
     expect(guide('seo-and-redirects', 'ar')).toContain('الروابط التي تمت مشاركتها');
     expect(guide('personal-data', 'ar')).toContain('تُعرض بيانات شخص واحد');
+  });
+});
+
+// ── 1d. A guide put through H11's catalog (Admin v2 G1) ────────────────────────────────
+// G1 rewrites website-stats for the tabs it adds, with one top-level app.put_help_guide in its
+// migration (no slice restates app.help_article_set() since H11). The guide's text is
+// docs/admin-v2/guides/website-stats.json, held here to every rule the set's guides keep, to the
+// code behind each sentence, and to the put that ships it (the set above reads it through it).
+
+describe('website-stats as G1 rewrites it (docs/admin-v2/guides/website-stats.json)', () => {
+  const RAW_GUIDE = JSON.parse(
+    readFileSync('docs/admin-v2/guides/website-stats.json', 'utf8'),
+  ) as unknown;
+  const guide = HelpArticleSeedSchema.parse(RAW_GUIDE);
+  const G1_FILE = '0071_stats_v2.sql';
+  // The guide as main left it: every migration but this one (the put's revision guard and the
+  // place, screens and capabilities it keeps are read against it).
+  const BEFORE = helpSet(MIGRATION_FILES.filter((f) => f.name !== G1_FILE));
+  const base = HelpArticleSeedSchema.parse(BEFORE.set.find((a) => a.slug === 'website-stats')!);
+  const en = textsOf(guide, 'en').join('\n');
+  const ar = textsOf(guide, 'ar').join('\n');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const MIGRATION = source(`${MIGRATIONS}/${G1_FILE}`);
+
+  it('keeps the schema (the nine keys put takes), its place, screens and capabilities', () => {
+    expect(Object.keys(RAW_GUIDE as object).sort()).toEqual([
+      'body',
+      'caps',
+      'minutes',
+      'screens',
+      'slug',
+      'sort_order',
+      'tags',
+      'title',
+      'title_ar',
+    ]);
+    expect(guide.slug).toBe(base.slug);
+    expect(guide.sort_order).toBe(base.sort_order);
+    expect(guide.screens).toEqual(base.screens);
+    expect(guide.caps).toEqual(base.caps);
+    expect(guide.title).toBe(base.title);
+    expect(guide.title_ar).toBe(base.title_ar);
+    // Its screens are still the page heads' (no new screen: the tabs are ?tab= links).
+    expect(PAGE_GUIDES.find((g) => g.slug === 'website-stats')?.screens).toEqual(guide.screens);
+  });
+
+  it('the Arabic follows the English block for block; no dash, brand, markup or $guide$', () => {
+    const kinds = (lang: 'en' | 'ar') =>
+      guide.body[lang].map((b) => (b.t === 'ol' ? `ol${b.x.length}` : b.t)).join(',');
+    expect(kinds('ar')).toBe(kinds('en'));
+    expect(textsOf(guide, 'ar').every((t) => /[؀-ۿ]/.test(t))).toBe(true);
+    for (const text of textsOf(guide)) {
+      expect(text).not.toMatch(/[–—]/);
+      expect(text.toLowerCase()).not.toMatch(/braii?n|statii?on/);
+      expect(text).not.toMatch(/[<>\u0000-\u001f]/);
+      expect(text.includes('$guide$')).toBe(false);
+      expect(text.includes('$help$')).toBe(false);
+    }
+  });
+
+  it('keeps every sentence of U2’s that stays true', () => {
+    expect(source('src/lib/admin/stats/range.ts')).toContain('STAT_RANGES = [7, 30, 90] as const');
+    expect(en).toContain('Pick 7, 30 or 90 days at the top');
+    expect(en).toContain('Counts are added up every 15 minutes');
+    expect(en).toContain('midnight to midnight UTC (3 am in Riyadh)');
+    expect(en).toContain('Raw visit records are kept 90 days');
+    expect(ar).toContain('كل 15 دقيقة');
+    // The visits rollup runs every 15 minutes too, offset from the page views'.
+    expect(MIGRATION).toContain(
+      "cron.schedule('rollup-visits', '4-59/15 * * * *', $job$ select app.rollup_visits(3) $job$)",
+    );
+  });
+
+  it('says what a visit is, as the rollup counts it', () => {
+    expect(en).toContain('A visit is one browser tab on one day');
+    expect(en).toContain('counts again the next day');
+    expect(MIGRATION).toMatch(
+      /group by e\.tenant_id, \(e\.occurred_at at time zone 'UTC'\)::date, e\.session_id/,
+    );
+    expect(source('src/lib/client/analytics.ts')).toContain("sessionStorage.getItem('bs_sid')");
+  });
+
+  it('says the funnel’s steps and why inquiries are apart, and for whom', () => {
+    expect(en).toContain('then the visits that opened a service page');
+    expect(en).toContain('only to people who work with leads');
+    expect(source('src/lib/admin/stats/leads.ts')).toContain(
+      "if (can(auth.role, 'leads.manage') !== 'full') return null;",
+    );
+    expect(en).toContain('Devices, countries and sources are not collected.');
+  });
+
+  it('says the busiest hours are in Riyadh time (the studio’s default zone)', () => {
+    expect(DEFAULT_TIME_ZONE).toBe('Asia/Riyadh');
+    expect(en).toContain('busiest hours of the day in Riyadh time');
+    expect(ar).toContain('بتوقيت الرياض');
+  });
+
+  it('says what realtime counts, how often it updates, when it stops and how long minutes are kept', () => {
+    expect(ACTIVE_MINUTES).toBe(5);
+    expect(REALTIME_POLL_MS).toBe(60_000);
+    expect(REALTIME_AUTO_STOP_MS).toBe(30 * 60_000);
+    expect(REALTIME_KEEP_HOURS).toBe(48);
+    expect(MIGRATION).toContain("cron.schedule('rollup-realtime', '* * * * *'");
+    expect(MIGRATION).toContain("r.minute < pg_catalog.now() - interval '48 hours'");
+    // Active: the five minutes ending with the minute (it, and the four before it).
+    expect(MIGRATION).toContain("ev.occurred_at >= g.m - interval '4 minutes'");
+    expect(en).toContain('in the last 5 minutes');
+    expect(en).toContain('It updates every minute while the tab is open');
+    expect(en).toContain('stops by itself after 30 minutes');
+    expect(en).toContain('Minute counts are kept 48 hours.');
+    expect(source('src/components/admin/screens/realtime/Realtime.tsx')).toContain('Pause updates');
+    expect(en).toContain('Pause updates stops it');
+    expect(ar).toContain('آخر 5 دقائق');
+    expect(ar).toContain('48 ساعة');
+  });
+
+  it('says who sets goals, how progress is counted and how many there can be', () => {
+    const setters = ROLES.filter((r) => ROLE_CAPS[r]['analytics.goals'] === 'full');
+    expect(setters).toEqual(['admin', 'seo']);
+    expect(en).toContain('Admins and the SEO role can add goals');
+    expect(en).toContain('Progress counts this calendar month, from the first, in UTC days.');
+    expect(MIGRATION).toContain(
+      "v_month date := date_trunc('month', (pg_catalog.now() at time zone 'UTC'))::date;",
+    );
+    expect(MAX_GOALS).toBe(20);
+    // Counted after the row is in (an AFTER trigger), so more than 20 is the refusal.
+    expect(MIGRATION).toMatch(/g\.tenant_id = new\.tenant_id\) > 20 then/);
+    expect(en).toContain('You can keep up to 20 goals.');
+    expect(ar).toContain('20 هدفًا');
+  });
+
+  it('0071 puts it through the catalog at the revision main leaves, and the set holds it', () => {
+    // One put, of this guide, naming the revision the guide is at before 0071.
+    const mine = HELP.edits.filter((e) => e.file === G1_FILE);
+    expect(mine).toEqual([
+      {
+        file: G1_FILE,
+        op: 'put',
+        slug: 'website-stats',
+        revision: BEFORE.revisions.get('website-stats'),
+      },
+    ]);
+    // It changes the guide, so the catalog moves it by one.
+    expect(HELP.revisions.get('website-stats')).toBe(
+      (BEFORE.revisions.get('website-stats') ?? 0) + 1,
+    );
+    // The set the migrations leave holds the file's guide exactly, and nothing else moved.
+    expect(SET.find((a) => a.slug === 'website-stats')).toEqual(guide);
+    expect(HELP.set.filter((g) => g.slug !== 'website-stats')).toEqual(
+      BEFORE.set.filter((g) => g.slug !== 'website-stats'),
+    );
+    // The put's literal is the guide file byte for byte (only its trailing newline dropped).
+    const literal =
+      /^select app\.put_help_guide\(\$guide\$\r?\n([\s\S]*?)\r?\n\$guide\$::jsonb, \d+\);/m.exec(
+        MIGRATION,
+      )?.[1];
+    expect(literal).toBe(
+      readFileSync('docs/admin-v2/guides/website-stats.json', 'utf8').replace(/\r?\n$/, ''),
+    );
+    expect(helpSetViolations(MIGRATION_FILES)).toEqual([]);
+    expect(MIGRATION).not.toContain('TODO(H11)');
+    expect(MIGRATION).not.toMatch(/create or replace function app\.help_article_set\(\)/);
+    // The migration's own postcondition checks the catalog row and every tenant's copy.
+    expect(MIGRATION).toContain("c.tags = array['stats', 'goals']");
   });
 });
 

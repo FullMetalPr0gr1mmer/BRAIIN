@@ -21,6 +21,8 @@ export const WIDGET_IDS = [
   'pages',
   'disciplines',
   'notes',
+  // Website stats v2 (G1b): people on the site now and their pages, from the minute rollup.
+  'realtime',
 ] as const;
 export type WidgetId = (typeof WIDGET_IDS)[number];
 

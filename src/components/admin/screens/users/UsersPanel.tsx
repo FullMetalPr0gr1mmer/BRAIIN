@@ -47,6 +47,8 @@ interface Page {
   hasOwner: boolean | null;
   /** Every invite nobody has accepted yet, wherever it falls in the pages (U12b). */
   pending: UserRow[];
+  /** Active members without 2FA, across the directory (U17); null when unknown. */
+  withoutTwoStep: number | null;
 }
 
 const STATUS_TONE: Readonly<Record<UserStatus, BadgeTone>> = {
@@ -58,7 +60,13 @@ const STATUS_TONE: Readonly<Record<UserStatus, BadgeTone>> = {
 
 export default function UsersPanel({ selfId, isOwner, canManage, emailReady }: UsersPanelProps) {
   const { formatDateTime, relTime } = useClock();
-  const [page, setPage] = useState<Page>({ rows: [], total: 0, hasOwner: true, pending: [] });
+  const [page, setPage] = useState<Page>({
+    rows: [],
+    total: 0,
+    hasOwner: true,
+    pending: [],
+    withoutTwoStep: null,
+  });
   const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | undefined>();
@@ -78,6 +86,7 @@ export default function UsersPanel({ selfId, isOwner, canManage, emailReady }: U
           total: data.total ?? 0,
           hasOwner: typeof data.hasOwner === 'boolean' ? data.hasOwner : null,
           pending: Array.isArray(data.pending) ? data.pending : [],
+          withoutTwoStep: typeof data.withoutTwoStep === 'number' ? data.withoutTwoStep : null,
         });
         // Whether the viewer owns the account, as fresh as the list: the page's prop is the
         // server's answer at render time, and ownership may have moved since.
@@ -132,6 +141,19 @@ export default function UsersPanel({ selfId, isOwner, canManage, emailReady }: U
           )}
         </span>
       ),
+    },
+    {
+      // The prototype's "2FA" column (screens_ops.js), after Role (U17).
+      key: 'twoStep',
+      label: '2FA',
+      render: (row) =>
+        row.twoStep === null ? (
+          <span className="cell-secondary">Unknown</span>
+        ) : row.twoStep ? (
+          <Badge tone="ok">On</Badge>
+        ) : (
+          <Badge tone="warn">Off</Badge>
+        ),
     },
     {
       key: 'status',
@@ -213,7 +235,7 @@ export default function UsersPanel({ selfId, isOwner, canManage, emailReady }: U
               void load(offset);
             }}
           />
-          <SecurityCard />
+          <SecurityCard withoutTwoStep={page.withoutTwoStep} />
         </div>
       )}
       {canManage && emailReady && (

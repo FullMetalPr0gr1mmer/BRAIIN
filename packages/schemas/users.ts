@@ -38,6 +38,11 @@ export const SecuritySettingsSchema = z
   .object({
     sessionMaxDays: z.union([z.literal(1), z.literal(7)]),
     inviteDomain: InviteDomainSchema.nullable(),
+    /**
+     * "Require 2FA for everyone" (Admin v2 U17, 0072). Optional: a card loaded before U17 posts
+     * without it, and its save leaves the stored value as it is.
+     */
+    requireMfa: z.boolean().optional(),
     /** The version the editor read: 0 before the row exists (the first save creates it). */
     version: z.number().int().min(0),
   })
@@ -55,6 +60,10 @@ export const StaffAccountRowSchema = z.object({
   email_confirmed_at: z.string().nullable(),
   last_sign_in_at: z.string().nullable(),
   is_owner: z.boolean(),
+  /** A verified second factor (0072, Admin v2 U17); absent from a directory before it. */
+  two_step: z.boolean().optional(),
+  /** profiles.is_active (0072); absent from a directory before it. */
+  is_active: z.boolean().optional(),
 });
 export type StaffAccountRow = z.infer<typeof StaffAccountRowSchema>;
 

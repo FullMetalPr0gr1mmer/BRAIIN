@@ -106,7 +106,13 @@ const headingId = `${sectionId}-heading`;
     <div class="disc__stage">
       {
         cards.map((c) => (
-          <a class="disc-card" href={c.href} data-disc={c.slug} data-clip-trigger>
+          <a
+            class="disc-card"
+            href={c.href}
+            data-disc={c.slug}
+            data-clip-trigger
+            data-track="discipline_card"
+          >
             {/* The link's own box is the card AT REST; everything visible is on this layer,
                 which is the widest width and clipped to the current one (global.css). */}
             <span class="disc-card__clip">

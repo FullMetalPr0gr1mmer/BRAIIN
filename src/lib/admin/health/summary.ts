@@ -10,6 +10,7 @@ import {
   type CheckResult,
   type ContentHealth,
 } from './checklist';
+import { accountsWithoutTwoStep, staffAccounts } from '../users';
 import { formatRatio, loadProbes, uptimeView, type ProbeReport, type UptimeView } from './probes';
 import { healthScore, scoreLabel, type HealthScore, type UptimeInput } from './score';
 import {
@@ -27,9 +28,10 @@ import {
 
 // Site health, read once for a screen (Admin v2 U2): the field vitals of the last 28 days
 // (rollup_daily_vitals), the checklist's counts, the errors of the last 7 days, the last
-// backup export and (G2) the uptime, domain and certificate readings (health_probes), each
-// read only when the role holds the capability its rows need (the checklist's rule, README
-// D4), all at once (at most five reads). The site health screen shows all of it; the
+// backup export, (G2) the uptime, domain and certificate readings (health_probes) and (U17)
+// how many active members have no second factor (public.staff_accounts), each read only when
+// the role holds the capability its rows need (the checklist's rule, README D4), all at once
+// (at most six reads). The site health screen shows all of it; the
 // dashboard's health widget (U1) shows loadHealthSummary's part.
 //
 // A read that fails is logged (system_logs) and its rows say "could not be read" rather than
@@ -177,7 +179,7 @@ export async function loadHealthReport(
 ): Promise<HealthReport> {
   const may = (cap: Parameters<typeof can>[1]) => can(auth.role, cap) === 'full';
   const mayHealth = may('siteHealth.view');
-  const [vitals, content, errors7d, lastBackup, probes] = await Promise.all([
+  const [vitals, content, errors7d, lastBackup, probes, withoutTwoStep] = await Promise.all([
     mayHealth ? settle(() => loadVitals(sb, auth, HEALTH_WINDOW_DAYS), null) : null,
     settle(() => loadContentHealth(sb, auth), null),
     may('logs.view') ? settle(() => loadErrorCount(sb, auth, now), null) : null,
@@ -185,6 +187,10 @@ export async function loadHealthReport(
     may('audit.view') ? settle(() => loadLastBackup(sb, auth), undefined) : undefined,
     // undefined: not read (no siteHealth.view); null: the read failed.
     mayHealth ? settle(() => loadProbes(sb, auth), null) : undefined,
+    // U17: one more read, for users.manage only (undefined: not read; null: it failed).
+    may('users.manage')
+      ? settle(async () => accountsWithoutTwoStep(await staffAccounts(sb, auth.tenantId)), null)
+      : undefined,
   ]);
   const checks = runChecklist({
     role: auth.role,
@@ -193,6 +199,7 @@ export async function loadHealthReport(
     errors7d,
     lastBackup,
     probes,
+    withoutTwoStep,
     now,
     tz,
   });
