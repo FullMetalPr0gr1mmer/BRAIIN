@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { RECRUITMENT_POLICY_VERSION } from '@consent/recruitment';
 import { createApplication } from '@/lib/applications/create';
@@ -101,6 +101,22 @@ async function cspViolations(page: Page): Promise<string[]> {
 
 const drawer = (page: Page) => page.getByRole('dialog', { name: NAME });
 
+/**
+ * A list row's action takes no pointer press until hover arms it (F4b: hidden row actions take
+ * no presses, so a tap cannot land on an invisible button), and the mouse rests wherever the
+ * last press left it (the drawer's Close, the confirm's Erase), never on the next row. Focus
+ * arms it at once, so the test reaches it the way a keyboard user does: focus, then Enter
+ * (tests/admin/invites.e2e.ts). A `.click()` here waits for a press that never lands.
+ */
+async function pressRowAction(button: Locator): Promise<void> {
+  await button.focus();
+  await button.press('Enter');
+}
+
+/** The list row's action that opens an application in the drawer. */
+const openButton = (page: Page, name: string) =>
+  page.getByRole('button', { name: `Open ${name}’s application` });
+
 test.beforeAll(async () => {
   const made = await createApplication(
     service(),
@@ -176,7 +192,7 @@ for (const width of [320, 390, 1280]) {
     expect(res?.status()).toBe(200);
     await ready(page);
     await expect(page.getByRole('table', { name: 'Job applications' })).toBeVisible();
-    await expect(page.getByRole('button', { name: `Open ${NAME}’s application` })).toBeAttached();
+    await expect(openButton(page, NAME)).toBeAttached();
     await axeClean(page, `list ${width}`);
     await noSidewaysScroll(page, `list ${width}`);
     expect(await cspViolations(page)).toEqual([]);
@@ -188,10 +204,10 @@ test('the status chips filter the list, and the address keeps the filter', async
   await ready(page);
   const chips = page.getByRole('group', { name: 'Filter by status' });
   await chips.getByRole('button', { name: 'Hired' }).click();
-  await expect(page.getByRole('button', { name: `Open ${NAME}’s application` })).toHaveCount(0);
+  await expect(openButton(page, NAME)).toHaveCount(0);
   await expect(page).toHaveURL(/[?&]status=hired\b/);
   await chips.getByRole('button', { name: 'New' }).click();
-  await expect(page.getByRole('button', { name: `Open ${NAME}’s application` })).toBeAttached();
+  await expect(openButton(page, NAME)).toBeAttached();
 });
 
 test('?open= opens the application in the drawer, and the drawer is clean', async ({ page }) => {
@@ -300,7 +316,7 @@ test('a slow save for one application never lands in the drawer of the next', as
   await drawer(page).getByRole('button', { name: 'Close' }).last().click();
   await expect(drawer(page)).toBeHidden();
 
-  await page.getByRole('button', { name: `Open ${OTHER}’s application` }).click();
+  await pressRowAction(openButton(page, OTHER));
   const second = page.getByRole('dialog', { name: OTHER });
   await expect(second.getByText(OTHER_MESSAGE)).toBeVisible();
   const answered = page.waitForResponse(
@@ -356,7 +372,7 @@ test('erase asks first, then the application and its CV are gone', async ({ page
   id = '';
 
   // The drawer stays mounted: the next application opens ready, nothing left disabled.
-  await page.getByRole('button', { name: `Open ${OTHER}’s application` }).click();
+  await pressRowAction(openButton(page, OTHER));
   const next = page.getByRole('dialog', { name: OTHER });
   await expect(next.getByText(OTHER_MESSAGE)).toBeVisible();
   await expect(next.getByRole('button', { name: 'Reveal contact details' })).toBeEnabled();
