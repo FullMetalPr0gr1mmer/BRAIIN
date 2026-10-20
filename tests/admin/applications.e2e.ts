@@ -11,17 +11,18 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  * Job applications on the kit (Admin v2 U8a), signed in as Admin, through the real Worker:
  *   list     at 320, 390 and 1280 px: zero axe violations, no sideways scroll, no CSP
  *            violation; the status chips filter;
- *   ?open    the address opens one application in the drawer (axe with it open), its
- *            heading the applicant's name with dir="auto";
+ *   ?open    the address opens one application in the drawer (axe with it open, at 320, 390
+ *            and 1280 px), its heading the applicant's name with dir="auto";
  *   reveal   one GET that writes exactly one `application.view_pii` row; a status change and a
  *            notes save after it write NO second one, and the revealed values stay on screen
  *            (before U8a every save re-revealed: a second decrypt and audit row per save);
- *   spam     asks first, and Cancel changes nothing;
+ *   spam     asks first (the confirm clean at all three widths), and Cancel changes nothing;
  *   CV       the link answers an attachment with the sandbox CSP and no-store, and writes one
  *            `application.cv_download` row;
  *   two      a status save for one application, held until a second is open in the drawer,
  *            lands on the first only: the second keeps its name, message and status;
- *   erase    asks first, then the row and the CV object are gone (read as the service role);
+ *   erase    asks first (the confirm clean at all three widths), then the row and the CV
+ *            object are gone (read as the service role);
  *            the next application opened has its controls on (an erase used to leave them off).
  * The applications are made here with the repo's own writer (createApplication, the CI dummy
  * key the workflows export); the second has no CV. Its name has no `E2E ` prefix: tests/e2e/apply-roundtrip.e2e.ts
@@ -36,6 +37,8 @@ test.describe.configure({ mode: 'serial' });
 test.use({ storageState: authFile('admin'), contextOptions: { reducedMotion: 'reduce' } });
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+/** Every width the list, the drawer and each confirm are checked at (brief §7). */
+const WIDTHS = [320, 390, 1280] as const;
 const RUN = Date.now().toString(36);
 const NAME = `Drawer Check ${RUN}`;
 const EMAIL = `drawer-${RUN}@example.com`;
@@ -100,6 +103,16 @@ async function cspViolations(page: Page): Promise<string[]> {
 }
 
 const drawer = (page: Page) => page.getByRole('dialog', { name: NAME });
+
+/** A confirm, open over the drawer, checked at every width: axe and no sideways scroll. */
+async function confirmClean(page: Page, ask: Locator, where: string) {
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(ask).toBeVisible();
+    await axeClean(page, `${where} ${width}`);
+    await noSidewaysScroll(page, `${where} ${width}`);
+  }
+}
 
 /**
  * A list row's action takes no pointer press until hover arms it (F4b: hidden row actions take
@@ -184,7 +197,7 @@ test.afterAll(async () => {
   }
 });
 
-for (const width of [320, 390, 1280]) {
+for (const width of WIDTHS) {
   test(`the list at ${width}px: clean, no sideways scroll, no CSP violation`, async ({ page }) => {
     await watchCsp(page);
     await page.setViewportSize({ width, height: 900 });
@@ -212,7 +225,7 @@ test('the status chips filter the list, and the address keeps the filter', async
 
 test('?open= opens the application in the drawer, and the drawer is clean', async ({ page }) => {
   await watchCsp(page);
-  for (const width of [320, 1280]) {
+  for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/admin/applications?open=${id}`);
     await ready(page);
@@ -277,6 +290,7 @@ test('spam asks first, and Cancel changes nothing', async ({ page }) => {
   const ask = page.getByRole('dialog').filter({ hasText: 'Mark as spam?' });
   await expect(ask).toBeVisible();
   await expect(ask).toContainText('It will be deleted within 30 days.');
+  await confirmClean(page, ask, 'spam confirm');
   await ask.getByRole('button', { name: 'Cancel' }).click();
   await expect(panel.getByRole('combobox', { name: 'Status' })).toHaveValue('in_review');
   const { data } = await service().from('job_applications').select('status').eq('id', id).single();
@@ -359,6 +373,7 @@ test('erase asks first, then the application and its CV are gone', async ({ page
   await drawer(page).getByRole('button', { name: 'Erase application' }).click();
   const ask = page.getByRole('dialog').filter({ hasText: 'This cannot be undone.' });
   await expect(ask).toContainText(NAME);
+  await confirmClean(page, ask, 'erase confirm');
   await ask.getByRole('button', { name: 'Erase' }).click();
   await expect(page.getByText('Application erased.')).toBeVisible();
   await expect(drawer(page)).toBeHidden();
