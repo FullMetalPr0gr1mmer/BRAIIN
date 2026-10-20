@@ -47,7 +47,9 @@ import {
 //     capability): the fields inside a disabled <fieldset>, a rich text not editable
 //     (FieldsReadOnly), no Save and no Ctrl/⌘+S, and `readOnlyNote` as a note above the
 //     fields. UX only: the server refuses a write whatever this shows.
-// `publicHref` adds "Open on site" to the action bar when it gives an address.
+// `publicHref` adds "Open on site" to the action bar when it gives an address. Field groups
+// (U9a) compose inside a field tab: a group renders in its tab's card, never across two tabs.
+// The tab API is frozen in docs/admin-v2/as-built/U8.md for U5 and U6.
 
 export interface EditorFormProps {
   save: EntitySave;
