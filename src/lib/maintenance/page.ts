@@ -24,7 +24,7 @@ export const MAINTENANCE_POSTER = '/media/hero-poster-blur.jpg';
 
 /** The scrim over the still: midnight (#000d30) at this opacity. */
 export const SCRIM_RGB = [0, 13, 48] as const;
-export const SCRIM_ALPHA = 0.72;
+export const SCRIM_ALPHA = 0.76;
 
 const ESCAPES: Record<string, string> = {
   '&': '&amp;',

@@ -259,7 +259,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
       const ip = normalizeIp(clientIp(request) ?? '');
       const allowed = ip !== null && m.allowlist.includes(ip);
       if (!allowed) {
-        if (m.snapshot.staffBypass && (await staffMayBypass(cookies))) {
+        // Fail closed twice over: the check answers false on any failure itself, and a throw
+        // that escaped it would still be the 503, never a page.
+        if (m.snapshot.staffBypass && (await staffMayBypass(cookies).catch(() => false))) {
           bypassed = true;
         } else {
           // The 503 page takes the nonce: its styles are in a nonced <style> block, because

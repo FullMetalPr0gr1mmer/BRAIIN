@@ -368,6 +368,35 @@ describe('the bell: what an item says', () => {
     }
   });
 
+  it('maintenance: a "Back on" day that came says it turned off by itself (Admin v2 U9b)', async () => {
+    const at = ago(5);
+    const feed = await loadNotifications(fakeDb(FULL).sb, auth('admin'), {
+      maintenance: async () => ({
+        active: false,
+        endedByDate: true,
+        changedAt: at,
+        allowlist: [],
+        snapshot: { ...MAINTENANCE_DEFAULTS, active: true, until: '2026-10-10', untilAt: at },
+      }),
+      now: NOW,
+    });
+    const item = feed.items.find((i) => i.kind === 'maintenance');
+    expect(item?.text).toBe('Maintenance mode turned off by itself');
+    expect(item?.detail).toBe('Its Back on day came. Visitors can reach the site again.');
+    expect(item?.at).toBe(at);
+  });
+
+  it('scheduled: "today" and the time are the studio’s zone (Admin v2 U9)', async () => {
+    const { studioDay } = await import('@/lib/admin/notifications/scheduled');
+    // 22:30 UTC on the 10th is the 11th in Riyadh and in Dubai, still the 10th in London.
+    const at = new Date('2026-10-10T22:30:00.000Z');
+    expect(studioDay(at, 'Asia/Dubai')).toEqual({
+      start: '2026-10-10T20:00:00.000Z',
+      end: '2026-10-11T20:00:00.000Z',
+    });
+    expect(studioDay(at, 'Europe/London').start).toBe('2026-10-09T23:00:00.000Z');
+  });
+
   it('maintenance: nothing for a switch older than the window, or one never stamped', async () => {
     const old = ago((WINDOW_DAYS + 1) * 24 * 60);
     for (const changedAt of [old, undefined]) {

@@ -1,0 +1,356 @@
+import { readFileSync } from 'node:fs';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import EditorForm from '@/components/admin/fields/EditorForm';
+import { openDetailsAround } from '@/components/admin/fields/reveal';
+import ApplicationsSwitch, {
+  LOCKED_NOTE,
+} from '@/components/admin/screens/general/ApplicationsSwitch';
+import BrandFacts, { LOGO_NOTE } from '@/components/admin/screens/general/BrandFacts';
+import TurnOnDialog, { turnOnText } from '@/components/admin/screens/maintenance/TurnOnDialog';
+import MaintenanceSketch, { dayWords } from '@/components/admin/screens/maintenance/MaintenanceSketch';
+import SaveStatus, { saveStatusText } from '@/components/admin/kit/SaveStatus';
+import { ClockProvider } from '@/components/admin/kit/clock';
+import { entitySaveReducer, initialSaveState } from '@/lib/admin/entitySave';
+import { ValidationError } from '@/lib/admin/errors';
+import { formToPayload, newItem, rowToForm } from '@/lib/admin/formPayload';
+import { clockFor } from '@/lib/admin/relTime';
+import { rethrowWriteError } from '@/lib/admin/singleton';
+import { siteProfileSingleton } from '@/lib/admin/singletons/siteProfile';
+import { siteSettingsSingleton } from '@/lib/admin/singletons/siteSettings';
+import { profileUi } from '@/lib/admin/ui/profile';
+import { settingsUi } from '@/lib/admin/ui/settings';
+import { maintenanceUi } from '@/lib/admin/ui/maintenance';
+import type { EntitySave } from '@/lib/admin/useEntitySave';
+import type { FieldDef, FieldGroup } from '@/lib/admin/uiSchema';
+
+// General settings v2 and maintenance v2's admin pieces (Admin v2 U9): EditorForm's groups
+// and the reveal of a closed card, the singleton kernel's named constraints, the default-on
+// switch in a repeater, the adopted version, the studio's clock in the screens, and the
+// screens' own words.
+
+vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+
+function fakeSave(values: Record<string, unknown>, patch: Partial<EntitySave> = {}): EntitySave {
+  return {
+    isNew: false,
+    values,
+    set: () => undefined,
+    version: 2,
+    busy: false,
+    loadError: null,
+    status: 'idle',
+    savedAt: null,
+    errors: { byId: {}, summary: [] },
+    conflict: false,
+    edgeMissed: false,
+    dirty: false,
+    message: null,
+    save: async () => true,
+    reloadTheirs: async () => undefined,
+    adoptVersion: () => undefined,
+    ...patch,
+  };
+}
+
+const FIELDS: FieldDef[] = [
+  { name: 'a', label: 'Alpha', kind: 'text' },
+  { name: 'b', label: 'Beta', kind: 'text' },
+  { name: 'c', label: 'Gamma', kind: 'text' },
+  { name: 'd', label: 'Delta', kind: 'text' },
+];
+
+describe('EditorForm groups (Admin v2 U9)', () => {
+  const groups: FieldGroup[] = [
+    { id: 'left', title: 'Left card', column: 'left', fields: ['a'] },
+    { id: 'right', title: 'Right card', sub: 'A line', column: 'right', fields: ['b'] },
+    { id: 'more', title: 'Advanced', column: 'left', collapsible: true, fields: ['c'] },
+  ];
+  const render = (extra = {}) =>
+    renderToStaticMarkup(
+      createElement(EditorForm, { save: fakeSave({}), fields: FIELDS, submitLabel: 'Save', ...extra }),
+    );
+
+  it('without groups: one card, as before', () => {
+    const html = render();
+    expect(html).not.toContain('editor__group');
+    expect(html.match(/class="card"/g)).toHaveLength(1);
+  });
+
+  it('cards in two columns, a closed card as <details>, the rest after', () => {
+    const html = render({ groups, slots: { left: createElement('p', { id: 'slot' }, 'Slot') } });
+    expect(html).toContain('class="grid grid--2 editor__cols"');
+    expect(html).toMatch(/<section class="card editor__group" data-group="left" aria-labelledby="g-left"><h2 class="card-title" id="g-left">Left card<\/h2><p id="slot">Slot<\/p>/);
+    expect(html).toContain('<p class="admin-sub editor__group-sub">A line</p>');
+    expect(html).toMatch(/<details class="card editor__group" data-group="more"><summary class="card-title">Advanced<\/summary>/);
+    expect(html).not.toMatch(/<details[^>]* open/);
+    // Delta is in no group: it follows, in a card of its own.
+    expect(html.indexOf('id="f-d"')).toBeGreaterThan(html.indexOf('id="f-c"'));
+    expect(html).not.toMatch(/\sstyle=/);
+  });
+
+  it('every field of the General screen’s forms sits in a card', () => {
+    for (const ui of [profileUi, settingsUi, maintenanceUi]) {
+      const grouped = new Set(ui.groups!.flatMap((g) => g.fields));
+      const drawn = ui.fields.filter((f) => f.name !== 'active').map((f) => f.name);
+      expect(drawn.filter((n) => !grouped.has(n)), ui.endpoint).toEqual([]);
+      for (const name of grouped) expect(ui.fields.map((f) => f.name), name).toContain(name);
+    }
+    expect(profileUi.fields.map((f) => f.name)).not.toContain('acceptingApplications');
+    expect(settingsUi.fields.map((f) => f.name)).not.toContain('identity');
+  });
+});
+
+describe('an error in a closed card is shown: its <details> are opened first', () => {
+  it('opens every closed ancestor, innermost first', () => {
+    const outer = { open: false, parentElement: null as unknown, closest: () => null };
+    const inner = {
+      open: false,
+      parentElement: { closest: (s: string) => (s === 'details' ? outer : null) },
+      closest: () => null,
+    };
+    const input = { parentElement: { closest: (s: string) => (s === 'details' ? inner : null) } };
+    expect(openDetailsAround(input as unknown as Element)).toBe(2);
+    expect(inner.open && outer.open).toBe(true);
+    expect(openDetailsAround(input as unknown as Element)).toBe(0);
+  });
+});
+
+describe('the singleton kernel names a refused value’s field (constraintFields)', () => {
+  const refuse = (code: string, constraint: string) => {
+    try {
+      rethrowWriteError(
+        'site_profile',
+        'settings.general',
+        'update',
+        { code, message: `new row for relation "site_profile" violates check constraint "${constraint}"` },
+        siteProfileSingleton.foreignKeys,
+        siteProfileSingleton.constraintFields,
+      );
+    } catch (err) {
+      return err;
+    }
+    return null;
+  };
+
+  it.each([
+    ['23514', 'site_profile_favicon_square', 'faviconMediaId'],
+    ['23514', 'site_profile_app_icon_square', 'appIconMediaId'],
+    ['23514', 'site_profile_phone_display_needs_number', 'phoneDisplay'],
+    ['23514', 'site_profile_whatsapp_display_needs_number', 'whatsappDisplay'],
+    ['23503', 'site_profile_favicon_fk', 'faviconMediaId'],
+    ['23503', 'site_profile_app_icon_fk', 'appIconMediaId'],
+  ])('%s %s → a 422 on %s', (code, constraint, field) => {
+    const err = refuse(code, constraint);
+    expect(err).toBeInstanceOf(ValidationError);
+    expect((err as ValidationError).field).toBe(field);
+  });
+
+  it('an unnamed CHECK stays the generic 422; another code stays a 500', () => {
+    const generic = refuse('23514', 'something_else');
+    expect(generic).toBeInstanceOf(ValidationError);
+    expect((generic as ValidationError).field).toBeUndefined();
+    expect(refuse('XX000', 'site_profile_favicon_square')).not.toBeInstanceOf(ValidationError);
+  });
+
+  it('the settings row names its zone list', () => {
+    expect(siteSettingsSingleton.constraintFields?.['site_settings_timezone_closed']?.field).toBe(
+      'timezone',
+    );
+  });
+});
+
+describe('a switch that is on by default in a repeater (a social account’s "Show on the site")', () => {
+  const socials = profileUi.fields.find((f) => f.name === 'socials')!;
+
+  it('a new item starts shown, and an untouched new item is still no item', () => {
+    expect(newItem(socials.itemFields!)).toEqual({ visible: true });
+    const payload = formToPayload({ socials: [newItem(socials.itemFields!)] }, [socials]);
+    expect(payload['socials']).toEqual([]);
+  });
+
+  it('sent only when turned off; a stored item with no flag shows as on', () => {
+    const shown = formToPayload(
+      { socials: [{ network: 'x', handle: '@a', url: 'https://x.com/a', visible: true }] },
+      [socials],
+    );
+    expect(shown['socials']).toEqual([{ network: 'x', handle: '@a', url: 'https://x.com/a' }]);
+    const hidden = formToPayload(
+      { socials: [{ network: 'x', handle: '@a', url: 'https://x.com/a', visible: false }] },
+      [socials],
+    );
+    expect(hidden['socials']).toEqual([
+      { network: 'x', handle: '@a', url: 'https://x.com/a', visible: false },
+    ]);
+    const form = rowToForm({ socials: [{ network: 'x', handle: '@a', url: 'https://x.com/a' }] }, [
+      socials,
+    ]);
+    expect((form['socials'] as Record<string, unknown>[])[0]?.['visible']).toBe(true);
+  });
+});
+
+describe('useEntitySave’s adopted version (the General screen’s applications switch)', () => {
+  it('takes the row’s new version and keeps the values on screen', () => {
+    const ready = entitySaveReducer(initialSaveState(FIELDS, false), {
+      type: 'loaded',
+      row: { a: 'x', version: 3 },
+      fields: FIELDS,
+      versionFallback: 0,
+    });
+    const edited = entitySaveReducer(ready, { type: 'set', name: 'a', value: 'y' });
+    const adopted = entitySaveReducer(edited, { type: 'version', version: 4 });
+    expect(adopted.version).toBe(4);
+    expect(adopted.values['a']).toBe('y');
+    expect(adopted.status).toBe('dirty');
+    expect(entitySaveReducer(adopted, { type: 'version', version: -1 })).toBe(adopted);
+  });
+});
+
+describe('the studio’s clock in the screens (Admin v2 U9)', () => {
+  it('one clock per zone, the same object each time; an unlisted zone is the default', () => {
+    expect(clockFor('Asia/Dubai')).toBe(clockFor('Asia/Dubai'));
+    expect(clockFor('Europe/Paris').zone).toBe('Asia/Riyadh');
+    expect(clockFor(null).zone).toBe('Asia/Riyadh');
+  });
+
+  it('prints the same moment in each zone’s wall time', () => {
+    const at = '2026-10-15T21:30:00.000Z';
+    expect(clockFor('Asia/Riyadh').formatDateTime(at)).toBe('16 Oct 2026, 00:30');
+    expect(clockFor('Asia/Dubai').formatDateTime(at)).toBe('16 Oct 2026, 01:30');
+    expect(clockFor('Europe/London').formatDateTime(at)).toBe('15 Oct 2026, 22:30');
+    expect(clockFor('UTC').formatTime(at)).toBe('21:30');
+    // "tomorrow" follows the zone's calendar.
+    const now = '2026-10-15T20:30:00.000Z';
+    expect(clockFor('UTC').relTime('2026-10-16T08:00:00.000Z', now)).toBe('tomorrow');
+    expect(clockFor('Asia/Dubai').relTime('2026-10-16T08:00:00.000Z', now)).toBe('in 11 h');
+  });
+
+  it('"Saved at" is the provider’s zone, in the island and in the pure helper', () => {
+    const at = '2026-10-15T21:30:00.000Z';
+    expect(saveStatusText('saved', at, undefined, clockFor('Asia/Dubai'))).toBe('Saved at 01:30');
+    const html = renderToStaticMarkup(
+      createElement(ClockProvider, {
+        tz: 'Europe/London',
+        children: createElement(SaveStatus, { state: 'saved', savedAt: at }),
+      }),
+    );
+    expect(html).toContain('Saved at 22:30');
+  });
+});
+
+describe('the General screen’s words', () => {
+  it('the logo tiles say why they cannot change, and spell no brand', () => {
+    const html = renderToStaticMarkup(createElement(BrandFacts, { logoSrc: '/_image?x' }));
+    expect(html).toContain(LOGO_NOTE);
+    expect(html).toContain('alt="Logo"');
+    expect(html).toContain('alt="Logo for light backgrounds"');
+    expect(html).not.toMatch(/Braiin/i);
+    expect(html).not.toMatch(/\sstyle=/);
+  });
+
+  it('the applications switch: live for Admin, disabled with the reason for Developer', () => {
+    const admin = renderToStaticMarkup(
+      createElement(ApplicationsSwitch, { open: true, canChange: true, onChanged: () => undefined }),
+    );
+    expect(admin).toMatch(/role="switch"[^>]*aria-checked="true"/);
+    expect(admin).not.toMatch(/role="switch"[^>]*disabled/);
+    const developer = renderToStaticMarkup(
+      createElement(ApplicationsSwitch, { open: false, canChange: false, onChanged: () => undefined }),
+    );
+    expect(developer).toMatch(/role="switch"[^>]*disabled/);
+    expect(developer).toContain(LOCKED_NOTE);
+  });
+
+  it('the page is the server’s gate and passes the island its zone; no style attribute', () => {
+    const page = readFileSync('src/pages/admin/settings.astro', 'utf8');
+    expect(page).toContain("can(session.role, 'settings.general') === 'full'");
+    expect(page).toContain('tz={tz}');
+    expect(page).not.toMatch(/\sstyle=/);
+    const maintenance = readFileSync('src/pages/admin/maintenance.astro', 'utf8');
+    expect(maintenance).toContain("can(session.role, 'maintenance.manage') === 'full'");
+    expect(maintenance).toContain('tz={tz}');
+  });
+});
+
+describe('the maintenance screen’s words', () => {
+  it('Turn on says who still sees the site, and when that is nobody', () => {
+    expect(turnOnText(true, 0)).toContain('Your signed in team still sees the site.');
+    expect(turnOnText(false, 2)).toContain('Only the addresses you allow still see the site.');
+    expect(turnOnText(false, 0)).toContain('No address is allowed, so everyone sees it, you included.');
+    for (const text of [turnOnText(true, 0), turnOnText(false, 0)]) {
+      expect(text).toContain('within about a minute');
+      expect(text).not.toMatch(/[–—]/);
+    }
+  });
+
+  it('the dialog: Cancel first and focused, Turn on as the danger button', () => {
+    const html = renderToStaticMarkup(
+      createElement(TurnOnDialog, {
+        open: false,
+        bypass: true,
+        allowed: 0,
+        onCancel: () => undefined,
+        onConfirm: () => undefined,
+      }),
+    );
+    expect(html.indexOf('Cancel')).toBeLessThan(html.indexOf('>Turn on<'));
+    expect(html).toContain('data-autofocus');
+  });
+
+  it('the sketch draws the values, class-based, with the page’s built-in words', () => {
+    const html = renderToStaticMarkup(
+      createElement(MaintenanceSketch, {
+        values: { background: 'black', showContact: false, showDate: true, until: '2026-11-03' },
+      }),
+    );
+    expect(html).toContain('data-bg="black"');
+    expect(html).toContain('We&#x27;re making something new.');
+    expect(html).toContain('Back on 3 November');
+    expect(html).not.toContain('WhatsApp');
+    expect(html).not.toMatch(/\sstyle=/);
+    expect(dayWords('2026-13-01')).toBe('');
+  });
+});
+
+describe('the studio’s zone for a request (studioTimeZone)', () => {
+  const read = vi.fn();
+  const sb = (answer: { data: unknown; error: unknown }) =>
+    ({
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => {
+              read();
+              return answer;
+            },
+          }),
+        }),
+      }),
+    }) as never;
+  beforeEach(() => read.mockReset());
+
+  it('reads once per request, the listed zone or the default', async () => {
+    const { studioTimeZone, resetStudioTimeZoneWarning } = await import(
+      '@/lib/admin/studioTimeZone'
+    );
+    resetStudioTimeZoneWarning();
+    const locals = {
+      supabase: sb({ data: { timezone: 'Asia/Dubai' }, error: null }),
+      session: { tenantId: 't' },
+    } as never;
+    expect(await studioTimeZone(locals)).toBe('Asia/Dubai');
+    expect(await studioTimeZone(locals)).toBe('Asia/Dubai');
+    expect(read).toHaveBeenCalledTimes(1);
+    for (const answer of [
+      { data: null, error: null },
+      { data: { timezone: 'Mars/Olympus' }, error: null },
+      { data: null, error: { message: 'boom' } },
+    ]) {
+      expect(await studioTimeZone({ supabase: sb(answer), session: { tenantId: 't' } } as never)).toBe(
+        'Asia/Riyadh',
+      );
+    }
+    expect(await studioTimeZone({ session: null } as never)).toBe('Asia/Riyadh');
+  });
+});
