@@ -130,7 +130,15 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row
     value_points: [],
     deliverables: [],
   },
-  site_profile: { address_country: 'SA', socials: [], accepting_applications: false },
+  site_profile: {
+    address_country: 'SA',
+    socials: [],
+    accepting_applications: false,
+    // 0075: the footer settings (today's footer), NOT NULL with these defaults
+    footer_style: 'light',
+    footer_show_email: true,
+    footer_show_social: false,
+  },
   statistics: {
     status: 'draft',
     sort_order: 0,

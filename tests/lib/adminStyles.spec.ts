@@ -130,11 +130,13 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
     expect([...ADMIN_STYLESHEETS].sort()).toEqual([
       'activity.css',
       'dashboard.css',
+      'general.css',
       'health.css',
       'help.css',
       'kit.css',
       'leads.css',
       'login.css',
+      'maintenance.css',
       'media.css',
       'personal.css',
       'search.css',

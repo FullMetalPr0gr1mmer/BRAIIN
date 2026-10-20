@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { MaintenanceInputSchema } from '@schemas/maintenance';
+import { MaintenanceInputSchema, maintenanceInForce } from '@schemas/maintenance';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { OptimisticLockError } from '@/lib/admin/errors';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
@@ -29,6 +29,13 @@ export const prerender = false;
 
 const DEFAULT_VALUE = { active: false, allowlist: [] };
 
+/** The audit action of a save: a flip as visitors see it, or a change of the settings. */
+const AUDIT_ACTIONS = {
+  on: { action: 'maintenance.enable' },
+  off: { action: 'maintenance.disable' },
+  update: { action: 'maintenance.update' },
+} as const;
+
 export const GET = defineAdminRoute({
   cap: 'maintenance.manage',
   handler: async ({ auth, sb }) => {
@@ -43,7 +50,8 @@ export const GET = defineAdminRoute({
     return {
       ...formOf(data?.maintenance ?? DEFAULT_VALUE, now),
       version: data?.version ?? 0,
-      edgeActive: edge === null ? null : edge.active,
+      // Whether the edge has maintenance in force now (null: its value cannot be read).
+      edgeActive: edge === null ? null : maintenanceInForce(edge, now),
     };
   },
 });
@@ -109,12 +117,9 @@ export const PATCH = defineAdminRoute({
     // Turning maintenance ON or OFF is a sitewide availability change; the operator's own IP
     // is recorded so "who took the site down at 03:00" has an answer. Field NAMES only.
     const form = formOf(plan.next, now);
+    const kind = !plan.flipped ? 'update' : form.effective.active ? 'on' : 'off';
     audit({
-      action: plan.flipped
-        ? form.effective.active
-          ? 'maintenance.enable'
-          : 'maintenance.disable'
-        : 'maintenance.update',
+      ...AUDIT_ACTIONS[kind],
       entityType: 'site_settings',
       entityId: auth.tenantId,
       detail: {
@@ -127,6 +132,6 @@ export const PATCH = defineAdminRoute({
       },
     });
 
-    return { ...form, version, kvSynced, edgeActive: kvSynced ? plan.next.active : null };
+    return { ...form, version, kvSynced, edgeActive: kvSynced ? form.effective.active : null };
   },
 });

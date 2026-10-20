@@ -14,6 +14,7 @@ export type FieldKind =
   | 'number'
   | 'url'
   | 'datetime'
+  | 'date' // a calendar day 'YYYY-MM-DD' (<input type="date">), '' = none (Admin v2 U9b)
   | 'tags'
   | 'json'
   // UI v2 (PR3): composite and referencing kinds
@@ -145,6 +146,24 @@ export interface SyncActionDef {
   label: string;
 }
 
+/**
+ * A card of an editor's fields (Admin v2 U9, EditorForm `groups`): the prototype draws a
+ * settings screen as titled cards in two columns. Fields named by no group render after the
+ * groups, as before, so an editor without groups is unchanged.
+ */
+export interface FieldGroup {
+  id: string;
+  title: string;
+  /** A line under the title. */
+  sub?: string;
+  /** The names of its fields, in order. */
+  fields: readonly string[];
+  /** A `<details>` closed by default (an Advanced card); an error inside opens it. */
+  collapsible?: boolean;
+  /** Which column on a wide screen; `full` spans both. Default `full`. */
+  column?: 'left' | 'right' | 'full';
+}
+
 export interface ResourceUi {
   /** URL segment for both /admin/<slug> and /api/admin/<slug>. */
   slug: string;
@@ -164,4 +183,6 @@ export interface SingletonUi {
   endpoint: string;
   title: string;
   fields: readonly FieldDef[];
+  /** Admin v2 U9: the cards the fields sit in (EditorForm). */
+  groups?: readonly FieldGroup[];
 }

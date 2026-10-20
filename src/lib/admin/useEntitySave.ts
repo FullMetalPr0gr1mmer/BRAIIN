@@ -49,6 +49,8 @@ export interface EntitySave {
   message: string | null;
   save(): Promise<boolean>;
   reloadTheirs(): Promise<void>;
+  /** Admin v2 U9: take the row's version after this screen moved it itself (entitySave.ts). */
+  adoptVersion(version: number): void;
 }
 
 export interface UseEntitySaveOptions {
@@ -58,6 +60,11 @@ export interface UseEntitySaveOptions {
   defaults?: Row;
   /** A created record: by default its edit screen opens (resources only). */
   onCreated?: (row: Row) => void;
+  /**
+   * Admin v2 U9: the row as the server answered it, on every load and save: what a screen
+   * shows beside the form (maintenance's state now, whether the edge took the change).
+   */
+  onRow?: (row: Row) => void;
 }
 
 /** "?edge=missed" on the address: the create that led here missed the edge snapshot. */
@@ -77,6 +84,8 @@ export function useEntitySave(
     throw new Error('Draft saving arrives with releases (R12)');
   }
   const { fields, defaults, onCreated } = options;
+  const onRow = useRef(options.onRow);
+  onRow.current = options.onRow;
   const isNew = target.kind === 'resource' && id === null;
   const [state, dispatch] = useReducer(entitySaveReducer, undefined, () => {
     const first = initialSaveState(fields, isNew, defaults);
@@ -105,6 +114,7 @@ export function useEntitySave(
         fields,
         versionFallback: versionFallback(targetRef.current),
       });
+      onRow.current?.(row);
     } catch (err) {
       dispatch({ type: 'load-failed', message: describeError(err) });
     }
@@ -126,6 +136,7 @@ export function useEntitySave(
         fields,
         versionFallback: versionFallback(targetRef.current),
       });
+      onRow.current?.(row);
     } catch (err) {
       dispatch({
         type: 'save-failed',
@@ -165,6 +176,7 @@ export function useEntitySave(
         return true;
       }
       dispatch({ type: 'saved', row, fields, at: new Date().toISOString() });
+      onRow.current?.(row);
       return true;
     } catch (err) {
       if (err instanceof AdminApiError && err.info.status === 409) {
@@ -212,6 +224,10 @@ export function useEntitySave(
     message: state.phase === 'load-failed' ? null : state.message,
     save,
     reloadTheirs,
+    adoptVersion: useCallback(
+      (version: number) => dispatch({ type: 'version', version }),
+      [],
+    ),
   };
 }
 

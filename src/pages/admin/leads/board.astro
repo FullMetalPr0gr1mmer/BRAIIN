@@ -10,6 +10,9 @@ import { boardFilters, parseLeadFilters } from '@/lib/crm/leadUrl';
 
 export const prerender = false;
 
+// The studio's time zone (Admin v2 U9): the island prints its dates in it, server and browser.
+const studioTz = await studioTimeZone(Astro.locals);
+
 // The pipeline board (Admin v2 C4b, crm.md §11 screen 2; the Leads area's Pipeline tab,
 // decision D2): a column per stage with its non-spam leads, "Move to…" on every card. The
 // first view is rendered here for the filters the address carries (whose, where from, which
@@ -39,8 +42,6 @@ const [frame, initial] =
         readBoardInitial(sb, session, filters, now, studioTz),
       ])
     : [null, null];
-// The studio's time zone (Admin v2 U9): the island prints its dates in it, server and browser.
-const studioTz = await studioTimeZone(Astro.locals);
 ---
 
 <AdminLayout

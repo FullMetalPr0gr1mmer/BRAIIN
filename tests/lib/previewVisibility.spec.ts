@@ -141,8 +141,9 @@ describe('the mirror over the fixture tenant', () => {
       'services',
     ]);
     // 0073 adds the share images: entity_seo (and the parents its fence reads, blog_posts
-    // among them) and seo_defaults.
-    expect(visibilityClosure(['media_assets']).size).toBe(14);
+    // among them) and seo_defaults; 0075 the site's icons: site_profile.
+    expect(visibilityClosure(['media_assets']).size).toBe(15);
+    expect(visibilityClosure(['media_assets'])).toContain('site_profile');
     for (const table of PREVIEW_TABLES)
       expect(VISIBILITY_DEPS[table as PreviewTable]).toBeDefined();
   });

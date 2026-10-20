@@ -80,7 +80,7 @@ export function worthChecking(cookies: AstroCookies, now: number = Date.now()): 
 
 export interface BypassDeps {
   /** Seams for tests: the session client and the check, as the admin builds them. */
-  createClient?: typeof createSessionClient;
+  sessionClient?: typeof createSessionClient;
   resolve?: typeof resolveAuthContext;
   timeoutMs?: number;
   now?: number;
@@ -96,7 +96,7 @@ export async function staffMayBypass(
 ): Promise<boolean> {
   try {
     if (!worthChecking(cookies, deps.now)) return false;
-    const supabase = (deps.createClient ?? createSessionClient)(cookies);
+    const supabase = (deps.sessionClient ?? createSessionClient)(cookies);
     const check = (deps.resolve ?? resolveAuthContext)(supabase).then(
       (result) => result.ctx !== null && !result.revoke,
       () => false,

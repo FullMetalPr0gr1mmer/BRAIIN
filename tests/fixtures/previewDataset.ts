@@ -711,6 +711,17 @@ export function fixtureTables(): Record<string, Row[]> {
         socials: [],
         accepting_applications: false,
         updated_at: '2026-01-01T00:00:00+00:00',
+        // Admin v2 U9 (0075): no tagline, phone, map or icons; today's footer.
+        tagline: null,
+        phone_e164: null,
+        phone_display: null,
+        map_url: null,
+        favicon_media_id: null,
+        app_icon_media_id: null,
+        footer_copyright: null,
+        footer_style: 'light',
+        footer_show_email: true,
+        footer_show_social: false,
       },
     ],
     seo_defaults: [

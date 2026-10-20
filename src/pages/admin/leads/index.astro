@@ -11,6 +11,9 @@ import { leadsSubline } from '@/lib/crm/leadView';
 
 export const prerender = false;
 
+// The studio's time zone (Admin v2 U9): the island prints its dates in it, server and browser.
+const studioTz = await studioTimeZone(Astro.locals);
+
 // The leads list (Admin v2 C4b, crm.md §11 screen 1): the KPIs, the chips, the search, the
 // filters, the table and its bulk bar. The first view is rendered here, for the filters the
 // address carries (src/lib/crm/leadUrl.ts: never a search), so the page is complete without
@@ -47,8 +50,6 @@ const summary = initial?.summary ?? null;
 const subtitle = summary
   ? leadsSubline(summary, filters.range)
   : 'Every inquiry from the site’s forms, and the ones added by hand.';
-// The studio's time zone (Admin v2 U9): the island prints its dates in it, server and browser.
-const studioTz = await studioTimeZone(Astro.locals);
 ---
 
 <AdminLayout title="Leads" subtitle={subtitle} styles={['leads.css']}>

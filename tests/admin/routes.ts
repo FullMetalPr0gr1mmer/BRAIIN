@@ -126,7 +126,20 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     cap: 'siteHealth.view',
     render: 'server',
   },
-  { href: '/admin/settings', api: '/api/admin/settings', cap: 'settings.general' },
+  // Admin v2 U9: General settings and maintenance render their gate on the server (a 403 and
+  // Refused.astro) before they hydrate their editors.
+  {
+    href: '/admin/settings',
+    api: '/api/admin/settings',
+    cap: 'settings.general',
+    render: 'server',
+  },
+  {
+    href: '/admin/maintenance',
+    api: '/api/admin/settings/maintenance',
+    cap: 'maintenance.manage',
+    render: 'server',
+  },
   { href: '/admin/integrations', api: '/api/admin/integrations', cap: 'settings.integrations' },
   { href: '/admin/themes', api: '/api/admin/themes', cap: 'theme.edit' },
   // Admin v2 U10: SEO is server-rendered with in-page tabs (Pages, Redirects, Site wide); a

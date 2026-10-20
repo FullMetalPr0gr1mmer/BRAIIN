@@ -88,6 +88,20 @@ for (const role of STAFF_ROLES) {
   });
 }
 
+// Admin v2 U9b: maintenance's "Preview full screen" is an HTML page behind
+// maintenance.manage, not a list: asked directly, as every role without the capability.
+for (const role of STAFF_ROLES.filter((r) => ROLE_CAPS[r]['maintenance.manage'] === 'none')) {
+  test.describe(`as ${role}, the maintenance preview`, () => {
+    test.use({ storageState: authFile(role) });
+
+    test('is refused by the server', async ({ page }) => {
+      const res = await page.request.get('/api/admin/settings/maintenance/preview?lang=en');
+      expect(res.status()).toBe(403);
+      expect(await res.json()).toMatchObject({ ok: false, error: 'forbidden' });
+    });
+  });
+}
+
 for (const role of STAFF_ROLES.filter((r) => ROLE_CAPS[r]['services.write'] === 'none')) {
   test.describe(`as ${role}, writing`, () => {
     test.use({ storageState: authFile(role) });

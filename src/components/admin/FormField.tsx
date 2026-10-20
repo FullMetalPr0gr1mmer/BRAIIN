@@ -269,7 +269,9 @@ export function Field({
         ? 'url'
         : field.kind === 'datetime'
           ? 'datetime-local'
-          : 'text';
+          : field.kind === 'date'
+            ? 'date'
+            : 'text';
   const text = value === null || value === undefined ? '' : String(value);
   // A list of bilingual phrases stores each as {en, ar} (ui/fields.ts bilingualList): the
   // `ar` box of an item is Arabic text.

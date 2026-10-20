@@ -1184,7 +1184,8 @@ describe('the guides say only what the admin does', () => {
     expect(SCORE_WEIGHTS).toEqual({ speed: 40, checks: 40, uptime: 20 });
     expect(uptimePoints(100)).toBe(100);
     expect(uptimePoints(99)).toBe(0);
-    expect(SCHEDULES['*/10 * * * *']).toBe(HEALTH_JOBS);
+    // The health probes run every 10 minutes (Admin v2 U9b's reconcile shares the trigger).
+    expect(SCHEDULES['*/10 * * * *']).toContain(HEALTH_JOBS[0]);
     expect(THRESHOLDS.domainFailDays).toBe(30);
     expect(THRESHOLDS.certificateFailDays).toBe(14);
     // Six failed reads at 10 minutes: an hour.

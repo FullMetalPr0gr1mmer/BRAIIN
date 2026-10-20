@@ -1,3 +1,4 @@
+import { MAINTENANCE_DEFAULTS } from '@schemas/maintenance';
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
@@ -102,11 +103,13 @@ const maintenanceOn = (changedAt: string | undefined) => async (): Promise<Maint
   active: true,
   allowlist: ['203.0.113.9'],
   ...(changedAt ? { changedAt } : {}),
+  snapshot: { ...MAINTENANCE_DEFAULTS, active: true, allowlist: ['203.0.113.9'] },
 });
 
 const noMaintenance = async (): Promise<MaintenanceState | null> => ({
   active: false,
   allowlist: [],
+  snapshot: MAINTENANCE_DEFAULTS,
 });
 
 describe('the bell: who gets what', () => {

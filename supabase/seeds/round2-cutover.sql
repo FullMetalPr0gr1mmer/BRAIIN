@@ -157,7 +157,7 @@ on conflict (tenant_id) do nothing;
 
 -- site_profile (00-tenant.json)
 insert into public.site_profile (tenant_id, brand_name, contact_email, location, address_locality, address_country, founded_year, socials, accepting_applications) values
-  ('00000000-0000-0000-0000-0000000000b1', '{"en":"Braiin Statiion","ar":"بريّن ستيشن"}'::jsonb, 'hello@braiinstatiion.com', '{"en":"Jeddah, Saudi Arabia","ar":"جدة، المملكة العربية السعودية"}'::jsonb, '{"en":"Jeddah","ar":"جدة"}'::jsonb, 'SA', 2019, '[{"network":"instagram","handle":"@braiinstatiion","url":"https://instagram.com/braiinstatiion"},{"network":"linkedin","handle":"@braiin-statiion","url":"https://linkedin.com/company/braiin-statiion"},{"network":"behance","handle":"@braiinstatiion","url":"https://behance.net/braiinstatiion"},{"network":"youtube","handle":"@braiinstatiion","url":"https://youtube.com/@braiinstatiion"}]'::jsonb, false)
+  ('00000000-0000-0000-0000-0000000000b1', '{"en":"Braiin Statiion","ar":"بريّن ستيشن"}'::jsonb, 'hello@braiinstatiion.com', '{"en":"Jeddah, Saudi Arabia","ar":"جدة، المملكة العربية السعودية"}'::jsonb, '{"en":"Jeddah","ar":"جدة"}'::jsonb, 'SA', 2019, '[{"network":"instagram","handle":"@braiinstatiion","url":"https://instagram.com/braiinstatiion","visible":true},{"network":"linkedin","handle":"@braiin-statiion","url":"https://linkedin.com/company/braiin-statiion","visible":true},{"network":"behance","handle":"@braiinstatiion","url":"https://behance.net/braiinstatiion","visible":true},{"network":"youtube","handle":"@braiinstatiion","url":"https://youtube.com/@braiinstatiion","visible":true}]'::jsonb, false)
 on conflict (tenant_id) do nothing;
 
 -- media_assets (05-media-stills.json)

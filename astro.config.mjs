@@ -53,6 +53,8 @@ const ADMIN_DASHBOARD_LAZY =
 // line, sorted: a later slice adds its island and its screen directory here, a line each.
 // prettier-ignore
 const ADMIN_EDITOR_ISLAND_NAMES = [
+  'AdminGeneral',
+  'AdminMaintenance',
   'AdminMediaLibrary',
   'AdminResourceForm',
   'AdminSeo',
@@ -60,6 +62,8 @@ const ADMIN_EDITOR_ISLAND_NAMES = [
 ];
 // prettier-ignore
 const ADMIN_EDITOR_SCREEN_DIRS = [
+  'general',
+  'maintenance',
   'media',
   'seo',
 ];

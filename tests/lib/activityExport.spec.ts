@@ -341,7 +341,9 @@ describe('the file', () => {
     expect(text).not.toContain('sara@acme.example');
     expect(text).not.toContain('should-never-be-read');
     expect(text).not.toContain('Called twice');
-    expect(new Set(reads.map((r) => r.table))).toEqual(new Set(['audit_log']));
+    // No title is looked up (no entity table is read); site_settings is the studio's time
+    // zone, the file's `when_studio` column (Admin v2 U9).
+    expect(new Set(reads.map((r) => r.table))).toEqual(new Set(['audit_log', 'site_settings']));
   });
 
   it('neutralises a spreadsheet formula in a name, and marks a former member', async () => {
@@ -414,16 +416,27 @@ describe('the studio clock, without Intl', () => {
     const { studioDateTimeWriter } = await import('@/lib/admin/activityExport');
     const { clockFor } = await import('@/lib/admin/relTime');
     const { STUDIO_TIME_ZONES } = await import('@schemas/timeZones');
-    for (const { value: tz } of STUDIO_TIME_ZONES) {
+    const sweep = (tz: string, start: number, steps: number, stepMin: number) => {
       const write = studioDateTimeWriter(tz);
       const { formatDateTime } = clockFor(tz);
-      // A year in 53-minute steps crosses every DST change of 2026 (London's in March and
-      // October, Cairo's in April and October) at every minute offset of the hour.
-      const start = Date.UTC(2026, 0, 1, 0, 7);
-      for (let i = 0; i < 9_920; i += 1) {
-        const at = new Date(start + i * 53 * 60_000).toISOString();
+      for (let i = 0; i < steps; i += 1) {
+        const at = new Date(start + i * stepMin * 60_000).toISOString();
         expect(write(at), `${tz} ${at}`).toBe(formatDateTime(at));
       }
+    };
+    // Every zone across the year, in 1 d 7 h 13 min steps (every hour of the day comes up).
+    for (const { value: tz } of STUDIO_TIME_ZONES) sweep(tz, Date.UTC(2026, 0, 1, 0, 7), 300, 1873);
+    // Around each 2026 change, minute by minute through the hours either side: London
+    // (29 Mar 01:00 UTC, 25 Oct 01:00 UTC) and Cairo (its last Friday of April and last
+    // Thursday of October, at midnight local).
+    for (const [tz, at] of [
+      ['Europe/London', Date.UTC(2026, 2, 29, 1)],
+      ['Europe/London', Date.UTC(2026, 9, 25, 1)],
+      ['Africa/Cairo', Date.UTC(2026, 3, 23, 22)],
+      ['Africa/Cairo', Date.UTC(2026, 9, 29, 21)],
+    ] as const) {
+      sweep(tz, at - 3 * 3_600_000, 6 * 60 / 7, 7);
     }
   });
+
 });

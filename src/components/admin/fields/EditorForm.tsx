@@ -5,7 +5,7 @@ import SaveStatus from '@/components/admin/kit/SaveStatus';
 import { badInputErrors, type MappedErrors } from '@/lib/admin/fieldErrors';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
 import { useSaveShortcut } from '@/lib/admin/useEntitySave';
-import type { FieldDef } from '@/lib/admin/uiSchema';
+import type { FieldDef, FieldGroup } from '@/lib/admin/uiSchema';
 import { Field } from '../FormField';
 import {
   ArabicGapsProvider,
@@ -40,6 +40,13 @@ export interface EditorFormProps {
    * Enter in it still saves.
    */
   after?: ReactNode;
+  /**
+   * Admin v2 U9: the cards the fields sit in (the prototype's settings screens: titled cards
+   * in two columns, an Advanced card closed). Without it the fields are one card, as before.
+   */
+  groups?: readonly FieldGroup[] | undefined;
+  /** Admin v2 U9: what a group shows before its fields, by group id (the logo tiles). */
+  slots?: Readonly<Record<string, ReactNode>> | undefined;
 }
 
 const LANGUAGE_KINDS = new Set(['bilingual', 'prose', 'richtext']);
@@ -55,6 +62,71 @@ function hasBilingual(fields: readonly FieldDef[]): boolean {
   );
 }
 
+/** The groups' cards, in two columns where a group names one; ungrouped fields after. */
+function GroupedFields({
+  groups,
+  slots,
+  fields,
+  renderField,
+}: {
+  groups: readonly FieldGroup[];
+  slots: Readonly<Record<string, ReactNode>> | undefined;
+  fields: readonly FieldDef[];
+  renderField: (field: FieldDef) => ReactNode;
+}) {
+  const byName = new Map(fields.map((f) => [f.name, f]));
+  const grouped = new Set(groups.flatMap((g) => g.fields));
+  const card = (group: FieldGroup) => {
+    const body = (
+      <>
+        {group.sub && <p className="admin-sub editor__group-sub">{group.sub}</p>}
+        {slots?.[group.id]}
+        {group.fields.flatMap((name) => {
+          const field = byName.get(name);
+          return field ? [renderField(field)] : [];
+        })}
+      </>
+    );
+    const headingId = `g-${group.id}`;
+    // A closed card is a <details>: an error inside it is shown by opening it first
+    // (fields/reveal.ts), so the summary links of the ErrorSummary still land.
+    return group.collapsible ? (
+      <details key={group.id} className="card editor__group" data-group={group.id}>
+        <summary className="card-title">{group.title}</summary>
+        {body}
+      </details>
+    ) : (
+      <section
+        key={group.id}
+        className="card editor__group"
+        data-group={group.id}
+        aria-labelledby={headingId}
+      >
+        <h2 className="card-title" id={headingId}>
+          {group.title}
+        </h2>
+        {body}
+      </section>
+    );
+  };
+  const left = groups.filter((g) => g.column === 'left');
+  const right = groups.filter((g) => g.column === 'right');
+  const full = groups.filter((g) => g.column !== 'left' && g.column !== 'right');
+  const rest = fields.filter((f) => !grouped.has(f.name));
+  return (
+    <>
+      {(left.length > 0 || right.length > 0) && (
+        <div className="grid grid--2 editor__cols">
+          <div className="editor__col">{left.map(card)}</div>
+          <div className="editor__col">{right.map(card)}</div>
+        </div>
+      )}
+      {full.map(card)}
+      {rest.length > 0 && <div className="card">{rest.map(renderField)}</div>}
+    </>
+  );
+}
+
 export default function EditorForm({
   save,
   fields,
@@ -63,6 +135,8 @@ export default function EditorForm({
   canAdvanced,
   children,
   after,
+  groups,
+  slots,
 }: EditorFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   // Errors found here before anything is sent (a number or a date the browser could not
@@ -80,7 +154,7 @@ export default function EditorForm({
     const unreadable = form
       ? [
           ...form.querySelectorAll<HTMLInputElement>(
-            'input[type="number"], input[type="datetime-local"]',
+            'input[type="number"], input[type="datetime-local"], input[type="date"]',
           ),
         ]
           .filter((input) => input.validity.badInput)
@@ -125,11 +199,22 @@ export default function EditorForm({
   if (save.busy && save.status !== 'saving') return <p className="admin-sub">Loading…</p>;
 
   const bilingual = hasBilingual(fields);
+  const errors = local ?? save.errors;
+  const renderField = (field: FieldDef) => (
+    <Field
+      key={field.name}
+      field={field}
+      value={save.values[field.name]}
+      values={save.values}
+      onChange={save.set}
+      errors={errors.byId}
+      canAdvanced={canAdvanced}
+    />
+  );
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     submit();
   };
-  const errors = local ?? save.errors;
 
   const form = (
     // noValidate: an input of the hidden language must never block a save silently (a
@@ -158,19 +243,16 @@ export default function EditorForm({
       )}
       {children}
 
-      <div className="card">
-        {fields.map((field) => (
-          <Field
-            key={field.name}
-            field={field}
-            value={save.values[field.name]}
-            values={save.values}
-            onChange={save.set}
-            errors={errors.byId}
-            canAdvanced={canAdvanced}
-          />
-        ))}
-      </div>
+      {groups && groups.length > 0 ? (
+        <GroupedFields
+          groups={groups}
+          slots={slots}
+          fields={fields}
+          renderField={renderField}
+        />
+      ) : (
+        <div className="card">{fields.map(renderField)}</div>
+      )}
       {after}
 
       <div className="toolbar form-actions">

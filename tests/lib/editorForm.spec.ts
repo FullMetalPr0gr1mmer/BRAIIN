@@ -35,6 +35,7 @@ function fakeSave(patch: Partial<EntitySave> = {}): EntitySave {
     message: null,
     save: async () => true,
     reloadTheirs: async () => undefined,
+    adoptVersion: () => undefined,
     ...patch,
   };
 }

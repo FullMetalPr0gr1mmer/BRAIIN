@@ -323,6 +323,9 @@ const ADMIN_PAIRS = [
   ['primary', 'surface-2', 4.5, 'a link in a hovered table row'],
   ['primary', 'primary-soft', 4.5, '.msg, soft button, klein badge, pressed toolbar button'],
   ['primary', 'primary-soft-2', 4.5, 'soft button on hover'],
+  // Maintenance (Admin v2 U9b): the sketch's words over its scrim on a white still (its
+  // banner's words are warn-text on warn-soft and ink/dim on bg, below and above)
+  ['card', 'mnt-scrim-worst', 4.5, 'maintenance sketch text over the scrim (white still)'],
   // Status badges and messages
   ['ok-text', 'ok-soft', 4.5, 'published / ok badge'],
   ['warn-text', 'warn-soft', 4.5, 'draft / warn badge'],

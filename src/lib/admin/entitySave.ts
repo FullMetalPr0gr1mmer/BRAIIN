@@ -89,7 +89,13 @@ export type EntitySaveAction =
       navigating: boolean;
     }
   | { type: 'conflict' }
-  | { type: 'reset' };
+  | { type: 'reset' }
+  /**
+   * Admin v2 U9: the row moved by a write this screen made itself on another column (the
+   * General screen's job-applications switch on site_profile): the form takes the row's new
+   * version and keeps its values, so its next save is not a 409 against itself.
+   */
+  | { type: 'version'; version: number };
 
 const NO_ERRORS = { byId: {}, summary: [] } as const;
 
@@ -201,6 +207,10 @@ export function entitySaveReducer(
     case 'conflict':
       // The editor's values are kept: "Reload their version" is a choice, not a reset.
       return { ...state, phase: 'ready', status: 'error', conflict: true, message: null };
+    case 'version':
+      return Number.isInteger(action.version) && action.version >= 0
+        ? { ...state, version: action.version }
+        : state;
     case 'reset':
       return {
         ...state,

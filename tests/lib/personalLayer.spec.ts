@@ -35,6 +35,7 @@ import {
 } from '@/lib/admin/environment';
 import { accountViewFor, updateMyDisplayName } from '@/lib/admin/account';
 import { getMaintenanceState, putMaintenanceState } from '@/lib/http/maintenance';
+import { MAINTENANCE_DEFAULTS } from '@schemas/maintenance';
 
 // The personal layer's smaller parts (Admin v2 F8, docs/admin-v2/ui.md AV-05): the
 // preferences row under its optimistic lock, the environment pill's per-isolate cache,
@@ -643,14 +644,18 @@ function kv() {
 }
 
 describe('the maintenance snapshot carries when it last flipped', () => {
+  // The route's stamping (turning it on stamps now, an allowlist change keeps the stamp, a
+  // switch never recorded gets no invented time) moved with maintenance v2 (Admin v2 U9b) to
+  // tests/lib/maintenanceRoute.spec.ts, which drives the route with its live recheck mocked.
   it('round-trips changedAt, and drops a value that is not a time', async () => {
     const { env, store } = kv();
     await putMaintenanceState(env, {
+      ...MAINTENANCE_DEFAULTS,
       active: true,
       allowlist: ['203.0.113.9'],
       changedAt: '2026-10-10T08:00:00.000Z',
     });
-    expect(await getMaintenanceState(env)).toEqual({
+    expect(await getMaintenanceState(env)).toMatchObject({
       active: true,
       allowlist: ['203.0.113.9'],
       changedAt: '2026-10-10T08:00:00.000Z',
@@ -660,61 +665,9 @@ describe('the maintenance snapshot carries when it last flipped', () => {
       'site:maintenance',
       JSON.stringify({ active: false, allowlist: [], changedAt: 'soon' }),
     );
-    expect(await getMaintenanceState(env)).toEqual({ active: false, allowlist: [] });
+    expect(await getMaintenanceState(env)).not.toHaveProperty('changedAt');
     store.set('site:maintenance', JSON.stringify({ active: true, allowlist: [] }));
-    expect(await getMaintenanceState(env)).toEqual({ active: true, allowlist: [] });
-  });
-
-  async function patchMaintenance(stored: unknown, body: Record<string, unknown>) {
-    const writes: unknown[] = [];
-    const sb = {
-      from: () => {
-        const b: Record<string, unknown> = {};
-        for (const m of ['select', 'eq']) b[m] = () => b;
-        b['update'] = (payload: unknown) => {
-          writes.push(payload);
-          return b;
-        };
-        let reads = 0;
-        b['maybeSingle'] = async () =>
-          reads++ === 0 && writes.length === 0
-            ? { data: { version: 2, maintenance: stored }, error: null }
-            : { data: { version: 3 }, error: null };
-        return b;
-      },
-    };
-    const { PATCH } = (await import('@/pages/api/admin/settings/maintenance')) as {
-      PATCH: APIRoute;
-    };
-    const request = new Request('https://admin.example.test/api/admin/settings/maintenance', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ version: 2, allowlist: [], ...body }),
-    });
-    const res = await PATCH({
-      locals: { session: auth('developer'), supabase: sb },
-      request,
-      url: new URL(request.url),
-      params: {},
-    } as unknown as Parameters<APIRoute>[0]);
-    expect(res.status).toBe(200);
-    return (writes[0] as { maintenance: Record<string, unknown> }).maintenance;
-  }
-
-  it('turning it on stamps now; changing only the allowlist keeps the stamp', async () => {
-    const before = Date.now();
-    const on = await patchMaintenance({ active: false, allowlist: [] }, { active: true });
-    expect(Date.parse(String(on['changedAt']))).toBeGreaterThanOrEqual(before);
-
-    const kept = await patchMaintenance(
-      { active: true, allowlist: [], changedAt: '2026-10-09T08:00:00.000Z' },
-      { active: true, allowlist: ['203.0.113.9'] },
-    );
-    expect(kept['changedAt']).toBe('2026-10-09T08:00:00.000Z');
-  });
-
-  it('a switch never recorded is not given an invented time', async () => {
-    const unknown = await patchMaintenance({ active: false, allowlist: [] }, { active: false });
-    expect(unknown).not.toHaveProperty('changedAt');
+    expect(await getMaintenanceState(env)).toMatchObject({ active: true, allowlist: [] });
   });
 });
+

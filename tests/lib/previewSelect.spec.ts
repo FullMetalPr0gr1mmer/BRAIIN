@@ -29,9 +29,9 @@ describe('parseSelect', () => {
     const selects = loaderQueries().filter((q) => q.table !== null);
     // blog, certifications, disciplines, navigation, pageSections (2), portfolio (3),
     // sectionMedia, seo (4: U10's getSeoRules reads entity_seo and pages), serviceCases,
-    // services (2), siteProfile, statistics,
-    // taxonomy (3), team: 24 `.from()` calls; search's two are rpcs.
-    expect(selects).toHaveLength(24);
+    // services (2), siteProfile (2: the identity, and U9's icons from media_assets),
+    // statistics, taxonomy (3), team: 25 `.from()` calls; search's two are rpcs.
+    expect(selects).toHaveLength(25);
     for (const q of selects) {
       expect(q.select, `${q.file}:${q.line}`).not.toBeNull();
       expect(() => parseSelect(q.select!), `${q.file}:${q.line}`).not.toThrow();

@@ -5,6 +5,7 @@ import { useSortable } from '@/components/admin/kit/useSortable';
 import type { FieldErrors } from '@/lib/admin/fieldErrors';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import { useRevealListener } from './reveal';
+import { newItem } from '@/lib/admin/formPayload';
 
 // An array of objects — columns of the "why us" block, a case study's result cards, a
 // section's social links. Each item is edited with the same field renderer as a whole
@@ -218,7 +219,9 @@ export default function RepeaterField({
         className="repeat__add"
         data-variant="soft"
         disabled={full}
-        onClick={() => commit([...items, {}], [...keys.current, newKey()])}
+        onClick={() =>
+          commit([...items, newItem(field.itemFields ?? [])], [...keys.current, newKey()])
+        }
       >
         <Icon name="plus" size={14} />
         {full ? `At most ${max}` : `Add ${field.label.toLowerCase()}`}

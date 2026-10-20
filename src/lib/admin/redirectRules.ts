@@ -33,6 +33,7 @@ export const STATIC_PUBLIC_ROUTES: readonly string[] = [
   '/healthz',
   '/join',
   '/llms.txt',
+  '/manifest.webmanifest',
   '/portfolio',
   '/portfolio/all',
   '/privacy',
