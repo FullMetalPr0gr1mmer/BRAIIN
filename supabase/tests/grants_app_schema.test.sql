@@ -358,7 +358,7 @@ select ok(has_function_privilege('authenticated', 'public.media_usage(uuid)', 'e
           and not has_function_privilege('service_role', 'public.media_usage(uuid)', 'execute'),
   'media_usage v4 is executable by authenticated only');
 
--- ---- 15. The FAQ (0070): a column-granted public table and its CHECK helper -----------------
+-- ---- 15. The FAQ (0096): a column-granted public table and its CHECK helper -----------------
 -- faq_items is read by anon through six columns only (so it is not in section 9's table-level
 -- list), and app.faq_text_ok is called by the CHECK as the writer: staff and the service role
 -- may call it, anon may not.

@@ -1400,7 +1400,7 @@ The account allows 5 cron triggers on the Free plan; this makes 2.
 Measure once after the key is set (O-16): Workers Logs for a `*/10` invocation shows its CPU
 time (expected under 3 ms: one JSON of 10 to 30 KB) and its subrequests (at most 11).
 
-### 6l. The FAQ moves into the database (migration 0070, Admin v2 U7)
+### 6l. The FAQ moves into the database (migration 0096, Admin v2 U7)
 
 The Contact page's ten questions were code (`contactFaq.ts`); from U7 they are
 `public.faq_items`, edited at Admin → Content → FAQ. The PR that ships the new Worker deletes
@@ -1408,8 +1408,9 @@ the code copy, and there is no fallback (a copy in code would drift from what ed
 publish), so **the rows must be in production before the merge**. A deploy before step 2 drops
 the FAQ band AND the FAQPage from `/contact` and `/ar/contact` together (never one without the
 other); running step 2 then is the whole recovery (Tier A is not edge-cached today). The
-migration's number is assigned at merge (`scripts/renumber-migration.mjs`): read 0070 below as
-whatever it became.
+migration was built as 0070 and renumbered to 0096 (`0096_faq_items.sql`) at merge, above
+`main`'s highest (0095), with `scripts/renumber-migration.mjs`; 0070 was never applied, so
+`npx supabase migration list` shows no 0070 and the push applies 0096 alone.
 
 1. **Push the migration** (the PR branch with `main` merged in): `npx supabase db push
    --dry-run` lists exactly the U7 migration; push it; `npx supabase migration list`; read it

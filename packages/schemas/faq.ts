@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ContentStatusSchema, UuidSchema } from './primitives';
 
-// The FAQ (Admin v2 U7, migration 0070): one question and its answer, both languages, plain
+// The FAQ (Admin v2 U7, migration 0096): one question and its answer, both languages, plain
 // text. One shape for the admin's writes and one for the public read; the database states
 // the same rules as a CHECK (app.faq_text_ok), the backstop for any other write path.
 //

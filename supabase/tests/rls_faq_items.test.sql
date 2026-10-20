@@ -1,4 +1,4 @@
--- pgTAP: public.faq_items, the FAQ (migration 0070, Admin v2 U7).
+-- pgTAP: public.faq_items, the FAQ (migration 0096, Admin v2 U7).
 --
 -- The Contact page's FAQ band and its FAQPage JSON-LD read this table through one loader
 -- (src/lib/data/faq.ts), so what a visitor reads here is exactly what both say. Held here:
