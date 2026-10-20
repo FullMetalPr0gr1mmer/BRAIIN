@@ -29,6 +29,10 @@ function fakeSb(row: Record<string, unknown> | null, error: { message: string } 
       asked.push(`${column}=${value}`);
       return query;
     },
+    limit: (n: number) => {
+      asked.push(`limit ${n}`);
+      return query;
+    },
     maybeSingle: async () => ({ data: row, error }),
   };
   return {
@@ -59,7 +63,26 @@ describe('a published post’s author must be a published team member (D11)', ()
       'select status',
       `tenant_id=${TENANT}`,
       `id=${AUTHOR}`,
+      'limit 1',
     ]);
+  });
+
+  it('a publish (R6) reads through its database: an author published in the same release counts', async () => {
+    const { sb, asked } = fakeSb(null);
+    const seen: unknown[] = [];
+    const db = {
+      exists: async () => false,
+      list: async () => [],
+      first: async (table: string, query: unknown) => {
+        seen.push([table, query]);
+        return { status: 'published' };
+      },
+    };
+    await expect(
+      postResource.assertPublishable!(LIVE, { auth: AUTH, sb, db }),
+    ).resolves.toBeUndefined();
+    expect(seen).toEqual([['team_members', { columns: 'status', eq: { id: AUTHOR } }]]);
+    expect(asked).toEqual([]);
   });
 
   it('a draft, archived or unseen author is refused on the author field', async () => {
@@ -83,7 +106,7 @@ describe('a published post’s author must be a published team member (D11)', ()
     const broken = fakeSb(null, { message: 'boom' });
     await expect(
       postResource.assertPublishable!(LIVE, { auth: AUTH, sb: broken.sb }),
-    ).rejects.toThrow('read team_members: boom');
+    ).rejects.toThrow('check team_members: boom');
   });
 });
 

@@ -3,6 +3,8 @@ import { PostUpdateSchema, PostWriteSchema } from '@schemas/admin';
 import { readingMinutes } from '@/lib/content/tiptap';
 import { ValidationError } from '../errors';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { AuthContext } from '@/lib/auth/types';
+import { liveDb, type OverlayDb } from '@/lib/release/overlayDb';
 import type { ResourceConfig } from '../resource';
 import {
   STAMPED,
@@ -56,7 +58,7 @@ export const postResource: ResourceConfig = {
   },
   fields: fieldsOf(POST_KEYS, { ...STAMPED, body: ['body_html', 'reading_minutes'] }),
   statusOf: (input) => statusOf(input as Input),
-  assertPublishable: async (row, { auth, sb }) => {
+  assertPublishable: async (row, { auth, sb, db }) => {
     requireBilingual(row, 'title', 'Post title');
     // CLAUDE.md Pillar 3: "E-E-A-T author pages — no anonymous authorship". A published
     // post with a null author is the exact thing that rule forbids, so it is refused
@@ -68,10 +70,11 @@ export const postResource: ResourceConfig = {
     // Admin v2 U8b (D11): and that author must be PUBLISHED. The public page embeds its
     // author through anon's RLS on team_members (published rows only), so a draft or
     // archived author renders the post with no author and an Article with none. One read,
-    // the caller's own client, tenant-scoped; a member it cannot see counts as unpublished.
-    // R6: a release validator must resolve the author through the overlay (a team member
-    // published in the same release as the post), not this live read.
-    await requirePublishedAuthor(sb, auth.tenantId, String(row['author_id']));
+    // under the caller's RLS, tenant-scoped; a member it cannot see counts as unpublished. A
+    // publish and its dry run (Admin v2 R6) read through their database (`db`, the state the
+    // release leaves behind), so a team member published in the same release counts; a save
+    // while releases are off reads live, as the poster rule does (portfolio.ts).
+    await requirePublishedAuthor({ sb, auth, db }, String(row['author_id']));
   },
 };
 
@@ -84,18 +87,12 @@ export function untouchedBody(input: Input): Input {
 
 /** Refuses a publish whose author is not a published team member of the tenant (D11). */
 export async function requirePublishedAuthor(
-  sb: SupabaseClient,
-  tenantId: string,
+  ctx: { sb: SupabaseClient; auth: Pick<AuthContext, 'tenantId'>; db?: OverlayDb | undefined },
   authorId: string,
 ): Promise<void> {
-  const { data, error } = await sb
-    .from('team_members')
-    .select('status')
-    .eq('tenant_id', tenantId)
-    .eq('id', authorId)
-    .maybeSingle();
-  if (error) throw new Error(`read team_members: ${error.message}`);
-  if ((data as { status?: unknown } | null)?.status !== 'published') {
+  const db = ctx.db ?? liveDb(ctx.sb, ctx.auth);
+  const member = await db.first('team_members', { columns: 'status', eq: { id: authorId } });
+  if (member?.['status'] !== 'published') {
     throw new ValidationError('the author must be a published team member', 'authorId');
   }
 }
