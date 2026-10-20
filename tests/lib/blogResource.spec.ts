@@ -6,6 +6,7 @@ import { postResource } from '@/lib/admin/resources/blog';
 import { RESOURCE_UI } from '@/lib/admin/uiSchema';
 import ResourceTable, {
   labelled,
+  renderCell,
   selectLabels,
 } from '@/components/admin/screens/resources/ResourceTable';
 import { readOnlyNoteFor } from '@/components/admin/screens/resources/ResourceForm';
@@ -154,6 +155,51 @@ describe('the list (ResourceTable)', () => {
       ),
     ).toBeNull();
     expect(labelled('x', null)).toBe('x');
+  });
+
+  it('a status badge keeps its stored key, in every list (admin.css colours data-status)', () => {
+    const cell = (slug: string, key: string, value: string) => {
+      const ui = RESOURCE_UI[slug]!;
+      const column = ui.columns.find((c) => c.key === key)!;
+      return renderToStaticMarkup(
+        createElement(
+          'div',
+          null,
+          renderCell(labelled(value, selectLabels(column, ui.fields)), column),
+        ),
+      );
+    };
+    const lists = Object.entries(RESOURCE_UI).filter(([, ui]) =>
+      ui.columns.some((c) => c.kind === 'status'),
+    );
+    expect(lists.length).toBeGreaterThanOrEqual(12);
+    for (const [slug, ui] of lists) {
+      const status = ui.columns.find((c) => c.kind === 'status')!;
+      for (const value of ['draft', 'scheduled', 'published', 'archived']) {
+        expect(cell(slug, status.key, value), `${slug} ${value}`).toContain(
+          `data-status="${value}"`,
+        );
+      }
+    }
+    // A redirect's Code is the code (its select's words carry a dash the list must not show).
+    expect(cell('redirects', 'status', '301')).toBe('<div><span dir="auto">301</span></div>');
+  });
+
+  it('only an option column shows words, and each names a select of its form', () => {
+    const options = Object.entries(RESOURCE_UI).flatMap(([slug, ui]) =>
+      ui.columns.filter((c) => c.kind === 'option').map((c) => ({ slug, ui, column: c })),
+    );
+    expect(options.map(({ slug, column }) => `${slug}.${column.key}`)).toEqual([
+      'ai-questions.input_type',
+    ]);
+    for (const { slug, ui, column } of options) {
+      expect(selectLabels(column, ui.fields), `${slug}.${column.key}`).not.toBeNull();
+    }
+    for (const [slug, ui] of Object.entries(RESOURCE_UI)) {
+      for (const column of ui.columns.filter((c) => c.kind !== 'option')) {
+        expect(selectLabels(column, ui.fields), `${slug}.${column.key}`).toBeNull();
+      }
+    }
   });
 
   it('no "New" for a role that cannot create; there by default', () => {

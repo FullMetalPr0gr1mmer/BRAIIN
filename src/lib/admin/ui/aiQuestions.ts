@@ -13,7 +13,7 @@ export const aiQuestionsUi: ResourceUi = {
   reorder: true,
   columns: [
     { key: 'prompt', label: 'Prompt', kind: 'bilingual' },
-    { key: 'input_type', label: 'Input' },
+    { key: 'input_type', label: 'Input', kind: 'option' },
     { key: 'status', label: 'Status', kind: 'status' },
   ],
   fields: [

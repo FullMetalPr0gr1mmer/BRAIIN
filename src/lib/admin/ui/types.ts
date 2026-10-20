@@ -135,7 +135,13 @@ export interface FieldDef {
 export interface ColumnDef {
   key: string;
   label: string;
-  kind?: 'status' | 'date' | 'bilingual' | 'text' | 'boolean';
+  /**
+   * How the cell draws its value. `option` (Admin v2 U8b): the stored key of the form's
+   * `select` field for this column, shown as that option's words ("Single choice", not
+   * `single`). Opt-in per column: a status badge, or a redirect's Code, draws the stored
+   * key itself.
+   */
+  kind?: 'status' | 'date' | 'bilingual' | 'text' | 'boolean' | 'option';
 }
 
 /**

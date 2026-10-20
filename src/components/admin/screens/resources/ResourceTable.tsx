@@ -184,8 +184,8 @@ export default function ResourceTable({
         ]
       : []),
     ...rest.map((column) => {
-      // A column that is a `select` of the form shows the option's words (U8b: the
-      // Style-Finder's Input reads "Single choice", not `single`).
+      // An `option` column shows its select's words (U8b: the Style-Finder's Input reads
+      // "Single choice", not `single`); every other column draws the stored value.
       const labels = selectLabels(column, ui.fields);
       return {
         key: column.key,
@@ -314,13 +314,15 @@ export default function ResourceTable({
 }
 
 /**
- * The option words of a list column that is a `select` field of the form (its row key is
- * the column's), or null. Admin v2 U8b.
+ * The option words of an `option` column: the form's `select` field whose row key is the
+ * column's. Null for every other column, so a status badge keeps its stored key (its
+ * `data-status` is what admin.css colours) and a redirect's Code stays the code. Admin v2 U8b.
  */
 export function selectLabels(
   column: ColumnDef,
   fields: readonly FieldDef[],
 ): ReadonlyMap<string, string> | null {
+  if (column.kind !== 'option') return null;
   const field = fields.find((f) => f.kind === 'select' && columnOf(f) === column.key);
   return field?.options ? new Map(field.options.map((o) => [o.value, o.label])) : null;
 }
