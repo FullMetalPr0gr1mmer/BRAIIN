@@ -24,7 +24,7 @@ import {
   sortLiveId,
 } from '@/components/admin/kit/Sortable';
 import StatusBadge from '@/components/admin/kit/StatusBadge';
-import Tabs from '@/components/admin/kit/Tabs';
+import Tabs, { TabStrip } from '@/components/admin/kit/Tabs';
 import { backdropDismiss } from '@/components/admin/kit/useDialog';
 import KitGallery from '@/components/admin/screens/kit/KitGallery';
 import { KIT_ROWS, KIT_SECTIONS } from '@/components/admin/screens/kit/samples';
@@ -254,6 +254,60 @@ describe('Tabs', () => {
   });
 });
 
+describe('TabStrip (Admin v2 U8b: the tab list alone, for EditorForm)', () => {
+  const tabs = [
+    { id: 'content', label: 'Content' },
+    { id: 'seo', label: 'SEO' },
+  ];
+  const strip = (props: Partial<Parameters<typeof TabStrip>[0]> = {}) =>
+    html(TabStrip, {
+      tabs,
+      label: 'Post editor',
+      value: 'seo',
+      onChange: () => {},
+      idBase: 'ed',
+      ...props,
+    });
+
+  it('is controlled: the value is the selected tab, each tab controls its panel by idBase', () => {
+    const out = strip();
+    expect(out).toMatch(/^<div class="seg" role="tablist" aria-label="Post editor">/);
+    expect(out).toMatch(
+      /id="ed-tab-seo" aria-selected="true" aria-controls="ed-panel-seo" tabindex="0">SEO</,
+    );
+    expect(out).toMatch(
+      /id="ed-tab-content" aria-selected="false" aria-controls="ed-panel-content" tabindex="-1">Content</,
+    );
+    expect(out).not.toContain('role="tabpanel"');
+  });
+
+  it('a cue: a dot, and words that end the name after the visible label (WCAG 2.5.3)', () => {
+    const out = strip({ tabs: [{ ...tabs[0]!, cue: 'has errors' }, tabs[1]!] });
+    // The name is stated whole ("Content, has errors"): a visually hidden span's words are
+    // read after a space Chromium adds before an absolutely positioned box ("Content , has").
+    expect(out).toContain(
+      'tabindex="-1" aria-label="Content, has errors" data-cue="">Content<span class="tab-cue" aria-hidden="true"></span></button>',
+    );
+    expect(out).not.toContain('visually-hidden');
+    expect(out.match(/tab-cue/g)).toHaveLength(1);
+    // A tab without a cue is named by its label alone.
+    expect(out).toMatch(/aria-controls="ed-panel-seo" tabindex="0">SEO</);
+    expect(out.match(/aria-label=/g)).toHaveLength(2);
+  });
+
+  it('Tabs draws the same tab list it did before the split', () => {
+    const out = html(Tabs, {
+      tabs: tabs.map((t) => ({ ...t, panel: t.label })),
+      label: 'Editor',
+      active: 'seo',
+    });
+    expect(out).not.toContain('data-cue');
+    expect(out).toMatch(
+      /^<div class="seg" role="tablist" aria-label="Editor"><button type="button" role="tab" id="[^"]+-tab-content" aria-selected="false" aria-controls="[^"]+-panel-content" tabindex="-1">Content<\/button>/,
+    );
+  });
+});
+
 describe('Segmented and Chips', () => {
   it('a segmented choice is native radios under a legend', () => {
     const out = html(Segmented<'en' | 'ar'>, {
@@ -365,6 +419,16 @@ describe('Modal and Drawer', () => {
     );
     expect(out).toContain('<div class="drw__b">Body</div>');
     expect(out).not.toContain('drw__f');
+  });
+
+  it('a drawer’s title may be a node: someone’s own text keeps its direction (U8)', () => {
+    const out = html(Drawer, {
+      open: false,
+      onClose: () => {},
+      title: createElement('span', { dir: 'auto' }, 'ريم'),
+      children: 'Body',
+    });
+    expect(out).toMatch(/<h2 id="[^"]+"><span dir="auto">ريم<\/span><\/h2>/);
   });
 
   it('only a press on the backdrop closes the dialog: one that starts or ends inside does not', () => {

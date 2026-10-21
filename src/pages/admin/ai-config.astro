@@ -1,13 +1,22 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminSingletonForm from '@/components/admin/islands/AdminSingletonForm';
+import Note from '@/components/admin/ui/Note.astro';
+import { can } from '@/lib/authz/matrix';
+import { STYLE_FINDER_CONFIG_NOT_READ } from '@/lib/admin/styleFinderCopy';
 
 export const prerender = false;
+
+// Results & logic (Admin only, `ai.config`; a role without it gets the island's refusal). The
+// quiz is not live (Admin v2 U8a): the note says nothing here is read yet, on the server.
+const role = Astro.locals.session?.role;
+const mayConfigure = role !== undefined && can(role, 'ai.config') === 'full';
 ---
 
 <AdminLayout
   title="Style-Finder results & logic"
-  subtitle="The cost and rate-limit envelope around the AI proxy. The API key is a Worker secret and is not editable here."
+  subtitle="The spending cap, the limits and the instructions the quiz will run with."
 >
+  {mayConfigure && <Note tone="info">{STYLE_FINDER_CONFIG_NOT_READ}</Note>}
   <AdminSingletonForm client:load config="ai-config" />
 </AdminLayout>

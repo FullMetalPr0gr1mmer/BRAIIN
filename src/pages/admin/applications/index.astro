@@ -1,19 +1,53 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminApplications from '@/components/admin/islands/AdminApplications';
+import Note from '@/components/admin/ui/Note.astro';
 import { can } from '@/lib/authz/matrix';
+import { getIdentity, IDENTITY_FALLBACK } from '@/lib/identity';
+import { parseInitial } from '@/lib/admin/applicationView';
 
 export const prerender = false;
 
-// UX hint from the same ROLE_CAPS the server enforces; the routes re-check
-// `applications.manage` / `applications.pii` and RLS refuses every role but Admin.
+// Job applications (Admin v2 U8a). UX hints from the same ROLE_CAPS the server enforces; the
+// routes re-check `applications.manage` / `applications.pii` and RLS refuses every role but
+// Admin (0029, with its live Admin check). A role without the capability gets the island,
+// whose list read answers 403 and shows the refusal (tests/admin/refusals.e2e.ts).
+//
+// `?status=` and `?open=` are read here for the first paint, through parseInitial: a status
+// the Join schema knows and an id shaped as a uuid, anything else ignored.
+//
+// The closed-form note reads the identity AdminLayout already reads (memoised per request,
+// src/lib/identity: no extra read). On a database outage the identity is the code fallback,
+// which says "closed"; nothing is said then, since the real setting is unknown.
 const role = Astro.locals.session?.role ?? 'content_creator';
+const canManage = can(role, 'applications.manage') === 'full';
 const canSeePii = can(role, 'applications.pii') === 'full';
+const initial = parseInitial({
+  status: Astro.url.searchParams.get('status'),
+  open: Astro.url.searchParams.get('open'),
+});
+const identity = canManage ? await getIdentity(Astro.locals) : null;
+const formClosed =
+  identity !== null && identity !== IDENTITY_FALLBACK && identity.acceptingApplications === false;
 ---
 
 <AdminLayout
   title="Job applications"
-  subtitle="From the Join page. Contact details are encrypted; revealing them or downloading a CV is logged against your account."
+  subtitle="People who applied on the Join page. Contact details stay hidden until you reveal them, and revealing them or downloading a CV is recorded against your account."
+  styles={['applications.css']}
 >
-  <AdminApplications client:load canSeePii={canSeePii} />
+  {
+    formClosed && (
+      <Note tone="warn">
+        The Join form is closed, so no new applications arrive. An Admin can open it in{' '}
+        <a href="/admin/settings">General settings</a>.
+      </Note>
+    )
+  }
+  <AdminApplications
+    client:load
+    canSeePii={canSeePii}
+    initialStatus={initial.status}
+    openId={canManage ? initial.open : null}
+  />
 </AdminLayout>

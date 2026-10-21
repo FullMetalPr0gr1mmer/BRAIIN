@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ReactNode } from 'react';
+import { Suspense, createContext, lazy, useContext, type ReactNode } from 'react';
 import type { TiptapDoc } from '@schemas/tiptap';
 import type { FieldErrors } from '@/lib/admin/fieldErrors';
 import type { FieldDef } from '@/lib/admin/uiSchema';
@@ -41,6 +41,13 @@ import Segmented from './kit/Segmented';
 // (src/lib/admin/fieldErrors.ts). No `style=` anywhere (CSP: §3 Pillar 1).
 
 export type Row = Record<string, unknown>;
+
+/**
+ * Admin v2 U8b: the fields are shown read-only (EditorForm `readOnly`). The disabled
+ * <fieldset> around them turns every input, select and button off, but a contenteditable
+ * ignores it, so the rich text reads this and is created not editable, with no toolbar.
+ */
+export const FieldsReadOnly = createContext(false);
 
 export interface FieldProps {
   field: FieldDef;
@@ -318,6 +325,7 @@ function RichTextField({
   const ids = { en: `${id}-en`, ar: `${id}-ar` };
   const doc = (value ?? {}) as Record<string, TiptapDoc | undefined>;
   const { shown, choose } = useFieldLanguage(ids);
+  const readOnly = useContext(FieldsReadOnly);
   const both = shown === 'both';
   const half = (lang: 'en' | 'ar') => {
     const error = errors?.[ids[lang]];
@@ -339,6 +347,7 @@ function RichTextField({
             invalid={Boolean(error)}
             describedBy={error ? `${ids[lang]}-error` : undefined}
             linkDialog={LinkDialog}
+            readOnly={readOnly}
           />
         </Suspense>
         {error && (

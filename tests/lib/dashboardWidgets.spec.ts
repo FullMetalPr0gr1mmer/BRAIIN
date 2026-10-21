@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { WIDGET_IDS, type WidgetId } from '@schemas/dashboard';
-import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
+import { CMS_ROLES, ROLES, type AuthContext, type Role } from '@/lib/auth/types';
 import { CAPABILITIES, ROLE_CAPS, type Access, type Capability } from '@/lib/authz/matrix';
 import {
   loadDashboard,
@@ -220,6 +220,32 @@ describe('the loaders read only what the role sees', () => {
       ]);
       const views = dashboard.widgets.views;
       expect(views?.ok && views.data.leads).toBeNull();
+    },
+  );
+
+  // H13 (0100_attention_staff.sql): the attention view answers CMS staff only. The dashboard
+  // asks it (widget and banner) only for a role holding a content capability, all CMS staff;
+  // Developer and Sales never ask, whatever their stored layout names, so no screen of a
+  // non-staff role depends on the view's empty answer.
+  it.each(ROLES)(
+    '%s asks the attention list only as CMS staff with a content role',
+    async (role) => {
+      const { sb, calls } = fakeDb({
+        tables: {
+          admin_user_prefs: { row: { dashboard: EVERYTHING, quick_actions: [], version: 3 } },
+        },
+      });
+      const dashboard = await loadDashboard({
+        sb,
+        auth: auth(role),
+        now: NOW,
+        siteUrl: 'https://site.example',
+      });
+      const asks = calls.some((c) => c.name === 'dashboard_attention');
+      expect(asks).toBe(['admin', 'content_creator', 'seo'].includes(role));
+      expect(asks && !(CMS_ROLES as readonly string[]).includes(role)).toBe(false);
+      expect('attention' in dashboard.widgets).toBe(asks);
+      expect(dashboard.banners.placeholdersLive).toBe(0);
     },
   );
 

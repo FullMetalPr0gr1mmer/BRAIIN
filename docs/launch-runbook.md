@@ -779,6 +779,10 @@ select kind, entity_type, slug from public.dashboard_attention
  where kind = 'placeholder_live';                                          -- expect none
 ```
 
+Run it as the owner with no `SET ROLE` and no role claim: `select current_setting('role');`
+reads `none`. Since Admin v2 H13 the list answers CMS staff tokens and that session only, so a
+session that switched role reads it empty, and "expect none" would pass on nothing.
+
 > **Superseded by §6d (Round 2, 2026-09-27)** for the services: the cut-over renames, re-copies
 > or archives every row below. Kept as the record of what round 1 applied — its titles are what
 > the §6d renames compare against.

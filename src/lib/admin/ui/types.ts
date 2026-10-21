@@ -1,3 +1,6 @@
+import type { IconName } from '../icons';
+import type { SeoEntityType } from '@/lib/seo/entityPaths';
+
 // The shapes of the admin's editor descriptors (Admin v2 W0: one module per entity in
 // this directory, registered in ./index.ts). Presentation only, and Zod-free: these ship
 // in the admin client bundle.
@@ -138,7 +141,13 @@ export interface FieldDef {
 export interface ColumnDef {
   key: string;
   label: string;
-  kind?: 'status' | 'date' | 'bilingual' | 'text' | 'boolean';
+  /**
+   * How the cell draws its value. `option` (Admin v2 U8b): the stored key of the form's
+   * `select` field for this column, shown as that option's words ("Single choice", not
+   * `single`). Opt-in per column: a status badge, or a redirect's Code, draws the stored
+   * key itself.
+   */
+  kind?: 'status' | 'date' | 'bilingual' | 'text' | 'boolean' | 'option';
 }
 
 /**
@@ -169,6 +178,23 @@ export interface FieldGroup {
   column?: 'left' | 'right' | 'full';
 }
 
+/**
+ * One tab of a tabbed editor (Admin v2 U8b; the API U5 and U6 inherit, frozen in
+ * docs/admin-v2/as-built/U8.md). A FIELD tab names the fields it holds (`fields`, by
+ * name): every field of the resource sits in exactly one field tab
+ * (src/lib/admin/editorTabs.ts `validateTabs`). A PANEL tab (`panel`) holds something that
+ * is not part of the form: 'seo' mounts the shared SEO editor (SeoPanel) for the record,
+ * typed by `ResourceUi.seoEntity`, outside the form (it is its own form). A tab is one or
+ * the other. Ids are lowercase words and hyphens: they are the `?tab=` value.
+ */
+export interface EditorTabDef {
+  id: string;
+  label: string;
+  icon?: IconName;
+  fields?: readonly string[];
+  panel?: 'seo';
+}
+
 export interface ResourceUi {
   /** URL segment for both /admin/<slug> and /api/admin/<slug>. */
   slug: string;
@@ -182,6 +208,15 @@ export interface ResourceUi {
   reorder?: boolean;
   /** Exposes a "push to the edge" button and its status line (ResourceTable). */
   syncAction?: SyncActionDef;
+  /** Admin v2 U8b: the editor's tabs (EditorTabDef). Without them, one card as before. */
+  tabs?: readonly EditorTabDef[];
+  /** Admin v2 U8b: the entity a `panel: 'seo'` tab edits the SEO of (entity_seo's type). */
+  seoEntity?: SeoEntityType;
+  /**
+   * Admin v2 U8b: the record's public address, for "Open on site" in the editor's action
+   * bar; null when it has none (not published, no slug).
+   */
+  publicHref?: (values: Readonly<Record<string, unknown>>) => string | null;
 }
 
 export interface SingletonUi {

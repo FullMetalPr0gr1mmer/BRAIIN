@@ -18,9 +18,11 @@
 --      relation `authenticated` holds more of than anon at least one row in the Sales tenant,
 --      and a test fails when one has none THERE (rows of another tenant, seed.sql's, prove
 --      nothing about this comparison; a view with no tenant_id column is counted as an Admin
---      of that tenant reads it), so a new staff-only table cannot pass by being empty; the one
---      relation with no fixture is named with its reason (_no_fixture); the FAQ (0098), the
---      block's fourth table, is also asserted on its own;
+--      of that tenant reads it), so a new staff-only table cannot pass by being empty; a
+--      relation with no fixture would be named with its reason (_no_fixture: none since H13,
+--      whose 0100_attention_staff.sql made the attention list answer CMS staff only); the FAQ
+--      (0098), the block's fourth table, and the attention list are also asserted on their
+--      own;
 --   4. the member's own rows (its profile, its preferences, its tenant, the guides, its
 --      role's dashboard preset), the stats and the team note analytics.read gives it, the password fence (U14b's 0061: a Sales token reads
 --      no section of a locked page), the definers it may call (the people directory gives
@@ -30,7 +32,7 @@
 --      lead, no timeline and nobody in the directory.
 
 begin;
-select plan(65);
+select plan(66);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- T1 is created older than any seeded tenant, so inside this transaction it is the launch
@@ -104,6 +106,12 @@ insert into public.faq_items (id, tenant_id, question, answer, status, sort_orde
    '{"en":"Asked?","ar":"سؤال؟"}', '{"en":"Answered.","ar":"جواب."}', 'published', 10),
   ('93000000-0000-0000-0000-00000000fa02', '93000000-0000-0000-0000-000000000001',
    '{"en":"Drafted?","ar":"مسودة؟"}', '{"en":"Not yet.","ar":"ليس بعد."}', 'draft', 20);
+-- The attention list (0100_attention_staff.sql, H13): a published post with no cover, which
+-- anon reads, gives the list one row (missing_image) in this tenant, so its comparison is
+-- not of nothing: CMS staff read it, a Sales token none.
+insert into public.blog_posts (id, tenant_id, slug, title, status) values
+  ('93000000-0000-0000-0000-00000000b0a1', '93000000-0000-0000-0000-000000000001', 'h13-post',
+   '{"en":"Post","ar":"مقال"}', 'published');
 
 -- Staff-only rows, one at least in each relation `authenticated` holds more of than anon.
 insert into public.site_settings (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
@@ -279,11 +287,11 @@ create function _not_compared() returns text[] language sql immutable as $$
 $$;
 grant execute on function _not_compared() to anon, authenticated;
 
--- Compared, but with no fixture row in T1, each for the reason on its line:
+-- Compared, but with no fixture row in T1, each for the reason on its line. None: the last,
+-- dashboard_attention, has its row since H13 (0100_attention_staff.sql) answers it to CMS
+-- staff only.
 create function _no_fixture() returns text[] language sql immutable as $$
-  select array[
-    -- its public row (a published post with no cover) is one Sales reads and anon cannot: open, C10a's follow-up (U7.md)
-    'dashboard_attention']
+  select array[]::text[]
 $$;
 
 -- ── 1. the catalog ─────────────────────────────────────────────────────────────
@@ -431,6 +439,15 @@ select is(
   (select string_agg(who || '=' || n, ' ' order by who) from _seen where name = 'faq_items'),
   'anon=1 content_creator=2 sales=0',
   'the FAQ: anon reads the published question, a Content Creator both, a Sales token none (faq_items_staff_columns)');
+
+-- The attention list (0100_attention_staff.sql, H13): an Admin of the Sales tenant reads the
+-- published post's missing_image row; anon (no privilege on the view) and a Sales token of
+-- the same tenant read none.
+select is(
+  (select string_agg(who || '=' || n, ' ' order by who) from _seen where name = 'dashboard_attention')
+    || ' admin=' || (select n from _t1_staff where name = 'dashboard_attention'),
+  'anon=0 sales=0 admin=1',
+  'the attention list: an Admin of the Sales tenant reads its one row, anon and a Sales token none (H13)');
 
 -- ── 4. the member's own rows, the stats and the fence ──────────────────────────
 set local role authenticated;
