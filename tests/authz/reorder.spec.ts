@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import { OTHER_TENANT, makeContext, serviceClientStub, type Principal } from './harness';
 import { client, resetIds, type Call, type Db, type Row } from '../fixtures/stagedDb';
@@ -69,8 +69,14 @@ function archiveGate(shelvedSortOrder: number) {
       : null;
 }
 
+// The route's module graph is the slow part of this file: loaded once, with a hook timeout of
+// its own, so the first test never pays for it under a loaded full run (it timed out there).
+let POST: APIRoute;
+beforeAll(async () => {
+  ({ POST } = (await import('@/pages/api/admin/services/reorder')) as { POST: APIRoute });
+}, 120_000);
+
 async function reorder(principal: Principal, items: { id: string; sortOrder: number }[]) {
-  const { POST } = (await import('@/pages/api/admin/services/reorder')) as { POST: APIRoute };
   const ctx = makeContext(principal, '/api/admin/services/reorder', { items }, 'POST');
   (ctx.locals as unknown as { supabase: unknown }).supabase = client(db);
   const res = (await POST(ctx)) as Response;
