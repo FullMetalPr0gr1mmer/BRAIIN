@@ -43,14 +43,7 @@ export interface ReconcileResult {
    * What the run did: nothing, ended maintenance, healed the edge to off, refreshed the
    * buttons, or set the edge's settings to the row's while on.
    */
-  outcome:
-    | 'none'
-    | 'ended'
-    | 'ended-race'
-    | 'healed'
-    | 'contact'
-    | 'synced'
-    | 'edge-off-while-on';
+  outcome: 'none' | 'ended' | 'ended-race' | 'healed' | 'contact' | 'synced' | 'edge-off-while-on';
   kvSynced: boolean | null;
 }
 
