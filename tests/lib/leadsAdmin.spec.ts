@@ -350,11 +350,11 @@ describe('lead detail without the reveal', () => {
 });
 
 describe('saving a lead', () => {
-  it('a legacy status save reads nothing back but the safe columns, nothing gated', async () => {
+  it('an unversioned save reads nothing back but the safe columns, nothing gated', async () => {
     const res = await detail.PATCH(
       ctx(`/api/admin/leads/${LEAD}`, 'admin', {
         method: 'PATCH',
-        body: { status: 'in_progress' },
+        body: { isStarred: true },
       }),
     );
     const body = (await res.json()) as { data: Record<string, unknown> };
@@ -367,13 +367,16 @@ describe('saving a lead', () => {
     expect(body.data['email_enc']).toBeUndefined();
   });
 
-  it('a status-only save by Developer reads nothing gated either', async () => {
-    liveRole = 'developer';
-    const res = await detail.PATCH(
-      ctx(`/api/admin/leads/${LEAD}`, 'developer', { method: 'PATCH', body: { status: 'done' } }),
-    );
-    expect(res.status).toBe(200);
-    expect(events.some((e) => e.startsWith('rls:refused'))).toBe(false);
-    expect(events).not.toContain('svc:leads');
-  });
+  it.each(['developer', 'sales'] as const)(
+    'a read-mark save by %s reads nothing gated either',
+    async (role) => {
+      liveRole = role;
+      const res = await detail.PATCH(
+        ctx(`/api/admin/leads/${LEAD}`, role, { method: 'PATCH', body: { read: true } }),
+      );
+      expect(res.status).toBe(200);
+      expect(events.some((e) => e.startsWith('rls:refused'))).toBe(false);
+      expect(events).not.toContain('svc:leads');
+    },
+  );
 });

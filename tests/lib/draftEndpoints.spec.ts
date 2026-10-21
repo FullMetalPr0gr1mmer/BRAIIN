@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
-import { ROLES, type Role } from '@/lib/auth/types';
+import { CMS_ROLES, ROLES, type Role } from '@/lib/auth/types';
 import { RELEASE_REGISTRY } from '@/lib/release/registry';
 import {
   mayAuthor,
@@ -105,13 +105,17 @@ const serviceEdit = (over: Row = {}) =>
 
 describe('who the routes admit', () => {
   it('every CMS role passes the gates; each item is then checked on its own', () => {
-    for (const role of ROLES) {
+    for (const role of CMS_ROLES) {
       expect(
         STAGE_ANY_CAP.some((cap) => mayAuthor(role, typeFor(cap))),
         role,
       ).toBe(true);
     }
     expect(PENDING_ANY_CAP.length).toBeGreaterThan(0);
+  });
+
+  it('Sales (C10a) authors nothing a release holds (P-2: never Sales)', () => {
+    for (const type of RELEASE_ENTITY_TYPES) expect(mayAuthor('sales', type), type).toBe(false);
   });
 
   it('author rules are 0038’s: content by Admin and Content Creator, identity by Developer, SEO by SEO', () => {
@@ -167,7 +171,7 @@ describe('the pending summary', () => {
     callRoute(db, await pending(), 'GET', '/api/admin/releases/pending', { role, user });
 
   it('lists only the types the caller may read', async () => {
-    for (const role of ROLES) {
+    for (const role of CMS_ROLES) {
       const res = await read(role);
       expect(res.status).toBe(200);
       const types = (res.data['items'] as Row[]).map((i) => i['entityType'] as ReleaseEntityType);
@@ -179,6 +183,8 @@ describe('the pending summary', () => {
     expect(await typesOf('developer')).toEqual(['site_profile']);
     expect(await typesOf('seo')).toEqual(['service', 'service', 'entity_seo']);
     expect(await typesOf('content_creator')).toEqual(['service', 'service', 'entity_seo']);
+    // Sales reads no area a release holds, so the summary's gate refuses it (C10a).
+    expect((await read('sales')).status).toBe(403);
   });
 
   it('says who can publish each change, and what it waits for', async () => {

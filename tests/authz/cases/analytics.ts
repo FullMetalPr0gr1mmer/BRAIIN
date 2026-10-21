@@ -9,8 +9,8 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/analytics/index'),
     method: 'GET',
     url: '/api/admin/analytics',
-    // The one capability all four roles hold.
-    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    // The one capability all five roles hold.
+    allow: ['admin', 'content_creator', 'seo', 'developer', 'sales'],
   },
   {
     name: 'search analytics',
@@ -24,16 +24,16 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/analytics/realtime'),
     method: 'GET',
     url: '/api/admin/analytics/realtime',
-    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    allow: ['admin', 'content_creator', 'seo', 'developer', 'sales'],
   },
-  // Goals (G1c): every analytics.read role reads them; analytics.goals (Admin, SEO) writes
-  // and deletes them (the resource names `deleteCap: 'analytics.goals'`).
+  // Goals (G1c): every analytics.read role reads them, Sales included (C10a); analytics.goals
+  // (Admin, SEO) writes and deletes them (the resource names `deleteCap: 'analytics.goals'`).
   {
     name: 'analytics goals list',
     load: () => import('@/pages/api/admin/analytics/goals/index'),
     method: 'GET',
     url: '/api/admin/analytics/goals',
-    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    allow: ['admin', 'content_creator', 'seo', 'developer', 'sales'],
   },
   {
     name: 'analytics goals create',
@@ -48,7 +48,7 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/analytics/goals/[id]'),
     method: 'GET',
     url: `/api/admin/analytics/goals/${UUID}`,
-    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    allow: ['admin', 'content_creator', 'seo', 'developer', 'sales'],
   },
   {
     name: 'analytics goals update',

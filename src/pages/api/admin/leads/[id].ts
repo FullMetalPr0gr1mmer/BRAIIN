@@ -15,9 +15,10 @@ import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLa
 // BEFORE anything gated is read (fail-closed), then the gated columns as the service role.
 //
 // Four gates stack here, and each one alone would be insufficient:
-//   1. RLS       — `leads_read` scopes rows to Admin + Developer in-tenant, and the
-//                  RESTRICTIVE `leads_live` re-reads the profile, so a demoted, inactive
-//                  or locked token sees no lead at all (0033)
+//   1. RLS       — `leads_read` scopes rows to Admin, Developer and Sales in-tenant
+//                  (`app.role_works_leads`, 0097), and the RESTRICTIVE `leads_live`
+//                  re-reads the profile, so a demoted, inactive or locked token sees no
+//                  lead at all (0033)
 //   2. GRANTS    — the caller's client can read only the safe columns (0033). The gated
 //                  ones are read as the service role, by revealLead and the export only
 //   3. assertCap — `leads.manage` for the row, `leads.pii` for the plaintext, then a live
@@ -69,9 +70,10 @@ export const GET = defineAdminRoute({
 //   • isStarred, read and logContact never move it (a star or a read mark must not turn
 //     every open lead into a conflict); the database stamps the read mark and the contact
 //     with its own clock and the session's person.
-//   • status is the legacy panel's, kept for an old tab until C14. internalNotes is refused
-//     by the schema since C4b (a 422 naming the field): notes are a thread, written through
-//     POST /api/admin/leads/[id]/notes, audited, never by rewriting the legacy field.
+//   • the legacy fields are refused by the schema, each with a 422 naming it: internalNotes
+//     since C4b (notes are a thread, written through POST /api/admin/leads/[id]/notes,
+//     audited) and status since C10a (a lead moves by its stage; 0097 withdrew the staff
+//     UPDATE on both columns).
 export const PATCH = defineAdminRoute({
   cap: 'leads.manage',
   input: LeadPatchSchema,
@@ -112,14 +114,13 @@ export const PATCH = defineAdminRoute({
       row = data as unknown as Record<string, unknown>;
     }
 
-    // Field names, the legacy status and the stage id: never tags or values.
+    // Field names and the stage id: never tags or values.
     audit({
       action: 'lead.update',
       entityType: 'lead',
       entityId: id,
       detail: {
         fields: Object.keys(values),
-        status: input.status ?? null,
         ...(input.stageId !== undefined ? { stage: input.stageId } : {}),
       },
     });
