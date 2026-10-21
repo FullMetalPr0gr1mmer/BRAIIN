@@ -35,7 +35,9 @@ export const clientResource: ResourceConfig = {
       message: 'an https:// address, at most 300 characters',
     },
   },
-  listColumns: 'id,slug,name,show_in_marquee,visible,is_placeholder,sort_order,version,updated_at',
+  // The collection row (Admin v2 U7b) says "Logo" or "Text only".
+  listColumns:
+    'id,slug,name,logo_media_id,show_in_marquee,visible,is_placeholder,sort_order,version,updated_at',
   columns:
     'id,slug,name,logo_media_id,website_url,show_in_marquee,visible,is_placeholder,sort_order,' +
     'version,created_at,updated_at',

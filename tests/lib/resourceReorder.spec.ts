@@ -160,7 +160,9 @@ describe('ResourceTable uses it', () => {
   });
 
   it('every list that reorders rows with a lifecycle is told whether its person may archive', () => {
-    // Derived, so a list that gains Move up and Move down later is held to it too.
+    // Derived, so a list that gains Move up and Move down later is held to it too. Two screens
+    // draw such a list: ResourceTable (this helper, told by `canArchive`) and U7's collection
+    // screen (its own `renumberable`, told by the session's `permissions.remove`).
     const pages = Object.keys(RESOURCES).filter(
       (slug) => RESOURCE_UI[slug]?.reorder === true && RESOURCES[slug]!.statusOf !== undefined,
     );
@@ -169,14 +171,24 @@ describe('ResourceTable uses it', () => {
       'ai-styles',
       'certifications',
       'disciplines',
+      'faq',
       'portfolio',
       'services',
       'statistics',
       'team',
       'testimonials',
     ]);
+    const collection = readFileSync('src/lib/admin/collectionScreen.ts', 'utf8');
+    expect(collection).toContain(
+      "can(role, config.deleteCap ?? 'content.archiveDelete') === 'full'",
+    );
     for (const page of pages) {
       const source = readFileSync(`src/pages/admin/${page}/index.astro`, 'utf8');
+      if (/<AdminCollection\s/.test(source)) {
+        expect(source, page).toContain(`collectionScreen(Astro.locals.session, '${page}')`);
+        expect(source, page).toContain('permissions={screen.permissions}');
+        continue;
+      }
       expect(source, page).toContain("can(role, 'content.archiveDelete') === 'full'");
       expect(source, page).toContain(
         `<AdminResourceTable client:load resource="${page}" canArchive={canArchive} />`,

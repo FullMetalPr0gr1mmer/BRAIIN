@@ -19,6 +19,13 @@ import type { FieldComponentProps } from './types';
 // Arabic half then names the AR option "Arabic (missing)" with a warn dot, and counts in
 // the form's "Arabic missing: N" bar. `prose` lets the Arabic lag: a neutral line says
 // "Arabic not written yet".
+//
+// `multiline` (Admin v2 U7, D14, and U10): a `bilingual` pair written as a paragraph (an
+// FAQ answer, a quote, an SEO description) takes a five-row textarea per language and stays
+// required in both, unlike `prose`. Unset, the field renders exactly as before.
+//
+// `placeholder` (Admin v2 U10): what an empty half shows, per language (an SEO override's
+// empty box shows the page's own words it keeps).
 
 type Lang = 'en' | 'ar';
 const LANGUAGE_NAME: Record<Lang, string> = { en: 'English', ar: 'Arabic' };
@@ -39,6 +46,7 @@ export default function BilingualField({
     ar: typeof record['ar'] === 'string' ? record['ar'] : '',
   };
   const multiline = field.kind === 'prose' || field.multiline === true;
+  const rows = field.kind === 'bilingual' && field.multiline === true ? 5 : undefined;
   const english = text.en.trim() !== '';
   const arabicEmpty = text.ar.trim() === '';
   const arabicRequired = field.kind === 'bilingual' && (field.required === true || english);
@@ -85,7 +93,7 @@ export default function BilingualField({
       onChange: (e: { target: { value: string } }) =>
         onChange(field.name, { ...record, [lang]: e.target.value }),
     };
-    return multiline ? <textarea {...props} /> : <input type="text" {...props} />;
+    return multiline ? <textarea rows={rows} {...props} /> : <input type="text" {...props} />;
   };
 
   const half = (lang: Lang) => (

@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
 import type { StatisticRow, TeamMemberRow, CertificationRow } from '@schemas/content';
+import type { FaqEntry } from '@schemas/faq';
+import type { Locale } from '@schemas/primitives';
 import type { Discipline } from '@/lib/data/disciplines';
 import type { PortfolioCard } from '@/lib/data/portfolio';
 import type { MarqueeClient, Testimonial } from '@/lib/data/taxonomy';
@@ -230,3 +233,28 @@ export const CERTIFICATIONS: CertificationRow[] = [
     sort_order: 1,
   },
 ];
+
+/**
+ * The FAQ, as the contact route hands it to the band (Admin v2 U7): the seeded questions
+ * (supabase/seed-data/56-faq.json), not invented ones. The one exception to the rule above,
+ * on purpose: the snapshot held the questions the code carried before U7 moved them into the
+ * database, so rendering the seed through the new path to the same bytes is the proof that
+ * the move changed nothing a visitor or a crawler reads.
+ */
+interface SeedFaqRow {
+  question: Record<Locale, string>;
+  answer: Record<Locale, string>;
+  sort_order: number;
+}
+const FAQ_ROWS = (
+  JSON.parse(readFileSync('supabase/seed-data/56-faq.json', 'utf8')) as {
+    blocks: { table: string; rows: SeedFaqRow[] }[];
+  }
+).blocks
+  .filter((b) => b.table === 'faq_items')
+  .flatMap((b) => b.rows)
+  .sort((a, b) => a.sort_order - b.sort_order);
+export const FAQ: Record<Locale, FaqEntry[]> = {
+  en: FAQ_ROWS.map((r) => ({ question: r.question.en, answer: r.answer.en })),
+  ar: FAQ_ROWS.map((r) => ({ question: r.question.ar, answer: r.answer.ar })),
+};

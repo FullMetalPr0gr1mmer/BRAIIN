@@ -3,7 +3,7 @@ import type { Locale } from '@schemas/primitives';
 import { RENDERED_SECTION_TYPES, type RenderedSectionType } from '@/lib/sections/registry';
 import { SECTION_COPY, type SectionCopy } from '@/lib/sections/copy';
 import { withHeroPreset, type HeroPreset, type SectionData } from '@/lib/sections/types';
-import { CARDS, DISCIPLINES, IDENTITY, LEADERS, STATS, TESTIMONIALS } from './fixtures';
+import { CARDS, DISCIPLINES, FAQ, IDENTITY, LEADERS, STATS, TESTIMONIALS } from './fixtures';
 import { LOCALES, renderSections } from './harness';
 
 // Per section type and per look: the built-in copy (src/lib/sections/copy/) IS what the
@@ -64,7 +64,8 @@ const PLACES: Record<RenderedSectionType, Record<string, Place>> = {
   contact: { default: { data: { groups: DISCIPLINES } } },
   contactInquiry: { default: { data: { groups: DISCIPLINES } } },
   contactChannels: { default: {} },
-  faq: { default: {} },
+  // The questions are route data (Admin v2 U7): with none, the band renders nothing.
+  faq: { default: { data: { items: FAQ.en } } },
   selectedWork: { default: { data: { cards: featured } } },
   testimonials: { default: { data: { items: TESTIMONIALS } } },
   aboutWho: { default: {} },

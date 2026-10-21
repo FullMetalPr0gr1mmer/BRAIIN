@@ -10,7 +10,6 @@ import {
 } from '@/lib/sections/types';
 import { CONTACT_CACHE_ENTITIES, faqShown, withContactData } from '@/lib/sections/contact';
 import { whatsappChannel } from '@/lib/identity/channels';
-import { CONTACT_FAQ } from '@/lib/content/contactFaq';
 import { tierATags } from '@/lib/http/cacheTags';
 import {
   ContactChannelsSectionContentSchema,
@@ -138,17 +137,50 @@ describe('the contact composition', () => {
     const groups = [{ slug: 'branding' }];
     const out = withContactData(
       [{ type: 'hero' }, { type: 'contactInquiry', props: { groups: ['forged'] } }],
-      { groups },
+      { groups, faq: [] },
     );
     expect(out[0]).toEqual({ type: 'hero' });
     expect(out[1]!.data).toEqual({ groups });
     expect(out[1]!.props).toEqual({ groups: ['forged'] });
   });
 
-  it('emits the FAQ JSON-LD only while the FAQ band renders', () => {
-    expect(faqShown(DEFAULT_CONTACT_SECTIONS)).toBe(true);
-    expect(faqShown([{ type: 'faq', visible: false }])).toBe(false);
-    expect(faqShown([{ type: 'hero' }, { type: 'contactInquiry' }])).toBe(false);
+  it('hands the published FAQ to the FAQ band as route data, never as content (U7)', () => {
+    const faq = [{ question: 'Q?', answer: 'A.' }];
+    const out = withContactData(
+      [
+        { type: 'faq', props: { items: [{ question: 'Forged?', answer: 'Forged.' }] } },
+        { type: 'contactInquiry' },
+      ],
+      { groups: [], faq },
+    );
+    // The same array, not a copy: the band and the FAQPage read one value.
+    expect(out[0]!.data!['items']).toBe(faq);
+    expect(out[0]!.props).toEqual({ items: [{ question: 'Forged?', answer: 'Forged.' }] });
+    expect(out[1]!.data).toEqual({ groups: [] });
+  });
+
+  it('emits the FAQ JSON-LD only while the FAQ band renders: a visible band AND a question', () => {
+    const faq = [{ question: 'Q?', answer: 'A.' }];
+    expect(faqShown(DEFAULT_CONTACT_SECTIONS, faq)).toBe(true);
+    expect(faqShown(DEFAULT_CONTACT_SECTIONS, [])).toBe(false);
+    expect(faqShown([{ type: 'faq', visible: false }], faq)).toBe(false);
+    expect(faqShown([{ type: 'hero' }, { type: 'contactInquiry' }], faq)).toBe(false);
+  });
+
+  it('one FAQ read feeds both the band and the FAQPage (ContactPage.astro)', () => {
+    // The route reads the FAQ once and hands that one array to the band (withContactData)
+    // and to the JSON-LD (buildFaqSchema), gated on the band showing: two reads could
+    // disagree (a publish between them), and the structured data would then describe
+    // questions the page does not show.
+    const page = readFileSync(join(process.cwd(), 'src/components/ContactPage.astro'), 'utf8');
+    expect(page.match(/getFaq\(/g)).toHaveLength(1);
+    expect(page).toMatch(/getFaq\(locale\),\n\]\);/);
+    expect(page).toMatch(/const \[composition, \{ seo \}, groups, faq\] = await Promise\.all/);
+    expect(page).toMatch(/withContactData\([^;]*\{\s*groups,\s*faq,\s*\}\);/);
+    expect(page).toContain(
+      'faqShown(sections, faq) ? [breadcrumb, buildFaqSchema(faq)] : [breadcrumb]',
+    );
+    expect(page).not.toMatch(/contactFaq|CONTACT_FAQ/);
   });
 
   it('its cache tags cover the composition, the disciplines and services, within the purge limit', () => {
@@ -160,6 +192,8 @@ describe('the contact composition', () => {
         'services:all',
         // Round 2: the form's options are grouped by discipline
         'disciplines:all',
+        // Admin v2 U7: the FAQ band and its FAQPage read faq_items
+        'faq:all',
         'site:identity',
       ]),
     );
@@ -230,21 +264,56 @@ describe('whatsappChannel: the card exists only for a real number', () => {
   });
 });
 
-describe('the contact FAQ (one source for the list and its JSON-LD)', () => {
-  it('has the design’s ten questions in each language', () => {
-    expect(CONTACT_FAQ.en).toHaveLength(10);
-    expect(CONTACT_FAQ.ar).toHaveLength(10);
-    for (const item of [...CONTACT_FAQ.en, ...CONTACT_FAQ.ar]) {
-      expect(item.q.trim()).not.toBe('');
-      expect(item.a.trim()).not.toBe('');
+describe('the contact FAQ, as seeded (supabase/seed-data/56-faq.json, Admin v2 U7)', () => {
+  // The questions the code carried until U7, now the seed of public.faq_items: published,
+  // never a design placeholder (production would demote one to a draft, and /contact would
+  // lose its FAQ and its FAQPage).
+  interface FaqSeedRow {
+    id: string;
+    question: { en: string; ar: string };
+    answer: { en: string; ar: string };
+    status: string;
+    sort_order: number;
+    __placeholder?: boolean;
+  }
+  const block = (
+    loadBlocks() as unknown as {
+      table: string;
+      conflict?: string[];
+      unlessAuthored?: string[];
+      rows: FaqSeedRow[];
+    }[]
+  ).find((b) => b.table === 'faq_items');
+  const rows = [...(block?.rows ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+
+  it('has the design’s ten questions in each language, published and never a placeholder', () => {
+    expect(rows).toHaveLength(10);
+    for (const row of rows) {
+      for (const text of [row.question.en, row.question.ar, row.answer.en, row.answer.ar]) {
+        expect(text.trim()).not.toBe('');
+        expect(text).toBe(text.trim());
+        expect(text).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
+      }
+      expect(row.question.en.length).toBeLessThanOrEqual(200);
+      expect(row.answer.en.length).toBeLessThanOrEqual(1200);
+      expect(row.status).toBe('published');
+      expect(row.__placeholder).toBeUndefined();
     }
+    expect(new Set(rows.map((r) => r.id)).size).toBe(10);
+    expect(new Set(rows.map((r) => r.sort_order)).size).toBe(10);
+  });
+
+  it('goes in only while the tenant holds no question (an editor’s deletions stay deleted)', () => {
+    expect(block?.conflict).toEqual(['id']);
+    expect(block?.unlessAuthored).toEqual(['tenant_id']);
   });
 
   it('the Arabic is the design’s Saudi-voice copy, verbatim', () => {
-    expect(CONTACT_FAQ.ar[0]!.q).toBe('وش تشمل الهوية البصرية الكاملة؟');
-    expect(CONTACT_FAQ.ar[9]!.a).toBe(
+    expect(rows[0]!.question.ar).toBe('وش تشمل الهوية البصرية الكاملة؟');
+    expect(rows[9]!.answer.ar).toBe(
       'أرسل النموذج فوق أو راسلنا مباشرة. يوصلك رد خلال يوم عمل واحد فيه أسئلتنا، ونطاق سعري مبدئي، وموعد للمكالمة.',
     );
+    expect(rows[0]!.question.en).toBe('What does a full brand identity include?');
   });
 });
 

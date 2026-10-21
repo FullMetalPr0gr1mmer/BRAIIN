@@ -759,6 +759,24 @@ do $seed$ begin
   end if;
 end $seed$;
 
+-- faq_items (56-faq.json)
+do $seed$ begin
+  if not exists (select 1 from public.faq_items where tenant_id = '00000000-0000-0000-0000-0000000000b1') then
+    insert into public.faq_items (tenant_id, id, question, answer, status, published_at, sort_order) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eedfa00-0000-4000-8000-000000000001', '{"en":"What does a full brand identity include?","ar":"وش تشمل الهوية البصرية الكاملة؟"}'::jsonb, '{"en":"Strategy, naming direction if you need it, a logo system, type and colour, art direction, and a usage guide. You leave with files your own team and any future vendor can actually work from, not a folder of JPEGs.","ar":"الاستراتيجية، واتجاه التسمية إذا احتجته، ونظام شعار متكامل، والخطوط والألوان، والإخراج الفني، ودليل استخدام. تخرج بملفات يقدر فريقك أو أي جهة مستقبلية يشتغلون عليها فعلاً، مو مجلد صور."}'::jsonb, 'published', now(), 10),
+      ('00000000-0000-0000-0000-0000000000b1', '5eedfa00-0000-4000-8000-000000000002', '{"en":"How many concepts do we see?","ar":"كم اتجاه نشوف؟"}'::jsonb, '{"en":"Two or three routes, and every one of them is a direction we would be happy to build. We don''t pad a presentation with options we don''t believe in just to make the deck look fuller.","ar":"اتجاهين أو ثلاثة، وكل واحد منها اتجاه نسعد ببنائه. ما نحشو العرض بخيارات ما نؤمن فيها عشان يبان أكبر."}'::jsonb, 'published', now(), 20),
+      ('00000000-0000-0000-0000-0000000000b1', '5eedfa00-0000-4000-8000-000000000003', '{"en":"How many rounds of revisions come with that?","ar":"كم جولة تعديلات تجي معها؟"}'::jsonb, '{"en":"Two rounds are built into every stage. If you want more we bill by the hour, and we tell you before the clock starts, never after.","ar":"جولتان مضمّنتان في كل مرحلة. وإذا احتجت أكثر نحسبها بالساعة، ونخبرك قبل ما يبدأ العداد، لا بعده."}'::jsonb, 'published', now(), 30),
+      ('00000000-0000-0000-0000-0000000000b1', '5eedfa00-0000-4000-8000-000000000004', '{"en":"How long does a project take?","ar":"كم ياخذ المشروع وقت؟"}'::jsonb, '{"en":"A brand identity usually runs six to ten weeks. A film depends on the shoot. A social campaign can move in two. You get a dated schedule before the work starts, not once it''s already late.","ar":"الهوية البصرية عادةً من ستة إلى عشرة أسابيع. الفيلم يعتمد على التصوير. الحملة الاجتماعية ممكن تتحرك في أسبوعين. تستلم جدولاً بتواريخ قبل بداية الشغل، مو بعد ما يتأخر."}'::jsonb, 'published', now(), 40),
+      ('00000000-0000-0000-0000-0000000000b1', '5eedfa00-0000-4000-8000-000000000005', '{"en":"Can we hire you for just one service?","ar":"نقدر نطلب خدمة واحدة بس؟"}'::jsonb, '{"en":"Yes. Take one of the twenty-eight or take all of them. Nothing is bundled together to force a bigger invoice.","ar":"أكيد. خذ واحدة من الثمان والعشرين أو خذها كلها. ما في شيء مربوط ببعضه عشان تكبر الفاتورة."}'::jsonb, 'published', now(), 50),
+      ('00000000-0000-0000-0000-0000000000b1', '5eedfa00-0000-4000-8000-000000000006', '{"en":"Do you work with brands that already exist?","ar":"تشتغلون مع علامات قائمة أصلاً؟"}'::jsonb, '{"en":"Often. Sometimes the answer is a full rebuild and sometimes it''s a tune-up, and we''ll tell you honestly which one you need even when the smaller job is the right call.","ar":"كثير. أحياناً الجواب إعادة بناء كاملة، وأحياناً مجرد ضبط، وبنقول لك بصراحة أي واحدة تحتاجها حتى لو كان الشغل الأصغر هو الصح."}'::jsonb, 'published', now(), 60),
+      ('00000000-0000-0000-0000-0000000000b1', '5eedfa00-0000-4000-8000-000000000007', '{"en":"What languages do you work in?","ar":"بأي لغات تشتغلون؟"}'::jsonb, '{"en":"Arabic and English are handled natively in house. Anything else runs through partners we''ve vetted, with our team still owning the typesetting and art direction so the result doesn''t read like a translation.","ar":"العربية والإنجليزية داخل الاستوديو وبشكل أصلي. وأي لغة ثانية عبر شركاء مجرَّبين، ويبقى التنسيق والإخراج الفني عندنا حتى ما تطلع النتيجة وكأنها ترجمة."}'::jsonb, 'published', now(), 70),
+      ('00000000-0000-0000-0000-0000000000b1', '5eedfa00-0000-4000-8000-000000000008', '{"en":"How is pricing structured?","ar":"كيف تُحسب الأسعار؟"}'::jsonb, '{"en":"A fixed price per project once the scope is agreed, or a monthly retainer for ongoing work. No hourly surprises at the end.","ar":"سعر ثابت للمشروع بعد الاتفاق على النطاق، أو عقد شهري للشغل المستمر. بدون مفاجآت بالساعة في النهاية."}'::jsonb, 'published', now(), 80),
+      ('00000000-0000-0000-0000-0000000000b1', '5eedfa00-0000-4000-8000-000000000009', '{"en":"Who owns the finished work?","ar":"لمن تعود ملكية الشغل؟"}'::jsonb, '{"en":"You do. Full rights transfer on final payment, source files included.","ar":"لك أنت. نقل كامل للحقوق عند السداد النهائي، وملفات المصدر مشمولة."}'::jsonb, 'published', now(), 90),
+      ('00000000-0000-0000-0000-0000000000b1', '5eedfa00-0000-4000-8000-000000000010', '{"en":"How do we get started?","ar":"كيف نبدأ؟"}'::jsonb, '{"en":"Send the form above or email us directly. You''ll get a reply within one business day with our questions, a rough range, and a time to talk.","ar":"أرسل النموذج فوق أو راسلنا مباشرة. يوصلك رد خلال يوم عمل واحد فيه أسئلتنا، ونطاق سعري مبدئي، وموعد للمكالمة."}'::jsonb, 'published', now(), 100)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
 select (x.tbl, x.key) in (
     ('media_assets', 'stills/services/write.jpg'),
     ('media_assets', 'stills/services/over.jpg'),
@@ -903,6 +921,9 @@ select (x.tbl, x.key) in (
    where x.xmin::text = (txid_current() % 4294967296)::text
   union all
   select 'page_sections'::text as tbl, (select slug::text from public.pages p where p.id = x.page_id) || '/' || x.type as key from public.page_sections x
+   where x.xmin::text = (txid_current() % 4294967296)::text
+  union all
+  select 'faq_items'::text as tbl, x.question ->> 'en' as key from public.faq_items x
    where x.xmin::text = (txid_current() % 4294967296)::text
   ) x
  order by this_round, x.tbl, x.key;

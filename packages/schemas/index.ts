@@ -15,3 +15,4 @@ export * from './analytics';
 export * from './sections';
 export * from './media';
 export * from './siteProfile';
+export * from './faq';
