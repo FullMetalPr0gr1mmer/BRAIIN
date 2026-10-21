@@ -432,36 +432,46 @@ describe('the maintenance screen’s words', () => {
 });
 
 describe('the studio’s zone for a request (studioTimeZone)', () => {
-  const read = vi.fn();
-  const sb = (answer: { data: unknown; error: unknown }) =>
+  // Read through public.studio_time_zone() (0098), never the table: a Sales token (0097)
+  // reads no site_settings row (app.is_staff() is the four CMS roles), so a table read would
+  // answer Sales Riyadh while every colleague sees the studio's zone.
+  const calls: string[] = [];
+  const sb = (answer: { data: unknown; error: unknown }, table: unknown = null) =>
     ({
-      from: () => ({
+      // What a Sales token's table read gets: no row. The RPC answers every member.
+      from: (name: string) => ({
         select: () => ({
           eq: () => ({
             maybeSingle: async () => {
-              read();
-              return answer;
+              calls.push(`from ${name}`);
+              return { data: table, error: null };
             },
           }),
         }),
       }),
+      rpc: async (fn: string, args?: unknown) => {
+        calls.push(`rpc ${fn}${args === undefined ? '' : ` ${JSON.stringify(args)}`}`);
+        return answer;
+      },
     }) as never;
-  beforeEach(() => read.mockReset());
+  beforeEach(() => {
+    calls.length = 0;
+  });
 
-  it('reads once per request, the listed zone or the default', async () => {
+  it('reads once per request, through public.studio_time_zone(), the listed zone or the default', async () => {
     const { studioTimeZone, resetStudioTimeZoneWarning } =
       await import('@/lib/admin/studioTimeZone');
     resetStudioTimeZoneWarning();
     const locals = {
-      supabase: sb({ data: { timezone: 'Asia/Dubai' }, error: null }),
-      session: { tenantId: 't' },
+      supabase: sb({ data: 'Asia/Dubai', error: null }),
+      session: { tenantId: 't', role: 'admin' },
     } as never;
     expect(await studioTimeZone(locals)).toBe('Asia/Dubai');
     expect(await studioTimeZone(locals)).toBe('Asia/Dubai');
-    expect(read).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(['rpc studio_time_zone']);
     for (const answer of [
       { data: null, error: null },
-      { data: { timezone: 'Mars/Olympus' }, error: null },
+      { data: 'Mars/Olympus', error: null },
       { data: null, error: { message: 'boom' } },
     ]) {
       expect(
@@ -469,5 +479,15 @@ describe('the studio’s zone for a request (studioTimeZone)', () => {
       ).toBe('Asia/Riyadh');
     }
     expect(await studioTimeZone({ session: null } as never)).toBe('Asia/Riyadh');
+  });
+
+  it('a Sales session gets the studio’s zone too, though its table read finds no row', async () => {
+    const { studioTimeZone } = await import('@/lib/admin/studioTimeZone');
+    const locals = {
+      supabase: sb({ data: 'Asia/Dubai', error: null }, null),
+      session: { tenantId: 't', role: 'sales' },
+    } as never;
+    expect(await studioTimeZone(locals)).toBe('Asia/Dubai');
+    expect(calls.some((c) => c.startsWith('from '))).toBe(false);
   });
 });

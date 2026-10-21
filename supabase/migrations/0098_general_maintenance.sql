@@ -49,9 +49,13 @@
 --      No API role keeps DELETE, TRUNCATE, REFERENCES, TRIGGER or MAINTAIN: until now the
 --      bootstrap ALL left authenticated a DELETE on site_settings, which its FOR ALL policy
 --      admitted for an Admin or Developer token (U10 found the same on seo_defaults).
---   8. app.studio_time_zone(p_tenant): the zone for SQL (C8, C9a and Sales read it; staff
---      roles other than Admin and Developer do not read site_settings). DEFINER, tenant-fenced:
---      another tenant's id answers the Riyadh default, which reveals nothing.
+--   8. app.studio_time_zone(p_tenant): the zone for SQL (C8 and C9a read it). DEFINER,
+--      tenant-fenced: another tenant's id answers the Riyadh default, which reveals nothing.
+--      And public.studio_time_zone(), its door for the Worker (PostgREST exposes only
+--      `public`): INVOKER, the caller's own tenant, executable by authenticated only. The
+--      admin reads the studio's clock through it for every member, because Sales (0097)
+--      reads no site_settings row: site_settings_staff_read is app.is_staff(), the four CMS
+--      roles, which 0097 leaves unchanged.
 --   9. media_assets_public_read: 0073's text word for word, plus the icons. site_profile is
 --      anon-readable and tenant-fenced by its own RLS, and NO policy on site_profile may read
 --      media_assets (the recursion rule 0073 states; a postcondition holds it).
@@ -309,6 +313,17 @@ as $$
 $$;
 revoke all on function app.studio_time_zone(uuid) from public, anon, authenticated, service_role;
 grant execute on function app.studio_time_zone(uuid) to authenticated, service_role;
+
+-- The Worker's door (src/lib/admin/studioTimeZone.ts): every member's own tenant, Sales
+-- included, through the caller's token. INVOKER: the tenant is the caller's, and the definer
+-- above does the one read. The service role reads site_settings itself and is not granted.
+create or replace function public.studio_time_zone() returns text
+  language sql stable security invoker set search_path = ''
+as $$
+  select app.studio_time_zone(app.effective_tenant_id())
+$$;
+revoke all on function public.studio_time_zone() from public, anon, authenticated, service_role;
+grant execute on function public.studio_time_zone() to authenticated;
 
 -- ═══ 9. media_assets_public_read: 0073's branches, plus the icons ═════════════════════════
 -- NO policy on public.site_profile (nor, as 0073 says, on entity_seo or seo_defaults) may
@@ -947,6 +962,16 @@ begin
      or not has_function_privilege('authenticated', 'app.studio_time_zone(uuid)', 'execute')
      or not has_function_privilege('service_role', 'app.studio_time_zone(uuid)', 'execute') then
     raise exception '0098: app.studio_time_zone must be DEFINER with search_path '''', executable by staff and the service role only';
+  end if;
+  if not exists (select 1 from pg_proc
+                  where oid = 'public.studio_time_zone()'::regprocedure
+                    and not prosecdef and proconfig = array['search_path=""']
+                    and prorettype = 'text'::regtype)
+     or has_function_privilege('anon', 'public.studio_time_zone()', 'execute')
+     or has_function_privilege('public', 'public.studio_time_zone()', 'execute')
+     or has_function_privilege('service_role', 'public.studio_time_zone()', 'execute')
+     or not has_function_privilege('authenticated', 'public.studio_time_zone()', 'execute') then
+    raise exception '0098: public.studio_time_zone() must be INVOKER with search_path '''', executable by authenticated only';
   end if;
 
   -- ---- 7. The exact policy sets, tenant first in each ---------------------------------------

@@ -10,14 +10,16 @@
 --     another tenant) write nothing to site_profile or site_settings, the maintenance switch
 --     included (U9b: the route writes the row before KV, so this gates the edge too).
 --   • site_settings.timezone: the default, the closed list, who writes and reads it, the
---     copy from crm_settings; app.studio_time_zone's tenant fence.
+--     copy from crm_settings; app.studio_time_zone's tenant fence; public.studio_time_zone(),
+--     the Worker's door, which answers every member its own tenant's zone, Sales included
+--     (Sales reads no site_settings row, 0097).
 --   • media_assets_public_read's icon branch, media_usage v6's icon rows.
 --   • the exact policy sets, the helper, the grants (has and has-not).
 --   • the four guides 0098 puts, in every tenant (two of them one sentence each: the busiest
 --     hours and the uptime days follow the studio's zone, not Riyadh).
 
 begin;
-select plan(73);
+select plan(80);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- Tenants created AFTER the launch tenant, so the anon fence keeps resolving to the launch
@@ -35,7 +37,8 @@ insert into auth.users (id, email) values
   ('75000000-0000-0000-0000-0000000000b1', 'u9-other-admin@example.test'),
   ('75000000-0000-0000-0000-0000000000d2', 'u9-demoted@example.test'),
   ('75000000-0000-0000-0000-0000000000d3', 'u9-inactive@example.test'),
-  ('75000000-0000-0000-0000-0000000000d4', 'u9-locked@example.test');
+  ('75000000-0000-0000-0000-0000000000d4', 'u9-locked@example.test'),
+  ('75000000-0000-0000-0000-000000000051', 'u9-sales@example.test');
 insert into public.profiles (id, tenant_id, role, is_active, locked_until) values
   ('75000000-0000-0000-0000-0000000000a1', '75000000-0000-0000-0000-00000000000a', 'admin', true, null),
   ('75000000-0000-0000-0000-0000000000c1', '75000000-0000-0000-0000-00000000000a', 'content_creator', true, null),
@@ -46,7 +49,8 @@ insert into public.profiles (id, tenant_id, role, is_active, locked_until) value
   ('75000000-0000-0000-0000-0000000000d2', '75000000-0000-0000-0000-00000000000a', 'seo', true, null),
   ('75000000-0000-0000-0000-0000000000d3', '75000000-0000-0000-0000-00000000000a', 'developer', false, null),
   ('75000000-0000-0000-0000-0000000000d4', '75000000-0000-0000-0000-00000000000a', 'developer', true,
-   now() + interval '10 minutes');
+   now() + interval '10 minutes'),
+  ('75000000-0000-0000-0000-000000000051', '75000000-0000-0000-0000-00000000000a', 'sales', true, null);
 
 -- Media: tenant A's square 512 upload, a non-square one, a small square one, an external
 -- square one; tenant B's square upload; the launch tenant's icon and an unreferenced upload.
@@ -421,6 +425,32 @@ select throws_ok($$ select app.studio_time_zone('75000000-0000-0000-0000-0000000
 set local role service_role;
 select _as(null, null, null);
 select is(app.studio_time_zone(_b()::uuid), 'Asia/Kuwait', 'the service role reads any tenant''s zone');
+
+-- ── public.studio_time_zone(): the Worker's door, for every member ──────
+set local role authenticated;
+select _as('75000000-0000-0000-0000-000000000051', 'sales', _a());
+select is((select count(*)::int from public.site_settings), 0,
+  'sales reads no site_settings row (site_settings_staff_read is app.is_staff(), unchanged by 0097)');
+select is(public.studio_time_zone(), 'Asia/Dubai',
+  'public.studio_time_zone() answers sales its tenant''s zone all the same');
+select is(_rows($$ update public.site_profile set tagline = null where tenant_id = _a()::uuid $$)
+        + _rows($$ update public.site_settings set timezone = 'UTC' where tenant_id = _a()::uuid $$),
+  0, 'sales updates neither row (0 rows)');
+select _as('75000000-0000-0000-0000-0000000000e1', 'seo', _a());
+select is(public.studio_time_zone(), 'Asia/Dubai', 'and every CMS role its tenant''s zone (seo)');
+select _as('75000000-0000-0000-0000-0000000000b1', 'admin', _b());
+select is(public.studio_time_zone(), 'Asia/Kuwait',
+  'other_tenant gets its own tenant''s zone, never tenant A''s');
+set local role anon;
+select _as(null, null, null);
+select throws_ok($$ select public.studio_time_zone() $$, '42501', null, 'anon cannot call it');
+reset role;
+select ok(
+  has_function_privilege('authenticated', 'public.studio_time_zone()', 'execute')
+  and not has_function_privilege('anon', 'public.studio_time_zone()', 'execute')
+  and not has_function_privilege('service_role', 'public.studio_time_zone()', 'execute')
+  and not has_function_privilege('public', 'public.studio_time_zone()', 'execute'),
+  'public.studio_time_zone() is executable by authenticated only');
 
 -- ── The guides ──────────────────────────────────────────────────────────
 reset role;

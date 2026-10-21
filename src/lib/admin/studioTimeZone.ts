@@ -5,14 +5,17 @@ import type { AuthContext } from '@/lib/auth/types';
 import { clockFor, type Clock } from './relTime';
 
 // The studio's time zone for one admin request (Admin v2 U9): `site_settings.timezone`, the one
-// source (0098), read through the caller's own session client (every staff role reads
-// site_settings: 0001's site_settings_staff_read), at most once per request: the first caller
-// stores the PROMISE on `locals`, as the identity loader does, so a page's components and its
-// layout share one read.
+// source (0098), read through the caller's own session client by `public.studio_time_zone()`
+// (0098), never the table: Sales (0097) reads no site_settings row (site_settings_staff_read is
+// app.is_staff(), the four CMS roles), and a table read would answer it no row, so its leads,
+// board and dashboard would print Riyadh's days while every colleague's follow the setting.
+// The function answers every member its own tenant's zone (the default when the tenant never
+// saved its settings). Read at most once per request: the first caller stores the PROMISE on
+// `locals`, as the identity loader does, so a page's components and its layout share one read.
 //
-// Never throws. No session, no row (a tenant that never saved its settings), an error, or a
-// value outside the closed list: the default, Riyadh, and an unreadable setting is logged once
-// per isolate, so a screen printing the wrong zone is diagnosable rather than silent.
+// Never throws. No session, an error, or a value outside the closed list: the default, Riyadh,
+// and an unreadable setting is logged once per isolate, so a screen printing the wrong zone is
+// diagnosable rather than silent.
 
 type ZoneLocals = Pick<App.Locals, 'studioTimeZone' | 'supabase' | 'session'>;
 
@@ -31,18 +34,14 @@ export async function readStudioTimeZone(
 ): Promise<StudioTimeZone> {
   if (!sb || !auth) return DEFAULT_TIME_ZONE;
   try {
-    const { data, error } = await sb
-      .from('site_settings')
-      .select('timezone')
-      .eq('tenant_id', auth.tenantId)
-      .maybeSingle<{ timezone: unknown }>();
+    // The token's own tenant (the function reads app.effective_tenant_id(), which is the
+    // session's: resolveAuthContext refuses a token whose tenant is not its profile's).
+    const { data, error } = await sb.rpc('studio_time_zone');
     if (error) {
       await warnOnce(`the studio's time zone could not be read; showing Riyadh time`);
       return DEFAULT_TIME_ZONE;
     }
-    // No row yet: the tenant never saved its settings, and the column's default is Riyadh.
-    if (!data) return DEFAULT_TIME_ZONE;
-    if (isStudioTimeZone(data.timezone)) return data.timezone;
+    if (isStudioTimeZone(data)) return data;
     await warnOnce(`the studio's time zone is not one of the listed zones; showing Riyadh time`);
     return DEFAULT_TIME_ZONE;
   } catch {
