@@ -29,6 +29,17 @@ export const settings: NavArea = {
       // light the link.
       match: ['/admin/redirects'],
     },
+    // Admin v2 U11: the two forms' fields and protections, read-only (General's capability:
+    // the forms config is `settings.general`, P-2); and the bell's settings, every member's
+    // own (`analytics.read`, which every role holds). The longer route wins, so
+    // /admin/settings/notifications lights Notifications, not General.
+    { href: '/admin/forms', label: 'Forms', icon: 'form', caps: ['settings.general'] },
+    {
+      href: '/admin/settings/notifications',
+      label: 'Notifications',
+      icon: 'bell',
+      caps: ['analytics.read'],
+    },
     {
       href: '/admin/integrations',
       label: 'Integrations',

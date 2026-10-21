@@ -55,7 +55,9 @@ const ADMIN_DASHBOARD_LAZY =
 const ADMIN_EDITOR_ISLAND_NAMES = [
   'AdminCollection',
   'AdminCrmSettings',
+  'AdminIntegrations',
   'AdminMediaLibrary',
+  'AdminNotificationSettings',
   'AdminResourceForm',
   'AdminSeo',
   'AdminSingletonForm',
@@ -64,7 +66,9 @@ const ADMIN_EDITOR_ISLAND_NAMES = [
 const ADMIN_EDITOR_SCREEN_DIRS = [
   'collection',
   'crmSettings',
+  'integrations',
   'media',
+  'notificationSettings',
   'seo',
 ];
 /** @param {readonly string[]} names */

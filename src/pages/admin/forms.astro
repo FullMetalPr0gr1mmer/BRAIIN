@@ -1,0 +1,140 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import Badge from '@/components/admin/ui/Badge.astro';
+import Card from '@/components/admin/ui/Card.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
+import LinkTabs from '@/components/admin/ui/LinkTabs.astro';
+import Note from '@/components/admin/ui/Note.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { CONSENT_VERSION, formFacts, type FormId } from '@/lib/admin/forms/overview';
+import { getIdentity } from '@/lib/identity';
+
+export const prerender = false;
+
+// Forms (Admin v2 U11, docs/admin-v2/ui.md "Integrations, Forms, Notifications (AV-20)"): a
+// read-only overview of the site's two forms, the inquiry form on Contact and the
+// application form on Join, as the code decides them (src/lib/admin/forms/overview.ts): the
+// fields and which are required, the protections (the hidden field, the EXC-004 limits, no
+// captcha yet), the consent version Join stores, and where the words around each form are
+// edited. Zero JS: tabs are links (`?tab=join`). settings.general (Admin, Developer: the forms
+// config is General's, P-2); a role without it gets the layout with the refusal and a 403.
+// It reads nothing of its own: the facts are code, and the applications switch is the public
+// identity the shell has already read for the brand.
+
+const PATH = '/admin/forms';
+const session = Astro.locals.session;
+const allowed = Boolean(session && can(session.role, 'settings.general') === 'full');
+if (!allowed) Astro.response.status = 403;
+
+const tab: FormId = Astro.url.searchParams.get('tab') === 'join' ? 'join' : 'inquiry';
+const href = (id: FormId) => (id === 'inquiry' ? PATH : `${PATH}?tab=join`);
+const facts = formFacts();
+const form = facts[tab];
+const mayEditPages = Boolean(session && can(session.role, 'pages.write') === 'full');
+// Opening and closing applications is Admin only, in General (0019's guard, R3b's route).
+const mayOpenApplications = Boolean(session && session.role === 'admin');
+const accepting = allowed && tab === 'join' ? (await getIdentity(Astro.locals)).acceptingApplications : false;
+---
+
+<AdminLayout
+  title="Forms"
+  subtitle="Which fields the site asks for, and how the forms protect themselves from spam."
+  styles={['forms.css']}
+>
+  {
+    !allowed ? (
+      <Refused />
+    ) : (
+      <>
+        <LinkTabs
+          label="Forms"
+          current={href(tab)}
+          tabs={[
+            { label: facts.inquiry.name, href: href('inquiry') },
+            { label: facts.join.name, href: href('join') },
+          ]}
+        />
+        <p class="frm-where">{form.where}</p>
+        <div class="grid grid--2-1">
+          <Card title="Fields" sub="What the form asks for">
+            <ul class="list frm-fields">
+              {form.fields.map((field) => (
+                <li class="li" data-field={field.key}>
+                  <span class="li__main">
+                    <span class="li__t">{field.label}</span>
+                    {field.hint && <span class="li__s">{field.hint}</span>}
+                  </span>
+                  <Badge tone={field.required ? 'klein' : 'gray'} plain>
+                    {field.required ? 'Required' : 'Optional'}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+            <Note>
+              <p>
+                The fields are fixed. Each one is checked on the server, and contact details are
+                stored encrypted.
+              </p>
+            </Note>
+          </Card>
+          <div class="frm-side">
+            <Card title="Protection" sub="How the form keeps spam out">
+              <ul class="frm-facts">
+                <li>
+                  <Icon name="check" size={14} />
+                  <span>Hidden field: always on. People never see it, and a send that fills it in is not stored.</span>
+                </li>
+                <li>
+                  <Icon name="check" size={14} />
+                  <span>Rate limits: up to {form.limits.join(', and ')}. {form.unchecked}</span>
+                </li>
+                <li>
+                  <Icon name="info" size={14} />
+                  <span>Captcha: Not set up.</span>
+                </li>
+                {
+                  tab === 'join' && (
+                    <li>
+                      <Icon name="check" size={14} />
+                      <span>
+                        Consent: each application stores the version of the consent text the
+                        person agreed to. The form shows version{' '}
+                        <span class="frm-version">{CONSENT_VERSION}</span> now.
+                      </span>
+                    </li>
+                  )
+                }
+              </ul>
+            </Card>
+            <Card title="Text on the page">
+              <p class="frm-text">
+                The heading, the lead line and the other words around the form are edited with
+                the page that holds it.
+              </p>
+              {
+                mayEditPages ? (
+                  <a class="btn" href="/admin/pages">
+                    Open Pages
+                  </a>
+                ) : (
+                  <p class="frm-text">Ask someone who edits pages to change them.</p>
+                )
+              }
+              {
+                tab === 'join' && (
+                  <p class="frm-text frm-open">
+                    <Badge tone={accepting ? 'ok' : 'gray'}>
+                      {accepting ? 'Applications are open' : 'Applications are closed'}
+                    </Badge>
+                    {mayOpenApplications && <a href="/admin/settings">Change it in General</a>}
+                  </p>
+                )
+              }
+            </Card>
+          </div>
+        </div>
+      </>
+    )
+  }
+</AdminLayout>
