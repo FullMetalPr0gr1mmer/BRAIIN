@@ -2,7 +2,13 @@ import type { PublishRequest } from '@schemas/release';
 import { json, type AdminRouteContext } from '@/lib/admin/route';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { checkOf, dryRun, publish } from './apply';
-import { assertMayPublish, checkSelection, loadSelection, ReleaseRefusal } from './validate';
+import {
+  assertMayPublish,
+  checkSelection,
+  loadSelection,
+  readLive,
+  ReleaseRefusal,
+} from './validate';
 
 // The publish and validate endpoints' one handler (Admin v2 R6; docs/admin-v2/releases.md §4.2,
 // §4.3). SERVER ONLY. The routes are `src/pages/api/admin/releases/index.ts` (publish now) and
@@ -44,11 +50,14 @@ export async function handleRelease(ctx: Ctx, mode: 'validate' | 'publish'): Pro
       return json({ ok: false, error: 'releases-off', detail: RELEASES_OFF_DETAIL }, 409);
     }
     const drafts = await loadSelection(sb, auth, input.items);
-    assertMayPublish(auth, drafts);
+    // The live rows, read once: who may publish a change to a row that stays archived is
+    // live's to say (hotfix H12), and the check below lays the selection over the same rows.
+    const live = await readLive(sb, auth, drafts);
+    assertMayPublish(auth, drafts, live);
     // The person, re-read at the moment it runs: a demoted, deactivated or locked person's
     // token still passes RLS for up to an hour (the apply re-reads them again, BR403).
     await liveRecheck(auth);
-    const checked = await checkSelection(sb, auth, drafts);
+    const checked = await checkSelection(sb, auth, drafts, live);
     if (!checked.ok) {
       const check = checkOf(checked.items, 'skipped');
       return mode === 'validate' ? check : json({ ok: false, error: 'validation', check }, 422);

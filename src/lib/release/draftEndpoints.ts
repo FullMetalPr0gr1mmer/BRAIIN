@@ -34,12 +34,14 @@ import { pick, stagedSelect } from './staged';
 //     reads something, for the summary), then checks each draft against its own entity type:
 //     a discard needs the type's author capabilities (`app.can_author`, 0038's delete policy),
 //     a resolve, which rewrites the change, what publishing it would need (`requiredCaps`:
-//     an archive needs `content.archiveDelete`, as the update policy's archive term does);
+//     an archive needs `content.archiveDelete`, as the update policy's archive term does, and
+//     so does a change that keeps an archived row archived, hotfix H12);
 //   • the database: every write goes through `public.write_drafts`, so RLS, the RESTRICTIVE
 //     live check (0062) and the draft lock bind (a stale token writes nothing; a claimed
 //     draft is untouchable).
 // The summary reads stored metadata only (never re-parses a payload: up to 1,000 drafts on the
-// Free plan's 10 ms), and lists only the entity types the caller may read.
+// Free plan's 10 ms), plus which listed edits' rows are archived live (ids only), and lists
+// only the entity types the caller may read.
 
 type Row = Record<string, unknown>;
 type Ctx = AdminRouteContext<unknown>;
@@ -75,14 +77,37 @@ function storedStatus(payload: unknown): string | null {
   return typeof status === 'string' ? status : null;
 }
 
-/** May this role rewrite this pending change (what publishing it would need)? */
-export function mayRewrite(role: Role, draft: Pick<StoredDraft, 'entity_type' | 'op' | 'payload'>) {
+/** The publish reference of a stored draft: its stored status, and live's where it was read. */
+function refOf(
+  draft: Pick<StoredDraft, 'entity_type' | 'op' | 'payload'>,
+  liveStatus?: string | null,
+): ReleaseItemRef {
   const status = storedStatus(draft.payload);
-  return canPublish(role, {
+  return {
     entityType: draft.entity_type,
     op: draft.op,
     patch: status ? { status } : null,
-  });
+    liveStatus,
+  };
+}
+
+/**
+ * May this role rewrite this pending change (what publishing it would need)? `liveStatus`,
+ * once live is read: a change that keeps an archived row archived is an Admin's (H12).
+ */
+export function mayRewrite(
+  role: Role,
+  draft: Pick<StoredDraft, 'entity_type' | 'op' | 'payload'>,
+  liveStatus?: string | null,
+) {
+  return canPublish(role, refOf(draft, liveStatus));
+}
+
+/** The 403 for a rewrite this role may not make, naming the first capability it lacks. */
+function rewriteRefusal(role: Role, draft: StoredDraft, liveStatus?: string | null): Response {
+  const caps = requiredCaps(refOf(draft, liveStatus));
+  const missing = caps?.find((cap) => ROLE_CAPS[role][cap] !== 'full');
+  return refuse(missing ?? RELEASE_ENTITY_META[draft.entity_type].authorCaps[0]!, [draft.id]);
 }
 
 /** A 403 that names the drafts refused (the kernel's AuthorizationError names only a cap). */
@@ -141,6 +166,51 @@ interface Tally {
   mine: number;
 }
 
+/** Ids per `.in()` filter on the summary's live read: a URL of about 4 KB, well under the limits. */
+const ARCHIVED_READ_CHUNK = 100;
+
+/**
+ * The listed edits whose row is archived live, as `<entity type>:<id>` (hotfix H12: a change
+ * that keeps an archived row archived waits for an Admin, `keepsArchived`). Only the edits of
+ * types with a lifecycle are asked about, ids only, one read per table and 100 ids: the 1,000
+ * the summary lists cost at most ten reads, plus one for each further table they span.
+ */
+async function archivedLive(ctx: Ctx, rows: readonly Row[]): Promise<Set<string>> {
+  const byType = new Map<ReleaseEntityType, Set<string>>();
+  const known = new Set<string>(RELEASE_ENTITY_TYPES);
+  for (const row of rows) {
+    const type = row['entity_type'];
+    const entityId = row['entity_id'];
+    if (row['op'] !== 'update' || typeof type !== 'string' || !known.has(type)) continue;
+    if (typeof entityId !== 'string' || !Uuid.safeParse(entityId).success) continue;
+    if (!RELEASE_ENTITY_META[type as ReleaseEntityType].hasStatus) continue;
+    const ids = byType.get(type as ReleaseEntityType) ?? new Set<string>();
+    ids.add(entityId);
+    byType.set(type as ReleaseEntityType, ids);
+  }
+  const reads: Promise<string[]>[] = [];
+  for (const [type, ids] of byType) {
+    const { table, key } = RELEASE_REGISTRY[type];
+    const all = [...ids];
+    for (let at = 0; at < all.length; at += ARCHIVED_READ_CHUNK) {
+      const chunk = all.slice(at, at + ARCHIVED_READ_CHUNK);
+      reads.push(
+        (async () => {
+          const { data, error } = await ctx.sb
+            .from(table)
+            .select(key)
+            .eq('tenant_id', ctx.auth.tenantId)
+            .eq('status', 'archived')
+            .in(key, chunk);
+          if (error) throw new Error(`pending archived ${type}: ${error.message}`);
+          return ((data ?? []) as Row[]).map((r) => `${type}:${String(r[key])}`);
+        })(),
+      );
+    }
+  }
+  return new Set((await Promise.all(reads)).flat());
+}
+
 /** The pending summary: every change the caller may read, who it waits for, counts by area. */
 export async function pendingSummary(ctx: Ctx): Promise<Row> {
   const { auth, sb } = ctx;
@@ -176,14 +246,17 @@ export async function pendingSummary(ctx: Ctx): Promise<Row> {
   }
 
   const rows = (drafts.data ?? []) as unknown as Row[];
+  const listed = rows.slice(0, PENDING_LIST_CAP);
+  const archived = await archivedLive(ctx, listed);
   const allowed = new Set<string>(readable);
-  // What publishing needs depends on the type, the op and whether it archives: memoised.
+  // What publishing needs depends on the type, the op, whether it archives and whether its
+  // row stays archived: memoised.
   const decided = new Map<
     string,
     Pick<PendingItem, 'publishableByMe' | 'requiredCaps' | 'waitingFor'>
   >();
   const items: PendingItem[] = [];
-  for (const row of rows.slice(0, PENDING_LIST_CAP)) {
+  for (const row of listed) {
     const type = row['entity_type'];
     const op = row['op'];
     if (typeof type !== 'string' || !allowed.has(type)) continue;
@@ -191,13 +264,15 @@ export async function pendingSummary(ctx: Ctx): Promise<Row> {
     if (typeof row['id'] !== 'string' || typeof row['version'] !== 'number') continue;
     const entityType = type as ReleaseEntityType;
     const status = typeof row['status'] === 'string' ? row['status'] : null;
-    const key = `${entityType}|${op}|${status === 'archived'}`;
+    const liveArchived = archived.has(`${entityType}:${String(row['entity_id'])}`);
+    const key = `${entityType}|${op}|${status === 'archived'}|${status === null}|${liveArchived}`;
     let decision = decided.get(key);
     if (!decision) {
       const ref: ReleaseItemRef = {
         entityType,
         op: op as DraftOp,
         patch: status ? { status } : null,
+        liveStatus: liveArchived ? 'archived' : null,
       };
       decision = {
         publishableByMe: canPublish(auth.role, ref),
@@ -428,15 +503,7 @@ export async function resolveDraft(
   const draft = await loadDraftById(ctx, id);
   const type = draft.entity_type;
   const entry = RELEASE_REGISTRY[type];
-  if (!mayRewrite(auth.role, draft)) {
-    const caps = requiredCaps({
-      entityType: type,
-      op: draft.op,
-      patch: { status: storedStatus(draft.payload) },
-    });
-    const missing = caps?.find((cap) => ROLE_CAPS[auth.role][cap] !== 'full');
-    return refuse(missing ?? RELEASE_ENTITY_META[type].authorCaps[0]!, [draft.id]);
-  }
+  if (!mayRewrite(auth.role, draft)) return rewriteRefusal(auth.role, draft);
   if (draft.release_id !== null) throw new DraftConflictError('scheduled', type);
   if (draft.version !== input.version) throw new DraftConflictError('draft-conflict', type);
   if (draft.op !== 'update') {
@@ -459,6 +526,12 @@ export async function resolveDraft(
       null,
       'This item was removed on the live site. Discard the change.',
     );
+  }
+  // Hotfix H12: the row is archived live and the change keeps it so, which only an Admin may
+  // publish (keepsArchived), so only an Admin rewrites it. Judged once live is read.
+  const liveStatus = typeof live['status'] === 'string' ? live['status'] : null;
+  if (!mayRewrite(auth.role, draft, liveStatus)) {
+    return rewriteRefusal(auth.role, draft, liveStatus);
   }
   let columns: string[];
   try {

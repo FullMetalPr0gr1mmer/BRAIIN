@@ -214,6 +214,55 @@ describe('the selection, the capabilities and the person', () => {
     expect(applyCalls()).toEqual([]);
   });
 
+  // Hotfix H12: the apply runs as the publisher and the archive gates refuse anyone but an
+  // Admin an update that leaves a row archived, so a change to a row archived live that sets
+  // no status (a number, a title) waits for an Admin, as an archive does. Before, canPublish
+  // saw no archive in it: a Content Creator was told they could publish it, and the apply
+  // was refused whole.
+  it('a Content Creator may not publish an edit of a row archived live: 403, waiting for an Admin', async () => {
+    const draft = serviceEdit({ sortOrder: 5 }, { sort_order: 10 });
+    for (const route of [PUBLISH, VALIDATE]) {
+      const db = seed({
+        services: [liveService({ status: 'archived', sort_order: 10 })],
+        content_drafts: [draft],
+      });
+      const res = await run(route, db, select(draft), 'content_creator');
+      expect(res.status).toBe(403);
+      expect(res.body).toMatchObject({
+        error: 'forbidden',
+        capability: 'content.archiveDelete',
+        draftIds: [draft['id']],
+        waitingFor: { [String(draft['id'])]: ['admin'] },
+      });
+    }
+    expect(applyCalls()).toEqual([]);
+  });
+
+  it('an Admin publishes that edit; a Content Creator publishes a restore of the same row', async () => {
+    const edit = serviceEdit({ sortOrder: 5 }, { sort_order: 10 });
+    const db = seed({
+      services: [liveService({ status: 'archived', sort_order: 10 })],
+      content_drafts: [edit],
+    });
+    const admin = await run(PUBLISH, db, select(edit));
+    expect(admin.status, JSON.stringify(admin.body)).toBe(200);
+    expect(applyCalls()).toHaveLength(1);
+
+    svc.calls = [];
+    const restore = serviceEdit({ status: 'draft' }, { status: 'archived' });
+    const cc = await run(
+      PUBLISH,
+      seed({
+        services: [liveService({ status: 'archived' })],
+        content_drafts: [restore],
+      }),
+      select(restore),
+      'content_creator',
+    );
+    expect(cc.status, JSON.stringify(cc.body)).toBe(200);
+    expect(applyCalls()).toHaveLength(1);
+  });
+
   it('SEO may not publish content, Developer may not publish a service', async () => {
     const draft = serviceEdit(
       { title: BI('A', 'ب') },

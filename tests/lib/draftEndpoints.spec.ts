@@ -228,6 +228,48 @@ describe('the pending summary', () => {
     expect([res.data['total'], res.data['truncated']]).toEqual([3, false]);
   });
 
+  it('an edit of a row archived live waits for an Admin (hotfix H12); its restore does not', async () => {
+    // The apply runs as the publisher and the archive gates let only an Admin write a row
+    // that stays archived: a change that sets no status on such a row is an Admin's to publish.
+    const S2 = '33333333-3333-4333-8333-333333333302';
+    db.tables['services'] = [
+      service({ status: 'archived' }),
+      service({ id: S2, slug: 'cards', status: 'archived' }),
+    ];
+    db.tables['content_drafts'] = [
+      serviceEdit({
+        payload: { sortOrder: 5 },
+        fields: ['sort_order'],
+        updated_at: '2026-10-18T09:00:00Z',
+      }),
+      draftRow({
+        id: id(5),
+        entity_type: 'service',
+        entity_id: S2,
+        payload: { status: 'draft' },
+        fields: ['status'],
+        updated_at: '2026-10-18T08:30:00Z',
+      }),
+    ];
+    const res = await read('content_creator', OTHER_USER);
+    const [edit, restore] = res.data['items'] as Row[];
+    expect(edit).toMatchObject({
+      draftId: id(1),
+      publishableByMe: false,
+      requiredCaps: ['services.write', 'content.publish', 'content.archiveDelete'],
+      waitingFor: ['admin'],
+    });
+    expect(restore).toMatchObject({
+      draftId: id(5),
+      publishableByMe: true,
+      waitingFor: ['admin', 'content_creator'],
+    });
+    // One read of the live statuses, the caller's tenant, archived rows of the listed ids.
+    const live = db.calls.filter((c) => c.name === 'services');
+    expect(live).toHaveLength(1);
+    expect(live[0]!.columns).toBe('id');
+  });
+
   it('reads stored metadata only, for the caller’s tenant, names through the directory', async () => {
     await read('admin');
     const select = db.calls.find((c) => c.name === 'content_drafts')!.columns!;
@@ -578,6 +620,20 @@ describe('settling a conflict', () => {
     expect(cc.status).toBe(403);
     expect(cc.body['capability']).toBe('content.archiveDelete');
     expect((await settle({ version: 1, keepMine: ['title'] }, 'admin')).status).toBe(200);
+  });
+
+  it('only an Admin settles a change to a row archived live that keeps it archived (H12)', async () => {
+    // Settling rewrites the change, so it needs what publishing it would; the archive gates
+    // let only an Admin write a row that stays archived. Judged once live is read.
+    db.tables['services'] = [service({ status: 'archived' })];
+    const cc = await settle({ version: 1, keepMine: ['title'] });
+    expect([cc.status, cc.body['capability']]).toEqual([403, 'content.archiveDelete']);
+    expect(cc.body['draftIds']).toEqual([id(1)]);
+    expect(drafts()[0]!['version']).toBe(1);
+    expect(auditsOf(db)).toEqual([]);
+    const admin = await settle({ version: 1, keepMine: ['title'] }, 'admin');
+    expect(admin.status, JSON.stringify(admin.body)).toBe(200);
+    expect(drafts()[0]!['version']).toBe(2);
   });
 
   it('entity SEO, a full replace: "use live" takes the live value, keeping the payload whole', async () => {
