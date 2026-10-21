@@ -1606,3 +1606,21 @@ operator script or Edge Function truncates any of them (`tests/lib/noTruncate.sp
 that does; seeds and restores run as the migration role). Its triggers are inert while
 `app.release_tenants` is empty, and an older Worker parses `media_usage`'s new `pending` column
 as an unknown key it drops. A Worker rollback across R5's PR is safe.
+
+0098 (Admin v2 U9) does not move the line either. It is expand only but for one privilege
+removal: its stated grants withdraw DELETE, TRUNCATE, REFERENCES and TRIGGER on
+`site_profile` and `site_settings` from `authenticated` and `service_role` (what the bootstrap
+ALL had left; `site_settings_write` admitted an Admin or Developer DELETE), and no build since
+the line, operator script or Edge Function deletes or truncates either row
+(`tests/lib/noSingletonDelete.spec.ts` and `tests/lib/noTruncate.spec.ts` fail one that does).
+Everything else an older Worker meets it ignores: it names its columns (never `*`), reads
+`media_usage`'s `site_profile` rows by its own words, and is refused by the live write
+policies only for a stale token its own session check refuses. A Worker rollback across U9's
+PR is safe, with one effect while maintenance is on: the older middleware reads only the
+switch and the allowlist of the KV value, so the 503 loses its copy, buttons, "Back on" and
+the staff bypass (signed-in staff see it too, and it does not end by itself) until someone
+turns maintenance off. Should a singleton row ever need deleting (a tenant's removal), do it
+as the migration role in a reviewed step, and change that spec in the same PR; to give the
+API roles DELETE back: `grant delete on public.site_settings to authenticated;` (and the same
+for `site_profile`), knowing `site_settings_write` then admits an Admin or Developer DELETE
+again.
