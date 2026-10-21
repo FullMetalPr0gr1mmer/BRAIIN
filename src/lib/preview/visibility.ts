@@ -348,7 +348,7 @@ export function createMirror(data: MirrorData): Mirror {
   };
 
   /**
-   * 0098 media_assets_public_read: 0045's eight branches, 0073's two and 0098's icons, each
+   * 0099 media_assets_public_read: 0045's eight branches, 0073's two and 0099's icons, each
    * under anon's RLS.
    */
   const referencedMedia = (): Set<string> => {
@@ -390,7 +390,7 @@ export function createMirror(data: MirrorData): Mirror {
     each('entity_seo', 'og_media_id');
     // 10. (0073) the tenant's default share image
     each('seo_defaults', 'default_og_media_id');
-    // 11. (0098) the site's favicon and app icon, under site_profile's own RLS (the tenant)
+    // 11. (0099) the site's favicon and app icon, under site_profile's own RLS (the tenant)
     each('site_profile', 'favicon_media_id');
     each('site_profile', 'app_icon_media_id');
     mediaRefs = refs;
@@ -467,7 +467,7 @@ export function createMirror(data: MirrorData): Mirror {
         const parent = SEO_PARENTS[String(row['entity_type'])];
         return parent !== undefined && visibleById(parent, row['entity_id']);
       }
-      // 0098 media_assets_public_read (restating 0073/0045/0028/0024): a hosted provider,
+      // 0099 media_assets_public_read (restating 0073/0045/0028/0024): a hosted provider,
       // referenced by one of eleven branches of visible content.
       case 'media_assets':
         return (

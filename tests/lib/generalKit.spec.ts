@@ -501,7 +501,7 @@ describe('the maintenance screen’s words', () => {
 });
 
 describe('the studio’s zone for a request (studioTimeZone)', () => {
-  // Read through public.studio_time_zone() (0098), never the table: a Sales token (0097)
+  // Read through public.studio_time_zone() (0099), never the table: a Sales token (0097)
   // reads no site_settings row (app.is_staff() is the four CMS roles), so a table read would
   // answer Sales Riyadh while every colleague sees the studio's zone.
   const calls: string[] = [];

@@ -24,7 +24,7 @@ export interface Identity {
   foundedYear: number | null;
   socials: SocialLink[];
   acceptingApplications: boolean;
-  // Admin v2 U9 (0098). Each is null (or today's footer) until the owner sets it.
+  // Admin v2 U9 (0099). Each is null (or today's footer) until the owner sets it.
   /** The tagline, both languages: Organization `slogan`, the manifest's description. */
   tagline: { en: string; ar: string } | null;
   phoneE164: string | null;

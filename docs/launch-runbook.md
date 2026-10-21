@@ -1464,11 +1464,11 @@ like any other content (P-3) and a scheduled question goes live through
 
 ---
 
-### 6l. General settings and maintenance v2 (migration 0098, Admin v2 U9)
+### 6n. General settings and maintenance v2 (migration 0099, Admin v2 U9)
 
 The letter is the next free one when U9 merges; renumber if a sibling took it.
 
-**Apply before the merge** (expand only; rule 5): 0098 adds columns, CHECKs, the icon keys,
+**Apply before the merge** (expand only; rule 5): 0099 adds columns, CHECKs, the icon keys,
 `site_settings.timezone` (copied from `crm_settings.timezone`; only rows that differ are
 written), the RESTRICTIVE live writes on `site_profile` and `site_settings` and the two tables'
 grants (authenticated loses an inherited DELETE on `site_settings` that nothing used). The old
@@ -1500,7 +1500,7 @@ with the U9 read-back query; every value must match its expected line.
 least 512 px). After setting them, `/_image` serves each as PNG at 32, 180, 192 and 512 only
 (four transformations per picture), and `/manifest.webmanifest` lists the app icon.
 
-**Rollback.** Revert the Worker; 0098 stays (expand only). If the RESTRICTIVE live writes ever
+**Rollback.** Revert the Worker; 0099 stays (expand only). If the RESTRICTIVE live writes ever
 need lifting, drop `site_profile_live_insert`, `site_profile_live_update`,
 `site_settings_live_insert` and `site_settings_live_update` (the permissive policies of 0001 and
 0019 still gate by role).
@@ -1646,7 +1646,7 @@ that does; seeds and restores run as the migration role). Its triggers are inert
 `app.release_tenants` is empty, and an older Worker parses `media_usage`'s new `pending` column
 as an unknown key it drops. A Worker rollback across R5's PR is safe.
 
-0098 (Admin v2 U9) does not move the line either. It is expand only but for one privilege
+0099 (Admin v2 U9) does not move the line either. It is expand only but for one privilege
 removal: its stated grants withdraw DELETE, TRUNCATE, REFERENCES and TRIGGER on
 `site_profile` and `site_settings` from `authenticated` and `service_role` (what the bootstrap
 ALL had left; `site_settings_write` admitted an Admin or Developer DELETE), and no build since

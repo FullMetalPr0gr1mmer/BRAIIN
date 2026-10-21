@@ -182,7 +182,7 @@ test.describe('as admin', () => {
     expect(upload.status(), await upload.text()).toBe(200);
     const icon = ((await upload.json()) as { data: { id: string } }).data.id;
 
-    // (A picture that is not square, or not an upload, is refused on its field by 0098's
+    // (A picture that is not square, or not an upload, is refused on its field by 0099's
     // trigger: supabase/tests/general_settings.test.sql and tests/lib/generalKit.spec.ts.)
     const row = await read(page, PROFILE);
     await save(page, PROFILE, { faviconMediaId: icon, appIconMediaId: icon, version: row.version });
