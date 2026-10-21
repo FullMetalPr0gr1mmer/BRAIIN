@@ -27,7 +27,8 @@ async function load(leadershipOnly: boolean): Promise<TeamMemberRow[]> {
       .from('team_members')
       .select(COLUMNS)
       .eq('status', 'published')
-      .order('sort_order', { ascending: true });
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
     if (leadershipOnly) query = query.eq('is_leadership', true);
     const { data, error } = await query;
     if (error) {

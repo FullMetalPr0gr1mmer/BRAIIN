@@ -61,7 +61,7 @@ function items(entityType: ReleaseEntityType, kind: Kind): ReleaseItemRef[] {
   return out;
 }
 
-const ROLE_ORDER: Role[] = ['admin', 'content_creator', 'seo', 'developer'];
+const ROLE_ORDER: Role[] = ['admin', 'content_creator', 'seo', 'developer', 'sales'];
 
 function parseReleaseMatrix(): Map<string, boolean[]> {
   const md = readFileSync(join(process.cwd(), 'docs', 'architecture.md'), 'utf8');
@@ -72,7 +72,7 @@ function parseReleaseMatrix(): Map<string, boolean[]> {
       .split('|')
       .slice(1, -1)
       .map((s) => s.trim());
-    expect(cells, line).toHaveLength(5);
+    expect(cells, line).toHaveLength(ROLE_ORDER.length + 1);
     const values = cells.slice(1).map((cell) => {
       if (cell === '✅') return true;
       if (cell === '❌') return false;
@@ -121,7 +121,9 @@ describe('the release publish matrix (architecture.md §3.4) equals ROLE_CAPS', 
     }
   });
 
-  it('only the four roles exist (anon, other_tenant and Sales hold nothing here)', () => {
+  it('every role is a column, and Sales publishes nothing (P-2: never Sales)', () => {
     expect([...ROLES].sort()).toEqual([...ROLE_ORDER].sort());
+    const sales = ROLE_ORDER.indexOf('sales');
+    for (const [label, cells] of doc) expect(cells[sales], label).toBe(false);
   });
 });

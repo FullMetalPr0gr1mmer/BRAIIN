@@ -4,7 +4,8 @@ import { NOTIFY_LEAD_SECRET, LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { serviceClient } from '@/lib/supabase/server';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import { decryptPII } from '@/lib/crypto/pii';
-import { canSeeLeadPii } from '@/lib/admin/leadFields';
+import { canManageLeads, receivesLeadPiiUnasked } from '@/lib/admin/leadFields';
+import { ROLES, isRole } from '@/lib/auth/types';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 import { notifySignatureValid, readNotifyHeaders } from '@/lib/leads/notifySignature';
@@ -37,10 +38,13 @@ import { notifySignatureValid, readNotifyHeaders } from '@/lib/leads/notifySigna
 //      and cancels the stream, the moment it passes the cap, whatever was declared. Both
 //      count bytes, not UTF-16 code units.
 //
-// Recipients are field-gated through the SAME helper the admin UI uses
-// (`canSeeLeadPii`) — §10 asks for one shared field-visibility rule, and the failure
-// mode of two rules is that budget and internal notes get emailed to someone the CMS
-// itself refuses to show them to.
+// Recipients are field-gated through the SAME helper file the admin UI uses
+// (src/lib/admin/leadFields.ts) — §10 asks for one shared field-visibility rule, and the
+// failure mode of two rules is that budget and internal notes get emailed to someone the
+// CMS itself refuses to show them to. Since Admin v2 C10a the gate is
+// `receivesLeadPiiUnasked`: `leads.pii` together with `export.csv` (Admin, Developer).
+// Sales holds `leads.pii` one lead at a time (owner default O-6), through the audited,
+// rate-limited reveal only, so a notification never hands it a lead's details.
 
 export const prerender = false;
 
@@ -58,8 +62,12 @@ const MAX_BODY_BYTES = 1024;
 /** A Content-Length of one to four digits: anything longer is over the cap anyway. */
 const CONTENT_LENGTH = /^[0-9]{1,4}$/;
 
-/** Who gets notified, and how much they see. Roles come from §5, never from the body. */
-const RECIPIENT_ROLES = ['admin', 'developer'] as const;
+/**
+ * Who gets notified: every role that works leads (`leads.manage` in ROLE_CAPS, §5), never
+ * a list of its own (Admin v2 C10a, crm.md D8). How much each sees is decided per role
+ * below. Roles come from §5, never from the body.
+ */
+const RECIPIENT_ROLES: readonly string[] = ROLES.filter(canManageLeads);
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -126,9 +134,10 @@ export const POST: APIRoute = async ({ request }) => {
     .eq('is_active', true)
     .in('role', [...RECIPIENT_ROLES]);
 
-  const sensitiveHolders = (recipients ?? []).filter((r) =>
-    canSeeLeadPii((r as { role: 'admin' | 'developer' }).role),
-  );
+  const sensitiveHolders = (recipients ?? []).filter((r) => {
+    const role = (r as { role?: unknown }).role;
+    return isRole(role) && receivesLeadPiiUnasked(role);
+  });
 
   // Readable labels for the interest slugs (Round 3): the recipient reads "Videography
   // (now Photography / Videography)", not a slug a cached page posted. EN — the
@@ -139,7 +148,7 @@ export const POST: APIRoute = async ({ request }) => {
   );
 
   // Build the two payload shapes once. Everything below the gate is omitted for a
-  // recipient without `leads.pii` — the same rule the admin API applies.
+  // recipient that may not be handed lead PII unasked (`receivesLeadPiiUnasked`).
   const safe = {
     id: lead['id'],
     name: lead['name'],

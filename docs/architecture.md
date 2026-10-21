@@ -234,81 +234,78 @@ Derived from one TS constant (`ROLE_CAPS` in `src/lib/authz/matrix.ts`). **This 
 
 > **Canonical role model (reconciled 2026-06-10).** The feature inventory describes **Developer** as *"full technical access + site-health panel"* — an infrastructure/technical role, **not** a content author or publisher. So: **Developer owns settings/theme/maintenance/integrations? (no — integrations are SEO) + logs/audit/site-health + leads management & PII + backup export, but has NO content-authoring, NO content publish/schedule, NO archive.** Content authoring belongs to Content Creator (who also publishes); publish/archive/delete to Admin (archive/delete Admin-only); SEO owns meta/schema/redirects/integrations. (Supersedes an earlier draft that granted Developer broad `content.write`/`content.publish`.)
 
-Legend: ● full · ◐ limited/own · ○ none.
+The table below is CLAUDE.md §5's, cell for cell, in its format (Admin v2 C10a, fixing verification D6): `tests/authz/matrix.spec.ts` parses both and compares each with `ROLE_CAPS`, so neither can drift from the code or from the other.
 
-| Capability | Admin | Content Creator | SEO | Developer |
-|---|---|---|---|---|
-| Content CRUD (services, blog, portfolio, pages/sections) | ● | ● | ◐ *(meta/SEO only)* | ○ |
-| **Publish / schedule / unpublish content** | ● | ● | ○ | ○ |
-| Archive / hard-delete content | ● | ○ | ○ | ○ |
-| Media — upload / edit metadata | ● | ● | ◐ *(meta only)* | ● |
-| Media — hard-delete | ● | ○ | ○ | ○ |
-| Users & roles | ● | ○ | ○ | ○ |
-| Global settings / identity / localization | ● | ○ | ○ | ● |
-| Maintenance / hidden pages / page visibility | ● | ○ | ○ | ● |
-| Integrations (GA4, Search Console, Calendly, reCAPTCHA) | ● | ○ | ● | ○ |
-| SEO meta / schema / global SEO defaults | ● | ◐ *(per-entity, view)* | ● | ○ |
-| **Redirects & canonicals** | ● | ○ | ● | ○ |
-| Analytics — read dashboards | ● | ● | ● | ● |
-| Search analytics | ● | ○ | ● | ● |
-| Analytics goals — set | ● | ○ | ● | ○ |
-| AI Style-Finder — questions/styles editor | ● | ● | ○ | ○ |
-| AI Style-Finder — results/logic config | ● | ○ | ○ | ○ |
-| Exports — `export-csv` (leads/analytics/activity) | ● | ○ | ○ | ● |
-| Exports — `export-backup` | ● | ○ | ○ | ● |
-| Leads — list/manage (status, notes) | ● | ○ | ○ | ● |
-| **Leads — budget/timeline/internal_notes/ip (PII)** | ● | ○ | ○ | ● |
-| **Leads & contacts — erase a person's data (DSAR)** | ● | ○ | ○ | ○ |
-| CRM settings — pipeline stages, scoring, response time, assignment | ● | ○ | ○ | ○ |
-| Job applications — view / manage status / notes / erase | ● | ○ | ○ | ○ |
-| **Job applications — contact details & CV download (PII)** | ● | ○ | ○ | ○ |
-| Theme editor | ● | ○ | ○ | ● |
-| System logs (view / clear) | ● | ○ | ○ | ◐ *(view; clear=Admin)* |
-| Audit log (view) | ● | ○ | ○ | ● |
-| Site-health & performance panel | ● | ○ | ○ | ● *(exclusive owner)* |
+| Capability / Area | Admin | Content Creator | SEO | Developer | Sales |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Users & roles | ✅ | ❌ | ❌ | ❌ | ❌ |
+| General settings (identity, footer, localization) | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Integrations (GA4, Search Console, Calendly, reCAPTCHA) | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Maintenance / hidden pages / page visibility | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Theme editor | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Services — create/edit | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Blog — create/edit/autosave | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Portfolio — create/edit | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Pages & sections — edit/reorder/style | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Navigation editor | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Categories management | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Publish / schedule content | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Archive / delete content | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Per-entity SEO meta / slug / schema | ✅ | view | ✅ | ❌ | ❌ |
+| Global SEO defaults | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Redirects / canonical module | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Media — upload / edit metadata | ✅ | ✅ | meta only | ✅ | ❌ |
+| Media — hard delete | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Leads — view list / manage status / notes | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Leads — budget/timeline/internal_notes/ip (PII) | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Leads / analytics / activity — export CSV | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Leads & contacts — erase a person's data (DSAR) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| CRM settings — pipeline stages, scoring, response time, assignment | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Job applications — view / manage status / notes / erase | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Job applications — contact details & CV download (PII) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Analytics — read dashboards | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Search analytics | ✅ | ❌ | ✅ | ✅ | ❌ |
+| Analytics goals — set | ✅ | ❌ | ✅ | ❌ | ❌ |
+| AI Style-Finder — questions/styles editor | ✅ | ✅ | ❌ | ❌ | ❌ |
+| AI Style-Finder — results/logic config | ✅ | ❌ | ❌ | ❌ | ❌ |
+| System logs — view | ✅ | ❌ | ❌ | ✅ | ❌ |
+| System logs — clear | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Audit log — view | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Site Health & Performance panel | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Backup export (`export-backup`) | ✅ | ❌ | ❌ | ✅ | ❌ |
 
-**Lead PII note.** `budget`/`timeline`/`internal_notes`/`ip_inet` are Admin + Developer only; Content Creator and SEO can never read leads. A Developer `export-backup` decrypts PII (Developer holds `leads.sensitive`) but is audit-logged with row counts + status (§4.9).
+Legend: ✅ full · "view"/"meta only" partial · ❌ none. `anon` and `other_tenant` get **deny on every row**; Sales gets deny on every row not marked. When in doubt, default-deny.
+
+**Sales (Admin v2 C10a, owner decision A4).** Sales works leads and is not CMS staff: `app.is_staff()` stays Admin, Content Creator, SEO and Developer (README P-6), and `app.is_member()` (the five roles) opens exactly one policy, `audit_insert`. The SQL helpers that name it are `app.role_works_leads` (`leads.manage`) and `app.role_analytics_read` (`analytics.read`); `leads.pii` reaches the database only through the service-role reveal, after `assertCap`, a live recheck, a rate limit and a fail-closed audit row, one lead at a time (owner default O-6), and a lead notification never carries PII to it (`receivesLeadPiiUnasked`: `leads.pii` and `export.csv`). A RESTRICTIVE non-staff block (0097) keeps it from the testimonial, case-study and media rows whose extra staff columns anon does not hold, and `supabase/tests/rls_sales_role.test.sql` proves from the catalog that it reads no more than anon outside the CRM.
+
+**Lead PII note.** `budget`/`timeline`/`internal_notes`/`ip_inet` are Admin + Developer, and Sales one lead at a time through the audited reveal; Content Creator and SEO can never read leads. A Developer `export-backup` decrypts PII (Developer holds `leads.sensitive`) but is audit-logged with row counts + status (§4.9).
 
 **Applicant PII note (Join, 0029).** Job applications are **Admin only** — `applications.manage` (list, status, notes, erase) and `applications.pii` (decrypted e-mail/phone, the CV download), both Admin in `ROLE_CAPS`, both enforced by RLS (`job_applications_admin_all` + the RESTRICTIVE `job_applications_admin_only`, which also checks the profile live — `app.is_live_admin()` — so a token that outlives a demotion reads nothing). Developer is excluded on purpose (owner decision J6): holding `leads.sensitive` does not reach applicants, and `export-backup` never includes `job_applications` (`FORBIDDEN_BACKUP_TABLES`). The CV sits in the private Supabase Storage bucket `applications`, reachable only by the service role; it leaves through one audited Admin route (CLAUDE.md §3).
 
-```ts
-// src/lib/authz/matrix.ts
-export const CAPS = ['content.read','content.write','content.publish','content.delete',
-  'users.manage','settings.write','maintenance.write','integrations.write','seo.meta',
-  'redirects.write','analytics.read','search.analytics','analytics.goals','exports.leads','exports.backup',
-  'leads.manage','leads.sensitive','media.write','media.delete','theme.write','logs.view',
-  'logs.clear','audit.view','sitehealth.view','crm.erase','crm.settings'] as const;
-export const ROLE_CAPS: Record<AppRole, ReadonlySet<Cap>> = {
-  admin: new Set(CAPS),
-  content_creator: new Set(['content.read','content.write','content.publish','seo.meta','media.write','analytics.read']),
-  seo: new Set(['content.read','seo.meta','redirects.write','integrations.write','analytics.read','search.analytics','analytics.goals','media.write']),
-  developer: new Set(['settings.write','maintenance.write','theme.write','analytics.read','search.analytics','media.write',
-    'exports.leads','exports.backup','leads.manage','leads.sensitive','logs.view','audit.view','sitehealth.view']),
-};
-```
+The code is `ROLE_CAPS` in `src/lib/authz/matrix.ts`; the table above is checked against it (no copy of the code is kept here, so none can go stale).
 
 #### Release publish matrix (derived; Admin v2 R2)
 
 Who may publish a pending change once releases are on (docs/admin-v2/releases.md §4.1). No capability is added: an item needs its area's capabilities (a content item its write capability and `content.publish`), plus the remove capability for a removal or an archive (`content.archiveDelete`; for redirects `redirects.manage`), and `content.archiveDelete` for an edit that leaves a row archived (its live status is archived and the change sets none: hotfix H12, `keepsArchived`, since the archive gates let only an Admin write such a row and the apply runs as the publisher), computed by `requiredCaps` in `src/lib/release/caps.ts`.
 
-| Release area | Admin | Content Creator | SEO | Developer |
-|---|:-:|:-:|:-:|:-:|
-| Release — content (pages, sections, services, disciplines, cases, Our work, collections, blog, navigation) | ✅ | ✅ | ❌ | ❌ |
-| Release — removals and archives (every area but redirects) | ✅ | ❌ | ❌ | ❌ |
-| Release — public identity | ✅ | ❌ | ❌ | ✅ |
-| Release — theme and appearance | ✅ | ❌ | ❌ | ✅ |
-| Release — per-entity SEO | ✅ | ❌ | ✅ | ❌ |
-| Release — global SEO defaults | ✅ | ❌ | ✅ | ❌ |
-| Release — redirects (removals included) | ✅ | ❌ | ✅ | ❌ |
-| Release — page visibility | ✅ | ❌ | ❌ | ✅ |
+| Release area | Admin | Content Creator | SEO | Developer | Sales |
+|---|:-:|:-:|:-:|:-:|:-:|
+| Release — content (pages, sections, services, disciplines, cases, Our work, collections, blog, navigation) | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Release — removals and archives (every area but redirects) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Release — public identity | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Release — theme and appearance | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Release — per-entity SEO | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Release — global SEO defaults | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Release — redirects (removals included) | ✅ | ❌ | ✅ | ❌ | ❌ |
+| Release — page visibility | ✅ | ❌ | ❌ | ✅ | ❌ |
 
-Derived, not authored: each cell equals what that role can already make live by saving (P-2); `tests/authz/releaseMatrix.spec.ts` evaluates `requiredCaps` for every registry type in the row's area against `ROLE_CAPS`. anon, other_tenant (and Sales, when it exists) are ❌ on every row. R14 copies it into CLAUDE.md §5.
+Derived, not authored: each cell equals what that role can already make live by saving (P-2); `tests/authz/releaseMatrix.spec.ts` evaluates `requiredCaps` for every registry type in the row's area against `ROLE_CAPS`. anon, other_tenant and Sales are ❌ on every row (P-2: never Sales). R14 copies it into CLAUDE.md §5.
 
 ### 3.5 Session / cookies / CSRF
 `httpOnly; Secure; SameSite=Lax` (`__Host-`) cookies; `getUser()` signature verification; double-submit `__Host-csrf` or same-origin check on all mutations.
 
 ### 3.6 RLS as primary control
-Every policy's tenant predicate is `app.effective_tenant_id()`: the JWT tenant (`app.current_tenant_id()`), else the single launch tenant, which is the anon fence (there is no `auth.current_tenant_id()`). Anonymous reads go through the same tenant-scoped policies as staff, limited to published rows (e.g. `services_read`); no anonymous write has a policy at all: the public forms write as the service role, the tenant resolved on the server. `services_write`/publish allow Admin + Content Creator (Developer has NO content.write); archive/delete is Admin-only via a second RESTRICTIVE policy. `leads_read`/`leads_update` allow Admin + Developer, and the RESTRICTIVE `leads_live` re-reads the profile on every lead query (`app.live_role()`, 0033). Staff tokens SELECT the safe columns of `leads` only (0033). **`leads_safe` view omits `budget/timeline/internal_notes/ip_inet` and is SECURITY INVOKER; it is granted to all `authenticated`, because a GRANT cannot tell the app roles apart, so RLS decides its rows** (corrected 0033). The plaintext PII gate of record is the role-checked decrypt path (§4.7), reached as the service role after `leads.pii`, a live recheck and a fail-closed audit row, with the column GRANT + view as defense-in-depth. pgTAP asserts SEO/Content Creator get zero lead access.
+Every policy's tenant predicate is `app.effective_tenant_id()`: the JWT tenant (`app.current_tenant_id()`), else the single launch tenant, which is the anon fence (there is no `auth.current_tenant_id()`). Anonymous reads go through the same tenant-scoped policies as staff, limited to published rows (e.g. `services_read`); no anonymous write has a policy at all: the public forms write as the service role, the tenant resolved on the server. `services_write`/publish allow Admin + Content Creator (Developer has NO content.write); archive/delete is Admin-only via a second RESTRICTIVE policy. `leads_read`/`leads_update` allow Admin, Developer and Sales (`app.role_works_leads`, 0097), and the RESTRICTIVE `leads_live` re-reads the profile on every lead query (`app.live_role()`, 0033). Staff tokens SELECT the safe columns of `leads` only (0033). **`leads_safe` view omits `budget/timeline/internal_notes/ip_inet` and is SECURITY INVOKER; it is granted to all `authenticated`, because a GRANT cannot tell the app roles apart, so RLS decides its rows** (corrected 0033). The plaintext PII gate of record is the role-checked decrypt path (§4.7), reached as the service role after `leads.pii`, a live recheck and a fail-closed audit row, with the column GRANT + view as defense-in-depth. pgTAP asserts SEO/Content Creator get zero lead access.
 
 ### 3.7 Independent role checks in Edge Functions
 `assertCap` verifies JWT against JWKS and, for **RLS-bypassing privileged endpoints** (`export-backup`, `export-csv`, `leads.sensitive`, `manage-users`), **live-rechecks `profiles.role`/`is_active`/`locked_until`** so a demotion/deactivation is effective immediately (not at the 1h token TTL). `submit-contact-form` resolves `tenant_id` server-side; `search-content` has **no captcha** (incoherent per-keystroke) — edge rate-limit + Zod cap + `websearch_to_tsquery`. A test demotes a user without refreshing the token and asserts immediate 403.
@@ -427,7 +424,7 @@ Tenant predicate first in every policy and composite index. **§8.5 freshness me
 ## 9. CI/CD, Testing, Observability, DR & Notifications
 
 ### 9.1–9.5 Type safety, testing pyramid, per-role authz, CI/CD, a11y
-TypeScript strict; Zod single source. **The authz matrix (§9.3)** is byte-for-byte consistent with §3.4 and CLAUDE.md §5: `service.publish` = Admin+Content Creator; `read lead.budget/timeline` = Admin+Developer; `content.write` = Admin+Content Creator; `settings.write/export-backup` = Admin+Developer; `integrations.write/seo_meta/redirects.write` = Admin+SEO; `crm.erase` (erasing a lead, then a person's data) = Admin only; `crm.settings` (the pipeline stages, scoring points, response time and assignment) = Admin only; `analytics.goals` (setting the website stats' goals) = Admin+SEO; `audit_log.delete` = deny all. Plus the targeted regression tests: anon tenant fence, live-recheck, lead-PII, notify-lead 401, search safety, role-matrix snapshot, AI limits, audit chain. CI gate order mirrors pillars. Three isolated Supabase projects; no preview deployments — a PR builds the production Worker and dry-runs `wrangler deploy` (`deploy-preflight`), and the browser suites run against the built Worker under `wrangler dev`; only `main` deploys, from CI, after every gate (CLAUDE.md §2, deploys amendment). WCAG 2.2 AA blocking (axe + 4 targeted checks).
+TypeScript strict; Zod single source. **The authz matrix (§9.3)** is byte-for-byte consistent with §3.4 and CLAUDE.md §5: `service.publish` = Admin+Content Creator; `read lead.budget/timeline` = Admin+Developer, and Sales one lead at a time (the audited reveal); every other capability is denied to Sales, which `tests/authz/endpoints.spec.ts` asserts route by route because it iterates every role; `content.write` = Admin+Content Creator; `settings.write/export-backup` = Admin+Developer; `integrations.write/seo_meta/redirects.write` = Admin+SEO; `crm.erase` (erasing a lead, then a person's data) = Admin only; `crm.settings` (the pipeline stages, scoring points, response time and assignment) = Admin only; `analytics.goals` (setting the website stats' goals) = Admin+SEO; `audit_log.delete` = deny all. Plus the targeted regression tests: anon tenant fence, live-recheck, lead-PII, notify-lead 401, search safety, role-matrix snapshot, AI limits, audit chain. CI gate order mirrors pillars. Three isolated Supabase projects; no preview deployments — a PR builds the production Worker and dry-runs `wrangler deploy` (`deploy-preflight`), and the browser suites run against the built Worker under `wrangler dev`; only `main` deploys, from CI, after every gate (CLAUDE.md §2, deploys amendment). WCAG 2.2 AA blocking (axe + 4 targeted checks).
 
 ### 9.6 Observability
 Operational telemetry (Sentry same-origin tunnel + `system_logs`, synthetics, `/healthz`) is legitimate-interest, PII-scrubbed, consent-independent. **Field web-vitals (RUM) is consent-gated** (carries `session_id`, `analytics` category) — client checks before `sendBeacon`, the same-origin Worker endpoint re-checks server-side (§4.12).

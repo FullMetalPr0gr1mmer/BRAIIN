@@ -9,12 +9,21 @@ import { describe, it, expect, vi } from 'vitest';
 // assumed.
 
 const inserted: Record<string, unknown>[] = [];
+// The recipients the profiles read answers, and the roles it was asked for (C10a).
+const { people, askedRoles } = vi.hoisted(() => ({
+  people: { rows: [{ id: 'u1', role: 'admin' }] as { id: string; role: string }[] },
+  askedRoles: [] as unknown[],
+}));
 
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => {
     const builder: Record<string, unknown> = {};
     const chain = () => builder;
-    for (const m of ['select', 'eq', 'in', 'order', 'limit']) builder[m] = chain;
+    for (const m of ['select', 'eq', 'order', 'limit']) builder[m] = chain;
+    builder['in'] = (column: string, values: unknown) => {
+      if (column === 'role') askedRoles.push(values);
+      return builder;
+    };
     builder['insert'] = (row: Record<string, unknown>) => {
       inserted.push(row);
       return Promise.resolve({ data: null, error: null });
@@ -37,7 +46,7 @@ vi.mock('@/lib/supabase/server', () => ({
       error: null,
     });
     builder['then'] = (resolve: (v: unknown) => unknown) =>
-      Promise.resolve(resolve({ data: [{ id: 'u1', role: 'admin' }], error: null }));
+      Promise.resolve(resolve({ data: people.rows, error: null }));
     return { from: () => builder };
   },
 }));
@@ -366,6 +375,40 @@ describe('notify-lead payload hygiene', () => {
     expect(serialized).not.toContain('hello');
     expect(serialized).not.toContain('3-6m');
     expect(row).toMatchObject({ channel: 'inbox', status: 'queued' });
+  });
+
+  it('notifies every role that works leads, Sales included (C10a, from ROLE_CAPS)', async () => {
+    askedRoles.length = 0;
+    await signedCall();
+    expect(askedRoles).toEqual([['admin', 'developer', 'sales']]);
+  });
+
+  it('never hands Sales a lead’s details unasked: only leads.pii + export.csv holders (C10a, O-6)', async () => {
+    const detailFor = async (rows: { id: string; role: string }[]) => {
+      people.rows = rows;
+      inserted.length = 0;
+      await signedCall();
+      return (
+        inserted.find((r) => 'channel' in r) as {
+          detail: { recipients: number; sensitiveRecipients: number; fields: string[] };
+        }
+      ).detail;
+    };
+    try {
+      const salesOnly = await detailFor([{ id: 's1', role: 'sales' }]);
+      expect(salesOnly.recipients).toBe(1);
+      expect(salesOnly.sensitiveRecipients).toBe(0);
+      expect(salesOnly.fields).not.toContain('email');
+      expect(salesOnly.fields).not.toContain('budget');
+      const mixed = await detailFor([
+        { id: 's1', role: 'sales' },
+        { id: 'd1', role: 'developer' },
+      ]);
+      expect(mixed.sensitiveRecipients).toBe(1);
+      expect(mixed.fields).toContain('email');
+    } finally {
+      people.rows = [{ id: 'u1', role: 'admin' }];
+    }
   });
 
   it('names the discipline among the fields a recipient is sent (0028)', async () => {

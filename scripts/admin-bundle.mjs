@@ -24,6 +24,8 @@
 //      its islands and its lazy pieces import admin-leads statically, admin-leads imports
 //      neither the field kit nor its lazy pieces statically, and nothing imports the lazy
 //      pieces (admin-leads-lazy: Add a lead, Erase) but through import().
+//   7. the preview bridge (Admin v2 R9) loads neither React nor admin-ui: a `/admin/preview/**`
+//      render runs a public page, and its bridge needs zod and the envelope only (admin-zod).
 //
 // Since C4b (owner item O-15, decided by the approved plan's default on 2026-10-18) check 3,
 // each admin screen's eager graph within ROUTE_BUDGET, is THE admin bundle gate; the
@@ -90,6 +92,7 @@ const OFF_SCREEN_GROUPS = [
   'admin-dashboard.',
   'admin-leads.',
   'admin-leads-lazy.',
+  'admin-preview.',
 ];
 
 // A screen family's group and the chunks allowed to import it statically (check 6).
@@ -98,6 +101,10 @@ const FAMILY_GROUPS = [{ group: 'admin-leads.', importers: /^(?:AdminLead|admin-
 const FAMILY_NEVER = { 'admin-leads.': ['admin-fields.', 'admin-leads-lazy.'] };
 // Groups reached only through import() (check 6).
 const LAZY_ONLY_GROUPS = ['admin-leads-lazy.'];
+
+// The preview bridge's script (check 7) and what its eager graph must never hold.
+const PREVIEW_BRIDGE_FILE = /^AdminPreviewBridge\.astro_/;
+const PREVIEW_NEVER = ['admin-vendor.', 'admin-ui.'];
 
 // Every admin chunk is `admin-*` (the groups in astro.config.mjs) or an island entry named
 // `Admin*` (src/components/admin/islands), plus a sign-in screen's script. A chunk named
@@ -164,6 +171,18 @@ export function check(dir) {
     if (eager.length) {
       problems.push(
         `${eager.join(', ')} import ${chunk} statically: it is meant for import() only`,
+      );
+    }
+  }
+
+  // 7. The preview bridge loads neither React nor admin-ui.
+  for (const bridge of files.filter((f) => PREVIEW_BRIDGE_FILE.test(f))) {
+    const pulled = [...closure(bridge, read)].filter((f) =>
+      PREVIEW_NEVER.some((prefix) => f.startsWith(prefix)),
+    );
+    if (pulled.length) {
+      problems.push(
+        `${bridge} loads ${pulled.sort().join(', ')} eagerly: a preview render needs neither`,
       );
     }
   }

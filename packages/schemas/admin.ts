@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ThemeTokensSchema } from './themeTokens';
 import {
   BilingualTextSchema,
   ContentStatusSchema,
@@ -937,19 +938,9 @@ export const IntegrationsSchema = z.object({
   version: SingletonVersionSchema,
 });
 
-/**
- * Theme tokens are CSS CUSTOM PROPERTIES ONLY (CLAUDE.md §7). The key pattern and the
- * value pattern together are the CSP story: with no `'unsafe-inline'` in `style-src`,
- * a token is injected as `--name: value` inside one nonced <style> block, so a value
- * containing `;` or `}` would break out of the declaration and author arbitrary CSS.
- */
-export const ThemeTokensSchema = z.record(
-  z.string().regex(/^--[a-z0-9-]{1,60}$/, 'token names must be CSS custom properties'),
-  z
-    .string()
-    .max(120)
-    .regex(/^[^;{}<>\\]*$/, 'token values may not contain ; { } < > or backslash'),
-);
+// Theme tokens: their own module (packages/schemas/themeTokens.ts) so the preview bridge's
+// envelope can use them without this file (Admin v2 R9).
+export { ThemeTokensSchema };
 
 export const ThemeWriteSchema = z.object({
   name: ShortTextSchema,
@@ -958,7 +949,7 @@ export const ThemeWriteSchema = z.object({
 });
 export const ThemeUpdateSchema = updatable(ThemeWriteSchema);
 
-export const RoleSchema = z.enum(['admin', 'content_creator', 'seo', 'developer']);
+export const RoleSchema = z.enum(['admin', 'content_creator', 'seo', 'developer', 'sales']);
 
 // A colleague's name follows the one display-name rule (DisplayNameValueSchema), which the
 // database applies to every writer of profiles.display_name (0044).

@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { ROLES, type Role } from '@/lib/auth/types';
-import { ROLE_LABELS } from '@/lib/authz/capLabels';
+import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '@/lib/authz/capLabels';
 import { INVITE_LINK_LIFETIME } from '@/lib/admin/userModel';
 import { INVITE_MESSAGE_MAX } from '@schemas/users';
 import Drawer from '@/components/admin/kit/Drawer';
@@ -36,6 +36,7 @@ export default function InviteDrawer({ open, onClose, onInvited }: InviteDrawerP
   const formId = useId();
   const emailId = useId();
   const roleId = useId();
+  const roleHintId = useId();
   const nameId = useId();
   const messageId = useId();
   const messageHintId = useId();
@@ -119,6 +120,7 @@ export default function InviteDrawer({ open, onClose, onInvited }: InviteDrawerP
           <select
             id={roleId}
             value={role}
+            aria-describedby={roleHintId}
             onChange={(event) => setRole(event.target.value as Role)}
           >
             {ROLES.map((option) => (
@@ -127,6 +129,9 @@ export default function InviteDrawer({ open, onClose, onInvited }: InviteDrawerP
               </option>
             ))}
           </select>
+          <p className="admin-sub" id={roleHintId}>
+            {ROLE_DESCRIPTIONS[role]}
+          </p>
         </div>
         <div className="field">
           <label htmlFor={nameId}>Name (optional)</label>

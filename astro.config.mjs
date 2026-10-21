@@ -93,6 +93,16 @@ const ADMIN_LEADS =
   /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]leads[\\/]|islands[\\/]AdminLead)/;
 const ADMIN_LEADS_LAZY =
   /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]leads[\\/](AddLeadDrawer|EraseLeadDialog)\.tsx$/;
+// The releases preview's bridge (Admin v2 R9, P-4): the code a `/admin/preview/**` render
+// loads (src/components/preview/AdminPreviewBridge.astro). Its own group, never in admin-ui,
+// which every admin screen loads.
+const ADMIN_PREVIEW = /[\\/]src[\\/]lib[\\/]admin[\\/]preview[\\/]/;
+// What the bridge shares with admin-ui (R9 pre-merge review): zod and the preview envelope
+// with its theme tokens. Claimed above admin-ui, so the bridge imports them from this chunk
+// and never admin-ui, whose static graph is React (admin-vendor) and the admin helpers:
+// about 120 KB gz a preview render loaded and never ran (scripts/admin-bundle.mjs check 7).
+const ADMIN_ZOD =
+  /[\\/](node_modules[\\/]zod[\\/]|packages[\\/]schemas[\\/](previewMessage|themeTokens)\.ts$)/;
 // A kit piece both the kit's reference screen and a screen group draw (C4b: the React KPI
 // card, in the gallery and on the leads list): in admin-ui, so neither the AdminKit entry nor
 // the group's chunk imports the other's. Small (under 1 KB gz) and shared, like any kit piece
@@ -200,7 +210,14 @@ export default defineConfig({
                 priority: 30,
               },
               {
-                // Our own admin-only modules, and what they need (zod, the schemas),
+                // zod and the preview envelope (R9): shared by admin-ui and the preview
+                // bridge, which must not import admin-ui (React) to reach them.
+                name: 'admin-zod',
+                test: ADMIN_ZOD,
+                priority: 25,
+              },
+              {
+                // Our own admin-only modules, and what they need (the schemas),
                 // except the component kit and its reference screen (F4b).
                 name: 'admin-ui',
                 test: (id) =>
@@ -212,8 +229,15 @@ export default defineConfig({
                     !ADMIN_FIELDS.test(id) &&
                     !ADMIN_EDITOR_ISLANDS.test(id) &&
                     !ADMIN_EDITOR_SCREENS.test(id) &&
-                    !ADMIN_LEADS.test(id)),
+                    !ADMIN_LEADS.test(id) &&
+                    !ADMIN_PREVIEW.test(id)),
                 priority: 20,
+              },
+              {
+                // The preview bridge (R9): only a preview render loads it.
+                name: 'admin-preview',
+                test: ADMIN_PREVIEW,
+                priority: 19,
               },
               {
                 // The leads screens (Admin v2 C4b): below admin-ui, so what both use stays in

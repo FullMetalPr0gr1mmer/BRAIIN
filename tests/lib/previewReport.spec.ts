@@ -23,11 +23,13 @@ describe('assessPreview', () => {
     r.pending = 4;
     r.invalid.push({ draftId: 'd', entityType: 'service', entityId: 'e', reason: 'invalid' });
     r.notPreviewed.push('rpc:search_content', 'redirect');
+    r.samples = 2;
     expect(assessPreview(r)).toEqual({
       state: 'ok',
       pending: 4,
       invalid: [{ draftId: 'd', entityType: 'service', entityId: 'e', reason: 'invalid' }],
       notPreviewed: ['rpc:search_content', 'redirect'],
+      samples: 2,
     });
   });
 

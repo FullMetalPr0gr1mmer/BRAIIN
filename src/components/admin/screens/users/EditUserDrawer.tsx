@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { ROLES, type Role } from '@/lib/auth/types';
-import { ROLE_LABELS } from '@/lib/authz/capLabels';
+import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '@/lib/authz/capLabels';
 import { formatDateTime, relTime } from '@/lib/admin/relTime';
 import { OWNER_PROTECTED, canResetTwoStep, personName, type UserRow } from '@/lib/admin/userModel';
 import Drawer from '@/components/admin/kit/Drawer';
@@ -52,6 +52,7 @@ export default function EditUserDrawer({
   const formId = useId();
   const nameId = useId();
   const roleId = useId();
+  const roleHintId = useId();
   const activeId = useId();
   const lockedHintId = useId();
 
@@ -265,7 +266,7 @@ export default function EditUserDrawer({
                 id={roleId}
                 value={role}
                 disabled={locked}
-                aria-describedby={locked ? lockedHintId : undefined}
+                aria-describedby={locked ? `${roleHintId} ${lockedHintId}` : roleHintId}
                 onChange={(event) => setRole(event.target.value as Role)}
               >
                 {ROLES.map((option) => (
@@ -274,6 +275,9 @@ export default function EditUserDrawer({
                   </option>
                 ))}
               </select>
+              <p className="admin-sub" id={roleHintId}>
+                {ROLE_DESCRIPTIONS[role]}
+              </p>
             </div>
             <label className="field field-inline" htmlFor={activeId}>
               <input

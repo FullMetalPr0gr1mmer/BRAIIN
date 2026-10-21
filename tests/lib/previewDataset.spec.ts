@@ -460,6 +460,31 @@ describe("a quote's consent (0028 testimonials_consent_gate)", () => {
   });
 });
 
+describe('a design sample going live (0025 production guard, R9)', () => {
+  it('a change that leaves a flagged sample published is shown and counted', async () => {
+    const tables = fixtureTables();
+    tables['testimonials']!.find((t) => t['id'] === ID.tDraft)!['is_placeholder'] = true;
+    const { db, report } = source(tables, [
+      draft('testimonial', 'update', ID.tDraft, { status: 'published' }),
+    ]);
+    expect((await read(db, 'testimonials', 'id')).map((r) => r['id'])).toContain(ID.tDraft);
+    expect(report.samples).toBe(1);
+    expect(report.invalid).toEqual([]);
+  });
+
+  it('a change to a real row, or one that keeps a sample off the site, counts nothing', async () => {
+    const tables = fixtureTables();
+    tables['testimonials']!.find((t) => t['id'] === ID.tDraft)!['is_placeholder'] = true;
+    tables['testimonials']!.find((t) => t['id'] === ID.tDraft)!['consent_obtained_at'] =
+      '2026-01-01T00:00:00+00:00';
+    const { db, report } = source(tables, [
+      draft('testimonial', 'update', ID.tDraft, { status: 'draft' }),
+    ]);
+    await read(db, 'testimonials', 'id');
+    expect(report.samples).toBe(0);
+  });
+});
+
 describe('the foreign keys a pending delete follows', () => {
   it("cascades only into tables no other key references (a parent's own drafts are the whole set)", () => {
     const cascaded = new Set(
