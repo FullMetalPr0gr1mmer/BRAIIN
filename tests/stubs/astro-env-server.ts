@@ -15,3 +15,7 @@ export const AUTH_EMAIL_READY = false;
 // "set up" path pass a config to src/lib/health/uptime's uptimeProvider() instead.
 export const UPTIME_MONITOR_API_KEY: string | undefined = undefined;
 export const UPTIME_MONITOR_IDS: string | undefined = undefined;
+// Not set up, as a deployment without a cache zone ships (owner item O-3). Tests of the "set up"
+// path pass a config to src/lib/http/purge.ts's purgeTags() instead.
+export const CF_ZONE_ID: string | undefined = undefined;
+export const CF_CACHE_PURGE_TOKEN: string | undefined = undefined;

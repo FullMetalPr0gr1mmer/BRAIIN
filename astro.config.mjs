@@ -404,6 +404,10 @@ export default defineConfig({
       // src/lib/health/uptime/uptimeRobot.ts checks the grammar). Unset: the account's first
       // five monitors. Not a secret: an id reads nothing without the key below.
       UPTIME_MONITOR_IDS: envField.string({ context: 'server', access: 'public', optional: true }),
+      // Admin v2 R7: the Cloudflare zone whose cache a release purges by Cache-Tag (owner item
+      // O-3, KAN-20). Unset, with or without the token below, the purge is "Not set up": a
+      // logged no-op, and pages stay fresh because nothing caches them yet. Not a secret.
+      CF_ZONE_ID: envField.string({ context: 'server', access: 'public', optional: true }),
 
       // ---- Server SECRETS (never client-bundled) ----
       SUPABASE_DB_POOL_URL: envField.string({ context: 'server', access: 'secret' }), // Supavisor :6543, pgbouncer=true
@@ -415,6 +419,12 @@ export default defineConfig({
       // Admin v2 G2: the external uptime monitor's READ-ONLY API key (owner item O-20). Unset,
       // site health says "Not set up" and the score leaves uptime out.
       UPTIME_MONITOR_API_KEY: envField.string({
+        context: 'server',
+        access: 'secret',
+        optional: true,
+      }),
+      // Admin v2 R7: a Cloudflare API token with Zone · Cache Purge on that zone only (O-3).
+      CF_CACHE_PURGE_TOKEN: envField.string({
         context: 'server',
         access: 'secret',
         optional: true,

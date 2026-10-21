@@ -129,9 +129,22 @@ begin
   if p_limit is null or p_limit < 1 or p_limit > 20 then
     raise exception 'claim_release_purges: a limit of 1 to 20' using errcode = '22023';
   end if;
-  with due as (
+  -- One tenant a run: the tenant of the release waiting longest. A run then sends at most one
+  -- purge request and rebuilds one tenant's snapshots, within its subrequest budget; another
+  -- tenant's releases are the next minute's.
+  with first as (
+    select r.tenant_id
+      from public.content_releases r
+     where r.status = 'published'
+       and r.purge_status in ('pending', 'failed')
+       and r.purge_attempts < 10
+       and coalesce(r.purge_next_at, r.published_at + interval '2 minutes') <= pg_catalog.now()
+     order by coalesce(r.purge_next_at, r.published_at), r.id
+     limit 1
+  ), due as (
     select r.id
       from public.content_releases r
+      join first f on f.tenant_id = r.tenant_id
      where r.status = 'published'
        and r.purge_status in ('pending', 'failed')
        and r.purge_attempts < 10

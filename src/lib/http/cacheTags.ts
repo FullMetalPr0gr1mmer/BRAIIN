@@ -12,24 +12,30 @@ import type { Locale } from '@schemas/primitives';
 export const TIER_A_CACHE_CONTROL = 'public, s-maxage=31536000, stale-while-revalidate=86400';
 
 /** Cloudflare purges at most 30 tags per request; one response never needs more. */
-const MAX_TAGS = 30;
+export const MAX_TAGS = 30;
 
-const ALWAYS = ['tenant:default', 'site:identity', 'nav:all'] as const;
+/** On every Tier A response: a collapsed purge (`tenant:default`), the identity, the menus. */
+export const ALWAYS_TAGS = ['tenant:default', 'site:identity', 'nav:all'] as const;
+const ALWAYS = ALWAYS_TAGS;
 
 type HasHeaders = { headers: Headers };
 
+/**
+ * A response's tags: the always tags, its route, its entities and its locale, each once. Past
+ * 30, entities are dropped from the end but the always, route and locale tags are kept (a
+ * dropped entity is still purged through `tenant:default`, the collapse every purge of more
+ * than 30 tags uses); tests/lib/sectionReads.spec.ts holds every route's whole set within 30
+ * so nothing is dropped in practice (Admin v2 R7).
+ */
 export function tierATags(opts: {
   route: string;
   locale: Locale;
   entities?: readonly string[];
 }): string[] {
-  const tags = [
-    ...ALWAYS,
-    `route:${opts.route}`,
-    ...(opts.entities ?? []),
-    `locale:${opts.locale}`,
-  ];
-  return [...new Set(tags)].slice(0, MAX_TAGS);
+  const fixed = [...ALWAYS, `route:${opts.route}`, `locale:${opts.locale}`];
+  const entities = [...new Set(opts.entities ?? [])].filter((tag) => !fixed.includes(tag));
+  const room = Math.max(0, MAX_TAGS - fixed.length);
+  return [...ALWAYS, `route:${opts.route}`, ...entities.slice(0, room), `locale:${opts.locale}`];
 }
 
 /** Long-lived edge cache, purged by tag on publish. */

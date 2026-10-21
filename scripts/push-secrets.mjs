@@ -25,12 +25,18 @@ const SECRETS = [
 
 /**
  * Optional — the AI proxy is a 501 stub, so a missing key is not an error; without the uptime
- * monitor's read-only key (Admin v2 G2, owner item O-20) site health says "Not set up".
+ * monitor's read-only key (Admin v2 G2, owner item O-20) site health says "Not set up"; without
+ * the cache-purge token (Admin v2 R7, owner item O-3) a release's purge is a logged no-op.
  */
-const OPTIONAL = new Set(['ANTHROPIC_API_KEY', 'SUPABASE_DB_POOL_URL', 'UPTIME_MONITOR_API_KEY']);
+const OPTIONAL = new Set([
+  'ANTHROPIC_API_KEY',
+  'SUPABASE_DB_POOL_URL',
+  'UPTIME_MONITOR_API_KEY',
+  'CF_CACHE_PURGE_TOKEN',
+]);
 
 /** Optional secrets pushed only when .env names them. */
-const PUSHED_WHEN_SET = ['ANTHROPIC_API_KEY', 'UPTIME_MONITOR_API_KEY'];
+const PUSHED_WHEN_SET = ['ANTHROPIC_API_KEY', 'UPTIME_MONITOR_API_KEY', 'CF_CACHE_PURGE_TOKEN'];
 
 const dryRun = process.argv.includes('--dry-run');
 
