@@ -7,8 +7,9 @@
 --      a public loader reads, in its tenant, whatever the status or visible flag, with the
 --      dataset's projection (`*`, or anon's columns on the five column-granted tables); a
 --      `sales` claim and anon read only what is public, and since 0097 a `sales` claim reads
---      no testimonial, case study or media row at all (the non-staff block: `authenticated`
---      holds columns of those three that anon does not); another tenant's admin reads none;
+--      no testimonial, case study or media row at all, nor since 0098 an FAQ row (the non-staff
+--      block: `authenticated` holds columns of those four that anon does not); another
+--      tenant's admin reads none;
 --   2. the CMS roles read their tenant's pending changes (content_drafts); a `sales` claim
 --      and another tenant read none, and anon holds no privilege;
 --   3. anon's column grants on testimonials, media_assets, disciplines, service_cases and
@@ -361,8 +362,8 @@ select is(_seen(),
   'developer reads every fixture row of the 22 tables');
 select _as('sales');
 select is(_seen(),
-  'blog_posts=1 categories=1 certifications=1 clients=1 disciplines=1 entity_seo=1 faq_items=1 media_assets=0 navigation=1 page_sections=1 pages=2 portfolio=1 portfolio_media=1 portfolio_services=1 sectors=1 seo_defaults=1 service_cases=0 services=1 site_profile=1 statistics=1 team_members=1 testimonials=0 page_visibility=0',
-  'a sales claim reads only the public fixture rows (no draft, archived or hidden row), and no testimonial, case study or media row (0097)');
+  'blog_posts=1 categories=1 certifications=1 clients=1 disciplines=1 entity_seo=1 faq_items=0 media_assets=0 navigation=1 page_sections=1 pages=2 portfolio=1 portfolio_media=1 portfolio_services=1 sectors=1 seo_defaults=1 service_cases=0 services=1 site_profile=1 statistics=1 team_members=1 testimonials=0 page_visibility=0',
+  'a sales claim reads only the public fixture rows (no draft, archived or hidden row), and no testimonial, case study, media or FAQ row (0097, 0098)');
 select _as_other();
 select is(_seen(),
   'blog_posts=0 categories=0 certifications=0 clients=0 disciplines=0 entity_seo=0 faq_items=0 media_assets=0 navigation=0 page_sections=0 pages=0 portfolio=0 portfolio_media=0 portfolio_services=0 sectors=0 seo_defaults=0 service_cases=0 services=0 site_profile=0 statistics=0 team_members=0 testimonials=0 page_visibility=0',

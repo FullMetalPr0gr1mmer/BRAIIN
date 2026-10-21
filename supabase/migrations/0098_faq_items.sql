@@ -6,7 +6,8 @@
 -- Depends on 0001 (tenants, content_status), 0009 (app.tg_bump_version), 0011 (the grant
 -- regime), 0021 (the status-entity policy pattern), 0038 (the release registry, history),
 -- 0051 (app.tg_release_capture), 0066 (the release guard, app.publish_scheduled as R5
--- left it) and 0069 (H11: the help-guide catalog, app.put_help_guide).
+-- left it), 0069 (H11: the help-guide catalog, app.put_help_guide) and 0097 (C10a: the
+-- non-staff block this table joins).
 --
 -- The design is docs/admin-v2/ui.md "Collections (AV-16)" and "### AV-16", releases.md §1.1
 -- (the faq_item row) and §2.6, and verification.md's FAQ cutover; the decisions taken and
@@ -23,7 +24,8 @@
 --      FIRST in every USING and every WITH CHECK, the RESTRICTIVE pair included: anon and
 --      every other reader see published rows; staff (app.is_staff) see all of their tenant's;
 --      Admin and Content Creator write (app.can_write_content = the holders of pages.write
---      and content.publish); only an Admin archives or deletes (content.archiveDelete).
+--      and content.publish); only an Admin archives or deletes (content.archiveDelete). And
+--      the non-staff block (0097 §4): a signed-in token that is not CMS staff reads no row.
 --   4. Grants, stated for both Supabase grant regimes (P-14): anon SELECTs six columns
 --      (never the version, the schedule, the publish date, the actors or the stamps);
 --      authenticated and service_role SELECT, INSERT, UPDATE, DELETE; nothing else, no
@@ -130,6 +132,18 @@ drop policy if exists faq_items_archive_admin on public.faq_items;
 create policy faq_items_archive_admin on public.faq_items as restrictive for update
   using (tenant_id = app.effective_tenant_id())
   with check (tenant_id = app.effective_tenant_id() and (app.is_admin() or status <> 'archived'));
+-- The non-staff block (0097 §4, Admin v2 C10a: Sales is a signed-in token that is not CMS
+-- staff, and reads no more than anon outside the CRM). anon SELECTs six columns of this table
+-- and `authenticated` all of them (the schedule, the version, the stamps and the ids of the
+-- staff who wrote a row), and a GRANT cannot tell the app roles apart (they share one
+-- Postgres role). So, as 0097 does for testimonials, service_cases and media_assets: RESTRICTIVE,
+-- FOR SELECT, TO authenticated, the tenant predicate first, then app.is_staff(). Staff pass it
+-- (they pass faq_items_read already); anon is not named. Nothing reads the FAQ through a
+-- non-staff token: the public loader uses the anon key, the preview and the admin staff ones.
+drop policy if exists faq_items_staff_columns on public.faq_items;
+create policy faq_items_staff_columns on public.faq_items
+  as restrictive for select to authenticated
+  using (tenant_id = app.effective_tenant_id() and app.is_staff());
 
 -- ═══ 4. Grants (stated, never inherited: both grant regimes) ══════════════════════════════
 revoke all on public.faq_items from public, anon, authenticated, service_role;
@@ -326,6 +340,7 @@ declare
   v_got text[];
   v_tenant_first constant text :=
     '^\((\(tenant_id = (app\.)?effective_tenant_id\(\)\) AND .+|tenant_id = (app\.)?effective_tenant_id\(\))\)$';
+  v_tenant constant text := '\(tenant_id = (app\.)?effective_tenant_id\(\)\)';
   r text;
   pr text;
 begin
@@ -340,6 +355,7 @@ begin
     'faq_items_archive_admin UPDATE RESTRICTIVE {public}',
     'faq_items_delete_admin DELETE RESTRICTIVE {public}',
     'faq_items_read SELECT PERMISSIVE {public}',
+    'faq_items_staff_columns SELECT RESTRICTIVE {authenticated}',
     'faq_items_write ALL PERMISSIVE {public}'];
   select array_agg(format('%s %s %s %s', policyname, cmd, permissive, roles) order by policyname)
     into v_got
@@ -357,6 +373,17 @@ begin
           or coalesce(qual, with_check) is null);
   if v_bad is not null then
     raise exception '0098: faq_items policies that do not lead with the tenant predicate: %', v_bad;
+  end if;
+
+  -- ---- 3b. The non-staff block: one RESTRICTIVE SELECT TO authenticated, no WITH CHECK, the
+  -- tenant first, then CMS staff, exactly as 0097's postcondition holds its three -----------
+  if (select count(*) from pg_policies
+       where schemaname = 'public' and tablename = 'faq_items'
+         and policyname = 'faq_items_staff_columns'
+         and cmd = 'SELECT' and permissive = 'RESTRICTIVE' and roles = '{authenticated}'
+         and with_check is null
+         and qual ~ ('^\(' || v_tenant || ' AND (app\.)?is_staff\(\)\)$')) <> 1 then
+    raise exception '0098: faq_items_staff_columns is missing or is not (tenant, is_staff)';
   end if;
 
   -- ---- 4. Privileges, exactly ---------------------------------------------------------------

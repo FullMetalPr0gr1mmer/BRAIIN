@@ -2,16 +2,18 @@
 --
 -- The Contact page's FAQ band and its FAQPage JSON-LD read this table through one loader
 -- (src/lib/data/faq.ts), so what a visitor reads here is exactly what both say. Held here:
---   1. the catalog: RLS forced, the four policies, the grants (anon six columns, staff and
---      the service role SELECT/INSERT/UPDATE/DELETE, never TRUNCATE), the triggers, the
---      registry row;
+--   1. the catalog: RLS forced, the five policies (the non-staff block among them), the
+--      grants (anon six columns, staff and the service role SELECT/INSERT/UPDATE/DELETE,
+--      never TRUNCATE), the triggers, the registry row;
 --   2. the CHECK: exactly {en, ar}, both non-empty strings, trimmed, at most 200 (question)
 --      or 1200 (answer) characters, no control character (a newline included);
 --   3. per role (admin, content_creator, seo, developer, anon, other_tenant, a token with no
 --      role): anon reads the launch tenant's published rows through its column grant only;
 --      staff read all of their tenant's; Admin and Content Creator write and publish; only
 --      Admin archives or deletes (RESTRICTIVE); SEO and Developer write nothing; another
---      tenant reads and writes none of it;
+--      tenant reads and writes none of it; a signed-in token that is not CMS staff (a `sales`
+--      claim, or no role at all) reads no row, not even a published one, and writes none
+--      (the non-staff block, 0097 §4: `authenticated` holds columns anon does not);
 --   4. the stamps (version, actor, updated_at), history (content_versions, 'faq_item'),
 --      the scheduled publisher, and the release lane (nothing captured while releases are
 --      off; with them on, the guard refuses staff and an out-of-band write is one system
@@ -23,7 +25,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
 begin;
-select plan(70);
+select plan(76);
 
 -- ── fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────────
 -- Tenant A is the launch tenant (the one anon is fenced to); tenant B is another. Every
@@ -81,8 +83,15 @@ select is(
   (select string_agg(format('%s %s %s', policyname, cmd, permissive), ', ' order by policyname)
      from pg_policies where schemaname = 'public' and tablename = 'faq_items'),
   'faq_items_archive_admin UPDATE RESTRICTIVE, faq_items_delete_admin DELETE RESTRICTIVE, '
-  'faq_items_read SELECT PERMISSIVE, faq_items_write ALL PERMISSIVE',
-  'the policies are exactly the read, the write and the two Admin-only gates');
+  'faq_items_read SELECT PERMISSIVE, faq_items_staff_columns SELECT RESTRICTIVE, '
+  'faq_items_write ALL PERMISSIVE',
+  'the policies are exactly the read, the write, the two Admin-only gates and the non-staff block');
+select is(
+  (select format('%s %s %s %s', cmd, permissive, roles, qual) from pg_policies
+    where schemaname = 'public' and tablename = 'faq_items' and policyname = 'faq_items_staff_columns'
+      and with_check is null),
+  'SELECT RESTRICTIVE {authenticated} ((tenant_id = app.effective_tenant_id()) AND app.is_staff())',
+  'the non-staff block (0097 §4): RESTRICTIVE, FOR SELECT, TO authenticated, the tenant first, then CMS staff');
 select is(
   (select coalesce(string_agg(policyname, ', '), '')
      from pg_policies
@@ -275,9 +284,44 @@ select is(_try($$ delete from public.faq_items where id = '7a000000-0000-4000-80
   'ok:0', 'other_tenant admin''s delete of tenant A removes nothing');
 select set_config('request.jwt.claims',
   jsonb_build_object('sub', '7a000000-0000-4000-8000-0000000000f9')::text, true);
-select is(_seen(), 1, 'a token with no role reads the published fixture only, as anon');
+select is(_seen(), 0, 'a signed-in token with no role reads no row (not CMS staff: the non-staff block)');
 select is(_try($$ insert into public.faq_items (question, answer) values ('{"en":"Q","ar":"س"}', '{"en":"A","ar":"ج"}') $$),
   '42501', 'and writes nothing');
+reset role;
+
+-- ── 7b. The non-staff block (0097 §4): a Sales token is signed in and not CMS staff ─────────
+-- What each principal reads of tenant A's four fixtures, then a Sales token's writes.
+create temp table _block (who text, n int);
+grant insert, select on _block to anon, authenticated;
+set local role authenticated;
+select _as('admin', _a());
+insert into _block select 'admin', _seen();
+select _as('content_creator', _a());
+insert into _block select 'content_creator', _seen();
+select _as('seo', _a());
+insert into _block select 'seo', _seen();
+select _as('developer', _a());
+insert into _block select 'developer', _seen();
+select _as('sales', _a());
+insert into _block select 'sales', _seen();
+reset role;
+set local role anon;
+select _as(null, null);
+insert into _block select 'anon', _seen();
+reset role;
+select is((select string_agg(who || '=' || n, ' ' order by who) from _block),
+  'admin=4 anon=1 content_creator=4 developer=4 sales=0 seo=4',
+  'the block: every CMS role reads all four fixtures, anon the published one, a Sales token none');
+set local role authenticated;
+select _as('sales', _a());
+select is((select count(*)::int from public.faq_items where id = '7a000000-0000-4000-8000-000000000001'),
+  0, 'a sales claim cannot read the published question either (the version, the schedule and the actors with it)');
+select is(_try($$ insert into public.faq_items (question, answer) values ('{"en":"Q","ar":"س"}', '{"en":"A","ar":"ج"}') $$),
+  '42501', 'a sales claim CANNOT insert');
+select is(_try($$ update public.faq_items set sort_order = 99 where id = '7a000000-0000-4000-8000-000000000001' $$),
+  'ok:0', 'a sales claim''s update changes nothing');
+select is(_try($$ delete from public.faq_items where id = '7a000000-0000-4000-8000-000000000001' $$),
+  'ok:0', 'a sales claim''s delete removes nothing');
 reset role;
 
 -- ── 8. The scheduled publisher ───────────────────────────────────────────────────────────
