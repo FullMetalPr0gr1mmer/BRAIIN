@@ -22,6 +22,7 @@ const SLUGS = [
   'certifications',
   'clients',
   'disciplines',
+  'faq',
   'media',
   'navigation',
   'pages',

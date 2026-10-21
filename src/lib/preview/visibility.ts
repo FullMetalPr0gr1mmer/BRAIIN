@@ -34,7 +34,7 @@ import type { DatasetTable, PreviewTable } from './relations';
 type Row = Readonly<Record<string, unknown>>;
 
 /**
- * Anon's column grants on the four tables granted by column (every other preview table is
+ * Anon's column grants on the five tables granted by column (every other preview table is
  * granted to anon whole). The dataset reads these tables with exactly these columns, and
  * the emulator answers 42501 for any other, as PostgREST does for a visitor.
  */
@@ -87,6 +87,8 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
     'published_at',
     'updated_at',
   ],
+  // 0098 (Admin v2 U7): never the version, the schedule, the publish date or the actors.
+  faq_items: ['id', 'tenant_id', 'question', 'answer', 'status', 'sort_order'],
   // 0028: never is_placeholder, the schedule, version or the actors.
   service_cases: [
     'id',
@@ -134,6 +136,10 @@ export const MIRRORED_POLICIES: Readonly<
   disciplines: {
     disciplines_read: 'PERMISSIVE:a3adeda401046be963dd172ac14b795c',
     disciplines_write: 'PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060',
+  },
+  faq_items: {
+    faq_items_read: 'PERMISSIVE:a3adeda401046be963dd172ac14b795c',
+    faq_items_write: 'PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060',
   },
   entity_seo: {
     entity_seo_published_only: 'RESTRICTIVE:df5c9a7d7588fed51b9e8704523bf0a3',
@@ -230,6 +236,7 @@ export const VISIBILITY_DEPS: Readonly<Record<DatasetTable, readonly DatasetTabl
   clients: [],
   disciplines: [],
   entity_seo: ['services', 'blog_posts', 'portfolio', 'pages'],
+  faq_items: [],
   media_assets: [
     'portfolio',
     'portfolio_media',
@@ -407,7 +414,8 @@ export function createMirror(data: MirrorData): Mirror {
         return published(row) && visibleById('services', row['service_id']);
       // 0028 disciplines_read; 0001 portfolio_read, blog_read, pages_read,
       // team_members_read; 0005 certifications_read, statistics_read; 0021
-      // testimonials_read: published.
+      // testimonials_read; 0098 faq_items_read: published.
+      case 'faq_items':
       case 'disciplines':
       case 'portfolio':
       case 'blog_posts':

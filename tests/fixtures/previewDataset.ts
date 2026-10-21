@@ -76,6 +76,9 @@ export const ID = {
   bUndated: id(442),
   bOld: id(443),
   bDraft: id(444),
+  // the FAQ (Admin v2 U7)
+  fqPub: id(461),
+  fqDraft: id(462),
   // pages, sections, menus
   pgHome: id(501),
   pgDraft: id(502),
@@ -524,6 +527,22 @@ export function fixtureTables(): Record<string, Row[]> {
         status: 'draft',
       }),
     ],
+    faq_items: [
+      T({
+        id: ID.fqPub,
+        question: BI('Who owns the work?', 'لمن الشغل؟'),
+        answer: BI('You do.', 'لك.'),
+        sort_order: 10,
+        status: 'published',
+      }),
+      T({
+        id: ID.fqDraft,
+        question: BI('Draft?', 'مسودة؟'),
+        answer: BI('Not yet.', 'ليس بعد.'),
+        sort_order: 20,
+        status: 'draft',
+      }),
+    ],
     categories: [T({ id: ID.cat1, slug: 'craft', name: BI('Craft', 'حرفة') })],
     blog_posts: [
       T({
@@ -772,6 +791,7 @@ export const VISIBLE: Readonly<Record<string, readonly string[]>> = {
   team_members: [ID.tmPub],
   statistics: [ID.stPub],
   certifications: [ID.cePub],
+  faq_items: [ID.fqPub],
   categories: [ID.cat1],
   blog_posts: [ID.bPub, ID.bUndated, ID.bOld],
   pages: [ID.pgHome, ID.pgLocked],

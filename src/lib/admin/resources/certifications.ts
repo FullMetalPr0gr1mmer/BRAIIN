@@ -18,7 +18,8 @@ export const certificationResource: ResourceConfig = {
   table: 'certifications',
   entity: 'certification',
   writeCap: 'services.write',
-  listColumns: 'id,slug,name,year,status,sort_order,version,updated_at',
+  // The collection row (Admin v2 U7b) reads "issuer, year".
+  listColumns: 'id,slug,name,issuer,year,status,sort_order,version,updated_at',
   columns: 'id,slug,name,issuer,year,logo_url,status,sort_order,version,created_at,updated_at',
   orderBy: { column: 'sort_order', ascending: true },
   searchColumn: 'slug',

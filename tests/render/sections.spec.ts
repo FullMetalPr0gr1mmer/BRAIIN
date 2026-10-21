@@ -27,6 +27,7 @@ import {
   CARDS,
   CERTIFICATIONS,
   DISCIPLINES,
+  FAQ,
   LEADERS,
   POSTER,
   STATS,
@@ -34,6 +35,7 @@ import {
   TESTIMONIALS,
 } from './fixtures';
 import { LOCALES, renderComponent, renderSections } from './harness';
+import type { Locale } from '@schemas/primitives';
 
 // The public sections, rendered to the byte (Admin v2 F6). Every case renders through
 // SectionRenderer — the path a page takes — in both languages, and the output is held to a
@@ -50,6 +52,17 @@ import { LOCALES, renderComponent, renderSections } from './harness';
 const t = (en: string, ar: string) => ({ en, ar });
 const featured = CARDS.filter((c) => c.isFeatured);
 
+/**
+ * The FAQ is route data in the reader's language (Admin v2 U7: the contact route reads it
+ * once, getFaq(locale)). A case names it with this marker, and `inLocale` swaps in the
+ * seeded questions of the language being rendered.
+ */
+const SEEDED_FAQ: readonly never[] = Object.freeze([]);
+const inLocale = (sections: SectionData[], locale: Locale): SectionData[] =>
+  sections.map((s) =>
+    s.data?.['items'] === SEEDED_FAQ ? { ...s, data: { ...s.data, items: FAQ[locale] } } : s,
+  );
+
 /** The pages' default compositions, composed as their routes compose them. */
 const PAGES: Record<string, SectionData[]> = {
   home: withHomeData(withHomeIntro(DEFAULT_HOME_SECTIONS), {
@@ -60,7 +73,7 @@ const PAGES: Record<string, SectionData[]> = {
   about: withLeaders(DEFAULT_ABOUT_SECTIONS, LEADERS),
   contact: withContactData(
     ensureContactInquiry(withHeroPreset(DEFAULT_CONTACT_SECTIONS, 'contact')),
-    { groups: DISCIPLINES },
+    { groups: DISCIPLINES, faq: SEEDED_FAQ },
   ),
   services: composeServicesPage([], DISCIPLINES),
   join: composeJoinPage([], null),
@@ -248,6 +261,7 @@ const AUTHORED: Record<string, SectionData[]> = {
         heading: t('Authored FAQ heading', 'عنوان الأسئلة المكتوب'),
         accent: { en: { from: 1 }, ar: { from: 1 } },
       },
+      data: { items: SEEDED_FAQ },
     },
   ],
   selectedWork: [
@@ -531,13 +545,17 @@ const VARIANTS: Record<string, SectionData[]> = {
   'pageHead built-in without a count': [{ type: 'pageHead' }],
   'serviceExplorer fallback panels': [{ type: 'serviceExplorer', data: { disciplines: [] } }],
   'join with an answer': composeJoinPage([], 'closed'),
+  // Admin v2 U7: no published question (or a failed read, or a route that does not load
+  // the FAQ) renders no band at all; the route omits the FAQPage with it (faqShown).
+  'faq with no questions': [{ type: 'faq', data: { items: [] } }],
+  'faq on a route that loads none': [{ type: 'faq' }],
 };
 
 describe('pages, as their routes compose them', () => {
   for (const [name, sections] of Object.entries(PAGES)) {
     for (const locale of LOCALES) {
       test(`${name} (${locale})`, async () => {
-        expect(await renderSections(sections, locale)).toMatchSnapshot();
+        expect(await renderSections(inLocale(sections, locale), locale)).toMatchSnapshot();
       });
     }
   }
@@ -547,7 +565,7 @@ describe('every content field authored', () => {
   for (const [name, sections] of Object.entries(AUTHORED)) {
     for (const locale of LOCALES) {
       test(`${name} (${locale})`, async () => {
-        expect(await renderSections(sections, locale)).toMatchSnapshot();
+        expect(await renderSections(inLocale(sections, locale), locale)).toMatchSnapshot();
       });
     }
   }
@@ -557,7 +575,7 @@ describe('variants, modes and route data', () => {
   for (const [name, sections] of Object.entries(VARIANTS)) {
     for (const locale of LOCALES) {
       test(`${name} (${locale})`, async () => {
-        expect(await renderSections(sections, locale)).toMatchSnapshot();
+        expect(await renderSections(inLocale(sections, locale), locale)).toMatchSnapshot();
       });
     }
   }

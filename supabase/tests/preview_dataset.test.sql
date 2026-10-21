@@ -3,16 +3,17 @@
 -- The preview (src/lib/preview) reads live rows through the signed-in person's OWN client and
 -- keeps what a visitor would read with a TypeScript mirror of anon's RLS. That is only right
 -- while these hold, so this file pins them:
---   1. each CMS role (admin, content_creator, seo, developer) reads every row of the 21 tables
+--   1. each CMS role (admin, content_creator, seo, developer) reads every row of the 22 tables
 --      a public loader reads, in its tenant, whatever the status or visible flag, with the
---      dataset's projection (`*`, or anon's columns on the four column-granted tables); a
+--      dataset's projection (`*`, or anon's columns on the five column-granted tables); a
 --      `sales` claim and anon read only what is public, and since 0097 a `sales` claim reads
---      no testimonial, case study or media row at all (the non-staff block: `authenticated`
---      holds columns of those three that anon does not); another tenant's admin reads none;
+--      no testimonial, case study or media row at all, nor since 0098 an FAQ row (the non-staff
+--      block: `authenticated` holds columns of those four that anon does not); another
+--      tenant's admin reads none;
 --   2. the CMS roles read their tenant's pending changes (content_drafts); a `sales` claim
 --      and another tenant read none, and anon holds no privilege;
---   3. anon's column grants on testimonials, media_assets, disciplines and service_cases
---      equal the literal in _anon_columns() below, and the other 17 tables are granted to
+--   3. anon's column grants on testimonials, media_assets, disciplines, service_cases and
+--      faq_items (0098) equal the literal in _anon_columns() below, and the other 17 tables are granted to
 --      anon whole; staff also read _dataset_only_columns() (a quote's consent record);
 --   4. the column defaults a pending create starts from equal _create_defaults() below;
 --   5. the policies that apply to an anon SELECT on each table equal _anon_policies() below
@@ -42,6 +43,7 @@ select plan(20);
 create function _anon_columns() returns table (tbl text, cols text) language sql immutable as $$
   values
     ('disciplines', 'id,tenant_id,slug,name,short,blurb,poster_media_id,preview_video_path,preview_start_s,preview_end_s,status,sort_order,published_at,updated_at'),
+    ('faq_items', 'id,tenant_id,question,answer,status,sort_order'),
     ('media_assets', 'id,tenant_id,kind,provider,storage_path,width,height,alt,stream_uid,mime_type,updated_at'),
     ('service_cases', 'id,tenant_id,service_id,portfolio_id,title,context,problems,results,status,published_at,updated_at'),
     ('testimonials', 'id,tenant_id,slug,quote,author_name,author_role,client_id,portfolio_id,avatar_media_id,placements,status,sort_order,published_at,updated_at')
@@ -67,6 +69,8 @@ create function _create_defaults() returns table (tbl text, col text, dflt text)
     ('disciplines', 'status', $d$'draft'::content_status$d$),
     ('entity_seo', 'meta_description', $d$'{}'::jsonb$d$),
     ('entity_seo', 'meta_title', $d$'{}'::jsonb$d$),
+    ('faq_items', 'sort_order', $d$0$d$),
+    ('faq_items', 'status', $d$'draft'::content_status$d$),
     ('navigation', 'is_key', $d$false$d$),
     ('navigation', 'sort_order', $d$0$d$),
     ('navigation', 'visible', $d$true$d$),
@@ -129,6 +133,7 @@ create function _anon_policies() returns table (tbl text, policies text) languag
     ('clients', 'clients_read:PERMISSIVE:db9934fa0ab3f173e346a67310b57bac,clients_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('disciplines', 'disciplines_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,disciplines_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('entity_seo', 'entity_seo_published_only:RESTRICTIVE:df5c9a7d7588fed51b9e8704523bf0a3,entity_seo_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,entity_seo_write:PERMISSIVE:763c5ebb7d12ee38b8e17d30ad1570df'),
+    ('faq_items', 'faq_items_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,faq_items_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('media_assets', 'media_assets_public_read:PERMISSIVE:f7fb1e5779de752edd5116394a0286de,media_read:PERMISSIVE:392446073406bce5902ebbac287245a1,media_write:PERMISSIVE:4f9223ffe3d088ba7a0a4098c7d190d6'),
     ('navigation', 'navigation_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,navigation_visible_only:RESTRICTIVE:d3e6a42adad1d6a81062627de227ba33,navigation_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('page_sections', 'page_sections_password_fence:RESTRICTIVE:288466d0b0045b81ef63d2e215c90e8e,page_sections_published_only:RESTRICTIVE:1f97d3d1084c993ca178204580b8d11d,page_sections_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,page_sections_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
@@ -226,6 +231,11 @@ insert into public.blog_posts (id, tenant_id, slug, title, status) values
   ('8a000000-0000-4000-8000-000000000442', app.default_tenant_id(), 'pv-b-draft', '{"en":"D","ar":"د"}', 'draft'),
   ('8a000000-0000-4000-8000-000000000443', app.default_tenant_id(), 'pv-b-arch', '{"en":"A","ar":"أ"}', 'archived');
 
+insert into public.faq_items (id, tenant_id, question, answer, status) values
+  ('8a000000-0000-4000-8000-000000000461', app.default_tenant_id(), '{"en":"P","ar":"ب"}', '{"en":"P","ar":"ب"}', 'published'),
+  ('8a000000-0000-4000-8000-000000000462', app.default_tenant_id(), '{"en":"D","ar":"د"}', '{"en":"D","ar":"د"}', 'draft'),
+  ('8a000000-0000-4000-8000-000000000463', app.default_tenant_id(), '{"en":"A","ar":"أ"}', '{"en":"A","ar":"أ"}', 'archived');
+
 insert into public.navigation (id, tenant_id, location, label, href, visible) values
   ('8a000000-0000-4000-8000-000000000451', app.default_tenant_id(), 'footer', '{"en":"V","ar":"ظ"}', '/pv-vis', true),
   ('8a000000-0000-4000-8000-000000000452', app.default_tenant_id(), 'footer', '{"en":"H","ar":"خ"}', '/pv-hid', false);
@@ -293,7 +303,7 @@ create function _as_other() returns void language sql as $$
 $$;
 
 -- What the caller reads of the fixtures, table by table, with the DATASET's projection:
--- anon's columns on the four column-granted tables (plus the dataset-only columns for a
+-- anon's columns on the five column-granted tables (plus the dataset-only columns for a
 -- staff token), `*` on the rest (src/lib/preview/dataset.ts). Anon reads anon's columns.
 create function _seen() returns text language plpgsql as $$
 declare
@@ -304,7 +314,7 @@ declare
   out text := '';
 begin
   foreach t in array array['blog_posts', 'categories', 'certifications', 'clients', 'disciplines',
-    'entity_seo', 'media_assets', 'navigation', 'page_sections', 'pages', 'portfolio',
+    'entity_seo', 'faq_items', 'media_assets', 'navigation', 'page_sections', 'pages', 'portfolio',
     'portfolio_media', 'portfolio_services', 'sectors', 'seo_defaults', 'service_cases',
     'services', 'site_profile', 'statistics', 'team_members', 'testimonials'] loop
     select a.cols into cols from _anon_columns() a where a.tbl = t;
@@ -339,33 +349,33 @@ $$;
 set local role authenticated;
 select _as('admin');
 select is(_seen(),
-  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
-  'admin reads every fixture row of the 21 tables, whatever its status or visible flag');
+  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 faq_items=3 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
+  'admin reads every fixture row of the 22 tables, whatever its status or visible flag');
 select _as('content_creator');
 select is(_seen(),
-  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
-  'content_creator reads every fixture row of the 21 tables');
+  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 faq_items=3 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
+  'content_creator reads every fixture row of the 22 tables');
 select _as('seo');
 select is(_seen(),
-  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
-  'seo reads every fixture row of the 21 tables');
+  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 faq_items=3 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
+  'seo reads every fixture row of the 22 tables');
 select _as('developer');
 select is(_seen(),
-  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
-  'developer reads every fixture row of the 21 tables');
+  'blog_posts=3 categories=1 certifications=3 clients=2 disciplines=3 entity_seo=2 faq_items=3 media_assets=3 navigation=2 page_sections=4 pages=4 portfolio=3 portfolio_media=2 portfolio_services=2 sectors=2 seo_defaults=1 service_cases=3 services=3 site_profile=1 statistics=3 team_members=3 testimonials=3 page_visibility=1',
+  'developer reads every fixture row of the 22 tables');
 select _as('sales');
 select is(_seen(),
-  'blog_posts=1 categories=1 certifications=1 clients=1 disciplines=1 entity_seo=1 media_assets=0 navigation=1 page_sections=1 pages=2 portfolio=1 portfolio_media=1 portfolio_services=1 sectors=1 seo_defaults=1 service_cases=0 services=1 site_profile=1 statistics=1 team_members=1 testimonials=0 page_visibility=0',
-  'a sales claim reads only the public fixture rows (no draft, archived or hidden row), and no testimonial, case study or media row (0097)');
+  'blog_posts=1 categories=1 certifications=1 clients=1 disciplines=1 entity_seo=1 faq_items=0 media_assets=0 navigation=1 page_sections=1 pages=2 portfolio=1 portfolio_media=1 portfolio_services=1 sectors=1 seo_defaults=1 service_cases=0 services=1 site_profile=1 statistics=1 team_members=1 testimonials=0 page_visibility=0',
+  'a sales claim reads only the public fixture rows (no draft, archived or hidden row), and no testimonial, case study, media or FAQ row (0097, 0098)');
 select _as_other();
 select is(_seen(),
-  'blog_posts=0 categories=0 certifications=0 clients=0 disciplines=0 entity_seo=0 media_assets=0 navigation=0 page_sections=0 pages=0 portfolio=0 portfolio_media=0 portfolio_services=0 sectors=0 seo_defaults=0 service_cases=0 services=0 site_profile=0 statistics=0 team_members=0 testimonials=0 page_visibility=0',
+  'blog_posts=0 categories=0 certifications=0 clients=0 disciplines=0 entity_seo=0 faq_items=0 media_assets=0 navigation=0 page_sections=0 pages=0 portfolio=0 portfolio_media=0 portfolio_services=0 sectors=0 seo_defaults=0 service_cases=0 services=0 site_profile=0 statistics=0 team_members=0 testimonials=0 page_visibility=0',
   'other_tenant reads no row of the launch tenant');
 reset role;
 set local role anon;
 select _as(null);
 select is(_seen(),
-  'blog_posts=1 categories=1 certifications=1 clients=1 disciplines=1 entity_seo=1 media_assets=1 navigation=1 page_sections=1 pages=2 portfolio=1 portfolio_media=1 portfolio_services=1 sectors=1 seo_defaults=1 service_cases=1 services=1 site_profile=1 statistics=1 team_members=1 testimonials=1',
+  'blog_posts=1 categories=1 certifications=1 clients=1 disciplines=1 entity_seo=1 faq_items=1 media_assets=1 navigation=1 page_sections=1 pages=2 portfolio=1 portfolio_media=1 portfolio_services=1 sectors=1 seo_defaults=1 service_cases=1 services=1 site_profile=1 statistics=1 team_members=1 testimonials=1',
   'anon reads only the public fixture rows, with the dataset''s projection');
 
 -- ── 2. Pending changes ─────────────────────────────────────────────────────────────────
@@ -401,14 +411,14 @@ select is(
             (select string_agg(x, ',' order by x collate "C") from unnest(string_to_array(a.cols, ',')) x)),
           E'\n' order by a.tbl collate "C")
      from _anon_columns() a),
-  'anon''s SELECT columns on the four column-granted tables equal ANON_COLUMNS');
+  'anon''s SELECT columns on the five column-granted tables equal ANON_COLUMNS');
 select ok(
   (select bool_and(not has_table_privilege('anon', format('public.%I', tbl), 'SELECT')) from _anon_columns()),
-  'the four column-granted tables have no table-level anon SELECT');
+  'the five column-granted tables have no table-level anon SELECT');
 select is(
   (select string_agg(t, ',' order by t collate "C")
      from unnest(array['blog_posts', 'categories', 'certifications', 'clients', 'disciplines',
-       'entity_seo', 'media_assets', 'navigation', 'page_sections', 'pages', 'portfolio',
+       'entity_seo', 'faq_items', 'media_assets', 'navigation', 'page_sections', 'pages', 'portfolio',
        'portfolio_media', 'portfolio_services', 'sectors', 'seo_defaults', 'service_cases',
        'services', 'site_profile', 'statistics', 'team_members', 'testimonials']) t
     where has_table_privilege('anon', format('public.%I', t), 'SELECT')),

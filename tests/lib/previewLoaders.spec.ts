@@ -35,6 +35,7 @@ const { withContentSource } = await import('@/lib/data/source');
 const blog = await import('@/lib/data/blog');
 const certifications = await import('@/lib/data/certifications');
 const disciplines = await import('@/lib/data/disciplines');
+const faq = await import('@/lib/data/faq');
 const navigation = await import('@/lib/data/navigation');
 const pageSections = await import('@/lib/data/pageSections');
 const portfolio = await import('@/lib/data/portfolio');
@@ -52,6 +53,7 @@ const MODULES = {
   blog,
   certifications,
   disciplines,
+  faq,
   navigation,
   pageSections,
   portfolio,
@@ -117,6 +119,12 @@ const CASES: Record<string, () => Promise<void>> = {
     expect(value.map((d) => [d.slug, d.poster?.id ?? null, d.services.map((s) => s.slug)])).toEqual(
       [['branding', ID.mDiscPoster, ['logo']]],
     );
+    clean(report);
+  },
+  'faq.getFaq': async () => {
+    // Published only, in order, in the reader's language (Admin v2 U7).
+    const { value, report } = await inPreview(() => faq.getFaq('ar'));
+    expect(value).toEqual([{ question: 'لمن الشغل؟', answer: 'لك.' }]);
     clean(report);
   },
   'navigation.getNavigation': async () => {
@@ -323,7 +331,7 @@ function clean(report: ReturnType<ReturnType<typeof createPreviewSource>['report
 }
 
 describe('every public loader, inside the preview scope', () => {
-  it('has a case for every exported loader function of the 15 files', () => {
+  it('has a case for every exported loader function of the 16 files', () => {
     const exported = Object.entries(MODULES).flatMap(([name, mod]) =>
       Object.entries(mod)
         .filter(([key, value]) => typeof value === 'function' && !PURE.has(key))
