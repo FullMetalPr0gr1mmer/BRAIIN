@@ -160,12 +160,13 @@ describe('what each role is offered on posts (from ROLE_CAPS)', () => {
     expect(RESOURCES['blog']?.readCaps).toContain('seo.entityMeta');
   });
 
-  it('SEO access follows seo.entityMeta: Admin and SEO full, Content Creator view, Developer none', () => {
+  it('SEO access follows seo.entityMeta: Admin and SEO full, Content Creator view, Developer and Sales none', () => {
     expect(ROLES.map((role) => [role, seoAccess(role)])).toEqual([
       ['admin', 'full'],
       ['content_creator', 'view'],
       ['seo', 'full'],
       ['developer', 'none'],
+      ['sales', 'none'],
     ]);
   });
 
