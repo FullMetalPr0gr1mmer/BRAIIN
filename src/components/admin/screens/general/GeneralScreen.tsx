@@ -52,10 +52,11 @@ export default function GeneralScreen({ logoSrc, canOpenApplications, tz }: Gene
         <ApplicationsSwitch
           open={applicationsOpen}
           canChange={canOpenApplications}
-          onChanged={(open, version) => {
+          onChanged={(open, version, changed) => {
             setApplicationsOpen(open);
-            // The switch moved the identity row's version; the form above keeps its edits.
-            profile.adoptVersion(version);
+            // The switch moved the identity row's version; the form above keeps its edits and
+            // takes the new version only if nothing but this write moved it (entitySave.ts).
+            if (changed) profile.adoptVersion(version);
           }}
         />
         <EditorForm

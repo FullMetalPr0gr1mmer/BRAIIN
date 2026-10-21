@@ -13,7 +13,8 @@ interface Props {
   /** What the identity row says (null until it has been read). */
   open: boolean | null;
   canChange: boolean;
-  onChanged: (open: boolean, version: number) => void;
+  /** `changed`: the endpoint wrote (false when the switch was already where it was asked). */
+  onChanged: (open: boolean, version: number, changed: boolean) => void;
 }
 
 export default function ApplicationsSwitch({ open, canChange, onChanged }: Props) {
@@ -27,11 +28,19 @@ export default function ApplicationsSwitch({ open, canChange, onChanged }: Props
     setBusy(true);
     setMessage(null);
     try {
-      const answer = await adminFetch<{ acceptingApplications: boolean; version: number }>(
-        '/api/admin/site-profile/intake',
-        { method: 'PATCH', body: { acceptingApplications: !on } },
+      const answer = await adminFetch<{
+        acceptingApplications: boolean;
+        version: number;
+        changed?: boolean;
+      }>('/api/admin/site-profile/intake', {
+        method: 'PATCH',
+        body: { acceptingApplications: !on },
+      });
+      onChanged(
+        answer.acceptingApplications === true,
+        Number(answer.version),
+        answer.changed === true,
       );
-      onChanged(answer.acceptingApplications === true, Number(answer.version));
       setMessage({
         kind: 'ok',
         text: answer.acceptingApplications

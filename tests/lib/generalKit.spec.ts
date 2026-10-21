@@ -14,7 +14,7 @@ import MaintenanceSketch, {
 } from '@/components/admin/screens/maintenance/MaintenanceSketch';
 import SaveStatus, { saveStatusText } from '@/components/admin/kit/SaveStatus';
 import { ClockProvider } from '@/components/admin/kit/clock';
-import { entitySaveReducer, initialSaveState } from '@/lib/admin/entitySave';
+import { buildSaveRequest, entitySaveReducer, initialSaveState } from '@/lib/admin/entitySave';
 import { ValidationError } from '@/lib/admin/errors';
 import { formToPayload, newItem, rowToForm } from '@/lib/admin/formPayload';
 import { clockFor } from '@/lib/admin/relTime';
@@ -299,19 +299,51 @@ describe('a switch that is on by default in a repeater (a social account’s "Sh
 });
 
 describe('useEntitySave’s adopted version (the General screen’s applications switch)', () => {
-  it('takes the row’s new version and keeps the values on screen', () => {
-    const ready = entitySaveReducer(initialSaveState(FIELDS, false), {
-      type: 'loaded',
-      row: { a: 'x', version: 3 },
-      fields: FIELDS,
-      versionFallback: 0,
-    });
-    const edited = entitySaveReducer(ready, { type: 'set', name: 'a', value: 'y' });
-    const adopted = entitySaveReducer(edited, { type: 'version', version: 4 });
-    expect(adopted.version).toBe(4);
-    expect(adopted.values['a']).toBe('y');
+  // The intake endpoint writes with no version check. The form takes the row's new version
+  // only when that write is provably the ONLY change since the form's version (the row moved
+  // by exactly one); otherwise a colleague's identity save sits in between, and the form's
+  // next save (every field, at its version) must still be the 409 that protects it.
+  const target = { kind: 'singleton', endpoint: profileUi.endpoint } as const;
+  const loadedAt = (version: number) =>
+    entitySaveReducer(
+      entitySaveReducer(initialSaveState(profileUi.fields, false), {
+        type: 'loaded',
+        row: { version, contact_email: 'old@studio.test' },
+        fields: profileUi.fields,
+        versionFallback: 0,
+      }),
+      { type: 'set', name: 'contactEmail', value: 'mine@studio.test' },
+    );
+
+  it('takes the version its own write made and keeps the values on screen', () => {
+    const adopted = entitySaveReducer(loadedAt(5), { type: 'version', version: 6 });
+    expect(adopted.version).toBe(6);
+    expect(adopted.values['contactEmail']).toBe('mine@studio.test');
     expect(adopted.status).toBe('dirty');
-    expect(entitySaveReducer(adopted, { type: 'version', version: -1 })).toBe(adopted);
+    expect(buildSaveRequest(target, null, adopted, profileUi.fields).body['version']).toBe(6);
+  });
+
+  it('a colleague saved in between (5, then 6, then the switch at 7): the form keeps 5', () => {
+    const form = loadedAt(5);
+    const kept = entitySaveReducer(form, { type: 'version', version: 7 });
+    expect(kept).toBe(form);
+    expect(buildSaveRequest(target, null, kept, profileUi.fields).body['version']).toBe(5);
+  });
+
+  it('never moves back, nor to a value that is not a version', () => {
+    const form = loadedAt(5);
+    for (const version of [5, 4, -1, 1.5, Number.NaN]) {
+      expect(entitySaveReducer(form, { type: 'version', version }), String(version)).toBe(form);
+    }
+  });
+
+  it('the screen adopts only what the switch reports it wrote', () => {
+    const screen = readFileSync('src/components/admin/screens/general/GeneralScreen.tsx', 'utf8');
+    expect(screen).toMatch(/onChanged=\{\(open, version, changed\) => \{/);
+    expect(screen).toMatch(/if \(changed\) profile\.adoptVersion\(version\);/);
+    const intakeRoute = readFileSync('src/pages/api/admin/site-profile/intake.ts', 'utf8');
+    expect(intakeRoute).toContain('changed: false');
+    expect(intakeRoute).toContain('changed: true');
   });
 });
 

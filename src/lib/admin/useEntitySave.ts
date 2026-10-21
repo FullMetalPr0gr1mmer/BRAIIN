@@ -49,7 +49,10 @@ export interface EntitySave {
   message: string | null;
   save(): Promise<boolean>;
   reloadTheirs(): Promise<void>;
-  /** Admin v2 U9: take the row's version after this screen moved it itself (entitySave.ts). */
+  /**
+   * Admin v2 U9: take the row's version after ONE write of this screen's own moved it; kept
+   * only when the form was at the version just before (entitySave.ts).
+   */
   adoptVersion(version: number): void;
 }
 
