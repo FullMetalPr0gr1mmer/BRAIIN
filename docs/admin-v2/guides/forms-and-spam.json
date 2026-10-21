@@ -1,0 +1,104 @@
+{
+  "slug": "forms-and-spam",
+  "sort_order": 85,
+  "minutes": 3,
+  "tags": ["settings", "leads"],
+  "screens": ["/admin/forms"],
+  "caps": ["settings.general"],
+  "title": "Forms and spam protection",
+  "title_ar": "النماذج والحماية من الرسائل المزعجة",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Forms shows the two forms on the site, the inquiry form on Contact and the application form on Join: the fields each one asks for and how each one keeps spam out. The fields are fixed. Each one is checked on the server, and contact details are stored encrypted."
+      },
+      {
+        "t": "h",
+        "x": "What each form asks for"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "The inquiry form needs a name, an e-mail and a message. The company, the service, the budget, when it is needed and the agreement to be contacted are optional.",
+          "The Join form needs a name, an e-mail, a phone number, a city, the role, the experience, how the person wants to work, when they could start, a portfolio link, a message and the box that lets you keep the application. The crafts, LinkedIn, the CV and the box for future roles are optional. A CV is a PDF or Word file of up to 10 MB."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Keeping spam out"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "A hidden field is always on. People never see it, and a send that fills it in is not stored.",
+          "The inquiry form takes up to 10 sends an hour from one internet address. If that count cannot be checked, the send still goes through, so no inquiry is lost.",
+          "The Join form takes up to 5 sends an hour from one internet address and 3 a day from one e-mail. If those counts cannot be checked, the send is refused for now, because it carries a file.",
+          "A captcha is not set up yet."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Consent on Join"
+      },
+      {
+        "t": "p",
+        "x": "Each application stores which version of the consent text the person agreed to. The Join tab shows the version the form uses now."
+      },
+      {
+        "t": "h",
+        "x": "Changing the words"
+      },
+      {
+        "t": "p",
+        "x": "The heading, the lead line and the other words around each form are edited with the page that holds it, in Pages, by the roles that edit pages. Admins open and close job applications in General settings."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تعرض شاشة Forms نموذجَي الموقع، نموذج الاستفسار في صفحة التواصل ونموذج التقديم في صفحة الانضمام: الحقول التي يطلبها كل منهما، وكيف يصد كل منهما الرسائل المزعجة. الحقول ثابتة، ويُتحقق من كل حقل على الخادم، وتُحفظ بيانات التواصل مشفّرة."
+      },
+      {
+        "t": "h",
+        "x": "ما يطلبه كل نموذج"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "يحتاج نموذج الاستفسار إلى اسم وبريد إلكتروني ورسالة. أما الشركة والخدمة والميزانية وموعد الحاجة والموافقة على التواصل فاختيارية.",
+          "يحتاج نموذج الانضمام إلى اسم وبريد إلكتروني ورقم جوال ومدينة والوظيفة والخبرة وطريقة العمل المفضلة وموعد البدء ورابط أعمال ورسالة، والخانة التي تسمح بحفظ الطلب. أما الحِرف ولينكدإن والسيرة الذاتية وخانة الوظائف المستقبلية فاختيارية. السيرة الذاتية ملف PDF أو Word حتى 10 ميجابايت."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "صد الرسائل المزعجة"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "خانة مخفية تعمل دائمًا. لا يراها الناس، وأي إرسال يملؤها لا يُحفظ.",
+          "يقبل نموذج الاستفسار حتى 10 إرسالات في الساعة من عنوان إنترنت واحد. وإذا تعذّر التحقق من هذا العدد يمر الإرسال، فلا يضيع أي استفسار.",
+          "يقبل نموذج الانضمام حتى 5 إرسالات في الساعة من عنوان إنترنت واحد، و3 في اليوم من بريد إلكتروني واحد. وإذا تعذّر التحقق من هذه الأعداد يُرفض الإرسال مؤقتًا، لأنه يحمل ملفًا.",
+          "التحقق من الزائر (Captcha) غير مُعدّ بعد."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "الموافقة في نموذج الانضمام"
+      },
+      {
+        "t": "p",
+        "x": "يحفظ كل طلب نسخة نص الموافقة التي وافق عليها صاحبه. ويعرض تبويب Join النسخة التي يستخدمها النموذج الآن."
+      },
+      {
+        "t": "h",
+        "x": "تغيير النصوص"
+      },
+      {
+        "t": "p",
+        "x": "يُحرَّر العنوان والسطر التمهيدي وبقية النصوص حول كل نموذج مع الصفحة التي تحمله، في Pages، وذلك للأدوار التي تحرر الصفحات. ويفتح المسؤولون (Admin) التقديم على الوظائف ويغلقونه من General settings."
+      }
+    ]
+  }
+}
