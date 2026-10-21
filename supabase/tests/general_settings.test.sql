@@ -237,8 +237,8 @@ select is(_rows($$ update public.site_profile set tagline = null where tenant_id
 -- ── Inserts: a first save is an INSERT ─────────────────────────────────
 select _as('75000000-0000-0000-0000-0000000000c1', 'content_creator', _a());
 select throws_ok(
-  $$ insert into public.site_settings (tenant_id) values ('75000000-0000-0000-0000-00000000000c') $$,
-  '42501', null, 'content_creator cannot create a settings row');
+  $$ insert into public.site_settings (tenant_id) values (_a()::uuid) $$,
+  '42501', null, 'content_creator cannot create a settings row, in its own tenant either');
 select _as('75000000-0000-0000-0000-0000000000e1', 'seo', _a());
 select throws_ok(
   $$ insert into public.site_profile (tenant_id, brand_name, contact_email, location)
@@ -274,24 +274,28 @@ select _as('75000000-0000-0000-0000-0000000000d2', 'developer', _a());
 select is(_rows($$ update public.site_profile set footer_style = 'dark' where tenant_id = _a()::uuid $$)
         + _rows($$ update public.site_settings set maintenance = '{"active":true,"allowlist":[]}' where tenant_id = _a()::uuid $$),
   0, 'a developer token whose profile is now seo writes neither row');
+-- The stale inserts name the token's OWN tenant (A): a third tenant's row is refused by the
+-- permissive policy's tenant predicate already, so only an insert into A reaches the live
+-- check. RLS's WITH CHECK runs before the unique key, so the live policy answers 42501; were
+-- it gone, the insert would pass RLS and stop at the key (23505), and these would fail.
 select throws_ok(
-  $$ insert into public.site_settings (tenant_id) values ('75000000-0000-0000-0000-00000000000c') $$,
-  '42501', null, 'nor creates one');
+  $$ insert into public.site_settings (tenant_id) values (_a()::uuid) $$,
+  '42501', null, 'nor creates one (the live check, not the tenant predicate)');
 select _as('75000000-0000-0000-0000-0000000000d3', 'developer', _a());
 select is(_rows($$ update public.site_profile set footer_style = 'dark' where tenant_id = _a()::uuid $$)
         + _rows($$ update public.site_settings set maintenance = '{"active":true,"allowlist":[]}' where tenant_id = _a()::uuid $$),
   0, 'a deactivated developer writes neither row');
 select throws_ok(
   $$ insert into public.site_profile (tenant_id, brand_name, contact_email, location)
-     values ('75000000-0000-0000-0000-00000000000c', '{"en":"X","ar":"س"}', 'x@example.test', '{"en":"J","ar":"ج"}') $$,
-  '42501', null, 'nor creates a profile');
+     values (_a()::uuid, '{"en":"X","ar":"س"}', 'x@example.test', '{"en":"J","ar":"ج"}') $$,
+  '42501', null, 'nor creates a profile in its own tenant');
 select _as('75000000-0000-0000-0000-0000000000d4', 'developer', _a());
 select is(_rows($$ update public.site_profile set footer_style = 'dark' where tenant_id = _a()::uuid $$)
         + _rows($$ update public.site_settings set retention = '{"raw_telemetry_days":1}' where tenant_id = _a()::uuid $$),
   0, 'a locked developer writes neither row (no purge by a shortened retention)');
 select throws_ok(
-  $$ insert into public.site_settings (tenant_id) values ('75000000-0000-0000-0000-00000000000c') $$,
-  '42501', null, 'nor creates one');
+  $$ insert into public.site_settings (tenant_id) values (_a()::uuid) $$,
+  '42501', null, 'nor creates one in its own tenant');
 -- Moved: tenant B's admin, carrying a token that names tenant A.
 select _as('75000000-0000-0000-0000-0000000000b1', 'admin', _a());
 select is(_rows($$ update public.site_profile set footer_style = 'dark' where tenant_id = _a()::uuid $$)
