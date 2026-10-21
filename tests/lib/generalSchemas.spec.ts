@@ -10,7 +10,7 @@ import { MaintenanceInputSchema } from '@schemas/maintenance';
 import { SiteSettingsSchema as LegacySiteSettings, MaintenanceSchema } from '@schemas/admin';
 
 // General settings v2 and maintenance v2's write schemas (Admin v2 U9): what the admin may
-// send, refused before the database's CHECKs (0075) would refuse it, and the public row read
+// send, refused before the database's CHECKs (0098) would refuse it, and the public row read
 // leniently field by field, so a bad value costs that field and never the brand.
 
 const ok = (input: Record<string, unknown>) =>
@@ -130,7 +130,7 @@ describe('the public row (SiteProfileRowSchema) reads each new field on its own'
     updated_at: null,
   };
 
-  it('a row from before 0075 reads with no tagline, phone, map or icons and today’s footer', () => {
+  it('a row from before 0098 reads with no tagline, phone, map or icons and today’s footer', () => {
     const row = SiteProfileRowSchema.parse(ROW);
     expect(row.tagline ?? null).toBeNull();
     expect(row.map_url).toBeNull();

@@ -1,4 +1,4 @@
--- pgTAP: General settings v2 and maintenance v2 (0075, Admin v2 U9). Run with `supabase test db`.
+-- pgTAP: General settings v2 and maintenance v2 (0098, Admin v2 U9). Run with `supabase test db`.
 --
 --   • site_profile v2: the new columns, their CHECKs (each 23514), the icon keys (another
 --     tenant's media is 23503; a picture in use cannot be hard-deleted) and the icon shape
@@ -13,7 +13,7 @@
 --     copy from crm_settings; app.studio_time_zone's tenant fence.
 --   • media_assets_public_read's icon branch, media_usage v6's icon rows.
 --   • the exact policy sets, the helper, the grants (has and has-not).
---   • the four guides 0075 puts, in every tenant (two of them one sentence each: the busiest
+--   • the four guides 0098 puts, in every tenant (two of them one sentence each: the busiest
 --     hours and the uptime days follow the studio's zone, not Riyadh).
 
 begin;

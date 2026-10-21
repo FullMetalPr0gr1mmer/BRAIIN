@@ -154,7 +154,7 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   foundedYear: 2020,
   socials: [{ network: 'instagram', handle: '@sample', url: 'https://instagram.com/sample' }],
   acceptingApplications: true,
-  // Admin v2 U9 (0075)
+  // Admin v2 U9 (0098)
   tagline: BI('From the brain to the real world', 'من الفكرة إلى الواقع'),
   phoneE164: '+966500000001',
   phoneDisplay: '050 000 0001',

@@ -1427,11 +1427,11 @@ The numbers are assigned at merge (`scripts/renumber-migration.mjs`): read them 
 
 ---
 
-### 6l. General settings and maintenance v2 (migration 0075, Admin v2 U9)
+### 6l. General settings and maintenance v2 (migration 0098, Admin v2 U9)
 
 The letter is the next free one when U9 merges; renumber if a sibling took it.
 
-**Apply before the merge** (expand only; rule 5): 0075 adds columns, CHECKs, the icon keys,
+**Apply before the merge** (expand only; rule 5): 0098 adds columns, CHECKs, the icon keys,
 `site_settings.timezone` (copied from `crm_settings.timezone`; only rows that differ are
 written), the RESTRICTIVE live writes on `site_profile` and `site_settings` and the two tables'
 grants (authenticated loses an inherited DELETE on `site_settings` that nothing used). The old
@@ -1461,7 +1461,7 @@ with the U9 read-back query; every value must match its expected line.
 least 512 px). After setting them, `/_image` serves each as PNG at 32, 180, 192 and 512 only
 (four transformations per picture), and `/manifest.webmanifest` lists the app icon.
 
-**Rollback.** Revert the Worker; 0075 stays (expand only). If the RESTRICTIVE live writes ever
+**Rollback.** Revert the Worker; 0098 stays (expand only). If the RESTRICTIVE live writes ever
 need lifting, drop `site_profile_live_insert`, `site_profile_live_update`,
 `site_settings_live_insert` and `site_settings_live_update` (the permissive policies of 0001 and
 0019 still gate by role).

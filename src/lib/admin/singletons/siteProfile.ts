@@ -1,6 +1,11 @@
 import { env } from 'cloudflare:workers';
+import { readMaintenance } from '@schemas/maintenance';
 import { SiteProfileSchema } from '@schemas/siteProfile';
-import { putMaintenanceState, readMaintenanceSnapshot } from '@/lib/http/maintenance';
+import {
+  edgeValueOf,
+  putMaintenanceState,
+  readMaintenanceSnapshot,
+} from '@/lib/http/maintenance';
 import { contactFromRow } from '@/lib/maintenance/contact';
 import type { SingletonConfig } from '@/lib/admin/singleton';
 import { AuthorizationError } from '@/lib/authz/errors';
@@ -39,7 +44,7 @@ const SITE_PROFILE_KEYS = {
   foundedYear: 'founded_year',
   socials: 'socials',
   acceptingApplications: 'accepting_applications',
-  // Admin v2 U9 (0075)
+  // Admin v2 U9 (0098)
   tagline: 'tagline',
   phoneE164: 'phone_e164',
   phoneDisplay: 'phone_display',
@@ -52,7 +57,7 @@ const SITE_PROFILE_KEYS = {
   footerShowSocial: 'footer_show_social',
 };
 
-/** What a refused icon says (0075's trigger, and its foreign key for another tenant's id). */
+/** What a refused icon says (0098's trigger, and its foreign key for another tenant's id). */
 export const ICON_REFUSED =
   'Choose a square picture from the media library, at least 512 pixels wide.';
 const DISPLAY_NEEDS_NUMBER = 'Add the number this displays, or clear it.';
@@ -95,7 +100,7 @@ export const siteProfileSingleton: SingletonConfig = {
     founded_year: F.foundedYear,
     socials: F.socials,
     accepting_applications: false,
-    // The column defaults (0075): today's footer, no tagline, phone, map or icons.
+    // The column defaults (0098): today's footer, no tagline, phone, map or icons.
     tagline: null,
     phone_e164: null,
     phone_display: null,
@@ -134,15 +139,26 @@ export const siteProfileSingleton: SingletonConfig = {
   },
   // Maintenance v2 (U9b): while the maintenance page is up, its contact buttons (a snapshot
   // of this row at the last maintenance save) follow an identity save at once, at the edge.
-  // Best effort: a failure is in the audit detail and the cron's reconcile heals it within ten
-  // minutes. With releases on, R7's post-publish effects must do the same.
-  afterWrite: async ({ row }) => {
-    const snapshot = await readMaintenanceSnapshot(env);
-    if (!snapshot?.active) return;
-    const kvSynced = await putMaintenanceState(env, {
-      ...snapshot,
-      contact: contactFromRow(row),
-    });
+  // The value put is built from the maintenance ROW (site_settings, which settings.general
+  // holders read), never from KV's own copy: a KV read can be up to a minute stale in this
+  // location, and re-putting it would bring back a bypass, an address or even the switch a
+  // colleague has just changed. KV only says whether the edge has maintenance on (when it
+  // does not, nothing is read or written: an identity save never switches the site on), and
+  // the row must say on too. Best effort: a failure is in the audit detail and the cron's
+  // reconcile heals it within ten minutes. With releases on, R7's post-publish effects must
+  // do the same.
+  afterWrite: async ({ auth, sb, row }) => {
+    const edge = await readMaintenanceSnapshot(env);
+    if (!edge?.active) return;
+    const { data, error } = await sb
+      .from('site_settings')
+      .select('maintenance')
+      .eq('tenant_id', auth.tenantId)
+      .maybeSingle<{ maintenance: unknown }>();
+    if (error) return { maintenanceContact: 'not-refreshed' };
+    const stored = readMaintenance(data?.maintenance ?? null);
+    if (!stored.active) return;
+    const kvSynced = await putMaintenanceState(env, edgeValueOf(stored, contactFromRow(row)));
     return { maintenanceContact: kvSynced ? 'refreshed' : 'not-refreshed' };
   },
   // The job-application intake switch is never part of a release (Admin v2 P-3; 0038's

@@ -5,7 +5,12 @@ import { resolveLaunchTenantId } from '@/lib/data/tenant';
 import type { CronJob } from './jobs';
 import { readMaintenance, type MaintenanceSnapshot } from '@schemas/maintenance';
 import { writeSystemLog } from '@/lib/data/systemLog';
-import { putMaintenanceState, readMaintenanceSnapshot } from '@/lib/http/maintenance';
+import {
+  edgeValueOf,
+  putMaintenanceState,
+  readMaintenanceSnapshot,
+  sameMaintenance,
+} from '@/lib/http/maintenance';
 import { readContact } from '@/lib/maintenance/contact';
 
 // The maintenance reconcile (Admin v2 U9b, decision D12), a job of the 10-minute schedule
@@ -21,20 +26,33 @@ import { readContact } from '@/lib/maintenance/contact';
 //   - the row says on and the edge says off, or cannot be read: NEVER switched on by a job.
 //     Taking the site down is a person's decision; it is logged as an error, so Site health
 //     shows it, and the admin's next save puts it right;
-//   - while the switch is on, the contact buttons (a snapshot of site_profile) are refreshed
-//     when the identity changed.
+//   - while both say on, the edge carries the ROW's value (every setting: the bypass, the
+//     allowlist, the words, "Back on") with the contact buttons (a snapshot of site_profile)
+//     refreshed from the identity. Never KV's own copy: a KV read can be up to a minute stale
+//     in this location, and re-putting it would bring back a bypass or an address the row no
+//     longer holds, which comparing only the switch would never put right. This never
+//     switches the site on (the edge already says on). One race remains: an editor who turns
+//     maintenance off between this run's read and its write is overwritten at the edge, and
+//     the next run heals that toward off (the second rule), within ten minutes.
 //
 // The launch tenant only: the KV key `site:maintenance` is the deployment's, as the
 // visibility snapshot's is. Counts and states only go to system_logs.
 
 export interface ReconcileResult {
-  /** What the run did: nothing, ended maintenance, healed the edge, refreshed the buttons. */
-  outcome: 'none' | 'ended' | 'ended-race' | 'healed' | 'contact' | 'edge-off-while-on';
+  /**
+   * What the run did: nothing, ended maintenance, healed the edge to off, refreshed the
+   * buttons, or set the edge's settings to the row's while on.
+   */
+  outcome:
+    | 'none'
+    | 'ended'
+    | 'ended-race'
+    | 'healed'
+    | 'contact'
+    | 'synced'
+    | 'edge-off-while-on';
   kvSynced: boolean | null;
 }
-
-const sameContact = (a: MaintenanceSnapshot['contact'], b: MaintenanceSnapshot['contact']) =>
-  JSON.stringify(a) === JSON.stringify(b);
 
 export async function reconcileMaintenance(
   sb: SupabaseClient,
@@ -123,13 +141,23 @@ export async function reconcileMaintenance(
     return { outcome: 'edge-off-while-on', kvSynced: false };
   }
 
-  // 4. On, both agree: the contact buttons follow the identity.
+  // 4. On, both agree: the edge carries the row's value, the buttons following the identity
+  //    (an identity it cannot read keeps the edge's buttons: display only, never a setting).
   if (row.active && edge?.active) {
-    const contact = await readContact(sb, tenantId);
-    if (contact && !sameContact(contact, edge.contact)) {
-      const kvSynced = await putMaintenanceState(env, { ...edge, contact });
-      return { outcome: 'contact', kvSynced };
-    }
+    const contact = (await readContact(sb, tenantId)) ?? edge.contact;
+    const next = edgeValueOf(row, contact);
+    if (sameMaintenance(next, edge)) return { outcome: 'none', kvSynced: null };
+    const settingsDiffer = !sameMaintenance(edgeValueOf(row, edge.contact), edge);
+    const kvSynced = await putMaintenanceState(env, next);
+    if (!settingsDiffer) return { outcome: 'contact', kvSynced };
+    await writeSystemLog({
+      level: kvSynced ? 'info' : 'error',
+      source: 'cron:maintenance-reconcile',
+      message: kvSynced
+        ? 'the edge held maintenance settings the settings row no longer holds; set to the row'
+        : 'the edge holds maintenance settings the settings row no longer holds, and could not be set',
+    });
+    return { outcome: 'synced', kvSynced };
   }
   return { outcome: 'none', kvSynced: null };
 }
@@ -139,8 +167,8 @@ export const MAINTENANCE_RECONCILE_JOB: CronJob = {
   name: 'maintenance-reconcile',
   label: 'maintenance reconcile',
   // The launch tenant (1), the settings row (1), the edge's value (1), the row's update (1),
-  // the edge's write (1), the audit row (1), its line (2): 8 at worst. (Refreshing the
-  // buttons instead: the identity read and the edge's write, 2, within the same 8.)
+  // the edge's write (1), the audit row (1), its line (2): 8 at worst. (Setting the edge to
+  // the row while on instead: the identity read, the edge's write and a line, 4: 7.)
   budget: 1 + 1 + 1 + 1 + 1 + 1 + 2,
   run: async () => {
     const tenantId = await resolveLaunchTenantId();

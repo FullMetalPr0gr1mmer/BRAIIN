@@ -5,7 +5,7 @@ import type { AuthContext } from '@/lib/auth/types';
 import { clockFor, type Clock } from './relTime';
 
 // The studio's time zone for one admin request (Admin v2 U9): `site_settings.timezone`, the one
-// source (0075), read through the caller's own session client (every staff role reads
+// source (0098), read through the caller's own session client (every staff role reads
 // site_settings: 0001's site_settings_staff_read), at most once per request: the first caller
 // stores the PROMISE on `locals`, as the identity loader does, so a page's components and its
 // layout share one read.

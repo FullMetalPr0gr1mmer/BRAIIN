@@ -13,6 +13,7 @@
 import {
   maintenanceInForce,
   readMaintenance,
+  type MaintenanceContact,
   type MaintenanceSnapshot,
 } from '@schemas/maintenance';
 import type { Locale } from '@schemas/primitives';
@@ -74,6 +75,36 @@ export async function putMaintenanceState(
   } catch {
     return false;
   }
+}
+
+/**
+ * The edge's value for a stored ROW and the current contact buttons, normalised as the
+ * edge reads it. Every setting (the switch, the bypass, the allowlist, the words, "Back on")
+ * comes from the row, the source of truth; never from KV's own copy, which a read can return
+ * up to a minute stale in its location. Only the buttons, a snapshot of the identity, are
+ * taken from elsewhere.
+ */
+export function edgeValueOf(
+  row: MaintenanceSnapshot,
+  contact: MaintenanceContact,
+): MaintenanceSnapshot {
+  return readMaintenance({ ...row, contact });
+}
+
+const canonical = (value: unknown): string =>
+  JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v as Record<string, unknown>).sort(([a], [b]) =>
+            a < b ? -1 : a > b ? 1 : 0,
+          ),
+        )
+      : v,
+  );
+
+/** Whether two values say the same in every field (key order aside). */
+export function sameMaintenance(a: MaintenanceSnapshot, b: MaintenanceSnapshot): boolean {
+  return canonical(a) === canonical(b);
 }
 
 /**

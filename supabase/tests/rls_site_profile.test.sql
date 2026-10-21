@@ -8,7 +8,7 @@
 --
 -- RLS UPDATE by a role with no matching policy FILTERS (0 rows, no error), so write
 -- denials are asserted by re-reading the value as a staff role afterwards. Every token is a
--- live profile's (0075's RESTRICTIVE live writes); the stale tokens are proven in
+-- live profile's (0098's RESTRICTIVE live writes); the stale tokens are proven in
 -- general_settings.test.sql.
 
 begin;
@@ -30,7 +30,7 @@ values (app.default_tenant_id(), '{"en":"Launch","ar":"ل"}', 'launch@example.te
         '{"en":"Jeddah","ar":"جدة"}')
 on conflict (tenant_id) do nothing;
 
--- Since 0075 a write to site_profile also needs the token's profile to be live and to hold
+-- Since 0098 a write to site_profile also needs the token's profile to be live and to hold
 -- settings.general (RESTRICTIVE, app.live_role()), so every role below is a real profile and
 -- its token carries its `sub`. The token for each role is that profile's.
 insert into public.tenants (id, name) values ('51000000-0000-0000-0000-000000000003', 'ProfileT3');

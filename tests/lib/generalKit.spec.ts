@@ -26,6 +26,9 @@ import { settingsUi } from '@/lib/admin/ui/settings';
 import { maintenanceUi } from '@/lib/admin/ui/maintenance';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
 import type { FieldDef, FieldGroup } from '@/lib/admin/uiSchema';
+import { MAINTENANCE_DEFAULTS, readMaintenance } from '@schemas/maintenance';
+import { MAINTENANCE_KV_KEY } from '@/lib/http/maintenance';
+import { __kv } from '../stubs/cloudflare-workers';
 
 // General settings v2 and maintenance v2's admin pieces (Admin v2 U9): EditorForm's groups
 // and the reveal of a closed card, the singleton kernel's named constraints, the default-on
@@ -179,6 +182,90 @@ describe('the singleton kernel names a refused value’s field (constraintFields
     expect(siteSettingsSingleton.constraintFields?.['site_settings_timezone_closed']?.field).toBe(
       'timezone',
     );
+  });
+});
+
+describe('an identity save refreshes the 503’s buttons from the maintenance ROW (afterWrite)', () => {
+  // KV is eventually consistent: this location can still hold the value from before a
+  // colleague's maintenance save. The settings row is the source of truth for every setting,
+  // so the follow-up builds the edge's value from it, and KV only says whether the edge has
+  // maintenance on at all (an identity save never switches the site on).
+  const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const identity = {
+    brand_name: { en: 'New', ar: 'جديد' },
+    contact_email: 'new@example.test',
+    whatsapp_e164: null,
+  };
+  const onRow = { ...MAINTENANCE_DEFAULTS, active: true, staffBypass: false, allowlist: [] };
+  const staleOn = JSON.stringify({
+    ...onRow,
+    staffBypass: true,
+    allowlist: ['203.0.113.9'],
+    copy: { title: { en: 'Old', ar: 'قديم' }, message: null },
+  });
+  let reads: string[] = [];
+  const sb = (answer: { data: unknown; error: unknown }) =>
+    ({
+      from: (table: string) => ({
+        select: (columns: string) => ({
+          eq: (column: string, value: string) => ({
+            maybeSingle: async () => {
+              reads.push(`${table}.${columns} ${column}=${value}`);
+              return answer;
+            },
+          }),
+        }),
+      }),
+    }) as never;
+  const after = (answer: { data: unknown; error: unknown }) =>
+    siteProfileSingleton.afterWrite!({
+      auth: { tenantId: TENANT } as never,
+      sb: sb(answer),
+      row: identity,
+    });
+  beforeEach(() => {
+    __kv.clear();
+    reads = [];
+  });
+
+  it('the row’s settings with the new buttons, whatever KV held (a stale bypass and IP)', async () => {
+    __kv.set(MAINTENANCE_KV_KEY, staleOn);
+    expect(await after({ data: { maintenance: onRow }, error: null })).toEqual({
+      maintenanceContact: 'refreshed',
+    });
+    expect(reads).toEqual([`site_settings.maintenance tenant_id=${TENANT}`]);
+    const edge = readMaintenance(__kv.get(MAINTENANCE_KV_KEY) ?? null);
+    expect(edge).toEqual(
+      readMaintenance({
+        ...onRow,
+        contact: { brand: identity.brand_name, email: identity.contact_email, whatsappE164: null },
+      }),
+    );
+    expect(edge).toMatchObject({ staffBypass: false, allowlist: [], copy: { title: null } });
+  });
+
+  it('a colleague turned it off (the row says off, a stale KV on): nothing is put back', async () => {
+    __kv.set(MAINTENANCE_KV_KEY, staleOn);
+    for (const data of [{ maintenance: { ...onRow, active: false } }, null]) {
+      expect(await after({ data, error: null })).toBeUndefined();
+      expect(__kv.get(MAINTENANCE_KV_KEY)).toBe(staleOn);
+    }
+  });
+
+  it('an unreadable row writes nothing and says so', async () => {
+    __kv.set(MAINTENANCE_KV_KEY, staleOn);
+    expect(await after({ data: null, error: { code: '57014' } })).toEqual({
+      maintenanceContact: 'not-refreshed',
+    });
+    expect(__kv.get(MAINTENANCE_KV_KEY)).toBe(staleOn);
+  });
+
+  it('the edge off: no row read, nothing written; an identity save never switches it on', async () => {
+    expect(await after({ data: { maintenance: onRow }, error: null })).toBeUndefined();
+    __kv.set(MAINTENANCE_KV_KEY, JSON.stringify({ ...onRow, active: false }));
+    expect(await after({ data: { maintenance: onRow }, error: null })).toBeUndefined();
+    expect(reads).toEqual([]);
+    expect(readMaintenance(__kv.get(MAINTENANCE_KV_KEY) ?? null).active).toBe(false);
   });
 });
 

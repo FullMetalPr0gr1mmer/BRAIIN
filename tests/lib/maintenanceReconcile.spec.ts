@@ -187,6 +187,90 @@ describe('the buttons follow the identity while it is on', () => {
   });
 });
 
+describe('while on, the edge carries the ROW’s settings, never KV’s own copy', () => {
+  // KV is eventually consistent: a read in the cron's location can return the value from
+  // before an editor's last save for up to a minute. Re-putting that copy (with fresh
+  // buttons) would bring back a staff bypass, an allowlisted address or words the row no
+  // longer holds, and comparing only the switch would never put them right.
+  const contact = { brand: { en: 'B', ar: 'ب' }, email: 'a@example.test', whatsappE164: null };
+  const onRow: MaintenanceSnapshot = {
+    ...MAINTENANCE_DEFAULTS,
+    active: true,
+    staffBypass: false,
+    allowlist: [],
+    contact,
+  };
+  const stale: MaintenanceSnapshot = {
+    ...onRow,
+    staffBypass: true,
+    allowlist: ['203.0.113.9'],
+    copy: { title: { en: 'Old', ar: 'قديم' }, message: null },
+    showDate: true,
+    until: '2026-10-25',
+    untilAt: '2026-10-24T21:00:00.000Z',
+    contact: { ...contact, email: 'old@example.test' },
+  };
+
+  it('a stale edge (the bypass on, an IP, old words, another day) is set to the row and stays so', async () => {
+    row = { version: 3, maintenance: onRow };
+    put(stale);
+    expect(await reconcileMaintenance(client(), env, TENANT, NOW)).toEqual({
+      outcome: 'synced',
+      kvSynced: true,
+    });
+    expect(edge()).toEqual(readMaintenance(onRow));
+    expect(state.logs.map((l) => l.level)).toEqual(['info']);
+    state.logs = [];
+    expect(await reconcileMaintenance(client(), env, TENANT, NOW)).toEqual({
+      outcome: 'none',
+      kvSynced: null,
+    });
+    expect(edge()).toEqual(readMaintenance(onRow));
+    expect(state.logs).toEqual([]);
+  });
+
+  it('the same when the buttons already agree: only the settings differ', async () => {
+    row = { version: 3, maintenance: onRow };
+    put({ ...stale, contact });
+    expect((await reconcileMaintenance(client(), env, TENANT, NOW)).outcome).toBe('synced');
+    expect(edge()).toMatchObject({ staffBypass: false, allowlist: [], showDate: false });
+  });
+
+  it('an identity it cannot read keeps the edge’s buttons, and the row’s settings still win', async () => {
+    row = { version: 3, maintenance: onRow };
+    put(stale);
+    profile = null;
+    const failing = client();
+    const from = failing.from.bind(failing);
+    (failing as unknown as { from: (t: string) => unknown }).from = (table: string) => {
+      if (table !== 'site_profile') return from(table);
+      return {
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: null, error: { code: '57014' } }) }),
+        }),
+      };
+    };
+    expect((await reconcileMaintenance(failing, env, TENANT, NOW)).outcome).toBe('synced');
+    expect(edge()).toEqual(readMaintenance({ ...onRow, contact: stale.contact }));
+  });
+
+  it('a v1 row (no bypass field) reads with the bypass OFF at the edge, whatever KV held', async () => {
+    row = { version: 3, maintenance: { active: true, allowlist: [] } };
+    put({ ...onRow, staffBypass: true });
+    await reconcileMaintenance(client(), env, TENANT, NOW);
+    expect(edge().staffBypass).toBe(false);
+  });
+
+  it('the edge off stays off: the row’s settings never switch the site on', async () => {
+    row = { version: 3, maintenance: onRow };
+    put({ ...stale, active: false });
+    expect((await reconcileMaintenance(client(), env, TENANT, NOW)).outcome).toBe(
+      'edge-off-while-on',
+    );
+    expect(edge().active).toBe(false);
+  });
+});
+
 describe('the job', () => {
   it('declares a budget its worst case (the date came) fits: 8', async () => {
     const value = {
@@ -203,5 +287,15 @@ describe('the job', () => {
     expect(used).toBeLessThanOrEqual(MAINTENANCE_RECONCILE_JOB.budget);
     expect(MAINTENANCE_RECONCILE_JOB.budget).toBe(8);
     expect(MAINTENANCE_RECONCILE_JOB.name).toBe('maintenance-reconcile');
+  });
+
+  it('and the edge set to the row while on fits it too: 7', async () => {
+    const on = { ...MAINTENANCE_DEFAULTS, active: true, staffBypass: false };
+    row = { version: 7, maintenance: on };
+    put({ ...on, staffBypass: true });
+    expect((await reconcileMaintenance(client(), env, TENANT, NOW)).outcome).toBe('synced');
+    const used = 1 + state.requests.length + 2 + 2 * state.logs.length;
+    expect(used).toBe(7);
+    expect(used).toBeLessThanOrEqual(MAINTENANCE_RECONCILE_JOB.budget);
   });
 });

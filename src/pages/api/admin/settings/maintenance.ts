@@ -10,7 +10,7 @@ import { readContact } from '@/lib/maintenance/contact';
 // Maintenance mode v2 (`maintenance.manage`: Admin + Developer; Admin v2 U9b).
 //
 // Two writes, in this order, and the order is the whole design:
-//   1. `site_settings.maintenance`: durable, audited, RLS-gated (and, since 0075, behind the
+//   1. `site_settings.maintenance`: durable, audited, RLS-gated (and, since 0098, behind the
 //      RESTRICTIVE live check) source of truth;
 //   2. the KV snapshot the middleware's pre-cache check actually reads.
 //
@@ -107,7 +107,7 @@ export const PATCH = defineAdminRoute({
         .select('version')
         .maybeSingle<{ version: number }>();
       if (error) throw new Error(`update settings: ${error.message}`);
-      // No row: a newer version, or the live check (0075) filtered it: either way not saved.
+      // No row: a newer version, or the live check (0098) filtered it: either way not saved.
       if (!data) throw new OptimisticLockError('site_settings');
       version = data.version;
     }

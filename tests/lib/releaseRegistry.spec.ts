@@ -280,7 +280,7 @@ describe('apply order', () => {
     // The share images (Admin v2 U10, 0073): media assets too.
     'entity_seo.og_media_id': 'outside',
     'seo_defaults.default_og_media_id': 'outside',
-    // The site's icons (Admin v2 U9, 0075): media assets too.
+    // The site's icons (Admin v2 U9, 0098): media assets too.
     'site_profile.favicon_media_id': 'outside',
     'site_profile.app_icon_media_id': 'outside',
   };
