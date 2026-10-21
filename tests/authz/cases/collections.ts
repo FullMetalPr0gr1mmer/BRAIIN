@@ -1,7 +1,8 @@
 import { UUID, VALID_BILINGUAL, type Case } from '../harness';
 
 // Collections: clients, testimonials, team, numbers and certifications (UI v2 content
-// model, 0020–0025). Each is authored by Content Creator; deleting is Admin only.
+// model, 0020–0025), and the FAQ (Admin v2 U7, 0098: pages.write, Contact-page content).
+// Each is authored by Content Creator; archiving and deleting are Admin only.
 
 export const cases: readonly Case[] = [
   {
@@ -227,6 +228,67 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/certifications/reorder'),
     method: 'POST',
     url: '/api/admin/certifications/reorder',
+    body: { items: [{ id: UUID, sortOrder: 10 }] },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'faq list',
+    load: () => import('@/pages/api/admin/faq/index'),
+    method: 'GET',
+    url: '/api/admin/faq',
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'faq create',
+    load: () => import('@/pages/api/admin/faq/index'),
+    method: 'POST',
+    url: '/api/admin/faq',
+    body: { question: VALID_BILINGUAL, answer: VALID_BILINGUAL },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'faq read one',
+    load: () => import('@/pages/api/admin/faq/[id]'),
+    method: 'GET',
+    url: `/api/admin/faq/${UUID}`,
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'faq update',
+    load: () => import('@/pages/api/admin/faq/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/faq/${UUID}`,
+    body: { answer: VALID_BILINGUAL, version: 1 },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'faq publish',
+    load: () => import('@/pages/api/admin/faq/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/faq/${UUID}`,
+    body: { status: 'published', version: 1 },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'faq archive',
+    load: () => import('@/pages/api/admin/faq/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/faq/${UUID}`,
+    body: { status: 'archived', version: 1 },
+    allow: ['admin'],
+  },
+  {
+    name: 'faq delete',
+    load: () => import('@/pages/api/admin/faq/[id]'),
+    method: 'DELETE',
+    url: `/api/admin/faq/${UUID}`,
+    allow: ['admin'],
+  },
+  {
+    name: 'faq reorder',
+    load: () => import('@/pages/api/admin/faq/reorder'),
+    method: 'POST',
+    url: '/api/admin/faq/reorder',
     body: { items: [{ id: UUID, sortOrder: 10 }] },
     allow: ['admin', 'content_creator'],
   },

@@ -6,7 +6,7 @@
 //
 // Pure data and lookups: no request state.
 
-/** Every table a public loader reads, top-level or through an embed (21). */
+/** Every table a public loader reads, top-level or through an embed (22). */
 export const PREVIEW_TABLES = [
   'blog_posts',
   'categories',
@@ -14,6 +14,7 @@ export const PREVIEW_TABLES = [
   'clients',
   'disciplines',
   'entity_seo',
+  'faq_items',
   'media_assets',
   'navigation',
   'page_sections',
@@ -38,7 +39,7 @@ export type PreviewTable = (typeof PREVIEW_TABLES)[number];
  * staff-read) is how 0061's password fence on page_sections is decided.
  */
 export const MIRROR_ONLY_TABLES = ['page_visibility'] as const;
-/** Every table the dataset reads: the loaders' 21 and the mirror's own. */
+/** Every table the dataset reads: the loaders' 22 and the mirror's own. */
 export type DatasetTable = PreviewTable | (typeof MIRROR_ONLY_TABLES)[number];
 
 export function isPreviewTable(table: string): table is PreviewTable {
@@ -57,6 +58,7 @@ export const TABLE_KEYS: Readonly<Record<DatasetTable, readonly string[]>> = {
   clients: ['id'],
   disciplines: ['id'],
   entity_seo: ['id'],
+  faq_items: ['id'],
   media_assets: ['id'],
   navigation: ['id'],
   page_sections: ['id'],

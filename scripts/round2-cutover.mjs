@@ -269,6 +269,9 @@ function keyExpr(table, alias = 'x') {
       return `(select slug::text from public.pages p where p.id = ${a}.page_id) || '/' || ${a}.type`;
     case 'service_cases':
       return `(select slug::text from public.services s where s.id = ${a}.service_id)`;
+    // Admin v2 U7: an FAQ item has no slug; its English question names it.
+    case 'faq_items':
+      return `${a}.question ->> 'en'`;
     default:
       return `${a}.slug::text`;
   }

@@ -1,0 +1,33 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminCollection from '@/components/admin/islands/AdminCollection';
+import Icon from '@/components/admin/ui/Icon.astro';
+import { collectionScreen } from '@/lib/admin/collectionScreen';
+
+export const prerender = false;
+
+// A collection screen (Admin v2 U7): the list, its order and the drawer, one island.
+const screen = collectionScreen(Astro.locals.session, 'faq');
+---
+
+<AdminLayout title={screen.title} subtitle={screen.sub} styles={['collection.css']}>
+  {
+    screen.permissions.write && (
+      <a
+        slot="actions"
+        class="btn"
+        data-variant="primary"
+        href="/admin/faq/new"
+        data-collection-add
+      >
+        <Icon name="plus" size={16} />
+        Add
+      </a>
+    )
+  }
+  <!--
+  `client:load`: this island IS the page. /admin is exempt from the CWV budgets (CLAUDE.md
+  §6) and is gated on bundle size instead.
+-->
+  <AdminCollection client:load collection="faq" open={null} permissions={screen.permissions} />
+</AdminLayout>

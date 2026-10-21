@@ -1,9 +1,9 @@
 ---
 import type { Locale } from '@schemas/primitives';
 import type { FaqSectionContent } from '@schemas/sections';
+import type { FaqEntry } from '@schemas/faq';
 import { pickLocale } from '@/lib/i18n';
 import AccentText from '@/components/ui/AccentText.astro';
-import { CONTACT_FAQ } from '@/lib/content/contactFaq';
 import { FAQ_COPY } from '@/lib/sections/copy/faq';
 
 // FAQ (UI v2 PR9: the design's DARK band), as native <details>/<summary> — no JavaScript.
@@ -13,52 +13,62 @@ import { FAQ_COPY } from '@/lib/sections/copy/faq';
 // crawler, no find-in-page, no reader mode, and a FAQPage JSON-LD block describing
 // content the page does not visibly contain (a structured-data mismatch Google issues
 // manual actions for). Every Q&A here is in the Tier A response, from the same array the
-// JSON-LD is built from (src/lib/content/contactFaq.ts).
+// JSON-LD is built from: the route loads the published questions ONCE (src/lib/data/faq.ts,
+// getFaq) and hands them here as route `data` (withContactData) and to buildFaqSchema.
 //
 // `name="faq"` gives the design's exclusive accordion natively; where it is unsupported
 // the group simply allows several open at once, which is harmless. The mockup animated the
 // panel HEIGHT (layout); here the panel opens at once and its answer fades/slides in —
 // compositor-only, and off under reduced motion.
 //
-// Only the heading is CMS content (FaqSectionContentSchema, over the design's in
-// src/lib/sections/copy/faq.ts); the Q&As stay code-owned.
+// The heading is section content (FaqSectionContentSchema, over the design's in
+// src/lib/sections/copy/faq.ts); the questions are the FAQ collection (Admin v2 U7,
+// public.faq_items, edited under Content, FAQ). With no questions in `data` (none
+// published, a failed read, or a route that does not load the FAQ) the band renders
+// nothing, and the route omits the FAQPage with it (faqShown).
 
 interface Props extends FaqSectionContent {
   locale: Locale;
+  data?: { items?: readonly FaqEntry[] } | undefined;
 }
 
-const { locale, tag, heading, accent } = Astro.props;
+const { locale, tag, heading, accent, data } = Astro.props;
 
 const headingText = heading ? pickLocale(heading, locale) : FAQ_COPY.heading[locale];
 const accentRange = heading ? accent : (accent ?? FAQ_COPY.accent);
-const items = CONTACT_FAQ[locale];
+const items = data?.items ?? [];
 ---
 
-<section class="faq-section" id="faq" aria-labelledby="faq-heading">
-  <div class="section-wrap">
-    <div class="tag tag--sky rv">
-      <span class="dot"></span><span>{tag ? pickLocale(tag, locale) : FAQ_COPY.tag[locale]}</span>
-    </div>
-    <div class="sec-head">
-      <h2 class="rv" id="faq-heading">
-        <AccentText text={headingText} locale={locale} accent={accentRange} />
-      </h2>
-    </div>
+{
+  items.length > 0 && (
+    <section class="faq-section" id="faq" aria-labelledby="faq-heading">
+      <div class="section-wrap">
+        <div class="tag tag--sky rv">
+          <>
+            <span class="dot" />
+            <span>{tag ? pickLocale(tag, locale) : FAQ_COPY.tag[locale]}</span>
+          </>
+        </div>
+        <div class="sec-head">
+          <h2 class="rv" id="faq-heading">
+            <AccentText text={headingText} locale={locale} accent={accentRange} />
+          </h2>
+        </div>
 
-    <div class="faq-list">
-      {
-        items.map((item) => (
-          <details class="faq-item rv" name="faq">
-            <summary class="faq-item__q">
-              <span class="faq-item__t">{item.q}</span>
-              <span class="faq-item__i" aria-hidden="true" />
-            </summary>
-            <div class="faq-item__a">
-              <p>{item.a}</p>
-            </div>
-          </details>
-        ))
-      }
-    </div>
-  </div>
-</section>
+        <div class="faq-list">
+          {items.map((item) => (
+            <details class="faq-item rv" name="faq">
+              <summary class="faq-item__q">
+                <span class="faq-item__t">{item.question}</span>
+                <span class="faq-item__i" aria-hidden="true" />
+              </summary>
+              <div class="faq-item__a">
+                <p>{item.answer}</p>
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}

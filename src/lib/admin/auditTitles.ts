@@ -44,6 +44,7 @@ const TITLE_SOURCES: Readonly<Record<string, TitleSource>> = {
   team_member: { table: 'team_members', column: 'name' },
   statistic: { table: 'statistics', column: 'label' },
   certification: { table: 'certifications', column: 'name' },
+  faq_item: { table: 'faq_items', column: 'question' },
   category: { table: 'categories', column: 'name' },
   nav_item: { table: 'navigation', column: 'label' },
   redirect: { table: 'redirects', column: 'source_path' },

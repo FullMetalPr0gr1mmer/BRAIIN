@@ -319,6 +319,26 @@ describe('the field kit v2 (Admin v2 F5a)', () => {
     expect(html).toContain('<textarea id="f-blurb-ar" lang="ar" dir="rtl"');
   });
 
+  it('multiline bilingual (U7): a five-row textarea per language, both still required', () => {
+    const answer = f({
+      name: 'answer',
+      label: 'Answer',
+      kind: 'bilingual',
+      multiline: true,
+      required: true,
+    });
+    const html = render(answer, { en: 'Answer first.', ar: '' });
+    expect(html).toMatch(/<textarea rows="5" id="f-answer-en" lang="en"/);
+    expect(html).toMatch(/<textarea rows="5" id="f-answer-ar" lang="ar" dir="rtl"/);
+    expect(html).not.toContain('<input type="text" id="f-answer');
+    // Unlike prose, the Arabic may not lag: it is counted as missing.
+    expect(html).toContain('<span class="visually-hidden"> (missing)</span>');
+    expect(html).not.toContain('Arabic not written yet');
+    // Unset, a bilingual pair renders exactly as before (one-line inputs).
+    expect(render(title, { en: 'Logo', ar: 'الشعار' })).not.toContain('<textarea');
+    expectUniqueIds(html);
+  });
+
   it('a counter in the label row for a field with maxLength', () => {
     const short = f({ name: 'metaTitle', label: 'Title tag', kind: 'text', maxLength: 60 });
     const html = render(short, 'Logo design');

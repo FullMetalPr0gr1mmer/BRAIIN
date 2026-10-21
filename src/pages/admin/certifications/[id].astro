@@ -1,16 +1,39 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
+import AdminCollection from '@/components/admin/islands/AdminCollection';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Note from '@/components/admin/ui/Note.astro';
+import { collectionScreen } from '@/lib/admin/collectionScreen';
 
 export const prerender = false;
 
-// Astro resolves the static `new.astro` before this dynamic route, so /admin/certifications/new
-// reaches the create form rather than being read as an id.
-const ui = uiFor('certifications');
-const id = Astro.params.id ?? null;
+// The collection screen with one item's drawer open (Admin v2 U7, D8): the palette, the
+// dashboard, site health and an old link land here. A path that cannot be an item's is a
+// 404 with the list; an item that is not in the list says so in the drawer.
+const screen = collectionScreen(Astro.locals.session, 'certifications', Astro.params.id ?? '');
+if (screen.notFound) Astro.response.status = 404;
 ---
 
-<AdminLayout title={`Edit ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="certifications" id={id} />
+<AdminLayout title={screen.title} subtitle={screen.sub} styles={['collection.css']}>
+  {
+    screen.permissions.write && (
+      <a
+        slot="actions"
+        class="btn"
+        data-variant="primary"
+        href="/admin/certifications/new"
+        data-collection-add
+      >
+        <Icon name="plus" size={16} />
+        Add
+      </a>
+    )
+  }
+  {screen.notFound && <Note tone="warn">That item is not in this list.</Note>}
+  <AdminCollection
+    client:load
+    collection="certifications"
+    open={screen.open}
+    permissions={screen.permissions}
+  />
 </AdminLayout>

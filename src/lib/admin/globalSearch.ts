@@ -11,6 +11,7 @@ import {
   certificationResource,
   clientResource,
   disciplineResource,
+  faqResource,
   mediaResource,
   pageResource,
   portfolioResource,
@@ -82,6 +83,8 @@ export const SEARCH_TARGETS: readonly SearchTarget[] = [
   { config: pageResource, uiSlug: 'pages', group: 'Pages', column: 'title->>en' },
   { config: categoryResource, uiSlug: 'categories', group: 'Categories', column: 'slug' },
   { config: teamResource, uiSlug: 'team', group: 'Team & authors', column: 'name->>en' },
+  // Admin v2 U7: a question opens in the FAQ screen's drawer.
+  { config: faqResource, uiSlug: 'faq', group: 'FAQ', column: 'question->>en' },
   {
     config: certificationResource,
     uiSlug: 'certifications',
@@ -179,6 +182,7 @@ function labelOf(row: Record<string, unknown>): string {
     textOf(row['title']) ??
     textOf(row['name']) ??
     textOf(row['label']) ??
+    textOf(row['question']) ??
     textOf(row['slug']) ??
     textOf(row['source_path']) ??
     textOf(row['storage_path']) ??

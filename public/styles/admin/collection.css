@@ -1,0 +1,68 @@
+/* The collection screens (/admin/faq, /admin/testimonials, /admin/clients, /admin/team,
+   /admin/statistics, /admin/certifications; Admin v2 U7): what only the AdminCollection
+   island renders. The rows are the kit's (.list, .li and their controls, in admin.css);
+   here are the screen's frame, how a row wraps on a phone, the drawer's footer and a design
+   sample's words. Tokens only (scripts/contrast-audit.mjs reads admin.css). */
+
+.coll {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* A row's title and line take the room left; on a narrow screen its badges and buttons
+   go under them instead of pushing the row past the screen's edge (320px, no horizontal
+   scroll). */
+.coll__list .li__main {
+  flex: 1 1 12rem;
+}
+
+@media (max-width: 640px) {
+  .coll__list .li {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}
+
+.coll__drawer {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.coll__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.coll__foot .msg {
+  margin: 0;
+}
+
+/* A design sample's words, read-only until "Make this quote real" is on. */
+.coll__sample {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--ad-line-2);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-surface-2);
+}
+
+.coll__sample blockquote {
+  margin: 0;
+}
+
+.coll__sample p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.coll__sample figcaption {
+  color: var(--ad-dim);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}

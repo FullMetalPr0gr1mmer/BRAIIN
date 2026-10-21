@@ -25,19 +25,18 @@ const TESTIMONIAL_REFUSALS: WriteRefusals = [
   {
     match: /cannot be created as a design sample/i,
     field: 'isPlaceholder',
-    message:
-      'A new quote can’t be a design sample. Untick Placeholder and record the person’s consent.',
+    message: 'A new quote can’t be a design sample. Record the person’s consent instead.',
   },
   {
     match: /cannot be turned into a design sample/i,
     field: 'isPlaceholder',
-    message: 'A real quote can’t be turned back into a design sample. Leave Placeholder unticked.',
+    message: 'A real quote can’t be turned back into a design sample.',
   },
   {
     match: /design sample/i,
     field: 'isPlaceholder',
     message:
-      'Sample quotes can’t be edited; replace the words, set consent and untick Placeholder in one save.',
+      'A sample quote’s words can’t be edited. Switch on Make this quote real, write the real words and record consent, then save once.',
   },
 ];
 
@@ -62,8 +61,11 @@ export const testimonialResource: ResourceConfig = {
   table: 'testimonials',
   entity: 'testimonial',
   writeCap: 'portfolio.write',
+  // The collection row (Admin v2 U7b) reads the quote's opening words and whether consent
+  // is recorded (its "Needs consent" badge); the consent record itself stays out of the list.
   listColumns:
-    'id,slug,author_name,placements,portfolio_id,is_placeholder,status,sort_order,version,updated_at',
+    'id,slug,quote,author_name,placements,portfolio_id,consent_obtained_at,is_placeholder,' +
+    'status,sort_order,version,updated_at',
   columns:
     'id,slug,quote,author_name,author_role,client_id,portfolio_id,avatar_media_id,placements,' +
     'consent_obtained_at,consent_reference,is_placeholder,status,sort_order,version,' +

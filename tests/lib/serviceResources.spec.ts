@@ -380,7 +380,7 @@ describe('the testimonial sample lock (0028) is said in words, not a bare 403', 
     expect(res.status).toBe(422);
     expect(res.body['field']).toBe('isPlaceholder');
     expect(res.body['detail']).toBe(
-      'Sample quotes can’t be edited; replace the words, set consent and untick Placeholder in one save.',
+      'A sample quote’s words can’t be edited. Switch on Make this quote real, write the real words and record consent, then save once.',
     );
   });
 
