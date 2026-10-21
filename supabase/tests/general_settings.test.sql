@@ -178,15 +178,17 @@ select is(
       and coalesce(with_check, qual) = coalesce(qual, with_check)),
   4,
   'each live policy is the tenant predicate first, then settings.general on the live role');
+-- One privilege per call: has_table_privilege(r, t, 'select, insert, update') is true when ANY
+-- of the listed privileges is held, so it could not fail on a missing INSERT or UPDATE.
 select ok(
   has_table_privilege('anon', 'public.site_profile', 'select')
   and not has_table_privilege('anon', 'public.site_profile', 'insert')
   and not has_table_privilege('anon', 'public.site_profile', 'update')
   and not has_table_privilege('anon', 'public.site_settings', 'select')
-  and has_table_privilege('authenticated', 'public.site_profile', 'select, insert, update')
-  and has_table_privilege('authenticated', 'public.site_settings', 'select, insert, update')
-  and has_table_privilege('service_role', 'public.site_profile', 'select, insert, update')
-  and has_table_privilege('service_role', 'public.site_settings', 'select, insert, update'),
+  and (select bool_and(has_table_privilege(r.role::name, t.name, p.priv))
+         from unnest(array['authenticated', 'service_role']) as r(role)
+         cross join unnest(array['public.site_profile', 'public.site_settings']) as t(name)
+         cross join unnest(array['select', 'insert', 'update']) as p(priv)),
   'grants: anon reads site_profile only; staff and the service role read, insert and update both');
 select is(
   (select count(*)::int
