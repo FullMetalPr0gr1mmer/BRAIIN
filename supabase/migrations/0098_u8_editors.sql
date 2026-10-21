@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
--- 0096 — Job applications and the Style-Finder on the kit, and the editors' tabs (Admin v2 U8,
+-- 0098 — Job applications and the Style-Finder on the kit, and the editors' tabs (Admin v2 U8,
 -- the folded U8a + U8b PR): the help guides only. Forward-only and EXPAND only: no table, no
 -- column, no policy, no grant and no function changes; two guides go through H11's catalog
 -- (0069) and nothing else is written. The number is a placeholder: it is assigned at merge
@@ -186,7 +186,7 @@ begin
                     and title = 'Style-Finder'
                     and caps = array['ai.editContent', 'ai.config']
                     and screens = array['/admin/ai-questions', '/admin/ai-styles', '/admin/ai-config']) then
-    raise exception '0096: the catalog must hold style-finder (revision 1, place 115) for the three Style-Finder screens';
+    raise exception '0098: the catalog must hold style-finder (revision 1, place 115) for the three Style-Finder screens';
   end if;
   select string_agg(t.id::text, ', ') into v_bad
     from public.tenants t
@@ -195,7 +195,7 @@ begin
                         and h.title = 'Style-Finder'
                         and h.caps = array['ai.editContent', 'ai.config']);
   if v_bad is not null then
-    raise exception '0096: tenants without the style-finder guide: %', v_bad;
+    raise exception '0098: tenants without the style-finder guide: %', v_bad;
   end if;
 
   -- ---- 2. job-applications: revision 2, the drawer's first step, nothing else moved -------
@@ -205,7 +205,7 @@ begin
                     and caps = array['applications.manage']
                     and screens = array['/admin/applications']
                     and body -> 'en' -> 1 -> 'x' ->> 0 like 'Open an application to read it,%') then
-    raise exception '0096: the catalog must hold job-applications at revision 2 with the drawer''s first step';
+    raise exception '0098: the catalog must hold job-applications at revision 2 with the drawer''s first step';
   end if;
   select string_agg(t.id::text, ', ') into v_bad
     from public.tenants t
@@ -213,7 +213,7 @@ begin
                       where h.tenant_id = t.id and h.slug = 'job-applications'
                         and h.body -> 'en' -> 1 -> 'x' ->> 0 like 'Open an application to read it,%');
   if v_bad is not null then
-    raise exception '0096: tenants without the reworded job-applications guide: %', v_bad;
+    raise exception '0098: tenants without the reworded job-applications guide: %', v_bad;
   end if;
 
   -- ---- 3. no API role gained anything on the help machinery -------------------------------
@@ -225,6 +225,6 @@ begin
      or has_function_privilege('service_role', 'app.seed_help_articles(uuid)', 'execute')
      or has_table_privilege('authenticated', 'app.help_guide_catalog', 'select')
      or has_table_privilege('anon', 'app.help_guide_catalog', 'select') then
-    raise exception '0096: an API role may read the help set, the catalog or seed guides';
+    raise exception '0098: an API role may read the help set, the catalog or seed guides';
   end if;
 end $$;
