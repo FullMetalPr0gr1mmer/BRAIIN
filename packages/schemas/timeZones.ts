@@ -5,7 +5,7 @@
 /**
  * The closed list of the studio's time zones, in the order the select shows them, each
  * labelled by its city. Equal to BOTH database CHECKs, `site_settings_timezone_closed` (0098)
- * and crm_settings' (0035): tests/lib/timeZones.spec.ts parses the migrations and compares.
+ * and crm_settings' (0035): tests/lib/zone.spec.ts parses the migrations and compares.
  */
 export const STUDIO_TIME_ZONES = [
   { value: 'Asia/Riyadh', label: 'Riyadh' },

@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -158,5 +158,33 @@ describe('the small ones', () => {
     expect(zonedInstant('Asia/Riyadh', 2026, 10, 15, 14, 5).toISOString()).toBe(
       '2026-10-15T11:05:00.000Z',
     );
+  });
+});
+
+describe('the files that point at these checks point at files that exist', () => {
+  // A comment that names a spec is how a reader finds the check; one naming a file that does
+  // not exist sends them nowhere (U9 review: timeZones.spec.ts and sharedRows.spec.ts were
+  // named, the checks live here and in tests/authz/sqlHelpers.spec.ts).
+  const u9 = readdirSync(MIGRATIONS).find((f) => f.endsWith('_general_maintenance.sql'))!;
+  const sources = [
+    `supabase/migrations/${u9}`,
+    'packages/schemas/timeZones.ts',
+    'packages/schemas/settings.ts',
+    'packages/schemas/maintenance.ts',
+    'src/lib/admin/studioTimeZone.ts',
+  ];
+
+  it.each(sources)('%s', (source) => {
+    const named = [
+      ...readFileSync(source, 'utf8').matchAll(/\b(?:tests|packages|src)\/[\w./-]+\.tsx?\b/g),
+    ].map((m) => m[0]);
+    for (const path of named) expect(existsSync(path), `${source} names ${path}`).toBe(true);
+  });
+
+  it('the zone list is named where it lives, and its checks where they run', () => {
+    const header = readFileSync(join(MIGRATIONS, u9), 'utf8');
+    expect(header).toContain('STUDIO_TIME_ZONES (packages/schemas/timeZones.ts;');
+    expect(header).toContain('tests/lib/zone.spec.ts');
+    expect(header).toContain('tests/authz/sqlHelpers.spec.ts holds them to one role set');
   });
 });

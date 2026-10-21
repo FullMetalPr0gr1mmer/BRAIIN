@@ -32,14 +32,14 @@
 --      PostgreSQL names a CHECK, so the Worker maps it to the field.
 --   4. site_settings.timezone: the studio's one time zone (immediate, P-3, so it is NOT on
 --      the staged site_profile: deviations.md, U9), a closed list equal to crm_settings' and
---      to STUDIO_TIME_ZONES (packages/schemas/settings.ts; tests/lib/timeZones.spec.ts parses
+--      to STUDIO_TIME_ZONES (packages/schemas/timeZones.ts; tests/lib/zone.spec.ts parses
 --      both CHECKs). Every existing row takes its tenant's crm_settings.timezone; a tenant
 --      with no row keeps the first-save semantics (H7) and the Riyadh default.
 --      crm_settings.timezone is marked deprecated (C14 drops it).
 --   5. app.role_general_settings(r): the one helper for settings.general (Admin, Developer),
 --      held equal to ROLE_CAPS by tests/authz/sqlHelpers.spec.ts. maintenance.manage keeps
 --      U14a's app.role_manages_visibility; the two capabilities share the site_settings row,
---      so tests/authz/sharedRows.spec.ts holds them to one role set.
+--      so tests/authz/sqlHelpers.spec.ts holds them to one role set.
 --   6. RESTRICTIVE live writes on site_profile and site_settings (H10's pattern, 0050): a
 --      token whose profile no longer matches it (demoted, deactivated, locked, moved) writes
 --      nothing through PostgREST: an UPDATE filters to no row, an INSERT is 42501. The
