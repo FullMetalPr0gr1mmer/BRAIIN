@@ -533,11 +533,13 @@ export const REORDER_MISSING =
  *   • an id that is not a row of the caller's tenant (another tenant's, or deleted): 422,
  *     REORDER_MISSING. Its UPDATE would have matched nothing and the reorder answered 200;
  *   • an archived row, for a caller without content.archiveDelete: 403, as an archive is
- *     (assertStatusTransition). The RESTRICTIVE archive gates (`app.is_admin() or status <>
- *     'archived'`) refuse every update that leaves a row archived, a sort order included, to
- *     everyone but an Admin.
- * A row archived or deleted between this read and the writes is not seen; the list's next
- * move repairs what that leaves.
+ *     (assertStatusTransition). The archive gates (0001's services and blog update WITH
+ *     CHECK; the RESTRICTIVE `<table>_archive_admin` policies of 0007, 0018, 0021 and 0028:
+ *     `app.is_admin() or status <> 'archived'`) refuse every update that leaves a row
+ *     archived, a sort order included, to everyone but an Admin.
+ * The ids are compared lowercased (the route's schema lowercases them; Postgres answers a
+ * uuid in lowercase). A row archived or deleted between this read and the writes is not seen:
+ * see reorderRoute for what that can leave.
  */
 async function assertReorderable(
   config: ResourceConfig,
@@ -545,7 +547,7 @@ async function assertReorderable(
   sb: Db,
   items: readonly { id: string }[],
 ): Promise<void> {
-  const ids = [...new Set(items.map((item) => item.id))];
+  const ids = [...new Set(items.map((item) => item.id.toLowerCase()))];
   // `status` only where the entity has a lifecycle: the tables without one have no column.
   const { data, error } = await sb
     .from(config.table)
@@ -554,7 +556,7 @@ async function assertReorderable(
     .in('id', ids);
   if (error) throw new Error(`reorder ${config.table}: ${error.message}`);
   const rows = (data ?? []) as unknown as Row[];
-  const found = new Set(rows.map((row) => String(row['id'])));
+  const found = new Set(rows.map((row) => String(row['id']).toLowerCase()));
   if (ids.some((id) => !found.has(id))) throw new ValidationError(REORDER_MISSING, 'items');
   if (rows.some((row) => row['status'] === 'archived')) {
     assertCap(auth, 'content.archiveDelete');
@@ -567,7 +569,18 @@ export function reorderRoute(config: ResourceConfig): APIRoute {
     cap: config.writeCap,
     input: z.object({
       items: z
-        .array(z.object({ id: z.string().uuid(), sortOrder: z.number().int() }))
+        .array(
+          z.object({
+            // Lowercased (hotfix H12): a uuid is accepted in either case, and Postgres answers
+            // in lowercase, so the pre-check, the updates and the staged path's maps all key on
+            // one spelling. An uppercase id of a real row is that row, not a missing one.
+            id: z
+              .string()
+              .uuid()
+              .transform((id) => id.toLowerCase()),
+            sortOrder: z.number().int(),
+          }),
+        )
         .min(1)
         .max(200),
     }),
@@ -589,9 +602,13 @@ export function reorderRoute(config: ResourceConfig): APIRoute {
           .update({ sort_order: item.sortOrder })
           .eq('tenant_id', auth.tenantId)
           .eq('id', item.id);
-        // A refusal here is a row that changed since assertReorderable read it (archived by
-        // someone else): the database's answer, mapped as every other write's is (a 403 for
-        // a RESTRICTIVE gate), not a 500. The rows before it stay moved.
+        // A refusal here is a row archived by someone else since assertReorderable read it:
+        // the database's answer, mapped as every other write's is (a 403 for an archive
+        // gate), not a 500. The rows before it stay moved. For the screen's two-row swap that
+        // leaves the moved row on the archived row's number, the two sharing it, and no later
+        // swap can part them (a swap only exchanges two numbers already stored); visitors never
+        // see the archived row, and setting either row's Sort order parts them. A row deleted
+        // in the same window matches nothing and is no error: the other row moves, no tie.
         if (error) {
           throw translateWriteError(
             error,

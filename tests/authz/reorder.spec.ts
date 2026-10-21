@@ -167,15 +167,53 @@ describe('POST /api/admin/<resource>/reorder — judged whole before any row is 
   });
 
   it('a row archived after the check is the database’s 403 (mapped), not a 500', async () => {
-    // The residual race (assertReorderable reads, someone archives, the writes run): the
-    // refusal is mapped as every other write's is. The rows before it stay moved, which the
-    // list's next move repairs.
+    // The residual race (assertReorderable reads, someone archives LIVE_2, the writes run):
+    // the refusal is mapped as every other write's is. The row before it stays moved, onto
+    // the number LIVE_2 still holds: the two now share 30, and no swap parts them (a swap
+    // only exchanges two numbers already stored); setting either row's Sort order does.
     db.fail = archiveGate(10);
     const res = await reorder('content_creator', [
       { id: LIVE_1, sortOrder: 30 },
       { id: LIVE_2, sortOrder: 10 },
     ]);
     expect([res.status, res.body['error']]).toEqual([403, 'forbidden']);
-    expect(order()[LIVE_1]).toBe(30);
+    expect([order()[LIVE_1], order()[LIVE_2]]).toEqual([30, 30]);
+  });
+
+  describe('ids in capitals (a uuid is case-blind; Postgres answers in lowercase)', () => {
+    // Rows whose ids hold hex letters, so their capital spelling differs. The route lowercases
+    // the ids once, so the pre-check, the updates and the staged path all key on one spelling;
+    // before, the pre-check compared the ids as sent with the ids Postgres answers, and refused
+    // a real row as missing. (The stand-in compares strings, so a capital id that reached it
+    // would match no row: it also proves the lowercase form is what is written.)
+    const CASED_LIVE = 'abcdef00-3333-4333-8333-3333333333a1';
+    const CASED_SHELVED = 'abcdef00-3333-4333-8333-3333333333a2';
+    const CASED_OTHER = 'abcdef00-3333-4333-8333-3333333333a3';
+    beforeEach(() => {
+      db.tables['services']!.push(
+        service(CASED_LIVE, T, 'draft', 40),
+        service(CASED_SHELVED, T, 'archived', 50),
+        service(CASED_OTHER, T, 'published', 60),
+      );
+    });
+
+    it('an id in capitals is the row it names: moved, not refused as missing', async () => {
+      const res = await reorder('content_creator', [
+        { id: CASED_LIVE.toUpperCase(), sortOrder: 60 },
+        { id: CASED_OTHER.toUpperCase(), sortOrder: 40 },
+      ]);
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body['data']).toEqual({ reordered: 2 });
+      expect([order()[CASED_LIVE], order()[CASED_OTHER]]).toEqual([60, 40]);
+    });
+
+    it('an archived row named in capitals is still the archive rule’s: 403, nothing written', async () => {
+      const res = await reorder('content_creator', [
+        { id: CASED_LIVE, sortOrder: 50 },
+        { id: CASED_SHELVED.toUpperCase(), sortOrder: 40 },
+      ]);
+      expect([res.status, res.body['capability']]).toEqual([403, 'content.archiveDelete']);
+      expect(writes()).toEqual([]);
+    });
   });
 });

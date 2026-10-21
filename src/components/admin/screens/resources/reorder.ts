@@ -2,9 +2,10 @@
 // unit-tested (tests/lib/resourceReorder.spec.ts).
 //
 // A move swaps two rows' `sort_order`, and the reorder route writes both rows. An archived row
-// is written by an Admin only: the RESTRICTIVE archive gates (0001, 0007, 0018, 0021, 0028:
-// `with check (app.is_admin() or status <> 'archived')`) refuse any update that leaves a row
-// archived, a new sort order included. So for a person who may not archive (`canArchive`:
+// is written by an Admin only: the archive gates (0001's services and blog update WITH CHECK;
+// the RESTRICTIVE `<table>_archive_admin` policies of 0007, 0018, 0021 and 0028: `with check
+// (app.is_admin() or status <> 'archived')`) refuse any update that leaves a row archived, a
+// new sort order included. So for a person who may not archive (`canArchive`:
 // content.archiveDelete, Admin only, CLAUDE.md §5) a move passes over archived rows to the
 // nearest row that is not archived, an archived row does not move at all, and a button with no
 // row to swap with is disabled. An archived row has no place on the site, so stepping over it
@@ -34,4 +35,18 @@ export function swapTarget(
     if (movable(rows[at]!, canArchive)) return at;
   }
   return null;
+}
+
+/**
+ * What the list says when the route refuses a move under the archive rule: an item in it was
+ * archived after the list loaded (by someone else, so the buttons did not know). The list is
+ * re-read before it is shown, so the words hold whether the route wrote nothing (its
+ * pre-check) or half the swap (a row archived between that check and the writes).
+ */
+export const MOVE_ARCHIVED =
+  'That move was refused: one of those items is archived, and only an Admin can move an archived item. The list has been reloaded and shows the order as it is stored.';
+
+/** Whether a refused move is the archive rule's: a 403 naming `content.archiveDelete`. */
+export function isArchiveRefusal(error: string, capability: unknown): boolean {
+  return error === 'forbidden' && capability === 'content.archiveDelete';
 }

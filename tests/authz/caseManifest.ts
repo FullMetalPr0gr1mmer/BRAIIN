@@ -197,6 +197,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'releases: services archive (releases on, Admin-only transition)',
   'releases: services create (releases on)',
   'releases: services delete (releases on)',
+  'releases: services edit of an archived row (releases on, Admin only)',
   'releases: services publish (releases on)',
   'releases: services reorder (releases on)',
   'releases: services reorder naming an archived row (releases on, Admin only)',

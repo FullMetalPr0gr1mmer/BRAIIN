@@ -3,13 +3,13 @@ import Chips from '@/components/admin/kit/Chips';
 import DataTable, { type DataColumn } from '@/components/admin/kit/DataTable';
 import Icon from '@/components/admin/kit/Icon';
 import StatusBadge from '@/components/admin/kit/StatusBadge';
-import { adminFetch, describeError } from '@/lib/admin/client';
+import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { PAGE_SIZE } from '@/lib/admin/pager';
 import { formatDate } from '@/lib/admin/relTime';
 import { toast } from '@/lib/admin/toast';
 import { uiFor, type ColumnDef, type SyncActionDef } from '@/lib/admin/uiSchema';
-import { swapTarget } from './reorder';
+import { isArchiveRefusal, MOVE_ARCHIVED, swapTarget } from './reorder';
 
 // The list view for every CRUD resource. Reads its shape from RESOURCE_UI, so adding an
 // entity is a config entry rather than a component.
@@ -151,10 +151,13 @@ export default function ResourceTable({
     setError('');
     try {
       // Swaps the two rows' sort_order, in one round-trip. The route reads both rows first and
-      // refuses the whole request, writing nothing, when one is not a row of this list, or is
-      // archived and the person may not archive. It then writes them one at a time, so a row
-      // archived or deleted by someone else between that read and the writes can still leave
-      // half a swap (two rows on one number); the next move, on the re-read list, repairs it.
+      // refuses the whole request, writing nothing, when one is archived and the person may
+      // not archive, or (with releases off) is not a row of this list; with releases on that
+      // id is skipped and the other row's move staged. With releases off it then writes them
+      // one at a time, so a row archived by someone else between that read and the writes can
+      // still leave half a swap: the moved row on the archived row's number, the two sharing
+      // it until either's Sort order is set (a swap never parts them). A refusal re-reads the
+      // list, below.
       await adminFetch(`/api/admin/${ui.slug}/reorder`, {
         method: 'POST',
         body: {
@@ -166,7 +169,15 @@ export default function ResourceTable({
       });
       await load();
     } catch (err) {
-      setError(describeError(err));
+      // A refused move most often means the list went stale (an item archived or deleted since
+      // it loaded), so re-read it first: its statuses, numbers and buttons are then the stored
+      // ones. load() clears the error as it starts, so the message is set after it.
+      await load();
+      setError(
+        err instanceof AdminApiError && isArchiveRefusal(err.info.error, err.body['capability'])
+          ? MOVE_ARCHIVED
+          : describeError(err),
+      );
     }
   }
 

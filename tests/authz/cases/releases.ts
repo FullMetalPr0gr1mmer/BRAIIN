@@ -218,6 +218,20 @@ export const cases: readonly Case[] = [
     releases: true,
   },
   {
+    // Hotfix H12, the same rule for any edit: a change that leaves an archived row archived
+    // (a title here) is an Admin's to stage, as it is to publish (tests/lib/stagedKernel.spec.ts).
+    // Every table answers the one row, so it is the pending edit the save names and, with its
+    // `status`, the archived live row.
+    name: 'services edit of an archived row (releases on, Admin only)',
+    load: () => import('@/pages/api/admin/services/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/services/${UUID}`,
+    body: { title: VALID_BILINGUAL, version: 1, draftId: UUID, draftVersion: 1 },
+    row: draftRow('service', { title: VALID_BILINGUAL }, { status: 'archived' }),
+    allow: ['admin'],
+    releases: true,
+  },
+  {
     name: 'testimonials publish (releases on)',
     load: () => import('@/pages/api/admin/testimonials/[id]'),
     method: 'PATCH',

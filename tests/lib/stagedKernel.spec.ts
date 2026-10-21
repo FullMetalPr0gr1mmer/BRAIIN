@@ -885,6 +885,83 @@ describe('releases on: reorder judges the whole pending change', () => {
     expect(res.status).toBe(200);
     expect(drafts()[0]!['payload']).toEqual({ status: 'draft', sortOrder: 5 });
   });
+
+  it('an id in capitals is the row it names: its move is staged, not skipped', async () => {
+    // The route lowercases the ids (Postgres answers a uuid in lowercase); a capital id used
+    // to match no live row here, so the move was skipped and the reorder answered 200. The
+    // id holds hex letters, so its capital spelling differs.
+    const CASED = 'abcdef00-3333-4333-8333-3333333333a4';
+    db.tables['services']!.push(
+      service({ id: CASED, slug: 'cased', title: { en: 'Cased' }, sort_order: 40, version: 1 }),
+    );
+    const res = await call(services.REORDER, 'POST', {
+      body: { items: [{ id: CASED.toUpperCase(), sortOrder: 5 }] },
+      role: 'content_creator',
+    });
+    expect([res.status, res.data['staged']]).toEqual([200, 1]);
+    expect(drafts().map((d) => [d['entity_id'], d['payload']])).toEqual([
+      [CASED, { sortOrder: 5 }],
+    ]);
+  });
+});
+
+// Hotfix H12, the same rule for any edit: the apply runs as the publisher, and the archive
+// gates refuse anyone but an Admin an update that leaves a row archived, so an edit of a row
+// that stays archived (a title, a number) is an Admin's to stage, as it is to publish.
+describe('releases on: PATCH of a row that is archived live', () => {
+  const title = (en: string) => ({ title: { en, ar: 'شعار' } });
+
+  it('a Content Creator’s edit that leaves it archived is 403, nothing written', async () => {
+    live(S1)['status'] = 'archived';
+    const res = await call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: { ...title('Logos'), version: 3 },
+      role: 'content_creator',
+    });
+    expect([res.status, res.body['capability']]).toEqual([403, 'content.archiveDelete']);
+    expect(db.calls.filter((c) => c.name === 'write_drafts')).toEqual([]);
+    expect(drafts()).toEqual([]);
+    expect(audits()).toEqual([]);
+  });
+
+  it('an Admin stages the same edit', async () => {
+    live(S1)['status'] = 'archived';
+    const res = await call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: { ...title('Logos'), version: 3 },
+    });
+    expect(res.status).toBe(200);
+    expect(drafts().map((d) => d['payload'])).toEqual([title('Logos')]);
+    expect(liveWrites()).toEqual([]);
+  });
+
+  it('a Content Creator may restore it, and edit it while a restore is pending', async () => {
+    live(S1)['status'] = 'archived';
+    const restore = await call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: { status: 'draft', version: 3 },
+      role: 'content_creator',
+    });
+    expect(restore.status, JSON.stringify(restore.body)).toBe(200);
+    const d = drafts()[0]!;
+    expect(d['payload']).toEqual({ status: 'draft' });
+    const edit = await call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: { ...title('Logos'), version: 3, ...editRef(d) },
+      role: 'content_creator',
+    });
+    expect(edit.status, JSON.stringify(edit.body)).toBe(200);
+    expect(drafts()[0]!['payload']).toEqual({ status: 'draft', ...title('Logos') });
+  });
+
+  it('a row that is not archived live is anyone’s to edit, as before', async () => {
+    const res = await call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: { ...title('Logos'), version: 3 },
+      role: 'content_creator',
+    });
+    expect(res.status).toBe(200);
+  });
 });
 
 describe('releases on: reads lay the pending change over live', () => {

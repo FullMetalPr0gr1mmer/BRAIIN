@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { movable, swapTarget } from '@/components/admin/screens/resources/reorder';
+import {
+  isArchiveRefusal,
+  movable,
+  MOVE_ARCHIVED,
+  swapTarget,
+} from '@/components/admin/screens/resources/reorder';
 import { RESOURCES } from '@/lib/admin/resources';
 import { RESOURCE_UI } from '@/lib/admin/uiSchema';
 
@@ -110,12 +115,48 @@ describe('swapTarget at the edges', () => {
   });
 });
 
+describe('a refused move (the list went stale)', () => {
+  // The buttons know only the list as it loaded: an item archived since by someone else is
+  // still offered, and the route refuses the move (403 content.archiveDelete).
+  it('isArchiveRefusal: a 403 naming content.archiveDelete, and nothing else', () => {
+    expect(isArchiveRefusal('forbidden', 'content.archiveDelete')).toBe(true);
+    expect(isArchiveRefusal('forbidden', 'services.write')).toBe(false);
+    expect(isArchiveRefusal('forbidden', undefined)).toBe(false);
+    expect(isArchiveRefusal('validation', 'content.archiveDelete')).toBe(false);
+    expect(isArchiveRefusal('conflict', undefined)).toBe(false);
+  });
+
+  it('says why, and that the list shown is the stored order, never that a later move repairs it', () => {
+    expect(MOVE_ARCHIVED).toMatch(/archived/);
+    expect(MOVE_ARCHIVED).toMatch(/only an Admin/);
+    expect(MOVE_ARCHIVED).toMatch(/reloaded/);
+    expect(MOVE_ARCHIVED).not.toMatch(/repair/i);
+  });
+});
+
 describe('ResourceTable uses it', () => {
+  const source = () =>
+    readFileSync('src/components/admin/screens/resources/ResourceTable.tsx', 'utf8');
+
   it('for the move and for both buttons’ disabled state', () => {
-    const source = readFileSync('src/components/admin/screens/resources/ResourceTable.tsx', 'utf8');
-    expect(source).toContain('swapTarget(rows, index, direction, canArchive)');
-    expect(source).toContain('disabled={swapTarget(rows, index, -1, canArchive) === null}');
-    expect(source).toContain('disabled={swapTarget(rows, index, 1, canArchive) === null}');
+    expect(source()).toContain('swapTarget(rows, index, direction, canArchive)');
+    expect(source()).toContain('disabled={swapTarget(rows, index, -1, canArchive) === null}');
+    expect(source()).toContain('disabled={swapTarget(rows, index, 1, canArchive) === null}');
+  });
+
+  it('re-reads the list when a move is refused, then says why (load() clears the message)', () => {
+    // The move's own catch: the list is re-read first, so its statuses, numbers and buttons
+    // are the stored ones (an item archived since is then stepped over), and the message is
+    // set after load(), which clears it as it starts.
+    const move = /async function move\([\s\S]*?\n {2}\}\n/.exec(source())?.[0] ?? '';
+    const caught = /\} catch \(err\) \{([\s\S]*)\}\s*\}\s*$/.exec(move)?.[1] ?? '';
+    expect(caught, 'the move has a catch').not.toBe('');
+    const reload = caught.indexOf('await load();');
+    const message = caught.indexOf('setError(');
+    expect(reload, 'the catch re-reads the list').toBeGreaterThanOrEqual(0);
+    expect(message, 'the catch says why').toBeGreaterThan(reload);
+    expect(caught).toContain('isArchiveRefusal(');
+    expect(caught).toContain('MOVE_ARCHIVED');
   });
 
   it('every list that reorders rows with a lifecycle is told whether its person may archive', () => {

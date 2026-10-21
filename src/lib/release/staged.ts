@@ -22,6 +22,7 @@ import {
   type DraftMeta,
 } from './overlay';
 import { registryByTable, type RegistryEntry } from './registry';
+import { keepsArchived } from './caps';
 import { pendingDb } from './layers';
 import {
   draftFields,
@@ -116,6 +117,34 @@ export function stageTransition(auth: AuthContext, config: ResourceConfig, paylo
   if (config.publishFlag === 'visible' && payload['visible'] === true) {
     assertCap(auth, 'content.publish');
   }
+}
+
+/**
+ * Hotfix H12, at stage time: a pending change to a row that is archived live and stays
+ * archived (it sets no status of its own: a sort order, a title) is an Admin's, as publishing
+ * it is (`keepsArchived`, caps.ts). The apply runs as the publisher (apply.ts) and the archive
+ * gates refuse anyone but an Admin an update that leaves a row archived, so a Content
+ * Creator's change would wait in a release only an Admin can publish. Refused like a staged
+ * archive (403, content.archiveDelete), before the writer call, so nothing is written. A
+ * pending status is not this rule's: `stageTransition` judges it (a pending restore lets a
+ * Content Creator change the row; a pending archive refuses them).
+ */
+export function stageKeepsArchived(
+  auth: AuthContext,
+  entry: RegistryEntry,
+  op: DraftOp,
+  stored: Readonly<Payload>,
+  live: Readonly<Row> | null,
+): void {
+  const status = stored['status'];
+  const liveStatus = live?.['status'];
+  const ref = {
+    entityType: entry.entityType,
+    op,
+    patch: typeof status === 'string' ? { status } : null,
+    liveStatus: typeof liveStatus === 'string' ? liveStatus : null,
+  };
+  if (keepsArchived(ref)) assertCap(auth, 'content.archiveDelete');
 }
 
 const target = (config: ResourceConfig) => ({ entity: config.entity, cap: config.writeCap });
@@ -368,6 +397,8 @@ export async function stagedUpdate(
   // The status rule over the whole pending change: re-saving someone else's staged archive or
   // publish is staging it too (RLS refuses an archive draft from a non-Admin as well).
   stageTransition(auth, config, stored);
+  // And a row that stays archived is an Admin's to change (hotfix H12).
+  stageKeepsArchived(auth, entry, op, stored, live);
   let derived = derivePatch(entry, op, stored);
   if (op === 'update') {
     const remaining = dropNoOps(derived.patch, live!, draft?.base);
@@ -542,16 +573,11 @@ export async function stagedReorder(
     let stored = mergePayload(draft?.payload, { sortOrder }, entry);
     stageTransition(auth, config, stored);
     // Hotfix H12: a row that stays archived (live archived, no pending status of its own) is an
-    // Admin's to move. The apply runs as the publisher (apply.ts), and the archive gates refuse
-    // anyone else an update that leaves a row archived, so a Content Creator's staged move
-    // would wait in a release they are told they may publish (canPublish sees no archive) and
-    // whose apply the gate refuses whole. Refused like a staged archive, before the one writer
-    // call, so nothing is written; a pending status was judged by stageTransition just above.
-    // (An id that is neither a live row of this tenant nor a pending create is still skipped,
-    // as R3 built it: the writer call is all or nothing, so no partial order can come of it.)
-    if (!('status' in stored) && live?.['status'] === 'archived') {
-      assertCap(auth, 'content.archiveDelete');
-    }
+    // Admin's to move, as publishing the move is: refused before the one writer call, so
+    // nothing is staged. (An id that is neither a live row of this tenant nor a pending create
+    // is still skipped, as R3 built it, and the other rows are staged: unlike the live path,
+    // which refuses the whole request, a reorder naming a deleted row stages the rest of it.)
+    stageKeepsArchived(auth, entry, op, stored, live);
     let derived = derivePatch(entry, op, stored);
     if (op === 'update') {
       const remaining = dropNoOps(derived.patch, live!, draft?.base);

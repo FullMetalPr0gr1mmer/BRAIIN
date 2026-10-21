@@ -1,15 +1,16 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { MOVE_ARCHIVED } from '@/components/admin/screens/resources/reorder';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 /*
  * Move up and Move down past an archived row (Admin v2 hotfix H12), signed in as
- * content_creator, through the real Worker and this job's local Supabase. The RESTRICTIVE
- * archive gates let only an Admin write a row that stays archived, so before H12 a Content
- * Creator's move next to an archived row always failed, and the route's one-at-a-time updates
- * could leave half of a move behind.
+ * content_creator, through the real Worker and this job's local Supabase. The archive gates
+ * (services: 0001's `services_update` WITH CHECK) let only an Admin write a row that stays
+ * archived, so before H12 a Content Creator's move next to an archived row always failed, and
+ * the route's one-at-a-time updates could leave half of a move behind.
  *
  *   the screen   on /admin/services, three services of this run's own (a live one, an archived
  *                one, a live one): the archived row's buttons are disabled, and the first row's
@@ -19,7 +20,10 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *                swapped numbers with the archived row untouched (its number and version);
  *   the server   the same person's request naming the archived row, sent by hand with a
  *                valid CSRF token and origin, is refused whole (403, content.archiveDelete)
- *                and moves nothing, the live row it also named included.
+ *                and moves nothing, the live row it also named included;
+ *   stale list   the row a move would swap with is archived (by the service role) after the
+ *                list loaded: the move is refused (403), nothing is written, the list is re-read
+ *                (its buttons now step over that row) and the screen says why (MOVE_ARCHIVED).
  *
  * The rows are made by the service role with a random marker in the slug and removed by it
  * afterwards. They stay drafts or archived, so no public page shows them, and their numbers
@@ -184,5 +188,52 @@ test('the server refuses a Content Creator move that names the archived row, wri
     error: 'forbidden',
     capability: 'content.archiveDelete',
   });
+  expect(await stored()).toEqual(before);
+});
+
+test('a move past a row archived since the list loaded: refused, the list re-read, the reason shown', async ({
+  page,
+}) => {
+  // After the first test the list reads second, shelved, first.
+  await page.goto('/admin/services', { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
+  await page.getByLabel('Search Services', { exact: true }).fill(MARK);
+  await expect(page.locator('table.data a.data-link')).toHaveText([
+    ROWS.second.title.en,
+    ROWS.shelved.title.en,
+    ROWS.first.title.en,
+  ]);
+  await expect(moveButton(page, 'second', 'down')).toBeEnabled();
+
+  // Someone else archives the row this move would swap with; the screen does not know.
+  const { error } = await service()
+    .from('services')
+    .update({ status: 'archived' })
+    .eq('id', ids.first!);
+  expect(error).toBeNull();
+  const before = await stored();
+
+  const answered = page.waitForResponse(
+    (r) =>
+      new URL(r.url()).pathname === '/api/admin/services/reorder' &&
+      r.request().method() === 'POST',
+  );
+  const down = moveButton(page, 'second', 'down');
+  await down.focus();
+  await down.press('Enter');
+  const response = await answered;
+  expect(response.status()).toBe(403);
+  expect(await response.json()).toEqual({
+    ok: false,
+    error: 'forbidden',
+    capability: 'content.archiveDelete',
+  });
+
+  // The list is re-read: the row now shows as archived, so nothing below the first one is
+  // left to swap with; and the screen says why the move did not happen.
+  await expect(page.locator('main .msg[data-kind="error"]')).toHaveText(MOVE_ARCHIVED);
+  await expect(moveButton(page, 'second', 'down')).toBeDisabled();
+  await expect(moveButton(page, 'first', 'up')).toBeDisabled();
+  // Nothing was written: the pre-check refused the whole move.
   expect(await stored()).toEqual(before);
 });

@@ -289,7 +289,7 @@ export const ROLE_CAPS: Record<AppRole, ReadonlySet<Cap>> = {
 
 #### Release publish matrix (derived; Admin v2 R2)
 
-Who may publish a pending change once releases are on (docs/admin-v2/releases.md §4.1). No capability is added: an item needs its area's capabilities (a content item its write capability and `content.publish`), plus the remove capability for a removal or an archive (`content.archiveDelete`; for redirects `redirects.manage`), computed by `requiredCaps` in `src/lib/release/caps.ts`.
+Who may publish a pending change once releases are on (docs/admin-v2/releases.md §4.1). No capability is added: an item needs its area's capabilities (a content item its write capability and `content.publish`), plus the remove capability for a removal or an archive (`content.archiveDelete`; for redirects `redirects.manage`), and `content.archiveDelete` for an edit that leaves a row archived (its live status is archived and the change sets none: hotfix H12, `keepsArchived`, since the archive gates let only an Admin write such a row and the apply runs as the publisher), computed by `requiredCaps` in `src/lib/release/caps.ts`.
 
 | Release area | Admin | Content Creator | SEO | Developer |
 |---|:-:|:-:|:-:|:-:|
