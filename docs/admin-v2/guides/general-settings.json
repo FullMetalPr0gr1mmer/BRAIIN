@@ -45,7 +45,7 @@
       },
       {
         "t": "p",
-        "x": "The time zone is the studio's clock: the dates and times on every admin screen, the days of the activity log, the busiest hours in website stats, the uptime days in site health, and the midnight when maintenance ends by itself. Page visibility keeps Riyadh days. The time zone saves on its own, with the retention limits, which can be shortened but never extended."
+        "x": "The time zone is the studio's clock: the dates and times on every admin screen, the days of the activity log, the busiest hours in website stats, the uptime days in site health, and the midnight when maintenance ends by itself. Page visibility keeps Riyadh days. The time zone saves on its own, with how long data is kept: each can be shortened, and never set past its limit."
       },
       {
         "t": "ol",
@@ -90,7 +90,7 @@
       },
       {
         "t": "p",
-        "x": "المنطقة الزمنية هي ساعة الاستوديو: التواريخ والأوقات في كل شاشات الإدارة، وأيام سجل النشاط، وأكثر الساعات نشاطًا في إحصاءات الموقع، وأيام وقت التشغيل في صحة الموقع، ومنتصف الليل الذي ينتهي فيه وضع الصيانة تلقائيًا. أما إخفاء الصفحات فيبقى بأيام الرياض. تُحفظ المنطقة الزمنية وحدها مع حدود الاحتفاظ بالبيانات، التي يمكن تقصيرها ولا يمكن تمديدها."
+        "x": "المنطقة الزمنية هي ساعة الاستوديو: التواريخ والأوقات في كل شاشات الإدارة، وأيام سجل النشاط، وأكثر الساعات نشاطًا في إحصاءات الموقع، وأيام وقت التشغيل في صحة الموقع، ومنتصف الليل الذي ينتهي فيه وضع الصيانة تلقائيًا. أما إخفاء الصفحات فيبقى بأيام الرياض. تُحفظ المنطقة الزمنية وحدها مع مدد الاحتفاظ بالبيانات: يمكن تقصير كل منها، ولا يمكن ضبطها أطول من حدها الأقصى."
       },
       {
         "t": "ol",

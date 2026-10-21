@@ -1911,11 +1911,29 @@ describe('U9’s guides say what General settings and maintenance do (Admin v2 U
       "LOCKED_NOTE = 'Only an admin can open or close job applications.'",
     );
     expect(en).toContain('Only an admin can open or close job applications.');
-    // Retention: shortened, never extended (the field's own hint).
+    // Retention: any value up to each limit may be saved, so a horizon can be lengthened
+    // too (spam from its default 30 days to 90), never past its limit (the field's hint).
+    const { RETENTION_LIMITS, RetentionSchema } = await import('@schemas/settings');
+    const { siteSettingsSingleton: settingsRow } =
+      await import('@/lib/admin/singletons/siteSettings');
+    const defaults = settingsRow.defaults['retention'] as Record<
+      keyof typeof RETENTION_LIMITS,
+      number
+    >;
+    for (const key of Object.keys(RETENTION_LIMITS) as (keyof typeof RETENTION_LIMITS)[]) {
+      const { max } = RETENTION_LIMITS[key];
+      expect(RetentionSchema.safeParse({ [key]: max }).success, key).toBe(true);
+      expect(RetentionSchema.safeParse({ [key]: max + 1 }).success, key).toBe(false);
+      expect(defaults[key], key).toBeLessThanOrEqual(max);
+    }
+    expect(defaults.spam_days).toBeLessThan(RETENTION_LIMITS.spam_days.max);
     expect(source('src/lib/admin/ui/settings.ts')).toContain(
-      'Each can be shortened, never extended',
+      'Each can be shortened, never extended past its limit',
     );
-    expect(en).toContain('can be shortened but never extended');
+    expect(en).toContain('each can be shortened, and never set past its limit.');
+    expect(en).not.toContain('never extended');
+    expect(ar).toContain('ولا يمكن ضبطها أطول من حدها الأقصى');
+    expect(ar).not.toContain('ولا يمكن تمديدها');
     // What the zone moves, and what keeps Riyadh days.
     expect(en).toContain('the busiest hours in website stats, the uptime days in site health');
     expect(en).toContain('Page visibility keeps Riyadh days.');
