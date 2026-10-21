@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { alterSignature } from './tamper';
 
 // Maintenance v2 (Admin v2 U9b) end to end, through the real Worker, middleware, KV and
 // session check: the README's TDD acceptance row "503 for visitors, signed-in admin passes,
@@ -105,8 +106,9 @@ test('the signed-in admin sees the site, private; an altered token does not', as
   expect(res.headers()['x-robots-tag']).toBe('noindex');
   expect(res.headers()['cache-tag']).toBeUndefined();
 
-  // The session cookie, joined from its chunks, with one character of the access token's
-  // signature changed: the local pre-filter passes it, the auth server refuses it.
+  // The session cookie, joined from its chunks, with the access token's signature changed
+  // (its bytes, not only its text: tamper.ts): the local pre-filter passes it, the auth
+  // server refuses it.
   const cookies = await page.context().cookies();
   const parts = cookies
     .filter((c) => c.name === SESSION || c.name.startsWith(`${SESSION}.`))
@@ -117,8 +119,7 @@ test('the signed-in admin sees the site, private; an altered token does not', as
     ? Buffer.from(value.slice(7), 'base64url').toString('utf8')
     : decodeURIComponent(value);
   const session = JSON.parse(json) as { access_token: string };
-  const last = session.access_token.slice(-1);
-  session.access_token = session.access_token.slice(0, -1) + (last === 'A' ? 'B' : 'A');
+  session.access_token = alterSignature(session.access_token);
   const forged = `base64-${Buffer.from(JSON.stringify(session), 'utf8').toString('base64url')}`;
   const tampered = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   await tampered.addCookies([{ ...parts[0]!, name: SESSION, value: forged }]);
