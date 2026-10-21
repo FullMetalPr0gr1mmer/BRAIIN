@@ -22,13 +22,14 @@
 --   • search_summary: SEO sees the searches, Content Creator none (search_queries' RLS),
 --     the locale filter, bounds.
 --   • content_health: the checklist's counts, the same for every staff role, nothing for
---     another tenant.
+--     another tenant, and no live placeholder for a Sales claim (the attention list under it
+--     answers CMS staff only, H13's 0100_attention_staff.sql).
 --   • who may execute or read what, for every API role.
 --
 -- Fixtures are two tenants of this file's own; every count is scoped to them.
 
 begin;
-select plan(80);
+select plan(81);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -434,6 +435,11 @@ select is((public.content_health('52000000-0000-0000-0000-000000000001') ->> 'pu
 select _as('admin', '52000000-0000-0000-0000-0000000000ff');
 select is(public.content_health('52000000-0000-0000-0000-000000000001'), null,
   'another tenant''s admin naming this tenant gets nothing');
+select _as('sales', '52000000-0000-0000-0000-000000000001');
+select is((public.content_health('52000000-0000-0000-0000-000000000001') ->> 'placeholders_live')
+          || '/' || (select count(*) from public.portfolio where slug = 'u2-sample'),
+  '0/1',
+  'a sales claim of the tenant reads the published sample project itself, but counts no live placeholder: the attention list is for CMS staff (H13)');
 
 -- ── 9. who executes and reads what ────────────────────────────────────────────────
 reset role;
