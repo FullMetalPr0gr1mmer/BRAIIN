@@ -6,8 +6,12 @@
 -- exists for are asserted here:
 --
 --   entity_seo        Admin + SEO write · Content Creator read-only
---   site_integrations Admin + SEO        (NOT Developer, who owns general settings)
 --   ai_config         Admin ALONE        (NOT Content Creator, who authors questions)
+--
+-- site_integrations (Admin + SEO) moved to supabase/tests/integrations.test.sql with Admin
+-- v2 U11, which narrowed its read to Admin + SEO behind a live check (app.live_role()). The
+-- claims this file injects carry no `sub`, so the live check reads nobody here: proving it
+-- needs real profiles, which that file has.
 --
 -- ── A note on how a denied write actually fails ──────────────────────────────────
 -- It is tempting to assert `throws_ok(..., '42501')` for every refused write. That is
@@ -25,7 +29,7 @@
 -- Run with `supabase test db`.
 
 begin;
-select plan(30);
+select plan(25);
 
 -- Setup runs as the migration role, where RLS is bypassed.
 --
@@ -63,7 +67,6 @@ insert into public.entity_seo (id, tenant_id, entity_type, entity_id, meta_title
     '{"en":"Unreleased","ar":"غير منشور"}'::jsonb
   );
 
-insert into public.site_integrations (tenant_id) values (app.default_tenant_id());
 insert into public.ai_config (tenant_id) values (app.default_tenant_id());
 -- A fixed id, and every navigation assertion below is scoped to it: seed.sql authors the
 -- real header and footer menus (UI v2), so a whole-table count would measure the seed.
@@ -91,10 +94,6 @@ create function _tid() returns text language sql as $$ select app.default_tenant
 -- Rows actually affected by a statement — the honest way to assert a filtered write.
 create function _updated_entity_seo() returns int language sql as $$
   with u as (update public.entity_seo set robots = 'noindex' returning 1) select count(*)::int from u
-$$;
-create function _updated_integrations() returns int language sql as $$
-  with u as (update public.site_integrations set ga4 = '{"id":"G-X"}'::jsonb returning 1)
-  select count(*)::int from u
 $$;
 create function _updated_navigation() returns int language sql as $$
   with u as (update public.navigation set href = '/x'
@@ -140,18 +139,6 @@ select is(_updated_entity_seo(), 2, 'admin can write entity_seo');
 
 select _claims('admin', '00000000-0000-0000-0000-0000000000ff');
 select is((select count(*) from public.entity_seo)::int, 0, 'admin of another tenant sees no entity_seo');
-
--- ---- site_integrations: Admin + SEO write, Developer refused ----------------
-select _claims('developer', _tid());
-select is((select count(*) from public.site_integrations)::int, 1, 'developer READS integrations (staff read)');
-select is(_updated_integrations(), 0, 'developer cannot write integrations — that is SEO''s capability');
-
-select _claims('seo', _tid());
-select is(_updated_integrations(), 1, 'seo can write integrations');
-
-select _claims('content_creator', _tid());
-select is((select count(*) from public.site_integrations)::int, 1, 'content_creator reads integrations (staff read)');
-select is(_updated_integrations(), 0, 'content_creator cannot write integrations');
 
 -- ---- ai_config: Admin ALONE -------------------------------------------------
 select _claims('content_creator', _tid());
