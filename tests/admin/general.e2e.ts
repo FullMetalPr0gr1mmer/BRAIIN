@@ -88,9 +88,13 @@ test.describe('as admin', () => {
 
   test('the screen saves the identity and the zone; zero axe violations', async ({ page }) => {
     await page.goto('/admin/settings', { waitUntil: 'networkidle' });
-    await expect(page.getByRole('heading', { level: 2, name: 'Site' })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 2, name: 'Contact' })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 2, name: 'Social accounts' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Site', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 2, name: 'Contact', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 2, name: 'Social accounts', exact: true }),
+    ).toBeVisible();
     await expect(page.getByText('The logo is part of the site build')).toBeVisible();
     const axe = await new AxeBuilder({ page }).withTags(WCAG).analyze();
     expect(axe.violations.map((v) => v.id)).toEqual([]);

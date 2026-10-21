@@ -389,6 +389,43 @@ describe('the General screen’s words', () => {
   });
 });
 
+describe('the General e2e’s heading lookups each name one card (Playwright’s strict mode)', () => {
+  // getByRole('heading', { name }) matches a case-insensitive SUBSTRING unless `exact`, and a
+  // locator that matches two elements fails every assertion in strict mode. 'Site' also
+  // matched the page's own "Site facts" card, so the first General test failed on every run
+  // and serial mode skipped the rest, the maintenance project with it.
+  const pageCard = readFileSync('src/pages/admin/settings.astro', 'utf8').match(
+    /<Card title="([^"]+)"/g,
+  );
+  const titles = [
+    ...(pageCard ?? []).map((t) => t.replace(/^<Card title="|"$/g, '')),
+    ...[profileUi, settingsUi].flatMap((ui) => [
+      ui.title,
+      ...(ui.groups ?? []).map((g) => g.title),
+    ]),
+    'Job applications',
+  ];
+  const lookups = [
+    ...readFileSync('tests/admin/general.e2e.ts', 'utf8').matchAll(
+      /getByRole\('heading', \{ level: 2, name: '([^']+)'(, exact: true)? \}\)/g,
+    ),
+  ].map((m) => ({ name: m[1] ?? '', exact: Boolean(m[2]) }));
+
+  it('the page’s own cards are among the candidates', () => {
+    expect(titles).toContain('Site facts');
+    expect(lookups.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(['Site', 'Contact', 'Social accounts'])('“%s” matches exactly one heading', (name) => {
+    const lookup = lookups.find((l) => l.name === name);
+    expect(lookup, name).toBeDefined();
+    const matches = titles.filter((t) =>
+      lookup!.exact ? t === name : t.toLowerCase().includes(name.toLowerCase()),
+    );
+    expect(matches, name).toEqual([name]);
+  });
+});
+
 describe('the maintenance screen’s words', () => {
   it('Turn on says who still sees the site, and when that is nobody', () => {
     expect(turnOnText(true, 0)).toContain('Your signed in team still sees the site.');
