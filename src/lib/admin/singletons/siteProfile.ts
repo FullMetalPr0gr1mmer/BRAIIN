@@ -40,7 +40,7 @@ const SITE_PROFILE_KEYS = {
   foundedYear: 'founded_year',
   socials: 'socials',
   acceptingApplications: 'accepting_applications',
-  // Admin v2 U9 (0099)
+  // Admin v2 U9 (0102)
   tagline: 'tagline',
   phoneE164: 'phone_e164',
   phoneDisplay: 'phone_display',
@@ -53,7 +53,7 @@ const SITE_PROFILE_KEYS = {
   footerShowSocial: 'footer_show_social',
 };
 
-/** What a refused icon says (0099's trigger, and its foreign key for another tenant's id). */
+/** What a refused icon says (0102's trigger, and its foreign key for another tenant's id). */
 export const ICON_REFUSED =
   'Choose a square picture from the media library, at least 512 pixels wide.';
 const DISPLAY_NEEDS_NUMBER = 'Add the number this displays, or clear it.';
@@ -96,7 +96,7 @@ export const siteProfileSingleton: SingletonConfig = {
     founded_year: F.foundedYear,
     socials: F.socials,
     accepting_applications: false,
-    // The column defaults (0099): today's footer, no tagline, phone, map or icons.
+    // The column defaults (0102): today's footer, no tagline, phone, map or icons.
     tagline: null,
     phone_e164: null,
     phone_display: null,

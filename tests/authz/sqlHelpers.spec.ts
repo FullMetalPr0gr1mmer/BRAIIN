@@ -60,7 +60,7 @@ describe('SQL capability helpers equal ROLE_CAPS', () => {
   }
 });
 
-// Two capabilities share one row (Admin v2 U9, 0099): site_settings holds the general
+// Two capabilities share one row (Admin v2 U9, 0102): site_settings holds the general
 // settings (settings.general) and the maintenance switch (maintenance.manage), and one
 // RESTRICTIVE live policy, app.role_general_settings, gates every write to it. RLS is
 // row-level, so the two capabilities must keep one role set while they share the row (P-9);

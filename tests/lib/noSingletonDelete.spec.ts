@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// Migration 0099 (Admin v2 U9) states the grants of the two singletons, `site_profile` and
+// Migration 0102 (Admin v2 U9) states the grants of the two singletons, `site_profile` and
 // `site_settings`, and so withdraws what the bootstrap ALL had left: DELETE, TRUNCATE,
 // REFERENCES and TRIGGER for `authenticated` and `service_role` (site_settings' FOR ALL policy
 // had admitted an Admin or Developer DELETE). A privilege removal needs a gate, not a grep
@@ -47,7 +47,7 @@ function singletonDeletes(text: string): number[] {
   return [...found].sort((a, b) => a - b);
 }
 
-describe('no code deletes a site_profile or site_settings row (0099 withdrew DELETE)', () => {
+describe('no code deletes a site_profile or site_settings row (0102 withdrew DELETE)', () => {
   it('scans the Worker, the scripts and the Edge Functions', () => {
     expect(files('src').length).toBeGreaterThan(100);
     expect(files('scripts').length).toBeGreaterThan(5);

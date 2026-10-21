@@ -13,7 +13,7 @@ import { contentClient } from './source';
 // database is unconfigured/unreachable or the row is missing/invalid. Every one of those
 // is logged, so a site running on the fallback is diagnosable rather than just "fine".
 //
-// Admin v2 U9 (0099) adds the tagline, the phone, the map link, the footer settings and the
+// Admin v2 U9 (0102) adds the tagline, the phone, the map link, the footer settings and the
 // icons' ids. Each new field parses on its own (SiteProfileRowSchema), so a bad value costs
 // that field, never the brand. The icons themselves are a SEPARATE read (getSiteIcons), never
 // an embed in this one: a media read that failed here would drop the whole identity to the
@@ -81,7 +81,7 @@ export interface SiteIcons {
 
 const NO_ICONS: SiteIcons = { favicon: null, appIcon: null };
 
-/** The smallest side an icon may have (0099's trigger says the same). */
+/** The smallest side an icon may have (0102's trigger says the same). */
 export const ICON_MIN_PX = 512;
 
 /** An icon is an UPLOADED image (`storage`), square, at least 512 px; anything else is none. */
@@ -94,7 +94,7 @@ function iconOf(row: unknown): ImageRef | null {
 }
 
 /**
- * The icons the identity names, in ONE read of `media_assets` (anon reads them through 0099's
+ * The icons the identity names, in ONE read of `media_assets` (anon reads them through 0102's
  * branch of media_assets_public_read). Never throws: no icon set, an error, a row that is not
  * an uploaded square image of at least 512 px, each is "no icon", so nothing is linked.
  */

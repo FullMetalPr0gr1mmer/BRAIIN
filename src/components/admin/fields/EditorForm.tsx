@@ -300,27 +300,28 @@ export default function EditorForm({
   const current = tabs?.find((t) => t.id === tab);
   const flagged = tabs ? tabsWithErrors(errors.byId, tabs, fields) : new Set<string>();
 
-  let fieldBlock: ReactNode = tabs ? (
-    fieldTabs.map((t) => {
-      const ids = tabIds(tabBase, t.id);
-      const own = new Set(t.fields);
-      return (
-        <div
-          key={t.id}
-          role="tabpanel"
-          id={ids.panel}
-          aria-labelledby={ids.tab}
-          tabIndex={0}
-          data-editor-tab={t.id}
-          hidden={t.id !== tab}
-        >
-          {fieldsBlock(fields.filter((f) => own.has(f.name)), inTab(own))}
-        </div>
-      );
-    })
-  ) : (
-    fieldsBlock(fields, groups ?? [])
-  );
+  let fieldBlock: ReactNode = tabs
+    ? fieldTabs.map((t) => {
+        const ids = tabIds(tabBase, t.id);
+        const own = new Set(t.fields);
+        return (
+          <div
+            key={t.id}
+            role="tabpanel"
+            id={ids.panel}
+            aria-labelledby={ids.tab}
+            tabIndex={0}
+            data-editor-tab={t.id}
+            hidden={t.id !== tab}
+          >
+            {fieldsBlock(
+              fields.filter((f) => own.has(f.name)),
+              inTab(own),
+            )}
+          </div>
+        );
+      })
+    : fieldsBlock(fields, groups ?? []);
   if (readOnly) {
     // A disabled fieldset turns every control in it off (a rich text is told separately:
     // a contenteditable ignores it).

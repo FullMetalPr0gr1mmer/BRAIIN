@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
--- 0099 — General settings v2 and maintenance v2 (Admin v2 U9, the folded U9a + U9b PR).
+-- 0102 — General settings v2 and maintenance v2 (Admin v2 U9, the folded U9a + U9b PR).
 -- Forward-only and EXPAND only: ten nullable or defaulted columns, their CHECKs, two composite
 -- foreign keys and two indexes on site_profile, one invoker trigger, one closed-list column on
 -- site_settings (copied from crm_settings, the only data written), one capability helper, four
@@ -180,15 +180,15 @@ create index if not exists site_profile_app_icon_idx
   on public.site_profile (app_icon_media_id) where app_icon_media_id is not null;
 
 comment on column public.site_profile.tagline is
-  'The site''s tagline, {en, ar} (both or none), up to 120 characters each (0099). Organization JSON-LD slogan, manifest description.';
+  'The site''s tagline, {en, ar} (both or none), up to 120 characters each (0102). Organization JSON-LD slogan, manifest description.';
 comment on column public.site_profile.map_url is
-  'A Google Maps or Apple Maps link (https; hosts checked by the Worker), Organization JSON-LD hasMap (0099).';
+  'A Google Maps or Apple Maps link (https; hosts checked by the Worker), Organization JSON-LD hasMap (0102).';
 comment on column public.site_profile.favicon_media_id is
-  'The favicon: a square storage image of at least 512 px of the same tenant (0099, app.tg_site_profile_icons). Linked in the head only when set.';
+  'The favicon: a square storage image of at least 512 px of the same tenant (0102, app.tg_site_profile_icons). Linked in the head only when set.';
 comment on column public.site_profile.app_icon_media_id is
-  'The home-screen icon: a square storage image of at least 512 px of the same tenant (0099). apple-touch-icon and the manifest icons, only when set.';
+  'The home-screen icon: a square storage image of at least 512 px of the same tenant (0102). apple-touch-icon and the manifest icons, only when set.';
 comment on column public.site_profile.footer_copyright is
-  'The footer''s copyright template, {en, ar}; only {year}, {brand} and {place} may be braced. Null = the built-in line. Rendered by E6 (0099).';
+  'The footer''s copyright template, {en, ar}; only {year}, {brand} and {place} may be braced. Null = the built-in line. Rendered by E6 (0102).';
 
 -- ═══ 3. The icon shape: square, storage, at least 512 px ══════════════════════════════════
 -- BEFORE triggers on site_profile fire by name: site_profile__release_guard (0066) <
@@ -256,7 +256,7 @@ update public.site_settings s
  where c.tenant_id = s.tenant_id
    and s.timezone is distinct from c.timezone;
 comment on column public.site_settings.timezone is
-  'The studio''s time zone (Admin v2 U9, 0099): the admin''s clock, the activity log''s days and maintenance''s "Back on" midnight. Immediate, never staged. A closed list equal to STUDIO_TIME_ZONES.';
+  'The studio''s time zone (Admin v2 U9, 0102): the admin''s clock, the activity log''s days and maintenance''s "Back on" midnight. Immediate, never staged. A closed list equal to STUDIO_TIME_ZONES.';
 comment on column public.crm_settings.timezone is
   'Deprecated (Admin v2 U9): site_settings.timezone is the one source. Dropped in C14.';
 
@@ -359,7 +359,7 @@ create policy media_assets_public_read on public.media_assets for select using (
                 where e.og_media_id = media_assets.id)
     or exists (select 1 from public.seo_defaults sd
                 where sd.default_og_media_id = media_assets.id)
-    -- 0099: the site's icons, read under site_profile's own RLS (the tenant fence).
+    -- 0102: the site's icons, read under site_profile's own RLS (the tenant fence).
     or exists (select 1 from public.site_profile sp
                 where sp.tenant_id = media_assets.tenant_id
                   and (sp.favicon_media_id = media_assets.id
@@ -433,7 +433,7 @@ as $$
   select 'seo_defaults', sd.tenant_id, 'site default', false
     from public.seo_defaults sd
    where sd.tenant_id = app.effective_tenant_id() and sd.default_og_media_id = p_media_id
-  -- ---- v6 (0099): the site's icons, labelled by which icon ----
+  -- ---- v6 (0102): the site's icons, labelled by which icon ----
   union all
   select 'site_profile', sp.tenant_id, 'favicon', false
     from public.site_profile sp
@@ -860,7 +860,7 @@ begin
                   where c.conrelid = 'public.media_assets'::regclass
                     and c.conname = 'media_assets_tenant_id_id' and c.contype = 'u'
                     and pg_get_constraintdef(c.oid) = 'UNIQUE (tenant_id, id)') then
-    raise exception '0099: media_assets_tenant_id_id must be UNIQUE (tenant_id, id)';
+    raise exception '0102: media_assets_tenant_id_id must be UNIQUE (tenant_id, id)';
   end if;
 
   -- ---- 2. The icon keys: RESTRICT, to that unique key ------------------------------------
@@ -874,12 +874,12 @@ begin
                                            and conrelid = 'public.media_assets'::regclass)
                       and pg_get_constraintdef(c.oid)
                           ~ format('^FOREIGN KEY \(tenant_id, %s_media_id\) REFERENCES (public\.)?media_assets\(tenant_id, id\) ON DELETE RESTRICT$', t)) then
-      raise exception '0099: site_profile_%_fk must be (tenant_id, %_media_id) -> media_assets (tenant_id, id) ON DELETE RESTRICT', t, t;
+      raise exception '0102: site_profile_%_fk must be (tenant_id, %_media_id) -> media_assets (tenant_id, id) ON DELETE RESTRICT', t, t;
     end if;
   end loop;
   if to_regclass('public.site_profile_favicon_idx') is null
      or to_regclass('public.site_profile_app_icon_idx') is null then
-    raise exception '0099: the icon indexes are missing';
+    raise exception '0102: the icon indexes are missing';
   end if;
 
   -- ---- 3. The CHECKs, by name ------------------------------------------------------------
@@ -892,7 +892,7 @@ begin
                       where c.conrelid = 'public.site_profile'::regclass
                         and c.conname = n and c.contype = 'c' and c.convalidated);
   if v_bad is not null then
-    raise exception '0099: site_profile lacks the validated CHECKs %', v_bad;
+    raise exception '0102: site_profile lacks the validated CHECKs %', v_bad;
   end if;
   if (select pg_get_expr(adbin, adrelid) from pg_attrdef d
         join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
@@ -900,7 +900,7 @@ begin
      is distinct from '''light''::text'
      or (select attnotnull from pg_attribute
           where attrelid = 'public.site_profile'::regclass and attname = 'footer_show_social') is not true then
-    raise exception '0099: the footer settings must default to today''s footer, not null';
+    raise exception '0102: the footer settings must default to today''s footer, not null';
   end if;
 
   -- ---- 4. The triggers on site_profile, by function --------------------------------------
@@ -917,12 +917,12 @@ begin
      'site_profile_updated_at:app.tg_set_updated_at, '
      'site_profile_updater:app.tg_set_updater, '
      'site_profile_version:app.tg_bump_version' then
-    raise exception '0099: site_profile''s triggers are not the expected set: %', v_got;
+    raise exception '0102: site_profile''s triggers are not the expected set: %', v_got;
   end if;
   if exists (select 1 from pg_proc
               where oid = 'app.tg_site_profile_icons()'::regprocedure
                 and (prosecdef or proconfig is distinct from array['search_path=""'])) then
-    raise exception '0099: app.tg_site_profile_icons must be INVOKER with search_path ''''';
+    raise exception '0102: app.tg_site_profile_icons must be INVOKER with search_path ''''';
   end if;
 
   -- ---- 5. The time zone: the closed list equals crm_settings', every row copied ------------
@@ -937,11 +937,11 @@ begin
                             and pg_get_constraintdef(c.oid) ~ 'timezone'),
                         '''([^'']+)''', 'g') with ordinality as x(m, ord);
   if v_site is null or v_site is distinct from v_crm or cardinality(v_site) <> 10 then
-    raise exception '0099: site_settings_timezone_closed (%) must equal crm_settings'' list (%)', v_site, v_crm;
+    raise exception '0102: site_settings_timezone_closed (%) must equal crm_settings'' list (%)', v_site, v_crm;
   end if;
   if exists (select 1 from public.site_settings s join public.crm_settings c using (tenant_id)
               where s.timezone is distinct from c.timezone) then
-    raise exception '0099: a site_settings row''s timezone differs from its tenant''s crm_settings.timezone';
+    raise exception '0102: a site_settings row''s timezone differs from its tenant''s crm_settings.timezone';
   end if;
 
   -- ---- 6. The helper, and the reader ------------------------------------------------------
@@ -952,7 +952,7 @@ begin
      or has_function_privilege('anon', 'app.role_general_settings(text)', 'execute')
      or has_function_privilege('public', 'app.role_general_settings(text)', 'execute')
      or not has_function_privilege('authenticated', 'app.role_general_settings(text)', 'execute') then
-    raise exception '0099: app.role_general_settings must be an immutable Admin + Developer check, executable by staff and the service role only';
+    raise exception '0102: app.role_general_settings must be an immutable Admin + Developer check, executable by staff and the service role only';
   end if;
   if not exists (select 1 from pg_proc
                   where oid = 'app.studio_time_zone(uuid)'::regprocedure
@@ -961,7 +961,7 @@ begin
      or has_function_privilege('public', 'app.studio_time_zone(uuid)', 'execute')
      or not has_function_privilege('authenticated', 'app.studio_time_zone(uuid)', 'execute')
      or not has_function_privilege('service_role', 'app.studio_time_zone(uuid)', 'execute') then
-    raise exception '0099: app.studio_time_zone must be DEFINER with search_path '''', executable by staff and the service role only';
+    raise exception '0102: app.studio_time_zone must be DEFINER with search_path '''', executable by staff and the service role only';
   end if;
   if not exists (select 1 from pg_proc
                   where oid = 'public.studio_time_zone()'::regprocedure
@@ -971,7 +971,7 @@ begin
      or has_function_privilege('public', 'public.studio_time_zone()', 'execute')
      or has_function_privilege('service_role', 'public.studio_time_zone()', 'execute')
      or not has_function_privilege('authenticated', 'public.studio_time_zone()', 'execute') then
-    raise exception '0099: public.studio_time_zone() must be INVOKER with search_path '''', executable by authenticated only';
+    raise exception '0102: public.studio_time_zone() must be INVOKER with search_path '''', executable by authenticated only';
   end if;
 
   -- ---- 7. The exact policy sets, tenant first in each ---------------------------------------
@@ -984,7 +984,7 @@ begin
      'site_profile_live_update UPDATE RESTRICTIVE {authenticated}, '
      'site_profile_read SELECT PERMISSIVE {public}, '
      'site_profile_update UPDATE PERMISSIVE {public}' then
-    raise exception '0099: site_profile''s policies are not the expected set: %', v_got;
+    raise exception '0102: site_profile''s policies are not the expected set: %', v_got;
   end if;
   select string_agg(format('%s %s %s %s', policyname, cmd, permissive, roles), ', ' order by policyname)
     into v_got
@@ -994,7 +994,7 @@ begin
      'site_settings_live_update UPDATE RESTRICTIVE {authenticated}, '
      'site_settings_staff_read SELECT PERMISSIVE {public}, '
      'site_settings_write ALL PERMISSIVE {public}' then
-    raise exception '0099: site_settings''s policies are not the expected set: %', v_got;
+    raise exception '0102: site_settings''s policies are not the expected set: %', v_got;
   end if;
   select string_agg(format('%s.%s', tablename, policyname), ', ') into v_bad
     from pg_policies
@@ -1005,14 +1005,14 @@ begin
      and not (coalesce(with_check, '^') ~ '^\(?\(?tenant_id = (app\.)?effective_tenant_id\(\)\)'
               or with_check is null);
   if v_bad is not null then
-    raise exception '0099: policies without the tenant predicate first: %', v_bad;
+    raise exception '0102: policies without the tenant predicate first: %', v_bad;
   end if;
   if (select count(*) from pg_policies
        where schemaname = 'public' and tablename in ('site_profile', 'site_settings')
          and permissive = 'RESTRICTIVE'
          and coalesce(qual, with_check) ~ '^\(\(tenant_id = (app\.)?effective_tenant_id\(\)\) AND (app\.)?role_general_settings\(\( SELECT (app\.)?live_role\(\) AS live_role\)\)\)$'
          and coalesce(with_check, qual) = coalesce(qual, with_check)) <> 4 then
-    raise exception '0099: each live policy must be the tenant predicate, then settings.general on the live role, on every side it has';
+    raise exception '0102: each live policy must be the tenant predicate, then settings.general on the live role, on every side it has';
   end if;
 
   -- ---- 8. RLS on and forced ---------------------------------------------------------------
@@ -1022,7 +1022,7 @@ begin
                  'public.media_assets'::regclass)
      and not (relrowsecurity and relforcerowsecurity);
   if v_bad is not null then
-    raise exception '0099: RLS is not enabled and forced on %', v_bad;
+    raise exception '0102: RLS is not enabled and forced on %', v_bad;
   end if;
 
   -- ---- 9. Grants: has and has-not, table-wide and per column -------------------------------
@@ -1031,22 +1031,22 @@ begin
       if not has_table_privilege(r::name, t, 'select')
          or not has_table_privilege(r::name, t, 'insert')
          or not has_table_privilege(r::name, t, 'update') then
-        raise exception '0099: % must SELECT, INSERT and UPDATE %', r, t;
+        raise exception '0102: % must SELECT, INSERT and UPDATE %', r, t;
       end if;
     end loop;
     foreach r in array array['public', 'anon', 'authenticated', 'service_role'] loop
       foreach p in array array['delete', 'truncate', 'references', 'trigger'] loop
         if has_table_privilege(r::name, t, p) then
-          raise exception '0099: % holds % on %', r, p, t;
+          raise exception '0102: % holds % on %', r, p, t;
         end if;
       end loop;
       if v_maintain and has_table_privilege(r::name, t, 'maintain') then
-        raise exception '0099: % holds MAINTAIN on %', r, t;
+        raise exception '0102: % holds MAINTAIN on %', r, t;
       end if;
     end loop;
     foreach r in array array['public', 'anon'] loop
       if has_table_privilege(r::name, t, 'insert') or has_table_privilege(r::name, t, 'update') then
-        raise exception '0099: % may write %', r, t;
+        raise exception '0102: % may write %', r, t;
       end if;
     end loop;
     -- No column grant widens any of it: every column, every API role.
@@ -1056,7 +1056,7 @@ begin
      where a.attrelid = t::regclass and a.attnum > 0 and not a.attisdropped
        and has_column_privilege(rr::name, t::regclass, a.attnum, 'insert, update, references');
     if v_bad is not null then
-      raise exception '0099: column write or REFERENCES grants: %', v_bad;
+      raise exception '0102: column write or REFERENCES grants: %', v_bad;
     end if;
     select string_agg(format('%s %s.%s', rr, t, a.attname), ', ') into v_bad
       from pg_attribute a
@@ -1064,7 +1064,7 @@ begin
      where a.attrelid = t::regclass and a.attnum > 0 and not a.attisdropped
        and has_column_privilege(rr::name, t::regclass, a.attnum, 'references');
     if v_bad is not null then
-      raise exception '0099: column REFERENCES grants: %', v_bad;
+      raise exception '0102: column REFERENCES grants: %', v_bad;
     end if;
   end loop;
   if not has_table_privilege('anon', 'public.site_profile', 'select')
@@ -1074,7 +1074,7 @@ begin
                  where a.attrelid = 'public.site_settings'::regclass and a.attnum > 0
                    and not a.attisdropped
                    and has_column_privilege('anon', 'public.site_settings'::regclass, a.attnum, 'select')) then
-    raise exception '0099: anon must read site_profile and nothing of site_settings';
+    raise exception '0102: anon must read site_profile and nothing of site_settings';
   end if;
 
   -- ---- 10. media_assets_public_read: PERMISSIVE SELECT, tenant first, every branch -------
@@ -1093,7 +1093,7 @@ begin
      or position('default_og_media_id' in v_qual) = 0
      or position('favicon_media_id' in v_qual) = 0
      or position('app_icon_media_id' in v_qual) = 0 then
-    raise exception '0099: media_assets_public_read must be PERMISSIVE SELECT, tenant first, naming storage, every 0045 and 0073 branch and the icons';
+    raise exception '0102: media_assets_public_read must be PERMISSIVE SELECT, tenant first, naming storage, every 0045 and 0073 branch and the icons';
   end if;
   -- The recursion rule: no policy on a table this policy reads may read media_assets.
   select string_agg(tablename || '.' || policyname, ', ') into v_bad
@@ -1101,7 +1101,7 @@ begin
    where schemaname = 'public' and tablename in ('site_profile', 'entity_seo', 'seo_defaults')
      and (coalesce(qual, '') ~ 'media_assets' or coalesce(with_check, '') ~ 'media_assets');
   if v_bad is not null then
-    raise exception '0099: policies that read media_assets (42P17 with media_assets_public_read): %', v_bad;
+    raise exception '0102: policies that read media_assets (42P17 with media_assets_public_read): %', v_bad;
   end if;
 
   -- ---- 11. media_usage v6: INVOKER, search_path '', four columns, authenticated only -----
@@ -1113,13 +1113,13 @@ begin
                     and prosrc ~ '''entity_seo''' and prosrc ~ '''seo_defaults'''
                     and prosrc ~ '''site_profile''' and prosrc ~ 'favicon_media_id'
                     and prosrc ~ 'app_icon_media_id' and prosrc ~ 'content_drafts') then
-    raise exception '0099: public.media_usage must be INVOKER, search_path '''', four columns, with the icon, share-image and pending branches';
+    raise exception '0102: public.media_usage must be INVOKER, search_path '''', four columns, with the icon, share-image and pending branches';
   end if;
   if not has_function_privilege('authenticated', 'public.media_usage(uuid)', 'execute')
      or has_function_privilege('anon', 'public.media_usage(uuid)', 'execute')
      or has_function_privilege('public', 'public.media_usage(uuid)', 'execute')
      or has_function_privilege('service_role', 'public.media_usage(uuid)', 'execute') then
-    raise exception '0099: public.media_usage must be executable by authenticated only';
+    raise exception '0102: public.media_usage must be executable by authenticated only';
   end if;
 
   -- ---- 12. The registry row, exactly ------------------------------------------------------
@@ -1131,10 +1131,10 @@ begin
                     and deferred_columns = '{}' and unique_flags = '{}'
                     and exempt_columns = '{accepting_applications}'
                     and apply_order = 110 and not has_status and publish_flag is null) then
-    raise exception '0099: the site_profile registry row is not as stated';
+    raise exception '0102: the site_profile registry row is not as stated';
   end if;
   if exists (select 1 from app.release_entities where 'timezone' = any (columns)) then
-    raise exception '0099: timezone is immediate and must never be staged';
+    raise exception '0102: timezone is immediate and must never be staged';
   end if;
 
   -- ---- 13. The guides: in the catalog and in every tenant ---------------------------------
@@ -1155,7 +1155,7 @@ begin
                      where slug = 'site-health-and-logs' and revision = 2
                        and body::text ~ 'Days follow the studio''s time zone'
                        and body::text !~ 'midnight to midnight in Riyadh') then
-    raise exception '0099: the catalog must hold general-settings at revision 1, maintenance-mode at 2, website-stats at 3 and site-health-and-logs at 2, with their new words';
+    raise exception '0102: the catalog must hold general-settings at revision 1, maintenance-mode at 2, website-stats at 3 and site-health-and-logs at 2, with their new words';
   end if;
   select string_agg(tn.id::text, ', ') into v_bad
     from public.tenants tn
@@ -1171,6 +1171,6 @@ begin
                       where h.tenant_id = tn.id and h.slug = 'site-health-and-logs'
                         and h.body::text ~ 'Days follow the studio''s time zone');
   if v_bad is not null then
-    raise exception '0099: tenants without the four guides as U9 leaves them: %', v_bad;
+    raise exception '0102: tenants without the four guides as U9 leaves them: %', v_bad;
   end if;
 end $$;

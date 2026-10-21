@@ -135,7 +135,7 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row
     address_country: 'SA',
     socials: [],
     accepting_applications: false,
-    // 0099: the footer settings (today's footer), NOT NULL with these defaults
+    // 0102: the footer settings (today's footer), NOT NULL with these defaults
     footer_style: 'light',
     footer_show_email: true,
     footer_show_social: false,

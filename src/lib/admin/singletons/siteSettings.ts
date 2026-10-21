@@ -3,7 +3,7 @@ import type { SingletonConfig } from '@/lib/admin/singleton';
 import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
 
 // The technical settings row, `site_settings` (Admin + Developer, `settings.general`): the
-// studio's time zone (Admin v2 U9, 0099) and the retention horizons. Integrations live
+// studio's time zone (Admin v2 U9, 0102) and the retention horizons. Integrations live
 // elsewhere (site_integrations, Admin + SEO), and maintenance has its own endpoint (the same
 // row, its own audit actions). Moved here from src/pages/api/admin/settings/index.ts (U9, the
 // R2 pattern: configs in singletons/, routes one line).

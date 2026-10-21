@@ -159,7 +159,7 @@ select ok(not has_table_privilege('authenticated', 'public.site_profile', 'delet
   'authenticated CANNOT delete the site_profile singleton');
 select ok(not has_table_privilege('authenticated', 'public.site_settings', 'delete')
           and not has_table_privilege('service_role', 'public.site_settings', 'delete'),
-  'nobody deletes the site_settings singleton either (0099 states its grants)');
+  'nobody deletes the site_settings singleton either (0102 states its grants)');
 
 -- ---- 8. The deploy guard can actually READ the marker (0016) ------------------------
 -- RLS on app.deployment is forced, and deploy_guard is NOBYPASSRLS. Without its policy

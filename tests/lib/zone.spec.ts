@@ -42,7 +42,7 @@ function checkList(pattern: RegExp): string[] {
 }
 
 describe('the closed list (STUDIO_TIME_ZONES)', () => {
-  it('equals site_settings_timezone_closed (0099) and crm_settings’ CHECK (0035), in order', () => {
+  it('equals site_settings_timezone_closed (0102) and crm_settings’ CHECK (0035), in order', () => {
     expect(
       checkList(/constraint site_settings_timezone_closed check \(timezone in \(([^)]*)\)\)/g),
     ).toEqual(ZONES);

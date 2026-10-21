@@ -5,8 +5,8 @@ import type { AuthContext } from '@/lib/auth/types';
 import { clockFor, type Clock } from './relTime';
 
 // The studio's time zone for one admin request (Admin v2 U9): `site_settings.timezone`, the one
-// source (0099), read through the caller's own session client by `public.studio_time_zone()`
-// (0099), never the table: Sales (0097) reads no site_settings row (site_settings_staff_read is
+// source (0102), read through the caller's own session client by `public.studio_time_zone()`
+// (0102), never the table: Sales (0097) reads no site_settings row (site_settings_staff_read is
 // app.is_staff(), the four CMS roles), and a table read would answer it no row, so its leads,
 // board and dashboard would print Riyadh's days while every colleague's follow the setting.
 // The function answers every member its own tenant's zone (the default when the tenant never

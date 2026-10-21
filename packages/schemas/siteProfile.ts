@@ -84,14 +84,14 @@ const NO_CONTROL = /^[^\u0000-\u001f\u007f]*$/;
 const line = (max: number) =>
   z.string().trim().min(1).max(max).regex(NO_CONTROL, 'one line of plain text');
 
-/** The tagline (Admin v2 U9, 0099): both languages, up to 120 characters each. */
+/** The tagline (Admin v2 U9, 0102): both languages, up to 120 characters each. */
 export const TAGLINE_MAX = 120;
 const TaglineSchema = z.object({ en: line(TAGLINE_MAX), ar: line(TAGLINE_MAX) });
 
 /**
  * The footer's copyright line (E6 renders it; U9 stores it): both languages, up to 160
  * characters, and no brace but the three placeholders {year}, {brand} and {place} (the
- * 0099 CHECK says the same).
+ * 0102 CHECK says the same).
  */
 export const FOOTER_COPYRIGHT_MAX = 160;
 export const COPYRIGHT_PLACEHOLDERS = ['{year}', '{brand}', '{place}'] as const;
@@ -154,7 +154,7 @@ export const SiteProfileSchema = z
     foundedYear: z.number().int().min(1900).max(2100).nullish(),
     socials: z.array(SocialLinkSchema).max(8).optional(),
     acceptingApplications: z.boolean().optional(),
-    // Admin v2 U9 (0099)
+    // Admin v2 U9 (0102)
     tagline: TaglineSchema.nullish(),
     phoneE164: E164.nullish(),
     phoneDisplay: line(32).nullish(),
@@ -198,10 +198,10 @@ export const SiteProfileRowSchema = z.object({
   ),
   accepting_applications: z.boolean(),
   updated_at: z.string().nullable(),
-  // Admin v2 U9 (0099). Each new field reads leniently, on its own: the identity falls back to
+  // Admin v2 U9 (0102). Each new field reads leniently, on its own: the identity falls back to
   // the code copy on ANY parse error (src/lib/data/siteProfile.ts), so a malformed tagline or
   // a map link off the allow-list must cost that field, never the brand on every page. Absent
-  // (a row read before 0099) reads as unset or today's footer.
+  // (a row read before 0102) reads as unset or today's footer.
   tagline: TaglineSchema.nullable().optional().catch(null),
   phone_e164: E164.nullable().optional().catch(null),
   phone_display: z.string().max(32).nullable().optional().catch(null),

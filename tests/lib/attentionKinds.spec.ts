@@ -86,7 +86,7 @@ describe('the attention kinds (latest public.dashboard_attention)', () => {
 
   // The view's day is still Riyadh's, written into its SQL (0066): it does not read the studio's
   // zone (site_settings.timezone, Admin v2 U9) yet. A follow-up for the view's next restatement
-  // (app.studio_time_zone(tenant), 0099); until then the default zone, which this holds.
+  // (app.studio_time_zone(tenant), 0102); until then the default zone, which this holds.
   it("the Riyadh day it uses is the admin's default time zone", () => {
     const zones = [...text.matchAll(/at time zone '([^']+)'/g)].map((m) => m[1]);
     expect(zones.length).toBeGreaterThan(0);

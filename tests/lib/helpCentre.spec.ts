@@ -1472,7 +1472,7 @@ describe('website-stats as G1 rewrites it (docs/admin-v2/guides/website-stats.js
   // The guide as main left it before 0071: the migrations that sort before it (the put's
   // revision guard and the place, screens and capabilities it keeps are read against it), and
   // as 0071 left it. By file order, not "all but 0071": a later put of the guide (Admin v2 U9's
-  // 0099, one sentence) names the revision 0071 left, which reads as stale without 0071.
+  // 0102, one sentence) names the revision 0071 left, which reads as stale without 0071.
   const BEFORE = helpSet(MIGRATION_FILES.filter((f) => f.name < G1_FILE));
   const AT_G1 = helpSet(MIGRATION_FILES.filter((f) => f.name <= G1_FILE));
   const base = HelpArticleSeedSchema.parse(BEFORE.set.find((a) => a.slug === 'website-stats')!);
@@ -1620,7 +1620,7 @@ describe('website-stats as G1 rewrites it (docs/admin-v2/guides/website-stats.js
       BEFORE.set.filter((g) => g.slug !== 'website-stats'),
     );
     // 0071's literal is the guide as 0071 left it; the LATEST put of the guide is the file
-    // byte for byte (only its trailing newline dropped): Admin v2 U9's 0099 changed a sentence.
+    // byte for byte (only its trailing newline dropped): Admin v2 U9's 0102 changed a sentence.
     const PUT =
       /^select app\.put_help_guide\(\$guide\$\r?\n([\s\S]*?)\r?\n\$guide\$::jsonb, \d+\);/gm;
     const literalsOf = (sql: string) => [...sql.matchAll(PUT)].map((m) => m[1] ?? '');

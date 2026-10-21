@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // The technical settings row, `public.site_settings` (Admin + Developer, `settings.general`;
-// staff read it, anon never). Admin v2 U9 (0099) adds the studio's time zone, the one clock
+// staff read it, anon never). Admin v2 U9 (0102) adds the studio's time zone, the one clock
 // every admin screen prints in. It is IMMEDIATE (P-3), never part of a release, which is why
 // it lives on this row and not on the staged `site_profile` (deviations.md, U9).
 

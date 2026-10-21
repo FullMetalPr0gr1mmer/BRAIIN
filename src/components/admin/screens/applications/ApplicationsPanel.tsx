@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { EXPERIENCE_LEVELS, optionLabel, type ApplicationStatus } from '@schemas/application';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { PAGE_SIZE } from '@/lib/admin/pager';
-import { formatDateTime, relTime } from '@/lib/admin/relTime';
 import {
   statusChips,
   statusLabel,
@@ -11,6 +10,7 @@ import {
   type StatusChip,
 } from '@/lib/admin/applicationView';
 import Chips from '@/components/admin/kit/Chips';
+import { useClock } from '@/components/admin/kit/clock';
 import DataTable, { type DataColumn } from '@/components/admin/kit/DataTable';
 import Note from '@/components/admin/kit/Note';
 import { Badge } from '@/components/admin/kit/StatusBadge';
@@ -58,6 +58,8 @@ export default function ApplicationsPanel({
   initialStatus = null,
   openId = null,
 }: ApplicationsPanelProps) {
+  // The rows arrive after mount, so the page's zone is the clock (kit/clock.tsx).
+  const clock = useClock();
   const [rows, setRows] = useState<ApplicationRow[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -104,8 +106,8 @@ export default function ApplicationsPanel({
       key: 'created_at',
       label: 'Received',
       render: (row) => (
-        <time dateTime={row.created_at} title={formatDateTime(row.created_at)}>
-          {relTime(row.created_at)}
+        <time dateTime={row.created_at} title={clock.formatDateTime(row.created_at)}>
+          {clock.relTime(row.created_at)}
         </time>
       ),
     },

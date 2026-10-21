@@ -41,6 +41,7 @@ function fakeSave(values: Record<string, unknown>, patch: Partial<EntitySave> = 
   return {
     isNew: false,
     values,
+    saved: values,
     set: () => undefined,
     version: 2,
     busy: false,
@@ -101,6 +102,38 @@ describe('EditorForm groups (Admin v2 U9)', () => {
     expect(html).not.toMatch(/<details[^>]* open/);
     // Delta is in no group: it follows, in a card of its own.
     expect(html.indexOf('id="f-d"')).toBeGreaterThan(html.indexOf('id="f-c"'));
+    expect(html).not.toMatch(/\sstyle=/);
+  });
+
+  it('groups compose inside a field tab, and the read-only fieldset wraps them (U8b, U8.md)', () => {
+    const tabs = [
+      { id: 'one', label: 'One', fields: ['a', 'b'] },
+      { id: 'two', label: 'Two', fields: ['c', 'd'] },
+    ];
+    const cards: FieldGroup[] = [
+      { id: 'left', title: 'Left card', fields: ['a'] },
+      { id: 'span', title: 'Spanning card', fields: ['b', 'c'] },
+    ];
+    const html = render({ tabs, groups: cards, readOnly: true });
+    const one = html.slice(
+      html.indexOf('data-editor-tab="one"'),
+      html.indexOf('data-editor-tab="two"'),
+    );
+    const two = html.slice(html.indexOf('data-editor-tab="two"'), html.indexOf('</form>'));
+    // A group wholly inside a tab is its card there.
+    expect(one).toContain('data-group="left"');
+    expect(one.indexOf('data-group="left"')).toBeLessThan(one.indexOf('id="f-a"'));
+    // One that would span two tabs is drawn in neither; its fields stay in their tabs.
+    expect(html).not.toContain('data-group="span"');
+    expect(one).toContain('id="f-b"');
+    expect(two).toContain('id="f-c"');
+    expect(two).toContain('id="f-d"');
+    expect(two).not.toContain('data-group=');
+    // Read-only: the disabled fieldset holds the tabs' grouped cards too.
+    expect(html.indexOf('<fieldset class="editor-ro" disabled=""')).toBeGreaterThan(-1);
+    expect(html.indexOf('<fieldset class="editor-ro" disabled=""')).toBeLessThan(
+      html.indexOf('data-group="left"'),
+    );
     expect(html).not.toMatch(/\sstyle=/);
   });
 
@@ -501,7 +534,7 @@ describe('the maintenance screen’s words', () => {
 });
 
 describe('the studio’s zone for a request (studioTimeZone)', () => {
-  // Read through public.studio_time_zone() (0099), never the table: a Sales token (0097)
+  // Read through public.studio_time_zone() (0102), never the table: a Sales token (0097)
   // reads no site_settings row (app.is_staff() is the four CMS roles), so a table read would
   // answer Sales Riyadh while every colleague sees the studio's zone.
   const calls: string[] = [];

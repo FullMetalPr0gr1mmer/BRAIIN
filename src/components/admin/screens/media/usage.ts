@@ -72,7 +72,7 @@ export const USAGE_KINDS: Readonly<Record<string, Kind>> = {
     words: () => 'Default share image',
     href: () => '/admin/seo?tab=site',
   },
-  // Admin v2 U9 (media_usage v6, 0099): the site's favicon or app icon. The entity is the
+  // Admin v2 U9 (media_usage v6, 0102): the site's favicon or app icon. The entity is the
   // tenant's identity row, its label which icon; it opens General settings.
   site_profile: {
     screen: '/admin/settings',
