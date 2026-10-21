@@ -1400,6 +1400,31 @@ The account allows 5 cron triggers on the Free plan; this makes 2.
 Measure once after the key is set (O-16): Workers Logs for a `*/10` invocation shows its CPU
 time (expected under 3 ms: one JSON of 10 to 30 KB) and its subrequests (at most 11).
 
+### 6l. The Sales role (migrations 0096 + 0097, Admin v2 C10a)
+
+Two files, in order, each in its own transaction: 0096 only adds `'sales'` to `app_role` (a
+new enum value cannot be used in the transaction that adds it, SQLSTATE 55P04); 0097 uses it.
+`supabase db push` applies them one file at a time; never paste both into one SQL editor run.
+The numbers are assigned at merge (`scripts/renumber-migration.mjs`): read them from the PR.
+
+1. **Code first is safe.** The Worker that merges with these files refuses the legacy lead
+   `status` in a PATCH (0097 revokes that grant) and knows the role; until 0096 is applied no
+   one can hold it, and the Users screen's Sales choice is refused by the database (22P02).
+   Applying the migrations first is safe too: no one is Sales yet, and the old Worker answers a
+   stale tab's legacy status with an error until the deploy.
+2. **Apply** 0096, then 0097, then run `readback_c10a.sql` (one row; the expected values are
+   in its header).
+3. **Invite a Sales user** (Settings › Users & roles › Invite, role Sales) with a display name,
+   so assignees are readable; or change an existing person's role, which signs them out
+   everywhere (divergence denies).
+4. **Verify the claim**: the person signs in, and `/admin` shows the Sales sidebar (Dashboard,
+   Leads, Website stats). Their access token's `app_metadata.role` is `sales` (the Custom
+   Access Token Hook projects the profile's role, any enum value, §2). A lead's page shows
+   "Reveal contact details (this access is logged)"; Export CSV does not show.
+5. **Rollback**: an enum value cannot be dropped. Change every Sales user to another role (or
+   switch them off) and leave the value unused: no policy or helper grants it anything but
+   what 0097 names, and reverting 0097's grants is a new forward migration.
+
 ---
 
 ### 6l. General settings and maintenance v2 (migration 0075, Admin v2 U9)

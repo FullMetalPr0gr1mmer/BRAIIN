@@ -11,20 +11,20 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/help/index'),
     method: 'GET',
     url: '/api/admin/help?screen=/admin/leads',
-    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    allow: ['admin', 'content_creator', 'seo', 'developer', 'sales'],
   },
   {
     name: 'help search',
     load: () => import('@/pages/api/admin/help/search'),
     method: 'GET',
     url: '/api/admin/help/search?q=password',
-    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    allow: ['admin', 'content_creator', 'seo', 'developer', 'sales'],
   },
   {
     name: 'help guide',
     load: () => import('@/pages/api/admin/help/article'),
     method: 'GET',
     url: '/api/admin/help/article?slug=finding-your-way',
-    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    allow: ['admin', 'content_creator', 'seo', 'developer', 'sales'],
   },
 ];

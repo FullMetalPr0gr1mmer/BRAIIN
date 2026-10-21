@@ -930,7 +930,7 @@ export const ThemeWriteSchema = z.object({
 });
 export const ThemeUpdateSchema = updatable(ThemeWriteSchema);
 
-export const RoleSchema = z.enum(['admin', 'content_creator', 'seo', 'developer']);
+export const RoleSchema = z.enum(['admin', 'content_creator', 'seo', 'developer', 'sales']);
 
 // A colleague's name follows the one display-name rule (DisplayNameValueSchema), which the
 // database applies to every writer of profiles.display_name (0044).

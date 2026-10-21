@@ -227,7 +227,9 @@ describe('GET /api/admin/media/library', () => {
 
 describe('Upload is offered exactly where the upload route would take it', () => {
   it('stats: uploadsReady and canUpload, by role', async () => {
-    for (const role of ROLES) {
+    // The screen's roles: media.write in full or meta. Sales (C10a) holds neither: refused.
+    expect((await call(STATS, ctx('/api/admin/media/stats', 'sales'))).status).toBe(403);
+    for (const role of ROLES.filter((r) => ROLE_CAPS[r]['media.write'] !== 'none')) {
       const { body } = await call(STATS, ctx('/api/admin/media/stats', role));
       expect(body['data'], role).toMatchObject({
         assets: 2,

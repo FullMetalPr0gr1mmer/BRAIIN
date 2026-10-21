@@ -159,6 +159,8 @@ describe('the bell: who gets what', () => {
       content_creator: ['maintenance', 'scheduled'],
       seo: ['maintenance'],
       developer: ['leads', 'maintenance'],
+      // Sales (C10a) works leads: the new ones, and the site-wide maintenance notice.
+      sales: ['leads', 'maintenance'],
     };
     for (const role of ROLES) {
       const { sb } = fakeDb(FULL);

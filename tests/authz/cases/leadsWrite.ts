@@ -12,7 +12,7 @@ export const cases: readonly Case[] = [
     method: 'PATCH',
     url: `/api/admin/leads/${UUID}`,
     body: { version: 1, stageId: UUID, assignedTo: null, tags: ['VIP'] },
-    allow: ['admin', 'developer'],
+    allow: ['admin', 'developer', 'sales'],
   },
   {
     name: 'lead marks (star, read, log contact)',
@@ -20,7 +20,7 @@ export const cases: readonly Case[] = [
     method: 'PATCH',
     url: `/api/admin/leads/${UUID}`,
     body: { isStarred: true, read: true, logContact: { channel: 'call' } },
-    allow: ['admin', 'developer'],
+    allow: ['admin', 'developer', 'sales'],
   },
   {
     name: 'leads bulk change',
@@ -28,7 +28,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: '/api/admin/leads/bulk',
     body: { action: 'stage', value: UUID, items: [{ id: UUID, version: 1 }] },
-    allow: ['admin', 'developer'],
+    allow: ['admin', 'developer', 'sales'],
   },
   {
     name: 'lead added by hand (leads.manage + leads.pii)',
@@ -36,7 +36,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: '/api/admin/leads',
     body: { name: 'Sara', phone: '0501234567', message: 'Called the office', channel: 'phone' },
-    allow: ['admin', 'developer'],
+    allow: ['admin', 'developer', 'sales'],
   },
   {
     name: 'lead erase (crm.erase, Admin only)',

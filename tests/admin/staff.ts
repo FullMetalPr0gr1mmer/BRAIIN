@@ -33,6 +33,7 @@ export const STAFF_IDS: Record<Role, string> = {
   content_creator: 'e2e00000-0000-4000-8000-000000000002',
   seo: 'e2e00000-0000-4000-8000-000000000003',
   developer: 'e2e00000-0000-4000-8000-000000000004',
+  sales: 'e2e00000-0000-4000-8000-000000000005',
 };
 
 export function staffEmail(role: Role): string {
