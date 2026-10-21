@@ -72,8 +72,8 @@ export function mediaItemToRow(item: PortfolioMediaItem): Input {
   };
 }
 
-/** A stored portfolio_media row → the form's item. */
-function mediaRowToItem(row: Input): Input {
+/** A stored portfolio_media row → the form's item (exported for R10's restore). */
+export function mediaRowToItem(row: Input): Input {
   const item: Input = { role: row['role'], kind: row['kind'] };
   if (row['media_id']) item['mediaId'] = row['media_id'];
   const clip = clipOfColumns(
