@@ -15,8 +15,10 @@ import {
   createDashboardReads,
   widgetLoaders,
 } from '@/lib/admin/dashboard/loaders';
+import { WIDGETS } from '@/lib/admin/dashboard/widgets';
 import { ADMIN_TIME_ZONE } from '@/lib/admin/relTime';
-import type { AuthContext } from '@/lib/auth/types';
+import { CMS_ROLES, ROLES, type AuthContext, type Role } from '@/lib/auth/types';
+import { can } from '@/lib/authz/matrix';
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 
@@ -26,7 +28,10 @@ vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 // the view's Riyadh day is the admin's time zone; site health's content_health (0052) reads
 // three kinds by name, none of the release ones; and the stale pending changes, which can be
 // many once releases are on, are read on their own with an exact count, so they never crowd
-// the content kinds out of the list's capped read.
+// the content kinds out of the list's capped read. Since H13 (0100_attention_staff.sql) the
+// list answers CMS staff only: the newest definition wraps the whole union in the staff test,
+// H13's own text is 0066's v4 verbatim inside that wrapper, and every role whose screens read
+// the list is CMS staff (Sales has none).
 
 const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
 const strip = (sql: string) => sql.replace(/--[^\n]*/g, '');
@@ -98,6 +103,66 @@ describe('the attention kinds (latest public.dashboard_attention)', () => {
     const named = [...(filter?.[1] ?? '').matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
     expect(named.sort()).toEqual(['consent_missing', 'missing_alt', 'placeholder_live']);
     for (const kind of RELEASE_ATTENTION_KINDS) expect(named).not.toContain(kind);
+  });
+
+  it('answers CMS staff only: the staff test once, as the WHERE over the whole union (H13)', () => {
+    // A restatement copied from a definition older than H13's would drop the wrapper; this
+    // fails then. The second arm is the owner's psql session: no switched role, no role claim.
+    expect(text).toMatch(
+      /\)\s*a\s+where\s+app\.is_staff\(\)\s+or\s+\(pg_catalog\.current_setting\('role'\)\s*=\s*'none'\s+and\s+/,
+    );
+    expect(text.match(/is_staff\(/g)).toHaveLength(1);
+    expect(text).toMatch(/#>>\s*'\{app_metadata,role\}'\)\s+is\s+null\)\s*$/);
+  });
+});
+
+describe('H13: the attention list for CMS staff (0100_attention_staff.sql)', () => {
+  const read = (name: string) =>
+    readFileSync(join(MIGRATIONS, name), 'utf8').replace(/\r\n/g, '\n');
+  const file = readdirSync(MIGRATIONS).find((f) => /^\d{4}_attention_staff\.sql$/.test(f));
+  const CREATE =
+    'create or replace view public.dashboard_attention with (security_invoker = true) as\n';
+  const OPEN = "-- ---- 0066's dashboard_attention v4, verbatim ----\n";
+  const CLOSE = "\n-- ---- end of 0066's text ----\n";
+
+  it("restates 0066's v4 byte for byte between its markers, inside one outer select", () => {
+    expect(file).toBeDefined();
+    const v4src = read('0066_release_guard.sql');
+    const from = v4src.indexOf(CREATE) + CREATE.length;
+    const v4 = v4src.slice(from, v4src.indexOf(';', from));
+    const src = read(file!);
+    const at = src.indexOf(CREATE);
+    expect(at).toBeGreaterThan(0);
+    expect(src.slice(at + CREATE.length, src.indexOf(OPEN))).toBe(
+      'select a.kind, a.entity_type, a.id, a.slug, a.title, a.at\n  from (\n',
+    );
+    expect(src.slice(src.indexOf(OPEN) + OPEN.length, src.indexOf(CLOSE))).toBe(v4);
+    expect(src.slice(src.indexOf(CLOSE) + CLOSE.length)).toMatch(
+      /^\s*\) a\n where app\.is_staff\(\)\n/,
+    );
+  });
+
+  it('states the grants exactly as 0066 did: SELECT for authenticated, nothing for anyone else', () => {
+    const v4src = read('0066_release_guard.sql');
+    const src = read(file!);
+    for (const line of [
+      'revoke all on public.dashboard_attention from public, anon, authenticated, service_role;',
+      'grant select on public.dashboard_attention to authenticated;',
+    ]) {
+      expect(v4src.split(line).length - 1, line).toBe(1);
+      expect(src.split(line).length - 1, line).toBe(1);
+    }
+    expect(src).not.toMatch(
+      /grant [^;]* on public\.dashboard_attention to (anon|public|service_role)/i,
+    );
+  });
+
+  it('every role whose screens read the list is CMS staff (the dashboard widget, site health)', () => {
+    const caps = [...WIDGETS.attention.anyCaps, 'siteHealth.view' as const];
+    const readers = ROLES.filter((role: Role) => caps.some((cap) => can(role, cap) === 'full'));
+    expect(readers.length).toBeGreaterThan(0);
+    for (const role of readers) expect(CMS_ROLES as readonly string[], role).toContain(role);
+    expect(readers).not.toContain('sales');
   });
 });
 

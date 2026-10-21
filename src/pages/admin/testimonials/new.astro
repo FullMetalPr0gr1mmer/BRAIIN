@@ -1,13 +1,36 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
+import AdminCollection from '@/components/admin/islands/AdminCollection';
+import Icon from '@/components/admin/ui/Icon.astro';
+import { collectionScreen } from '@/lib/admin/collectionScreen';
 
 export const prerender = false;
 
-const ui = uiFor('testimonials');
+// The collection screen with the "New" drawer open (Admin v2 U7, D8), so a link or the
+// palette lands on it. Closing the drawer takes the address back to the list. Astro resolves
+// this static route before [id].astro.
+const screen = collectionScreen(Astro.locals.session, 'testimonials', 'new');
 ---
 
-<AdminLayout title={`New ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="testimonials" id={null} />
+<AdminLayout title={screen.title} subtitle={screen.sub} styles={['collection.css']}>
+  {
+    screen.permissions.write && (
+      <a
+        slot="actions"
+        class="btn"
+        data-variant="primary"
+        href="/admin/testimonials/new"
+        data-collection-add
+      >
+        <Icon name="plus" size={16} />
+        Add
+      </a>
+    )
+  }
+  <AdminCollection
+    client:load
+    collection="testimonials"
+    open={screen.open}
+    permissions={screen.permissions}
+  />
 </AdminLayout>

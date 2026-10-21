@@ -1,7 +1,8 @@
 import { SORT_FIELD, STATUS_FIELD } from './fields';
 import type { ResourceUi } from './types';
 
-// Certifications: the list and the form at /admin/certifications.
+// Certifications: the form in the collection screen's drawer at /admin/certifications
+// (Admin v2 U7b).
 export const certificationsUi: ResourceUi = {
   slug: 'certifications',
   title: 'Certifications',

@@ -6,6 +6,7 @@ import { categoriesUi } from './categories';
 import { certificationsUi } from './certifications';
 import { clientsUi } from './clients';
 import { disciplinesUi } from './disciplines';
+import { faqUi } from './faq';
 import { integrationsUi } from './integrations';
 import { mediaUi } from './media';
 import { navigationUi } from './navigation';
@@ -71,6 +72,7 @@ export const RESOURCE_UI: Record<string, ResourceUi> = Object.fromEntries(
     certificationsUi,
     clientsUi,
     disciplinesUi,
+    faqUi,
     mediaUi,
     navigationUi,
     pagesUi,

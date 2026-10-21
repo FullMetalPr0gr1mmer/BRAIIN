@@ -54,12 +54,20 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
       '/admin/sectors',
       '/admin/blog',
       '/admin/categories',
+      '/admin/navigation',
+    ],
+  },
+  // Admin v2 U7: the collection screens and the FAQ (the FAQ migration's put, revision 0).
+  {
+    slug: 'collections-and-faq',
+    caps: ['pages.write', 'portfolio.write', 'blog.write', 'services.write'],
+    screens: [
+      '/admin/faq',
       '/admin/testimonials',
       '/admin/clients',
       '/admin/team',
       '/admin/statistics',
       '/admin/certifications',
-      '/admin/navigation',
     ],
   },
   { slug: 'media-library', caps: ['media.write'], screens: ['/admin/media'] },

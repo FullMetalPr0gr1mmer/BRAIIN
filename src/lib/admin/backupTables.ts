@@ -93,6 +93,10 @@ export const BACKUP_TABLES: readonly { table: string; columns: string }[] = [
   },
   { table: 'certifications', columns: 'id,slug,name,issuer,year,logo_url,status,sort_order' },
   {
+    table: 'faq_items',
+    columns: 'id,question,answer,status,sort_order,published_at,scheduled_for',
+  },
+  {
     table: 'statistics',
     columns:
       'id,slug,label,value,value_numeric,value_suffix,placements,placement_labels,status,' +

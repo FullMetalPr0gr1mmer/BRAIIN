@@ -11,6 +11,7 @@
 export const ADMIN_STYLESHEETS = [
   'activity.css',
   'applications.css',
+  'collection.css',
   'crm-settings.css',
   'dashboard.css',
   'health.css',

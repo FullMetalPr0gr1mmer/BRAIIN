@@ -37,6 +37,10 @@ import {
 } from '@/lib/admin/help';
 import HelpArticleBody from '@/components/admin/screens/help/HelpArticleBody';
 import HelpGuideList from '@/components/admin/screens/help/HelpGuideList';
+import { COLLECTIONS } from '@/components/admin/screens/collection/collections';
+import { clientsUi } from '@/lib/admin/ui/clients';
+import { faqUi } from '@/lib/admin/ui/faq';
+import { faqShown } from '@/lib/sections/contact';
 import { EXTRA_LINKS, pageFileFor } from '../admin/routes';
 import { MAX_GOALS } from '@schemas/analyticsGoals';
 import { ADMIN_TIME_ZONE } from '@/lib/admin/relTime';
@@ -1728,10 +1732,73 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
     expect(pageGuideFor('/admin/help', 'admin')).toBeNull();
   });
 
+  it('the collection screens open the collections guide (U7), FAQ included', () => {
+    expect(pageGuideFor('/admin/faq', 'content_creator')).toBe('collections-and-faq');
+    expect(pageGuideFor('/admin/testimonials/1234', 'admin')).toBe('collections-and-faq');
+    expect(pageGuideFor('/admin/statistics/new', 'content_creator')).toBe('collections-and-faq');
+    expect(pageGuideFor('/admin/faq', 'seo')).toBeNull();
+    expect(pageGuideFor('/admin/faq', 'developer')).toBeNull();
+  });
+
   it('SEO opens Pages and Posts without the content guide, which is for the writers', () => {
     expect(pageGuideFor('/admin/pages', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/blog/1', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/pages', 'content_creator')).toBe('saving-and-publishing');
+  });
+});
+
+// ── 1e. The collections guide (U7), as its migration puts it ─────────────────────────────
+
+describe('collections-and-faq (U7), a new guide put by the FAQ migration', () => {
+  const article = () => SET.find((a) => a.slug === 'collections-and-faq')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+
+  it('is put once, at revision 0 (new), by the migration that creates faq_items', () => {
+    const puts = HELP.edits.filter((e) => e.slug === 'collections-and-faq');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts[0]?.file).toMatch(/^\d{4}_faq_items\.sql$/);
+    expect(HELP.revisions.get('collections-and-faq')).toBe(1);
+  });
+
+  it('takes the free place 45 (between saving 40 and media 50), for the content writers', () => {
+    expect(article().sort_order).toBe(45);
+    expect(article().tags).toEqual(['content']);
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual(['admin', 'content_creator']);
+  });
+
+  it('says what the screens do, in the words they use', () => {
+    const en = text('en');
+    const ar = text('ar');
+    // The FAQ: the form's hint, and the route that drops band and FAQPage together.
+    expect(faqUi.fields.find((f) => f.name === 'answer')?.help).toContain('40 to 60 words');
+    expect(en).toContain('in 40 to 60 words, as one paragraph, in both languages');
+    expect(en).toContain('While no question is published, the Contact page shows no FAQ at all.');
+    expect(faqShown([{ type: 'faq' }], [])).toBe(false);
+    // Consent: the date is the gate (the CHECK, assertPublishable); the record is advice.
+    expect(en).toContain('only once you record when the person agreed to be quoted');
+    expect(source('src/lib/admin/resources/testimonials.ts')).toContain(
+      "if (!row['consent_obtained_at'])",
+    );
+    // The switches and the sample flow, by their labels.
+    expect(clientsUi.fields.find((f) => f.name === 'visible')?.label).toBe('Visible on the site');
+    for (const label of ['Visible on the site', 'Make this quote real']) {
+      expect(en).toContain(label);
+      expect(ar).toContain(label);
+    }
+    expect(source('src/components/admin/screens/collection/CollectionDrawer.tsx')).toContain(
+      'label="Make this quote real"',
+    );
+    expect(en).toContain('An item marked Sample');
+    expect(source('src/components/admin/screens/collection/collections.ts')).toContain(
+      "const SAMPLE: CollectionBadge = { label: 'Sample'",
+    );
+    // Duplicate: a draft right after the original; never a team member or a sample.
+    expect(en).toContain('team members and design samples are not copied');
+    expect(COLLECTIONS['team']?.copy).toBeUndefined();
+    expect(COLLECTIONS['testimonials']?.copy?.({ is_placeholder: true })).toBeNull();
+    expect(COLLECTIONS['clients']?.copy?.({ is_placeholder: true })).toBeNull();
   });
 });
 
@@ -2031,6 +2098,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
 
   it('Content Creator: the basics, content, media, the Style-Finder and stats; no leads, PII, hiring, settings or SEO', () => {
     expect(shown('content_creator')).toEqual([
+      'collections-and-faq',
       'finding-your-way',
       'media-library',
       'previewing-changes',

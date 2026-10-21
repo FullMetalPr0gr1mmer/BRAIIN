@@ -5,8 +5,8 @@
 -- it may reach from both sides:
 --   1. the catalog: 'sales' is in app_role; app.is_staff() still names four roles and
 --      app.is_member() five; every capability helper answers ROLE_CAPS for every enum value
---      (a literal copy of CLAUDE.md §5); audit_insert, the non-staff block and the sample
---      lock read as 0097 wrote them;
+--      (a literal copy of CLAUDE.md §5); audit_insert, the non-staff block (0097's three
+--      tables and 0098's faq_items) and the sample lock read as written;
 --   2. the CRM: a live Sales token reads and works leads (the stages, the timeline, the
 --      settings, the people it may assign to) through RLS and the pipeline's column grant,
 --      and writes nothing else of a lead: no insert, no delete, no legacy status, no
@@ -15,8 +15,14 @@
 --      can read at all, outside the CRM and the member's own rows, a Sales token reads no
 --      more rows than anon, and wherever it reads a row it reads no column anon cannot read
 --      (disciplines is the one named exception, 0097 §4 says why). The fixtures give every
---      relation `authenticated` holds more of than anon at least one row in the tenant, and
---      a test fails when one has none, so a new staff-only table cannot pass by being empty;
+--      relation `authenticated` holds more of than anon at least one row in the Sales tenant,
+--      and a test fails when one has none THERE (rows of another tenant, seed.sql's, prove
+--      nothing about this comparison; a view with no tenant_id column is counted as an Admin
+--      of that tenant reads it), so a new staff-only table cannot pass by being empty; a
+--      relation with no fixture would be named with its reason (_no_fixture: none since H13,
+--      whose 0100_attention_staff.sql made the attention list answer CMS staff only); the FAQ
+--      (0098), the block's fourth table, and the attention list are also asserted on their
+--      own;
 --   4. the member's own rows (its profile, its preferences, its tenant, the guides, its
 --      role's dashboard preset), the stats and the team note analytics.read gives it, the password fence (U14b's 0061: a Sales token reads
 --      no section of a locked page), the definers it may call (the people directory gives
@@ -26,7 +32,7 @@
 --      lead, no timeline and nobody in the directory.
 
 begin;
-select plan(64);
+select plan(66);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- T1 is created older than any seeded tenant, so inside this transaction it is the launch
@@ -94,6 +100,18 @@ insert into public.page_sections (id, tenant_id, page_id, type, content, visible
    '{"body":{"en":"secret words"},"mediaId":"93000000-0000-4000-8000-000000000001"}', true, 10),
   ('93000000-0000-0000-0000-0000000051a2', '93000000-0000-0000-0000-000000000001',
    '93000000-0000-0000-0000-00000000a002', 'slogan', '{"body":{"en":"open words"}}', true, 10);
+-- The FAQ (0098, U7): a published question anon reads, and a draft only staff read.
+insert into public.faq_items (id, tenant_id, question, answer, status, sort_order) values
+  ('93000000-0000-0000-0000-00000000fa01', '93000000-0000-0000-0000-000000000001',
+   '{"en":"Asked?","ar":"سؤال؟"}', '{"en":"Answered.","ar":"جواب."}', 'published', 10),
+  ('93000000-0000-0000-0000-00000000fa02', '93000000-0000-0000-0000-000000000001',
+   '{"en":"Drafted?","ar":"مسودة؟"}', '{"en":"Not yet.","ar":"ليس بعد."}', 'draft', 20);
+-- The attention list (0100_attention_staff.sql, H13): a published post with no cover, which
+-- anon reads, gives the list one row (missing_image) in this tenant, so its comparison is
+-- not of nothing: CMS staff read it, a Sales token none.
+insert into public.blog_posts (id, tenant_id, slug, title, status) values
+  ('93000000-0000-0000-0000-00000000b0a1', '93000000-0000-0000-0000-000000000001', 'h13-post',
+   '{"en":"Post","ar":"مقال"}', 'published');
 
 -- Staff-only rows, one at least in each relation `authenticated` holds more of than anon.
 insert into public.site_settings (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
@@ -226,12 +244,38 @@ create function _extra_columns(p_rel regclass) returns text language sql stable 
      and not has_column_privilege('anon', p_rel, a.attnum, 'SELECT')
 $$;
 
+-- Whether a relation has a tenant_id column (the catalog only, no read of the relation).
+create function _has_tenant(p_rel regclass) returns boolean language sql stable as $$
+  select exists (select 1 from pg_attribute a
+                  where a.attrelid = p_rel and a.attname = 'tenant_id' and a.attnum > 0
+                    and not a.attisdropped)
+$$;
+
+-- The rows a relation holds IN THE SALES TENANT (T1), read as the migration role (RLS
+-- bypassed): the comparison reads one tenant, so a row of another tenant (seed.sql's launch
+-- tenant included) proves nothing about it. A relation with no tenant_id column answers null
+-- here and is counted as an Admin token of T1 reads it (_t1_staff, filled in section 3: the
+-- RLS of the tables under it keeps T1's rows), never whole.
+create function _fixture_rows(p_rel regclass) returns bigint language plpgsql as $$
+declare
+  n bigint;
+begin
+  if not _has_tenant(p_rel) then
+    return null;
+  end if;
+  execute format('select count(*) from %s where tenant_id = %L', p_rel,
+                 '93000000-0000-0000-0000-000000000001') into n;
+  return n;
+end $$;
+
 -- What each principal read, relation by relation (filled below, compared after).
 create temp table _seen (who text, name text, n bigint);
+-- What an Admin token of T1 reads of each compared relation with no tenant_id column.
+create temp table _t1_staff (name text, n bigint);
 
 grant execute on function _as(text, text, text), _sales(), _run(text), _val(text), _count(regclass),
-  _readable(), _extra_columns(regclass) to anon, authenticated, service_role;
-grant insert, select on _seen to anon, authenticated;
+  _readable(), _extra_columns(regclass), _has_tenant(regclass) to anon, authenticated, service_role;
+grant insert, select on _seen, _t1_staff to anon, authenticated;
 
 -- The CRM, a member's own rows and the stats analytics.read gives: proven on their own below.
 create function _not_compared() returns text[] language sql immutable as $$
@@ -242,6 +286,13 @@ create function _not_compared() returns text[] language sql immutable as $$
                'rollup_minute_activity', 'analytics_goals']
 $$;
 grant execute on function _not_compared() to anon, authenticated;
+
+-- Compared, but with no fixture row in T1, each for the reason on its line. None: the last,
+-- dashboard_attention, has its row since H13 (0100_attention_staff.sql) answers it to CMS
+-- staff only.
+create function _no_fixture() returns text[] language sql immutable as $$
+  select array[]::text[]
+$$;
 
 -- ── 1. the catalog ─────────────────────────────────────────────────────────────
 select ok('sales' = any (enum_range(null::public.app_role)::text[]), 'sales is an app_role (0096)');
@@ -275,10 +326,11 @@ select is(
   (select string_agg(tablename || ' ' || qual, ' | ' order by tablename) from pg_policies
     where schemaname = 'public' and policyname like '%\_staff\_columns' and permissive = 'RESTRICTIVE'
       and cmd = 'SELECT' and roles = '{authenticated}'),
+  'faq_items ((tenant_id = app.effective_tenant_id()) AND app.is_staff()) | '
   'media_assets ((tenant_id = app.effective_tenant_id()) AND app.is_staff()) | '
   'service_cases ((tenant_id = app.effective_tenant_id()) AND app.is_staff()) | '
   'testimonials ((tenant_id = app.effective_tenant_id()) AND app.is_staff())',
-  'the non-staff block: three RESTRICTIVE reads, the tenant first, then CMS staff');
+  'the non-staff block: four RESTRICTIVE reads (0097''s three, the FAQ''s in 0098), the tenant first, then CMS staff');
 select ok(
   not has_column_privilege('authenticated', 'public.leads', 'status', 'update')
     and not has_column_privilege('authenticated', 'public.leads', 'internal_notes', 'update')
@@ -343,6 +395,9 @@ reset role;
 set local role authenticated;
 select _sales();
 insert into _seen select 'sales', r.name, _count(r.rel) from _readable() r where r.name <> all (_not_compared());
+select _as('93000000-0000-0000-0000-0000000000a1', 'admin', '93000000-0000-0000-0000-000000000001');
+insert into _t1_staff select r.name, _count(r.rel) from _readable() r
+ where r.name <> all (_not_compared()) and not _has_tenant(r.rel);
 reset role;
 select _as(null, null, null);
 
@@ -362,15 +417,37 @@ select is(
 select is(
   (select string_agg(r.name, ', ' order by r.name)
      from _readable() r
-    where r.name <> all (_not_compared())
+    where r.name <> all (_not_compared()) and r.name <> all (_no_fixture())
       and (not has_table_privilege('anon', r.rel, 'SELECT') or _extra_columns(r.rel) <> '')
-      and _count(r.rel) = 0),
-  null, 'every relation authenticated holds more of than anon has a row here, so none passes empty');
+      and coalesce(_fixture_rows(r.rel), (select t.n from _t1_staff t where t.name = r.name), 0) = 0),
+  null, 'every relation authenticated holds more of than anon has a row in the Sales tenant (but _no_fixture''s, named), so none passes empty');
 select ok(
   (select bool_and(n > 0) from _seen
     where who = 'anon' and name in ('services', 'disciplines', 'testimonials', 'service_cases',
-                                    'media_assets', 'page_sections', 'pages')),
+                                    'media_assets', 'faq_items', 'page_sections', 'pages')),
   'and anon itself reads the public fixtures, so the comparison is not of nothing');
+
+-- The FAQ (0098, U7), the block's fourth table: anon reads the published question (T1 is
+-- the launch tenant anon resolves to here), a CMS staff token of the Sales tenant reads both,
+-- and a Sales token of the same tenant reads neither.
+set local role authenticated;
+select _as('93000000-0000-0000-0000-0000000000c1', 'content_creator', '93000000-0000-0000-0000-000000000001');
+insert into _seen select 'content_creator', 'faq_items', _count('public.faq_items');
+reset role;
+select _as(null, null, null);
+select is(
+  (select string_agg(who || '=' || n, ' ' order by who) from _seen where name = 'faq_items'),
+  'anon=1 content_creator=2 sales=0',
+  'the FAQ: anon reads the published question, a Content Creator both, a Sales token none (faq_items_staff_columns)');
+
+-- The attention list (0100_attention_staff.sql, H13): an Admin of the Sales tenant reads the
+-- published post's missing_image row; anon (no privilege on the view) and a Sales token of
+-- the same tenant read none.
+select is(
+  (select string_agg(who || '=' || n, ' ' order by who) from _seen where name = 'dashboard_attention')
+    || ' admin=' || (select n from _t1_staff where name = 'dashboard_attention'),
+  'anon=0 sales=0 admin=1',
+  'the attention list: an Admin of the Sales tenant reads its one row, anon and a Sales token none (H13)');
 
 -- ── 4. the member's own rows, the stats and the fence ──────────────────────────
 set local role authenticated;

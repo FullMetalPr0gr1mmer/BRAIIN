@@ -926,11 +926,13 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
   it('a release touching every registry type stays in a stated budget (the reads grow per table)', async () => {
     // One link-only change per type: readLive costs one read per table and primeLinks one per
     // link table (two for a table the selection also edits), so a broad release, not a long one,
-    // is what approaches the Free plan's 50. Validate alone costs 41 reads here (the rules do not
+    // is what approaches the Free plan's 50. Validate alone costs 42 reads here over the 22
+    // types (41 over R6's 21; Admin v2 U7's faq_items is one table more) (the rules do not
     // run: these changes stop at the Worker's own check), held as a tripwire; with the session's
-    // two reads, the apply and the after-effects a clean all-types publish is about 50. O-16
-    // measures it on staging; a cap on the tables per release, or one live read, follows it.
-    const MAX_READS = 41;
+    // two reads, the apply and the after-effects a clean all-types publish is about 51, past
+    // the 50. O-16 measures it on staging; a cap on the tables per release, or one live read,
+    // follows it. Releases are off (inert until R14), so no publish reaches it yet.
+    const MAX_READS = 42;
     const tables: Record<string, Row[]> = {};
     const drafts: Row[] = [];
     let n = 0;

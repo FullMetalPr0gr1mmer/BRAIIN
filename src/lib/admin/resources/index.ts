@@ -6,6 +6,7 @@ import { categoryResource } from './categories';
 import { certificationResource } from './certifications';
 import { clientResource } from './clients';
 import { disciplineResource } from './disciplines';
+import { faqResource } from './faq';
 import { mediaResource } from './media';
 import { navigationResource } from './navigation';
 import { pageResource } from './pages';
@@ -37,6 +38,7 @@ export {
   certificationResource,
   clientResource,
   disciplineResource,
+  faqResource,
   mediaResource,
   navigationResource,
   pageResource,
@@ -65,6 +67,7 @@ export const RESOURCES: Readonly<Record<string, ResourceConfig>> = {
   certifications: certificationResource,
   clients: clientResource,
   disciplines: disciplineResource,
+  faq: faqResource,
   media: mediaResource,
   navigation: navigationResource,
   pages: pageResource,

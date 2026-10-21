@@ -1,7 +1,7 @@
 import { PLACEHOLDER_FIELD, SORT_FIELD, STATUS_FIELD } from './fields';
 import type { ResourceUi } from './types';
 
-// Statistics: the list and the form at /admin/statistics.
+// Numbers: the form in the collection screen's drawer at /admin/statistics (Admin v2 U7b).
 export const statisticsUi: ResourceUi = {
   slug: 'statistics',
   title: 'Statistics',
@@ -27,7 +27,7 @@ export const statisticsUi: ResourceUi = {
       name: 'valueSuffix',
       label: 'Suffix',
       kind: 'text',
-      help: '“+”, “%”, “x” — at most 4 characters.',
+      help: 'Such as “+”, “%” or “x”. At most 4 characters.',
     },
     {
       name: 'value',

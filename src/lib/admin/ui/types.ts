@@ -106,6 +106,13 @@ export interface FieldDef {
    * the form shows one thing (an unticked box) while the server stores another.
    */
   defaultValue?: unknown;
+  /**
+   * `bilingual` (Admin v2 U7 and U10, the same flag from both): a paragraph, not a line: a
+   * five-row textarea per language, as `prose`, with the pair rule kept (both still
+   * required, unlike `prose`, whose Arabic may lag). Additive: unset, the field renders as
+   * before. Used by the FAQ answer, the testimonial quote and the SEO description.
+   */
+  multiline?: boolean;
   /** Text kinds: the most characters; shows "n/max" in the label row and sets maxLength. */
   maxLength?: number;
   /**
@@ -113,8 +120,6 @@ export interface FieldDef {
    * (an SEO override's empty box keeps the page's default, and says which words those are).
    */
   placeholder?: { en: string; ar: string };
-  /** `bilingual` (Admin v2 U10): a textarea per language, as `prose`, with the pair rule kept. */
-  multiline?: boolean;
   /** `color`: swatches to offer, and the text colour its contrast line is measured for. */
   color?: { swatches?: readonly string[]; contrastWith?: string };
   /** `range`: bounded steps; the value is a number. */

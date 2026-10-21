@@ -9,10 +9,17 @@
 -- and another tenant see none. The kinds the view had before (0028) are unchanged. No row
 -- exists in production until R3, R7 or R11 writes one.
 --
+-- H13 (0100_attention_staff.sql): the whole list is for CMS staff. A row over public content
+-- (a published post with no cover, which anon and Sales read in the table itself) is read by
+-- the tenant's Admin, Content Creator, SEO and Developer; a Sales claim, a token with no role
+-- claim, another tenant and anon read none of it. The owner's psql session (no switched
+-- role, no role claim) still reads it, for the launch runbook's checks, and reads none once
+-- it carries a Sales claim.
+--
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(15);
+select plan(26);
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────────
 insert into public.tenants (id, name) values
@@ -65,6 +72,11 @@ insert into public.portfolio (id, tenant_id, slug, title, status, is_placeholder
   ('66200000-0000-0000-0006-000000000001', '66200000-0000-0000-0000-00000000000a', 'r5a-sample',
    '{"en":"Sample","ar":"عينة"}', 'draft', true);
 
+-- A v1 row over public content (H13): a published post with no cover in A (missing_image).
+insert into public.blog_posts (id, tenant_id, slug, title, status) values
+  ('66200000-0000-0000-000b-000000000001', '66200000-0000-0000-0000-00000000000a', 'h13-post',
+   '{"en":"Post","ar":"مقال"}', 'published');
+
 create function _as(p_role text, p_tid text) returns void language sql as $$
   select set_config(
     'request.jwt.claims',
@@ -84,6 +96,11 @@ create function _v4() returns text language sql stable as $$
   select coalesce(string_agg(kind || ':' || right(id::text, 1), ',' order by kind, id::text), '')
     from public.dashboard_attention
    where kind in ('release_scheduled_today', 'release_overdue', 'release_failed', 'purge_failed', 'draft_stale')
+$$;
+-- Every row the current role sees about the published post (H13).
+create function _post() returns text language sql stable as $$
+  select coalesce(string_agg(kind, ',' order by kind), '')
+    from public.dashboard_attention where id = '66200000-0000-0000-000b-000000000001'
 $$;
 
 -- ── 1. The catalog ───────────────────────────────────────────────────────────────────
@@ -135,6 +152,42 @@ select _as(null, null);
 select throws_ok($$ select count(*) from public.dashboard_attention $$, '42501', null,
   'anon cannot read the attention list at all');
 reset role;
+
+-- ── 4. Only CMS staff read the list (H13, 0100_attention_staff.sql) ─────────────────
+set local role authenticated;
+select _as('admin', '66200000-0000-0000-0000-00000000000a');
+select is(_post(), 'missing_image', 'admin of the tenant reads the published post''s missing_image row');
+select _as('content_creator', '66200000-0000-0000-0000-00000000000a');
+select is(_post(), 'missing_image', 'content creator of the tenant reads it');
+select _as('seo', '66200000-0000-0000-0000-00000000000a');
+select is(_post(), 'missing_image', 'seo of the tenant reads it');
+select _as('developer', '66200000-0000-0000-0000-00000000000a');
+select is(_post(), 'missing_image', 'developer of the tenant reads it (site health counts the list through content_health)');
+select _as('sales', '66200000-0000-0000-0000-00000000000a');
+select is((select count(*)::int from public.blog_posts where id = '66200000-0000-0000-000b-000000000001'), 1,
+  'a sales claim of the tenant reads the post itself, as anon does');
+select is((select count(*)::int from public.dashboard_attention), 0,
+  'but no row of the attention list at all, the post''s included: it is for CMS staff');
+select _as(null, null);
+select is((select count(*)::int from public.dashboard_attention), 0,
+  'a signed-in token with no role claim reads none either');
+select _as('admin', '66200000-0000-0000-0000-00000000000b');
+select is(_post(), '', 'other_tenant: another tenant''s admin reads none of it');
+reset role;
+set local role anon;
+select _as(null, null);
+select throws_ok(
+  $$ select count(*) from public.dashboard_attention where id = '66200000-0000-0000-000b-000000000001' $$,
+  '42501', null, 'anon reads none of it (no privilege on the view)');
+reset role;
+-- The owner's psql session: no switched role. With no role claim it reads the list, for the
+-- launch runbook's checks; a role claim is judged like a token's.
+select _as(null, null);
+select is(_post(), 'missing_image', 'the owner''s session (no switched role, no role claim) still reads it');
+select _as('sales', '66200000-0000-0000-0000-00000000000a');
+select is((select count(*)::int from public.dashboard_attention), 0,
+  'the owner''s session carrying a Sales claim reads no row');
+select _as(null, null);
 
 select * from finish();
 rollback;

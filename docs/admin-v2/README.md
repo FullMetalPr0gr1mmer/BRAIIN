@@ -707,6 +707,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [U16](as-built/U16.md): the help centre: guides as typed blocks in the database, the "?" drawer with search and this screen's guides, `/admin/help`, 0046 (#62)
 - [U12a](as-built/U12a.md): users v2 and the session posture: the token's own claims and the session length checked, sessions revoked on a role change, the live read of profiles, the account owner, the Security card, the read-only role matrix, 0055 (PR number at review)
 - [U12b](as-built/U12b.md): invites: the acceptance page `/admin/invite` (eight pre-auth paths), Pending invites with Resend and Cancel, the invite drawer and message, switched off ("Not set up") until SMTP, the invite e-mail template, no address in the invite audit rows, 0056 (the help guide; PR number at review)
+- [U7](as-built/U7.md): collections and the FAQ, folded (U7a + U7b): `faq_items` (bilingual plain text, its CHECK, anon's column grant, registry row, guard, capture, history, `publish_scheduled`), one loader for the Contact band and its FAQPage with no code copy, the delta seed before the merge, the generic `AdminCollection` island (list, drawer, order, duplicate) for the FAQ and the five collections, the sample quote made real in one save, the collections-and-faq guide (one `app.put_help_guide`, revision 0), 0098 (built as 0070, renumbered at merge; #90)
 - [U17](as-built/U17.md): two factor sign in: TOTP set up on `/admin/2fa` (zero JS, the key and an `otpauth://` link), the second step held in two layers (the token hook at the required `aal`, `resolveAuthContext`'s pending step), Require 2FA for everyone, Reset 2FA, the 2FA column and health check, its two guides put through H11's catalog, 0072 (PR number at review)
 
 **Releases**
@@ -741,6 +742,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [H9](as-built/H9.md): lead notifications restored, signed and never silent, 0048; the staleDomain flake (#63)
 - [H10](as-built/H10.md): a stale Admin token changes no profile, and an audit row names who wrote it, 0050 (#66)
 - [H11](as-built/H11.md): the help-guide catalog: one row per guide, `app.help_article_set()` read from it, `app.put_help_guide`/`app.drop_help_guide` with a revision guard, so no slice restates the set, built as 0069 (number at merge; PR number at review)
+- [H13](as-built/H13.md): the attention list is for CMS staff: `dashboard_attention` restated as 0066 left it, wrapped once in `app.is_staff()` (or the owner's session: no switched role, no role claim), grants stated, so a Sales token reads no row; the Sales pgTAP's last unfixtured relation gets its row, built as `0100_attention_staff.sql` (number at merge; PR number at review)
 
 **Wave 0**
 - [W0-a](as-built/W0-a.md): CLAUDE.md §8 in bullets with one lane per track, the as-built files, the migration ledger, the runbook's rollback floor
