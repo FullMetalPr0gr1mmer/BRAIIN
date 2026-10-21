@@ -1447,8 +1447,10 @@ with the U9 read-back query; every value must match its expected line.
 2. To prove the staff bypass on production: turn maintenance on, then open the site in a
    private window (the 503, Retry-After, `no-store`) and in the signed-in browser (the site,
    `Cache-Control: private, no-store`, `X-Robots-Tag: noindex`); turn it off. A signed-in
-   person who still gets the 503 has a session the admin would refuse too (expired, switched
-   off, locked, or a second step owed): sign in again.
+   person who still gets the 503 either has an access token that expired while they were away
+   (the bypass refuses it before asking, though the admin would renew it): open any admin page
+   first (it renews the sign in), then reload the site; or has a session the admin refuses too
+   (switched off, locked, or a second step owed): sign in, or finish the second step, first.
 3. `kvSynced: false` after a save means the row changed but the edge did not: the site is
    still doing what it did before. Save again; the 10-minute reconcile heals an edge that says
    on while the row says off, never the other way round (a row on with the edge off is logged

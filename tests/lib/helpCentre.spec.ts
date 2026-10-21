@@ -1979,6 +1979,21 @@ describe('U9’s guides say what General settings and maintenance do (Admin v2 U
     expect(en).toContain(
       'If their sign in cannot be checked, they see the maintenance page like everyone else.',
     );
+    // An expired access token is refused before the check (the bypass's local pre-filter),
+    // though the admin renews that same session: whoever has been away opens an admin page
+    // first. The guide, the field's hint and the runbook say so; none says "sign in again".
+    expect(source('src/lib/http/maintenanceBypass.ts')).toContain(
+      'if (claims.exp * 1000 <= now) return false;',
+    );
+    const renew = 'open any admin page first (it renews the sign in), then reload the site';
+    expect(en).toContain(`Someone who has been away a while should ${renew}.`);
+    expect(ar).toContain('يفتح أي صفحة في لوحة الإدارة أولًا');
+    expect(source('src/lib/admin/ui/maintenance.ts')).toContain(
+      'After time away, open any admin page first to renew the sign in.',
+    );
+    const runbook = source('docs/launch-runbook.md').replace(/\s+/g, ' ');
+    expect(runbook).toContain(renew);
+    expect(runbook).not.toContain('or a second step owed): sign in again.');
     // Temporary to search engines: a 503 with Retry-After.
     expect(source('src/lib/http/maintenance.ts')).toContain("'retry-after': String(");
     expect(en).toContain('Search engines are told the break is temporary');

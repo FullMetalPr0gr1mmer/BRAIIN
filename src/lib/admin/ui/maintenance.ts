@@ -65,7 +65,7 @@ export const maintenanceUi: SingletonUi = {
       label: 'Signed in team still sees the site',
       kind: 'checkbox',
       column: 'staffBypass',
-      help: 'Anyone signed in to this admin sees the real site. If their sign in cannot be checked, they see the maintenance page.',
+      help: 'Anyone signed in to this admin sees the real site. If their sign in cannot be checked, they see the maintenance page. After time away, open any admin page first to renew the sign in.',
     },
     {
       name: 'allowlist',

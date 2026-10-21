@@ -41,7 +41,7 @@
       },
       {
         "t": "p",
-        "x": "With Signed in team still sees the site on, anyone signed in to this admin sees the real site. If their sign in cannot be checked, they see the maintenance page like everyone else. You can also allow IP addresses, for the client or an outside tester."
+        "x": "With Signed in team still sees the site on, anyone signed in to this admin sees the real site. If their sign in cannot be checked, they see the maintenance page like everyone else. Someone who has been away a while should open any admin page first (it renews the sign in), then reload the site. You can also allow IP addresses, for the client or an outside tester."
       },
       {
         "t": "p",
@@ -79,7 +79,7 @@
       },
       {
         "t": "p",
-        "x": "عند تشغيل Signed in team still sees the site يرى كل من سجّل الدخول إلى لوحة الإدارة الموقعَ الحقيقي. وإذا تعذّر التحقق من دخوله يرى صفحة الصيانة مثل الجميع. ويمكنك أيضًا السماح بعناوين IP للعميل أو لمختبِر من الخارج."
+        "x": "عند تشغيل Signed in team still sees the site يرى كل من سجّل الدخول إلى لوحة الإدارة الموقعَ الحقيقي. وإذا تعذّر التحقق من دخوله يرى صفحة الصيانة مثل الجميع. ومن غاب مدة يفتح أي صفحة في لوحة الإدارة أولًا (فهذا يجدّد دخوله) ثم يعيد تحميل الموقع. ويمكنك أيضًا السماح بعناوين IP للعميل أو لمختبِر من الخارج."
       },
       {
         "t": "p",
