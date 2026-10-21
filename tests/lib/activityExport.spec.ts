@@ -269,7 +269,14 @@ describe('the lockdown, in order', () => {
       ]),
     );
     expect(String(read.calls.find(([m]) => m === 'select')?.[1][0])).not.toMatch(/hash/);
-    expect(rpcs).toEqual([{ fn: 'audit_people', args: { p_tenant: TENANT, p_ids: [AMAL] } }]);
+    // The people lookup, and the studio's zone (the file's `when_studio` column, Admin v2 U9)
+    // through public.studio_time_zone(), which takes no argument: the token's own tenant.
+    expect(rpcs.filter((r) => r.fn !== 'studio_time_zone')).toEqual([
+      { fn: 'audit_people', args: { p_tenant: TENANT, p_ids: [AMAL] } },
+    ]);
+    expect(rpcs.filter((r) => r.fn === 'studio_time_zone')).toEqual([
+      { fn: 'studio_time_zone', args: undefined },
+    ]);
   });
 });
 
@@ -341,9 +348,9 @@ describe('the file', () => {
     expect(text).not.toContain('sara@acme.example');
     expect(text).not.toContain('should-never-be-read');
     expect(text).not.toContain('Called twice');
-    // No title is looked up (no entity table is read); site_settings is the studio's time
-    // zone, the file's `when_studio` column (Admin v2 U9).
-    expect(new Set(reads.map((r) => r.table))).toEqual(new Set(['audit_log', 'site_settings']));
+    // No title is looked up (no entity table is read); the studio's time zone, the file's
+    // `when_studio` column (Admin v2 U9), is an rpc, not a table read.
+    expect(new Set(reads.map((r) => r.table))).toEqual(new Set(['audit_log']));
   });
 
   it('neutralises a spreadsheet formula in a name, and marks a former member', async () => {
