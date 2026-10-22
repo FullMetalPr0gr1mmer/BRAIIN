@@ -50,10 +50,11 @@ jobs:
   e2e:
     name: E2E + axe + CSP + video bytes
     runs-on: ubuntu-latest
-    # 45: the suite itself took 23 minutes once U8's admin suites joined it, and with the stack,
+    # 55: the suite itself took 23 minutes once U8's admin suites joined it, and with the stack,
     # the build and the design capture the job passed 30 and was cancelled with every test
-    # green. Sharding the suite is the follow-up if it nears this again (the rule caps jobs at 60).
-    timeout-minutes: 45
+    # green; the browser install below may now take up to 20 of it on a slow mirror. Sharding
+    # the suite and caching the browser are the follow-ups (the rule caps jobs at 60).
+    timeout-minutes: 55
     env:
       # As above, but WITH storage-api: tests/e2e/apply-roundtrip.e2e.ts sends one real Join
       # application, and its CV must reach the private `applications` bucket (migration
@@ -102,10 +103,11 @@ jobs:
           '{"/e2e-old":{"to":"/about","status":301},"/e2e-temp":{"to":"/contact?from=e2e","status":302},"/e2e-anchor":{"to":"/services#e2e","status":308},"/api/e2e-old":{"to":"/about","status":301}}'
           --binding SESSION --local --preview
       # 22-132 s normally. A stalled download once held this step for 94 min (2026-10-07, on
-      # the old pipeline, no job timeout); the cap fails it fast, so the re-run (runbook §5b)
-      # starts long before the job's 30 minutes run out and the merge queue moves again.
+      # the old pipeline, no job timeout), so it keeps a cap. 20, not 10: on 2026-10-22 the
+      # runner's apt mirror served --with-deps at 44 kB/s (25.9 MB in 9 min 45 s) and three runs
+      # in a row were cut off at 10 minutes with every test still to run.
       - name: Install Playwright Chromium
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: npx playwright install --with-deps chromium
       - name: Start preview (wrangler dev)
         run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env &

@@ -38,6 +38,9 @@ const OUTPUT_TYPES = {
   avif: 'image/avif',
   webp: 'image/webp',
   jpg: 'image/jpeg',
+  // The site icons only (Admin v2 U9): the guard admits PNG for a square upload at one of
+  // ICON_WIDTHS and nothing else (imageGuard.ts checkIcon).
+  png: 'image/png',
 } as const;
 
 /** What the Images binding is asked to do with an upload (worker-configuration.d.ts `ImageTransform`). */

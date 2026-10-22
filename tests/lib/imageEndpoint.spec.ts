@@ -145,6 +145,20 @@ describe('the /_image endpoint', () => {
     expect(adapter).not.toHaveBeenCalled();
   });
 
+  it('a square upload asked as a site icon (PNG at a listed size) is transformed to PNG (U9)', async () => {
+    // The guard admits PNG for an icon only (imageGuard.ts checkIcon); the endpoint's own
+    // format table must carry it too, or every icon link in the head is a 400 (U9 e2e).
+    const square = storageThumbUrl(`${TENANT}/44444444-4444-4444-8444-444444444444_600x600.webp`)!;
+    const href = new URL(square, 'https://x.test').searchParams.get('href')!;
+    const res = await call(`/_image?href=${encodeURIComponent(href)}&w=32&h=32&f=png`);
+    expect(res.status).toBe(200);
+    expect(fetched).toEqual([href]);
+    expect(state.calls).toStrictEqual([
+      { width: 32, fit: 'scale-down', format: 'image/png', quality: 85 },
+    ]);
+    expect(res.headers.get('content-type')).toBe('image/png');
+  });
+
   it.each([
     [
       'a missing object (the bucket answers JSON)',

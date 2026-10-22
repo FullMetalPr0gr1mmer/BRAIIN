@@ -31,7 +31,11 @@ const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const SESSION = '__Host-braiin-auth';
 
 async function csrf(page: Page): Promise<string> {
-  if (!page.url().includes('/admin')) await page.goto('/admin', { waitUntil: 'networkidle' });
+  // By the token itself, not the address: the preview test ends on /api/admin/…/preview, a
+  // bare maintenance page with no admin layout and so no token.
+  if ((await page.locator('meta[name="csrf-token"]').count()) === 0) {
+    await page.goto('/admin', { waitUntil: 'networkidle' });
+  }
   const token = await page.locator('meta[name="csrf-token"]').getAttribute('content');
   expect(token, 'the admin layout carries a CSRF token').toBeTruthy();
   return token!;
@@ -217,7 +221,8 @@ test('Preview full screen: the saved page, 200, private, axe-clean, no CSP viola
     const res = await page.goto(`${PREVIEW}?lang=${lang}`);
     expect(res?.status()).toBe(200);
     expect(res?.headers()['cache-control']).toContain('no-store');
-    expect(res?.headers()['x-robots-tag']).toBe('noindex');
+    // A private /api/admin answer: the middleware's Tier C rule makes it 'noindex, nofollow'.
+    expect(res?.headers()['x-robots-tag']).toBe('noindex, nofollow');
     await expect(page.locator('h1')).toHaveText(
       lang === 'en' ? 'Back very soon' : 'نعود قريبًا جدًا',
     );
