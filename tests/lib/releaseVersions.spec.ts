@@ -1250,3 +1250,39 @@ describe('POST /api/admin/releases with kind rollback', () => {
     expect(applyArgs()?.['p_restores_release_id']).toBe(null);
   });
 });
+
+describe('the Free plan’s 50 subrequests (P-15)', () => {
+  it('restoring 60 edits of one table costs a handful of reads, never one per change', async () => {
+    const services = Array.from({ length: 60 }, (_, i) =>
+      liveService({ id: id(3000 + i), slug: `s${i}`, title: BI(`Now ${i}`, `الآن ${i}`) }),
+    );
+    const db = seed(
+      { services },
+      asOf(
+        1,
+        services.map((s) => ({
+          entity_type: 'service',
+          entity_id: String(s['id']),
+          before: { ...s, title: BI('Then', 'سابقا') },
+          exists_now: true,
+        })),
+      ),
+    );
+    const res = await restore(db);
+    expect(res.status).toBe(200);
+    expect((res.data['staged'] as Row[]).length).toBe(60);
+    // The person's client: the flag, the version, the ledger, the live rows, the pending
+    // changes, the writer and the audit row; the service client: the re-read and the mark.
+    expect(db.calls.map((c) => c.name).sort()).toEqual([
+      'audit_log',
+      'content_drafts',
+      'content_drafts',
+      'content_releases',
+      'profiles',
+      'release_as_of',
+      'releases_enabled',
+      'services',
+      'write_drafts',
+    ]);
+  });
+});
