@@ -19,11 +19,47 @@ import type { FieldDef } from './uiSchema';
 //     trigger-set fields, the derived ones such as reading_minutes), never from local state.
 //   - a table with an edge snapshot (redirects) answers `kvSynced`; false is a committed
 //     row the public request path does not see yet (`edgeMissed`).
+//
+// Draft mode (Admin v2 R12, P-5): with releases on, a release-managed route answers its row
+// with a `draft` key, the pending change the row carries (null when there is none yet), and it
+// never does with releases off. The machine reads that key and nothing else to know the mode:
+//   - every save names the pending change it was made on (`draftId` + `draftVersion`, beside
+//     the live `version`), as R3a's staged PATCH asks;
+//   - a value typed while a save is in flight is kept when its answer lands (an autosave runs
+//     while the person types);
+//   - the 409s of a pending change each have their way out: someone else saved it
+//     (`draft-conflict`, the "Reload their version" banner), it was published or thrown away
+//     under the form (`draft-published`, `draft-discarded`: the values stay, the form is on
+//     live again, "Save again" makes a new change), a schedule holds it (`scheduled`);
+//   - autosave waits for the person after any of those (`held`), and for the next edit after
+//     a refused automatic save (`autoBlocked`).
+// With releases off no answer carries `draft`, so `draft` stays undefined and every rule above
+// is the live mode's, request for request (tests/lib/entitySave.spec.ts).
 
 type Row = Record<string, unknown>;
 
-/** How an editor saves: explicit Save with version/409 (`live`), or drafts (R12). */
+/** How an editor saves: explicit Save with version/409 (`live`), or pending changes (R12). */
 export type SaveMode = 'live' | 'draft';
+
+/**
+ * The pending change an editor is on (Admin v2 R12): the item read's `draft` (R3a's DraftMeta,
+ * as overlayRow answers it). `releaseId`: a scheduled release has claimed it (read only).
+ * `conflict`: the columns live moved in since the change began. `liveMissing`: the live row is
+ * gone under it. `invalid`: its stored payload no longer reads.
+ */
+export interface EditorDraft {
+  id: string;
+  version: number;
+  op: 'create' | 'update' | 'delete';
+  fields: readonly string[];
+  releaseId: string | null;
+  conflict: readonly string[];
+  liveMissing: boolean;
+  invalid: boolean;
+}
+
+/** The draft-specific 409s of a staged save that leave the form on live again (R3a). */
+export type DraftGone = 'draft-published' | 'draft-discarded';
 
 /**
  * What an editor saves: one row of a collection, or a per-tenant singleton. A collection
@@ -59,6 +95,22 @@ export interface EntitySaveState {
   message: string | null;
   /** The row is saved but the public request path's snapshot was not rebuilt. */
   edgeMissed: boolean;
+  /**
+   * Admin v2 R12: the pending change the form is on. Undefined: the server saves live (no
+   * answer carried `draft`: releases off, or a route outside the release); null: releases on
+   * and nothing pending yet.
+   */
+  draft: EditorDraft | null | undefined;
+  /** The record is staged for removal (the item read's `pendingRemoval`): read only. */
+  pendingRemoval: boolean;
+  /** The values the save in flight sent: draft mode keeps what was typed since. */
+  sent: Row | null;
+  /** Autosave waits for the person (a conflict, a change gone under the form, a schedule). */
+  held: boolean;
+  /** Autosave waits for the next edit: the last automatic save was refused as it stood. */
+  autoBlocked: boolean;
+  /** The change was published or thrown away under the form; "Save again" makes a new one. */
+  gone: DraftGone | null;
 }
 
 export type EntitySaveAction =
@@ -77,6 +129,8 @@ export type EntitySaveAction =
       type: 'save-failed';
       message: string | null;
       errors?: { byId: FieldErrors; summary: readonly FieldError[] } | undefined;
+      /** R12: an automatic save (autosave then waits for the next edit). */
+      auto?: boolean | undefined;
     }
   | {
       /**
@@ -89,6 +143,19 @@ export type EntitySaveAction =
       navigating: boolean;
     }
   | { type: 'conflict' }
+  /**
+   * Admin v2 R12: the pending change the form was on is gone, published or thrown away; the
+   * server answered with the live row (or none). The values stay; the form is on live again.
+   */
+  | {
+      type: 'draft-gone';
+      code: DraftGone;
+      live: Row | null;
+      fields: readonly FieldDef[];
+      versionFallback: number;
+    }
+  /** Admin v2 R12: a scheduled release holds the change: nothing can be saved over it. */
+  | { type: 'scheduled' }
   | { type: 'reset' }
   /**
    * Admin v2 U9: the row moved by ONE write this screen made itself on another column (the
@@ -138,8 +205,56 @@ export function initialSaveState(
     conflict: false,
     message: null,
     edgeMissed: false,
+    draft: undefined,
+    pendingRemoval: false,
+    sent: null,
+    held: false,
+    autoBlocked: false,
+    gone: null,
   };
 }
+
+const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+
+/**
+ * The pending change a server row carries (Admin v2 R12): undefined when the row has no
+ * `draft` key (the server saved it live), null when releases are on and nothing is pending.
+ */
+export function readDraft(row: Readonly<Row>): EditorDraft | null | undefined {
+  if (!('draft' in row)) return undefined;
+  const d = row['draft'];
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return null;
+  const meta = d as Row;
+  const id = str(meta['id']);
+  const version = meta['version'];
+  const op = meta['op'];
+  if (!id || typeof version !== 'number') return null;
+  if (op !== 'create' && op !== 'update' && op !== 'delete') return null;
+  const list = (v: unknown) =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  return {
+    id,
+    version,
+    op,
+    fields: list(meta['fields']),
+    releaseId: str(meta['releaseId']),
+    conflict: list(meta['conflict']),
+    liveMissing: meta['liveMissing'] === true,
+    invalid: meta['invalid'] === true,
+  };
+}
+
+/** What a server row says of the release: its pending change, and a staged removal. */
+function draftOf(row: Readonly<Row>): Pick<EntitySaveState, 'draft' | 'pendingRemoval'> {
+  const draft = readDraft(row);
+  return {
+    draft,
+    pendingRemoval:
+      draft !== undefined && (row['pendingRemoval'] === true || draft?.op === 'delete'),
+  };
+}
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export function entitySaveReducer(
   state: EntitySaveState,
@@ -158,6 +273,11 @@ export function entitySaveReducer(
         errors: NO_ERRORS,
         conflict: false,
         message: null,
+        ...draftOf(action.row),
+        sent: null,
+        held: false,
+        autoBlocked: false,
+        gone: null,
       };
     }
     case 'load-failed':
@@ -170,23 +290,51 @@ export function entitySaveReducer(
         // An edit after a save is a new change: the old "not on the edge" no longer
         // describes what is on screen (as ResourceForm did).
         edgeMissed: false,
+        // R12: an edit is a new attempt, so autosave may try again.
+        autoBlocked: false,
       };
     case 'save-start':
-      return { ...state, phase: 'saving', status: 'saving', message: null, errors: NO_ERRORS };
+      return {
+        ...state,
+        phase: 'saving',
+        status: 'saving',
+        message: null,
+        errors: NO_ERRORS,
+        sent: state.values,
+        held: false,
+        gone: null,
+      };
     case 'saved': {
-      const values = rowToForm(action.row, action.fields);
+      const fromServer = rowToForm(action.row, action.fields);
+      const pending = draftOf(action.row);
+      // Draft mode: what was typed while this save was on its way stays on screen (and still
+      // to save); everything else takes the server's answer. Live mode re-seeds as it did.
+      let values = fromServer;
+      let typedSince = false;
+      if (pending.draft !== undefined && state.sent) {
+        const sent = state.sent;
+        values = { ...fromServer };
+        for (const key of Object.keys(state.values)) {
+          if (!same(state.values[key], sent[key])) {
+            values[key] = state.values[key];
+            typedSince = true;
+          }
+        }
+      }
       return {
         ...state,
         values,
-        initial: values,
+        initial: fromServer,
         version: Number(action.row['version'] ?? state.version + 1),
         phase: 'ready',
-        status: 'saved',
+        status: typedSince ? 'dirty' : 'saved',
         savedAt: action.at,
         errors: NO_ERRORS,
         conflict: false,
         message: null,
         edgeMissed: action.row['kvSynced'] === false,
+        ...pending,
+        sent: null,
       };
     }
     case 'created':
@@ -206,10 +354,51 @@ export function entitySaveReducer(
         status: 'error',
         message: action.message,
         errors: action.errors ?? NO_ERRORS,
+        sent: null,
+        autoBlocked: action.auto === true,
       };
     case 'conflict':
       // The editor's values are kept: "Reload their version" is a choice, not a reset.
-      return { ...state, phase: 'ready', status: 'error', conflict: true, message: null };
+      return {
+        ...state,
+        phase: 'ready',
+        status: 'error',
+        conflict: true,
+        message: null,
+        sent: null,
+        held: true,
+      };
+    case 'draft-gone': {
+      // The values stay (they are the person's work); the form is on live again, so the next
+      // save is a new pending change over the live version ("Save again").
+      const initial = action.live ? rowToForm(action.live, action.fields) : state.initial;
+      return {
+        ...state,
+        initial,
+        version: action.live
+          ? Number(action.live['version'] ?? action.versionFallback)
+          : state.version,
+        phase: 'ready',
+        status: 'error',
+        errors: NO_ERRORS,
+        message: null,
+        conflict: false,
+        draft: state.draft === undefined ? undefined : null,
+        pendingRemoval: false,
+        sent: null,
+        held: true,
+        gone: action.code,
+      };
+    }
+    case 'scheduled':
+      return {
+        ...state,
+        phase: 'ready',
+        status: 'error',
+        message: SCHEDULED_WORDS,
+        sent: null,
+        held: true,
+      };
     case 'version':
       return Number.isInteger(action.version) && action.version === state.version + 1
         ? { ...state, version: action.version }
@@ -227,10 +416,43 @@ export function entitySaveReducer(
   }
 }
 
+/** What a change a scheduled release holds says (R12). */
+export const SCHEDULED_WORDS =
+  'This change is scheduled to go live, so it cannot be edited now. Unschedule it to change it.';
+
+/** The words for a pending change gone under the form (R12). */
+export const DRAFT_GONE_WORDS: Readonly<Record<DraftGone, string>> = {
+  'draft-published':
+    'This change was published while you were editing. Your edits are still here: save again to make them a new unpublished change.',
+  'draft-discarded':
+    'This change was thrown away while you were editing. Your edits are still here: save again to keep them.',
+};
+
 /** True while the values differ from what was loaded or last saved. */
 export function isDirty(state: EntitySaveState): boolean {
   if (state.phase === 'loading' || state.phase === 'load-failed') return false;
   return JSON.stringify(state.values) !== JSON.stringify(state.initial);
+}
+
+/**
+ * Whether an automatic save (a blur, a tab switch, the page editor's idle timer) should run
+ * now (Admin v2 R12, P-5): `save`, `later` (one is on its way: run again once it lands) or
+ * `no`. Never in live mode (releases off: P-5's explicit Save), never for a new record, a
+ * staged removal, a scheduled change, after a conflict or a change gone under the form
+ * (`held`, until the person acts), or after a refused automatic save until the next edit.
+ */
+export function autosaveDecision(
+  state: EntitySaveState,
+  isNew: boolean,
+  inFlight: boolean,
+): 'save' | 'later' | 'no' {
+  if (state.draft === undefined || isNew) return 'no';
+  if (state.held || state.autoBlocked || state.pendingRemoval || state.draft?.releaseId) {
+    return 'no';
+  }
+  if (inFlight) return 'later';
+  if (state.phase !== 'ready' || !isDirty(state)) return 'no';
+  return 'save';
 }
 
 /** Where an editor reads its row from. */
@@ -257,6 +479,9 @@ export function buildSaveRequest(
   fields: readonly FieldDef[],
 ): { url: string; method: 'POST' | 'PATCH' | 'PUT'; body: Row } {
   const body = formToPayload(state.values, fields);
+  // R12: a save on a pending change names it, at the version the form holds (R3a). Only in
+  // draft mode: with releases off the request is exactly what it always was.
+  const ref = state.draft ? { draftId: state.draft.id, draftVersion: state.draft.version } : {};
   if (target.kind === 'entitySeo') {
     // A full replace: every field the form holds, the target, and the version it loaded.
     return {
@@ -267,6 +492,7 @@ export function buildSaveRequest(
         entityType: target.entityType,
         entityId: target.entityId,
         version: state.version,
+        ...ref,
       },
     };
   }
@@ -283,7 +509,7 @@ export function buildSaveRequest(
     target.kind === 'resource' && target.saveUrl && id !== null
       ? target.saveUrl(id)
       : loadUrl(target, id);
-  return { url, method: 'PATCH', body: { ...body, version: state.version } };
+  return { url, method: 'PATCH', body: { ...body, version: state.version, ...ref } };
 }
 
 /** Where a created record opens: its edit screen, saying so when the edge missed it. */

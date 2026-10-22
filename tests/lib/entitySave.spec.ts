@@ -1,11 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  autosaveDecision,
   buildSaveRequest,
   createdHref,
+  DRAFT_GONE_WORDS,
   entitySaveReducer,
   initialSaveState,
   isDirty,
   loadUrl,
+  readDraft,
+  SCHEDULED_WORDS,
   versionFallback,
   type EntitySaveAction,
   type EntitySaveState,
@@ -343,22 +347,193 @@ describe('a failed "Reload their version" (review L10)', () => {
   });
 });
 
-describe('draft mode (brief §9)', () => {
-  it('throws until releases fill it in (R12)', async () => {
+// Admin v2 R12: draft mode. The server says which mode a record is in: a release-managed
+// route with releases on answers its row with a `draft` key (null when nothing is pending,
+// R3a's DraftMeta otherwise), and never does with releases off.
+const DRAFT = {
+  id: '77777777-7777-4777-8777-000000000001',
+  version: 3,
+  op: 'update',
+  fields: ['slug'],
+  updatedBy: null,
+  updatedAt: '2026-10-23T08:00:00Z',
+  releaseId: null,
+};
+const STAGED = { ...ROW, slug: 'logo-new', draft: DRAFT };
+
+describe('draft mode (Admin v2 R12)', () => {
+  it('follows the server: no `draft` key is live mode, request for request', () => {
+    const live = run(loaded(), { type: 'set', name: 'slug', value: 'logos' });
+    expect(live.draft).toBeUndefined();
+    const req = buildSaveRequest(SERVICES, 'r1', live, FIELDS);
+    expect(req.body).not.toHaveProperty('draftId');
+    expect(req.body).not.toHaveProperty('draftVersion');
+    expect(Object.keys(req.body).sort()).toEqual(['slug', 'title', 'version', 'visible']);
+    expect(readDraft(ROW)).toBeUndefined();
+    // Every R12 member stays at its live-mode value.
+    expect(live).toMatchObject({
+      pendingRemoval: false,
+      held: false,
+      autoBlocked: false,
+      gone: null,
+    });
+  });
+
+  it('a save on a pending change names it at the version the form holds', () => {
+    const state = run(loaded(STAGED), { type: 'set', name: 'slug', value: 'logo-newer' });
+    expect(state.draft).toMatchObject({ id: DRAFT.id, version: 3, op: 'update' });
+    const req = buildSaveRequest(SERVICES, 'r1', state, FIELDS);
+    expect(req.body).toMatchObject({ version: 4, draftId: DRAFT.id, draftVersion: 3 });
+    // Entity SEO's full replace names it too.
+    const seo = run(loaded(STAGED, PAGE_SEO), { type: 'set', name: 'slug', value: 'x' });
+    expect(buildSaveRequest(PAGE_SEO, null, seo, FIELDS).body).toMatchObject({
+      draftId: DRAFT.id,
+      draftVersion: 3,
+    });
+  });
+
+  it('releases on with nothing pending (draft: null) sends the live version only', () => {
+    const state = run(loaded({ ...ROW, draft: null }), { type: 'set', name: 'slug', value: 'x' });
+    expect(state.draft).toBeNull();
+    const body = buildSaveRequest(SERVICES, 'r1', state, FIELDS).body;
+    expect(body['version']).toBe(4);
+    expect(body).not.toHaveProperty('draftId');
+  });
+
+  it('a pending create (no live version) sends version 0 and the change', () => {
+    const create = { ...ROW, version: 0, draft: { ...DRAFT, op: 'create', version: 1 } };
+    const state = run(loaded(create), { type: 'set', name: 'slug', value: 'x' });
+    expect(buildSaveRequest(SERVICES, 'r1', state, FIELDS).body).toMatchObject({
+      version: 0,
+      draftVersion: 1,
+    });
+  });
+
+  it('what was typed while a save was on its way stays; live mode re-seeds as before', () => {
+    const typed = run(
+      loaded(STAGED),
+      { type: 'set', name: 'slug', value: 'sent' },
+      { type: 'save-start' },
+      { type: 'set', name: 'title', value: { en: 'Typed since', ar: 'كتب' } },
+    );
+    const answer = { ...STAGED, slug: 'sent', draft: { ...DRAFT, version: 4 } };
+    const done = run(typed, { type: 'saved', row: answer, fields: FIELDS, at: 'now' });
+    expect(done.values['slug']).toBe('sent');
+    expect(done.values['title']).toEqual({ en: 'Typed since', ar: 'كتب' });
+    expect(done.initial['title']).toEqual(ROW.title);
+    expect([done.status, isDirty(done), done.draft?.version]).toEqual(['dirty', true, 4]);
+    // Live mode: the server's row, as F5a built it.
+    const liveTyped = run(
+      loaded(),
+      { type: 'set', name: 'slug', value: 'sent' },
+      { type: 'save-start' },
+      { type: 'set', name: 'title', value: { en: 'Typed since', ar: 'كتب' } },
+    );
+    const liveDone = run(liveTyped, {
+      type: 'saved',
+      row: { ...ROW, slug: 'sent', version: 5 },
+      fields: FIELDS,
+      at: 'now',
+    });
+    expect(liveDone.values['title']).toEqual(ROW.title);
+    expect(liveDone.status).toBe('saved');
+  });
+
+  it('a change published or thrown away under the form: the edits stay, on live again', () => {
+    const state = run(
+      loaded(STAGED),
+      { type: 'set', name: 'slug', value: 'mine' },
+      { type: 'save-start' },
+      {
+        type: 'draft-gone',
+        code: 'draft-published',
+        live: { ...ROW, slug: 'logo-new', version: 5 },
+        fields: FIELDS,
+        versionFallback: 1,
+      },
+    );
+    expect(state).toMatchObject({ gone: 'draft-published', held: true, draft: null, version: 5 });
+    expect(state.values['slug']).toBe('mine');
+    expect(state.initial['slug']).toBe('logo-new');
+    // "Save again": a new pending change over the live version, naming no old change.
+    const body = buildSaveRequest(SERVICES, 'r1', state, FIELDS).body;
+    expect(body).toMatchObject({ slug: 'mine', version: 5 });
+    expect(body).not.toHaveProperty('draftId');
+    // An explicit save clears the hold and the notice.
+    expect(run(state, { type: 'save-start' })).toMatchObject({ held: false, gone: null });
+  });
+
+  it('a scheduled change is held with words; a staged removal is read from the row', () => {
+    const held = run(loaded(STAGED), { type: 'scheduled' });
+    expect(held).toMatchObject({ held: true, message: SCHEDULED_WORDS });
+    const removal = loaded({ ...ROW, pendingRemoval: true, draft: { ...DRAFT, op: 'delete' } });
+    expect(removal.pendingRemoval).toBe(true);
+    // Live mode never reads `pendingRemoval`: no live row carries it.
+    expect(loaded({ ...ROW, pendingRemoval: true }).pendingRemoval).toBe(false);
+    expect(DRAFT_GONE_WORDS['draft-discarded']).not.toMatch(/[–—]/);
+  });
+
+  it('reads the change’s conflict and a row gone under it', () => {
+    const conflict = loaded({ ...STAGED, draft: { ...DRAFT, conflict: ['title'] } });
+    expect(conflict.draft?.conflict).toEqual(['title']);
+    const gone = loaded({ id: 'r1', version: null, draft: { ...DRAFT, liveMissing: true } });
+    expect(gone.draft?.liveMissing).toBe(true);
+  });
+});
+
+describe('autosave (Admin v2 R12, P-5)', () => {
+  const edited = (row: Record<string, unknown> = STAGED) =>
+    run(loaded(row), { type: 'set', name: 'slug', value: 'typed' });
+
+  it('saves an unsaved pending change; never in live mode, never a new record', () => {
+    expect(autosaveDecision(edited(), false, false)).toBe('save');
+    expect(autosaveDecision(edited(ROW), false, false)).toBe('no');
+    expect(autosaveDecision(edited(), true, false)).toBe('no');
+    // Nothing typed: nothing to save.
+    expect(autosaveDecision(loaded(STAGED), false, false)).toBe('no');
+  });
+
+  it('waits for a save on its way, and runs again once it lands', () => {
+    expect(autosaveDecision(edited(), false, true)).toBe('later');
+  });
+
+  it('waits for the person after a conflict, a gone change or a schedule; for an edit after a refusal', () => {
+    expect(autosaveDecision(run(edited(), { type: 'conflict' }), false, false)).toBe('no');
+    expect(autosaveDecision(run(edited(), { type: 'scheduled' }), false, false)).toBe('no');
+    const scheduled = edited({ ...STAGED, draft: { ...DRAFT, releaseId: DRAFT.id } });
+    expect(autosaveDecision(scheduled, false, false)).toBe('no');
+    const refused = run(
+      edited(),
+      { type: 'save-start' },
+      { type: 'save-failed', message: 'x', auto: true },
+    );
+    expect(autosaveDecision(refused, false, false)).toBe('no');
+    // The next edit is a new attempt.
+    const retyped = run(refused, { type: 'set', name: 'slug', value: 'fixed' });
+    expect(autosaveDecision(retyped, false, false)).toBe('save');
+    // An explicit save that failed does not block the automatic ones.
+    const explicit = run(edited(), { type: 'save-start' }, { type: 'save-failed', message: 'x' });
+    expect(autosaveDecision(explicit, false, false)).toBe('save');
+    // A staged removal is read only.
+    const removal = edited({ ...ROW, pendingRemoval: true, draft: { ...DRAFT, op: 'delete' } });
+    expect(autosaveDecision(removal, false, false)).toBe('no');
+  });
+});
+
+describe('the hook in live mode (F5a, unchanged by R12)', () => {
+  it('renders a new record as before; asking for draft mode no longer throws', async () => {
     const { createElement } = await import('react');
     const { renderToStaticMarkup } = await import('react-dom/server');
     const { useEntitySave } = await import('@/lib/admin/useEntitySave');
-    function Draft() {
-      useEntitySave(SERVICES, 'r1', { fields: FIELDS, mode: 'draft' });
-      return null;
-    }
-    expect(() => renderToStaticMarkup(createElement(Draft))).toThrow(
-      'Draft saving arrives with releases (R12)',
-    );
     function Live() {
       const save = useEntitySave(SERVICES, null, { fields: FIELDS, mode: 'live' });
-      return createElement('p', null, save.isNew ? 'new' : 'old');
+      return createElement('p', null, `${save.isNew ? 'new' : 'old'} ${save.mode}`);
     }
-    expect(renderToStaticMarkup(createElement(Live))).toBe('<p>new</p>');
+    expect(renderToStaticMarkup(createElement(Live))).toBe('<p>new live</p>');
+    function Draft() {
+      const save = useEntitySave(SERVICES, 'r1', { fields: FIELDS, mode: 'draft' });
+      return createElement('p', null, `${save.draft === null ? 'none' : 'some'}`);
+    }
+    expect(renderToStaticMarkup(createElement(Draft))).toBe('<p>none</p>');
   });
 });
