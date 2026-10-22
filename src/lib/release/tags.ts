@@ -14,10 +14,12 @@ import { RELEASE_REGISTRY, type RegistryEntry } from './registry';
 //     page's own item in the same release gives the slug, before and after, else one read);
 //   • an SEO row's target, `service:`, `blog:`, `portfolio:` or `page:<slug>`;
 //   • a case study's link sets (`portfolio_children`), its own `portfolio:<slug>`;
-//   • `route:sitemap` and `route:llms` when a URL appears, goes, moves or changes state: a
-//     create, removal, slug or status change of a page, service, discipline, case study or
-//     post, and any change to page visibility or to search settings (the sitemap and llms.txt
-//     list only what is public and indexable);
+//   • `route:sitemap` and `route:llms` for ANY change of a page, service, discipline, case
+//     study or post, and any change to page visibility or to search settings: the two list
+//     only what is public and indexable, llms.txt names titles and descriptions, and the
+//     sitemap's <lastmod> is the row's `updated_at`, which every applied edit moves (CLAUDE.md
+//     Pillar 3, truthful dates). The design's narrower "URL changes" would leave a stale
+//     lastmod after an edit;
 //   • nothing for a redirect: its rule lives in the edge map (KV `site:redirects`), rebuilt
 //     after the release, not in a cached page.
 // Anything this cannot resolve (a row it cannot read, a type it does not know) is
@@ -44,10 +46,16 @@ export type SlugLookup = (
   reads: readonly { table: SlugTable; ids: readonly string[] }[],
 ) => Promise<ReadonlyMap<SlugTable, ReadonlyMap<string, string>>>;
 
-/** Types whose URL is public: a create, removal, slug or status change moves the sitemap. */
-const URL_TYPES = new Set(['page', 'service', 'discipline', 'portfolio', 'blog_post']);
 /** Types whose every change moves the sitemap and llms.txt (what is listed, and how). */
-const LISTING_TYPES = new Set(['page_visibility', 'entity_seo']);
+const LISTING_TYPES = new Set([
+  'page',
+  'service',
+  'discipline',
+  'portfolio',
+  'blog_post',
+  'page_visibility',
+  'entity_seo',
+]);
 
 export const SITEMAP_TAGS = ['route:sitemap', 'route:llms'] as const;
 
@@ -57,16 +65,9 @@ const imageOf = (item: Item, side: 'before' | 'after'): Row | null =>
 const str = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
 
-/** Whether this item moves a public URL or what the listings show. */
-function movesUrl(item: Item): boolean {
-  if (LISTING_TYPES.has(item.entity_type)) return true;
-  if (!URL_TYPES.has(item.entity_type)) return false;
-  if (item.op !== 'update') return true;
-  const before = imageOf(item, 'before');
-  const after = imageOf(item, 'after');
-  // An update the apply answered without images (none today): assume it moved.
-  if (!before || !after) return true;
-  return before['slug'] !== after['slug'] || before['status'] !== after['status'];
+/** Whether this item moves what the sitemap or llms.txt shows. */
+function movesListing(item: Item): boolean {
+  return LISTING_TYPES.has(item.entity_type);
 }
 
 export interface ReleaseTagSet {
@@ -158,7 +159,7 @@ export async function releaseTags(
         }
       }
     }
-    if (movesUrl(item)) for (const tag of SITEMAP_TAGS) tags.add(tag);
+    if (movesListing(item)) for (const tag of SITEMAP_TAGS) tags.add(tag);
   }
 
   // One read for every slug the images did not carry.

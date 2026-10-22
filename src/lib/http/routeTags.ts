@@ -10,7 +10,7 @@ import { SERVICES_CACHE_ENTITIES } from '@/lib/services/servicesPage';
 // (home, services, a service, contact, join) are named here; the ones that lived in the .astro
 // files (About, Our Work, All projects, a case study) moved here, `media:all` added: those
 // pages show posters and images, and a media alt or tag save purges `media:all` (README, "What
-// the mapping found"). tests/lib/sectionReads.spec.ts walks this table: every route within 30
+// the mapping found"). The blog's routes gained `team:all`: a post shows its author's name. tests/lib/sectionReads.spec.ts walks this table: every route within 30
 // tags with every section a composed page could hold, and every tag a release or a media save
 // purges stamped by at least one route.
 
@@ -54,6 +54,14 @@ export function caseStudyCacheEntities(slug: string): string[] {
   ];
 }
 
+/** The blog's index: every post, and each post's author (an E-E-A-T team member). */
+export const BLOG_CACHE_ENTITIES = ['blog:all', 'team:all'] as const;
+
+/** A post: itself and its author's name. */
+export function blogPostCacheEntities(slug: string): string[] {
+  return [`blog:${slug}`, 'team:all'];
+}
+
 export interface TierARoute {
   /** The `route:<name>` tag. */
   route: string;
@@ -74,8 +82,8 @@ export const TIER_A_ROUTES: readonly TierARoute[] = [
   { route: 'portfolio-item', entities: caseStudyCacheEntities('sample'), composed: false },
   { route: 'contact', entities: CONTACT_CACHE_ENTITIES, composed: true },
   { route: 'join', entities: JOIN_CACHE_ENTITIES, composed: true },
-  { route: 'blog', entities: ['blog:all'], composed: false },
-  { route: 'blog-post', entities: ['blog:sample'], composed: false },
+  { route: 'blog', entities: BLOG_CACHE_ENTITIES, composed: false },
+  { route: 'blog-post', entities: blogPostCacheEntities('sample'), composed: false },
   { route: 'search', entities: [], composed: false },
   { route: 'legal', entities: [], composed: false },
 ];

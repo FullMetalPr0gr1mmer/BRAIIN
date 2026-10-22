@@ -37,9 +37,14 @@
   //                   visibility re-sync and the CRM lead index backfill;
   //   "*/10 * * * *"  site health's readings (Admin v2 G2, src/lib/cron/health.ts): the
   //                   uptime monitor's API, and the domain's registration record about daily.
+  //   "* * * * *"     what a published release still owes the edge (Admin v2 R7,
+  //                   src/lib/cron/releases.ts): failed cache purges retried with backoff, and
+  //                   the snapshots and purge of a release whose after-effects never ran. One
+  //                   claim a minute that finds nothing while releases are off; R11 adds the
+  //                   scheduled releases' fire step here.
   // Cron triggers are free on every Workers plan; the Free plan allows 5 per account.
   "triggers": {
-    "crons": ["23 3 * * *", "*/10 * * * *"],
+    "crons": ["23 3 * * *", "*/10 * * * *", "* * * * *"],
   },
   // ⚠ NO `PUBLIC_*` ENTRIES HERE — THEY OVERRIDE THE BUILD ENVIRONMENT.
   //

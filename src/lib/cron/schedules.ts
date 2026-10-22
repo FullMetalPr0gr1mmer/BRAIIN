@@ -2,6 +2,7 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 import { runJobs } from './daily';
 import { HEALTH_JOBS } from './health';
 import { DAILY_JOBS, type CronJob } from './jobs';
+import { RELEASE_JOBS } from './releases';
 
 // The Worker's cron schedules (wrangler.jsonc `triggers.crons`), dispatched by
 // src/worker.ts's `scheduled` on `controller.cron`. Each trigger is its own invocation, with
@@ -18,6 +19,8 @@ export const SCHEDULES: Readonly<Record<string, readonly CronJob[]>> = {
   '23 3 * * *': DAILY_JOBS,
   // Every 10 minutes: site health's readings (Admin v2 G2).
   '*/10 * * * *': HEALTH_JOBS,
+  // Every minute: what a published release still owes the edge (Admin v2 R7).
+  '* * * * *': RELEASE_JOBS,
 };
 
 /** Runs the jobs of the schedule that fired. An unknown cron runs nothing and says so. */

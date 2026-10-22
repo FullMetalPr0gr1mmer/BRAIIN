@@ -4,6 +4,7 @@ import { NotFoundError } from '@/lib/admin/errors';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { saveVisibility, settingOfRow } from '@/lib/admin/pageVisibility';
 import { syncVisibilityToEdge, visibilityPurgeTags } from '@/lib/admin/visibilitySync';
+import { purgeAfterSave } from '@/lib/http/purge';
 
 // The legacy page visibility toggle, `maintenance.manage` (Admin + Developer), kept as an
 // alias over `page_visibility` (Admin v2 U14a): `navVisible: true` is "visible to everyone",
@@ -42,6 +43,10 @@ export const PATCH = defineAdminRoute({
       version: input.version,
     });
     const sync = await syncVisibilityToEdge(sb, auth);
+    // What a cache in front of the Worker clears (Admin v2 R7; nothing is sent while no cache
+    // zone is set up, O-3).
+    const purgeTags = target.kind === 'page' ? visibilityPurgeTags(target) : [];
+    await purgeAfterSave(auth.tenantId, purgeTags, 'visibility');
     audit({
       action: 'page_visibility.update',
       entityType: 'page',
@@ -57,7 +62,7 @@ export const PATCH = defineAdminRoute({
     return {
       setting: settingOfRow(row),
       kvSynced: sync.kvSynced,
-      purgeTags: target.kind === 'page' ? visibilityPurgeTags(target) : [],
+      purgeTags,
     };
   },
 });

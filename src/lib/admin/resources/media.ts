@@ -1,4 +1,5 @@
 import { MediaUpdateSchema, MediaWriteSchema } from '@schemas/admin';
+import { MEDIA_PURGE_TAGS, purgeAfterSave } from '@/lib/http/purge';
 import { isStaticMediaKey, staticImage } from '@/lib/media/static';
 import { PREVIEW_WIDTH, storageThumbUrl } from '@/lib/media/storageUrl';
 import { getRow } from '../crud';
@@ -112,6 +113,13 @@ export const mediaResource: ResourceConfig = {
     if (merged['provider'] === 'static' && !isStaticMediaKey(String(merged['storage_path']))) {
       throw new ValidationError('not a still shipped with the site', 'storagePath');
     }
+  },
+  // An edit of a row (alt, tags, folder, a still's key) changes what the pages showing it
+  // render: `media:all` is purged (Admin v2 R7; a logged-nothing no-op until a cache zone
+  // exists, O-3). A new row is shown nowhere yet. It returns nothing, so the answer and the
+  // audit row are as before.
+  afterWrite: async ({ auth, operation }) => {
+    if (operation === 'update') await purgeAfterSave(auth.tenantId, MEDIA_PURGE_TAGS, 'media');
   },
   // The picker shows thumbnails: a static still's built asset URL (the admin is exempt from
   // the public image budget, and these frames are ≤ 70 KB), or an upload through `/_image`

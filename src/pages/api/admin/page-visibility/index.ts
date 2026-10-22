@@ -1,5 +1,6 @@
 import { PageVisibilityWriteSchema } from '@schemas/visibility';
 import { defineAdminRoute } from '@/lib/admin/route';
+import { purgeAfterSave } from '@/lib/http/purge';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { listVisibility, saveVisibility, settingOfRow } from '@/lib/admin/pageVisibility';
 import {
@@ -21,9 +22,10 @@ import {
 //        says whether the edge took it (`kvSynced`). Immediate until releases switch on
 //        (D8): R3 adds the staged branch here, and R7 re-syncs after an apply or a rollback.
 //
-// `purgeTags` is what a cache in front of the Worker would have to clear for this change (a
-// page that leaves public must leave every cached copy): nothing caches Tier A yet, and R7
-// wires the tags to the purge seam.
+// `purgeTags` is what a cache in front of the Worker has to clear for this change (a page that
+// leaves public must leave every cached copy): after the save they are purged through the
+// purge seam (Admin v2 R7, src/lib/http/purge.ts), which sends nothing while no cache zone is
+// set up (O-3), so the answer is as before.
 
 export const prerender = false;
 
@@ -42,6 +44,10 @@ export const PUT = defineAdminRoute({
     await liveRecheck(auth);
     const { row, fields, target } = await saveVisibility(sb, auth, input);
     const sync = await syncVisibilityToEdge(sb, auth);
+    const purgeTags = visibilityPurgeTags(
+      target.kind === 'page' ? { kind: 'page', slug: target.slug } : target,
+    );
+    await purgeAfterSave(auth.tenantId, purgeTags, 'visibility');
     // Audited whether or not the edge took it: a `kvSynced: false` row is how "the change was
     // never live" is found later. Field names only.
     audit({
@@ -59,9 +65,7 @@ export const PUT = defineAdminRoute({
     return {
       setting: settingOfRow(row),
       kvSynced: sync.kvSynced,
-      purgeTags: visibilityPurgeTags(
-        target.kind === 'page' ? { kind: 'page', slug: target.slug } : target,
-      ),
+      purgeTags,
     };
   },
 });

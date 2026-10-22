@@ -3,6 +3,7 @@ import { defineAdminRoute } from '@/lib/admin/route';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { savePagePassword } from '@/lib/admin/pageVisibility';
 import { syncVisibilityToEdge, visibilityPurgeTags } from '@/lib/admin/visibilitySync';
+import { purgeAfterSave } from '@/lib/http/purge';
 
 // POST /api/admin/page-visibility/password — put one page behind a password (Admin v2
 // U14b), `maintenance.manage` (Admin + Developer, §5 "Maintenance / hidden pages / page
@@ -28,10 +29,10 @@ export const POST = defineAdminRoute({
     await liveRecheck(auth);
     const { setting, slug } = await savePagePassword(sb, auth, input);
     const sync = await syncVisibilityToEdge(sb, auth);
-    return {
-      setting,
-      kvSynced: sync.kvSynced,
-      purgeTags: visibilityPurgeTags({ kind: 'page', slug }),
-    };
+    // A cached copy of the page must not outlive its password (Admin v2 R7; nothing is sent
+    // while no cache zone is set up, O-3).
+    const purgeTags = visibilityPurgeTags({ kind: 'page', slug });
+    await purgeAfterSave(auth.tenantId, purgeTags, 'visibility');
+    return { setting, kvSynced: sync.kvSynced, purgeTags };
   },
 });

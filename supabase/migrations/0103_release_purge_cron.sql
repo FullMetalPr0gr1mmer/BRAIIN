@@ -9,8 +9,8 @@
 -- What this file adds (docs/admin-v2/releases.md §5, slice R7; the departures are in
 -- docs/admin-v2/as-built/R7.md):
 --   1. public.cache_purge_log: one row per purge request the Worker sends to the cache (a
---      release's, the minute cron's retry, a media save's `media:all`): when, how many tags,
---      from where. It is the 24-hour budget's ledger (CLAUDE.md §2: at most 30 tags a purge
+--      release's, the minute cron's retry, a media save's `media:all`, a page-visibility
+--      save's): when, how many tags, from where. It is the 24-hour budget's ledger (CLAUDE.md §2: at most 30 tags a purge
 --      and 30,000 a day), counted across the deployment (one zone), so it holds across
 --      isolates. Rows older than 48 hours are dropped by the function below. No person reads
 --      or writes it: RLS forced with no policy, and only the service role holds privileges.
@@ -23,7 +23,8 @@
 --      releases whose after-effects never ran (still `pending` with no attempt two minutes
 --      after they went live: the Worker stopped after the commit), oldest first, locked with
 --      SKIP LOCKED and pushed five minutes ahead in the same statement: one claim per
---      release, so two runs of the cron never act on the same release twice. The Worker then
+--      release, so two runs of the cron never act on the same release twice. A baseline
+--      (R11's switch-on version) changes nothing live and is never claimed. The Worker then
 --      records the outcome with record_release_purge (0051), which counts the attempt.
 --   4. public.release_read_rows(tenant, reads): Admin v2 O-16. A publish's check reads the
 --      live rows the selection changes and every row its links name, one PostgREST request
@@ -58,10 +59,11 @@ create table if not exists public.cache_purge_log (
   created_at timestamptz not null default pg_catalog.now(),
   -- The tags one request purges: at most 30 (CLAUDE.md §2).
   tag_count int not null,
-  -- Who sent it: a publish's after-effects, the minute cron's retry, a media save.
+  -- Who sent it: a publish's after-effects, the minute cron's retry, a media save, a
+  -- page-visibility save (both immediate, never staged: releases.md §1.2).
   source text not null,
   constraint cache_purge_log_tag_count check (tag_count between 1 and 30),
-  constraint cache_purge_log_source check (source in ('release', 'cron', 'media'))
+  constraint cache_purge_log_source check (source in ('release', 'cron', 'media', 'visibility'))
 );
 create index if not exists cache_purge_log_created_idx on public.cache_purge_log (created_at);
 alter table public.cache_purge_log enable row level security;
@@ -90,8 +92,8 @@ begin
     raise exception 'cache_purge_take: only the service role purges the cache' using errcode = '42501';
   end if;
   if p_tenant is null or p_tags is null or p_tags < 1 or p_tags > 30
-     or p_source is null or p_source not in ('release', 'cron', 'media') then
-    raise exception 'cache_purge_take: a tenant, 1 to 30 tags and a source (release, cron or media)'
+     or p_source is null or p_source not in ('release', 'cron', 'media', 'visibility') then
+    raise exception 'cache_purge_take: a tenant, 1 to 30 tags and a source (release, cron, media or visibility)'
       using errcode = '22023';
   end if;
   -- One taker at a time across the deployment: the budget is the zone's, not a tenant's.
@@ -136,6 +138,7 @@ begin
     select r.tenant_id
       from public.content_releases r
      where r.status = 'published'
+       and r.kind <> 'baseline'
        and r.purge_status in ('pending', 'failed')
        and r.purge_attempts < 10
        and coalesce(r.purge_next_at, r.published_at + interval '2 minutes') <= pg_catalog.now()
@@ -146,6 +149,7 @@ begin
       from public.content_releases r
       join first f on f.tenant_id = r.tenant_id
      where r.status = 'published'
+       and r.kind <> 'baseline'
        and r.purge_status in ('pending', 'failed')
        and r.purge_attempts < 10
        and coalesce(r.purge_next_at, r.published_at + interval '2 minutes') <= pg_catalog.now()

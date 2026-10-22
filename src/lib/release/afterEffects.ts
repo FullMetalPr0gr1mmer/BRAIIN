@@ -5,10 +5,10 @@ import { writeAudit } from '@/lib/admin/audit';
 import { syncRedirectsOfTenant } from '@/lib/admin/redirectSync';
 import { rebuildVisibilitySnapshot } from '@/lib/admin/visibilitySync';
 import { writeSystemLog } from '@/lib/data/systemLog';
-import { COLLAPSE_TAG, purgeTags, type PurgeOptions, type PurgeOutcome } from '@/lib/http/purge';
+import { COLLAPSE_TAG, purgeTags, type PurgeOptions } from '@/lib/http/purge';
 import { serviceClient } from '@/lib/supabase/server';
 import { liveDb } from './overlayDb';
-import { releaseTags, SLUG_TABLES, type SlugLookup, type SlugTable } from './tags';
+import { releaseTags, type SlugLookup, type SlugTable } from './tags';
 
 // What follows a published release (Admin v2 R7; docs/admin-v2/releases.md §4.2 step 7, §5).
 // SERVER ONLY. Each step on its own and never fatal: the release is live, so a failure here is
@@ -146,11 +146,6 @@ export async function recordPurge(args: {
   }
 }
 
-/** The status a purge outcome is recorded as. */
-export function recordedStatus(outcome: PurgeOutcome): PurgeStatus {
-  return outcome.status;
-}
-
 export interface AfterPublishResult {
   purge: PurgeStatus;
   /** Present when a snapshot was rebuilt: did the edge take every one. */
@@ -197,7 +192,7 @@ export async function afterPublish(args: {
   await recordPurge({
     tenantId: auth.tenantId,
     releaseId,
-    status: recordedStatus(outcome),
+    status: outcome.status,
     tags: outcome.tags.length > 0 ? outcome.tags : tags,
     nextAt,
     sideEffects: kvSynced === undefined ? {} : { kvSynced },
@@ -220,6 +215,3 @@ export async function afterPublish(args: {
     ? { purge: outcome.status, tags: outcome.tags }
     : { purge: outcome.status, kvSynced, tags: outcome.tags };
 }
-
-/** The slug tables a release's tags may read (for the tag closure spec). */
-export const TAG_SLUG_TABLES = Object.keys(SLUG_TABLES) as SlugTable[];

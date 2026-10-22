@@ -1,4 +1,5 @@
 import { CF_CACHE_PURGE_TOKEN, CF_ZONE_ID } from 'astro:env/server';
+import { writeSystemLog } from '@/lib/data/systemLog';
 import { serviceClient } from '@/lib/supabase/server';
 import { outboundJson, OutboundError, type OutboundOptions } from './outbound';
 
@@ -55,7 +56,9 @@ export const PURGE_REQUEST: Required<Pick<OutboundOptions, 'timeoutMs' | 'retrie
 /** The breaker: this many failures in a row stop requests from this isolate for a minute. */
 export const BREAKER = { failures: 3, openMs: 60_000 } as const;
 
-export type PurgeSource = 'release' | 'cron' | 'media';
+/** Who sends a purge (0103's cache_purge_log CHECK holds the same list). */
+export const PURGE_SOURCES = ['release', 'cron', 'media', 'visibility'] as const;
+export type PurgeSource = (typeof PURGE_SOURCES)[number];
 
 export type PurgeReason =
   | 'not-set-up'
@@ -220,3 +223,33 @@ export async function purgeTags(
     return { status: 'failed', tags: set, requests, reason };
   }
 }
+
+/**
+ * The purge after an IMMEDIATE save (never staged, releases.md §1.2): a media alt, tag, folder
+ * or file purges `media:all` (every Tier A page that shows a media row stamps it); a page's
+ * visibility purges its page, the menus, the sitemap and llms.txt (`visibilityPurgeTags`), so a
+ * page that leaves public leaves every cached copy of itself. Awaited after the commit and
+ * never fatal: nothing is sent, read or logged while not set up (O-3), so the save behaves as
+ * before; a failure is one warning in system_logs (`purge:<source>`, the reason code only).
+ * No release row holds it, so nothing retries it: the next save or release purges again.
+ */
+export async function purgeAfterSave(
+  tenantId: string,
+  tags: readonly string[],
+  source: Extract<PurgeSource, 'media' | 'visibility'>,
+  options: Omit<PurgeOptions, 'source'> = {},
+): Promise<PurgeOutcome> {
+  const outcome = await purgeTags(tenantId, tags, { ...options, source });
+  if (outcome.status === 'failed') {
+    await writeSystemLog({
+      level: 'warn',
+      source: `purge:${source}`,
+      message: `The cache purge after a save did not go through (${outcome.reason ?? 'unknown'}).`,
+      detail: { reason: outcome.reason ?? null, tags: outcome.tags.length },
+    });
+  }
+  return outcome;
+}
+
+/** What a media save purges: every page that shows a media row stamps it (routeTags.ts). */
+export const MEDIA_PURGE_TAGS = ['media:all'] as const;

@@ -3,6 +3,7 @@ import { MediaMetaOnlySchema } from '@schemas/admin';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { NotFoundError, OptimisticLockError } from '@/lib/admin/errors';
 import { getRow, translateWriteError } from '@/lib/admin/crud';
+import { MEDIA_PURGE_TAGS, purgeAfterSave } from '@/lib/http/purge';
 
 // The SEO role's media write path. §5 gives SEO `media.write: 'meta only'`, and that
 // adverb is the entire endpoint: alt text, tags and folder — never `storage_path`,
@@ -20,6 +21,9 @@ import { getRow, translateWriteError } from '@/lib/admin/crud';
 // the editor was told "someone else saved" (a 409) on every attempt. The function writes
 // exactly these three columns, tenant-fenced and version-checked, for any staff role —
 // the capability check above (full or meta) is the second, independent layer.
+//
+// After the write, `media:all` is purged (Admin v2 R7): every page that shows the asset
+// renders its alt text. Nothing is sent while no cache zone is set up (O-3).
 
 export const prerender = false;
 
@@ -52,6 +56,7 @@ export const PATCH = defineAdminRoute({
       await getRow(sb, 'media_assets', auth, id, COLUMNS);
       throw new OptimisticLockError('media_assets');
     }
+    await purgeAfterSave(auth.tenantId, MEDIA_PURGE_TAGS, 'media');
     audit({
       action: 'media_asset.update_meta',
       entityType: 'media_asset',
