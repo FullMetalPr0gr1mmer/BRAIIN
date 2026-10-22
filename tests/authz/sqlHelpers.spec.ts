@@ -21,6 +21,7 @@ const HELPER_CAPABILITY: Record<string, Capability> = {
   role_analytics_read: 'analytics.read',
   role_manages_visibility: 'maintenance.manage',
   role_analytics_goals: 'analytics.goals',
+  role_general_settings: 'settings.general',
   role_manages_integrations: 'settings.integrations',
 };
 
@@ -56,6 +57,25 @@ describe('SQL capability helpers equal ROLE_CAPS', () => {
       const holders = ROLES.filter((role) => ROLE_CAPS[role][capability] === 'full').sort();
       expect(holders.length).toBeGreaterThan(0);
       expect(helpers.get(helper)).toEqual(holders);
+    });
+  }
+});
+
+// Two capabilities share one row (Admin v2 U9, 0102): site_settings holds the general
+// settings (settings.general) and the maintenance switch (maintenance.manage), and one
+// RESTRICTIVE live policy, app.role_general_settings, gates every write to it. RLS is
+// row-level, so the two capabilities must keep one role set while they share the row (P-9);
+// a matrix change that splits them must split the row first.
+describe('capabilities that share a row hold one role set', () => {
+  const SHARED_ROWS: Record<string, readonly Capability[]> = {
+    site_settings: ['settings.general', 'maintenance.manage'],
+  };
+  for (const [table, caps] of Object.entries(SHARED_ROWS)) {
+    it(`${table}: ${caps.join(', ')}`, () => {
+      const holders = (cap: Capability) =>
+        ROLES.filter((role) => ROLE_CAPS[role][cap] === 'full').sort();
+      const first = holders(caps[0]!);
+      for (const cap of caps) expect(holders(cap), cap).toEqual(first);
     });
   }
 });

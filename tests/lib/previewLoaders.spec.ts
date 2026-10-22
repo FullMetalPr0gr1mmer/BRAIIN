@@ -260,6 +260,27 @@ const CASES: Record<string, () => Promise<void>> = {
   'siteProfile.getSiteProfile': async () => {
     const { value, report } = await inPreview(() => siteProfile.getSiteProfile());
     expect(value.contactEmail).toBe('hello@example.test');
+    expect(value.footer).toEqual({
+      copyright: null,
+      style: 'light',
+      showEmail: true,
+      showSocial: false,
+    });
+    clean(report);
+  },
+  // Admin v2 U9: the icons are one media read for the ids the identity names. The fixture's
+  // identity names a project poster (a static still, not an upload) as its favicon, and a
+  // missing id as its app icon: an icon must be an uploaded square, so neither is one, and
+  // the read goes through the overlay like every other.
+  'siteProfile.readSiteIcons': async () => {
+    const { value, report } = await inPreview(async () =>
+      siteProfile.readSiteIcons({
+        ...(await siteProfile.getSiteProfile()),
+        faviconMediaId: ID.mPoster,
+        appIconMediaId: '00000000-0000-4000-8000-00000000dead',
+      }),
+    );
+    expect(value).toEqual({ favicon: null, appIcon: null });
     clean(report);
   },
   'siteVerification.getSearchConsoleToken': async () => {

@@ -78,6 +78,8 @@ describe('a published post’s author must be a published team member (D11)', ()
         seen.push([table, query]);
         return { status: 'published' };
       },
+      // R7's batched reads (OverlayDb.listMany); the author rule asks through `first`.
+      listMany: async () => [],
     };
     await expect(
       postResource.assertPublishable!(LIVE, { auth: AUTH, sb, db }),

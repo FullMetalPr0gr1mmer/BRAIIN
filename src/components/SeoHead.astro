@@ -5,8 +5,9 @@
 import type { Locale } from '@schemas/primitives';
 import type { JsonLdNode } from '@/lib/seo/jsonld';
 import { hreflangAlternates, localizedPath } from '@/lib/i18n';
-import { getIdentity, brandName } from '@/lib/identity';
+import { getIdentity, getSiteIcons, brandName } from '@/lib/identity';
 import { getSearchConsoleToken } from '@/lib/data/siteVerification';
+import { headIcons } from '@/lib/seo/siteIcons';
 import { heroFontPreload, type HeroFace } from '@/lib/seo/fonts';
 import { resolveOgImage, type OgImageCandidates } from '@/lib/seo/ogImage';
 import { localizedCanonical } from '@/lib/seo/canonical';
@@ -65,6 +66,9 @@ const verification = claimsSite ? getSearchConsoleToken() : Promise.resolve(null
 // og:site_name is the brand from the public identity — shared with the header and footer
 // through the per-request memo, so this costs no extra query.
 const siteName = brandName(await getIdentity(Astro.locals), locale);
+// The site's icons (Admin v2 U9): links only when the owner set one, so a site with none
+// serves the head it always did (tests/render/seoHead.spec.ts).
+const icons = await headIcons(await getSiteIcons(Astro.locals), locale);
 
 const canonical = localizedCanonical(
   canonicalOverride,
@@ -116,6 +120,17 @@ const hasDescription = description.trim().length > 0;
     ? alternates.map((a) => <link rel="alternate" hreflang={a.hreflang} href={a.href} />)
     : null
 }
+{
+  icons.favicons.map((i) => (
+    <link rel="icon" type="image/png" sizes={`${i.size}x${i.size}`} href={i.href} />
+  ))
+}
+{
+  icons.appleTouch ? (
+    <link rel="apple-touch-icon" sizes="180x180" href={icons.appleTouch.href} />
+  ) : null
+}
+{icons.manifest ? <link rel="manifest" href={icons.manifest} /> : null}
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content={siteName} />
 <meta property="og:title" content={title} />

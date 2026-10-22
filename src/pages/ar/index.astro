@@ -16,6 +16,7 @@ import { PAGE_META } from '@/lib/seo/pageMeta';
 import { buildOrganizationSchema, buildWebSiteSchema, orgRef } from '@/lib/seo/jsonld';
 import { setTierA } from '@/lib/http/cacheTags';
 import { HOME_CACHE_ENTITIES } from '@/lib/sections/home';
+import { sectionTags } from '@/lib/sections/reads';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 
 // Tier A. Home is composed from CMS sections (`pages` slug 'home' + `page_sections`,
@@ -54,7 +55,11 @@ const jsonLd = [
   buildOrganizationSchema(PUBLIC_SITE_URL, identity, locale),
   buildWebSiteSchema(PUBLIC_SITE_URL, orgRef(identity, locale)),
 ];
-setTierA(Astro.response, { route: 'home', locale, entities: HOME_CACHE_ENTITIES });
+setTierA(Astro.response, {
+  route: 'home',
+  locale,
+  entities: [...HOME_CACHE_ENTITIES, ...sectionTags(sections)],
+});
 ---
 
 <BaseLayout

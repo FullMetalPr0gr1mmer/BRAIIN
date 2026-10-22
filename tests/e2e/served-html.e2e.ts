@@ -59,6 +59,20 @@ for (const route of ROUTES) {
     );
   });
 
+  // The site's icons and the Organization's tagline, phone and map link render only once the
+  // owner sets them (Admin v2 U9). The seed sets none, and this project runs before `general`
+  // (which sets and restores them): the head links no icon or manifest, and no JSON-LD node
+  // carries the three keys, so every page is what it was before U9.
+  test(`no icon, manifest or new Organization key on the seed on ${route}`, async ({ request }) => {
+    const html = await (await request.get(route)).text();
+    const links = html.match(/<link[^>]+rel="(?:icon|apple-touch-icon|manifest)"[^>]*>/gi) ?? [];
+    expect(links, `icon or manifest links on ${route}`).toEqual([]);
+    const ld = [...html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)]
+      .map((m) => m[1] ?? '')
+      .join('\n');
+    expect(ld.match(/"(?:slogan|telephone|hasMap)"\s*:/g) ?? [], `JSON-LD on ${route}`).toEqual([]);
+  });
+
   test(`served HTML uses the current brand on ${route}`, async ({ request }) => {
     // Owner decision 1 (UI v2): "Braiin Statiion". The single-i "Station" spelling must
     // not reach any displayed string — the legal pages included, since their copy names the

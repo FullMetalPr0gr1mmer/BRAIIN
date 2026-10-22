@@ -1,14 +1,75 @@
 ---
+import { getImage } from 'astro:assets';
+import { PUBLIC_SITE_URL } from 'astro:env/client';
+import logo from '@/assets/braiin-logo-white.png';
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminSingletonForm from '@/components/admin/islands/AdminSingletonForm';
+import AdminGeneral from '@/components/admin/islands/AdminGeneral';
+import Card from '@/components/admin/ui/Card.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 
 export const prerender = false;
+
+// General settings (Admin v2 U9, docs/admin-v2/ui.md "General (/admin/settings; AV-18)"):
+// the island draws the two editors (the public identity, then Region and data) and the
+// job-applications switch; what the screen cannot change is this page's own card, zero JS.
+// `settings.general` (Admin, Developer): any other role gets the layout with the refusal and
+// a 403, and nothing is read. The logo tiles are the bundled file through `/_image` at a
+// listed width (264, TRANSFORM_WIDTHS).
+
+const session = Astro.locals.session;
+const allowed = Boolean(session && can(session.role, 'settings.general') === 'full');
+if (!allowed) Astro.response.status = 403;
+
+let host = PUBLIC_SITE_URL;
+try {
+  host = new URL(PUBLIC_SITE_URL).host || PUBLIC_SITE_URL;
+} catch {
+  // A malformed setting is shown as written.
+}
+const logoSrc = allowed
+  ? await getImage({ src: logo, width: 264, format: 'webp' })
+      .then((image) => image.src)
+      .catch(() => null)
+  : null;
+const canOpenApplications = Boolean(session && can(session.role, 'applications.manage') === 'full');
+const tz = allowed ? await studioTimeZone(Astro.locals) : '';
 ---
 
 <AdminLayout
   title="General settings"
-  subtitle="Public identity, technical keys and data-retention horizons. Integrations and maintenance have their own screens."
+  subtitle="Site name, brand files, contact details and social accounts."
+  styles={['general.css']}
 >
-  <AdminSingletonForm client:load config="profile" />
-  <AdminSingletonForm client:load config="settings" />
+  {
+    !allowed ? (
+      <Refused />
+    ) : (
+      <>
+        <AdminGeneral
+          client:load
+          logoSrc={logoSrc}
+          canOpenApplications={canOpenApplications}
+          tz={tz}
+        />
+        <Card title="Site facts" class="general__facts-card">
+          <dl class="general__facts">
+            <div>
+              <dt>Domain</dt>
+              <dd>{host}, where the site lives.</dd>
+            </div>
+            <div>
+              <dt>Languages on the site</dt>
+              <dd>English and Arabic, both always built.</dd>
+            </div>
+            <div>
+              <dt>Default language</dt>
+              <dd>English, for visitors whose browser asks for neither.</dd>
+            </div>
+          </dl>
+        </Card>
+      </>
+    )
+  }
 </AdminLayout>

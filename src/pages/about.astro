@@ -10,6 +10,8 @@ import { ogImageCandidates } from '@/lib/seo/ogImage';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { buildPersonSchema, buildBreadcrumbSchema, orgRef } from '@/lib/seo/jsonld';
 import { setTierA } from '@/lib/http/cacheTags';
+import { ABOUT_CACHE_ENTITIES } from '@/lib/http/routeTags';
+import { sectionTags } from '@/lib/sections/reads';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 
@@ -72,7 +74,7 @@ const jsonLd = [
 setTierA(Astro.response, {
   route: 'about',
   locale,
-  entities: ['page:about', 'team:all', 'statistics:all'],
+  entities: [...ABOUT_CACHE_ENTITIES, ...sectionTags(sections)],
 });
 ---
 

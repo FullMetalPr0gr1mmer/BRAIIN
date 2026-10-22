@@ -32,6 +32,8 @@ interface StubOptions {
    * `{ data: null }`), as production stands until R14.
    */
   releases?: boolean;
+  /** What a named rpc answers (`data`), when a case needs one (Admin v2 R10's version reads). */
+  rpcs?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -91,6 +93,14 @@ export function makeStubClient(options: StubOptions = {}) {
     rpc: async (fn: string, args?: Record<string, unknown>) => {
       if (typeof args?.['p_tenant'] === 'string') observedTenantFilters.push(args['p_tenant']);
       if (fn === 'releases_enabled' && options.releases) return { data: true, error: null };
+      if (options.rpcs && Object.hasOwn(options.rpcs, fn)) {
+        return { data: structuredClone(options.rpcs[fn]), error: null };
+      }
+      // A publish's batched read (Admin v2 R7, `release_read_rows`): one answer per read, each
+      // the rows every list query answers, as a read through `from()` resolves.
+      if (fn === 'release_read_rows' && Array.isArray(args?.['p_reads'])) {
+        return { data: (args['p_reads'] as unknown[]).map(() => rows), error: null };
+      }
       return { data: null, error: null };
     },
     auth: {
@@ -189,7 +199,7 @@ export function makeContext(
   body?: unknown,
   method = 'GET',
   params: Readonly<Record<string, string>> = {},
-  stub: Pick<Case, 'releases' | 'row'> = {},
+  stub: Pick<Case, 'releases' | 'row' | 'rpcs'> = {},
 ) {
   observedTenantFilters = [];
   const session = sessionFor(principal);
@@ -213,6 +223,7 @@ export function makeContext(
       supabase: makeStubClient({
         ...(stub.row ? { row: stub.row } : {}),
         ...(stub.releases ? { releases: true } : {}),
+        ...(stub.rpcs ? { rpcs: stub.rpcs } : {}),
       }),
       cspNonce: 'test',
       csrfToken: 'test',
@@ -251,6 +262,8 @@ export interface Case {
   releases?: true;
   /** The stub's row (every table answers it), when a case needs a particular one. */
   row?: Record<string, unknown>;
+  /** What named rpcs answer (`data`), when a case needs it (R10: the state at a version). */
+  rpcs?: Readonly<Record<string, unknown>>;
 }
 
 export const VALID_BILINGUAL = { en: 'Example', ar: 'مثال' };

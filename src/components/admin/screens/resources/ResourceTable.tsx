@@ -6,7 +6,8 @@ import StatusBadge from '@/components/admin/kit/StatusBadge';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { PAGE_SIZE } from '@/lib/admin/pager';
-import { formatDate } from '@/lib/admin/relTime';
+import { pageTimeZone, useClock } from '@/components/admin/kit/clock';
+import { clockFor, type Clock } from '@/lib/admin/relTime';
 import { toast } from '@/lib/admin/toast';
 import {
   columnOf,
@@ -24,7 +25,7 @@ import { isArchiveRefusal, MOVE_ARCHIVED, swapTarget } from './reorder';
 // requests unchanged: the first column's text is a real link to the edit screen, stretched
 // over the row; Move up, Move down and Delete are the row's actions (shown on hover and
 // whenever focus is in the row); the status filter is chips; the range and the numbered
-// pages sit under the table. Dates are the studio's (Asia/Riyadh, relTime.ts): one clock
+// pages sit under the table. Dates are the studio's (its zone, relTime.ts and kit/clock.tsx): one clock
 // for every screen, whoever's browser shows it. (The rows are fetched after mount, so the
 // server's HTML holds no dates to disagree with.)
 //
@@ -93,6 +94,7 @@ export default function ResourceTable({
   canCreate = true,
   canArchive = false,
 }: ResourceTableProps) {
+  const clock = useClock();
   const ui = uiFor(resource);
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
@@ -214,7 +216,7 @@ export default function ResourceTable({
       return {
         key: column.key,
         label: column.label,
-        render: (row: Row) => renderCell(labelled(row[column.key], labels), column),
+        render: (row: Row) => renderCell(labelled(row[column.key], labels), column, clock),
       };
     }),
   ];
@@ -526,7 +528,12 @@ function ArabicLine({ ar }: { ar: string }) {
   );
 }
 
-export function renderCell(value: unknown, column: ColumnDef) {
+export function renderCell(
+  value: unknown,
+  column: ColumnDef,
+  clock: Clock = clockFor(pageTimeZone()),
+) {
+  const { formatDate } = clock;
   if (value === null || value === undefined) return '—';
   switch (column.kind) {
     case 'status':

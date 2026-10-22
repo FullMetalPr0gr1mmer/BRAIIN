@@ -50,14 +50,20 @@ export function buildOrganizationSchema(
   };
   if (identity.legalName) node.legalName = identity.legalName[locale];
   if (identity.foundedYear) node.foundingDate = String(identity.foundedYear);
+  // Admin v2 U9: each only when set, so a site that set none emits the node it always did.
+  if (identity.tagline) node.slogan = identity.tagline[locale];
+  if (identity.phoneE164) node.telephone = identity.phoneE164;
+  if (identity.mapUrl) node.hasMap = identity.mapUrl;
   node.address = {
     '@type': 'PostalAddress',
     ...(identity.addressLocality ? { addressLocality: identity.addressLocality[locale] } : {}),
     addressCountry: identity.addressCountry,
   };
   // Socials were re-validated against the per-network host allow-list on read
-  // (SiteProfileRowSchema), so every URL here points at the network it claims.
-  if (identity.socials.length > 0) node.sameAs = identity.socials.map((s) => s.url);
+  // (SiteProfileRowSchema), so every URL here points at the network it claims. An account
+  // with "Show on the site" off (Admin v2 U9, decision D8) is left out here too.
+  const shown = identity.socials.filter((s) => s.visible !== false);
+  if (shown.length > 0) node.sameAs = shown.map((s) => s.url);
   return node;
 }
 

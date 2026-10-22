@@ -1,0 +1,161 @@
+/* Screen stylesheet: maintenance mode, /admin/maintenance (Admin v2 U9b). Linked only
+   through AdminLayout's `styles` prop (styles={['maintenance.css']}), after admin.css. The
+   form, its cards, the modal and the buttons are the kit's. Here: the status banner (the
+   prototype's on/live head), the two columns, and "What visitors see" (the prototype's drawPv,
+   class-based: the background is a data-bg bucket, the scrim a token). It uses admin.css's
+   tokens and declares none, and holds no colour literal (tests/lib/adminStyles.spec.ts,
+   scripts/contrast-audit.mjs: --ad-mnt-scrim-worst is the ground its words are checked on). */
+
+.mnt-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: var(--ad-r);
+  background: var(--ad-bg);
+}
+
+.mnt-status[data-state='on'] {
+  background: var(--ad-warn-soft);
+}
+
+.mnt-status__dot {
+  flex: none;
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: 50%;
+  background: var(--ad-ok);
+}
+
+.mnt-status[data-state='on'] .mnt-status__dot {
+  background: var(--ad-warn);
+}
+
+.mnt-status__text {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.mnt-status__t {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.mnt-status__s {
+  margin: 2px 0 0;
+  color: var(--ad-dim);
+  font-size: 13px;
+}
+
+.mnt-status[data-state='on'] .mnt-status__t,
+.mnt-status[data-state='on'] .mnt-status__s {
+  color: var(--ad-warn-text);
+}
+
+.mnt__body {
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.mnt__body > * {
+  min-width: 0;
+}
+
+.mnt__side {
+  position: sticky;
+  top: calc(var(--ad-top) + 16px);
+}
+
+.mnt__side-t {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.mnt__side-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 6px;
+}
+
+/* What visitors see: the hero still under the midnight scrim, or black. */
+.mnt-sketch {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  min-block-size: 230px;
+  padding: 26px 22px;
+  overflow: hidden;
+  border-radius: var(--ad-r);
+  background: var(--ad-midnight);
+  color: var(--ad-card);
+}
+
+.mnt-sketch[data-bg='image'] {
+  background: var(--ad-midnight) url('/media/hero-poster-blur.jpg') center / cover no-repeat;
+}
+
+.mnt-sketch[data-bg='image']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--ad-mnt-scrim);
+}
+
+.mnt-sketch__logo {
+  inline-size: 70px;
+  block-size: 12px;
+  margin-bottom: auto;
+  border-radius: 2px;
+  background: var(--ad-card);
+}
+
+.mnt-sketch__t {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.mnt-sketch__m {
+  max-inline-size: 34ch;
+  font-size: 12px;
+}
+
+.mnt-sketch__d {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.mnt-sketch__c {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.mnt-sketch__b {
+  padding: 6px 12px;
+  border: 1px solid var(--ad-card);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mnt-sketch__b[data-primary] {
+  border-color: var(--ad-primary);
+  background: var(--ad-primary);
+  color: var(--ad-on-primary);
+}

@@ -1,3 +1,4 @@
+import { MAINTENANCE_DEFAULTS } from '@schemas/maintenance';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
 import type { AuthContext, Role } from '@/lib/auth/types';
@@ -167,7 +168,11 @@ describe('loadShellState', () => {
     };
     const state = await loadShellState(sb, auth('admin'), visibleNav('admin'), env, {
       feed: { items: [], unread: 3, seenAt: null, failed: [], asOf: '2026-10-10T12:00:00.000Z' },
-      maintenance: { active: true, allowlist: [] },
+      maintenance: {
+        active: true,
+        allowlist: [],
+        snapshot: { ...MAINTENANCE_DEFAULTS, active: true },
+      },
     });
     expect(state.unread).toBe(3);
     expect(state.maintenance).toBe(true);

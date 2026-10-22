@@ -11,6 +11,7 @@ import type { AuthContext, Role } from '@/lib/auth/types';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
 import type { ContentSource } from '@/lib/data/source';
+import type { AsOfChange } from '@/lib/release/asOf';
 import { derivePatch, RegistryDriftError, type DerivedPatch } from '@/lib/release/overlay';
 import { RELEASE_REGISTRY, type RegistryEntry } from '@/lib/release/registry';
 import { createOverlayClient, type OverlayData, type PreviewError } from './client';
@@ -57,6 +58,12 @@ import { ANON_COLUMNS, createMirror, visibilityClosure } from './visibility';
 // first time its table is read, and one that fails is reported and not shown (edge case
 // 13). Redirects, custom themes and page visibility change the edge or the stylesheet, not
 // a loader's rows: they are reported as not previewed.
+//
+// A version (Admin v2 R10, `?v=N`): in place of the drafts read, the changes that take the site
+// from now back to version N (src/lib/release/asOf.ts, read from the ledger by the caller), each
+// kept under the same rule (an area the person may read) and laid over live exactly as a
+// pending change is: an edit as the whole image the version held, a removal since as a create,
+// a creation since as a delete. More changed since than were read leaves the render untrusted.
 //
 // Nothing here is module state: every map lives inside one createPreviewSource() call.
 
@@ -134,7 +141,15 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row
     value_points: [],
     deliverables: [],
   },
-  site_profile: { address_country: 'SA', socials: [], accepting_applications: false },
+  site_profile: {
+    address_country: 'SA',
+    socials: [],
+    accepting_applications: false,
+    // 0102: the footer settings (today's footer), NOT NULL with these defaults
+    footer_style: 'light',
+    footer_show_email: true,
+    footer_show_social: false,
+  },
   statistics: {
     status: 'draft',
     sort_order: 0,
@@ -224,6 +239,14 @@ export function canPreview(role: Role): boolean {
   return RELEASE_ENTITY_TYPES.some((type) => readsEntity(role, RELEASE_REGISTRY[type]));
 }
 
+/** A published version shown as it was (R10, `?v=`): the changes from now back to it. */
+export interface VersionPreview {
+  number: number;
+  changes: readonly AsOfChange[];
+  /** More changed since than were read: the render is not trusted. */
+  truncated: boolean;
+}
+
 export interface PreviewSourceOptions {
   /** `locals.supabase`: the signed-in person's own client. */
   supabase: SupabaseClient;
@@ -231,6 +254,8 @@ export interface PreviewSourceOptions {
   session: AuthContext | null | undefined;
   /** Draft ids to preview (the publish dialog's selection); every readable draft when absent. */
   only?: readonly string[];
+  /** A published version to show as it was, in place of the pending changes (R10). */
+  asOf?: VersionPreview;
   /** Test seam for the stamps. */
   now?: () => Date;
 }
@@ -319,7 +344,41 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
   const deletedIds = new Map<DatasetTable, Set<string>>();
   let draftsLoaded: Promise<PreviewError | null> | null = null;
 
+  /** A version's creates that bring a removed row back: the first-publish date it keeps. */
+  const keptDates = new Map<string, string>();
+
+  /** The changes back to a version, as drafts the overlay lays over live (R10). */
+  function versionDrafts(asOf: VersionPreview): Draft[] {
+    if (asOf.truncated) noteOnce(report.truncated, 'content_release_items');
+    const drafts: Draft[] = [];
+    for (const change of asOf.changes) {
+      if (!readsEntity(role, RELEASE_REGISTRY[change.entityType])) {
+        report.draftsNotShown += 1;
+        continue;
+      }
+      if (change.op === 'create' && change.publishedAt !== undefined) {
+        keptDates.set(`${change.entityType}:${change.entityId}`, change.publishedAt);
+      }
+      drafts.push({
+        id: `${change.entityType}:${change.entityId}`,
+        tenant_id: tenantId,
+        entity_type: change.entityType,
+        entity_id: change.entityId,
+        op: change.op,
+        payload: change.payload,
+        version: 1,
+        release_id: null,
+        updated_at: '',
+      });
+    }
+    return drafts;
+  }
+
   async function loadDrafts(): Promise<PreviewError | null> {
+    if (opts.asOf) {
+      keep(versionDrafts(opts.asOf));
+      return null;
+    }
     const read = await readAll('content_drafts', DRAFT_COLUMNS, ['id'], PREVIEW_ROW_CAP);
     if (read.error) {
       noteOnce(report.failedTables, 'content_drafts');
@@ -355,6 +414,12 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
     drafts.sort((a, b) =>
       a.updated_at === b.updated_at ? (a.id < b.id ? -1 : 1) : a.updated_at < b.updated_at ? -1 : 1,
     );
+    keep(drafts);
+    return null;
+  }
+
+  /** The changes to lay over the page, by the table they change (the rest reported). */
+  function keep(drafts: readonly Draft[]): void {
     for (const draft of drafts) {
       const entry = RELEASE_REGISTRY[draft.entity_type];
       report.pending += 1;
@@ -370,7 +435,6 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
         deletedIds.set(table, ids);
       }
     }
-    return null;
   }
 
   /** Each kept draft parsed once (lazily, D9); null when it is reported invalid. */
@@ -482,6 +546,9 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
           continue;
         }
         stamp(table, null, next, change.patch);
+        // A row a version brings back keeps the date it had (0104's apply), not today's.
+        const kept = keptDates.get(draft.id);
+        if (kept !== undefined && PUBLISHED_AT_TABLES.includes(table)) next['published_at'] = kept;
         rows.push(next);
         if (sampleLive(table, next)) report.samples += 1;
       }

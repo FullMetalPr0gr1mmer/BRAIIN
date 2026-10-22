@@ -126,7 +126,20 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     cap: 'siteHealth.view',
     render: 'server',
   },
-  { href: '/admin/settings', api: '/api/admin/settings', cap: 'settings.general' },
+  // Admin v2 U9: General settings and maintenance render their gate on the server (a 403 and
+  // Refused.astro) before they hydrate their editors.
+  {
+    href: '/admin/settings',
+    api: '/api/admin/settings',
+    cap: 'settings.general',
+    render: 'server',
+  },
+  {
+    href: '/admin/maintenance',
+    api: '/api/admin/settings/maintenance',
+    cap: 'maintenance.manage',
+    render: 'server',
+  },
   // Admin v2 U11: Integrations reads its row on the server and refuses itself (a 403 and
   // Refused.astro) for Content Creator and Developer. The Forms overview is server-rendered
   // from code and has no JSON twin of its own: its capability is General's (the forms config

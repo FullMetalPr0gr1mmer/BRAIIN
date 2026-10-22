@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(68);
+select plan(69);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -163,6 +163,9 @@ select ok(
   'the 0016/0019 app.* routines are not executable by authenticated either');
 select ok(not has_table_privilege('authenticated', 'public.site_profile', 'delete'),
   'authenticated CANNOT delete the site_profile singleton');
+select ok(not has_table_privilege('authenticated', 'public.site_settings', 'delete')
+          and not has_table_privilege('service_role', 'public.site_settings', 'delete'),
+  'nobody deletes the site_settings singleton either (0102 states its grants)');
 
 -- ---- 8. The deploy guard can actually READ the marker (0016) ------------------------
 -- RLS on app.deployment is forced, and deploy_guard is NOBYPASSRLS. Without its policy

@@ -13,7 +13,11 @@ import {
   noReadingLine,
   unwatched,
 } from '@/lib/admin/health/uptime';
-import { formatDate, formatDateTime, formatTime } from '@/lib/admin/relTime';
+import { studioClock } from '@/lib/admin/studioTimeZone';
+
+// The studio's clock (Admin v2 U9: `site_settings.timezone`, read once per request).
+const clock = await studioClock(Astro.locals);
+const { formatDate, formatDateTime, formatTime } = clock;
 
 // The Uptime card (Admin v2 G2; the prototype's uptime card in screens_health.js): what the
 // external monitor sees, read every 10 minutes by the Worker's health schedule. Server-
@@ -47,7 +51,7 @@ const nowWord = anyDown
     ? 'Paused'
     : 'Up';
 const missing = facts ? unwatched(facts.monitors) : [];
-const failedLine = failedReadLine(probe, now);
+const failedLine = failedReadLine(probe, now, clock);
 const points = facts?.responseTimes ?? [];
 const minutes = (seconds: number) => Math.max(1, Math.round(seconds / 60));
 const monitorWord = (m: { path: string | null; name: string; status: string }) => {

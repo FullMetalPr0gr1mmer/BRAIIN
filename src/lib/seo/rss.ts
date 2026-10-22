@@ -25,6 +25,15 @@ const CHANNEL = {
   },
 } as const;
 
+/**
+ * A feed's Cache-Tag: its route and language, the posts it lists, the brand its title names
+ * (`site:identity`), and `tenant:default`, the tag a collapsed purge sends (more than 30 tags,
+ * an orphaned release, a slug it could not resolve: Admin v2 R7), so no purge misses it.
+ */
+export function rssCacheTag(locale: Locale): string {
+  return `tenant:default,route:rss,rss:${locale},blog:all,site:identity`;
+}
+
 export async function buildRssFeed(
   locale: Locale,
   siteUrl: string,
@@ -84,8 +93,7 @@ export async function buildRssFeed(
     headers: {
       'content-type': 'application/rss+xml; charset=utf-8',
       'cache-control': 'public, max-age=3600',
-      // site:identity — the channel title names the brand.
-      'cache-tag': `route:rss,rss:${locale},blog:all,site:identity`,
+      'cache-tag': rssCacheTag(locale),
     },
   });
 }

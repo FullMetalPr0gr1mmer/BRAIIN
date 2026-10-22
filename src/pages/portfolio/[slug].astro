@@ -2,6 +2,7 @@
 import CaseStudyPage from '@/components/case-study/CaseStudyPage.astro';
 import { loadCaseStudyPage } from '@/lib/portfolio/casePage';
 import { setTierA } from '@/lib/http/cacheTags';
+import { caseStudyCacheEntities } from '@/lib/http/routeTags';
 
 // A case study (UI v2 PR11). Tier A: server-rendered and edge-cached, purged by the
 // project's tag — and by the tags of what else it shows (the next project's card, its
@@ -16,14 +17,7 @@ if (!page) return Astro.rewrite('/404');
 setTierA(Astro.response, {
   route: 'portfolio-item',
   locale,
-  entities: [
-    `portfolio:${page.study.slug}`,
-    'portfolio:all',
-    'sectors:all',
-    'clients:all',
-    'services:all',
-    'testimonials:all',
-  ],
+  entities: caseStudyCacheEntities(page.study.slug),
 });
 ---
 

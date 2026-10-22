@@ -268,10 +268,11 @@ export async function edgeVisibilityStatus(): Promise<EdgeVisibilityStatus | nul
 }
 
 /**
- * The cache tags a change to one page's or template's visibility touches: what a purge must
- * clear once a cache sits in front of the Worker (L9; R7 wires these to the purge seam). A
- * page leaving public must leave every cached copy of itself, of the menus that link it, and
- * of the sitemap and llms.txt.
+ * The cache tags a change to one page's or template's visibility touches, purged through
+ * the purge seam (R7). The cache lookup runs after the visibility check, so a hidden page is
+ * blocked before any cached copy; what a purge must clear is what LISTS it (the menus that
+ * link it, the sitemap, llms.txt), and its own tag goes too, so a copy cached before the
+ * change cannot outlive it once the page is public again.
  */
 export function visibilityPurgeTags(
   target:

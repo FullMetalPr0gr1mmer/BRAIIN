@@ -35,6 +35,12 @@ declare namespace App {
     // sitemap and llms.txt leave out what it does not list. Absent on /admin, /api and the
     // health probe, and in a render with no middleware: read as "every page public".
     visibility?: import('@/lib/http/visibility').VisibilitySnapshot;
+    // The studio's time zone (Admin v2 U9, `site_settings.timezone`), read at most once per
+    // request by src/lib/admin/studioTimeZone.ts. A promise, as `identity` is.
+    studioTimeZone?: Promise<import('@schemas/timeZones').StudioTimeZone>;
+    // The public site's icons (Admin v2 U9), read at most once per request by
+    // src/lib/data/siteProfile.ts getSiteIcons.
+    siteIcons?: Promise<import('@/lib/data/siteProfile').SiteIcons>;
     // The releases preview (Admin v2 R9), set by its middleware branch
     // (src/lib/http/preview.ts) on a `/admin/preview/**` render only: BaseLayout drops the
     // consent banner and telemetry, says noindex and loads the bridge; SectionRenderer marks

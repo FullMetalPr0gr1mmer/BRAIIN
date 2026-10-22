@@ -8,7 +8,7 @@ import { tabOfElement, tabsWithErrors } from '@/lib/admin/editorTabs';
 import { badInputErrors, type MappedErrors } from '@/lib/admin/fieldErrors';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
 import { useSaveShortcut } from '@/lib/admin/useEntitySave';
-import type { EditorTabDef, FieldDef } from '@/lib/admin/uiSchema';
+import type { EditorTabDef, FieldDef, FieldGroup } from '@/lib/admin/uiSchema';
 import { Field, FieldsReadOnly } from '../FormField';
 import { useRevealListener } from './reveal';
 import {
@@ -26,7 +26,8 @@ import {
 //   - the language bar when any field is bilingual: English / العربية / Both for the whole
 //     form, and "Arabic missing: N" with "Next gap";
 //   - `children` (a screen's own notes, such as the edge warning), then the fields, in one
-//     card (with `heading`, U11, the card's header band: the prototype's `card(title, sub)`);
+//     card (with `heading`, U11, the card's header band: the prototype's `card(title, sub)`)
+//     or, given `groups` (U9), in the groups' titled cards;
 //   - the action bar: Save (Ctrl/⌘+S too), the way back, where the save stands
 //     (SaveStatus) and the version ("Not saved yet" for a singleton never saved).
 // It takes the save from useEntitySave and holds no save state of its own.
@@ -68,6 +69,13 @@ export interface EditorFormProps {
    * Enter in it still saves.
    */
   after?: ReactNode;
+  /**
+   * Admin v2 U9: the cards the fields sit in (the prototype's settings screens: titled cards
+   * in two columns, an Advanced card closed). Without it the fields are one card, as before.
+   */
+  groups?: readonly FieldGroup[] | undefined;
+  /** Admin v2 U9: what a group shows before its fields, by group id (the logo tiles). */
+  slots?: Readonly<Record<string, ReactNode>> | undefined;
   /** Admin v2 U8b: the editor's tabs (the role's own: see editorTabs.ts visibleTabs). */
   tabs?: readonly EditorTabDef[] | undefined;
   /** The tab list's name ("Post editor"). */
@@ -102,6 +110,71 @@ function hasBilingual(fields: readonly FieldDef[]): boolean {
   );
 }
 
+/** The groups' cards, in two columns where a group names one; ungrouped fields after. */
+function GroupedFields({
+  groups,
+  slots,
+  fields,
+  renderField,
+}: {
+  groups: readonly FieldGroup[];
+  slots: Readonly<Record<string, ReactNode>> | undefined;
+  fields: readonly FieldDef[];
+  renderField: (field: FieldDef) => ReactNode;
+}) {
+  const byName = new Map(fields.map((f) => [f.name, f]));
+  const grouped = new Set(groups.flatMap((g) => g.fields));
+  const card = (group: FieldGroup) => {
+    const body = (
+      <>
+        {group.sub && <p className="admin-sub editor__group-sub">{group.sub}</p>}
+        {slots?.[group.id]}
+        {group.fields.flatMap((name) => {
+          const field = byName.get(name);
+          return field ? [renderField(field)] : [];
+        })}
+      </>
+    );
+    const headingId = `g-${group.id}`;
+    // A closed card is a <details>: an error inside it is shown by opening it first
+    // (fields/reveal.ts), so the summary links of the ErrorSummary still land.
+    return group.collapsible ? (
+      <details key={group.id} className="card editor__group" data-group={group.id}>
+        <summary className="card-title">{group.title}</summary>
+        {body}
+      </details>
+    ) : (
+      <section
+        key={group.id}
+        className="card editor__group"
+        data-group={group.id}
+        aria-labelledby={headingId}
+      >
+        <h2 className="card-title" id={headingId}>
+          {group.title}
+        </h2>
+        {body}
+      </section>
+    );
+  };
+  const left = groups.filter((g) => g.column === 'left');
+  const right = groups.filter((g) => g.column === 'right');
+  const full = groups.filter((g) => g.column !== 'left' && g.column !== 'right');
+  const rest = fields.filter((f) => !grouped.has(f.name));
+  return (
+    <>
+      {(left.length > 0 || right.length > 0) && (
+        <div className="grid grid--2 editor__cols">
+          <div className="editor__col">{left.map(card)}</div>
+          <div className="editor__col">{right.map(card)}</div>
+        </div>
+      )}
+      {full.map(card)}
+      {rest.length > 0 && <div className="card">{rest.map(renderField)}</div>}
+    </>
+  );
+}
+
 export default function EditorForm({
   save,
   fields,
@@ -110,6 +183,8 @@ export default function EditorForm({
   canAdvanced,
   children,
   after,
+  groups,
+  slots,
   tabs,
   tabsLabel = 'Editor sections',
   panels,
@@ -154,7 +229,7 @@ export default function EditorForm({
     const unreadable = form
       ? [
           ...form.querySelectorAll<HTMLInputElement>(
-            'input[type="number"], input[type="datetime-local"]',
+            'input[type="number"], input[type="datetime-local"], input[type="date"]',
           ),
         ]
           .filter((input) => input.validity.badInput)
@@ -199,12 +274,7 @@ export default function EditorForm({
   if (save.busy && save.status !== 'saving') return <p className="admin-sub">Loading…</p>;
 
   const bilingual = hasBilingual(fields);
-  const onSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    if (!readOnly) submit();
-  };
   const errors = local ?? save.errors;
-
   const renderField = (field: FieldDef) => (
     <Field
       key={field.name}
@@ -216,43 +286,65 @@ export default function EditorForm({
       canAdvanced={canAdvanced}
     />
   );
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!readOnly) submit();
+  };
+
+  // The fields' cards: the groups' (U9) when there are any, else one card as before, with
+  // `head`'s header band (U11) when the form is that one named card (groups title their own).
+  const fieldsBlock = (
+    shown: readonly FieldDef[],
+    cards: readonly FieldGroup[],
+    head?: EditorFormProps['heading'],
+  ) =>
+    cards.length > 0 ? (
+      <GroupedFields groups={cards} slots={slots} fields={shown} renderField={renderField} />
+    ) : (
+      <div className="card">
+        {head && (
+          <div className="card__h">
+            <div>
+              <h2 className="card__t">{head.title}</h2>
+              {head.sub && <p className="card__sub">{head.sub}</p>}
+            </div>
+          </div>
+        )}
+        {shown.map(renderField)}
+      </div>
+    );
+  // Groups compose inside a field tab (U8.md): a group renders in the tab that holds all of
+  // its fields; one that would span two tabs is drawn in neither, its fields plain in theirs.
+  const inTab = (own: ReadonlySet<string>) =>
+    (groups ?? []).filter((g) => g.fields.every((name) => own.has(name)));
 
   const fieldTabs = tabs?.filter((t) => !t.panel) ?? [];
   const panelTabs = tabs?.filter((t) => t.panel) ?? [];
   const current = tabs?.find((t) => t.id === tab);
   const flagged = tabs ? tabsWithErrors(errors.byId, tabs, fields) : new Set<string>();
 
-  let fieldBlock: ReactNode = tabs ? (
-    fieldTabs.map((t) => {
-      const ids = tabIds(tabBase, t.id);
-      const own = new Set(t.fields);
-      return (
-        <div
-          key={t.id}
-          role="tabpanel"
-          id={ids.panel}
-          aria-labelledby={ids.tab}
-          tabIndex={0}
-          data-editor-tab={t.id}
-          hidden={t.id !== tab}
-        >
-          <div className="card">{fields.filter((f) => own.has(f.name)).map(renderField)}</div>
-        </div>
-      );
-    })
-  ) : (
-    <div className="card">
-      {heading && (
-        <div className="card__h">
-          <div>
-            <h2 className="card__t">{heading.title}</h2>
-            {heading.sub && <p className="card__sub">{heading.sub}</p>}
+  let fieldBlock: ReactNode = tabs
+    ? fieldTabs.map((t) => {
+        const ids = tabIds(tabBase, t.id);
+        const own = new Set(t.fields);
+        return (
+          <div
+            key={t.id}
+            role="tabpanel"
+            id={ids.panel}
+            aria-labelledby={ids.tab}
+            tabIndex={0}
+            data-editor-tab={t.id}
+            hidden={t.id !== tab}
+          >
+            {fieldsBlock(
+              fields.filter((f) => own.has(f.name)),
+              inTab(own),
+            )}
           </div>
-        </div>
-      )}
-      {fields.map(renderField)}
-    </div>
-  );
+        );
+      })
+    : fieldsBlock(fields, groups ?? [], heading);
   if (readOnly) {
     // A disabled fieldset turns every control in it off (a rich text is told separately:
     // a contenteditable ignores it).

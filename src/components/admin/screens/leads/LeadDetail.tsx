@@ -3,7 +3,7 @@ import { Badge } from '@/components/admin/kit/StatusBadge';
 import Note from '@/components/admin/kit/Note';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { showFlash } from '@/lib/admin/flash';
-import { formatDateTime, relTime } from '@/lib/admin/relTime';
+import { useClock } from '@/components/admin/kit/clock';
 import type {
   LeadDetailInitial,
   LeadDetailRow,
@@ -42,6 +42,7 @@ export interface LeadDetailProps extends LeadDetailInitial {
 const CONFLICT = 'Someone else changed this. Refreshed.';
 
 export default function LeadDetail(props: LeadDetailProps) {
+  const { formatDateTime, relTime } = useClock();
   const { stages, people, permissions, me } = props;
   const [lead, setLead] = useState<LeadDetailRow>(props.lead);
   const [events, setEvents] = useState<LeadEventRow[]>(props.events);

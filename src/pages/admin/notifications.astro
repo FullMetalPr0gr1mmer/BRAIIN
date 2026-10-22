@@ -1,4 +1,5 @@
 ---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 import { env } from 'cloudflare:workers';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import NotificationList from '@/components/admin/screens/chrome/NotificationList';
@@ -48,6 +49,7 @@ if (session && sb) {
     feed: await loadNotifications(sb, session, {
       maintenance: async () => maintenance,
       labels: true,
+      tz: await studioTimeZone(Astro.locals),
     }),
   };
 }

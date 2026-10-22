@@ -6,7 +6,7 @@ import {
   optionLabel,
   type ApplicationStatus,
 } from '@schemas/application';
-import { formatDateTime } from './relTime';
+import type { Clock } from './relTime';
 import type { BadgeTone } from './tones';
 
 // The job applications screen's words and rules (Admin v2 U8a), pure so the panel, the drawer
@@ -95,8 +95,9 @@ export function statusChips(): { value: StatusChip; label: string }[] {
 /**
  * The "Details" card: label and value pairs, from the option tables (labels, never keys).
  * Never a contact field: the e-mail and phone have their own card, behind the reveal.
+ * "Received" is in the studio's zone: the caller's clock (Admin v2 U9, relTime.ts).
  */
-export function detailRows(detail: ApplicationRow): [string, string][] {
+export function detailRows(detail: ApplicationRow, clock: Clock): [string, string][] {
   return [
     ['Role', detail.role],
     ['City', detail.city],
@@ -104,7 +105,7 @@ export function detailRows(detail: ApplicationRow): [string, string][] {
     ['Works', optionLabel(WORK_TYPES, detail.work_type)],
     ['Can start', optionLabel(AVAILABILITY, detail.availability)],
     ['Language', detail.locale === 'ar' ? 'Arabic' : 'English'],
-    ['Received', formatDateTime(detail.created_at)],
+    ['Received', clock.formatDateTime(detail.created_at)],
   ];
 }
 

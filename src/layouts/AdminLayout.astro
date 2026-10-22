@@ -13,6 +13,8 @@ import AdminChrome from '@/components/admin/islands/AdminChrome';
 import { paletteGroupsFor } from '@/lib/admin/paletteSources';
 import { pageGuideFor } from '@/lib/admin/help/pageGuides';
 import type { AdminStylesheet } from '@/lib/admin/stylesheets';
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
+import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
 
 // Tier C shell (CLAUDE.md §2): on-demand, `private, no-store` (set in middleware),
 // never indexable. Deliberately NOT built on BaseLayout — that one carries <SeoHead>,
@@ -65,16 +67,21 @@ const tab = section ? currentTab(section, path) : null;
 // This screen's guide for the role (U16): known in code, so it costs no read.
 const guide = app && session ? pageGuideFor(path, session.role) : null;
 
+// The studio's time zone (U9): written on the page for the islands that print dates only
+// after they load (src/components/admin/kit/clock.tsx); one read per request, shared with
+// the page's own components through the request memo.
+const studioTz = session ? await studioTimeZone(Astro.locals) : DEFAULT_TIME_ZONE;
+
 const shell: ShellState =
   app && session && supabase
-    ? await loadShellState(supabase, session, nav, env, preload)
+    ? await loadShellState(supabase, session, nav, env, preload, studioTz)
     : { displayName: null, maintenance: false, counts: {}, environment: null, unread: 0 };
 const initials = session ? initialsOf(shell.displayName, session.email) : '';
 const account = session ? accountViewFor(session, shell.displayName) : null;
 ---
 
 <!doctype html>
-<html lang="en" dir="ltr">
+<html lang="en" dir="ltr" data-studio-tz={studioTz}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />

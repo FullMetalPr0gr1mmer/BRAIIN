@@ -8,12 +8,13 @@ vi.mock('@/lib/data/siteProfile', () => ({
 }));
 
 describe('Tier-A cache headers', () => {
-  it('always tags the identity and the navigation, which every page renders', () => {
+  it('always tags the identity, the navigation and the media rows, which every page renders', () => {
     const tags = tierATags({ route: 'about', locale: 'ar', entities: ['team:all'] });
     expect(tags).toEqual([
       'tenant:default',
       'site:identity',
       'nav:all',
+      'media:all',
       'route:about',
       'team:all',
       'locale:ar',
@@ -25,7 +26,7 @@ describe('Tier-A cache headers', () => {
     setTierA(response, { route: 'service', locale: 'en', entities: ['service:branding'] });
     expect(response.headers.get('Cache-Control')).toBe(TIER_A_CACHE_CONTROL);
     expect(response.headers.get('Cache-Tag')).toBe(
-      'tenant:default,site:identity,nav:all,route:service,service:branding,locale:en',
+      'tenant:default,site:identity,nav:all,media:all,route:service,service:branding,locale:en',
     );
   });
 
