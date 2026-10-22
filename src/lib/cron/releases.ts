@@ -107,7 +107,10 @@ export async function runReleasePurges(
   for (const release of claimed) {
     // record_release_purge counts every outcome but not_needed as an attempt.
     const attempts = release.attempts + (outcome.status === 'not_needed' ? 0 : 1);
-    const nextAt = outcome.status === 'failed' ? purgeRetryAt(attempts) : null;
+    const nextAt =
+      outcome.status === 'failed'
+        ? purgeRetryAt(attempts, (purge.now ?? Date.now)(), purge.random ?? Math.random)
+        : null;
     if (outcome.status === 'failed' && nextAt === null) run.exhausted += 1;
     const recorded = await recordPurge({
       tenantId,

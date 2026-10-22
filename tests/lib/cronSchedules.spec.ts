@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// The Worker's cron schedules (Admin v2 G2, src/lib/cron/schedules.ts): the keys are exactly
+// The Worker's cron schedules (Admin v2 G2 and R7, src/lib/cron/schedules.ts): the keys are exactly
 // wrangler.jsonc's `triggers.crons`, each schedule's declared budgets fit the Workers Free
 // plan's 50 subrequests, the health job runs at its worst within the budget it declares
 // (dailyJobs.spec's method: every awaited query, every fetch, two per log line), and a cron
@@ -59,6 +59,7 @@ vi.mock('astro:env/server', async (importOriginal) => ({
 const { SCHEDULES, runSchedule } = await import('@/lib/cron/schedules');
 const { DAILY_JOBS } = await import('@/lib/cron/jobs');
 const { HEALTH_JOBS } = await import('@/lib/cron/health');
+const { RELEASE_JOBS } = await import('@/lib/cron/releases');
 const { runJobs } = await import('@/lib/cron/daily');
 
 /** wrangler.jsonc's crons, read from the file as deployed. */
@@ -86,6 +87,8 @@ describe('the schedules (src/lib/cron/schedules.ts)', () => {
     expect(Object.keys(SCHEDULES).sort()).toEqual(wranglerCrons().sort());
     expect(SCHEDULES['23 3 * * *']).toBe(DAILY_JOBS);
     expect(SCHEDULES['*/10 * * * *']).toBe(HEALTH_JOBS);
+    // Admin v2 R7: what published releases still owe the edge, every minute.
+    expect(SCHEDULES['* * * * *']).toBe(RELEASE_JOBS);
   });
 
   it('stay within the Free plan’s 5 cron triggers per account', () => {
