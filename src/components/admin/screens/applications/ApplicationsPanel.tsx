@@ -1,51 +1,40 @@
 import { useCallback, useEffect, useState } from 'react';
+import { EXPERIENCE_LEVELS, optionLabel, type ApplicationStatus } from '@schemas/application';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import { PAGE_SIZE } from '@/lib/admin/pager';
+import { formatDateTime, relTime } from '@/lib/admin/relTime';
 import {
-  APPLICATION_STATUSES,
-  AVAILABILITY,
-  CRAFTS,
-  EXPERIENCE_LEVELS,
-  SPAM_RETENTION_DAYS,
-  WORK_TYPES,
-  optionLabel,
-} from '@schemas/application';
+  statusChips,
+  statusLabel,
+  statusTone,
+  type ApplicationRow,
+  type StatusChip,
+} from '@/lib/admin/applicationView';
+import Chips from '@/components/admin/kit/Chips';
+import DataTable, { type DataColumn } from '@/components/admin/kit/DataTable';
+import Note from '@/components/admin/kit/Note';
+import { Badge } from '@/components/admin/kit/StatusBadge';
+import ApplicationDrawer from './ApplicationDrawer';
 
-// Job applications (Join) — Admin only. The leads panel's pattern, with one difference in
-// what is personal data: here the contact details AND the CV are, and both are fetched one
-// application at a time by a deliberate click the server audits (`?pii=1`, `[id]/cv`).
+// Job applications (Join), Admin only (Admin v2 U8a, ui.md AV-17), on the kit: the list is a
+// DataTable with status chips and the pager, each row's "Open" shows the application in a
+// wide drawer (ApplicationDrawer: the audited reveal, the CV download, status, notes,
+// consent and retention, erase). The four routes are unchanged; the list and the detail
+// never carry contact details or the CV's storage path (src/lib/admin/applicationFields.ts).
 //
-// Notes are not personal data in this table (it is Admin-only to begin with), so they come
-// with the ordinary detail — the notes box always shows what is stored, and a save can
-// never blank notes the panel had not loaded (the leads panel's bug, not repeated here).
+// The address keeps `?status=` and `?open=<id>` in step (history.replaceState), and the
+// server reads both for the first paint (src/pages/admin/applications/index.astro), so the
+// bell's "New application" opens that one. Opening writes the route's `application.view`
+// audit row (no personal data), as a click does. A status changes in the drawer only (D6):
+// one control per change, never from a table row.
 
-interface ApplicationRow {
-  id: string;
-  created_at: string;
-  locale: string;
-  name: string;
-  city: string;
-  role: string;
-  experience: string;
-  work_type: string;
-  availability: string;
-  skills: string[];
-  portfolio_url: string;
-  linkedin_url: string | null;
-  status: string;
-  future_roles_consent: boolean;
-  retention_delete_after: string;
-  has_cv: boolean;
-  cv_content_type: string | null;
-  cv_bytes: number | null;
-}
-
-interface ApplicationDetail extends ApplicationRow {
-  message: string;
-  internal_notes: string | null;
-  consent_at: string;
-  consent_version: string;
-  email?: string | null;
-  phone?: string | null;
+export interface ApplicationsPanelProps {
+  /** Mirrors `applications.pii`: UX only, the server decides. */
+  canSeePii: boolean;
+  /** The address's status filter, checked on the server; null for All. */
+  initialStatus?: ApplicationStatus | null | undefined;
+  /** The address's `?open=` application, checked on the server (a uuid); null for none. */
+  openId?: string | null | undefined;
 }
 
 interface ListResponse {
@@ -53,46 +42,44 @@ interface ListResponse {
   total: number;
 }
 
-export interface ApplicationsPanelProps {
-  /** Mirrors `applications.pii` — UX only; the server decides. */
-  canSeePii: boolean;
+/** Keeps `?status=` and `?open=` in the address, without a history entry. */
+function syncAddress(status: StatusChip, open: string | null): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (status === 'all') url.searchParams.delete('status');
+  else url.searchParams.set('status', status);
+  if (open) url.searchParams.set('open', open);
+  else url.searchParams.delete('open');
+  window.history.replaceState(window.history.state, '', url);
 }
 
-const PAGE_SIZE = 25;
-
-/** `1.2 MB` / `850 KB`. */
-export function formatBytes(n: number | null | undefined): string {
-  if (!n || n <= 0) return '';
-  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(n / 1024))} KB`;
-}
-
-/** A link the admin may open: https only (the schema and the 0029 CHECK already insist). */
-export function safeLink(url: string | null | undefined): string | null {
-  return typeof url === 'string' && /^https:\/\//i.test(url) ? url : null;
-}
-
-export default function ApplicationsPanel({ canSeePii }: ApplicationsPanelProps) {
+export default function ApplicationsPanel({
+  canSeePii,
+  initialStatus = null,
+  openId = null,
+}: ApplicationsPanelProps) {
   const [rows, setRows] = useState<ApplicationRow[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [status, setStatus] = useState('');
-  const [selected, setSelected] = useState<ApplicationDetail | null>(null);
-  const [piiShown, setPiiShown] = useState(false);
-  const [notes, setNotes] = useState('');
-  const [error, setError] = useState('');
+  const [status, setStatus] = useState<StatusChip>(initialStatus ?? 'all');
+  const [open, setOpen] = useState<string | null>(openId);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState<string | undefined>();
   const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
-    setError('');
+    setBusy(true);
+    setError(undefined);
     try {
       const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
-      if (status) params.set('status', status);
+      if (status !== 'all') params.set('status', status);
       const data = await adminFetch<ListResponse>(`/api/admin/applications?${params.toString()}`);
       setRows(data.rows ?? []);
       setTotal(data.total ?? 0);
     } catch (err) {
       setError(describeError(err));
+    } finally {
+      setBusy(false);
     }
   }, [offset, status]);
 
@@ -100,264 +87,107 @@ export default function ApplicationsPanel({ canSeePii }: ApplicationsPanelProps)
     void load();
   }, [load]);
 
-  async function open(id: string, withPii: boolean) {
-    setError('');
-    setNotice('');
-    try {
-      const detail = await adminFetch<ApplicationDetail>(
-        `/api/admin/applications/${id}${withPii ? '?pii=1' : ''}`,
-      );
-      setSelected(detail);
-      setPiiShown(withPii);
-      setNotes(detail.internal_notes ?? '');
-    } catch (err) {
-      setError(describeError(err));
-    }
-  }
+  useEffect(() => {
+    syncAddress(status, open);
+  }, [status, open]);
 
-  async function patch(id: string, body: Record<string, unknown>) {
-    setError('');
-    try {
-      await adminFetch(`/api/admin/applications/${id}`, { method: 'PATCH', body });
-      await load();
-      if (selected?.id === id) await open(id, piiShown);
-    } catch (err) {
-      setError(describeError(err));
-    }
-  }
+  const columns: readonly DataColumn<ApplicationRow>[] = [
+    { key: 'name', label: 'Name', render: (row) => <span dir="auto">{row.name}</span> },
+    { key: 'role', label: 'Role', render: (row) => <span dir="auto">{row.role}</span> },
+    {
+      key: 'experience',
+      label: 'Experience',
+      render: (row) => optionLabel(EXPERIENCE_LEVELS, row.experience),
+    },
+    { key: 'cv', label: 'CV', render: (row) => (row.has_cv ? 'Yes' : 'No') },
+    {
+      key: 'created_at',
+      label: 'Received',
+      render: (row) => (
+        <time dateTime={row.created_at} title={formatDateTime(row.created_at)}>
+          {relTime(row.created_at)}
+        </time>
+      ),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (row) => <Badge tone={statusTone(row.status)}>{statusLabel(row.status)}</Badge>,
+    },
+  ];
 
-  async function erase(id: string, name: string) {
-    // eslint-disable-next-line no-alert -- a destructive, irreversible action deserves a plain confirm
-    if (!window.confirm(`Erase ${name}'s application and CV? This cannot be undone.`)) return;
-    setError('');
-    try {
-      await adminFetch(`/api/admin/applications/${id}`, { method: 'DELETE' });
-      setSelected(null);
-      setNotice('Application erased.');
-      await load();
-    } catch (err) {
-      setError(describeError(err));
-    }
-  }
+  const filtered = status !== 'all';
 
   return (
-    <div>
-      <div className="toolbar">
-        <label className="visually-hidden" htmlFor="application-status">
-          Filter by status
-        </label>
-        <select
-          id="application-status"
-          value={status}
-          onChange={(event) => {
-            setOffset(0);
-            setStatus(event.target.value);
-          }}
-        >
-          <option value="">All statuses</option>
-          {APPLICATION_STATUSES.map((value) => (
-            <option key={value} value={value}>
-              {value.replace('_', ' ')}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {error && (
-        <p className="msg" data-kind="error" role="alert">
-          {error}
-        </p>
-      )}
+    <div className="apps">
       {notice && (
-        <p className="msg" role="status">
+        <Note tone="ok" role="status">
           {notice}
-        </p>
+        </Note>
       )}
-
-      <div className="card table-wrap">
-        <table className="data">
-          <caption className="visually-hidden">Job applications</caption>
-          <thead>
-            <tr>
-              <th scope="col">Received</th>
-              <th scope="col">Name</th>
-              <th scope="col">Role</th>
-              <th scope="col">Experience</th>
-              <th scope="col">CV</th>
-              <th scope="col">Status</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td>{new Date(row.created_at).toLocaleDateString()}</td>
-                <td>{row.name}</td>
-                <td>{row.role}</td>
-                <td>{optionLabel(EXPERIENCE_LEVELS, row.experience)}</td>
-                <td>{row.has_cv ? 'Yes' : '—'}</td>
-                <td>
-                  <label className="visually-hidden" htmlFor={`s-${row.id}`}>
-                    Status for {row.name}
-                  </label>
-                  <select
-                    id={`s-${row.id}`}
-                    value={row.status}
-                    onChange={(event) => void patch(row.id, { status: event.target.value })}
-                  >
-                    {APPLICATION_STATUSES.map((value) => (
-                      <option key={value} value={value}>
-                        {value.replace('_', ' ')}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  <button type="button" onClick={() => void open(row.id, false)}>
-                    View
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={7}>No applications yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="toolbar form-actions">
-        <button
-          type="button"
-          onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-          disabled={offset === 0}
-        >
-          Previous
-        </button>
-        <span aria-live="polite">
-          {total === 0 ? '0' : `${offset + 1}–${Math.min(offset + PAGE_SIZE, total)}`} of {total}
-        </span>
-        <button
-          type="button"
-          onClick={() => setOffset(offset + PAGE_SIZE)}
-          disabled={offset + PAGE_SIZE >= total}
-        >
-          Next
-        </button>
-      </div>
-
-      {selected && (
-        <div className="card card-detail">
-          <h2 className="card-title">{selected.name}</h2>
-          <p className="admin-sub">
-            {new Date(selected.created_at).toLocaleString()} · {selected.locale.toUpperCase()} ·{' '}
-            {selected.city}
-          </p>
-          <dl className="pii">
-            <dt>Role</dt>
-            <dd>{selected.role}</dd>
-            <dt>Experience</dt>
-            <dd>{optionLabel(EXPERIENCE_LEVELS, selected.experience)}</dd>
-            <dt>Works</dt>
-            <dd>{optionLabel(WORK_TYPES, selected.work_type)}</dd>
-            <dt>Can start</dt>
-            <dd>{optionLabel(AVAILABILITY, selected.availability)}</dd>
-            <dt>Crafts</dt>
-            <dd>
-              {selected.skills.length > 0
-                ? selected.skills.map((s) => optionLabel(CRAFTS, s)).join(', ')
-                : '—'}
-            </dd>
-            <dt>Portfolio</dt>
-            <dd>
-              {safeLink(selected.portfolio_url) ? (
-                <a href={selected.portfolio_url} target="_blank" rel="noopener noreferrer">
-                  {selected.portfolio_url}
-                </a>
-              ) : (
-                '—'
-              )}
-            </dd>
-            <dt>LinkedIn</dt>
-            <dd>
-              {safeLink(selected.linkedin_url) ? (
-                <a href={selected.linkedin_url ?? ''} target="_blank" rel="noopener noreferrer">
-                  {selected.linkedin_url}
-                </a>
-              ) : (
-                '—'
-              )}
-            </dd>
-            <dt>Consent</dt>
-            <dd>
-              {new Date(selected.consent_at).toLocaleDateString()} (notice{' '}
-              {selected.consent_version})
-              {selected.future_roles_consent ? ' · future roles too' : ''}
-            </dd>
-            <dt>Kept until</dt>
-            <dd>
-              {new Date(selected.retention_delete_after).toLocaleDateString()}
-              {selected.status === 'spam'
-                ? ''
-                : ` · marking it spam deletes it within ${SPAM_RETENTION_DAYS} days`}
-            </dd>
-          </dl>
-          <p className="prewrap">{selected.message}</p>
-
-          {canSeePii && !piiShown && (
-            <button type="button" onClick={() => void open(selected.id, true)}>
-              Reveal contact details (this access is logged)
-            </button>
-          )}
-          {piiShown && (
-            <dl className="pii">
-              <dt>Email</dt>
-              <dd>{selected.email || '—'}</dd>
-              <dt>Phone</dt>
-              <dd>{selected.phone || '—'}</dd>
-            </dl>
-          )}
-
-          {canSeePii && selected.has_cv && (
-            <p>
-              {/* A plain link: the server answers with an attachment, audited and rate-limited. */}
-              <a className="btn" href={`/api/admin/applications/${selected.id}/cv`} download>
-                Download CV ({formatBytes(selected.cv_bytes)}) — this access is logged
-              </a>{' '}
-              <span className="badge" data-tone="warn">
-                Not virus-scanned
-              </span>
-            </p>
-          )}
-
-          <label className="field">
-            <span>Internal notes</span>
-            <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
-            <button
-              type="button"
-              onClick={() => void patch(selected.id, { internalNotes: notes })}
-              className="spaced-top"
-            >
-              Save notes
-            </button>
-          </label>
-
-          <p className="toolbar">
-            <button type="button" onClick={() => setSelected(null)}>
-              Close
-            </button>
-            <button
-              type="button"
-              data-variant="danger"
-              onClick={() => void erase(selected.id, selected.name)}
-            >
-              Erase application
-            </button>
-          </p>
-        </div>
-      )}
+      <DataTable<ApplicationRow>
+        caption="Job applications"
+        columns={columns}
+        rows={rows}
+        rowName={(row) => row.name}
+        total={total}
+        offset={offset}
+        limit={PAGE_SIZE}
+        onPage={setOffset}
+        busy={busy}
+        error={error}
+        actionsLabel="Open"
+        rowActions={(row) => (
+          <button
+            type="button"
+            data-size="sm"
+            data-variant="ghost"
+            aria-label={`Open ${row.name}’s application`}
+            onClick={() => {
+              setNotice('');
+              setOpen(row.id);
+            }}
+          >
+            Open
+          </button>
+        )}
+        toolbar={
+          <Chips<StatusChip>
+            label="Filter by status"
+            chips={statusChips()}
+            selected={[status]}
+            onChange={([next]) => {
+              setOffset(0);
+              setStatus(next ?? 'all');
+            }}
+          />
+        }
+        empty={
+          filtered
+            ? { title: 'No applications match', text: 'Try another status.', icon: 'hand' }
+            : {
+                title: 'No applications yet',
+                text: 'They arrive here from the Join page.',
+                icon: 'hand',
+              }
+        }
+      />
+      <ApplicationDrawer
+        id={open}
+        canSeePii={canSeePii}
+        onClose={() => setOpen(null)}
+        onChanged={() => void load()}
+        onErased={(erased) => {
+          // Closed only if it still shows the erased application.
+          setOpen((current) => (current === erased ? null : current));
+          setNotice('Application erased.');
+          void load();
+        }}
+      />
     </div>
   );
 }
+
+// The panel's helpers live in the screen's model (src/lib/admin/applicationView.ts); kept
+// importable from here, where tests/lib/applicationsAdmin.spec.ts has always read them.
+export { formatBytes, safeLink } from '@/lib/admin/applicationView';

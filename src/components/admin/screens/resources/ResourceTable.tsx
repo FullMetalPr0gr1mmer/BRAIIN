@@ -8,7 +8,13 @@ import { confirmDialog } from '@/lib/admin/confirm';
 import { PAGE_SIZE } from '@/lib/admin/pager';
 import { formatDate } from '@/lib/admin/relTime';
 import { toast } from '@/lib/admin/toast';
-import { uiFor, type ColumnDef, type SyncActionDef } from '@/lib/admin/uiSchema';
+import {
+  columnOf,
+  uiFor,
+  type ColumnDef,
+  type FieldDef,
+  type SyncActionDef,
+} from '@/lib/admin/uiSchema';
 import { isArchiveRefusal, MOVE_ARCHIVED, swapTarget } from './reorder';
 
 // The list view for every CRUD resource. Reads its shape from RESOURCE_UI, so adding an
@@ -54,6 +60,12 @@ export interface ResourceTableProps {
   /** Bump to re-read the list and the edge status line (a save made in the drawer). */
   epoch?: number;
   /**
+   * Admin v2 U8b: the role holds the resource's write capability (the page's
+   * canWriteResource). Without it, no "New" and no "add the first one" (SEO on posts).
+   * UX only: the server refuses a create whatever this shows. Default true.
+   */
+  canCreate?: boolean;
+  /**
    * Hotfix H12: the person may archive (`content.archiveDelete`), so Move up and Move down may
    * write an archived row. Without it a move steps over archived rows (./reorder.ts). The page
    * reads it from the session; the reorder route refuses such a move whatever this says.
@@ -78,6 +90,7 @@ export default function ResourceTable({
   onEdit,
   onCreate,
   epoch = 0,
+  canCreate = true,
   canArchive = false,
 }: ResourceTableProps) {
   const ui = uiFor(resource);
@@ -194,11 +207,16 @@ export default function ResourceTable({
           },
         ]
       : []),
-    ...rest.map((column) => ({
-      key: column.key,
-      label: column.label,
-      render: (row: Row) => renderCell(row[column.key], column),
-    })),
+    ...rest.map((column) => {
+      // An `option` column shows its select's words (U8b: the Style-Finder's Input reads
+      // "Single choice", not `single`); every other column draws the stored value.
+      const labels = selectLabels(column, ui.fields);
+      return {
+        key: column.key,
+        label: column.label,
+        render: (row: Row) => renderCell(labelled(row[column.key], labels), column),
+      };
+    }),
   ];
 
   return (
@@ -266,7 +284,7 @@ export default function ResourceTable({
         )}
         toolbar={
           <>
-            {onCreate ? (
+            {!canCreate ? null : onCreate ? (
               <button type="button" className="btn" data-variant="primary" onClick={onCreate}>
                 <Icon name="plus" size={16} />
                 New {ui.singular.toLowerCase()}
@@ -308,14 +326,34 @@ export default function ResourceTable({
             query || status
               ? `No ${ui.title.toLowerCase()} match`
               : `No ${ui.title.toLowerCase()} yet`,
-          text:
-            query || status
-              ? 'Try another search or filter.'
-              : `Add the first one with “New ${ui.singular.toLowerCase()}”.`,
+          ...(query || status
+            ? { text: 'Try another search or filter.' }
+            : canCreate
+              ? { text: `Add the first one with “New ${ui.singular.toLowerCase()}”.` }
+              : {}),
         }}
       />
     </div>
   );
+}
+
+/**
+ * The option words of an `option` column: the form's `select` field whose row key is the
+ * column's. Null for every other column, so a status badge keeps its stored key (its
+ * `data-status` is what admin.css colours) and a redirect's Code stays the code. Admin v2 U8b.
+ */
+export function selectLabels(
+  column: ColumnDef,
+  fields: readonly FieldDef[],
+): ReadonlyMap<string, string> | null {
+  if (column.kind !== 'option') return null;
+  const field = fields.find((f) => f.kind === 'select' && columnOf(f) === column.key);
+  return field?.options ? new Map(field.options.map((o) => [o.value, o.label])) : null;
+}
+
+/** A stored value as its option's words when it has one; anything else as it is. */
+export function labelled(value: unknown, labels: ReadonlyMap<string, string> | null): unknown {
+  return labels && typeof value === 'string' ? (labels.get(value) ?? value) : value;
 }
 
 /**

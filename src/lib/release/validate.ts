@@ -480,11 +480,16 @@ async function primeLinks(
     service,
   }));
   const mine = groups.filter((g) => !g.service);
+  // A post's author (U8b, D11): the publish rule asks for the member's status, read here with
+  // the ids, under the caller's RLS and through the state the release leaves.
+  const isAuthor = (table: string, service: boolean) => table === 'team_members' && !service;
+  const columnsOf = (table: string) =>
+    table === 'media_assets' ? 'id,kind,alt' : isAuthor(table, false) ? 'id,status' : 'id';
   const [answers, theirs] = await Promise.all([
     db.listMany(
       mine.map(({ table, list }) => ({
         table,
-        query: { columns: table === 'media_assets' ? 'id,kind,alt' : 'id', in: { id: list } },
+        query: { columns: columnsOf(table), in: { id: list } },
       })),
     ),
     // A team member's account: staff read only their own profile, so existence in the tenant
@@ -500,11 +505,24 @@ async function primeLinks(
   const rowsOf = new Map<string, Row[]>();
   mine.forEach((g, index) => rowsOf.set(g.table, answers[index] ?? []));
   groups.filter((g) => g.service).forEach((g, index) => rowsOf.set(g.table, theirs[index] ?? []));
-  for (const { table, list } of groups) {
+  for (const { table, list, service } of groups) {
     const rows = rowsOf.get(table) ?? [];
     const have = new Set(rows.map((r) => String(r['id'])));
     found.set(table, have);
     for (const id of list) db.primeExists(table, id, {}, have.has(id));
+    if (isAuthor(table, service)) {
+      // requirePublishedAuthor's question (blog.ts), answered for every author at once: one
+      // read per release, not one per author (P-15). A member the read cannot see is null,
+      // which the rule refuses, as it would have refused the live answer.
+      const statusOf = new Map(rows.map((row) => [String(row['id']), row['status'] ?? null]));
+      for (const id of list) {
+        db.primeFirst(
+          table,
+          { columns: 'status', eq: { id } },
+          statusOf.has(id) ? { status: statusOf.get(id) } : null,
+        );
+      }
+    }
     if (table === 'media_assets') {
       // The poster rules ask "an image of this site" and "its alt text": answered from here.
       for (const row of rows) {

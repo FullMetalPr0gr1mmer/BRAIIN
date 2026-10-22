@@ -87,6 +87,13 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     caps: ['analytics.read'],
     screens: ['/admin/analytics', '/admin/analytics/search'],
   },
+  // Admin v2 U8a: the three Style-Finder screens (Questions and Styles: Admin and Content
+  // Creator; Results & logic: Admin).
+  {
+    slug: 'style-finder',
+    caps: ['ai.editContent', 'ai.config'],
+    screens: ['/admin/ai-questions', '/admin/ai-styles', '/admin/ai-config'],
+  },
   {
     slug: 'site-health-and-logs',
     caps: ['siteHealth.view', 'logs.view', 'audit.view'],

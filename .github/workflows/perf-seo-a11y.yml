@@ -50,7 +50,10 @@ jobs:
   e2e:
     name: E2E + axe + CSP + video bytes
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 45: the suite itself took 23 minutes once U8's admin suites joined it, and with the stack,
+    # the build and the design capture the job passed 30 and was cancelled with every test
+    # green. Sharding the suite is the follow-up if it nears this again (the rule caps jobs at 60).
+    timeout-minutes: 45
     env:
       # As above, but WITH storage-api: tests/e2e/apply-roundtrip.e2e.ts sends one real Join
       # application, and its CV must reach the private `applications` bucket (migration

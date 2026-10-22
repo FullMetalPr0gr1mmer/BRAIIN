@@ -1,0 +1,81 @@
+{
+  "slug": "style-finder",
+  "sort_order": 115,
+  "minutes": 2,
+  "tags": [
+    "growth"
+  ],
+  "screens": [
+    "/admin/ai-questions",
+    "/admin/ai-styles",
+    "/admin/ai-config"
+  ],
+  "caps": [
+    "ai.editContent",
+    "ai.config"
+  ],
+  "title": "Style-Finder",
+  "title_ar": "أداة Style-Finder",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "The Style-Finder is a short quiz that will suggest a style to visitors. It is not on the site yet: what you write here is saved and waits for the quiz, and publishing a question or a style shows it nowhere."
+      },
+      {
+        "t": "h",
+        "x": "Questions and styles"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Questions: the prompt in both languages, how visitors answer (one choice, several, a scale or their own words) and, for choices, up to 20 options.",
+          "Styles: a result a visitor can be given, with its name and description in both languages.",
+          "Move up and Move down in the list set the order. Only an Admin can delete."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Results & logic"
+      },
+      {
+        "t": "p",
+        "x": "Only an Admin sees this tab. It holds the daily spend cap, the hourly limits, the model and the instructions the quiz will run with. None of it is read yet: until the quiz ships every request to it is turned away, nothing is spent, and the limits are fixed at 60 an hour per address and 20 per visitor."
+      },
+      {
+        "t": "tip",
+        "x": "The key for the AI service is never stored here. It is a secret on the server, out of the admin’s reach."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "أداة Style-Finder اختبار قصير سيقترح على الزوار أسلوبًا يناسبهم. وهي ليست على الموقع بعد: ما تكتبه هنا يُحفظ وينتظر الاختبار، ونشر سؤال أو أسلوب لا يُظهره في أي مكان."
+      },
+      {
+        "t": "h",
+        "x": "الأسئلة والأساليب"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "الأسئلة (Questions): نص السؤال باللغتين، وطريقة إجابة الزائر (خيار واحد، أو عدة خيارات، أو مقياس، أو بكلماته)، وللخيارات حتى 20 خيارًا.",
+          "الأساليب (Styles): نتيجة قد يحصل عليها الزائر، باسمها ووصفها باللغتين.",
+          "يحدد Move up وMove down في القائمة الترتيب. والحذف للمسؤول (Admin) فقط."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "النتائج والمنطق (Results & logic)"
+      },
+      {
+        "t": "p",
+        "x": "لا يرى هذا التبويب إلا المسؤول (Admin). وفيه الحد الأقصى للإنفاق اليومي، والحدود في الساعة، والنموذج، والتعليمات التي سيعمل بها الاختبار. ولا يُقرأ شيء منها بعد: فإلى أن يُطلق الاختبار يُرفض كل طلب إليه، ولا يُنفق شيء، وتبقى الحدود ثابتة عند 60 في الساعة لكل عنوان و20 لكل زائر."
+      },
+      {
+        "t": "tip",
+        "x": "لا يُحفظ مفتاح خدمة الذكاء الاصطناعي هنا أبدًا. فهو سرٌّ على الخادم، بعيد عن متناول لوحة الإدارة."
+      }
+    ]
+  }
+}

@@ -2,15 +2,63 @@
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
 import { uiFor } from '@/lib/admin/uiSchema';
+import { canWriteResource, seoAccess } from '@/lib/admin/editorAccess';
+import { firstTab, visibleTabs } from '@/lib/admin/editorTabs';
+import { loadSeoPanelSetup, type SeoPanelSetup } from '@/lib/admin/seo/list';
+import { writeSystemLog } from '@/lib/data/systemLog';
 
 export const prerender = false;
 
 // Astro resolves the static `new.astro` before this dynamic route, so /admin/blog/new
 // reaches the create form rather than being read as an id.
+//
+// Admin v2 U8b: the post editor in tabs (Content | SEO | Publishing). Decided here, from the
+// same ROLE_CAPS the routes enforce (UX only; the API refuses whatever this shows):
+//   - read-only for a role that reads posts without `blog.write` (SEO);
+//   - the SEO tab for `seo.entityMeta` holders, read-only at `view` (Content Creator), its
+//     setup read here (loadSeoPanelSetup: the post, the brand and the defaults, the caller's
+//     own reads) so the panel's previews say what the public head would;
+//   - the first tab from `?tab=` (firstTab), else SEO for a role that may only change SEO.
 const ui = uiFor('blog');
 const id = Astro.params.id ?? null;
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const role = session?.role ?? 'content_creator';
+const readOnly = !canWriteResource('blog', role);
+const seo = seoAccess(role);
+const initialTab = firstTab(
+  visibleTabs(ui.tabs ?? [], { seoAccess: seo }),
+  Astro.url.searchParams.get('tab'),
+  { readOnly, seoAccess: seo },
+);
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let setup: SeoPanelSetup | null = null;
+if (seo !== 'none' && session && sb && id && UUID.test(id)) {
+  try {
+    setup = await loadSeoPanelSetup(sb, session, 'blog_post', id);
+  } catch (err) {
+    await writeSystemLog({
+      level: 'error',
+      source: 'admin:blog.seo',
+      message: err instanceof Error ? err.message : 'SEO panel setup read failed',
+      detail: { path: Astro.url.pathname },
+    });
+  }
+}
 ---
 
-<AdminLayout title={`Edit ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="blog" id={id} />
+<AdminLayout
+  title={readOnly ? ui.singular : `Edit ${ui.singular.toLowerCase()}`}
+  subtitle={ui.title}
+>
+  <AdminResourceForm
+    client:load
+    resource="blog"
+    id={id}
+    readOnly={readOnly}
+    initialTab={initialTab}
+    seoAccess={seo}
+    seo={setup}
+  />
 </AdminLayout>

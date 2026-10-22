@@ -405,16 +405,19 @@ describe('the screens admin-ui leaves share one admin-screens group (Admin v2 U4
     expect(claim('src/components/admin/fields/media/UploadDialog.tsx')).toBe('admin-fields');
   });
 
-  it('claims the SEO island and its screen code, SeoPanel included (Admin v2 U10)', () => {
+  it('claims the SEO island and its screen code (Admin v2 U10)', () => {
     for (const path of [
       'src/components/admin/islands/AdminSeo.tsx',
       'src/components/admin/screens/seo/SeoScreen.tsx',
-      'src/components/admin/screens/seo/SeoPanel.tsx',
-      'src/components/admin/screens/seo/GooglePreview.tsx',
+      'src/components/admin/screens/seo/SeoDrawer.tsx',
       'src/components/admin/screens/seo/RedirectsTab.tsx',
     ]) {
       expect(claim(path), path).toBe('admin-screens');
     }
+    // The shared SEO editor is the field kit's since U8b: every tabbed editor's SEO tab draws
+    // it, and in this group it made every editor import admin-screens.
+    expect(claim('src/components/admin/screens/seo/SeoPanel.tsx')).toBe('admin-fields');
+    expect(claim('src/components/admin/screens/seo/GooglePreview.tsx')).toBe('admin-fields');
   });
 
   it('leaves every other screen where it was', () => {
@@ -581,9 +584,14 @@ describe('the field kit is its own group (Admin v2 F5a)', () => {
       'src/lib/admin/useEntitySave.ts',
       'src/lib/admin/entitySave.ts',
       'src/lib/admin/fieldErrors.ts',
+      // Admin v2 U8b: the tabbed editors' rules and the SEO tab's editor.
+      'src/lib/admin/editorTabs.ts',
+      'src/components/admin/screens/seo/SeoPanel.tsx',
     ]) {
       expect(claim(path), path).toBe('admin-fields');
     }
+    // The kit's tab strip stays the kit's (Tabs.tsx, admin-kit or admin-ui by use).
+    expect(claim('src/components/admin/kit/Tabs.tsx')).not.toBe('admin-fields');
     // The list beside the form, and the editor itself, keep their groups.
     expect(claim('src/components/admin/screens/resources/ResourceTable.tsx')).toBe('admin-ui');
     expect(claim('src/components/admin/RichText.tsx')).toBe('admin-rich');
