@@ -177,6 +177,16 @@ describe('every action the admin writes has words', () => {
     expect(sentence(describeRow(row('release.purge')))).toBe(
       'Refreshed the cached pages of a version',
     );
+    // A request sent and failed (a 429, a refusal) says so; the cron tries again.
+    const failed = describeRow(
+      row('release.purge', {
+        detail: { number: 15, status: 'failed', tags: 4, reason: 'rate-limited' },
+      }),
+    );
+    expect([failed.kind, sentence(failed)]).toEqual([
+      'publishing',
+      'Could not refresh the cached pages of version 15',
+    ]);
   });
 });
 

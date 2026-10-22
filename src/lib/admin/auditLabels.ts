@@ -406,10 +406,17 @@ const EXACT: Readonly<Record<string, Label>> = {
   },
 
   // A release's cache purge (Admin v2 R7), written when a purge request was sent to the
-  // cache after a publish: the pages the release changed, cleared from the cache.
+  // cache after a publish: the pages the release changed, cleared from the cache. Only `done`
+  // says it worked; a request the cache refused or that failed (a 429, a 5xx: the minute cron
+  // tries again) says it did not.
   'release.purge': {
     kind: 'publishing',
-    verb: 'Refreshed the cached pages of',
+    verb: (detail) => {
+      const status = str(detail['status']);
+      return status === null || status === 'done'
+        ? 'Refreshed the cached pages of'
+        : 'Could not refresh the cached pages of';
+    },
     noun: versionNoun,
   },
 
