@@ -318,7 +318,12 @@ function writeDraftsRpc(db: Db, args: Row) {
  */
 function readRowsRpc(db: Db, args: Row) {
   if (args['p_tenant'] !== T) return { data: null, error: { code: '42501', message: 'tenant' } };
-  const reads = args['p_reads'] as { table: string; columns: string[]; key: string; ids: string[] }[];
+  const reads = args['p_reads'] as {
+    table: string;
+    columns: string[];
+    key: string;
+    ids: string[];
+  }[];
   if (!Array.isArray(reads) || reads.length < 1 || reads.length > 40) {
     return { data: null, error: { code: '22023', message: 'reads' } };
   }
