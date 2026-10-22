@@ -54,7 +54,7 @@ export const VISIBILITY_COPY = {
 } as const;
 
 /** The registry types a version's preview shows as they are now (no loader reads them). */
-const AS_NOW: ReadonlySet<string> = new Set(['redirect', 'custom_theme', 'page_visibility']);
+const AS_NOW: readonly string[] = ['redirect', 'custom_theme', 'page_visibility'];
 
 /** The ribbon's lines: the headline first, then the notes, in order. */
 export function ribbonLines(input: Pick<RibbonInput, 'verdict' | 'gate' | 'version'>): {
@@ -77,10 +77,10 @@ export function ribbonLines(input: Pick<RibbonInput, 'verdict' | 'gate' | 'versi
     }
     if (verdict.samples > 0) notes.push(count(PREVIEW_COPY.samples, verdict.samples));
     const keys = [
-      ...new Set(verdict.notPreviewed.filter((n) => !AS_NOW.has(n)).map(notPreviewedKey)),
+      ...new Set(verdict.notPreviewed.filter((n) => !AS_NOW.includes(n)).map(notPreviewedKey)),
     ];
     for (const key of keys) notes.push(PREVIEW_COPY.notPreviewed[key]);
-    if (verdict.notPreviewed.some((n) => AS_NOW.has(n))) {
+    if (verdict.notPreviewed.some((n) => AS_NOW.includes(n))) {
       notes.push(PREVIEW_COPY.version.notPreviewed);
     }
   } else {
