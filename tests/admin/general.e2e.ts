@@ -99,6 +99,13 @@ test.describe('as admin', () => {
     const axe = await new AxeBuilder({ page }).withTags(WCAG).analyze();
     expect(axe.violations.map((v) => v.id)).toEqual([]);
 
+    // The editor shows one language at a time, English first: Both shows every Arabic half,
+    // as a person would switch it (the form's own "Editing language" control).
+    await page
+      .locator('form', { has: page.locator('#f-tagline-en') })
+      .getByRole('group', { name: 'Editing language' })
+      .getByRole('radio', { name: 'Both' })
+      .check();
     await page.locator('#f-tagline-en').fill('From the brain to the real world');
     await page.locator('#f-tagline-ar').fill('من الفكرة إلى الواقع');
     await page.locator('#f-mapUrl').fill('https://maps.app.goo.gl/e2eStudio');
