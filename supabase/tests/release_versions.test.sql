@@ -14,11 +14,13 @@
 --     a page and its section, and a team member (never answered): the state at v1, v2 and v3,
 --     the page scope, the limit; refusals (another tenant, a bad number or limit, no such
 --     version); per role: admin, content_creator, seo and developer read it, a sales claim
---     and another tenant's admin read no version, anon cannot call it.
+--     and another tenant's admin read no version, anon cannot call it;
+--   • the draft lock (restated): the restore's mark by the service role sets the provenance
+--     and keeps the change's author; a staff caller is stamped as before.
 -- CLAUDE.md §3 (Pillar 4), §8 (versioning; Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(48);
+select plan(52);
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────
 insert into public.tenants (id, name) values
@@ -291,6 +293,48 @@ select is(
   (select count(*)::int from public.content_release_items
     where tenant_id = '10400000-0000-0000-0000-00000000000a'),
   8, 'and the ledger is as written (eight items)');
+
+-- ── 6. The restore's mark keeps the change's author (0104's draft lock) ────────────
+-- A change the content creator staged (written as the migration role naming them: no role
+-- claim, so the lock does not bind, and the insert names its user).
+select set_config('request.jwt.claims', '{"sub":"10400000-0000-0000-0000-0000000000c1"}', true);
+insert into public.content_drafts (id, tenant_id, entity_type, entity_id, op, payload)
+values ('10400000-0000-0000-0005-000000000001', '10400000-0000-0000-0000-00000000000a', 'service',
+        '10400000-0000-0000-0001-000000000001', 'update', '{"title":{"en":"Back","ar":"عودة"}}');
+select is(
+  (select format('%s v%s %s', updated_by, version, coalesce(origin_kind, '-'))
+     from public.content_drafts where id = '10400000-0000-0000-0005-000000000001'),
+  '10400000-0000-0000-0000-0000000000c1 v1 -', 'a staged change names the person who staged it');
+-- The restore's mark: the service role with its own key's claims (no user, no role claim).
+set local role service_role;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+update public.content_drafts
+   set origin_kind = 'restore', origin_release_id = '10400000-0000-0000-0003-000000000002'
+ where id = '10400000-0000-0000-0005-000000000001';
+reset role;
+select is(
+  (select format('%s %s %s v%s', origin_kind, origin_release_id, updated_by, version)
+     from public.content_drafts where id = '10400000-0000-0000-0005-000000000001'),
+  'restore 10400000-0000-0000-0003-000000000002 10400000-0000-0000-0000-0000000000c1 v2',
+  'the service role''s mark sets the provenance and keeps the author (it names no user)');
+-- A staff caller (a role claim: the lock binds it) is stamped as before and cannot clear the
+-- provenance.
+select _as_a('10400000-0000-0000-0000-0000000000a1', 'admin');
+update public.content_drafts
+   set payload = '{"title":{"en":"Edited","ar":"معدل"}}', origin_kind = null, origin_release_id = null
+ where id = '10400000-0000-0000-0005-000000000001';
+select is(
+  (select format('%s %s v%s', origin_kind, updated_by, version)
+     from public.content_drafts where id = '10400000-0000-0000-0005-000000000001'),
+  'restore 10400000-0000-0000-0000-0000000000a1 v3',
+  'a staff edit names its editor, as before, and keeps the restore''s provenance');
+-- An unbound write that names a user is stamped with them (the runbook, a seed).
+select set_config('request.jwt.claims', '{"sub":"10400000-0000-0000-0000-0000000000d1"}', true);
+update public.content_drafts set payload = '{}' where id = '10400000-0000-0000-0005-000000000001';
+select is(
+  (select updated_by::text from public.content_drafts
+    where id = '10400000-0000-0000-0005-000000000001'),
+  '10400000-0000-0000-0000-0000000000d1', 'an unbound write that names a user is stamped with them');
 
 select * from finish();
 rollback;

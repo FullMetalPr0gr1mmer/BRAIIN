@@ -29,6 +29,15 @@
 --     under RLS (content_releases_read, content_release_items_read: CMS staff of the tenant),
 --     so a Sales token, another tenant or a stale role read nothing (P0002); EXECUTE for
 --     authenticated only, anon nothing. One subrequest (P-15).
+--   • app.tg_draft_lock (0062) restated with one change: an UPDATE by a caller the lock does
+--     not bind (the service role, or no role claim) and that names no user keeps the draft's
+--     `updated_by` instead of clearing it. A restore stages its changes as the person
+--     (write_drafts, their RLS) and then marks them as a restore of the version
+--     (`origin_kind`, `origin_release_id`) with the service role, which no staff token may do;
+--     the service key names no user, so the mark used to leave the change with no author
+--     ("Discard my changes" and the savebar's names read `updated_by`). A bound caller (every
+--     staff token) is stamped exactly as before, and the provenance stays the unbound
+--     caller's alone.
 --
 -- No table, no capability, no app.role_* helper, no registry row, no screen, no help guide:
 -- the screens are R13's. Grants are stated for both Supabase grant regimes (Admin v2 P-14).
@@ -201,6 +210,80 @@ comment on function public.release_as_of(uuid, int, int, uuid) is
   'entity touched since, its earliest before-image and whether it exists now. Invoker: the '
   'ledger''s staff-only RLS decides who reads it.';
 
+-- ═══ 4. The restore's mark keeps the change's author ══════════════════════════════════════
+-- 0062's body, unchanged but for step 3's `updated_by` (above): bound callers are stamped with
+-- auth.uid() as before; an unbound UPDATE keeps the stored author when it names no user.
+create or replace function app.tg_draft_lock() returns trigger
+  language plpgsql set search_path = ''
+as $$
+declare
+  v_role text := nullif(pg_catalog.current_setting('request.jwt.claims', true), '')::jsonb
+                   #>> '{app_metadata,role}';
+  v_bound constant boolean := current_user::text in ('anon', 'authenticated')
+                              or (v_role is not null and current_user::text <> 'service_role');
+begin
+  -- 1. The claim lock.
+  if v_bound then
+    if tg_op = 'INSERT' then
+      if new.release_id is not null then
+        raise exception 'a pending change is claimed and released only by a scheduled release'
+          using errcode = '42501',
+                hint = 'Schedule or unschedule the release instead.';
+      end if;
+    elsif old.release_id is not null then
+      raise exception 'a pending change claimed by a scheduled release cannot be changed or discarded'
+        using errcode = '42501',
+              hint = 'Unschedule the release first.';
+    elsif tg_op = 'UPDATE' and new.release_id is not null then
+      raise exception 'a pending change is claimed and released only by a scheduled release'
+        using errcode = '42501',
+              hint = 'Schedule or unschedule the release instead.';
+    end if;
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+
+  -- 2 and 3. The version, the id, the actor and the stamps.
+  if tg_op = 'INSERT' then
+    if v_role is not null then
+      new.id := pg_catalog.gen_random_uuid();
+      new.version := 1;
+      new.created_by := auth.uid();
+      new.created_at := pg_catalog.now();
+    else
+      new.created_by := coalesce(new.created_by, auth.uid());
+    end if;
+  else
+    new.id := old.id;
+    new.version := old.version + 1;
+    new.created_by := old.created_by;
+    new.created_at := old.created_at;
+  end if;
+  -- 0104: an unbound UPDATE that names no user (the restore's mark, by the service role) keeps
+  -- the author; every other write names its caller, as 0038 and 0062 did.
+  if tg_op = 'UPDATE' and not v_bound then
+    new.updated_by := coalesce(auth.uid(), old.updated_by);
+  else
+    new.updated_by := auth.uid();
+  end if;
+  new.updated_at := pg_catalog.now();
+
+  -- 4. The provenance (0062): a bound caller never sets or changes it.
+  if v_bound then
+    if tg_op = 'INSERT' then
+      new.origin_kind := null;
+      new.origin_release_id := null;
+    else
+      new.origin_kind := old.origin_kind;
+      new.origin_release_id := old.origin_release_id;
+    end if;
+  end if;
+  return new;
+end $$;
+revoke all on function app.tg_draft_lock() from public, anon, authenticated, service_role;
+
 -- ═══ Postconditions ═══════════════════════════════════════════════════════════════════════
 -- Each block says what it checks.
 do $$
@@ -327,6 +410,29 @@ begin
                                          ('content_release_items', 'content_release_items_read'))
          and cmd = 'SELECT' and qual ~ '(app\.)?is_staff\(\)') <> 2 then
     raise exception '0104: the ledger''s read policies must stay CMS staff only';
+  end if;
+
+  -- ---- The draft lock: still the one trigger on content_drafts, an invoker nobody calls,
+  -- pinning the provenance (0062's checks), and keeping the author on an unbound update ----
+  if (select string_agg(format('%s %s.%s %s', tg.tgname, n.nspname, f.proname, tg.tgtype), ', ')
+        from pg_trigger tg
+        join pg_proc f on f.oid = tg.tgfoid
+        join pg_namespace n on n.oid = f.pronamespace
+       where tg.tgrelid = 'public.content_drafts'::regclass and not tg.tgisinternal)
+     is distinct from 'content_drafts_lock app.tg_draft_lock 31' then
+    raise exception '0104: content_drafts must carry exactly one trigger, the draft lock';
+  end if;
+  if not exists (select 1 from pg_proc
+                  where oid = 'app.tg_draft_lock()'::regprocedure and not prosecdef
+                    and proconfig = array['search_path=""']
+                    and prosrc ~ 'new\.origin_kind := null'
+                    and prosrc ~ 'new\.origin_release_id := old\.origin_release_id'
+                    and prosrc ~ 'new\.updated_by := coalesce\(auth\.uid\(\), old\.updated_by\)')
+     or has_function_privilege('anon', 'app.tg_draft_lock()', 'execute')
+     or has_function_privilege('authenticated', 'app.tg_draft_lock()', 'execute')
+     or has_function_privilege('service_role', 'app.tg_draft_lock()', 'execute')
+     or has_function_privilege('public', 'app.tg_draft_lock()', 'execute') then
+    raise exception '0104: app.tg_draft_lock must pin the provenance, keep the author on an unbound update and be callable by no API role';
   end if;
 
   -- ---- Releases are still off everywhere (0038 to 0066) ------------------------------
