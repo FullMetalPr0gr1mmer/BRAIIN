@@ -164,6 +164,30 @@ describe('every action the admin writes has words', () => {
     expect([d.kind, sentence(d)]).toEqual(['publishing', 'Published version 15']);
     expect(sentence(describeRow(row('release.rollback')))).toBe('Published a version');
   });
+
+  it('a release’s cache purge (R7 writes release.purge) is told in its own words, not as a publish', () => {
+    expect(hasLabel('release.purge')).toBe(true);
+    const d = describeRow(
+      row('release.purge', { detail: { number: 15, status: 'done', tags: 4 } }),
+    );
+    expect([d.kind, sentence(d)]).toEqual([
+      'publishing',
+      'Refreshed the cached pages of version 15',
+    ]);
+    expect(sentence(describeRow(row('release.purge')))).toBe(
+      'Refreshed the cached pages of a version',
+    );
+    // A request sent and failed (a 429, a refusal) says so; the cron tries again.
+    const failed = describeRow(
+      row('release.purge', {
+        detail: { number: 15, status: 'failed', tags: 4, reason: 'rate-limited' },
+      }),
+    );
+    expect([failed.kind, sentence(failed)]).toEqual([
+      'publishing',
+      'Could not refresh the cached pages of version 15',
+    ]);
+  });
 });
 
 describe('the kinds', () => {
@@ -175,9 +199,11 @@ describe('the kinds', () => {
     const all = Object.values(fixed).flat();
     expect(new Set(all).size).toBe(all.length);
     for (const save of KERNEL_SAVES) expect(all).not.toContain(save);
+    // An action named under a prefix has the prefix's kind (release.purge, R7, is a release's
+    // own words, still Publishing), so a chip never claims a row another chip claims too.
     for (const kind of [...ACTIVITY_KINDS, 'other' as const]) {
       for (const prefix of prefixesOfKind(kind)) {
-        const others = all.filter((a) => a.startsWith(prefix));
+        const others = all.filter((a) => a.startsWith(prefix) && !fixed[kind]!.includes(a));
         expect(others, prefix).toEqual([]);
       }
     }

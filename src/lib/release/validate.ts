@@ -45,8 +45,8 @@ import { pick, stagedSelect } from './staged';
 //      capability and `content.publish`, `content.archiveDelete` for a removal, an archive, or
 //      a change that keeps an archived row archived), the Worker layer of the two (403 naming
 //      the drafts and who could publish them); a null is "no role publishes this" (R2's note),
-//      never "nothing needed". The live rows are read first for it (`readLive`, one read per
-//      table, the same read step 4 uses), because whether a row stays archived is live's
+//      never "nothing needed". The live rows are read first for it (`readLive`, every table in
+//      one request, the same read step 4 uses), because whether a row stays archived is live's
 //      (hotfix H12: the archive gates refuse that write to anyone but an Admin);
 //   3. the person, re-read live (`liveRecheck`, by the caller: a demoted or locked person's
 //      token passes RLS for up to an hour, so publishing re-reads them at the moment it runs);
@@ -58,8 +58,9 @@ import { pick, stagedSelect } from './staged';
 //      removes refuses its children's changes; the entity's `assertWritable` and, for a row live
 //      afterwards, `assertPublishable`; entity SEO's Arabic and target; page visibility's home
 //      rule; and the warnings.
-// Reads are batched per table and kept for the request (`memoDb`), so a 60-change release costs
-// a handful of subrequests (P-15), not one per rule per change.
+// Reads are batched, every table in one request where `public.release_read_rows` serves them
+// (Admin v2 R7, O-16), and kept for the request (`memoDb`), so a 60-change release costs a
+// handful of subrequests (P-15), not one per rule per change or one per table.
 
 type Row = Record<string, unknown>;
 
@@ -231,9 +232,11 @@ function asIssue(err: unknown): ReleaseIssue {
 }
 
 /**
- * The live rows the selection changes, one read per table (the whole writable allowlist, the
- * status included), keyed `<entity type>:<id>`. Read once per request: the capability check
- * (step 2) and the check over the state the selection leaves (steps 4 and 5) share it.
+ * The live rows the selection changes (the whole writable allowlist of each table, the status
+ * included), keyed `<entity type>:<id>`, every table in ONE request (`liveDb(...).listMany`,
+ * public.release_read_rows: Admin v2 R7, O-16), under the publisher's RLS. Read once per
+ * request: the capability check (step 2) and the check over the state the selection leaves
+ * (steps 4 and 5) share it.
  */
 export async function readLive(
   sb: SupabaseClient,
@@ -247,20 +250,22 @@ export async function readLive(
     group.ids.add(draft.entity_id);
     byTable.set(entry.table, group);
   }
-  const out = new Map<string, Row>();
-  await Promise.all(
-    [...byTable.values()].map(async ({ entry, ids }) => {
-      const { data, error } = await sb
-        .from(entry.table)
-        .select(stagedSelect(entry, `${entry.key},version`))
-        .eq('tenant_id', auth.tenantId)
-        .in(entry.key, [...ids]);
-      if (error) throw new Error(`read ${entry.table}: ${error.message}`);
-      for (const row of (data ?? []) as unknown as Row[]) {
-        out.set(`${entry.entityType}:${String(row[entry.key])}`, row);
-      }
-    }),
+  const groups = [...byTable.values()];
+  const answers = await liveDb(sb, auth).listMany(
+    groups.map(({ entry, ids }) => ({
+      table: entry.table,
+      query: {
+        columns: stagedSelect(entry, `${entry.key},version`),
+        in: { [entry.key]: [...ids] },
+      },
+    })),
   );
+  const out = new Map<string, Row>();
+  groups.forEach(({ entry }, index) => {
+    for (const row of answers[index] ?? []) {
+      out.set(`${entry.entityType}:${String(row[entry.key])}`, row);
+    }
+  });
   return out;
 }
 
@@ -449,7 +454,11 @@ function linksOf(item: Derived): { written: LinkUse[]; kept: LinkUse[] } {
   return { written, kept };
 }
 
-/** The tables and ids the rules will ask about, read in one query per table and primed. */
+/**
+ * The tables and ids the rules will ask about, primed: every table the publisher reads in ONE
+ * request over the state the release leaves (`db.listMany`; Admin v2 R7, O-16), a team member's
+ * account apart.
+ */
 async function primeLinks(
   db: MemoDb,
   sb: SupabaseClient,
@@ -465,53 +474,70 @@ async function primeLinks(
     byTable.set(spec.table, group);
   }
   const found = new Map<string, Set<string>>();
-  await Promise.all(
-    [...byTable.entries()].map(async ([table, { ids, service }]) => {
-      const list = [...ids];
-      const isMedia = table === 'media_assets';
-      // A post's author (U8b, D11): the publish rule asks for the member's status, read here
-      // with the ids, under the caller's RLS and through the state the release leaves.
-      const isAuthor = table === 'team_members' && !service;
-      // A team member's account: staff read only their own profile, so existence in the tenant
-      // is read with the service client (ids only, nothing returned to anyone).
-      const rows = service
-        ? await liveDb(serviceClient(), auth).list(table, { columns: 'id', in: { id: list } })
-        : await db.list(table, {
-            columns: isMedia ? 'id,kind,alt' : isAuthor ? 'id,status' : 'id',
-            in: { id: list },
-          });
-      const have = new Set(rows.map((r) => String(r['id'])));
-      found.set(table, have);
-      for (const id of list) db.primeExists(table, id, {}, have.has(id));
-      if (isAuthor) {
-        // requirePublishedAuthor's question (blog.ts), answered for every author at once: one
-        // read per release, not one per author (P-15). A member the read cannot see is null,
-        // which the rule refuses, as it would have refused the live answer.
-        const statusOf = new Map(rows.map((row) => [String(row['id']), row['status'] ?? null]));
-        for (const id of list) {
-          db.primeFirst(
-            table,
-            { columns: 'status', eq: { id } },
-            statusOf.has(id) ? { status: statusOf.get(id) } : null,
-          );
+  const groups = [...byTable.entries()].map(([table, { ids, service }]) => ({
+    table,
+    list: [...ids],
+    service,
+  }));
+  const mine = groups.filter((g) => !g.service);
+  // A post's author (U8b, D11): the publish rule asks for the member's status, read here with
+  // the ids, under the caller's RLS and through the state the release leaves.
+  const isAuthor = (table: string, service: boolean) => table === 'team_members' && !service;
+  const columnsOf = (table: string) =>
+    table === 'media_assets' ? 'id,kind,alt' : isAuthor(table, false) ? 'id,status' : 'id';
+  const [answers, theirs] = await Promise.all([
+    db.listMany(
+      mine.map(({ table, list }) => ({
+        table,
+        query: { columns: columnsOf(table), in: { id: list } },
+      })),
+    ),
+    // A team member's account: staff read only their own profile, so existence in the tenant
+    // is read with the service client (ids only, nothing returned to anyone).
+    Promise.all(
+      groups
+        .filter((g) => g.service)
+        .map((g) =>
+          liveDb(serviceClient(), auth).list(g.table, { columns: 'id', in: { id: g.list } }),
+        ),
+    ),
+  ]);
+  const rowsOf = new Map<string, Row[]>();
+  mine.forEach((g, index) => rowsOf.set(g.table, answers[index] ?? []));
+  groups.filter((g) => g.service).forEach((g, index) => rowsOf.set(g.table, theirs[index] ?? []));
+  for (const { table, list, service } of groups) {
+    const rows = rowsOf.get(table) ?? [];
+    const have = new Set(rows.map((r) => String(r['id'])));
+    found.set(table, have);
+    for (const id of list) db.primeExists(table, id, {}, have.has(id));
+    if (isAuthor(table, service)) {
+      // requirePublishedAuthor's question (blog.ts), answered for every author at once: one
+      // read per release, not one per author (P-15). A member the read cannot see is null,
+      // which the rule refuses, as it would have refused the live answer.
+      const statusOf = new Map(rows.map((row) => [String(row['id']), row['status'] ?? null]));
+      for (const id of list) {
+        db.primeFirst(
+          table,
+          { columns: 'status', eq: { id } },
+          statusOf.has(id) ? { status: statusOf.get(id) } : null,
+        );
+      }
+    }
+    if (table === 'media_assets') {
+      // The poster rules ask "an image of this site" and "its alt text": answered from here.
+      for (const row of rows) {
+        const id = String(row['id']);
+        db.primeExists(table, id, { kind: 'image' }, row['kind'] === 'image');
+        db.primeFirst(table, { columns: 'alt', eq: { id } }, { alt: row['alt'] ?? null });
+      }
+      for (const id of list) {
+        if (!have.has(id)) {
+          db.primeExists(table, id, { kind: 'image' }, false);
+          db.primeFirst(table, { columns: 'alt', eq: { id } }, null);
         }
       }
-      if (isMedia) {
-        // The poster rules ask "an image of this site" and "its alt text": answered from here.
-        for (const row of rows) {
-          const id = String(row['id']);
-          db.primeExists(table, id, { kind: 'image' }, row['kind'] === 'image');
-          db.primeFirst(table, { columns: 'alt', eq: { id } }, { alt: row['alt'] ?? null });
-        }
-        for (const id of list) {
-          if (!have.has(id)) {
-            db.primeExists(table, id, { kind: 'image' }, false);
-            db.primeFirst(table, { columns: 'alt', eq: { id } }, null);
-          }
-        }
-      }
-    }),
-  );
+    }
+  }
   return found;
 }
 

@@ -481,6 +481,21 @@ describe('resource routes — afterWrite / afterDelete run through runHook', () 
     expect(updated).toMatchObject({ id: ID, kvSynced: true, count: 3 });
   });
 
+  it('an update hands the hook the row as stored before the write (R7: media purges compare)', async () => {
+    // The media hook purges only when a public column moved (mediaChangeIsPublic); without
+    // `before` every media save purges again, and savePurges.spec builds `before` by hand.
+    const afterWrite = vi.fn(async () => undefined);
+    const { PATCH } = itemRoutes(config({ afterWrite }));
+    const res = await PATCH(ctx('admin', 'PATCH', { title: 'y', version: 1 }, { title: 'old' }));
+    expect((res as Response).status).toBe(200);
+    expect(afterWrite).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: 'update',
+        before: expect.objectContaining({ id: ID, title: 'old' }),
+      }),
+    );
+  });
+
   it('a hook returning nothing leaves the response as before', async () => {
     const { POST } = collectionRoutes(config({ afterWrite: async () => undefined }));
     const created = await body(await POST(ctx('admin', 'POST', { title: 'x', status: 'draft' })));

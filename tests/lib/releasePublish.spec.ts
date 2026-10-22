@@ -41,17 +41,21 @@ vi.mock('@/lib/data/systemLog', () => ({
     return true;
   },
 }));
-const syncs = vi.hoisted(() => ({ redirects: 0, visibility: 0 }));
+// The edge snapshots, rebuilt after a release AS THE SYSTEM (Admin v2 R7): the service client
+// and the release's tenant, whoever published. Counted here, with the tenant they were given.
+const syncs = vi.hoisted(() => ({ redirects: 0, visibility: 0, tenants: [] as string[] }));
 vi.mock('@/lib/admin/redirectSync', () => ({
-  syncRedirectsToEdge: async () => {
+  syncRedirectsOfTenant: async (_sb: unknown, tenantId: string) => {
     syncs.redirects += 1;
+    syncs.tenants.push(tenantId);
     return { kvSynced: true, count: 1, truncated: false };
   },
 }));
 vi.mock('@/lib/admin/visibilitySync', () => ({
-  syncVisibilityToEdge: async () => {
+  rebuildVisibilitySnapshot: async (_sb: unknown, tenantId: string) => {
     syncs.visibility += 1;
-    return { kvSynced: false, count: 0 };
+    syncs.tenants.push(tenantId);
+    return { snapshot: {}, kvSynced: false };
   },
 }));
 
@@ -143,8 +147,28 @@ async function run(
   return callRoute(db, route, 'POST', path, { body, role });
 }
 
-const published = (number = 7) => ({
-  data: { release_id: id(99), number, items: [] },
+/** One item of the apply's answer: the row it changed, before and after. */
+const applied = (
+  entityType: string,
+  entityId: string,
+  op: 'create' | 'update' | 'delete',
+  before: Row | null,
+  after: Row | null,
+) => ({
+  id: 1,
+  tenant_id: T,
+  release_id: id(99),
+  entity_type: entityType,
+  entity_id: entityId,
+  op,
+  before,
+  after,
+  draft_id: null,
+  actor_id: ADMIN,
+  created_at: '2026-10-22T10:00:00+00:00',
+});
+const published = (number = 7, items: unknown[] = []) => ({
+  data: { release_id: id(99), number, items },
   error: null,
 });
 const dryOk = (n: number) => ({
@@ -158,6 +182,7 @@ beforeEach(() => {
   svc.answer = (fn) => (fn === 'record_release_purge' ? { data: null, error: null } : published());
   syncs.redirects = 0;
   syncs.visibility = 0;
+  syncs.tenants = [];
 });
 
 describe('releases off (every tenant until R14)', () => {
@@ -298,7 +323,7 @@ describe('the selection, the capabilities and the person', () => {
     expect(res.status).toBe(403);
   });
 
-  it('a rollback is refused until versions can be restored (R10)', async () => {
+  it('a rollback of changes no restore staged is refused on its kind (R10)', async () => {
     const draft = serviceEdit({ title: BI('A', 'ب') }, {});
     const res = await run(PUBLISH, seed({ content_drafts: [draft] }), {
       ...select(draft),
@@ -631,15 +656,17 @@ describe('the check (validate)', () => {
 });
 
 describe('publishing', () => {
-  it('a clean release: applied as the publisher, the purge a logged no-op, nothing fatal after', async () => {
+  it('a clean release: applied as the publisher, its tags recorded, the purge a logged no-op', async () => {
     const draft = serviceEdit(
       { title: BI('Logo', 'شعار') },
       { title: BI('Logo Design', 'تصميم الشعار') },
     );
-    const res = await run(PUBLISH, seed({ content_drafts: [draft] }), {
-      ...select(draft),
-      note: 'Spring copy',
-    });
+    svc.answer = (fn) =>
+      fn === 'record_release_purge'
+        ? { data: null, error: null }
+        : published(7, [applied('service', SERVICE, 'update', { slug: 'logo' }, { slug: 'logo' })]);
+    const db = seed({ content_drafts: [draft] });
+    const res = await run(PUBLISH, db, { ...select(draft), note: 'Spring copy' });
     expect(res.status).toBe(200);
     expect(res.data).toMatchObject({
       release: { id: id(99), number: 7 },
@@ -648,14 +675,25 @@ describe('publishing', () => {
     });
     expect(applyCalls()[0]!.args).toMatchObject({ p_mode: 'publish', p_note: 'Spring copy' });
     const purge = svc.calls.find((c) => c.fn === 'record_release_purge');
-    expect(purge!.args).toMatchObject({ p_tenant: T, p_release: id(99), p_status: 'skipped' });
+    expect(purge!.args).toMatchObject({
+      p_tenant: T,
+      p_release: id(99),
+      p_status: 'skipped',
+      p_next_at: null,
+    });
+    // The service's page, the lists, the sitemap and llms.txt (Admin v2 R7).
+    expect([...(purge!.args['p_tags'] as string[])].sort()).toEqual(
+      ['route:llms', 'route:sitemap', 'service:logo', 'services:all'].sort(),
+    );
     expect(svc.logs).toContainEqual(
       expect.objectContaining({ level: 'info', source: 'release:purge' }),
     );
-    expect(syncs).toEqual({ redirects: 0, visibility: 0 });
+    expect(syncs).toMatchObject({ redirects: 0, visibility: 0 });
+    // No purge was sent, so no release.purge row.
+    expect((db.tables['audit_log'] ?? []).map((r) => r['action'])).not.toContain('release.purge');
   });
 
-  it('a release with a redirect rebuilds the edge map; a failed purge record is only logged', async () => {
+  it('a release of redirects only: the edge map rebuilt as the system, nothing to purge', async () => {
     const redirect = draftRow({
       id: draftId(12),
       entity_type: 'redirect',
@@ -668,19 +706,24 @@ describe('publishing', () => {
     svc.answer = (fn) =>
       fn === 'record_release_purge'
         ? { data: null, error: { code: 'XX000', message: 'down' } }
-        : published(8);
+        : published(8, [
+            applied('redirect', id(21), 'create', null, {
+              source_path: '/old-page',
+              target_path: '/services',
+            }),
+          ]);
     const res = await run(PUBLISH, seed({ content_drafts: [redirect] }), select(redirect), 'seo');
     expect(res.status).toBe(200);
-    expect(res.data).toMatchObject({ release: { number: 8 }, kvSynced: true, purge: 'skipped' });
+    expect(res.data).toMatchObject({ release: { number: 8 }, kvSynced: true, purge: 'not_needed' });
     expect(syncs.redirects).toBe(1);
+    expect(syncs.tenants).toEqual([T]);
+    // A failed purge record is only logged.
     expect(svc.logs).toContainEqual(
       expect.objectContaining({ level: 'error', source: 'release:purge' }),
     );
   });
 
-  it('a page change never rebuilds the visibility snapshot: only a visibility change moves it', async () => {
-    // A page's new slug reaches the edge by the daily re-sync, as for a save (R7 may rebuild as
-    // the system after a page release).
+  it('a page edit that keeps its slug rebuilds no snapshot', async () => {
     const draft = draftRow({
       id: draftId(13),
       entity_type: 'page',
@@ -689,6 +732,10 @@ describe('publishing', () => {
       payload: { title: BI('About us', 'من نحن') },
       base: { title: BI('About', 'عنا') },
     });
+    svc.answer = (fn) =>
+      fn === 'record_release_purge'
+        ? { data: null, error: null }
+        : published(7, [applied('page', PAGE, 'update', { slug: 'about' }, { slug: 'about' })]);
     const res = await run(
       PUBLISH,
       seed({ content_drafts: [draft] }),
@@ -696,8 +743,48 @@ describe('publishing', () => {
       'content_creator',
     );
     expect(res.status).toBe(200);
-    expect(syncs.visibility).toBe(0);
+    expect(syncs).toMatchObject({ redirects: 0, visibility: 0 });
     expect(res.data['kvSynced']).toBeUndefined();
+  });
+
+  it('a page renamed by a Content Creator: the visibility snapshot rebuilt as the system (R6 question 2)', async () => {
+    // The snapshot names pages by slug: a hidden page renamed would otherwise be public at the
+    // edge under its new name until the daily re-sync.
+    const draft = draftRow({
+      id: draftId(16),
+      entity_type: 'page',
+      entity_id: PAGE,
+      op: 'update',
+      payload: { slug: 'who-we-are' },
+      base: { slug: 'about' },
+    });
+    svc.answer = (fn) =>
+      fn === 'record_release_purge'
+        ? { data: null, error: null }
+        : published(7, [
+            applied('page', PAGE, 'update', { slug: 'about' }, { slug: 'who-we-are' }),
+          ]);
+    const db = seed({
+      content_drafts: [draft],
+      pages: [
+        {
+          id: PAGE,
+          tenant_id: T,
+          slug: 'about',
+          title: BI('About', 'عنا'),
+          status: 'published',
+          version: 1,
+        },
+      ],
+    });
+    const res = await run(PUBLISH, db, select(draft), 'content_creator');
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(syncs).toMatchObject({ redirects: 0, visibility: 1, tenants: [T] });
+    expect(res.data['kvSynced']).toBe(false);
+    const purge = svc.calls.find((c) => c.fn === 'record_release_purge');
+    expect(purge!.args['p_tags']).toEqual(
+      expect.arrayContaining(['page:about', 'page:who-we-are']),
+    );
   });
 
   it('a page-visibility change rebuilds the snapshot, and says when the edge missed it', async () => {
@@ -715,10 +802,25 @@ describe('publishing', () => {
         { id: id(50), tenant_id: T, page_id: PAGE, template: null, mode: 'public', version: 1 },
       ],
     });
+    svc.answer = (fn) =>
+      fn === 'record_release_purge'
+        ? { data: null, error: null }
+        : published(7, [
+            applied(
+              'page_visibility',
+              id(50),
+              'update',
+              { page_id: PAGE, mode: 'public' },
+              { page_id: PAGE, mode: 'hidden' },
+            ),
+          ]);
     const res = await run(PUBLISH, db, select(draft), 'developer');
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(syncs.visibility).toBe(1);
     expect(res.data['kvSynced']).toBe(false);
+    // The page's slug read in one request, as the publisher (release_read_rows).
+    const purge = svc.calls.find((c) => c.fn === 'record_release_purge');
+    expect(purge!.args['p_tags']).toEqual(expect.arrayContaining(['page:about', 'nav:all']));
   });
 
   it('nothing is applied while the check finds something to fix (422 with the check)', async () => {
@@ -872,8 +974,11 @@ describe('publishing', () => {
     const res = await run(PUBLISH, db, select(draft), 'developer');
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.data).toMatchObject({ release: { id: id(98), number: 9 }, purge: 'skipped' });
-    expect(syncs.visibility).toBe(1);
-    expect(svc.calls.filter((c) => c.fn === 'record_release_purge')).toHaveLength(1);
+    // Its items are not known: both snapshots rebuilt as the system, the whole site purged.
+    expect(syncs).toMatchObject({ redirects: 1, visibility: 1, tenants: [T, T] });
+    const records = svc.calls.filter((c) => c.fn === 'record_release_purge');
+    expect(records).toHaveLength(1);
+    expect(records[0]!.args['p_tags']).toEqual(['tenant:default']);
   });
 
   it('releases switched off between the flag read and the apply (55000) is 409 releases-off', async () => {
@@ -890,6 +995,13 @@ describe('publishing', () => {
 });
 
 describe('the Free plan’s 50 subrequests (P-15)', () => {
+  // A clean publish touching every registry type, end to end (Admin v2 R7, O-16): measured at
+  // 26 on the merged tree (2026-10-22), plus the one slug read a release whose images do not
+  // carry its pages' slugs adds. A cache zone's purge adds at most 4 more (the budget read, the
+  // request and its one retry, the release.purge row): 31, under the Free plan's 50. A rollback
+  // of the same changes (R10) adds its own two reads: 28 on the merged tree (2026-10-22).
+  const MAX_PUBLISH = 27;
+  const PURGE_SET_UP = 4;
   it('a 60-change release of linked services costs a handful of reads, not one per rule', async () => {
     const services: Row[] = [];
     const drafts: Row[] = [];
@@ -969,19 +1081,24 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
           : [],
       );
     }
-    expect(db.calls.filter((c) => c.name === 'team_members')).toHaveLength(1);
+    // One read of the authors: since Admin v2 R7, one entry of the batched read
+    // (release_read_rows) rather than a request of its own; never one per author.
+    const batched = db.calls
+      .filter((c) => c.kind === 'rpc' && c.name === 'release_read_rows')
+      .flatMap((c) => (c.values as { p_reads: { table: string }[] }).p_reads)
+      .filter((read) => read.table === 'team_members');
+    expect(db.calls.filter((c) => c.name === 'team_members')).toHaveLength(0);
+    expect(batched).toHaveLength(1);
   });
 
   it('a release touching every registry type stays in a stated budget (the reads grow per table)', async () => {
-    // One link-only change per type: readLive costs one read per table and primeLinks one per
-    // link table (two for a table the selection also edits), so a broad release, not a long one,
-    // is what approaches the Free plan's 50. Validate alone costs 42 reads here over the 22
-    // types (41 over R6's 21; Admin v2 U7's faq_items is one table more) (the rules do not
-    // run: these changes stop at the Worker's own check), held as a tripwire; with the session's
-    // two reads, the apply and the after-effects a clean all-types publish is about 51, past
-    // the 50. O-16 measures it on staging; a cap on the tables per release, or one live read,
-    // follows it. Releases are off (inert until R14), so no publish reaches it yet.
-    const MAX_READS = 42;
+    // One link-only change per type. Before Admin v2 R7, readLive cost one read per table and
+    // primeLinks one per link table: 42 reads over the 22 types, and a clean all-types publish
+    // about 51, past the Free plan's 50 (O-16). Since R7 each is ONE request for every table
+    // (public.release_read_rows): the flag, the drafts, the live rows, the person, a team
+    // member's account and the links, 6 (the rules do not run: these changes stop at the
+    // Worker's own check; the clean publish below runs them). Held as a tripwire.
+    const MAX_READS = 6;
     const tables: Record<string, Row[]> = {};
     const drafts: Row[] = [];
     let n = 0;
@@ -1030,5 +1147,235 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
     expect(res.status).toBe(200);
     expect(drafts.length).toBeGreaterThanOrEqual(20);
     expect(db.calls.length + svc.calls.length).toBeLessThanOrEqual(MAX_READS);
+  });
+
+  /**
+   * A clean release of one change of EVERY registry type, published end to end, and the
+   * subrequests it cost. `rollback` (R10 over R7, counted on the merged tree): the same changes
+   * as a version's restore leaves them (marked, at version 2), published as the rollback naming
+   * that version, which adds its own check (the restore's open changes and the version).
+   */
+  async function publishEveryType(kind: 'publish' | 'rollback'): Promise<number> {
+    svc.calls = [];
+    svc.logs = [];
+    syncs.redirects = 0;
+    syncs.visibility = 0;
+    syncs.tenants = [];
+    const RESTORED = id(3190);
+    // Admin v2 R7 brought the per-table reads into one request each (public.release_read_rows):
+    // the live rows, then every link. This is a release that passes every check and publishes,
+    // touching all 22 types at once, with every read the rules can make (a redirect's route
+    // and chain, a hidden page's slug, the discipline warning, entity SEO's target, a team
+    // member's account), the apply, and every after-effect (the slug read, both snapshots
+    // rebuilt as the system, the purge's record and its line). Counted: every request of the
+    // publisher's client and the service client, every log line as two (the tenant and the
+    // insert), the snapshot rebuilds at their cost (the rules and their KV write: 2; the
+    // visibility rows, the write, the rows again and the write again: 4), and the session's
+    // two reads (getUser and the profile, in the middleware).
+    const PAGE2 = id(3101);
+    const TEAM = id(3102);
+    const CATEGORY = id(3103);
+    const SECTOR = id(3104);
+    const CLIENT = id(3105);
+    const STAT = id(3106);
+    const CERT = id(3107);
+    const CASE = id(3108);
+    const QUOTE = id(3109);
+    const POST = id(3110);
+    const NAV = id(3111);
+    const THEME = id(3112);
+    const SEO = id(3113);
+    const REDIRECT = id(3114);
+    const VIS = id(3115);
+    const FAQ = id(3116);
+    const row = (rowId: string, over: Row = {}): Row => ({
+      id: rowId,
+      tenant_id: T,
+      version: 1,
+      status: 'draft',
+      ...over,
+    });
+    const tables: Record<string, Row[]> = {
+      categories: [{ id: CATEGORY, tenant_id: T, version: 1, slug: 'news' }],
+      sectors: [row(SECTOR, { slug: 'retail' })],
+      disciplines: [
+        row(DISCIPLINE, { slug: 'branding', status: 'published', name: BI('Branding', 'هوية') }),
+      ],
+      clients: [row(CLIENT, { slug: 'acme' })],
+      team_members: [row(TEAM, { slug: 'amal' })],
+      statistics: [row(STAT, { slug: 'years' })],
+      certifications: [row(CERT, { slug: 'iso' })],
+      portfolio: [row(PROJECT, { slug: 'the-rider' })],
+      service_cases: [row(CASE)],
+      testimonials: [row(QUOTE, { slug: 'q1' })],
+      blog_posts: [row(POST, { slug: 'hello' })],
+      pages: [
+        { id: PAGE, tenant_id: T, slug: 'about', status: 'published', version: 1 },
+        { id: PAGE2, tenant_id: T, slug: 'join', status: 'published', version: 1 },
+      ],
+      navigation: [{ id: NAV, tenant_id: T, version: 1, sort_order: 1 }],
+      site_profile: [{ tenant_id: T, version: 1, brand_name: null }],
+      custom_themes: [{ id: THEME, tenant_id: T, version: 1, name: 'Old' }],
+      seo_defaults: [{ tenant_id: T, version: 1, default_title: null }],
+      page_visibility: [
+        { id: VIS, tenant_id: T, page_id: PAGE2, template: null, mode: 'public', version: 1 },
+      ],
+      faq_items: [row(FAQ)],
+      // The version a rollback names: published, the tenant's.
+      content_releases: [{ id: RESTORED, tenant_id: T, number: 1, status: 'published' }],
+    };
+    const change = (
+      n: number,
+      type: string,
+      entityId: string,
+      payload: Row,
+      base: Row,
+      op: 'update' | 'create' = 'update',
+    ) =>
+      draftRow({
+        id: draftId(3000 + n),
+        entity_type: type,
+        entity_id: entityId,
+        op,
+        payload,
+        base,
+        ...(op === 'create' ? { base_version: null } : {}),
+        // As a restore leaves its changes: its write (1), then the mark (2). A restore stages no
+        // team member (O-12); the rollback keeps one so both counts cover the same changes.
+        ...(kind === 'rollback'
+          ? { origin_kind: 'restore', origin_release_id: RESTORED, version: 2 }
+          : {}),
+      });
+    const drafts = [
+      change(1, 'category', CATEGORY, { name: BI('News', 'أخبار') }, { name: null }),
+      change(2, 'sector', SECTOR, { name: BI('Retail', 'تجزئة') }, { name: null }),
+      change(3, 'client', CLIENT, { logoMediaId: POSTER }, { logo_media_id: null }),
+      change(
+        4,
+        'team_member',
+        TEAM,
+        { profileUserId: ADMIN, portraitMediaId: POSTER },
+        { profile_user_id: null, portrait_media_id: null },
+      ),
+      change(5, 'statistic', STAT, { label: BI('Years', 'سنوات') }, { label: null }),
+      change(6, 'certification', CERT, { name: BI('ISO', 'أيزو') }, { name: null }),
+      change(7, 'discipline', DISCIPLINE, { posterMediaId: POSTER }, { poster_media_id: null }),
+      change(
+        8,
+        'service',
+        SERVICE,
+        { disciplineId: DISCIPLINE, posterMediaId: POSTER },
+        { discipline_id: DISCIPLINE, poster_media_id: null },
+      ),
+      change(
+        9,
+        'portfolio',
+        PROJECT,
+        { sectorId: SECTOR, clientId: CLIENT },
+        { sector_id: null, client_id: null },
+      ),
+      change(
+        10,
+        'service_case',
+        CASE,
+        { serviceId: SERVICE, portfolioId: PROJECT },
+        { service_id: null, portfolio_id: null },
+      ),
+      change(11, 'testimonial', QUOTE, { clientId: CLIENT }, { client_id: null }),
+      change(
+        12,
+        'blog_post',
+        POST,
+        { authorId: TEAM, categoryId: CATEGORY },
+        { author_id: null, category_id: null },
+      ),
+      change(13, 'page', PAGE, { title: BI('About us', 'من نحن') }, { title: null }),
+      change(14, 'page_section', SECTION, { sortOrder: 2 }, { sort_order: 1 }),
+      change(15, 'nav_item', NAV, { sortOrder: 2 }, { sort_order: 1 }),
+      change(16, 'site_profile', T, { brandName: BI('Studio', 'استوديو') }, { brand_name: null }),
+      change(17, 'custom_theme', THEME, { name: 'Calm' }, { name: 'Old' }),
+      change(
+        18,
+        'entity_seo',
+        SEO,
+        {
+          entityType: 'service',
+          entityId: SERVICE,
+          metaTitle: BI('Logo', 'شعار'),
+          metaDescription: BI('Logo design', 'تصميم شعار'),
+        },
+        {},
+        'create',
+      ),
+      change(
+        19,
+        'seo_defaults',
+        T,
+        { defaultTitle: BI('Studio', 'استوديو') },
+        { default_title: null },
+      ),
+      change(
+        20,
+        'redirect',
+        REDIRECT,
+        { sourcePath: '/services/old-logo', targetPath: '/services' },
+        {},
+        'create',
+      ),
+      change(
+        21,
+        'page_visibility',
+        VIS,
+        { target: { pageId: PAGE2 }, mode: 'hidden', redirectPageId: null },
+        { mode: 'public', redirect_page_id: null, hide_from: null, show_on: null },
+      ),
+      change(22, 'faq_item', FAQ, { question: BI('Why?', 'لماذا؟') }, { question: null }),
+    ];
+    expect(new Set(drafts.map((d) => d['entity_type'])).size).toBe(
+      Object.keys(RELEASE_REGISTRY).length,
+    );
+    const db = seed({ ...tables, content_drafts: drafts });
+    // The apply answers one item per change, with images that carry what the tags read.
+    const items = drafts.map((d) =>
+      applied(
+        String(d['entity_type']),
+        String(d['entity_id']),
+        d['op'] as 'update' | 'create',
+        d['op'] === 'create' ? null : { slug: 's', page_id: PAGE },
+        { slug: 's', page_id: PAGE, entity_type: 'service', entity_id: SERVICE },
+      ),
+    );
+    svc.answer = (fn) =>
+      fn === 'record_release_purge' ? { data: null, error: null } : published(11, items);
+
+    const body = kind === 'rollback' ? { ...select(...drafts), kind } : select(...drafts);
+    const res = await run(PUBLISH, db, body);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(syncs).toMatchObject({ redirects: 1, visibility: 1 });
+    expect(applyCalls()[0]?.args).toMatchObject(
+      kind === 'rollback'
+        ? { p_kind: 'rollback', p_restores_release_id: RESTORED, p_note: 'Restored v1' }
+        : { p_kind: 'publish', p_restores_release_id: null },
+    );
+
+    const SESSION = 2;
+    const SNAPSHOTS = 2 * syncs.redirects + 4 * syncs.visibility;
+    return SESSION + db.calls.length + svc.calls.length + 2 * svc.logs.length + SNAPSHOTS;
+  }
+
+  it('O-16: a clean publish of one change of EVERY registry type, counted end to end, is under 50', async () => {
+    expect(await publishEveryType('publish')).toBeLessThanOrEqual(MAX_PUBLISH);
+    expect(MAX_PUBLISH + PURGE_SET_UP).toBeLessThan(50);
+  });
+
+  it('the rollback of a version that changed EVERY registry type costs the publish and two reads (R10 over R7)', async () => {
+    // A rollback is a release (R10): R7's batched check, the apply and every after-effect, plus
+    // its own check of the selection (the restore's open changes and the version, together).
+    const ROLLBACK_READS = 2;
+    const publishCost = await publishEveryType('publish');
+    const rollbackCost = await publishEveryType('rollback');
+    expect(rollbackCost).toBe(publishCost + ROLLBACK_READS);
+    expect(rollbackCost).toBeLessThanOrEqual(MAX_PUBLISH + ROLLBACK_READS);
+    expect(MAX_PUBLISH + ROLLBACK_READS + PURGE_SET_UP).toBeLessThan(50);
   });
 });

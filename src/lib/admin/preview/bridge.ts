@@ -20,7 +20,8 @@ import { PREVIEW_PREFIX, READ_ONLY_ENDPOINTS, toPreviewPath } from './paths';
 //     never as markup or a style attribute.
 // In the page:
 //   - a same-origin link to a previewable page stays in the preview (rewritten to
-//     `/admin/preview/<path>`, the `only` selection kept) and is reported to the parent;
+//     `/admin/preview/<path>`, the `only` selection or the version `v` kept) and is reported
+//     to the parent;
 //   - a form never sends: the submit is stopped before the page's own handler sees it, and the
 //     response's CSP already says `form-action 'none'` (src/lib/http/preview.ts);
 //   - a script's request that could change something (any method but GET and HEAD) is refused,
@@ -66,8 +67,8 @@ export function postToParent(
 
 /**
  * Where a click on `href` goes inside the preview: the preview URL of a previewable
- * same-origin page (with the current `only` selection), or null to leave the click alone (an
- * anchor on this page, another site, a feed, a file).
+ * same-origin page (with the current `only` selection, or the version shown, `v`: Admin v2
+ * R10), or null to leave the click alone (an anchor on this page, another site, a feed, a file).
  */
 export function previewHrefFor(href: string, base: string): string | null {
   let url: URL;
@@ -85,6 +86,8 @@ export function previewHrefFor(href: string, base: string): string | null {
   const out = new URL(mapped, here.origin);
   const only = here.searchParams.get('only');
   if (only) out.searchParams.set('only', only);
+  const version = here.searchParams.get('v');
+  if (version && !only) out.searchParams.set('v', version);
   return `${out.pathname}${out.search}${url.hash}`;
 }
 

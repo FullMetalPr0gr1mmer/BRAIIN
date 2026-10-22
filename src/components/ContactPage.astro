@@ -2,77 +2,23 @@
 import type { Locale } from '@schemas/primitives';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SectionRenderer from '@/components/SectionRenderer.astro';
-import { getPageComposition } from '@/lib/data/pageSections';
-import { getPublishedDisciplines } from '@/lib/data/disciplines';
-import { getFaq } from '@/lib/data/faq';
-import { buildBreadcrumbSchema, buildFaqSchema } from '@/lib/seo/jsonld';
-import { localizedPath } from '@/lib/i18n';
-import { loadHead } from '@/lib/seo/head';
 import { ogImageCandidates } from '@/lib/seo/ogImage';
-import { PAGE_META } from '@/lib/seo/pageMeta';
-import {
-  DEFAULT_CONTACT_SECTIONS,
-  ensureContactInquiry,
-  withHeroPreset,
-} from '@/lib/sections/types';
-import { faqShown, withContactData } from '@/lib/sections/contact';
-import { PUBLIC_SITE_URL } from 'astro:env/client';
+import type { ContactPageData } from '@/lib/sections/contactPage';
 
 // Contact (UI v2 PR9) — a CMS-composed section page (`pages` slug 'contact' +
 // `page_sections`, authored under /admin/pages + /admin/sections): banner hero → inquiry →
-// channels → FAQ. The default composition renders until the page is composed.
-//
-// Three route-level guarantees sit on top of whatever the CMS says:
-//   withHeroPreset('contact')  the hero is the contact banner with the contact copy — before
-//                              PR9 it fell back to the HOME headline and "See our work";
-//   ensureContactInquiry       the inquiry form (the one public write path) cannot be hidden
-//                              or removed;
-//   withContactData            the published disciplines and their services reach the form
-//                              as route data (its grouped select, Round 2), and the published
-//                              FAQ reaches the FAQ band (Admin v2 U7).
+// channels → FAQ. The default composition renders until the page is composed. Its data is
+// loaded by the route (src/lib/sections/contactPage.ts, with the route-level guarantees), so
+// the route can tag the sections it renders before it sets its headers (Admin v2 R7).
 
 interface Props {
   locale: Locale;
+  page: ContactPageData;
 }
 
-const { locale } = Astro.props;
-
-const STR = { en: { home: 'Home' }, ar: { home: 'الرئيسية' } }[locale];
-const meta = PAGE_META.contact[locale];
-
-// The composition, the head (whose per-page SEO override needs the page id, so it is handed
-// the composition query rather than its result), the disciplines and the FAQ load together.
-const compositionQuery = getPageComposition('contact');
-const [composition, { seo }, groups, faq] = await Promise.all([
-  compositionQuery,
-  loadHead(Astro.locals, {
-    locale,
-    fallbackTitle: meta.title,
-    fallbackDescription: meta.description,
-    entity: compositionQuery.then((c) => (c ? { type: 'page' as const, id: c.page.id } : null)),
-  }),
-  getPublishedDisciplines(),
-  getFaq(locale),
-]);
-// A published page with no sections yet renders the default composition (its SEO override,
-// keyed by the page id above, still applies).
-const composed = composition?.sections.length ? composition.sections : DEFAULT_CONTACT_SECTIONS;
-const sections = withContactData(ensureContactInquiry(withHeroPreset(composed, 'contact')), {
-  groups,
-  faq,
-});
-
-const base = PUBLIC_SITE_URL.replace(/\/$/, '');
-const breadcrumb = buildBreadcrumbSchema([
-  { name: STR.home, url: base + localizedPath('/', locale) },
-  { name: meta.title, url: base + localizedPath('/contact', locale) },
-]);
-
-// FAQPage, built from the SAME array FaqAccordion renders (one getFaq read, handed to both;
-// src/lib/data/faq.ts), and only while the FAQ band renders: a visible FAQ section and at
-// least one published question. If the two ever disagree, the structured data describes
-// content the page does not visibly contain, which is a manual-action category.
-const jsonLd = faqShown(sections, faq) ? [breadcrumb, buildFaqSchema(faq)] : [breadcrumb];
+const { locale, page } = Astro.props;
+const { sections, jsonLd } = page;
+const { seo } = page.head;
 ---
 
 <BaseLayout

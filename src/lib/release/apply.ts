@@ -9,15 +9,13 @@ import {
   DryRunReportSchema,
   type ApplyRequest,
   type PublishResult,
-  type PurgeStatus,
   type ReleaseCheck,
   type ReleaseIssue,
 } from '@schemas/release';
 import type { AuthContext } from '@/lib/auth/types';
-import { syncRedirectsToEdge } from '@/lib/admin/redirectSync';
-import { syncVisibilityToEdge } from '@/lib/admin/visibilitySync';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { serviceClient } from '@/lib/supabase/server';
+import { afterPublish } from './afterEffects';
 import { ReleaseRefusal, type CheckedItem } from './validate';
 
 // Calling `public.apply_release` (migration 0051, R4) for a checked selection, and what follows a
@@ -166,6 +164,7 @@ function requestOf(
   mode: 'publish' | 'dry_run',
   items: readonly CheckedItem[],
   note: string | undefined,
+  restores?: string,
 ): ApplyRequest {
   return ApplyRequestSchema.parse({
     p_actor: auth.userId,
@@ -173,7 +172,9 @@ function requestOf(
     p_mode: mode,
     p_items: items.map((i) => i.apply),
     p_note: note && note.length > 0 ? note : null,
-    p_kind: 'publish',
+    // A rollback names the version it restores (R10); R4 checks it is a live one of the tenant.
+    p_kind: restores ? 'rollback' : 'publish',
+    p_restores_release_id: restores ?? null,
   });
 }
 
@@ -275,9 +276,10 @@ export async function dryRun(
   auth: AuthContext,
   items: readonly CheckedItem[],
   note: string | undefined,
+  restores?: string,
 ): Promise<ReleaseCheck> {
   const check = checkOf(items, 'ran');
-  const { data, error } = await callApply(requestOf(auth, 'dry_run', items, note));
+  const { data, error } = await callApply(requestOf(auth, 'dry_run', items, note, restores));
   if (error) throw refusalOf(error, items);
   const report = DryRunReportSchema.safeParse(data);
   if (!report.success) throw new Error('apply_release (dry run) answered in the wrong shape');
@@ -291,21 +293,33 @@ export async function publish(
   auth: AuthContext,
   items: readonly CheckedItem[],
   note: string | undefined,
+  restores?: string,
 ): Promise<PublishResult> {
-  const answer = await callApply(requestOf(auth, 'publish', items, note));
+  const answer = await callApply(requestOf(auth, 'publish', items, note, restores));
   let data = answer.data;
+  let landed = false;
   if (answer.error) {
     // No answer is not a refusal: the transaction may have committed after the Worker stopped
     // waiting. If it did, the after-effects still run (a release that hid a page must not leave
     // it public at the edge until the daily re-sync); if not yet, the person is told "busy".
-    const landed = answer.unanswered ? await landedRelease(auth, items) : null;
-    if (!landed) throw refusalOf(answer.error, items);
-    data = landed;
+    const found = answer.unanswered ? await landedRelease(auth, items) : null;
+    if (!found) throw refusalOf(answer.error, items);
+    data = found;
+    landed = true;
   }
   const result = ApplyResultSchema.safeParse(data);
   if (!result.success) throw new Error('apply_release answered in the wrong shape');
   const { release_id: releaseId, number } = result.data;
-  const effects = await afterPublish(sb, auth, releaseId, number, items);
+  // The apply's own items (every row it changed, cascades included, before and after) give the
+  // tags and the snapshots to rebuild (Admin v2 R7); a release found after no answer carries
+  // none, so everything is rebuilt and purged.
+  const effects = await afterPublish({
+    sb,
+    auth,
+    releaseId,
+    number,
+    items: landed ? null : result.data.items,
+  });
   return {
     release: { id: releaseId, number },
     items: items.map((i) => ({
@@ -362,63 +376,4 @@ async function landedRelease(
   } catch {
     return null;
   }
-}
-
-/**
- * After the commit, each effect on its own and never fatal (the `runHook` contract of
- * resource.ts: the release is live, so a failure here is reported, not thrown):
- *   • redirects in the release: the edge map rebuilt from the table (`syncRedirectsToEdge`,
- *     the publisher's RLS client, as a save does; publishing a redirect needs
- *     `redirects.manage`, so the publisher reads every rule);
- *   • page visibility in the release: the visibility snapshot rebuilt (`syncVisibilityToEdge`,
- *     the publisher's RLS client, which reads every rule: `page_visibility_read` is any staff
- *     role of the tenant, 0057). Only for a release carrying a visibility change, because only
- *     that change moves the snapshot; a page's new slug reaches the edge as it does for a save
- *     today, by the daily re-sync (R7 may run a rebuild as the system after a page release);
- *   • the cache purge: a logged no-op until a cache zone exists (owner item O-3, KAN-20; R7
- *     brings the purge seam), recorded on the release as `skipped`.
- */
-async function afterPublish(
-  sb: SupabaseClient,
-  auth: AuthContext,
-  releaseId: string,
-  number: number,
-  items: readonly CheckedItem[],
-): Promise<{ purge: PurgeStatus; kvSynced?: boolean }> {
-  const types = new Set(items.map((i) => i.draft.entity_type));
-  let kvSynced: boolean | undefined;
-  if (types.has('redirect')) {
-    kvSynced = (await syncRedirectsToEdge(sb, auth)).kvSynced;
-  }
-  if (types.has('page_visibility')) {
-    const synced = (await syncVisibilityToEdge(sb, auth)).kvSynced;
-    kvSynced = (kvSynced ?? true) && synced;
-  }
-
-  const purge: PurgeStatus = 'skipped';
-  void writeSystemLog({
-    level: 'info',
-    source: 'release:purge',
-    message: 'No cache zone yet (KAN-20): nothing to purge.',
-    detail: { releaseId, number },
-  });
-  try {
-    const { error } = await serviceClient().rpc('record_release_purge', {
-      p_tenant: auth.tenantId,
-      p_release: releaseId,
-      p_status: purge,
-      p_tags: null,
-      p_next_at: null,
-      p_side_effects: kvSynced === undefined ? {} : { kvSynced },
-    });
-    if (error) throw new Error(error.message);
-  } catch (err) {
-    void writeSystemLog({
-      level: 'error',
-      source: 'release:purge',
-      message: err instanceof Error ? err.message : 'record_release_purge failed',
-      detail: { releaseId },
-    });
-  }
-  return kvSynced === undefined ? { purge } : { purge, kvSynced };
 }

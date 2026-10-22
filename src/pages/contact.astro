@@ -2,10 +2,18 @@
 import ContactPage from '@/components/ContactPage.astro';
 import { setTierA } from '@/lib/http/cacheTags';
 import { CONTACT_CACHE_ENTITIES } from '@/lib/sections/contact';
+import { loadContactPage } from '@/lib/sections/contactPage';
+import { sectionTags } from '@/lib/sections/reads';
 
 // Tier A. Composed from CMS sections (`pages` slug 'contact'); a publish of the page or of
 // a service purges it by tag.
-setTierA(Astro.response, { route: 'contact', locale: 'en', entities: CONTACT_CACHE_ENTITIES });
+// The tags add what the rendered sections read (Admin v2 R7).
+const page = await loadContactPage(Astro.locals, 'en');
+setTierA(Astro.response, {
+  route: 'contact',
+  locale: 'en',
+  entities: [...CONTACT_CACHE_ENTITIES, ...sectionTags(page.sections)],
+});
 ---
 
-<ContactPage locale="en" />
+<ContactPage locale="en" page={page} />

@@ -28,8 +28,10 @@ import { scrubPii } from './lib/log/scrub';
 //
 // `scheduled` dispatches on `controller.cron` (wrangler.jsonc `triggers.crons`) through
 // src/lib/cron/schedules.ts: the daily jobs (src/lib/cron/jobs.ts, in their order, cheapest
-// first) and the 10-minute health schedule (src/lib/cron/health.ts, Admin v2 G2), each its
-// own invocation within the Free plan's 50 subrequests. Importing the
+// first), the 10-minute schedule (the health probes, src/lib/cron/health.ts, Admin v2 G2, and
+// the maintenance reconcile, Admin v2 U9) and the minute
+// release schedule (src/lib/cron/releases.ts, Admin v2 R7), each its own invocation within the
+// Free plan's 50 subrequests. Importing the
 // adapter's handler above is what wires `astro:env` for this path too (it calls `setGetEnv`
 // at module load from `cloudflare:workers`' env), so the jobs use the same service client as
 // every endpoint.

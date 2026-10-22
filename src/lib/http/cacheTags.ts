@@ -7,29 +7,41 @@ import type { Locale } from '@schemas/primitives';
 // Every Tier-A page carries `site:identity` and `nav:all` as well as its own tags,
 // because the header, footer and head of EVERY page render the public identity and the
 // navigation: a brand or menu edit must be able to purge the whole site by two tags,
-// not by enumerating routes.
+// not by enumerating routes. And `media:all` (Admin v2 R7): every page's head renders a URL
+// built from a media row (the default share image, `seo_defaults.default_og_media`, through
+// src/lib/seo/head.ts), so a media save, whose purge is `media:all`, must reach every page.
 
 export const TIER_A_CACHE_CONTROL = 'public, s-maxage=31536000, stale-while-revalidate=86400';
 
 /** Cloudflare purges at most 30 tags per request; one response never needs more. */
-const MAX_TAGS = 30;
+export const MAX_TAGS = 30;
 
-const ALWAYS = ['tenant:default', 'site:identity', 'nav:all'] as const;
+/**
+ * On every Tier A response: a collapsed purge (`tenant:default`), the identity, the menus, and
+ * the media rows every head renders (the share image).
+ */
+export const ALWAYS_TAGS = ['tenant:default', 'site:identity', 'nav:all', 'media:all'] as const;
+const ALWAYS = ALWAYS_TAGS;
 
 type HasHeaders = { headers: Headers };
 
+/**
+ * A response's tags: the always tags, its route, its entities and its locale, each once. Past
+ * 30, entities are dropped from the end but the always, route and locale tags are kept. A
+ * purge naming a dropped entity would then miss the response: only a collapsed purge
+ * (`tenant:default`: more than 30 tags, an orphaned release, a slug it could not resolve) or
+ * one of the kept tags reaches it. So tests/lib/sectionReads.spec.ts holds every route's whole
+ * set within 30, and nothing is dropped in practice (Admin v2 R7).
+ */
 export function tierATags(opts: {
   route: string;
   locale: Locale;
   entities?: readonly string[];
 }): string[] {
-  const tags = [
-    ...ALWAYS,
-    `route:${opts.route}`,
-    ...(opts.entities ?? []),
-    `locale:${opts.locale}`,
-  ];
-  return [...new Set(tags)].slice(0, MAX_TAGS);
+  const fixed = [...ALWAYS, `route:${opts.route}`, `locale:${opts.locale}`];
+  const entities = [...new Set(opts.entities ?? [])].filter((tag) => !fixed.includes(tag));
+  const room = Math.max(0, MAX_TAGS - fixed.length);
+  return [...ALWAYS, `route:${opts.route}`, ...entities.slice(0, room), `locale:${opts.locale}`];
 }
 
 /** Long-lived edge cache, purged by tag on publish. */

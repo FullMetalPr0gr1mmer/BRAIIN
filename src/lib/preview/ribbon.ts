@@ -25,6 +25,8 @@ export interface RibbonInput {
   twinLocale: 'en' | 'ar';
   /** The `only` selection this preview shows, carried to the twin (the bridge skips the link). */
   only?: readonly string[];
+  /** The published version this preview shows (`?v=`, R10), carried to the twin too. */
+  version?: number;
 }
 
 const ESCAPES: Record<string, string> = {
@@ -51,19 +53,44 @@ export const VISIBILITY_COPY = {
     "Visitors see this password prompt. The page behind it isn't previewed while it is locked.",
 } as const;
 
+/** The registry types a version's preview shows as they are now (no loader reads them). */
+const AS_NOW: readonly string[] = ['redirect', 'custom_theme', 'page_visibility'];
+
 /** The ribbon's lines: the headline first, then the notes, in order. */
-export function ribbonLines(input: Pick<RibbonInput, 'verdict' | 'gate'>): {
+export function ribbonLines(input: Pick<RibbonInput, 'verdict' | 'gate' | 'version'>): {
   lead: string;
   notes: string[];
 } {
-  const { verdict, gate } = input;
+  const { verdict, gate, version } = input;
   const notes: string[] = [];
   let lead: string;
-  if (verdict.state === 'untrusted') {
+  if (verdict.state === 'untrusted' && version !== undefined) {
+    // A version that could not be read whole (more changed since than was read, a table that
+    // failed): its number, never "your changes".
+    const words: Partial<Record<string, string>> = PREVIEW_COPY.version.reasons;
+    lead = PREVIEW_COPY.version.untrusted.replace('{v}', String(version));
+    for (const reason of verdict.reasons) {
+      notes.push(words[reason] ?? PREVIEW_COPY.reasons[reason]);
+    }
+  } else if (verdict.state === 'untrusted') {
     lead = PREVIEW_COPY.untrusted;
     for (const reason of verdict.reasons) notes.push(PREVIEW_COPY.reasons[reason]);
   } else if (verdict.state === 'locked') {
     lead = PREVIEW_COPY.locked;
+  } else if (version !== undefined) {
+    // A version as it was (R10): its number, never a count of pending changes.
+    lead = PREVIEW_COPY.version.lead.replace('{v}', String(version));
+    if (verdict.invalid.length > 0) {
+      notes.push(count(PREVIEW_COPY.version.invalid, verdict.invalid.length));
+    }
+    if (verdict.samples > 0) notes.push(count(PREVIEW_COPY.samples, verdict.samples));
+    const keys = [
+      ...new Set(verdict.notPreviewed.filter((n) => !AS_NOW.includes(n)).map(notPreviewedKey)),
+    ];
+    for (const key of keys) notes.push(PREVIEW_COPY.notPreviewed[key]);
+    if (verdict.notPreviewed.some((n) => AS_NOW.includes(n))) {
+      notes.push(PREVIEW_COPY.version.notPreviewed);
+    }
   } else {
     lead =
       verdict.pending === 0
@@ -86,11 +113,16 @@ export function ribbonLines(input: Pick<RibbonInput, 'verdict' | 'gate'>): {
 export function renderRibbon(input: RibbonInput): string {
   const { lead, notes } = ribbonLines(input);
   const twinPreview = toPreviewPath(input.twin);
-  // The bridge leaves a link already under /admin/preview alone, so the selection is added
-  // here, as the handler's keepInPreview adds it to a redirect.
+  // The bridge leaves a link already under /admin/preview alone, so the selection (or the
+  // version) is added here, as the handler's keepInPreview adds it to a redirect.
+  const keep = input.only
+    ? `only=${input.only.map(encodeURIComponent).join(',')}`
+    : input.version !== undefined
+      ? `v=${input.version}`
+      : null;
   const twinHref =
-    twinPreview && input.only
-      ? `${twinPreview}${twinPreview.includes('?') ? '&' : '?'}only=${input.only.map(encodeURIComponent).join(',')}`
+    twinPreview && keep
+      ? `${twinPreview}${twinPreview.includes('?') ? '&' : '?'}${keep}`
       : twinPreview;
   const twinLabel = input.twinLocale === 'ar' ? 'العربية' : 'English';
   const twinAttrs = input.twinLocale === 'ar' ? ' lang="ar" dir="rtl"' : ' lang="en" dir="ltr"';
