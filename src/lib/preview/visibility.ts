@@ -34,7 +34,7 @@ import type { DatasetTable, PreviewTable } from './relations';
 type Row = Readonly<Record<string, unknown>>;
 
 /**
- * Anon's column grants on the five tables granted by column (every other preview table is
+ * Anon's column grants on the six tables granted by column (every other preview table is
  * granted to anon whole). The dataset reads these tables with exactly these columns, and
  * the emulator answers 42501 for any other, as PostgREST does for a visitor.
  */
@@ -89,6 +89,9 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
   ],
   // 0098 (Admin v2 U7): never the version, the schedule, the publish date or the actors.
   faq_items: ['id', 'tenant_id', 'question', 'answer', 'status', 'sort_order'],
+  // 0105 (Admin v2 U11, numbered at merge): the Search Console code the home page's head
+  // carries, and the tenant; never the GA4 id, the Calendly link or the legacy jsonb.
+  site_integrations: ['tenant_id', 'search_console_token'],
   // 0028: never is_placeholder, the schedule, version or the actors.
   service_cases: [
     'id',
@@ -197,6 +200,11 @@ export const MIRRORED_POLICIES: Readonly<
     services_discipline_published: 'RESTRICTIVE:c37eff0d6d10d79117aab9034276c0fa',
     services_read: 'PERMISSIVE:a3adeda401046be963dd172ac14b795c',
   },
+  // 0105 (U11): the anon read, the tenant fence alone; the staff policies are TO
+  // authenticated, so none applies to a visitor.
+  site_integrations: {
+    site_integrations_public_read: 'PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54',
+  },
   site_profile: {
     site_profile_read: 'PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54',
   },
@@ -260,6 +268,7 @@ export const VISIBILITY_DEPS: Readonly<Record<DatasetTable, readonly DatasetTabl
   seo_defaults: [],
   service_cases: ['services'],
   services: ['disciplines'],
+  site_integrations: [],
   site_profile: [],
   statistics: [],
   team_members: [],
@@ -448,11 +457,12 @@ export function createMirror(data: MirrorData): Mirror {
       case 'sectors':
       case 'clients':
         return flagged(row);
-      // 0001 categories_read, 0019 site_profile_read, 0009 seo_defaults_read: the tenant
-      // fence only.
+      // 0001 categories_read, 0019 site_profile_read, 0009 seo_defaults_read, 0105
+      // site_integrations_public_read (U11; anon's two columns): the tenant fence only.
       case 'categories':
       case 'site_profile':
       case 'seo_defaults':
+      case 'site_integrations':
         return true;
       // 0009 entity_seo_read (tenant) AND 0011 entity_seo_published_only (RESTRICTIVE: its
       // parent published, under the parent's RLS; an orphan or another entity type never).

@@ -12,8 +12,9 @@
 --      tenant's admin reads none;
 --   2. the CMS roles read their tenant's pending changes (content_drafts); a `sales` claim
 --      and another tenant read none, and anon holds no privilege;
---   3. anon's column grants on testimonials, media_assets, disciplines, service_cases and
---      faq_items (0098) equal the literal in _anon_columns() below, and the other 17 tables are granted to
+--   3. anon's column grants on testimonials, media_assets, disciplines, service_cases,
+--      faq_items (0098) and site_integrations (0105) equal the literal in _anon_columns() below,
+--      and the other 17 tables are granted to
 --      anon whole; staff also read _dataset_only_columns() (a quote's consent record);
 --   4. the column defaults a pending create starts from equal _create_defaults() below;
 --   5. the policies that apply to an anon SELECT on each table equal _anon_policies() below
@@ -23,7 +24,13 @@
 --      password (with the image only it holds, media branch 6) is read by staff and by
 --      neither a sales claim nor anon;
 --   6. page visibility (0057) is no row security: anon holds nothing on page_visibility, which
---      the CMS roles read (the dataset reads it for the fence alone) and a sales claim does not.
+--      the CMS roles read (the dataset reads it for the fence alone) and a sales claim does not;
+--   7. site_integrations (Admin v2 U11, 0105) is a preview table too, the home page's Search
+--      Console code, but not one every CMS role reads: Admin + SEO only, behind a live check on
+--      the profile that this file's claims have none of (supabase/tests/integrations.test.sql
+--      proves the staff rows with live profiles). Here: anon reads the launch tenant's code
+--      through its two columns (item 3), and a content_creator, developer or sales claim and
+--      another tenant read no row of it.
 -- The literals are held equal to ANON_COLUMNS, DATASET_ONLY_COLUMNS, CREATE_DEFAULTS and MIRRORED_POLICIES
 -- by tests/lib/previewMirror.spec.ts, which parses this file: a grant, default or policy
 -- that moves fails one side until the other follows.
@@ -37,7 +44,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
 begin;
-select plan(20);
+select plan(23);
 
 -- ── The literals (parsed by tests/lib/previewMirror.spec.ts; keep one row per line) ──────
 create function _anon_columns() returns table (tbl text, cols text) language sql immutable as $$
@@ -46,6 +53,7 @@ create function _anon_columns() returns table (tbl text, cols text) language sql
     ('faq_items', 'id,tenant_id,question,answer,status,sort_order'),
     ('media_assets', 'id,tenant_id,kind,provider,storage_path,width,height,alt,stream_uid,mime_type,updated_at'),
     ('service_cases', 'id,tenant_id,service_id,portfolio_id,title,context,problems,results,status,published_at,updated_at'),
+    ('site_integrations', 'tenant_id,search_console_token'),
     ('testimonials', 'id,tenant_id,slug,quote,author_name,author_role,client_id,portfolio_id,avatar_media_id,placements,status,sort_order,published_at,updated_at')
 $$;
 
@@ -142,6 +150,7 @@ create function _anon_policies() returns table (tbl text, policies text) languag
     ('seo_defaults', 'seo_defaults_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,seo_defaults_write:PERMISSIVE:763c5ebb7d12ee38b8e17d30ad1570df'),
     ('service_cases', 'service_cases_published_parent:RESTRICTIVE:5ec4bd1be2ede2fd328e9818b89a640d,service_cases_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,service_cases_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('services', 'services_discipline_in_tenant:RESTRICTIVE:b326b5062b2f0e69046810717534cb09,services_discipline_published:RESTRICTIVE:c37eff0d6d10d79117aab9034276c0fa,services_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c'),
+    ('site_integrations', 'site_integrations_public_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54'),
     ('site_profile', 'site_profile_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54'),
     ('statistics', 'statistics_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,statistics_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('team_members', 'team_members_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,team_members_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
@@ -269,6 +278,11 @@ insert into public.site_profile (tenant_id, brand_name, contact_email, location)
 values (app.default_tenant_id(), '{"en":"Fixture","ar":"تجربة"}', 'hello@example.test', '{"en":"Riyadh","ar":"الرياض"}')
 on conflict (tenant_id) do nothing;
 insert into public.seo_defaults (tenant_id) values (app.default_tenant_id()) on conflict (tenant_id) do nothing;
+-- The verification code a visitor reads (0105); the GA4 id beside it is staff-only.
+insert into public.site_integrations (tenant_id, search_console_token, ga4_measurement_id)
+values (app.default_tenant_id(), 'PreviewCode_0123456', 'G-PREVIEW1')
+on conflict (tenant_id) do update
+  set search_console_token = excluded.search_console_token, ga4_measurement_id = excluded.ga4_measurement_id;
 
 -- Pending changes: two of the launch tenant's and one of the other tenant's.
 insert into public.content_drafts (id, tenant_id, entity_type, entity_id, op, payload) values
@@ -408,10 +422,10 @@ select is(
             (select string_agg(x, ',' order by x collate "C") from unnest(string_to_array(a.cols, ',')) x)),
           E'\n' order by a.tbl collate "C")
      from _anon_columns() a),
-  'anon''s SELECT columns on the five column-granted tables equal ANON_COLUMNS');
+  'anon''s SELECT columns on the six column-granted tables equal ANON_COLUMNS');
 select ok(
   (select bool_and(not has_table_privilege('anon', format('public.%I', tbl), 'SELECT')) from _anon_columns()),
-  'the five column-granted tables have no table-level anon SELECT');
+  'the six column-granted tables have no table-level anon SELECT');
 select is(
   (select string_agg(t, ',' order by t collate "C")
      from unnest(array['blog_posts', 'categories', 'certifications', 'clients', 'disciplines',
@@ -467,6 +481,28 @@ select ok(
   and not has_table_privilege('anon', 'public.page_visibility', 'DELETE')
   and not has_table_privilege('anon', 'public.content_drafts', 'SELECT'),
   'anon holds nothing on page_visibility (0057: the edge decides, not RLS) or content_drafts');
+
+-- ── 7. site_integrations (Admin v2 U11, 0105) ──────────────────────────────────────────
+-- The rows a claim reads of it, in the launch tenant (the count only: every staff column).
+create function _integrations_rows(p_role text) returns int language plpgsql as $$
+begin
+  perform _as(p_role);
+  return (select count(*)::int from public.site_integrations
+           where tenant_id::text = current_setting('pv.launch'));
+end $$;
+set local role anon;
+select _as(null);
+select is((select search_console_token from public.site_integrations), 'PreviewCode_0123456',
+  'anon reads the launch tenant''s Search Console code, the dataset''s projection of site_integrations');
+reset role;
+set local role authenticated;
+select is(_integrations_rows('content_creator') + _integrations_rows('developer') + _integrations_rows('sales'), 0,
+  'a content_creator, developer or sales claim reads no site_integrations row (Admin + SEO only since 0105): their preview of the home page carries no tag');
+select _as_other();
+select is((select count(*)::int from public.site_integrations
+            where tenant_id::text = current_setting('pv.launch')), 0,
+  'other_tenant reads no site_integrations row of the launch tenant');
+reset role;
 
 select * from finish();
 rollback;
