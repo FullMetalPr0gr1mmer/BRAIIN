@@ -11,8 +11,11 @@
 --                      pending, no attempt, two minutes after it went live); never a baseline, a
 --                      done purge, an exhausted one, one not yet due, or a release not live; each
 --                      leased five minutes, so the next claim takes another tenant's, then none.
---   release_read_rows  CMS staff of their own tenant only (a Sales token, anon, another tenant
---                      and the service role are refused); registry tables and media_assets
+--   release_read_rows  CMS staff of their own tenant only: an Admin, a Content Creator, an SEO
+--                      and a Developer of tenant A read A's rows alike; a token of tenant B
+--                      reads none of A's rows through its own tenant and is refused A's (a
+--                      Sales token, no role, anon and the service role are refused too);
+--                      registry tables and media_assets
 --                      only, columns the table has, keyed by id (tenant_id only for a
 --                      singleton the registry keys by its tenant, never services or
 --                      media_assets), the ids uuids, 2,000 at most over all the reads; the
@@ -22,7 +25,7 @@
 -- Run with `supabase test db`. CLAUDE.md §2 (the Cache-Tag limits), §3 (Pillars 1 and 4), §9.
 
 begin;
-select plan(43);
+select plan(48);
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────────
 insert into public.tenants (id, name) values
@@ -86,6 +89,17 @@ $$;
 create temp table _claims (n int, answer jsonb);
 grant execute on function _as(text, text), _ids(jsonb) to anon, authenticated, service_role;
 grant insert, select on _claims to service_role;
+-- One read of tenant A's services, as whoever calls it (section 4's per-role rows).
+create temp table _reads (who text, answer jsonb);
+create function _read_a() returns jsonb language sql as $$
+  select public.release_read_rows('71030000-0000-0000-0000-00000000000a', jsonb_build_array(
+    jsonb_build_object('table', 'services', 'columns', jsonb_build_array('id', 'slug'), 'key', 'id',
+      'ids', jsonb_build_array('71030000-0000-0000-0001-000000000002',
+                               '71030000-0000-0000-0001-000000000001',
+                               '71030000-0000-0000-0001-000000000009'))))
+$$;
+grant insert, select on _reads to authenticated;
+grant execute on function _read_a() to authenticated;
 
 -- ── 1. The catalog ───────────────────────────────────────────────────────────────────
 select ok(
@@ -233,6 +247,36 @@ select is(
       jsonb_build_object('id', '71030000-0000-0000-0001-000000000002', 'slug', 'r7-motion')),
     jsonb_build_array(jsonb_build_object('status', 'draft'))),
   'a Content Creator reads her own site''s rows, projected, one array per read, in order; another site''s id reads nothing');
+
+-- Every CMS role reads its own site alike (app.is_staff() admits the four): the same read as
+-- an Admin, an SEO and a Developer of tenant A answers the Content Creator's rows.
+select _as('admin', '71030000-0000-0000-0000-00000000000a');
+insert into _reads select 'admin', _read_a();
+select _as('seo', '71030000-0000-0000-0000-00000000000a');
+insert into _reads select 'seo', _read_a();
+select _as('developer', '71030000-0000-0000-0000-00000000000a');
+insert into _reads select 'developer', _read_a();
+select is((select answer from _reads where who = 'admin'), jsonb_build_array(jsonb_build_array(
+    jsonb_build_object('id', '71030000-0000-0000-0001-000000000001', 'slug', 'r7-logo'),
+    jsonb_build_object('id', '71030000-0000-0000-0001-000000000002', 'slug', 'r7-motion'))),
+  'an Admin of the site reads its rows (the draft too), never another site''s');
+select is((select answer from _reads where who = 'seo'),
+  (select answer from _reads where who = 'admin'), 'an SEO of the site reads the same');
+select is((select answer from _reads where who = 'developer'),
+  (select answer from _reads where who = 'admin'), 'a Developer of the site reads the same');
+
+-- other_tenant: a token of tenant B reads none of A's rows through its own tenant, and is
+-- refused A's tenant (the tenant check), whatever its role.
+select _as('admin', '71030000-0000-0000-0000-00000000000b');
+select is(
+  public.release_read_rows('71030000-0000-0000-0000-00000000000b', jsonb_build_array(
+    jsonb_build_object('table', 'services', 'columns', jsonb_build_array('id', 'slug'), 'key', 'id',
+      'ids', jsonb_build_array('71030000-0000-0000-0001-000000000001',
+                               '71030000-0000-0000-0001-000000000002')))),
+  '[[]]'::jsonb, 'an Admin of another site, through its own tenant, reads none of this site''s rows');
+select throws_ok($$ select _read_a() $$, '42501', null,
+  'and is refused this site''s tenant');
+select _as('content_creator', '71030000-0000-0000-0000-00000000000a');
 select is(
   (select jsonb_agg(r -> 'tenant_id') from jsonb_array_elements(
      public.release_read_rows('71030000-0000-0000-0000-00000000000a', jsonb_build_array(
