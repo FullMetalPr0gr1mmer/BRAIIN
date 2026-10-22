@@ -767,6 +767,8 @@ describe('the draft endpoints and the intake switch (R3b)', () => {
       publishableByMe: true,
       requiredCaps: ['services.write', 'content.publish'],
       waitingFor: ['admin', 'content_creator'],
+      status: null,
+      visible: null,
       href: `/admin/services/${uuid(2)}`,
       fieldLabels: ['Title'],
     };

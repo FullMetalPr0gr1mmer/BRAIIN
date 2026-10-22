@@ -213,6 +213,13 @@ async function archivedLive(ctx: Ctx, rows: readonly Row[]): Promise<Set<string>
   return new Set((await Promise.all(reads)).flat());
 }
 
+/** A stored go-live flag: `payload->>visible` is text to PostgREST ('true'), a boolean as JSON. */
+function flagOf(value: unknown): boolean | null {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return null;
+}
+
 /** The pending summary: every change the caller may read, who it waits for, counts by area. */
 export async function pendingSummary(ctx: Ctx): Promise<Row> {
   const { auth, sb } = ctx;
@@ -228,7 +235,7 @@ export async function pendingSummary(ctx: Ctx): Promise<Row> {
     sb
       .from('content_drafts')
       .select(
-        'id,entity_type,entity_id,op,fields,label,version,updated_by,updated_at,release_id,status:payload->>status',
+        'id,entity_type,entity_id,op,fields,label,version,updated_by,updated_at,release_id,status:payload->>status,visible:payload->>visible',
       )
       .eq('tenant_id', auth.tenantId)
       .in('entity_type', readable)
@@ -305,7 +312,10 @@ export async function pendingSummary(ctx: Ctx): Promise<Row> {
       scheduled: row['release_id'] !== null && row['release_id'] !== undefined,
       mine,
       ...decision,
-      // R12: where it is edited, and its fields in the editor's words (static per type).
+      // R12: what it stores of the lifecycle (its badge: Published, Hidden, Archived, Shown),
+      // where it is edited, and its fields in the editor's words (static per type).
+      status,
+      visible: flagOf(row['visible']),
       href: editHref(entityType, String(row['entity_id'])),
       fieldLabels: fieldLabels(entityType, fields),
     });

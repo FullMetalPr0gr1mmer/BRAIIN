@@ -628,6 +628,9 @@ export const PendingItemSchema = z
     publishableByMe: z.boolean(),
     requiredCaps: z.array(z.string()).nullable(),
     waitingFor: z.array(z.string()),
+    /** Admin v2 R12: the status and the go-live flag the change stores, as stored (its badge). */
+    status: z.string().nullable(),
+    visible: z.boolean().nullable(),
     /** Admin v2 R12: where the change is edited (the dialog's "Fix" and its row link). */
     href: z.string().nullable(),
     /** Admin v2 R12: the changed fields in the editor's words ("Title, Intro, +2"). */

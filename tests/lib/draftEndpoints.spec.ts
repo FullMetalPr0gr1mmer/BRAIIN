@@ -238,7 +238,8 @@ describe('the pending summary', () => {
       href: `/admin/services/${S1}`,
       fieldLabels: ['Service name', 'Tagline'],
     });
-    expect(archive!['fieldLabels']).toEqual(['Status']);
+    expect(archive).toMatchObject({ fieldLabels: ['Status'], status: 'archived', visible: null });
+    expect(edit).toMatchObject({ status: null, visible: null });
     expect(profile).toMatchObject({ href: '/admin/settings', fieldLabels: ['Site name'] });
     expect(seo).toMatchObject({ href: '/admin/seo' });
     // Words, never a column name (no snake_case), and each once.
