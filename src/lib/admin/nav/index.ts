@@ -73,14 +73,11 @@ export function visibleNav(role: Role): NavGroup[] {
 
 /** Every screen a role reaches from the menu: sidebar links and their tabs, deduplicated. */
 export function reachableHrefs(role: Role): string[] {
-  // A tab's own routes (`match`, Admin v2 U5: the discipline pages under the Services tab)
-  // are reached through it, by the roles it is visible to. A LINK's `match` is not: it only
-  // lights the link (Pages lights for /admin/sections, which only its writers may open).
+  // A `match` route is not listed: it is a page reached FROM its screen (Admin v2 U5: a
+  // discipline's page, opened from the Services overview), and this list is the palette's
+  // "Go to" (tests/lib/adminPalette.spec.ts).
   const hrefs = visibleNav(role).flatMap((group) =>
-    group.links.flatMap((link) => [
-      link.href,
-      ...(link.tabs ?? []).flatMap((tab) => [tab.href, ...(tab.match ?? [])]),
-    ]),
+    group.links.flatMap((link) => [link.href, ...(link.tabs ?? []).map((tab) => tab.href)]),
   );
   return [...new Set(hrefs)];
 }

@@ -15,8 +15,10 @@ export interface NavTab {
   access?: readonly Access[];
   /**
    * Other routes that belong to this screen (on a link: to its area), for the same roles:
-   * they light it up, and a tab's are reachable by whoever sees the tab (Admin v2 U5: the
-   * Services tab holds the discipline pages, /admin/disciplines/<id>, which the overview opens).
+   * they light it up (Admin v2 U5: the Services tab holds the discipline pages,
+   * /admin/disciplines/<id>, which the overview opens). They are not menu screens of their
+   * own (`reachableHrefs` leaves them out); the media library's "Used in" links follow a
+   * tab's to its visibility.
    */
   match?: readonly string[];
 }

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ROLES } from '@/lib/auth/types';
 import { barBucket } from '@/lib/admin/charts';
 import { mediaPermissionsFor, usageScreensFor } from '@/lib/admin/mediaLibrary';
-import { reachableHrefs } from '@/lib/admin/nav';
+import { reachableHrefs, visibleNav } from '@/lib/admin/nav';
 import {
   cleanQuery,
   meterBucket,
@@ -74,9 +74,14 @@ describe('"Used in": words and links', () => {
     expect(linked('content_creator')).toHaveLength(USAGE.length);
   });
 
-  it('every link a role is given is a screen its sidebar reaches', () => {
+  it('every link a role is given is a screen its sidebar reaches, or a page a tab of it holds', () => {
     for (const role of ROLES) {
-      const reach = reachableHrefs(role);
+      // A tab's own routes (`match`) are pages its screen opens (Admin v2 U5: a discipline's
+      // page, from the Services overview), so they are reached by whoever sees the tab.
+      const held = visibleNav(role).flatMap((group) =>
+        group.links.flatMap((link) => (link.tabs ?? []).flatMap((tab) => tab.match ?? [])),
+      );
+      const reach = [...reachableHrefs(role), ...held];
       for (const screen of usageScreensFor(role))
         expect(reach, `${role} ${screen}`).toContain(screen);
     }

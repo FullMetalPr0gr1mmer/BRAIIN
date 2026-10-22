@@ -10,7 +10,7 @@ import {
   type NavLink,
 } from '@/lib/admin/nav';
 import { ICON_NAMES } from '@/lib/admin/icons';
-import { pageFileFor } from '../admin/routes';
+import { REDIRECT_PAGES, pageFileFor } from '../admin/routes';
 
 // The Admin v2 information architecture (F2, docs/admin-v2/ui.md §3.1): the prototype's
 // groups, an icon per link, and the screens it folds into an area as that area's tabs.
@@ -54,9 +54,13 @@ describe('the admin menu', () => {
   it('keeps every screen of the old menu reachable for the roles that had it', () => {
     // Folding Disciplines, Sectors, System logs… into tabs must not strand a role. The
     // system log is site health's Errors tab since U2 (/admin/logs redirects there).
+    // Admin v2 U5: the Disciplines tab folded into the Services overview, which lists the
+    // disciplines and opens each one's page; /admin/disciplines redirects there.
     expect(reachableHrefs('content_creator')).toEqual(
-      expect.arrayContaining(['/admin/disciplines', '/admin/service-cases', '/admin/sectors']),
+      expect.arrayContaining(['/admin/services', '/admin/service-cases', '/admin/sectors']),
     );
+    expect(reachableHrefs('content_creator')).not.toContain('/admin/disciplines');
+    expect(REDIRECT_PAGES['/admin/disciplines']).toBe('/admin/services');
     expect(reachableHrefs('developer')).toEqual(
       expect.arrayContaining([
         '/admin/site-health',

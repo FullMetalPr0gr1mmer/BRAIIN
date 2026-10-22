@@ -299,10 +299,7 @@ describe('the sweep route map', () => {
         .filter((r) => r.kind === 'screen')
         .map((r) => r.path)
         .filter((p) => !EXTRA_LINKS.some((l) => l.href === p));
-      // A tab's own route that only redirects (Admin v2 U5: /admin/disciplines, the Services
-      // tab's, answers on the overview) is reached but never swept as a screen of its own.
-      const reached = reachableHrefs(role).filter((href) => !(href in REDIRECT_PAGES));
-      expect(new Set(screens)).toEqual(new Set(reached));
+      expect(new Set(screens)).toEqual(new Set(reachableHrefs(role)));
     }
   });
 });
