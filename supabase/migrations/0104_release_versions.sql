@@ -16,7 +16,11 @@
 --     for the first to commit and numbers after it (READ COMMITTED, as every PostgREST and
 --     pg_cron write runs; a writer of one row already waits on its row lock). A unique index is
 --     the backstop: a number taken twice fails the write (23505), never records a duplicate.
---     Existing rows are numbered in (created_at, version, id) order. `version` is unchanged.
+--     Existing rows are numbered once, by when their transaction began (`created_at`), then
+--     the row's version, then the row's place in the table (`ctid`: insertion order, for a
+--     table no API role updates or deletes, 0032), then the id; that is commit order except
+--     where two transactions wrote one entity at once, which the per-entity lock now orders.
+--     `version` is unchanged.
 --   • public.release_as_of(p_tenant, p_number, p_limit, p_page): the state at version N, for a
 --     restore (staged as pending changes) and a preview of that version. For every entity the
 --     ledger touched after version N (release items and R5's system items), the `before` of its
@@ -54,18 +58,22 @@ set local lock_timeout = '5s';
 -- ═══ 1. content_versions.seq ═════════════════════════════════════════════════════════════
 alter table public.content_versions add column if not exists seq int;
 
--- The history already kept, numbered per entity in the order it was written. Rows that already
--- hold their number (a second run) are left alone; the trigger below is created afterwards, so
--- this is the one statement that ever writes the column.
+-- The history already kept, numbered per entity in the order it was written: two snapshots of
+-- one entity from one transaction share created_at (now()) and may share a version (a writer
+-- sends its version back), so their place in the table, insertion order, decides before the
+-- random id. Only rows with no number are written: a second run renumbers nothing (it could
+-- otherwise reorder such a pair against the unique index). The trigger below is created
+-- afterwards, so this is the one statement that ever writes the column.
 drop trigger if exists content_versions_seq on public.content_versions;
 update public.content_versions v
    set seq = n.seq
   from (select c.id,
                (pg_catalog.row_number() over (partition by c.tenant_id, c.entity_type, c.entity_id
-                                              order by c.created_at, c.version, c.id))::int as seq
+                                              order by c.created_at, c.version, c.ctid, c.id))::int
+                 as seq
           from public.content_versions c) n
  where v.id = n.id
-   and v.seq is distinct from n.seq;
+   and v.seq is null;
 
 alter table public.content_versions alter column seq set not null;
 alter table public.content_versions drop constraint if exists content_versions_seq_positive;
