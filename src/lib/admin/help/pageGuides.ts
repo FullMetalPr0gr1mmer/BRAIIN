@@ -47,15 +47,20 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     screens: [
       '/admin/pages',
       '/admin/sections',
-      '/admin/services',
-      '/admin/disciplines',
       '/admin/service-cases',
-      '/admin/portfolio',
       '/admin/sectors',
       '/admin/blog',
       '/admin/categories',
       '/admin/navigation',
     ],
+  },
+  // Admin v2 U5 + U6: the Services overview, a discipline's page and the Projects list open
+  // their own guide (put by the services-and-projects migration, revision 0). SEO reads it too:
+  // it opens these screens for their SEO.
+  {
+    slug: 'services-and-projects',
+    caps: ['services.write', 'portfolio.write', 'seo.entityMeta'],
+    screens: ['/admin/services', '/admin/disciplines', '/admin/portfolio'],
   },
   // Admin v2 U7: the collection screens and the FAQ (the FAQ migration's put, revision 0).
   {

@@ -1,0 +1,94 @@
+{
+  "slug": "services-and-projects",
+  "sort_order": 42,
+  "minutes": 3,
+  "tags": [
+    "content"
+  ],
+  "screens": [
+    "/admin/services",
+    "/admin/disciplines",
+    "/admin/portfolio"
+  ],
+  "caps": [
+    "services.write",
+    "portfolio.write",
+    "seo.entityMeta"
+  ],
+  "title": "Services and projects",
+  "title_ar": "الخدمات والمشاريع",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Services are filed under disciplines, the big cards on the home page and the Services page. Projects are the case studies on Our Work. Change what you need, then press Save changes."
+      },
+      {
+        "t": "h",
+        "x": "Services"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Services lists the disciplines in the order the site shows them. Drag one, or use Move up and Move down, to change the order. The eye shows or hides a discipline, and hiding one hides its services too.",
+          "Open a discipline to order its services, show or hide each one, and add a service. An Admin also sees how many inquiries named each service.",
+          "A service opens in tabs: Content, Case study, SEO, Leads and Publishing. It shows at most 4 value cards; three work best.",
+          "The case study has its own Save. It takes at most 5 problems. A design sample says so: write the real words and switch off Placeholder to make it real."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Projects"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Search by title or type, or narrow the list with the chips: Featured, a sector, or Hidden for projects that are not published.",
+          "Manage tags edits the sectors and opens each client. Switch a client on only when they have agreed to be named.",
+          "A project opens in tabs: Basics, Case study, Breakdown & gallery, SEO and Publishing. Its pictures, films and gallery are saved with the rest, in one save.",
+          "To publish, a project needs its title and type in both languages, and a poster with alt text in both languages. The Publishing tab lists what is missing."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "Only an Admin can archive or delete a service, a discipline or a project. The SEO role opens them to change their SEO; everything else is read only for it."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تُصنَّف الخدمات تحت المجالات، وهي البطاقات الكبيرة في الصفحة الرئيسية وصفحة الخدمات. أما المشاريع فهي دراسات الحالة في صفحة أعمالنا. غيّر ما تحتاجه، ثم اضغط Save changes."
+      },
+      {
+        "t": "h",
+        "x": "الخدمات (Services)"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "تعرض شاشة Services المجالات بالترتيب الذي يظهر به الموقع. اسحب مجالًا، أو استخدم Move up وMove down، لتغيير الترتيب. وتُظهر العين المجال أو تخفيه، وإخفاء المجال يُخفي خدماته أيضًا.",
+          "افتح مجالًا لترتيب خدماته، وإظهار كل خدمة أو إخفائها، وإضافة خدمة. ويرى المسؤول (Admin) أيضًا عدد الاستفسارات التي ذكرت كل خدمة.",
+          "تُفتح الخدمة في تبويبات: Content وCase study وSEO وLeads وPublishing. وتعرض 4 بطاقات قيمة على الأكثر، وثلاث هي الأفضل.",
+          "لدراسة الحالة زر Save خاص بها، وتتسع لـ 5 مشكلات على الأكثر. ونموذج التصميم يقول ذلك: اكتب الكلمات الحقيقية وأطفئ Placeholder لجعله حقيقيًا."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "المشاريع (Projects)"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "ابحث بالعنوان أو النوع، أو ضيّق القائمة بالشرائح: Featured، أو قطاع، أو Hidden للمشاريع غير المنشورة.",
+          "يعدّل Manage tags القطاعات ويفتح كل عميل. لا تشغّل العميل إلا إذا وافق على ذكر اسمه.",
+          "يُفتح المشروع في تبويبات: Basics وCase study وBreakdown & gallery وSEO وPublishing. وتُحفظ صوره وأفلامه ومعرضه مع الباقي، في حفظ واحد.",
+          "ليُنشر المشروع يحتاج إلى عنوانه ونوعه باللغتين، وإلى صورة غلاف بنص بديل باللغتين. ويسرد تبويب Publishing ما ينقص."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "لا يستطيع أرشفة خدمة أو مجال أو مشروع أو حذفها إلا المسؤول (Admin). ويفتحها دور SEO لتغيير بيانات SEO الخاصة بها، وكل ما عدا ذلك للقراءة فقط بالنسبة له."
+      }
+    ]
+  }
+}

@@ -1752,7 +1752,10 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
   });
 
   it('pages below a screen share its guide; the dashboard’s covers only itself', () => {
-    expect(pageGuideFor('/admin/services/1234', 'content_creator')).toBe('saving-and-publishing');
+    expect(pageGuideFor('/admin/services/1234', 'content_creator')).toBe('services-and-projects');
+    expect(pageGuideFor('/admin/service-cases/1234', 'content_creator')).toBe(
+      'saving-and-publishing',
+    );
     expect(pageGuideFor('/admin/pages/new', 'admin')).toBe('saving-and-publishing');
     expect(pageGuideFor('/admin/analytics/search', 'seo')).toBe('website-stats');
     expect(pageGuideFor('/admin/redirects/9', 'seo')).toBe('seo-and-redirects');
@@ -1771,6 +1774,10 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
   });
 
   it('SEO opens Pages and Posts without the content guide, which is for the writers', () => {
+    // Services and projects (U5, U6) are the exception: SEO opens them for their SEO, and their
+    // guide says what SEO does there.
+    expect(pageGuideFor('/admin/services', 'seo')).toBe('services-and-projects');
+    expect(pageGuideFor('/admin/portfolio/1', 'seo')).toBe('services-and-projects');
     expect(pageGuideFor('/admin/pages', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/blog/1', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/pages', 'content_creator')).toBe('saving-and-publishing');
@@ -2312,6 +2319,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'previewing-changes',
       'roles-and-access',
       'saving-and-publishing',
+      'services-and-projects',
       'style-finder',
       'website-stats',
       'your-account',
@@ -2326,6 +2334,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'previewing-changes',
       'roles-and-access',
       'seo-and-redirects',
+      'services-and-projects',
       'website-stats',
       'your-account',
       'your-dashboard',
@@ -2537,7 +2546,8 @@ describe('the loaders', () => {
     expect(index.guides.map((g) => g.slug)).toEqual(
       SET.filter((a) => mayRead('content_creator', a.caps)).map((a) => a.slug),
     );
-    expect(index.onScreen).toEqual(['saving-and-publishing']);
+    // Both guides name the services screens (U5 + U6 added the second), in their places.
+    expect(index.onScreen).toEqual(['saving-and-publishing', 'services-and-projects']);
     // Nothing but what a list shows leaves the server.
     expect(Object.keys(index.guides[0] ?? {}).sort()).toEqual(['minutes', 'slug', 'tags', 'title']);
   });

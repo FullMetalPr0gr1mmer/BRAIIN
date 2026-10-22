@@ -56,6 +56,14 @@ export const cases: readonly Case[] = [
     allow: ['admin', 'developer', 'sales'],
     read: true,
   },
+  // The Services area's per-service counts (Admin v2 U5): counts only, the leads caps.
+  {
+    name: 'lead interest counts (per service)',
+    load: () => import('@/pages/api/admin/leads/interest-counts'),
+    method: 'GET',
+    url: '/api/admin/leads/interest-counts',
+    allow: ['admin', 'developer', 'sales'],
+  },
   {
     name: 'lead KPIs',
     load: () => import('@/pages/api/admin/leads/summary'),
