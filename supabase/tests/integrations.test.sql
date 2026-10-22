@@ -165,9 +165,11 @@ select is(_seen(), 0, 'content_creator reads nothing (since U11 the staff read i
 select is(_rows($$ update public.site_integrations set ga4_measurement_id = null
                    where tenant_id = '11100000-0000-0000-0000-000000000001' $$),
   0, 'content_creator changes nothing');
+-- Its own tenant's id: the tenant predicate passes, so only the role checks can refuse it (an
+-- RLS pass would reach the existing row's key, 23505).
 select is(_state($$ insert into public.site_integrations (tenant_id)
-                    values ('11100000-0000-0000-0000-0000000000ff') $$),
-  '42501', 'content_creator cannot add a row (WITH CHECK)');
+                    values ('11100000-0000-0000-0000-000000000001') $$),
+  '42501', 'content_creator cannot add a row (WITH CHECK, before the key)');
 select _as('11100000-0000-0000-0000-0000000000d1', 'developer', '11100000-0000-0000-0000-000000000001');
 select is(_seen(), 0, 'developer reads nothing');
 select is(_rows($$ update public.site_integrations set ga4_measurement_id = null
