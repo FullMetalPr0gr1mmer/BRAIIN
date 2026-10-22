@@ -37,6 +37,8 @@ const discardBulk = async () =>
   ((await import('@/pages/api/admin/drafts/discard')) as { POST: APIRoute }).POST;
 const resolve = async () =>
   ((await import('@/pages/api/admin/drafts/[id]/resolve')) as { POST: APIRoute }).POST;
+const compare = async () =>
+  ((await import('@/pages/api/admin/drafts/[id]/compare')) as { GET: APIRoute }).GET;
 
 const S1 = '33333333-3333-4333-8333-333333333301';
 const SEO_ROW = '99999999-9999-4999-8999-000000000001';
@@ -226,6 +228,25 @@ describe('the pending summary', () => {
       settings: { total: 0, publishableByMe: 0, waiting: 0, mine: 0 },
     });
     expect([res.data['total'], res.data['truncated']]).toEqual([3, false]);
+  });
+
+  it('names where each change is edited and its fields in the editor’s words (R12)', async () => {
+    const res = await read('admin');
+    const [edit, archive, profile, seo] = res.data['items'] as Row[];
+    // The service's own editor, the identity's General screen, the SEO screen.
+    expect(edit).toMatchObject({
+      href: `/admin/services/${S1}`,
+      fieldLabels: ['Service name', 'Tagline'],
+    });
+    expect(archive!['fieldLabels']).toEqual(['Status']);
+    expect(profile).toMatchObject({ href: '/admin/settings', fieldLabels: ['Site name'] });
+    expect(seo).toMatchObject({ href: '/admin/seo' });
+    // Words, never a column name (no snake_case), and each once.
+    for (const item of res.data['items'] as Row[]) {
+      const labels = item['fieldLabels'] as string[];
+      for (const label of labels) expect(label).not.toMatch(/_/);
+      expect(new Set(labels).size).toBe(labels.length);
+    }
   });
 
   it('an edit of a row archived live waits for an Admin (hotfix H12); its restore does not', async () => {
@@ -706,5 +727,64 @@ describe('settling a conflict', () => {
     const res = await settle({ version: 1, useLive: ['mode'] }, 'developer', id(7));
     expect([res.status, res.body['field']]).toEqual([422, 'useLive']);
     expect(drafts()[0]!['version']).toBe(1);
+  });
+});
+
+// ── GET /api/admin/drafts/[id]/compare (R12) ──────────────────────────────────────────────
+
+describe('comparing a change with the live site (R12)', () => {
+  beforeEach(() => {
+    db.tables['content_drafts'] = [serviceEdit()];
+  });
+  const look = async (role: Role = 'content_creator', draft = id(1)) =>
+    callRoute(db, await compare(), 'GET', `/api/admin/drafts/${draft}/compare`, {
+      role,
+      params: { id: draft },
+    });
+
+  it('lists each column live moved in, with live now and the change’s value, in words', async () => {
+    const res = await look();
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.data).toEqual({
+      draftId: id(1),
+      draftVersion: 1,
+      removed: false,
+      // Blurb is changed too, but live never moved under it: no conflict, not listed.
+      columns: [
+        { column: 'title', label: 'Service name', kind: 'bilingual', live: MOVED, yours: MINE },
+      ],
+    });
+    // A read: nothing is written, nothing audited.
+    expect(drafts()[0]!['version']).toBe(1);
+    expect(auditRowsOf(db)).toEqual([]);
+  });
+
+  it('a long text is clipped as a version shows it; a consent record says only "changed"', async () => {
+    const long = 'x'.repeat(400);
+    db.tables['services'] = [service({ blurb: { en: long } })];
+    drafts()[0] = serviceEdit({ base: { title: TITLE, blurb: { en: 'old' } } });
+    const blurb = ((await look()).data['columns'] as Row[]).find((c) => c['column'] === 'blurb')!;
+    expect((blurb['live'] as Row)['en']).toHaveLength(301);
+  });
+
+  it('the row gone under the change: removed, nothing to compare', async () => {
+    db.tables['services'] = [];
+    const res = await look();
+    expect(res.data).toMatchObject({ removed: true, columns: [] });
+  });
+
+  it('who may compare: a role that reads the type (Developer reads no service)', async () => {
+    expect((await look('admin')).status).toBe(200);
+    expect((await look('seo')).status).toBe(200);
+    const dev = await look('developer');
+    expect([dev.status, dev.body['draftIds']]).toEqual([403, [id(1)]]);
+    expect((await look('sales')).status).toBe(403);
+  });
+
+  it('a create or removal has nothing to conflict with (422); an unknown id is 404', async () => {
+    drafts()[0] = serviceEdit({ op: 'create', base: {}, base_version: null });
+    expect((await look()).status).toBe(422);
+    expect((await look('content_creator', id(9))).status).toBe(404);
+    expect((await look('content_creator', 'not-a-uuid')).status).toBe(404);
   });
 });

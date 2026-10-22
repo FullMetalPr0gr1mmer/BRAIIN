@@ -89,6 +89,23 @@ const perItem: readonly Case[] = (
   },
 ]);
 
+// R12: Compare, a read of one change against live. Admitted for every role that reads some
+// release-managed type, then the change's own type decides: who reads it in the admin.
+const compareItems: readonly Case[] = (
+  [
+    ['a service', SERVICE_DRAFT, ['admin', 'content_creator', 'seo']],
+    ['the public identity', PROFILE_DRAFT, ['admin', 'developer']],
+    ['entity SEO', SEO_DRAFT, ['admin', 'content_creator', 'seo']],
+  ] as const
+).map(([what, row, allow]): Case => ({
+  name: `draft compare: ${what}`,
+  load: () => import('@/pages/api/admin/drafts/[id]/compare'),
+  method: 'GET',
+  url: `/api/admin/drafts/${UUID}/compare`,
+  allow: [...allow],
+  row,
+}));
+
 // R6: publishing and its check. The kernel admits every role that publishes some area; each
 // selected change is then checked against what ITS publish needs (the release publish matrix,
 // architecture §3.4). One draft per row (the stub answers it from every table), both routes,
@@ -506,6 +523,7 @@ export const cases: readonly Case[] = [
     allow: ['admin', 'content_creator', 'seo', 'developer'],
   },
   ...perItem,
+  ...compareItems,
   ...publishItems,
   ...publishOff,
   ...versions,

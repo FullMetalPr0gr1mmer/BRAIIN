@@ -628,9 +628,40 @@ export const PendingItemSchema = z
     publishableByMe: z.boolean(),
     requiredCaps: z.array(z.string()).nullable(),
     waitingFor: z.array(z.string()),
+    /** Admin v2 R12: where the change is edited (the dialog's "Fix" and its row link). */
+    href: z.string().nullable(),
+    /** Admin v2 R12: the changed fields in the editor's words ("Title, Intro, +2"). */
+    fieldLabels: z.array(z.string()),
   })
   .strict();
 export type PendingItem = z.infer<typeof PendingItemSchema>;
+
+/**
+ * Admin v2 R12, `GET /api/admin/drafts/[id]/compare` (Compare, releases.md §7 "Conflicts"):
+ * per column the live site moved since the change began, what live holds now and what the
+ * change writes, as plain or bilingual text (R10's field formatter: 300 characters at most,
+ * anything else only "changed"). `removed`: the live row is gone under the change.
+ */
+export const CompareColumnSchema = z
+  .object({
+    column: z.string(),
+    label: z.string(),
+    kind: z.enum(['text', 'bilingual', 'changed']),
+    live: z.unknown().optional(),
+    yours: z.unknown().optional(),
+  })
+  .strict();
+export type CompareColumn = z.infer<typeof CompareColumnSchema>;
+
+export const CompareResultSchema = z
+  .object({
+    draftId: Uuid,
+    draftVersion: DraftVersionSchema,
+    removed: z.boolean(),
+    columns: z.array(CompareColumnSchema),
+  })
+  .strict();
+export type CompareResult = z.infer<typeof CompareResultSchema>;
 
 // ---- Publishing and its check (the publish and validate endpoints, Admin v2 R6) -------------
 // `POST /api/admin/releases/validate` answers a ReleaseCheck: per selected change, what stops it
