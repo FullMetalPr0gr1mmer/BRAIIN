@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import SeoHead from '@/components/SeoHead.astro';
 import { renderComponent } from './harness';
@@ -75,6 +76,22 @@ describe('the verification tag', () => {
   ])('%s neither carries it nor reads it', async (_name, props) => {
     getSearchConsoleToken.mockResolvedValue(CODE);
     const html = await renderComponent(SeoHead, { ...props });
+    expect(html).not.toContain('google-site-verification');
+    expect(getSearchConsoleToken).not.toHaveBeenCalled();
+  });
+
+  test('no preview carries it: the layout makes every preview noindex, so it is never read', async () => {
+    // src/lib/preview/dataset.ts and the U11 as-built say so: whoever previews, the dataset's
+    // site_integrations row (Admin's and SEO's) never reaches a tag.
+    const layout = readFileSync('src/layouts/BaseLayout.astro', 'utf8');
+    expect(layout).toContain("const robotsValue = preview ? 'noindex,nofollow' : robots;");
+    expect(layout).toContain('robots={robotsValue}');
+    getSearchConsoleToken.mockResolvedValue(CODE);
+    const html = await renderComponent(SeoHead, {
+      ...HOME,
+      locale: 'en',
+      robots: 'noindex,nofollow',
+    });
     expect(html).not.toContain('google-site-verification');
     expect(getSearchConsoleToken).not.toHaveBeenCalled();
   });

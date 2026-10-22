@@ -26,11 +26,14 @@
 --   6. page visibility (0057) is no row security: anon holds nothing on page_visibility, which
 --      the CMS roles read (the dataset reads it for the fence alone) and a sales claim does not;
 --   7. site_integrations (Admin v2 U11, 0105) is a preview table too, the home page's Search
---      Console code, but not one every CMS role reads: Admin + SEO only, behind a live check on
---      the profile that this file's claims have none of (supabase/tests/integrations.test.sql
---      proves the staff rows with live profiles). Here: anon reads the launch tenant's code
---      through its two columns (item 3), and a content_creator, developer or sales claim and
---      another tenant read no row of it.
+--      Console code, but not one every CMS role reads: Admin + SEO only, behind a RESTRICTIVE
+--      live check on the profile. _as's claims have no profile, so they would read nothing
+--      whatever their role: this section signs in with live profiles instead, so the role
+--      check alone decides. Here: anon reads the launch tenant's code through its two columns
+--      (item 3), a live Admin reads the row, a live content_creator, developer or sales
+--      profile reads none, and neither does another tenant (supabase/tests/integrations.test.sql
+--      holds every role, stale tokens included). No preview emits the tag anyway: a preview
+--      is noindex (BaseLayout), and SeoHead reads the code only for an indexable home page.
 -- The literals are held equal to ANON_COLUMNS, DATASET_ONLY_COLUMNS, CREATE_DEFAULTS and MIRRORED_POLICIES
 -- by tests/lib/previewMirror.spec.ts, which parses this file: a grant, default or policy
 -- that moves fails one side until the other follows.
@@ -44,7 +47,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
 begin;
-select plan(23);
+select plan(24);
 
 -- ── The literals (parsed by tests/lib/previewMirror.spec.ts; keep one row per line) ──────
 create function _anon_columns() returns table (tbl text, cols text) language sql immutable as $$
@@ -483,10 +486,29 @@ select ok(
   'anon holds nothing on page_visibility (0057: the edge decides, not RLS) or content_drafts');
 
 -- ── 7. site_integrations (Admin v2 U11, 0105) ──────────────────────────────────────────
--- The rows a claim reads of it, in the launch tenant (the count only: every staff column).
-create function _integrations_rows(p_role text) returns int language plpgsql as $$
+-- Live profiles in the launch tenant (as the migration role), one per role asked, so the
+-- RESTRICTIVE live check (app.live_role()) passes for each and only the role check refuses.
+reset role;
+insert into auth.users (id, email) values
+  ('8a000000-0000-4000-8000-0000000000a7', 'preview-admin@example.test'),
+  ('8a000000-0000-4000-8000-0000000000c7', 'preview-creator@example.test'),
+  ('8a000000-0000-4000-8000-0000000000d7', 'preview-developer@example.test'),
+  ('8a000000-0000-4000-8000-0000000000b7', 'preview-sales@example.test');
+insert into public.profiles (id, tenant_id, role, is_active, locked_until) values
+  ('8a000000-0000-4000-8000-0000000000a7', current_setting('pv.launch')::uuid, 'admin', true, null),
+  ('8a000000-0000-4000-8000-0000000000c7', current_setting('pv.launch')::uuid, 'content_creator', true, null),
+  ('8a000000-0000-4000-8000-0000000000d7', current_setting('pv.launch')::uuid, 'developer', true, null),
+  ('8a000000-0000-4000-8000-0000000000b7', current_setting('pv.launch')::uuid, 'sales', true, null);
+-- The rows a live profile's token reads of it, in the launch tenant (the count only: every
+-- staff column).
+create function _integrations_rows(p_sub text, p_role text) returns int language plpgsql as $$
 begin
-  perform _as(p_role);
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object(
+      'sub', p_sub,
+      'app_metadata', json_build_object('role', p_role, 'tenant_id', current_setting('pv.launch')))::text,
+    true);
   return (select count(*)::int from public.site_integrations
            where tenant_id::text = current_setting('pv.launch'));
 end $$;
@@ -496,8 +518,12 @@ select is((select search_console_token from public.site_integrations), 'PreviewC
   'anon reads the launch tenant''s Search Console code, the dataset''s projection of site_integrations');
 reset role;
 set local role authenticated;
-select is(_integrations_rows('content_creator') + _integrations_rows('developer') + _integrations_rows('sales'), 0,
-  'a content_creator, developer or sales claim reads no site_integrations row (Admin + SEO only since 0105): their preview of the home page carries no tag');
+select is(_integrations_rows('8a000000-0000-4000-8000-0000000000a7', 'admin'), 1,
+  'a live admin profile reads the launch tenant''s site_integrations row (the comparison below is not of nothing)');
+select is(_integrations_rows('8a000000-0000-4000-8000-0000000000c7', 'content_creator')
+          + _integrations_rows('8a000000-0000-4000-8000-0000000000d7', 'developer')
+          + _integrations_rows('8a000000-0000-4000-8000-0000000000b7', 'sales'), 0,
+  'a live content_creator, developer or sales profile reads no site_integrations row: since 0105 the staff read is Admin + SEO, and the role check alone refuses them');
 select _as_other();
 select is((select count(*)::int from public.site_integrations
             where tenant_id::text = current_setting('pv.launch')), 0,

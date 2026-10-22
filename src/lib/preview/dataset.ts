@@ -35,8 +35,9 @@ import { ANON_COLUMNS, createMirror, visibilityClosure } from './visibility';
 // Staff read every row of these tables whatever its status (supabase/tests/
 // preview_dataset.test.sql pins that); the mirror (visibility.ts) then keeps what a visitor
 // would see. One exception: site_integrations (Admin v2 U11) is Admin + SEO only (§5), so a
-// Content Creator's or Developer's preview of the home page carries no Search Console tag.
-// The tag is in <head>, which the parity e2e does not compare, and changes nothing shown.
+// Content Creator's or Developer's dataset holds no row of it. No preview emits the Search
+// Console tag in any case: a preview is noindex (BaseLayout), and SeoHead reads the code only
+// for an indexable home page.
 //
 // Live rows, lazily per table: the first query that needs a table (directly, through an
 // embed, or because a visibility rule reads it) reads it whole, memoised for the request.
