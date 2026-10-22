@@ -34,7 +34,10 @@ const ROWS: Record<string, { types: ReleaseEntityType[]; kinds: Kind[] }> = {
   'Release — page visibility': { types: ['page_visibility'], kinds: ['edit'] },
 };
 
-/** The concrete changes of a kind: create, update and a visible flip; delete and archive. */
+/**
+ * The concrete changes of a kind: create, update, a visible flip and a restore of an archived
+ * row; delete, archive, and a change that keeps an archived row archived (hotfix H12).
+ */
 function items(entityType: ReleaseEntityType, kind: Kind): ReleaseItemRef[] {
   if (kind === 'edit') {
     const out: ReleaseItemRef[] = [
@@ -43,6 +46,7 @@ function items(entityType: ReleaseEntityType, kind: Kind): ReleaseItemRef[] {
     ];
     if (meta(entityType).hasStatus) {
       out.push({ entityType, op: 'update', patch: { status: 'published' } });
+      out.push({ entityType, op: 'update', patch: { status: 'draft' }, liveStatus: 'archived' });
     }
     if (meta(entityType).publishFlag) {
       out.push({ entityType, op: 'update', patch: { visible: true } });
@@ -52,6 +56,7 @@ function items(entityType: ReleaseEntityType, kind: Kind): ReleaseItemRef[] {
   const out: ReleaseItemRef[] = [{ entityType, op: 'delete' }];
   if (meta(entityType).hasStatus) {
     out.push({ entityType, op: 'update', patch: { status: 'archived' } });
+    out.push({ entityType, op: 'update', patch: { sort_order: 5 }, liveStatus: 'archived' });
   }
   return out;
 }

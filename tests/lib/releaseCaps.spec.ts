@@ -8,6 +8,7 @@ import {
   RELEASE_ANY_CAP,
   canPublish,
   isRemoval,
+  keepsArchived,
   publishableAreas,
   publishableByArea,
   requiredCaps,
@@ -96,6 +97,57 @@ describe('requiredCaps', () => {
     for (const entityType of ['site_profile', 'seo_defaults', 'entity_seo'] as const) {
       expect(requiredCaps({ entityType, op: 'delete' })).toBeNull();
       expect(waitingFor({ entityType, op: 'delete' })).toEqual([]);
+    }
+  });
+});
+
+describe('keepsArchived: a change that leaves an archived row archived (hotfix H12)', () => {
+  // The archive gates refuse anyone but an Admin an update that leaves a row archived, and the
+  // apply runs as the publisher, so such a change is an Admin's to publish, as an archive is.
+  it('an edit of a row archived live that sets no status needs content.archiveDelete', () => {
+    for (const entityType of STATUS_TYPES) {
+      const meta = RELEASE_ENTITY_META[entityType];
+      const removal = [meta.authorCaps[0], 'content.publish', 'content.archiveDelete'];
+      for (const patch of [null, { sort_order: 5 }, { title: { en: 'A' } }]) {
+        const item = { entityType, op: 'update' as const, patch, liveStatus: 'archived' };
+        expect(keepsArchived(item), entityType).toBe(true);
+        expect(isRemoval(item), entityType).toBe(false);
+        expect(requiredCaps(item), entityType).toEqual(removal);
+        expect(waitingFor(item), entityType).toEqual(['admin']);
+        expect(canPublish('content_creator', item), entityType).toBe(false);
+        expect(canPublish('admin', item), entityType).toBe(true);
+      }
+    }
+  });
+
+  it('a restore (any status of its own) is an edit, as an immediate save of it is', () => {
+    for (const entityType of STATUS_TYPES) {
+      for (const status of ['draft', 'scheduled', 'published']) {
+        const item = {
+          entityType,
+          op: 'update' as const,
+          patch: { status },
+          liveStatus: 'archived',
+        };
+        expect(keepsArchived(item)).toBe(false);
+        expect(requiredCaps(item)).toEqual(RELEASE_ENTITY_META[entityType].authorCaps);
+      }
+    }
+  });
+
+  it('only an update of a row archived live, of a type with a lifecycle', () => {
+    for (const entityType of STATUS_TYPES) {
+      for (const liveStatus of [undefined, null, 'draft', 'published', 'scheduled']) {
+        const item = { entityType, op: 'update' as const, liveStatus };
+        expect(keepsArchived(item), `${entityType} ${String(liveStatus)}`).toBe(false);
+      }
+      expect(keepsArchived({ entityType, op: 'create', liveStatus: 'archived' })).toBe(false);
+      // A delete is a removal already: nothing more to add.
+      expect(keepsArchived({ entityType, op: 'delete', liveStatus: 'archived' })).toBe(false);
+    }
+    // A redirect's status is its HTTP code, a nav item has none: neither is ever archived.
+    for (const entityType of ['redirect', 'nav_item', 'page_section', 'site_profile'] as const) {
+      expect(keepsArchived({ entityType, op: 'update', liveStatus: 'archived' })).toBe(false);
     }
   });
 });
