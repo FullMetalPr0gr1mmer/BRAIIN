@@ -33,11 +33,12 @@ import { planRestore, type PlannedChange, type RestorePlan } from './revert';
 //
 // In order: releases on (else 409 `releases-off`); the version (published, the caller's tenant,
 // else 404); the state at it (one call, `public.release_as_of`); the plan against live
-// (revert.ts), refused whole, with every entity named, when one has a pending change (409
-// `pending-changes`), when the person cannot publish one of the changes (403 `forbidden`, with
-// who could: Admin and the publishers only, P-2), or when one cannot come back as it was (422
-// `not-restorable`: an image today's schema refuses, a link to something gone, an address
-// another item now holds); more than one release can carry (60, P-15) is 422 `too-many`; the
+// (revert.ts), refused whole when one entity has a pending change (409 `pending-changes`), when
+// the person cannot publish one of the changes (403 `forbidden`, with who could: Admin and the
+// publishers only, P-2), or when one cannot come back as it was (422 `not-restorable`: an image
+// today's schema refuses, a link to something gone, an address another item now holds): the
+// status is the first of those that applies, and the answer names every refused entity under
+// every reason, grouped (`groups`); more than one release can carry (60, P-15) is 422 `too-many`; the
 // person re-read live; then one `write_drafts` call under their own RLS (the drafts' policies
 // and the draft lock bind as for any save), and the restore's mark on those drafts
 // (`origin_kind`, `origin_release_id`) by the service role, which the draft lock lets no staff
@@ -66,30 +67,50 @@ export const RESTORE_COPY = {
   noHistory: 'History isn’t kept for team members yet.',
 } as const;
 
-/** A refusal of the whole restore, every entity named. */
+/**
+ * The ways a restore is refused, in the order a person deals with them: what to publish or
+ * discard first, what to ask someone else to publish, what cannot come back as it was. The
+ * answer's status and words are the first that applies; its items name every refused entity
+ * under every reason that applies, and `groups` holds them by reason.
+ */
+const REFUSALS = [
+  {
+    error: 'pending-changes',
+    status: 409,
+    detail: RESTORE_COPY.pending,
+    reasons: ['pending'],
+  },
+  { error: 'forbidden', status: 403, detail: RESTORE_COPY.forbidden, reasons: ['forbidden'] },
+  {
+    error: 'not-restorable',
+    status: 422,
+    detail: RESTORE_COPY.notRestorable,
+    reasons: ['unrestorable', 'link-gone', 'address-taken'],
+  },
+] as const satisfies readonly {
+  error: string;
+  status: number;
+  detail: string;
+  reasons: readonly RestoreItem['reason'][];
+}[];
+
+/** A refusal of the whole restore, every entity named, or null. */
 function refusal(plan: RestorePlan): Response | null {
-  const of = (reason: RestoreItem['reason']) => plan.refused.filter((r) => r.reason === reason);
-  if (of('pending').length > 0) {
-    return json(
-      { ok: false, error: 'pending-changes', detail: RESTORE_COPY.pending, items: of('pending') },
-      409,
-    );
-  }
-  if (of('forbidden').length > 0) {
-    return json(
-      { ok: false, error: 'forbidden', detail: RESTORE_COPY.forbidden, items: of('forbidden') },
-      403,
-    );
-  }
-  if (plan.refused.length > 0) {
+  const groups = REFUSALS.map((g) => ({
+    g,
+    items: plan.refused.filter((r) => (g.reasons as readonly string[]).includes(r.reason)),
+  })).filter((x) => x.items.length > 0);
+  const first = groups[0];
+  if (first) {
     return json(
       {
         ok: false,
-        error: 'not-restorable',
-        detail: RESTORE_COPY.notRestorable,
-        items: plan.refused,
+        error: first.g.error,
+        detail: first.g.detail,
+        items: groups.flatMap((x) => x.items),
+        groups: groups.map((x) => ({ error: x.g.error, detail: x.g.detail, items: x.items })),
       },
-      422,
+      first.g.status,
     );
   }
   if (plan.changes.length > RELEASE_MAX_ITEMS) {

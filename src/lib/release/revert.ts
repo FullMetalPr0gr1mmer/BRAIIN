@@ -21,12 +21,13 @@ import { put, stagedSelect } from './staged';
 //   an update  the columns (and a case study's link sets) that differ from live;
 //   a create   an entity removed since comes back with its own id;
 //   a removal  an entity created since goes;
-// refused, entity by entity, when it already has a pending change, when the person cannot
-// publish the change (P-2: Admin and the publishers), when its image no longer reads as a
-// change (rowPayload.ts), when a link of the version names something that is gone and that the
-// restore does not bring back (a deleted picture, a team member: never captured), or when its
-// address (a slug, a redirect's source) now belongs to another item the restore leaves as it
-// is (releases.md §8 edge case 5: reported, never forced). A removal no role publishes (the
+// refused, entity by entity (each under every reason that applies), when it already has a
+// pending change, when the person cannot publish the change (P-2: Admin and the publishers),
+// when its image no longer reads as a change (rowPayload.ts), when a link of the version names
+// something that is gone and that the restore does not bring back (a deleted picture, a team
+// member: never captured), or when its address (a slug, a redirect's source) now belongs to
+// another item the restore leaves as it is (releases.md §8 edge case 5: reported, never
+// forced). A removal no role publishes (the
 // site identity, an entity's SEO details) is left as it is and listed (`kept`). An item of an
 // area the person may not read is named by its type alone (no label).
 // Team members are never in the ledger (owner item O-12): a version does not hold them, and a
@@ -419,6 +420,10 @@ export async function planRestore(
   ]);
 
   const changes: PlannedChange[] = [];
+  // Every change the restore means to make, refused ones included: what it brings back or
+  // removes, for the link and address checks, so each refused entity is named under every
+  // reason in one answer and none is blamed for another's refusal.
+  const intended: PlannedChange[] = [];
   const refused: RestoreItem[] = [];
   const kept: RestoreItem[] = [];
   for (const t of targets) {
@@ -429,6 +434,7 @@ export async function planRestore(
     if (!planned.change) continue;
     const { labelRow, ...change } = planned.change;
     const full: PlannedChange = { ...change, label: draftLabel(t.entry, labelRow) };
+    intended.push(full);
     if (pending.has(keyOf(t.entry.entityType, t.entityId))) {
       refused.push({ ...item(t.entry, t.entityId, labelRow, 'pending') });
       continue;
@@ -452,8 +458,11 @@ export async function planRestore(
     }
     changes.push(full);
   }
-  if (refused.length === 0) refused.push(...(await goneLinks(sb, auth, changes)));
-  if (refused.length === 0) refused.push(...(await takenAddresses(sb, auth, changes)));
+  const [gone, taken] = await Promise.all([
+    goneLinks(sb, auth, intended),
+    takenAddresses(sb, auth, intended),
+  ]);
+  refused.push(...gone, ...taken);
   // An area the person may not read: its type and id, never its words.
   const named = (r: RestoreItem): RestoreItem =>
     r.label !== null && !mayRead(auth.role, RELEASE_REGISTRY[r.entityType])

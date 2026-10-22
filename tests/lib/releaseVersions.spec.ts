@@ -652,6 +652,66 @@ describe('POST /api/admin/releases/[id]/restore', () => {
     expect(writerCalls(db)).toEqual([]);
   });
 
+  it('a refusal names every refused item under every reason at once, grouped; the status is the first reason', async () => {
+    const theme = {
+      id: THEME,
+      tenant_id: T,
+      name: 'Night',
+      tokens: {},
+      is_active: true,
+      version: 2,
+    };
+    const db = seed(
+      {
+        custom_themes: [theme],
+        services: [
+          liveService(),
+          liveService({ id: SERVICE_2, slug: 'web', poster_media_id: null }),
+        ],
+        content_drafts: [draftRow({ id: id(80), entity_type: 'service', entity_id: SERVICE })],
+      },
+      asOf(1, [
+        // A pending change on it.
+        {
+          entity_type: 'service',
+          entity_id: SERVICE,
+          before: liveService({ title: BI('Old', 'قديم') }),
+          exists_now: true,
+        },
+        // Not the Content Creator's to publish.
+        {
+          entity_type: 'custom_theme',
+          entity_id: THEME,
+          before: { ...theme, name: 'Day' },
+          exists_now: true,
+        },
+        // A picture that is gone now.
+        {
+          entity_type: 'service',
+          entity_id: SERVICE_2,
+          before: liveService({ id: SERVICE_2, slug: 'web', poster_media_id: id(44) }),
+          exists_now: true,
+        },
+      ]),
+    );
+    const res = await restore(db, V1, {}, 'content_creator');
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ error: 'pending-changes', detail: RESTORE_COPY.pending });
+    expect((res.body['items'] as Row[]).map((r) => `${r['entityId']} ${r['reason']}`)).toEqual([
+      `${SERVICE} pending`,
+      `${THEME} forbidden`,
+      `${SERVICE_2} link-gone`,
+    ]);
+    expect(
+      (res.body['groups'] as Row[]).map((g) => [g['error'], (g['items'] as Row[]).length]),
+    ).toEqual([
+      ['pending-changes', 1],
+      ['forbidden', 1],
+      ['not-restorable', 1],
+    ]);
+    expect(writerCalls(db)).toEqual([]);
+  });
+
   it('a removal only an Admin publishes: a Content Creator is refused it', async () => {
     const db = seed(
       { statistics: [{ id: STAT, tenant_id: T, slug: 'years', status: 'published', version: 1 }] },
