@@ -13,6 +13,7 @@ import { NOTIFICATION_KIND_LABELS } from '@/lib/admin/notifications/kinds';
 const loaded = (values: Record<string, unknown>): EntitySave => ({
   isNew: false,
   values,
+  saved: values,
   set: () => undefined,
   version: 2,
   busy: false,
