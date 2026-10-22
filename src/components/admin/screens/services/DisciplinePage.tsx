@@ -195,7 +195,7 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
   const max = Math.max(0, ...rows.map((row) => counts?.[String(row['slug'])] ?? 0));
 
   return (
-    <div className="grid grid--2-1 svc-d">
+    <div className="grid grid--2-1">
       <section className="card svc-d__main" aria-labelledby="svc-d-list">
         <h2 className="card-title" id="svc-d-list">
           Services in this discipline
@@ -361,7 +361,7 @@ function ServiceList({
   return (
     <>
       <ul
-        className="list svc__list"
+        className="list"
         ref={ref}
         aria-label="Services in this discipline"
         aria-busy={working || undefined}
@@ -373,7 +373,8 @@ function ServiceList({
           const ar = textOf(row['title'], 'ar');
           const status = String(row['status'] ?? 'draft');
           const slug = String(row['slug'] ?? '');
-          const thumb = typeof row['poster_thumb_url'] === 'string' ? row['poster_thumb_url'] : null;
+          const thumb =
+            typeof row['poster_thumb_url'] === 'string' ? row['poster_thumb_url'] : null;
           const eye = write && (archive || status !== 'archived') ? eyeTarget(status) : null;
           return (
             <li

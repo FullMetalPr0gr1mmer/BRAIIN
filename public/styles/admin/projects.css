@@ -60,6 +60,12 @@
   font-size: 14px;
 }
 
+/* A sector edited in place: its form, then the way back. */
+.prj-tags__form {
+  display: grid;
+  gap: 10px;
+}
+
 /* A sector's names: the English, then the Arabic beside it. */
 .prj-tags__name {
   display: flex;

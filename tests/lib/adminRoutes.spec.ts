@@ -299,7 +299,10 @@ describe('the sweep route map', () => {
         .filter((r) => r.kind === 'screen')
         .map((r) => r.path)
         .filter((p) => !EXTRA_LINKS.some((l) => l.href === p));
-      expect(new Set(screens)).toEqual(new Set(reachableHrefs(role)));
+      // A tab's own route that only redirects (Admin v2 U5: /admin/disciplines, the Services
+      // tab's, answers on the overview) is reached but never swept as a screen of its own.
+      const reached = reachableHrefs(role).filter((href) => !(href in REDIRECT_PAGES));
+      expect(new Set(screens)).toEqual(new Set(reached));
     }
   });
 });
@@ -373,9 +376,10 @@ describe('the locked APIs the refusals e2e asks directly', () => {
       expect(existsSync(`${api}.ts`) || existsSync(`${api}/index.ts`), api).toBe(true);
       const resource = RESOURCE_BY_SEGMENT[entry.api.replace(/^\/api\/admin\//, '')];
       expect(resource, entry.api).toBeDefined();
-      expect(resource!.config.readCaps ?? [resource!.config.writeCap], entry.api).toEqual([
-        entry.cap,
-      ]);
+      expect(resource!.config.readCaps ?? [resource!.config.writeCap], entry.api).toEqual(
+        entry.anyOf ? [...entry.anyOf] : [entry.cap],
+      );
+      if (entry.anyOf) expect(entry.anyOf, entry.api).toContain(entry.cap);
       const refused = refusedRoles(entry);
       expect(refused.length, entry.api).toBeGreaterThan(0);
       expect(refused, entry.api).not.toContain('admin');

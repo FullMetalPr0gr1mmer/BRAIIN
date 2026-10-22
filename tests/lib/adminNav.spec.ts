@@ -135,8 +135,14 @@ describe('currentTab', () => {
 
   it("marks the area's own tab on its edit pages", () => {
     expect(currentTab(byHref('/admin/services'), '/admin/services/0a1b')?.label).toBe('Services');
-    expect(currentTab(byHref('/admin/services'), '/admin/disciplines/new')?.label).toBe(
-      'Disciplines',
+    // Admin v2 U5: a discipline's pages are the Services tab's own (its `match`), since the
+    // Services screen IS the disciplines' overview.
+    expect(currentTab(byHref('/admin/services'), '/admin/disciplines/new')?.label).toBe('Services');
+    expect(currentTab(byHref('/admin/services'), '/admin/disciplines/0a1b')?.label).toBe(
+      'Services',
+    );
+    expect(currentTab(byHref('/admin/services'), '/admin/service-cases/0a1b')?.label).toBe(
+      'Case studies',
     );
   });
 });

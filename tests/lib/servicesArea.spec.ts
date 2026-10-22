@@ -45,7 +45,10 @@ import {
 import { drawerFields } from '@/components/admin/screens/services/DisciplineDrawer';
 import { serviceFields } from '@/components/admin/screens/services/ServiceEditor';
 import { caseFields } from '@/components/admin/screens/services/ServiceCasePanel';
-import { orderChanges, renumberable as collectionRenumberable } from '@/components/admin/screens/collection/reorder';
+import {
+  orderChanges,
+  renumberable as collectionRenumberable,
+} from '@/components/admin/screens/collection/reorder';
 import { copySlug as collectionCopySlug } from '@/components/admin/screens/collection/collections';
 import { replayLeadGrant } from './leadGrantReplay';
 
@@ -78,9 +81,9 @@ describe('the admin caps: 4 value cards and 5 problems (the prototype’s, U5)',
 
   it('a save takes 4 value cards and refuses a fifth, on create and update alike', () => {
     const base = { slug: 'logo', title: { en: 'Logo', ar: 'شعار' } };
-    expect(ServiceWriteSchema.safeParse({ ...base, valuePoints: Array(4).fill(card) }).success).toBe(
-      true,
-    );
+    expect(
+      ServiceWriteSchema.safeParse({ ...base, valuePoints: Array(4).fill(card) }).success,
+    ).toBe(true);
     expect(
       ServiceWriteSchema.safeParse({ ...base, valuePoints: Array(5).fill(card) }).success,
     ).toBe(false);
@@ -140,9 +143,12 @@ describe('the service editor’s tabs and cards (U8’s API, U9’s groups)', ()
       'seo',
       'publishing',
     ]);
-    expect(
-      visibleTabs(tabs, { seoAccess: 'view', panels: ['case'] }).map((t) => t.id),
-    ).toEqual(['content', 'case', 'seo', 'publishing']);
+    expect(visibleTabs(tabs, { seoAccess: 'view', panels: ['case'] }).map((t) => t.id)).toEqual([
+      'content',
+      'case',
+      'seo',
+      'publishing',
+    ]);
     expect(
       visibleTabs(tabs, { seoAccess: 'full', panels: ['case', 'leads'] }).map((t) => t.id),
     ).toEqual(['content', 'case', 'seo', 'leads', 'publishing']);
@@ -270,7 +276,11 @@ describe('the overview and a discipline’s page (model.ts)', () => {
       { id: 'a', sortOrder: 20 },
     ]);
     // The same as the collection screen's, which this restates.
-    for (const order of [['c', 'b', 'a'], ['a', 'c', 'b'], ['b', 'c', 'a']]) {
+    for (const order of [
+      ['c', 'b', 'a'],
+      ['a', 'c', 'b'],
+      ['b', 'c', 'a'],
+    ]) {
       expect(tensOrderChanges(rows, order)).toEqual(orderChanges(rows, order));
     }
   });
@@ -348,7 +358,7 @@ describe('the overview and a discipline’s page (model.ts)', () => {
         status: 'published',
         scheduledFor: '2030-01-01T00:00:00.000Z',
         sortOrder: 10,
-        disciplineId: 'd1',
+        disciplineId: T,
         version: 4,
       },
       new Set(['logo', 'logo-copy']),
@@ -358,7 +368,7 @@ describe('the overview and a discipline’s page (model.ts)', () => {
       title: { en: 'Logo design (copy)', ar: 'تصميم الشعار' },
       status: 'draft',
       sortOrder: 11,
-      disciplineId: 'd1',
+      disciplineId: T,
     });
     expect(ServiceWriteSchema.safeParse(out).success).toBe(true);
   });
@@ -380,7 +390,8 @@ describe('the overview and a discipline’s page (model.ts)', () => {
 
   it('draws a bar as charts.ts does (barBucket, restated off admin-ui)', () => {
     for (const max of [0, 1, 7, 40]) {
-      for (let v = 0; v <= max; v++) expect(barWidth(v, max), `${v}/${max}`).toBe(barBucket(v, max));
+      for (let v = 0; v <= max; v++)
+        expect(barWidth(v, max), `${v}/${max}`).toBe(barBucket(v, max));
     }
   });
 });
@@ -413,9 +424,21 @@ describe('the lead counts per service (0106, GET /api/admin/leads/interest-count
 
 describe('the Leads tab’s one read (loadServiceLeads)', () => {
   function fakeDb(leads: Record<string, unknown>[], stages: Record<string, unknown>[]) {
-    const seen: { table: string; select: string; eq: [string, unknown][]; in?: unknown; limit?: number }[] = [];
+    const seen: {
+      table: string;
+      select: string;
+      eq: [string, unknown][];
+      in?: unknown;
+      limit?: number;
+    }[] = [];
     const builder = (table: string, rows: Record<string, unknown>[]) => {
-      const q: { table: string; select: string; eq: [string, unknown][]; in?: unknown; limit?: number } = {
+      const q: {
+        table: string;
+        select: string;
+        eq: [string, unknown][];
+        in?: unknown;
+        limit?: number;
+      } = {
         table,
         select: '',
         eq: [],
@@ -427,7 +450,8 @@ describe('the Leads tab’s one read (loadServiceLeads)', () => {
         in: (_col: string, values: unknown) => ((q.in = values), api),
         order: () => api,
         limit: (n: number) => ((q.limit = n), api),
-        then: (resolve: (v: unknown) => unknown) => Promise.resolve(resolve({ data: rows, error: null })),
+        then: (resolve: (v: unknown) => unknown) =>
+          Promise.resolve(resolve({ data: rows, error: null })),
       };
       return api;
     };
@@ -474,7 +498,13 @@ describe('the Leads tab’s one read (loadServiceLeads)', () => {
   it('reads only columns the staff column grant holds, none of them gated (0033, 0034)', () => {
     const granted = replayLeadGrant('select');
     for (const column of SERVICE_LEAD_COLUMNS.split(',')) expect(granted, column).toContain(column);
-    for (const gated of ['budget_enc', 'timeline_band', 'email_enc', 'phone_enc', 'internal_notes']) {
+    for (const gated of [
+      'budget_enc',
+      'timeline_band',
+      'email_enc',
+      'phone_enc',
+      'internal_notes',
+    ]) {
       expect(SERVICE_LEAD_COLUMNS.split(',')).not.toContain(gated);
     }
   });

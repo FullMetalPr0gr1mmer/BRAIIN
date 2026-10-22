@@ -29,6 +29,7 @@ export const content: NavArea = {
           href: '/admin/services',
           label: 'Services',
           caps: ['services.write', 'seo.entityMeta'],
+          match: ['/admin/disciplines'],
         },
         { href: '/admin/service-cases', label: 'Case studies', caps: ['services.write'] },
       ],

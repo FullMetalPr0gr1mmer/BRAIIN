@@ -99,7 +99,7 @@ export default function GalleryField({
     <fieldset
       id={base}
       tabIndex={-1}
-      className="f f--group gal"
+      className="f f--group"
       aria-describedby={groupError ? `${base}-error` : undefined}
     >
       <legend className="field-legend">{field.label}</legend>

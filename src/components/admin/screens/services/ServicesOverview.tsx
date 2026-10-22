@@ -215,8 +215,8 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
             Not filed under a discipline
           </h2>
           <p className="admin-sub">
-            These services are on no discipline, so the site does not list them. Open one and
-            choose its discipline.
+            These services are on no discipline, so the site does not list them. Open one and choose
+            its discipline.
           </p>
           <ul className="list">
             {grouped.unfiled.map((service) => (
@@ -302,7 +302,7 @@ function DisciplineList({
 
   return (
     <>
-      <ul className="list svc__list" ref={ref} aria-label="Disciplines" aria-busy={working || undefined}>
+      <ul className="list" ref={ref} aria-label="Disciplines" aria-busy={working || undefined}>
         {shown.map((id) => {
           const row = byId.get(id);
           if (!row) return null;
@@ -312,7 +312,8 @@ function DisciplineList({
           const own = grouped.byDiscipline.get(id) ?? [];
           const pills = servicePills(own);
           const status = String(row['status'] ?? 'draft');
-          const thumb = typeof row['poster_thumb_url'] === 'string' ? row['poster_thumb_url'] : null;
+          const thumb =
+            typeof row['poster_thumb_url'] === 'string' ? row['poster_thumb_url'] : null;
           const eye = write && (archive || status !== 'archived') ? eyeTarget(status) : null;
           return (
             <li
@@ -346,7 +347,7 @@ function DisciplineList({
                 </span>
               </div>
               {pills.names.length > 0 && (
-                <span className="pill-row svc__pills" aria-label={`Services in ${name}`}>
+                <span className="svc__pills" aria-label={`Services in ${name}`}>
                   {pills.names.map((pill, index) => (
                     <span key={index} className="badge" data-tone="gray" dir="auto">
                       {pill}

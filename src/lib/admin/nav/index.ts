@@ -73,8 +73,14 @@ export function visibleNav(role: Role): NavGroup[] {
 
 /** Every screen a role reaches from the menu: sidebar links and their tabs, deduplicated. */
 export function reachableHrefs(role: Role): string[] {
+  // A tab's own routes (`match`, Admin v2 U5: the discipline pages under the Services tab)
+  // are reached through it, by the roles it is visible to. A LINK's `match` is not: it only
+  // lights the link (Pages lights for /admin/sections, which only its writers may open).
   const hrefs = visibleNav(role).flatMap((group) =>
-    group.links.flatMap((link) => [link.href, ...(link.tabs ?? []).map((tab) => tab.href)]),
+    group.links.flatMap((link) => [
+      link.href,
+      ...(link.tabs ?? []).flatMap((tab) => [tab.href, ...(tab.match ?? [])]),
+    ]),
   );
   return [...new Set(hrefs)];
 }
@@ -104,9 +110,13 @@ export function currentLink(nav: readonly NavGroup[], path: string): NavLink | n
 
 /** The tab of `link` that holds `path` (the longest match), when the area has tabs. */
 export function currentTab(link: NavLink, path: string): NavTab | null {
-  let best: NavTab | null = null;
+  let best: { tab: NavTab; length: number } | null = null;
   for (const tab of link.tabs ?? []) {
-    if (under(path, tab.href) && (!best || tab.href.length > best.href.length)) best = tab;
+    for (const route of [tab.href, ...(tab.match ?? [])]) {
+      if (under(path, route) && (!best || route.length > best.length)) {
+        best = { tab, length: route.length };
+      }
+    }
   }
-  return best;
+  return best?.tab ?? null;
 }

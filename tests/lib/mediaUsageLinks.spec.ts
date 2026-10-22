@@ -57,14 +57,17 @@ describe('"Used in": words and links', () => {
     ]);
   });
 
-  it('links only what the role’s sidebar opens: SEO projects and services, Developer none', () => {
+  it('links only what the role’s sidebar opens: SEO projects, disciplines and services, Developer none', () => {
     const linked = (role: (typeof ROLES)[number]) =>
       usageEntries(usageScreensFor(role), USAGE)
         .filter((e) => e.href !== null)
         .map((e) => e.words);
+    // Admin v2 U5: a discipline's page is the Services tab's own, which SEO opens (to reach a
+    // service's SEO), so its "Used in" entry links there for SEO too.
     expect(linked('seo')).toEqual([
       'Project: desert-campaign',
       'Project (gallery)',
+      'Discipline: branding',
       'Service: logo',
     ]);
     expect(linked('developer')).toEqual([]);
