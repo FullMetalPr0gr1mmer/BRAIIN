@@ -32,6 +32,32 @@ function same(a: unknown, b: unknown): boolean {
   return typeof x === 'number' || typeof y === 'number' ? Number(x) === Number(y) : x === y;
 }
 
+/**
+ * The admin thumbnail of a picture embedded in another list (Admin v2 U5, U6): a discipline's,
+ * a service's or a project's poster, selected as `poster:poster_media_id(provider,storage_path)`
+ * so a list shows its pictures with no read per row. The same URL the library's tiles use
+ * (`thumb_url` below); null for anything else (no poster, a provider the admin cannot draw,
+ * or a row the caller may not read, which PostgREST embeds as null).
+ */
+export const POSTER_EMBED = 'poster:poster_media_id(provider,storage_path)';
+
+export function posterThumb(embedded: unknown): string | null {
+  if (!embedded || typeof embedded !== 'object' || Array.isArray(embedded)) return null;
+  const media = embedded as Record<string, unknown>;
+  const path = typeof media['storage_path'] === 'string' ? media['storage_path'] : '';
+  if (!path) return null;
+  if (media['provider'] === 'storage') return storageThumbUrl(path);
+  if (media['provider'] === 'static') return staticImage(path)?.src ?? null;
+  return null;
+}
+
+/** A list row with its embedded poster turned into `poster_thumb_url` (the embed dropped). */
+export function withPosterThumb(row: Record<string, unknown>): Record<string, unknown> {
+  if (!('poster' in row)) return row;
+  const { poster, ...rest } = row;
+  return { ...rest, poster_thumb_url: posterThumb(poster) };
+}
+
 export const mediaResource: ResourceConfig = {
   table: 'media_assets',
   entity: 'media_asset',

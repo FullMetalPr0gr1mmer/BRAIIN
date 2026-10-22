@@ -102,6 +102,12 @@ const ADMIN_LEADS =
   /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]leads[\\/]|islands[\\/]AdminLead)/;
 const ADMIN_LEADS_LAZY =
   /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]leads[\\/](AddLeadDrawer|EraseLeadDialog)\.tsx$/;
+// The Services and Projects areas (Admin v2 U5 + U6): their five islands and their screens'
+// code, a family of their own (as the leads screens are), so the shared admin-screens chunk
+// (the collections, SEO, the media library, General settings) neither carries them nor is
+// carried by them. Their graphs reach the field kit, so admin-ui leaves them too.
+const ADMIN_CONTENT =
+  /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]Admin(Services|Discipline|ServiceEditor|Projects|ProjectEditor)\.tsx$|screens[\\/](services|projects)[\\/])/;
 // The releases preview's bridge (Admin v2 R9, P-4): the code a `/admin/preview/**` render
 // loads (src/components/preview/AdminPreviewBridge.astro). Its own group, never in admin-ui,
 // which every admin screen loads.
@@ -239,6 +245,7 @@ export default defineConfig({
                     !ADMIN_EDITOR_ISLANDS.test(id) &&
                     !ADMIN_EDITOR_SCREENS.test(id) &&
                     !ADMIN_LEADS.test(id) &&
+                    !ADMIN_CONTENT.test(id) &&
                     !ADMIN_PREVIEW.test(id)),
                 priority: 20,
               },
@@ -271,6 +278,14 @@ export default defineConfig({
                 name: 'admin-leads-lazy',
                 test: ADMIN_LEADS_LAZY,
                 priority: 14,
+              },
+              {
+                // The Services and Projects areas (U5 + U6): below the field kit, so what both
+                // use stays in admin-fields and this chunk imports it from there; above
+                // admin-screens, whose path rule would claim them otherwise.
+                name: 'admin-content',
+                test: ADMIN_CONTENT,
+                priority: 13.5,
               },
               {
                 // The screens admin-ui leaves (Admin v2 U4, Wave 3's chunk rule): an island

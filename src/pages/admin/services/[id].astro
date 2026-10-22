@@ -1,16 +1,137 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
+import AdminServiceEditor from '@/components/admin/islands/AdminServiceEditor';
+import Note from '@/components/admin/ui/Note.astro';
+import { firstTab, visibleTabs } from '@/lib/admin/editorTabs';
+import { loadSeoPanelSetup, type SeoPanelSetup } from '@/lib/admin/seo/list';
+import {
+  isUuid,
+  loadServiceLeads,
+  servicesAreaAccess,
+  type ServiceLeads,
+} from '@/lib/admin/servicesArea';
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
+import { uiFor, type EditorPanel } from '@/lib/admin/uiSchema';
+import { readLeadInterestCounts } from '@/lib/crm/leadInterest';
+import { writeSystemLog } from '@/lib/data/systemLog';
 
 export const prerender = false;
 
-// Astro resolves the static `new.astro` before this dynamic route, so /admin/services/new
-// reaches the create form rather than being read as an id.
+// A service's editor (Admin v2 U5, AV-14): Content | Case study | SEO | Leads | Publishing.
+// Astro resolves the static `new.astro` before this dynamic route. Decided here, from the same
+// ROLE_CAPS the routes enforce (UX only; the API refuses whatever this shows):
+//   - read-only for a role that reads services without services.write (SEO: it opens the
+//     SEO tab first), or for one that may not archive when the service is archived;
+//   - the SEO tab for seo.entityMeta holders (read-only at `view`), its setup read here;
+//   - the Leads tab for leads.manage holders: the newest leads naming the service and their
+//     count, read here through the caller's own client (counts and safe columns only).
+// The head names the service as stored (the caller's read). A row this read cannot see (a
+// pending create with releases on, or another tenant's) gets a plain title: the island loads
+// through the API, which answers for it.
 const ui = uiFor('services');
 const id = Astro.params.id ?? null;
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const access = servicesAreaAccess(session?.role);
+const valid = isUuid(id);
+if (!valid) Astro.response.status = 404;
+
+let title = 'Service';
+let slug: string | null = null;
+let setup: SeoPanelSetup | null = null;
+let leads: ServiceLeads | null = null;
+let leadsFailed = false;
+let leadCount: number | null = null;
+
+if (valid && session && sb) {
+  const { data } = await sb
+    .from('services')
+    .select('slug,title')
+    .eq('tenant_id', session.tenantId)
+    .eq('id', id)
+    .maybeSingle();
+  const row = (data ?? null) as { slug?: unknown; title?: { en?: unknown } } | null;
+  if (row) {
+    slug = typeof row.slug === 'string' ? row.slug : null;
+    if (typeof row.title?.en === 'string' && row.title.en.trim()) title = row.title.en.trim();
+  }
+  const reads: Promise<unknown>[] = [];
+  if (access.seo !== 'none') {
+    reads.push(
+      loadSeoPanelSetup(sb, session, 'service', id)
+        .then((value) => {
+          setup = value;
+        })
+        .catch(async (err) => {
+          await writeSystemLog({
+            level: 'error',
+            source: 'admin:services.seo',
+            message: err instanceof Error ? err.message : 'SEO panel setup read failed',
+            detail: { path: Astro.url.pathname },
+          });
+        }),
+    );
+  }
+  if (access.leads && slug) {
+    const serviceSlug = slug;
+    reads.push(
+      Promise.all([
+        loadServiceLeads(sb, session, serviceSlug),
+        readLeadInterestCounts(sb, session.tenantId),
+      ])
+        .then(([rows, counts]) => {
+          leads = rows;
+          leadCount = counts[serviceSlug.toLowerCase()] ?? 0;
+        })
+        .catch(async (err) => {
+          leadsFailed = true;
+          await writeSystemLog({
+            level: 'error',
+            source: 'admin:services.leads',
+            message: err instanceof Error ? err.message : 'service leads read failed',
+            detail: { path: Astro.url.pathname },
+          });
+        }),
+    );
+  }
+  await Promise.all(reads);
+}
+
+const panels: EditorPanel[] = [
+  ...(access.services ? ['case' as const] : []),
+  ...(access.leads ? ['leads' as const] : []),
+];
+const initialTab = firstTab(
+  visibleTabs(ui.tabs ?? [], { seoAccess: access.seo, panels }),
+  Astro.url.searchParams.get('tab'),
+  { readOnly: !access.services, seoAccess: access.seo, panels },
+);
+const tz = await studioTimeZone(Astro.locals);
 ---
 
-<AdminLayout title={`Edit ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="services" id={id} />
+<AdminLayout title={title} subtitle="Service" styles={['services.css']}>
+  <!--
+  The way back, "Open on site" (while published, as saved) and Duplicate are the editor's own
+  (its action bar and status line), so they follow a save without a reload.
+-->
+  {
+    valid ? (
+      <AdminServiceEditor
+        client:load
+        id={id}
+        write={access.services}
+        archive={access.archive}
+        seoAccess={access.seo}
+        leads={access.leads}
+        initialTab={initialTab}
+        seo={setup}
+        leadRows={leads}
+        leadsFailed={leadsFailed}
+        leadCount={leadCount}
+        tz={tz}
+      />
+    ) : (
+      <Note tone="warn">This address names no service. Open one from the Services list.</Note>
+    )
+  }
 </AdminLayout>

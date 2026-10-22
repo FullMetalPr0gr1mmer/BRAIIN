@@ -291,6 +291,12 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   { href: '/admin/seo?tab=redirects', label: 'SEO redirects', caps: ['redirects.manage'] },
   { href: '/admin/seo?tab=site', label: 'SEO site wide', caps: ['seo.globalDefaults'] },
   { href: '/admin/redirects', label: 'Redirects', caps: ['redirects.manage'] },
+  // Admin v2 U5: the disciplines are the Services overview, so /admin/disciplines only
+  // redirects there (REDIRECT_PAGES); it is listed so a discipline's page
+  // (/admin/disciplines/[id], reached from the overview) and the no-JS form (/new) are still
+  // swept, for the roles that open them: the writers, and SEO, which reads a discipline's
+  // services to open one for its SEO.
+  { href: '/admin/disciplines', label: 'Disciplines', caps: ['services.write', 'seo.entityMeta'] },
   // The leads list's states (Admin v2 C4b): the spam view (its chip pressed, the empty state,
   // "Not spam" in the bulk bar), and a range with a filter (the KPIs' changes, the sub-line's
   // "in the last 30 days").
@@ -312,6 +318,8 @@ export const REDIRECT_PAGES: Readonly<Record<string, string>> = {
   '/admin/media/new': '/admin/media?upload=1',
   // Admin v2 U10: the redirects list is the SEO screen's Redirects tab.
   '/admin/redirects': '/admin/seo?tab=redirects',
+  // Admin v2 U5: the disciplines are the Services overview.
+  '/admin/disciplines': '/admin/services',
 };
 
 /** Every screen of the menu: sidebar links, then their tabs, each once. */

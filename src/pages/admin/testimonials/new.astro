@@ -3,6 +3,7 @@ import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminCollection from '@/components/admin/islands/AdminCollection';
 import Icon from '@/components/admin/ui/Icon.astro';
 import { collectionScreen } from '@/lib/admin/collectionScreen';
+import { isUuid } from '@/lib/admin/servicesArea';
 
 export const prerender = false;
 
@@ -10,6 +11,10 @@ export const prerender = false;
 // palette lands on it. Closing the drawer takes the address back to the list. Astro resolves
 // this static route before [id].astro.
 const screen = collectionScreen(Astro.locals.session, 'testimonials', 'new');
+// Admin v2 U6: a project's "Add a quote" links here with `?project=<id>`, so the new quote
+// starts linked to that project (only a uuid is taken; the server checks the link's tenant).
+const project = Astro.url.searchParams.get('project');
+const presets = project && isUuid(project) ? { portfolioId: project } : undefined;
 ---
 
 <AdminLayout title={screen.title} subtitle={screen.sub} styles={['collection.css']}>
@@ -32,5 +37,6 @@ const screen = collectionScreen(Astro.locals.session, 'testimonials', 'new');
     collection="testimonials"
     open={screen.open}
     permissions={screen.permissions}
+    presets={presets}
   />
 </AdminLayout>

@@ -17,6 +17,8 @@ export const content: NavArea = {
       ],
     },
     {
+      // Admin v2 U5: the Services screen IS the disciplines (each opens its page,
+      // /admin/disciplines/<id>), so the area keeps two tabs; /admin/disciplines redirects here.
       href: '/admin/services',
       label: 'Services',
       icon: 'layers',
@@ -28,7 +30,6 @@ export const content: NavArea = {
           label: 'Services',
           caps: ['services.write', 'seo.entityMeta'],
         },
-        { href: '/admin/disciplines', label: 'Disciplines', caps: ['services.write'] },
         { href: '/admin/service-cases', label: 'Case studies', caps: ['services.write'] },
       ],
     },

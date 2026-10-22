@@ -1,25 +1,47 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceTable from '@/components/admin/islands/AdminResourceTable';
-import { uiFor } from '@/lib/admin/uiSchema';
-import { can } from '@/lib/authz/matrix';
+import AdminServices from '@/components/admin/islands/AdminServices';
+import Icon from '@/components/admin/ui/Icon.astro';
+import { servicesAreaAccess } from '@/lib/admin/servicesArea';
 
 export const prerender = false;
 
-// Move up and Move down write an archived row only for a role that may archive (hotfix H12):
-// the UX half of `content.archiveDelete`, as `canAdvanced` is on the section form. The
-// reorder route refuses such a move whatever this says.
-const role = Astro.locals.session?.role;
-const canArchive = role !== undefined && can(role, 'content.archiveDelete') === 'full';
-
-const ui = uiFor('services');
+// The Services overview (Admin v2 U5, AV-14): the disciplines in the site's order, each with
+// its services' count and first four as pills, the eye, the drawer and the order; the services
+// filed under no discipline below. A discipline's own page (/admin/disciplines/[id]) orders
+// its services. What the role may do is decided here from ROLE_CAPS (the buttons only: every
+// route checks again): services.write adds, edits, orders, shows and hides; content.archiveDelete
+// archives and deletes. SEO reaches this screen through seo.entityMeta and reads it, to open a
+// service for its SEO.
+const access = servicesAreaAccess(Astro.locals.session?.role);
 ---
 
-<AdminLayout title={ui.title}>
+<AdminLayout
+  title="Services"
+  subtitle="Disciplines and their services, in the order the site shows them."
+  styles={['services.css']}
+>
+  <a slot="actions" class="btn" href="/services" target="_blank" rel="noopener">
+    <Icon name="ext" size={16} />
+    Open services page
+  </a>
+  {
+    access.services && (
+      <a
+        slot="actions"
+        class="btn"
+        data-variant="primary"
+        href="/admin/disciplines/new"
+        data-discipline-add
+      >
+        <Icon name="plus" size={16} />
+        Add discipline
+      </a>
+    )
+  }
   <!--
-  `client:load` rather than `client:visible`: this island IS the page, so deferring it
-  to intersection just adds a blank frame. Public routes use visible/idle — /admin is
-  exempt from the CWV budgets (CLAUDE.md §6) and is gated on bundle size instead.
+  `client:load`: this island IS the page. /admin is exempt from the CWV budgets (CLAUDE.md
+  §6) and is gated on bundle size instead.
 -->
-  <AdminResourceTable client:load resource="services" canArchive={canArchive} />
+  <AdminServices client:load write={access.services} archive={access.archive} />
 </AdminLayout>

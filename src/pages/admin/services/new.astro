@@ -1,13 +1,47 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
+import AdminServiceEditor from '@/components/admin/islands/AdminServiceEditor';
+import { firstTab, visibleTabs } from '@/lib/admin/editorTabs';
+import { isUuid, servicesAreaAccess } from '@/lib/admin/servicesArea';
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
+import { uiFor, type EditorPanel } from '@/lib/admin/uiSchema';
 
 export const prerender = false;
 
+// A new service (Admin v2 U5), in the editor's tabs. A discipline's page adds services through
+// its own modal; this is the full form (the dashboard's "Add a service", the no-JS path).
+// `?discipline=<id>` files it under that discipline. Its case study, SEO and leads belong to a
+// service that exists, so those tabs say to save it first. A role without services.write sees
+// the form read-only (the API refuses a create anyway).
 const ui = uiFor('services');
+const access = servicesAreaAccess(Astro.locals.session?.role);
+const discipline = Astro.url.searchParams.get('discipline');
+const panels: EditorPanel[] = [
+  ...(access.services ? ['case' as const] : []),
+  ...(access.leads ? ['leads' as const] : []),
+];
+const initialTab = firstTab(
+  visibleTabs(ui.tabs ?? [], { seoAccess: access.seo, panels }),
+  Astro.url.searchParams.get('tab'),
+  { readOnly: !access.services, seoAccess: access.seo, panels },
+);
+const tz = await studioTimeZone(Astro.locals);
 ---
 
-<AdminLayout title={`New ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="services" id={null} />
+<AdminLayout title="New service" subtitle="Services" styles={['services.css']}>
+  <AdminServiceEditor
+    client:load
+    id={null}
+    write={access.services}
+    archive={access.archive}
+    seoAccess={access.seo}
+    leads={access.leads}
+    initialTab={initialTab}
+    seo={null}
+    leadRows={null}
+    leadsFailed={false}
+    leadCount={null}
+    defaults={isUuid(discipline) ? { disciplineId: discipline, status: 'draft' } : { status: 'draft' }}
+    tz={tz}
+  />
 </AdminLayout>

@@ -93,6 +93,7 @@ export default function ResourceForm({
     <EditorForm
       save={save}
       fields={ui.fields}
+      groups={ui.groups}
       submitLabel={save.isNew ? `Create ${noun}` : 'Save changes'}
       back={{ href: `/admin/${ui.slug}`, label: `Back to ${ui.title.toLowerCase()}` }}
       canAdvanced={canAdvanced}
