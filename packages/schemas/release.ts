@@ -737,3 +737,125 @@ export const PublishResultSchema = z
   })
   .strict();
 export type PublishResult = z.infer<typeof PublishResultSchema>;
+
+// ---- Versions, history and restore (Admin v2 R10) -------------------------------------------
+// `GET /api/admin/releases` (the versions), `GET /api/admin/releases/[id]` (one version's
+// changes), `POST /api/admin/releases/[id]/restore` (stage the state at vN), `GET
+// /api/admin/history` and `POST /api/admin/history/restore` (one entity's numbered snapshots),
+// and what `public.release_as_of` (migration 0104) answers. The answers' row schemas are not
+// strict: an expand migration may add a key the deployed Worker must ignore (corrections rule 5).
+
+/** The most entities a restore reads from the ledger (one write_drafts call holds 200). */
+export const RESTORE_SCAN_MAX = WRITE_DRAFTS_MAX_OPS;
+/** The most entities a preview of a version lays over live (the preview reads 2,000 rows a table). */
+export const AS_OF_PREVIEW_MAX = 500;
+/** A version's changes read at once (at most 60 changes, plus their cascades and link sets). */
+export const VERSION_ITEMS_MAX = 1000;
+/** Versions, and history rows, per page. */
+export const VERSIONS_PAGE = 50;
+
+const EntityTypeText = z.string().regex(/^[a-z][a-z_]{1,39}$/);
+
+/** One entity in the state at a version: its image then (null: it did not exist) and now. */
+export const AsOfEntitySchema = z.object({
+  entity_type: EntityTypeText,
+  entity_id: Uuid,
+  before: z.record(z.string(), z.unknown()).nullable(),
+  exists_now: z.boolean(),
+  page_id: z.string().nullable().optional(),
+});
+export type AsOfEntity = z.infer<typeof AsOfEntitySchema>;
+
+/** `public.release_as_of(p_tenant, p_number, p_limit, p_page)` (0104). */
+export const AsOfAnswerSchema = z.object({
+  release: z.object({
+    id: Uuid,
+    number: z.number().int().min(1),
+    kind: ReleaseKindSchema,
+    note: z.string().nullable(),
+    published_at: Timestamp.nullable(),
+    published_by: Uuid.nullable(),
+  }),
+  cutoff: z.number().int().min(0),
+  total: z.number().int().min(0),
+  entities: z.array(AsOfEntitySchema),
+});
+export type AsOfAnswer = z.infer<typeof AsOfAnswerSchema>;
+
+/** The versions list's query: the page before a number (newest first). */
+export const VersionsQuerySchema = z
+  .object({ before: z.coerce.number().int().min(2).max(1_000_000_000).optional() })
+  .strict();
+
+/** Restoring a version: the whole site, or one page and its sections (the page editor's). */
+export const RestoreVersionRequestSchema = z.object({ pageId: Uuid.optional() }).strict();
+export type RestoreVersionRequest = z.infer<typeof RestoreVersionRequestSchema>;
+
+/** One entity's history: its own snapshots, or (a page) every version that touched it. */
+export const HistoryQuerySchema = z
+  .object({
+    entityType: ReleaseEntityTypeSchema,
+    entityId: Uuid,
+    scope: z.enum(['item', 'page']).default('item'),
+    before: z.coerce.number().int().min(2).max(1_000_000_000).optional(),
+  })
+  .strict();
+export type HistoryQuery = z.infer<typeof HistoryQuerySchema>;
+
+/** Restoring one snapshot of one entity. */
+export const HistoryRestoreRequestSchema = z
+  .object({
+    entityType: ReleaseEntityTypeSchema,
+    entityId: Uuid,
+    seq: z.number().int().min(1).max(1_000_000_000),
+  })
+  .strict();
+export type HistoryRestoreRequest = z.infer<typeof HistoryRestoreRequestSchema>;
+
+/** Why one entity stops a restore, or is left as it is. */
+export const RESTORE_REASONS = [
+  // It has a pending change already: publish or discard it first.
+  'pending',
+  // The person cannot publish this change (Admin and the publishers only, P-2).
+  'forbidden',
+  // The version links to something that is gone and that the restore does not bring back.
+  'link-gone',
+  // Its stored image no longer reads as a change the editor could make.
+  'unrestorable',
+  // Left as it is: no role removes it through a release (the site identity, SEO details).
+  'kept',
+] as const;
+export type RestoreReason = (typeof RESTORE_REASONS)[number];
+
+export const RestoreItemSchema = z.object({
+  entityType: ReleaseEntityTypeSchema,
+  entityId: Uuid,
+  label: z.record(z.string(), z.unknown()).nullable(),
+  reason: z.enum(RESTORE_REASONS),
+  /** The field (payload key) a gone link is on, or the columns that do not come back. */
+  field: z.string().optional(),
+  columns: z.array(z.string()).optional(),
+  waitingFor: z.array(z.string()).optional(),
+});
+export type RestoreItem = z.infer<typeof RestoreItemSchema>;
+
+/** What a restore answers: the pending changes it staged, and what it left as it is. */
+export const RestoreResultSchema = z.object({
+  /** The version restored (one item's: the version that wrote its snapshot, if any). */
+  release: z.object({ id: Uuid, number: z.number().int().min(1) }).nullable(),
+  scope: z.enum(['site', 'page', 'item']),
+  staged: z.array(
+    z.object({
+      draftId: Uuid,
+      draftVersion: DraftVersionSchema,
+      entityType: ReleaseEntityTypeSchema,
+      entityId: Uuid,
+      op: DraftOpSchema,
+      label: z.record(z.string(), z.unknown()).nullable(),
+    }),
+  ),
+  kept: z.array(RestoreItemSchema),
+  /** False when the changes were staged but could not be marked as a restore (logged). */
+  marked: z.boolean(),
+});
+export type RestoreResult = z.infer<typeof RestoreResultSchema>;
