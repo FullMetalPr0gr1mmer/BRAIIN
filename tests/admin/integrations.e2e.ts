@@ -102,9 +102,9 @@ for (const role of ['admin', 'seo'] as const) {
       test(`the four tiles at ${width}px, and a drawer open`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 });
         await open(page);
-        await expect(page.getByRole('list', { name: 'Integrations' }).locator('> li')).toHaveCount(
-          4,
-        );
+        await expect(
+          page.getByRole('list', { name: 'Integrations' }).locator(':scope > li'),
+        ).toHaveCount(4);
         for (const key of ['ga4', 'searchConsole', 'calendly', 'captcha']) {
           await expect(tile(page, key)).toBeVisible();
         }

@@ -19,7 +19,6 @@ export const INTEGRATION_DEFAULTS = {
   calendly_url: null,
 } as const;
 
-
 /** The tenant's row, read as the caller; throws on a refused or failed read. */
 export async function loadIntegrations(
   sb: SupabaseClient,

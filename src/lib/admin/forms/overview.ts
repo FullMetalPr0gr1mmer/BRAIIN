@@ -154,7 +154,8 @@ export function formFacts(): Record<FormId, FormFacts> {
       limits: [
         `${perWindow(CONTACT_LIMITS.perIp.max, CONTACT_LIMITS.perIp.windowSeconds)} from one internet address`,
       ],
-      unchecked: 'If the count cannot be checked, the send still goes through, so no inquiry is lost.',
+      unchecked:
+        'If the count cannot be checked, the send still goes through, so no inquiry is lost.',
     },
     join: {
       id: 'join',
@@ -165,7 +166,8 @@ export function formFacts(): Record<FormId, FormFacts> {
         `${perWindow(APPLY_LIMITS.perIp.max, APPLY_LIMITS.perIp.windowSeconds)} from one internet address`,
         `${perWindow(APPLY_LIMITS.perEmail.max, APPLY_LIMITS.perEmail.windowSeconds)} from one e-mail`,
       ],
-      unchecked: 'If the counts cannot be checked, the send is refused for now, because it carries a file.',
+      unchecked:
+        'If the counts cannot be checked, the send is refused for now, because it carries a file.',
     },
   };
 }
