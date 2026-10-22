@@ -433,6 +433,8 @@ export async function planRestore(
       refused.push({ ...item(t.entry, t.entityId, labelRow, 'pending') });
       continue;
     }
+    // What publishing it needs: a removal or an archive, or (hotfix H12) an edit that leaves a
+    // row archived live archived, is an Admin's.
     const ref = {
       entityType: t.entry.entityType,
       op: full.op,
@@ -440,6 +442,7 @@ export async function planRestore(
         typeof full.derived.patch['status'] === 'string'
           ? { status: full.derived.patch['status'] }
           : null,
+      liveStatus: typeof row?.['status'] === 'string' ? row['status'] : null,
     } as const;
     if (!canPublish(auth.role, ref)) {
       refused.push(

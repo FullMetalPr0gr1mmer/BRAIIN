@@ -661,6 +661,23 @@ describe('POST /api/admin/releases/[id]/restore', () => {
     expect(res.body['items']).toMatchObject([{ entityType: 'statistic', waitingFor: ['admin'] }]);
   });
 
+  it('an edit that leaves an archived row archived is an Admin’s (hotfix H12)', async () => {
+    const archived = liveService({ status: 'archived', title: BI('Now', 'الآن') });
+    const answer = asOf(1, [
+      {
+        entity_type: 'service',
+        entity_id: SERVICE,
+        before: { ...archived, title: BI('Then', 'سابقا') },
+        exists_now: true,
+      },
+    ]);
+    let res = await restore(seed({ services: [archived] }, answer), V1, {}, 'content_creator');
+    expect(res.status).toBe(403);
+    expect(res.body['items']).toMatchObject([{ entityType: 'service', waitingFor: ['admin'] }]);
+    res = await restore(seed({ services: [archived] }, answer), V1, {}, 'admin');
+    expect(res.status).toBe(200);
+  });
+
   it('a link to something gone and not brought back is 422 naming the field (a deleted picture)', async () => {
     const db = seed(
       { media_assets: [] },
