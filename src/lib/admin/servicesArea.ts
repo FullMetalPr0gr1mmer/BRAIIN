@@ -115,7 +115,8 @@ export async function loadServiceLeads(
       .select('id,label,tone')
       .eq('tenant_id', auth.tenantId)
       .in('id', stageIds);
-    if (stageError) throw new Error(`service lead stages: ${stageError.code ?? stageError.message}`);
+    if (stageError)
+      throw new Error(`service lead stages: ${stageError.code ?? stageError.message}`);
     for (const stage of (rows ?? []) as Record<string, unknown>[]) {
       const tone = String(stage['tone']);
       stages.set(String(stage['id']), {

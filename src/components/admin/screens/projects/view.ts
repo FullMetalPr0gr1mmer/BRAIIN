@@ -83,7 +83,11 @@ export const GALLERY_FIELD: FieldDef = {
 export const PROJECT_FIELDS: readonly FieldDef[] = [
   from('title', 'Name'),
   from('projectType', 'Type', 'For example “Brand film” or “Rebrand”. Required to publish.'),
-  from('teaser', 'One line description', 'Under the project on Our Work and All projects. Empty means the overview.'),
+  from(
+    'teaser',
+    'One line description',
+    'Under the project on Our Work and All projects. Empty means the overview.',
+  ),
   from('slug', 'Link (slug)'),
   from('sectorId', 'Sector'),
   from('clientId', 'Client'),
@@ -106,7 +110,11 @@ export const PROJECT_FIELDS: readonly FieldDef[] = [
   from('status', 'Status'),
   from('scheduledFor', 'Scheduled for'),
   from('isFeatured', 'Featured on Our Work'),
-  from('sortOrder', 'Order in the catalogue', 'Lower comes first. The Projects list’s Move up and Move down set it.'),
+  from(
+    'sortOrder',
+    'Order in the catalogue',
+    'Lower comes first. The Projects list’s Move up and Move down set it.',
+  ),
   from('nextPortfolioId', 'Next project'),
   from('isPlaceholder', 'Placeholder (design sample)'),
 ];
@@ -185,6 +193,13 @@ export const PROJECT_TABS: readonly EditorTabDef[] = [
     id: 'publishing',
     label: 'Publishing',
     icon: 'cal',
-    fields: ['status', 'scheduledFor', 'isFeatured', 'sortOrder', 'nextPortfolioId', 'isPlaceholder'],
+    fields: [
+      'status',
+      'scheduledFor',
+      'isFeatured',
+      'sortOrder',
+      'nextPortfolioId',
+      'isPlaceholder',
+    ],
   },
 ];

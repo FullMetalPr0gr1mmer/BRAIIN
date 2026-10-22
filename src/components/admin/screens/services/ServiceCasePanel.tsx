@@ -131,7 +131,8 @@ function CaseForm({ caseId, serviceId, write, archive, onCreated }: CaseFormProp
   const status = save.saved['status'];
   const sample = save.saved['isPlaceholder'] === true;
   const readOnly = !write || (!archive && status === 'archived');
-  const projectId = typeof save.values['portfolioId'] === 'string' ? save.values['portfolioId'] : '';
+  const projectId =
+    typeof save.values['portfolioId'] === 'string' ? save.values['portfolioId'] : '';
 
   return (
     <div className="svc-case">
@@ -152,8 +153,8 @@ function CaseForm({ caseId, serviceId, write, archive, onCreated }: CaseFormProp
       >
         {sample && (
           <Note tone="warn">
-            This is a design sample. Write the real words, switch off “Placeholder (design
-            sample)” and save to make it real. Until then it cannot be published.
+            This is a design sample. Write the real words, switch off “Placeholder (design sample)”
+            and save to make it real. Until then it cannot be published.
           </Note>
         )}
       </EditorForm>

@@ -347,7 +347,7 @@ function DisciplineList({
                 </span>
               </div>
               {pills.names.length > 0 && (
-                <span className="svc__pills" aria-label={`Services in ${name}`}>
+                <span className="svc__pills">
                   {pills.names.map((pill, index) => (
                     <span key={index} className="badge" data-tone="gray" dir="auto">
                       {pill}
@@ -356,6 +356,7 @@ function DisciplineList({
                   {pills.more > 0 && (
                     <span className="badge" data-tone="gray">
                       {`+${pills.more}`}
+                      <span className="visually-hidden"> more services</span>
                     </span>
                   )}
                 </span>

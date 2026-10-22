@@ -7,14 +7,7 @@ import { isArchiveRefusal, MOVE_ARCHIVED, swapTarget } from '../resources/reorde
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { PAGE_SIZE } from '@/lib/admin/pager';
 import AddProjectModal from './AddProjectModal';
-import {
-  filterProjects,
-  projectChips,
-  projectName,
-  serviceNames,
-  textIn,
-  type Row,
-} from './model';
+import { filterProjects, projectChips, projectName, serviceNames, textIn, type Row } from './model';
 import TagsDrawer from './TagsDrawer';
 
 // The Projects list (Admin v2 U6, AV-15; the prototype's route('/projects')): the AdminProjects
@@ -229,7 +222,9 @@ export default function ProjectsList({ write, archive, sectors }: ProjectsListPr
               Featured
             </span>
           )}
-          {row['status'] !== 'published' && <StatusBadge status={String(row['status'] ?? 'draft')} />}
+          {row['status'] !== 'published' && (
+            <StatusBadge status={String(row['status'] ?? 'draft')} />
+          )}
           {row['is_placeholder'] === true && (
             <span className="badge" data-tone="gray">
               Sample

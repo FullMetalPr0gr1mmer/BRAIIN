@@ -58,7 +58,10 @@ export function groupServices(disciplines: readonly Row[], services: readonly Ro
 }
 
 /** The pills a discipline's row shows: its first services by name, and how many more. */
-export function servicePills(services: readonly Row[], shown = 4): { names: string[]; more: number } {
+export function servicePills(
+  services: readonly Row[],
+  shown = 4,
+): { names: string[]; more: number } {
   return {
     names: services.slice(0, shown).map((s) => nameOf(s)),
     more: Math.max(0, services.length - shown),

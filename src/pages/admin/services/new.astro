@@ -41,7 +41,9 @@ const tz = await studioTimeZone(Astro.locals);
     leadRows={null}
     leadsFailed={false}
     leadCount={null}
-    defaults={isUuid(discipline) ? { disciplineId: discipline, status: 'draft' } : { status: 'draft' }}
+    defaults={isUuid(discipline)
+      ? { disciplineId: discipline, status: 'draft' }
+      : { status: 'draft' }}
     tz={tz}
   />
 </AdminLayout>

@@ -95,7 +95,10 @@ export default function ServiceEditor({
   const stored = save.saved['status'];
   const archivedLock = id !== null && !archive && stored === 'archived';
   const readOnly = !write || archivedLock;
-  const offered: EditorPanel[] = [...(write ? ['case' as const] : []), ...(leads ? ['leads' as const] : [])];
+  const offered: EditorPanel[] = [
+    ...(write ? ['case' as const] : []),
+    ...(leads ? ['leads' as const] : []),
+  ];
   const tabs = visibleTabs(ui.tabs ?? [], { seoAccess, panels: offered });
   const hasSeo = tabs.some((t) => t.panel === 'seo');
 
