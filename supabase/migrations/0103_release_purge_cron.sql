@@ -182,7 +182,8 @@ grant execute on function public.claim_release_purges(int) to service_role;
 -- (app.release_entities, read as the caller: CMS staff read it, 0038) or media_assets;
 -- `columns` 1 to 200 column names of that table, or ["*"]; `key` 'id' or 'tenant_id' (a
 -- singleton's key); `ids` 1 to 500 uuids. Answers an array with one array of rows per read,
--- in order, each row as to_jsonb prints it (the shape PostgREST answers). Nothing is
+-- in order (each read's rows by its key), each row as to_jsonb prints it (the shape PostgREST
+-- answers). Nothing is
 -- spliced but %I-quoted names the catalog confirmed; the tenant and the ids are bound.
 -- RELEASE_READS_MAX and RELEASE_READ_IDS_MAX in src/lib/release/overlayDb.ts
 -- (tests/lib/overlayDb.spec.ts holds them equal to the literals here).
@@ -287,8 +288,8 @@ begin
 
     execute pg_catalog.format(
       'select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(r)), ''[]''::jsonb) '
-      'from (select %s from public.%I t where t.tenant_id = $1 and t.%I = any ($2)) r',
-      v_list, v_table, v_key)
+      'from (select %s from public.%I t where t.tenant_id = $1 and t.%I = any ($2) order by t.%I) r',
+      v_list, v_table, v_key, v_key)
       into v_rows using p_tenant, v_ids;
     v_out := v_out || pg_catalog.jsonb_build_array(v_rows);
   end loop;
