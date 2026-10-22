@@ -88,6 +88,14 @@ describe('the R7 migration', () => {
     expect(RELEASE_SINGLETON_TABLES.length).toBeGreaterThan(0);
   });
 
+  it('names this spec as the one holding its literals equal (no other reads the migration)', () => {
+    const named = [
+      ...sql.matchAll(/tests\/lib\/([\w.]+)\.spec\.ts\s+(?:--\s+)?holds (?:them|the literals)/g),
+    ].map((m) => m[1]);
+    expect(named.length).toBeGreaterThanOrEqual(3);
+    expect([...new Set(named)]).toEqual(['purgeCronSql']);
+  });
+
   it('no function of it sets a setting or a role, or names the release token', () => {
     for (const name of ['cache_purge_take', 'claim_release_purges', 'release_read_rows']) {
       const body = fn(name).toLowerCase();

@@ -83,7 +83,7 @@ comment on table public.cache_purge_log is
 
 -- ═══ 2. The budget ═══════════════════════════════════════════════════════════════════════
 -- CACHE_PURGE_DAY_TAGS and CACHE_PURGE_MAX_TAGS in src/lib/http/purge.ts
--- (tests/lib/purge.spec.ts holds them equal to the literals here).
+-- (tests/lib/purgeCronSql.spec.ts holds them equal to the literals here).
 create or replace function public.cache_purge_take(p_tenant uuid, p_tags int, p_source text)
   returns boolean
   language plpgsql volatile security invoker set search_path = '' set lock_timeout = '5s'
@@ -118,7 +118,7 @@ grant execute on function public.cache_purge_take(uuid, int, text) to service_ro
 
 -- ═══ 3. The minute cron's claim ══════════════════════════════════════════════════════════
 -- RELEASE_PURGE_MAX_ATTEMPTS, RELEASE_ORPHAN_AFTER_MINUTES and RELEASE_CLAIM_LEASE_MINUTES in
--- src/lib/cron/releases.ts (tests/lib/releaseCron.spec.ts holds them equal to the literals).
+-- src/lib/cron/releases.ts (tests/lib/purgeCronSql.spec.ts holds them equal to the literals).
 -- An answer row: {tenant_id, release_id, number, tags, status, attempts, orphan}; `orphan` is
 -- a release whose after-effects never ran (the snapshots and the purge are owed).
 create or replace function public.claim_release_purges(p_limit int default 5)
