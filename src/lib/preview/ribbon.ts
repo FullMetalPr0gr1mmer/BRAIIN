@@ -64,7 +64,15 @@ export function ribbonLines(input: Pick<RibbonInput, 'verdict' | 'gate' | 'versi
   const { verdict, gate, version } = input;
   const notes: string[] = [];
   let lead: string;
-  if (verdict.state === 'untrusted') {
+  if (verdict.state === 'untrusted' && version !== undefined) {
+    // A version that could not be read whole (more changed since than was read, a table that
+    // failed): its number, never "your changes".
+    const words: Partial<Record<string, string>> = PREVIEW_COPY.version.reasons;
+    lead = PREVIEW_COPY.version.untrusted.replace('{v}', String(version));
+    for (const reason of verdict.reasons) {
+      notes.push(words[reason] ?? PREVIEW_COPY.reasons[reason]);
+    }
+  } else if (verdict.state === 'untrusted') {
     lead = PREVIEW_COPY.untrusted;
     for (const reason of verdict.reasons) notes.push(PREVIEW_COPY.reasons[reason]);
   } else if (verdict.state === 'locked') {

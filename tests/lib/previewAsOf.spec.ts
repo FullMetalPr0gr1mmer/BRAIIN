@@ -215,6 +215,25 @@ describe('the ribbon of a version', () => {
     ]);
   });
 
+  it('a version it could not read whole names the version, never "your changes"', () => {
+    const { lead, notes } = ribbonLines({
+      verdict: { state: 'untrusted', reasons: ['truncated', 'failed-table'] },
+      gate: PASS,
+      version: 7,
+    });
+    expect(lead).toBe(PREVIEW_COPY.version.untrusted.replace('{v}', '7'));
+    expect(lead).toContain('version 7');
+    expect(lead).not.toMatch(/your changes|Reload/);
+    expect(notes).toEqual([
+      PREVIEW_COPY.version.reasons.truncated,
+      PREVIEW_COPY.reasons['failed-table'],
+    ]);
+    // A preview of pending changes keeps R9's words.
+    expect(
+      ribbonLines({ verdict: { state: 'untrusted', reasons: ['truncated'] }, gate: PASS }).lead,
+    ).toBe(PREVIEW_COPY.untrusted);
+  });
+
   it('keeps the copy rules: no em or en dash, the brand never spelled', () => {
     const text = JSON.stringify(PREVIEW_COPY.version);
     expect(text).not.toMatch(/[–—]/);
