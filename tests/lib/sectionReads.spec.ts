@@ -83,7 +83,7 @@ describe('every Tier A route (src/lib/http/routeTags.ts)', () => {
     }
   });
 
-  it('past 30, the always, route and locale tags are kept (a dropped entity is purged by tenant:default)', () => {
+  it('past 30, the always, route and locale tags are kept (only those, or a collapsed purge, reach it)', () => {
     const many = Array.from({ length: 40 }, (_, n) => `portfolio:p${n}`);
     const tags = tierATags({ route: 'x', locale: 'ar', entities: many });
     expect(tags).toHaveLength(MAX_TAGS);

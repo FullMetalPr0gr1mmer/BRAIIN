@@ -27,10 +27,11 @@ type HasHeaders = { headers: Headers };
 
 /**
  * A response's tags: the always tags, its route, its entities and its locale, each once. Past
- * 30, entities are dropped from the end but the always, route and locale tags are kept (a
- * dropped entity is still purged through `tenant:default`, the collapse every purge of more
- * than 30 tags uses); tests/lib/sectionReads.spec.ts holds every route's whole set within 30
- * so nothing is dropped in practice (Admin v2 R7).
+ * 30, entities are dropped from the end but the always, route and locale tags are kept. A
+ * purge naming a dropped entity would then miss the response: only a collapsed purge
+ * (`tenant:default`: more than 30 tags, an orphaned release, a slug it could not resolve) or
+ * one of the kept tags reaches it. So tests/lib/sectionReads.spec.ts holds every route's whole
+ * set within 30, and nothing is dropped in practice (Admin v2 R7).
  */
 export function tierATags(opts: {
   route: string;
