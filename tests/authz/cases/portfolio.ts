@@ -59,6 +59,16 @@ export const cases: readonly Case[] = [
     allow: ['admin', 'content_creator'],
   },
   {
+    // Hotfix H12: only an Admin may write a row that stays archived (tests/authz/reorder.spec.ts).
+    name: 'portfolio reorder naming an archived row (Admin only)',
+    load: () => import('@/pages/api/admin/portfolio/reorder'),
+    method: 'POST',
+    url: '/api/admin/portfolio/reorder',
+    body: { items: [{ id: UUID, sortOrder: 10 }] },
+    row: { id: UUID, version: 1, status: 'archived' },
+    allow: ['admin'],
+  },
+  {
     name: 'sectors list',
     load: () => import('@/pages/api/admin/sectors/index'),
     method: 'GET',

@@ -8,6 +8,12 @@ import { STYLE_FINDER_NOT_LIVE } from '@/lib/admin/styleFinderCopy';
 
 export const prerender = false;
 
+// Move up and Move down write an archived row only for a role that may archive (hotfix H12):
+// the UX half of `content.archiveDelete`, as `canAdvanced` is on the section form. The
+// reorder route refuses such a move whatever this says.
+const role = Astro.locals.session?.role;
+const canArchive = role !== undefined && can(role, 'content.archiveDelete') === 'full';
+
 const ui = uiFor('ai-styles');
 // The quiz is not live (Admin v2 U8a): said to the roles that edit it, on the server, zero JS.
 const role = Astro.locals.session?.role;
@@ -21,5 +27,5 @@ const mayEdit = role !== undefined && can(role, 'ai.editContent') === 'full';
   to intersection just adds a blank frame. Public routes use visible/idle — /admin is
   exempt from the CWV budgets (CLAUDE.md §6) and is gated on bundle size instead.
 -->
-  <AdminResourceTable client:load resource="ai-styles" />
+  <AdminResourceTable client:load resource="ai-styles" canArchive={canArchive} />
 </AdminLayout>

@@ -742,6 +742,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [H9](as-built/H9.md): lead notifications restored, signed and never silent, 0048; the staleDomain flake (#63)
 - [H10](as-built/H10.md): a stale Admin token changes no profile, and an audit row names who wrote it, 0050 (#66)
 - [H11](as-built/H11.md): the help-guide catalog: one row per guide, `app.help_article_set()` read from it, `app.put_help_guide`/`app.drop_help_guide` with a revision guard, so no slice restates the set, built as 0069 (number at merge; PR number at review)
+- [H12](as-built/H12.md): Move up / Move down step over archived rows for a role that may not archive, and the reorder route refuses a request naming one (or another tenant's id) before writing anything, and with releases on a change that leaves a row archived is an Admin's to stage and publish; no migration (PR number at review)
 - [H13](as-built/H13.md): the attention list is for CMS staff: `dashboard_attention` restated as 0066 left it, wrapped once in `app.is_staff()` (or the owner's session: no switched role, no role claim), grants stated, so a Sales token reads no row; the Sales pgTAP's last unfixtured relation gets its row, built as `0100_attention_staff.sql` (number at merge; PR number at review)
 
 **Wave 0**
