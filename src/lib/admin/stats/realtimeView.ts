@@ -1,4 +1,5 @@
-import { formatTime } from '@/lib/admin/relTime';
+import { timeZoneCity } from '@schemas/timeZones';
+import type { Clock } from '@/lib/admin/relTime';
 
 // Realtime on the website stats (Admin v2 G1b), the shape the screen and its island share.
 // Pure: the Realtime tab renders it on the server first, then the island (AdminRealtime)
@@ -66,13 +67,19 @@ export function realtimeOf(raw: unknown): RealtimeView {
   };
 }
 
-/** "Updated 14:05, Riyadh time", or nothing to say when the answer named no minute. */
-export function updatedLine(view: RealtimeView): string {
-  return view.asOf ? `Updated ${formatTime(view.asOf)}, Riyadh time` : '';
+/** "Riyadh time": the studio's zone named by its city (Admin v2 U9). */
+export const zoneWords = (clock: Clock): string => `${timeZoneCity(clock.zone)} time`;
+
+/**
+ * "Updated 14:05, Riyadh time" on the studio's clock, or nothing to say when the answer
+ * named no minute.
+ */
+export function updatedLine(view: RealtimeView, clock: Clock): string {
+  return view.asOf ? `Updated ${clock.formatTime(view.asOf)}, ${zoneWords(clock)}` : '';
 }
 
-/** The minute's label on the chart and in its table: "14:05", Riyadh time. */
-export const minuteLabel = (minute: string): string => formatTime(minute);
+/** The minute's label on the chart and in its table: "14:05", on the studio's clock. */
+export const minuteLabel = (minute: string, clock: Clock): string => clock.formatTime(minute);
 
 /** "1 person" / "7 people". */
 export function peopleWord(n: number): string {

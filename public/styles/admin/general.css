@@ -1,0 +1,92 @@
+/* Screen stylesheet: General settings, /admin/settings (Admin v2 U9). Linked only through
+   AdminLayout's `styles` prop (styles={['general.css']}), after admin.css. The cards, the
+   fields and the switch are the kit's (EditorForm's groups, admin.css). Here: the Brand
+   card's two read-only logo tiles (the prototype's .imgf__pv on a dark and a light ground),
+   the job-applications card, and the facts card's rows. It uses admin.css's tokens and
+   declares none, and holds no colour literal (tests/lib/adminStyles.spec.ts,
+   scripts/contrast-audit.mjs). */
+
+.general > .editor + .card,
+.general > .card + .editor {
+  margin-top: 18px;
+}
+
+.general__logos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.general__logo {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.general__logo img {
+  display: block;
+  box-sizing: content-box;
+  inline-size: 132px;
+  block-size: auto;
+  padding: 14px 18px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-xs);
+  object-fit: contain;
+}
+
+/* The white logo on the midnight ground, and drawn dark on the light one. */
+.general__logo[data-ground='dark'] img {
+  background: var(--ad-midnight);
+}
+
+.general__logo[data-ground='light'] img {
+  background: var(--ad-bg);
+  filter: invert(1);
+}
+
+.general__logo figcaption {
+  color: var(--ad-dim2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.general__logo-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.general__apps .f {
+  margin-bottom: 8px;
+}
+
+.general__apps-msg {
+  margin: 0;
+}
+
+/* The facts card: what the site is, which this screen cannot change. */
+.general__facts {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.general__facts div {
+  display: grid;
+  gap: 2px;
+}
+
+.general__facts dt {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.general__facts dd {
+  margin: 0;
+  color: var(--ad-dim2);
+  font-size: 13px;
+}
+
+.general__facts-card {
+  margin-top: 18px;
+}

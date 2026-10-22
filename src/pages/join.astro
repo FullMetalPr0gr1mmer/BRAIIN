@@ -2,6 +2,8 @@
 import JoinPage from '@/components/JoinPage.astro';
 import { noEdgeCache, setTierA } from '@/lib/http/cacheTags';
 import { JOIN_CACHE_ENTITIES, joinAnswer } from '@/lib/sections/join';
+import { loadJoinPage } from '@/lib/sections/joinPage';
+import { sectionTags } from '@/lib/sections/reads';
 
 // Join. Tier A — server-rendered and edge-cached — for the bare URL only; a publish of the
 // page purges it by tag. A request carrying `?status=` is the no-JS answer page (a plain
@@ -10,8 +12,14 @@ import { JOIN_CACHE_ENTITIES, joinAnswer } from '@/lib/sections/join';
 // cannot fill the edge cache. Its canonical is the bare page (SeoHead drops the query).
 const locale = 'en' as const;
 const answer = joinAnswer(Astro.url.searchParams);
+const page = await loadJoinPage(Astro.locals, locale, answer.status);
 if (answer.present) noEdgeCache(Astro.response);
-else setTierA(Astro.response, { route: 'join', locale, entities: JOIN_CACHE_ENTITIES });
+else
+  setTierA(Astro.response, {
+    route: 'join',
+    locale,
+    entities: [...JOIN_CACHE_ENTITIES, ...sectionTags(page.sections)],
+  });
 ---
 
-<JoinPage locale={locale} answer={answer.status} />
+<JoinPage locale={locale} page={page} />

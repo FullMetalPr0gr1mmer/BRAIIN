@@ -8,7 +8,14 @@ import {
   generateNonce,
   withSecurityHeaders,
 } from '@/lib/http/securityHeaders';
-import { getMaintenanceState, clientIp, maintenanceResponse } from '@/lib/http/maintenance';
+import {
+  getMaintenanceState,
+  clientIp,
+  maintenanceResponse,
+  normalizeIp,
+} from '@/lib/http/maintenance';
+import { staffMayBypass } from '@/lib/http/maintenanceBypass';
+import { maintenanceLogoSrc } from '@/lib/maintenance/logo';
 import { getRedirectMap, lookupRedirect, redirectResponse } from '@/lib/http/redirects';
 import {
   HIDDEN_CACHE_CONTROL,
@@ -267,15 +274,34 @@ export const onRequest = defineMiddleware(async (context, next) => {
   //    the guard below admits, and its stills are as public as the `/_astro/*` files the
   //    asset layer serves without the Worker during maintenance. Gating it 503'd the admin's
   //    own thumbnails of uploads for every editor off the allowlist.
+  //
+  //    Admin v2 U9b: ONE KV read decides it (src/lib/http/maintenance.ts): in force when the
+  //    switch is on and "Back on" has not come, so the site returns at that instant with no
+  //    write. Then the IP allowlist (canonical addresses, compared as saved). Then, only when
+  //    the value allows it, the staff bypass (src/lib/http/maintenanceBypass.ts): the admin's
+  //    own session check, fail CLOSED (no session, an unreadable one, an error or a slow auth
+  //    server: the 503). A bypassed page is private, untagged and noindex (step 5).
+  let bypassed = false;
   if (!isAdmin && !isApi && !isHealth && !isImage) {
-    const m = await getMaintenanceState(env);
+    const now = Date.now();
+    const m = await getMaintenanceState(env, now);
     if (m.active) {
-      const ip = clientIp(request);
+      const ip = normalizeIp(clientIp(request) ?? '');
       const allowed = ip !== null && m.allowlist.includes(ip);
-      // The 503 page takes the nonce: its styles are in a nonced <style> block, because
-      // the CSP it now carries has no 'unsafe-inline' and would blank an inline-styled
-      // page. A maintenance notice that renders unstyled is a bad look at a bad time.
-      if (!allowed) return secured(maintenanceResponse(nonce));
+      if (!allowed) {
+        // Fail closed twice over: the check answers false on any failure itself, and a throw
+        // that escaped it would still be the 503, never a page.
+        if (m.snapshot.staffBypass && (await staffMayBypass(cookies).catch(() => false))) {
+          bypassed = true;
+        } else {
+          // The 503 page takes the nonce: its styles are in a nonced <style> block, because
+          // the CSP it carries has no 'unsafe-inline'. Its language is the route's.
+          const locale = localeFromPath(context.routePattern ?? url.pathname);
+          return secured(
+            maintenanceResponse(nonce, m.snapshot, locale, now, await maintenanceLogoSrc()),
+          );
+        }
+      }
     }
   }
 
@@ -475,7 +501,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     REDIRECTABLE_METHODS.has(request.method)
   ) {
     const rule = lookupRedirect(url.pathname, await getRedirectMap(env));
-    if (rule) return secured(redirectResponse(rule, url));
+    if (rule) {
+      const redirected = await secured(redirectResponse(rule, url));
+      // Seen past the maintenance page or a password (U9b): private like step 5's answer, so
+      // the redirect a signed-in person sees is never cached for a visitor.
+      return unlocked !== null || bypassed ? hiddenAnswer(redirected) : redirected;
+    }
   }
 
   // 5) Apply the same headers to the rendered response; a link-only page is not indexed,
@@ -483,7 +514,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   //    carrying no cache tag a purge could mistake for a public page's.
   const out = await secured(rendered);
   if (gate.action === 'noindex') out.headers.set('X-Robots-Tag', 'noindex');
-  if (unlocked !== null) {
+  if (unlocked !== null || bypassed) {
+    // A page unlocked by its password, or one a signed-in person sees past the maintenance
+    // page (U9b): private, never cached, never indexed, no tag a purge could mistake.
     out.headers.set('Cache-Control', HIDDEN_CACHE_CONTROL);
     out.headers.delete('Cache-Tag');
     out.headers.set('X-Robots-Tag', 'noindex');

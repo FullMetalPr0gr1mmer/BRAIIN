@@ -3,6 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { APPLICATION_STATUSES, SPAM_RETENTION_DAYS } from '@schemas/application';
+import { clockFor, DEFAULT_TIME_ZONE } from '@/lib/admin/relTime';
 import { BADGE_TONES } from '@/lib/admin/tones';
 import {
   APPLICATION_STATUS_LABEL,
@@ -88,7 +89,8 @@ describe('the details card', () => {
       email: 'r@example.com',
       phone: '+966500000000',
     };
-    const rows = detailRows(revealed);
+    // The studio's default zone (Riyadh): the clock is the caller's (Admin v2 U9).
+    const rows = detailRows(revealed, clockFor(DEFAULT_TIME_ZONE));
     expect(rows.map(([label]) => label)).toEqual([
       'Role',
       'City',

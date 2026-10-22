@@ -4,7 +4,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { WIDGET_IDS, type WidgetId } from '@schemas/dashboard';
 import { CMS_ROLES, ROLES, type AuthContext, type Role } from '@/lib/auth/types';
 import { CAPABILITIES, ROLE_CAPS, type Access, type Capability } from '@/lib/authz/matrix';
-import { loadDashboard, perRiyadhDay, riyadhDate } from '@/lib/admin/dashboard/loaders';
+import {
+  loadDashboard,
+  perStudioDay as perRiyadhDay,
+  studioDate as riyadhDate,
+} from '@/lib/admin/dashboard/loaders';
 import {
   DEFAULT_LAYOUTS,
   WIDGETS,
@@ -13,6 +17,7 @@ import {
 } from '@/lib/admin/dashboard/widgets';
 import { visibleNav } from '@/lib/admin/nav';
 import { loadShellState } from '@/lib/admin/shell';
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 
 const { logs } = vi.hoisted(() => ({ logs: [] as unknown[] }));
 vi.mock('@/lib/data/systemLog', () => ({
@@ -413,9 +418,11 @@ const MIDDLEWARE = 3;
  * the health widget's readings (health_probes, through loadHealthSummary) and the bell's health
  * source in the shell (docs/admin-v2/as-built/G2.md). G1b added one: the Right now widget's
  * realtime_summary (docs/admin-v2/as-built/G1.md). U17 added one, for users.manage only:
- * the health widget's two factor row reads the directory (staff_accounts).
+ * the health widget's two factor row reads the directory (staff_accounts). U9 added one: the
+ * studio's time zone (public.studio_time_zone), which the page and the layout both ask for
+ * and studioTimeZone reads once per request (docs/admin-v2/as-built/U9.md).
  */
-const MEASURED = { loadDashboard: 28, total: 39 };
+const MEASURED = { loadDashboard: 28, total: 40 };
 
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
   // A real request has one clock: the dashboard's "Going live today" and the bell both ask
@@ -479,8 +486,18 @@ describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () 
         },
       },
     });
+    // The studio's zone: index.astro and AdminLayout.astro each ask studioTimeZone(Astro.locals),
+    // which stores the read on the request's locals, so the two cost one subrequest.
+    for (const file of ['src/pages/admin/index.astro', 'src/layouts/AdminLayout.astro']) {
+      expect(readFileSync(file, 'utf8'), file).toContain('await studioTimeZone(Astro.locals)');
+    }
+    const locals = { supabase: sb, session: auth('admin') } as unknown as App.Locals;
+    await studioTimeZone(locals);
+    await studioTimeZone(locals);
+    const zone = calls.length;
+    expect(zone).toBe(1);
     await loadDashboard({ sb, auth: auth('admin'), now: NOW, siteUrl: 'https://site.example' });
-    const page = calls.length;
+    const page = calls.length - zone;
     await loadShellState(
       sb,
       auth('admin'),
@@ -488,7 +505,7 @@ describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () 
       {},
       { maintenance: null, displayName: 'Amal' },
     );
-    const shell = calls.length - page;
+    const shell = calls.length - zone - page;
     // The page's own read beside loadDashboard (src/pages/admin/index.astro): the greeting's
     // display name, one `sb.from(` there; the maintenance snapshot is a KV read, not a fetch.
     const indexPage = readFileSync('src/pages/admin/index.astro', 'utf8');
@@ -500,22 +517,22 @@ describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () 
         .map((c) => c.name)
         .sort();
     // The reads that run only on data did run (the point of answering rows).
-    expect(byName(0, page)).toEqual(
+    expect(byName(zone, zone + page)).toEqual(
       expect.arrayContaining(['audit_people', 'disciplines', 'services']),
     );
     // The bell shares the dashboard's pair of "going live today" reads (the memo above), so
     // the shell asks neither table again.
-    expect(byName(page, calls.length)).not.toContain('services');
-    expect(byName(page, calls.length)).not.toContain('blog_posts');
+    expect(byName(zone + page, calls.length)).not.toContain('services');
+    expect(byName(zone + page, calls.length)).not.toContain('blog_posts');
     // Measured: recorded in docs/admin-v2/as-built/U1.md (the page, its own read, the shell;
     // then the middleware's session check and identity row, 3, must still leave room). The
     // message names every read, so a failure says which one is new instead of only by how much.
-    const reads = `page ${page} [${byName(0, page).join(' ')}] + own ${own} + shell ${shell} [${byName(
-      page,
+    const reads = `zone ${zone} + page ${page} [${byName(zone, zone + page).join(' ')}] + own ${own} + shell ${shell} [${byName(
+      zone + page,
       calls.length,
     ).join(' ')}] + middleware ${MIDDLEWARE}`;
     expect(page, reads).toBeLessThanOrEqual(MEASURED.loadDashboard);
-    expect(own + page + shell + MIDDLEWARE, reads).toBeLessThanOrEqual(MEASURED.total);
+    expect(zone + own + page + shell + MIDDLEWARE, reads).toBeLessThanOrEqual(MEASURED.total);
     expect(MEASURED.total).toBeLessThanOrEqual(40);
   });
 });

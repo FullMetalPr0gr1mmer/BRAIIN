@@ -2,7 +2,7 @@ import { useEffect, useId, useState, type FormEvent } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { ROLES, type Role } from '@/lib/auth/types';
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '@/lib/authz/capLabels';
-import { formatDateTime, relTime } from '@/lib/admin/relTime';
+import { useClock } from '@/components/admin/kit/clock';
 import { OWNER_PROTECTED, canResetTwoStep, personName, type UserRow } from '@/lib/admin/userModel';
 import Drawer from '@/components/admin/kit/Drawer';
 import Modal from '@/components/admin/kit/Modal';
@@ -43,6 +43,7 @@ export default function EditUserDrawer({
   onClose,
   onChanged,
 }: EditUserDrawerProps) {
+  const { formatDateTime, relTime } = useClock();
   const [name, setName] = useState('');
   const [role, setRole] = useState<Role>('content_creator');
   const [active, setActive] = useState(true);

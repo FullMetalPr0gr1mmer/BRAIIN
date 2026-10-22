@@ -13,6 +13,10 @@ export const prerender = false;
 
 export const GET = defineAdminRoute({
   cap: 'analytics.read',
-  handler: async ({ auth, sb }) =>
-    loadNotifications(sb, auth, { maintenance: () => getMaintenanceState(env), labels: true }),
+  handler: async ({ auth, sb, studioTimeZone }) =>
+    loadNotifications(sb, auth, {
+      maintenance: () => getMaintenanceState(env),
+      labels: true,
+      tz: await studioTimeZone(),
+    }),
 });

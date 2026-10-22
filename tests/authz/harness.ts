@@ -96,6 +96,11 @@ export function makeStubClient(options: StubOptions = {}) {
       if (options.rpcs && Object.hasOwn(options.rpcs, fn)) {
         return { data: structuredClone(options.rpcs[fn]), error: null };
       }
+      // A publish's batched read (Admin v2 R7, `release_read_rows`): one answer per read, each
+      // the rows every list query answers, as a read through `from()` resolves.
+      if (fn === 'release_read_rows' && Array.isArray(args?.['p_reads'])) {
+        return { data: (args['p_reads'] as unknown[]).map(() => rows), error: null };
+      }
       return { data: null, error: null };
     },
     auth: {

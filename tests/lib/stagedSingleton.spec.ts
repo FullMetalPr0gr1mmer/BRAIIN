@@ -361,7 +361,7 @@ describe('PATCH /api/admin/site-profile/intake: immediate, Admin only, releases 
           body: { acceptingApplications: true },
         });
         expect(res.status, JSON.stringify(res.body)).toBe(200);
-        expect(res.data).toEqual({ acceptingApplications: true, version: 1 });
+        expect(res.data).toEqual({ acceptingApplications: true, version: 1, changed: true });
         const [row] = db.tables['site_profile']!;
         expect(row).toMatchObject({ tenant_id: T, accepting_applications: true });
         expect(row!['brand_name']).toBeTruthy();
@@ -379,12 +379,12 @@ describe('PATCH /api/admin/site-profile/intake: immediate, Admin only, releases 
         const same = await callRoute(db, patch, 'PATCH', '/api/admin/site-profile/intake', {
           body: { acceptingApplications: false },
         });
-        expect(same.data).toEqual({ acceptingApplications: false, version: 4 });
+        expect(same.data).toEqual({ acceptingApplications: false, version: 4, changed: false });
         expect(liveWritesOf(db, 'site_profile')).toEqual([]);
         const open = await callRoute(db, patch, 'PATCH', '/api/admin/site-profile/intake', {
           body: { acceptingApplications: true },
         });
-        expect(open.data).toEqual({ acceptingApplications: true, version: 5 });
+        expect(open.data).toEqual({ acceptingApplications: true, version: 5, changed: true });
         expect(liveWritesOf(db, 'site_profile').map((c) => c.values)).toEqual([
           { accepting_applications: true },
         ]);

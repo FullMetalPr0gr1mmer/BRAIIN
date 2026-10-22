@@ -238,8 +238,27 @@ function linkToPayload(value: unknown): Row | null {
 export function objectToForm(obj: unknown, fields: readonly FieldDef[]): Row {
   const source = (obj && typeof obj === 'object' ? obj : {}) as Row;
   const out: Row = {};
-  for (const field of fields) out[field.name] = valueToForm(source[field.name], field, source);
+  for (const field of fields) {
+    // A switch with a default shows it when the item does not say (Admin v2 U9: a social
+    // account stored before "Show on the site" existed is shown, as the server reads it).
+    const raw =
+      field.kind === 'checkbox' &&
+      source[field.name] === undefined &&
+      field.defaultValue !== undefined
+        ? field.defaultValue
+        : source[field.name];
+    out[field.name] = valueToForm(raw, field, source);
+  }
   return out;
+}
+
+/** A new repeater item: blank, but for the switches whose default is on (Admin v2 U9). */
+export function newItem(fields: readonly FieldDef[]): Row {
+  return Object.fromEntries(
+    fields
+      .filter((field) => field.kind === 'checkbox' && field.defaultValue !== undefined)
+      .map((field) => [field.name, field.defaultValue]),
+  );
 }
 
 function valueToForm(raw: unknown, field: FieldDef, siblings: Row): unknown {
@@ -598,6 +617,10 @@ function overrideToPayload(value: unknown, field: FieldDef, siblings: Row): unkn
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
     case 'checkbox':
+      // A switch that is ON by default (Admin v2 U9: a social account's "Show on the site")
+      // is sent only when turned off; one off by default only when turned on. Either way an
+      // untouched item stays untouched (repeaterToPayload drops it).
+      if (field.defaultValue === true) return value === false ? false : undefined;
       return value === true ? true : undefined;
     case 'repeater': {
       const items = repeaterToPayload(value, field);

@@ -16,6 +16,10 @@ import { defineConfig, devices } from '@playwright/test';
 const ADMIN_SPECS = /[\\/]tests[\\/]admin[\\/]/;
 // Page visibility (Admin v2 U14a) hides real pages: its own project, run last (below).
 const VISIBILITY_SPEC = /[\\/]tests[\\/]admin[\\/]visibility\.e2e\.ts$/;
+// General settings (Admin v2 U9) changes the public identity every spec reads, and maintenance
+// (U9b) takes the site down: each its own project, after page visibility, in that order.
+const GENERAL_SPEC = /[\\/]tests[\\/]admin[\\/]general\.e2e\.ts$/;
+const MAINTENANCE_SPEC = /[\\/]tests[\\/]admin[\\/]maintenance\.e2e\.ts$/;
 
 export default defineConfig({
   testDir: './tests',
@@ -49,7 +53,7 @@ export default defineConfig({
     {
       name: 'admin',
       testDir: './tests/admin',
-      testIgnore: VISIBILITY_SPEC,
+      testIgnore: [VISIBILITY_SPEC, GENERAL_SPEC, MAINTENANCE_SPEC, /maintenance\.teardown\.ts$/],
       use: { ...devices['Desktop Chrome'] },
       dependencies: ['admin-samples'],
     },
@@ -62,6 +66,32 @@ export default defineConfig({
       testMatch: VISIBILITY_SPEC,
       use: { ...devices['Desktop Chrome'] },
       dependencies: ['chromium', 'admin'],
+    },
+    {
+      // General settings (Admin v2 U9) edits the public identity (a tagline, a hidden social
+      // account, the icons) and the studio's zone, then puts them back: alone, after the
+      // public specs that read them.
+      name: 'general',
+      testDir: './tests/admin',
+      testMatch: GENERAL_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['visibility'],
+    },
+    {
+      // Maintenance (Admin v2 U9b) takes the shared preview down: last of all, and its
+      // teardown switches it off whatever happened.
+      name: 'maintenance',
+      testDir: './tests/admin',
+      testMatch: MAINTENANCE_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['general'],
+      teardown: 'maintenance-teardown',
+    },
+    {
+      name: 'maintenance-teardown',
+      testDir: './tests/admin',
+      testMatch: /maintenance\.teardown\.ts$/,
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 });

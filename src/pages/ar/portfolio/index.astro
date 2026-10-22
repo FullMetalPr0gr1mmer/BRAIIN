@@ -3,6 +3,8 @@ import CatalogPage from '@/components/CatalogPage.astro';
 import { loadOurWork } from '@/lib/portfolio/pages';
 import { PAGE_META } from '@/lib/seo/pageMeta';
 import { noEdgeCache, setTierA } from '@/lib/http/cacheTags';
+import { WORK_CACHE_ENTITIES } from '@/lib/http/routeTags';
+import { sectionTags } from '@/lib/sections/reads';
 
 // Our Work (UI v2 PR10). Tier A: server-rendered and edge-cached — the bare URL only. A
 // facet query (?service=…) is a private, uncached response whose canonical is this page.
@@ -14,15 +16,7 @@ else
   setTierA(Astro.response, {
     route: 'portfolio',
     locale,
-    entities: [
-      'page:portfolio',
-      'portfolio:all',
-      'sectors:all',
-      'clients:all',
-      'services:all',
-      'statistics:all',
-      'testimonials:all',
-    ],
+    entities: [...WORK_CACHE_ENTITIES, ...sectionTags(page.sections)],
   });
 ---
 

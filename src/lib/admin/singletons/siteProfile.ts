@@ -1,4 +1,8 @@
+import { env } from 'cloudflare:workers';
+import { readMaintenance } from '@schemas/maintenance';
 import { SiteProfileSchema } from '@schemas/siteProfile';
+import { edgeValueOf, putMaintenanceState, readMaintenanceSnapshot } from '@/lib/http/maintenance';
+import { contactFromRow } from '@/lib/maintenance/contact';
 import type { SingletonConfig } from '@/lib/admin/singleton';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { IDENTITY_FALLBACK } from '@/lib/identity/fallback';
@@ -36,7 +40,23 @@ const SITE_PROFILE_KEYS = {
   foundedYear: 'founded_year',
   socials: 'socials',
   acceptingApplications: 'accepting_applications',
+  // Admin v2 U9 (0102)
+  tagline: 'tagline',
+  phoneE164: 'phone_e164',
+  phoneDisplay: 'phone_display',
+  mapUrl: 'map_url',
+  faviconMediaId: 'favicon_media_id',
+  appIconMediaId: 'app_icon_media_id',
+  footerCopyright: 'footer_copyright',
+  footerStyle: 'footer_style',
+  footerShowEmail: 'footer_show_email',
+  footerShowSocial: 'footer_show_social',
 };
+
+/** What a refused icon says (0102's trigger, and its foreign key for another tenant's id). */
+export const ICON_REFUSED =
+  'Choose a square picture from the media library, at least 512 pixels wide.';
+const DISPLAY_NEEDS_NUMBER = 'Add the number this displays, or clear it.';
 
 export const siteProfileSingleton: SingletonConfig = {
   table: 'site_profile',
@@ -46,7 +66,9 @@ export const siteProfileSingleton: SingletonConfig = {
   writeCap: 'settings.general',
   columns:
     'tenant_id,brand_name,legal_name,contact_email,whatsapp_e164,whatsapp_display,location,' +
-    'address_locality,address_country,founded_year,socials,accepting_applications,version,updated_at',
+    'address_locality,address_country,founded_year,socials,accepting_applications,' +
+    'tagline,phone_e164,phone_display,map_url,favicon_media_id,app_icon_media_id,' +
+    'footer_copyright,footer_style,footer_show_email,footer_show_social,version,updated_at',
   schema: SiteProfileSchema,
   guardColumns: 'accepting_applications',
   guardWrite: (auth, existing, values) => {
@@ -74,6 +96,17 @@ export const siteProfileSingleton: SingletonConfig = {
     founded_year: F.foundedYear,
     socials: F.socials,
     accepting_applications: false,
+    // The column defaults (0102): today's footer, no tagline, phone, map or icons.
+    tagline: null,
+    phone_e164: null,
+    phone_display: null,
+    map_url: null,
+    favicon_media_id: null,
+    app_icon_media_id: null,
+    footer_copyright: null,
+    footer_style: 'light',
+    footer_show_email: true,
+    footer_show_social: false,
   },
   toRow: (input) => {
     const out: Record<string, unknown> = {};
@@ -83,6 +116,47 @@ export const siteProfileSingleton: SingletonConfig = {
     return out;
   },
   fields: fieldsOf(SITE_PROFILE_KEYS),
+  // Admin v2 U9: a refused icon or phone pair is a 422 on its field, not a generic one.
+  foreignKeys: {
+    site_profile_favicon_fk: { field: 'faviconMediaId', message: ICON_REFUSED },
+    site_profile_app_icon_fk: { field: 'appIconMediaId', message: ICON_REFUSED },
+  },
+  constraintFields: {
+    site_profile_favicon_square: { field: 'faviconMediaId', message: ICON_REFUSED },
+    site_profile_app_icon_square: { field: 'appIconMediaId', message: ICON_REFUSED },
+    site_profile_phone_display_needs_number: {
+      field: 'phoneDisplay',
+      message: DISPLAY_NEEDS_NUMBER,
+    },
+    site_profile_whatsapp_display_needs_number: {
+      field: 'whatsappDisplay',
+      message: DISPLAY_NEEDS_NUMBER,
+    },
+  },
+  // Maintenance v2 (U9b): while the maintenance page is up, its contact buttons (a snapshot
+  // of this row at the last maintenance save) follow an identity save at once, at the edge.
+  // The value put is built from the maintenance ROW (site_settings, which settings.general
+  // holders read), never from KV's own copy: a KV read can be up to a minute stale in this
+  // location, and re-putting it would bring back a bypass, an address or even the switch a
+  // colleague has just changed. KV only says whether the edge has maintenance on (when it
+  // does not, nothing is read or written: an identity save never switches the site on), and
+  // the row must say on too. Best effort: a failure is in the audit detail and the cron's
+  // reconcile heals it within ten minutes. With releases on, R7's post-publish effects must
+  // do the same.
+  afterWrite: async ({ auth, sb, row }) => {
+    const edge = await readMaintenanceSnapshot(env);
+    if (!edge?.active) return;
+    const { data, error } = await sb
+      .from('site_settings')
+      .select('maintenance')
+      .eq('tenant_id', auth.tenantId)
+      .maybeSingle<{ maintenance: unknown }>();
+    if (error) return { maintenanceContact: 'not-refreshed' };
+    const stored = readMaintenance(data?.maintenance ?? null);
+    if (!stored.active) return;
+    const kvSynced = await putMaintenanceState(env, edgeValueOf(stored, contactFromRow(row)));
+    return { maintenanceContact: kvSynced ? 'refreshed' : 'not-refreshed' };
+  },
   // The job-application intake switch is never part of a release (Admin v2 P-3; 0038's
   // exempt_columns): with releases on it gets its own endpoint (R3). The legacy PATCH above
   // still writes it while releases are off.

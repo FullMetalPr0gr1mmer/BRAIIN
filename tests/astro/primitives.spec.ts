@@ -22,7 +22,9 @@ import Ring from '@/components/admin/ui/charts/Ring.astro';
 import Spark from '@/components/admin/ui/charts/Spark.astro';
 import { avatarTone } from '@/lib/admin/avatar';
 import { formatNumber } from '@/lib/admin/charts';
-import { formatDate } from '@/lib/admin/relTime';
+import { clockFor } from '@/lib/admin/relTime';
+
+const { formatDate } = clockFor('Asia/Riyadh');
 
 // The admin's server primitives (Admin v2 F4b, docs/admin-v2/ui.md AV-07), rendered with
 // Astro's container API: zero JS, so their markup is their whole behaviour. Every render

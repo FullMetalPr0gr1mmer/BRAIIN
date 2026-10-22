@@ -1,3 +1,5 @@
+import type { StudioTimeZone } from '@schemas/timeZones';
+import { studioTimeZone } from './studioTimeZone';
 import type { APIContext, APIRoute } from 'astro';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -50,6 +52,16 @@ export interface AdminRouteContext<TInput> {
    * a guess at "off". Only release-managed routes ask, so other routes pay nothing.
    */
   releasesEnabled(): Promise<boolean>;
+  /**
+   * The studio's time zone (Admin v2 U9, `site_settings.timezone`), read once per request
+   * on first call (src/lib/admin/studioTimeZone.ts); the default on any failure.
+   */
+  studioTimeZone(): Promise<StudioTimeZone>;
+  /**
+   * This request's CSP nonce (src/middleware.ts), for a route that answers HTML with an
+   * inline <style> (Admin v2 U9b: the maintenance page's preview).
+   */
+  readonly cspNonce: string;
 }
 
 export interface AdminRouteOptions<TSchema extends z.ZodTypeAny | undefined> {
@@ -192,6 +204,8 @@ export function defineAdminRoute<TSchema extends z.ZodTypeAny | undefined = unde
         params,
         audit: (entry) => pending.push(entry),
         releasesEnabled: () => (releases ??= readReleasesFlag(sb, auth)),
+        studioTimeZone: () => studioTimeZone(locals),
+        cspNonce: locals.cspNonce ?? '',
       });
 
       // Audit AFTER the operation succeeded, so the log records what happened rather

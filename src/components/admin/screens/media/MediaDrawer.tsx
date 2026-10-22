@@ -18,7 +18,7 @@ import {
 } from '@/components/admin/fields/media/xhrUpload';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
-import { formatDateTime } from '@/lib/admin/relTime';
+import { useClock } from '@/components/admin/kit/clock';
 import { toast } from '@/lib/admin/toast';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
@@ -85,6 +85,7 @@ export default function MediaDrawer({
   onChanged,
   onDeleted,
 }: MediaDrawerProps) {
+  const { formatDateTime } = useClock();
   const id = String(listed['id']);
   const [row, setRow] = useState<MediaRow>(listed);
   const [usage, setUsage] = useState<UsageRow[] | null>(null);

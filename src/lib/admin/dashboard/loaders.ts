@@ -20,7 +20,8 @@ import { percentChange, pointChange, type DeltaUnit } from '../kpi';
 import { goingLiveToday } from '../notifications/scheduled';
 import { readMyDashboardPrefs, type MyDashboardPrefs } from '../prefs';
 import { libraryAction } from '../quickActions';
-import { ADMIN_TIME_ZONE } from '../relTime';
+import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
+import { dayKeyIn } from '@/lib/time/zone';
 import { dailyArabicShare, loadPageviewSummary, type PageviewSummary } from '../stats/pageviews';
 import { dayLabel, hasPreviousPeriod, rangeOfDays } from '../stats/range';
 import { count as countOf, record } from '../stats/read';
@@ -169,6 +170,8 @@ export interface DashboardContext {
   now: Date;
   /** PUBLIC_SITE_URL: the sub-line names its host. */
   siteUrl: string;
+  /** The studio's time zone (Admin v2 U9): whose days the leads chart counts. */
+  tz?: string;
 }
 
 // ── The attention list's words (0028's kinds, and 0066's release kinds) ────────────────
@@ -238,24 +241,19 @@ const ATTENTION_ROWS = 5;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────────────
 
-const RIYADH_DAY = new Intl.DateTimeFormat('en-CA', {
-  timeZone: ADMIN_TIME_ZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-
-/** The Riyadh calendar day (YYYY-MM-DD) that holds an instant. */
-export function riyadhDate(at: number): string {
-  return RIYADH_DAY.format(at);
+/** The studio's calendar day (YYYY-MM-DD) that holds an instant (Admin v2 U9: its zone). */
+export function studioDate(at: number, tz: string = DEFAULT_TIME_ZONE): string {
+  return dayKeyIn(at, tz);
 }
 
-/** Counts instants per Riyadh day over the `days` days ending today, oldest first. */
-export function perRiyadhDay(
+/** Counts instants per studio day over the `days` days ending today, oldest first. */
+export function perStudioDay(
   instants: readonly string[],
   days: number,
   now: Date,
+  tz: string = DEFAULT_TIME_ZONE,
 ): { days: string[]; counts: number[] } {
+  const riyadhDate = (at: number) => studioDate(at, tz);
   const keys: string[] = [];
   for (let i = days - 1; i >= 0; i -= 1) keys.push(riyadhDate(now.getTime() - i * DAY_MS));
   const unique = [...new Set(keys)];
@@ -506,7 +504,7 @@ export function widgetLoaders(
       let leads: ViewsData['leads'] = null;
       if (reads.may('leads.manage')) {
         const instants = await reads.leads30();
-        const counted = perRiyadhDay(instants, 30, now);
+        const counted = perStudioDay(instants, 30, now, ctx.tz);
         leads = {
           labels: counted.days.map((day) => dayLabel(day)),
           counts: counted.counts,
@@ -575,7 +573,7 @@ export function widgetLoaders(
           ? reads.staleDrafts()
           : Promise.resolve({ rows: [] as AttentionRow[], count: 0 }),
         reads.may('services.write') || reads.may('blog.write')
-          ? goingLiveToday(sb, auth, now)
+          ? goingLiveToday(sb, auth, now, ctx.tz)
           : Promise.resolve([]),
       ]);
       // A sample quote is listed as a placeholder and again as "no consent" (it has none by
@@ -620,7 +618,7 @@ export function widgetLoaders(
       };
     },
 
-    health: () => loadHealthSummary(sb, auth, now.getTime()),
+    health: () => loadHealthSummary(sb, auth, now.getTime(), ctx.tz),
 
     async activity() {
       const { data, error } = await sb

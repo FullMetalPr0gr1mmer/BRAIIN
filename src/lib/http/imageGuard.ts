@@ -80,6 +80,17 @@ export const TRANSFORM_FORMATS: ReadonlySet<string> = new Set([
  */
 export const UPLOAD_TRANSFORM_FORMATS: ReadonlySet<string> = new Set(['avif', 'webp', 'jpg']);
 
+/**
+ * The site's icons (Admin v2 U9): an uploaded square image as a PNG at exactly these sizes
+ * (SeoHead's favicon at 32 and 192, the apple-touch-icon at 180, the manifest's 192 and 512).
+ * A narrow rule of its own, not a widening of TRANSFORM_WIDTHS or UPLOAD_TRANSFORM_FORMATS:
+ * only an upload whose key says it is square, only square transforms, only PNG, so each
+ * uploaded picture can cost at most four more unique transformations, and only one used as
+ * an icon is ever asked for them.
+ */
+export const ICON_WIDTHS: ReadonlySet<number> = new Set([32, 180, 192, 512]);
+export const ICON_FORMAT = 'png';
+
 /** Astro derives `h` from rounded target dimensions, so it can drift a pixel or two. */
 export const ASPECT_TOLERANCE_PX = 2;
 
@@ -144,6 +155,8 @@ export function checkImageRequest(
   if (!asset) return { ok: false, reason: 'href' };
 
   const format = params.get('f');
+  // An icon (above): an upload, square, at a listed size, as PNG; nothing else is PNG.
+  if (upload && format === ICON_FORMAT) return checkIcon(upload, params);
   const formats = upload ? UPLOAD_TRANSFORM_FORMATS : TRANSFORM_FORMATS;
   if (format === null || !formats.has(format)) return { ok: false, reason: 'format' };
 
@@ -161,6 +174,21 @@ export function checkImageRequest(
   const tolerance = upload ? UPLOAD_ASPECT_TOLERANCE_PX : ASPECT_TOLERANCE_PX;
   if (Math.abs(height - expected) > tolerance) return { ok: false, reason: 'aspect' };
 
+  return { ok: true };
+}
+
+/** The icon rule: a square upload, asked for a square PNG at one of ICON_WIDTHS. */
+function checkIcon(asset: AssetSize, params: URLSearchParams): ImageGuardResult {
+  if (asset.width !== asset.height) return { ok: false, reason: 'icon: not square' };
+  const w = params.get('w');
+  const h = params.get('h');
+  if (w === null || h === null || !INT.test(w) || !INT.test(h)) {
+    return { ok: false, reason: 'dimensions' };
+  }
+  const width = Number(w);
+  if (Number(h) !== width) return { ok: false, reason: 'icon: not square' };
+  if (!ICON_WIDTHS.has(width)) return { ok: false, reason: 'icon: width' };
+  if (width > asset.width) return { ok: false, reason: 'wider than the source' };
   return { ok: true };
 }
 

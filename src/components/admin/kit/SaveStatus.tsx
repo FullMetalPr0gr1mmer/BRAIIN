@@ -1,5 +1,6 @@
 import Icon from './Icon';
-import { formatTime, type Instant } from '@/lib/admin/relTime';
+import { clockFor, type Clock, type Instant } from '@/lib/admin/relTime';
+import { pageTimeZone, useClock } from './clock';
 
 // Where a save stands (Admin v2 F4b): "Unsaved changes", "Saving…", "Saved at 14:05",
 // "Not saved". Always words (the colour and the icon repeat them), in a status region that
@@ -19,16 +20,21 @@ const WORDS: Record<SaveState, string> = {
 
 export interface SaveStatusProps {
   state: SaveState;
-  /** When the last save landed: "Saved at 14:05" (Riyadh time). */
+  /** When the last save landed: "Saved at 14:05" (the studio's time, Admin v2 U9). */
   savedAt?: Instant | null | undefined;
   /** Replaces "Not saved" with the reason ("Not saved: someone else changed this"). */
   error?: string | undefined;
 }
 
 /** The words for a state. */
-export function saveStatusText(state: SaveState, savedAt?: Instant | null, error?: string) {
+export function saveStatusText(
+  state: SaveState,
+  savedAt?: Instant | null,
+  error?: string,
+  clock: Clock = clockFor(pageTimeZone()),
+) {
   if (state === 'saved' && savedAt) {
-    const time = formatTime(savedAt);
+    const time = clock.formatTime(savedAt);
     if (time) return `Saved at ${time}`;
   }
   if (state === 'error' && error) return error;
@@ -36,11 +42,12 @@ export function saveStatusText(state: SaveState, savedAt?: Instant | null, error
 }
 
 export default function SaveStatus({ state, savedAt, error }: SaveStatusProps) {
+  const clock = useClock();
   return (
     <p className="save-status" data-state={state} role="status">
       {state === 'saving' && <Icon name="loader" size={14} className="spin" />}
       {state === 'saved' && <Icon name="check" size={14} />}
-      {saveStatusText(state, savedAt, error)}
+      {saveStatusText(state, savedAt, error, clock)}
     </p>
   );
 }

@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { LLMS_CACHE_TAG } from '@/lib/http/routeTags';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { getPublishedServices } from '@/lib/data/services';
 import { getPublishedDisciplines } from '@/lib/data/disciplines';
@@ -110,7 +111,7 @@ ${sectionLines}
       'content-type': 'text/plain; charset=utf-8',
       // TODO(KAN-20): purge by Cache-Tag on publish instead of waiting out max-age.
       'cache-control': 'public, max-age=3600',
-      'cache-tag': 'route:llms,llms:all,site:identity',
+      'cache-tag': LLMS_CACHE_TAG,
     },
   });
 };

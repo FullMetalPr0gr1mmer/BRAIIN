@@ -64,6 +64,9 @@ const NOT_GATEABLE = [
   '/sitemap.xml',
   '/llms.txt',
   '/robots.txt',
+  // The web app manifests (Admin v2 U9): a file the head links, not a page.
+  '/manifest.webmanifest',
+  '/ar/manifest.webmanifest',
   '/healthz',
 ];
 const ALL_NOT_GATEABLE = new Set(NOT_GATEABLE);

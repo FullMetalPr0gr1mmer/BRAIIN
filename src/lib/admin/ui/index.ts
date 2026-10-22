@@ -8,6 +8,7 @@ import { clientsUi } from './clients';
 import { disciplinesUi } from './disciplines';
 import { faqUi } from './faq';
 import { integrationsUi } from './integrations';
+import { maintenanceUi } from './maintenance';
 import { mediaUi } from './media';
 import { navigationUi } from './navigation';
 import { pagesUi } from './pages';
@@ -33,6 +34,7 @@ export type {
   EditorTabDef,
   EditorLanguage,
   FieldDef,
+  FieldGroup,
   FieldKind,
   RelationDef,
   RelationFilterValue,
@@ -104,6 +106,7 @@ export function uiFor(slug: string): ResourceUi {
 export const SINGLETON_UI: Record<string, SingletonUi> = {
   'ai-config': aiConfigUi,
   integrations: integrationsUi,
+  maintenance: maintenanceUi,
   profile: profileUi,
   seo: seoUi,
   settings: settingsUi,

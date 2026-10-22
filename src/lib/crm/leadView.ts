@@ -1,6 +1,7 @@
 import type { LeadChannel, LeadContactChannel, LeadSource } from '@schemas/crm';
 import { BADGE_TONES, type BadgeTone } from '@/lib/admin/tones';
-import { ADMIN_TIME_ZONE } from '@/lib/admin/relTime';
+import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
+import { addDays, todayIn, zonedDayStart } from '@/lib/time/zone';
 
 // How a lead reads on the leads screens (Admin v2 C4a, crm.md §11): the words and tones for
 // its interest, source, stage, score and SLA flag, its timeline's sentences, the date ranges
@@ -248,33 +249,10 @@ export interface RangeInstants {
 }
 
 const DAY_MS = 86_400_000;
-const STUDIO_DATE = /* @__PURE__ */ new Intl.DateTimeFormat('en-CA', {
-  timeZone: ADMIN_TIME_ZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-
-/** The studio's UTC offset in minutes at `at` (Asia/Riyadh: +180, no daylight saving). */
-function studioOffsetMinutes(at: Date): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: ADMIN_TIME_ZONE,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-  }).formatToParts(at);
-  const n = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  const asUtc = Date.UTC(n('year'), n('month') - 1, n('day'), n('hour'), n('minute'), n('second'));
-  return Math.round((asUtc - Math.floor(at.getTime() / 1000) * 1000) / 60_000);
-}
 
 /**
  * The last N days in the studio's calendar, today included: from midnight N-1 days ago
- * (Asia/Riyadh) to now, `to` exclusive as lead_summary and leads_list read it. Null for all
+ * (in the studio's zone, `tz`: Admin v2 U9) to now, `to` exclusive as lead_summary and leads_list read it. Null for all
  * time (no range, so no deltas).
  *
  * The comparison (C4b, settling what C4a left open): the same elapsed span N days earlier,
@@ -283,13 +261,15 @@ function studioOffsetMinutes(at: Date): number {
  * whole days only would leave today's leads out of the KPIs. `previousPeriod`
  * (src/lib/crm/leadKpis.ts) shifts the same way, so the route and the screen agree.
  */
-export function rangeToInstants(range: LeadRange, now: Date): RangeInstants | null {
+export function rangeToInstants(
+  range: LeadRange,
+  now: Date,
+  tz: string = DEFAULT_TIME_ZONE,
+): RangeInstants | null {
   if (range === 'all') return null;
   const days = Number(range);
-  const [y, m, d] = STUDIO_DATE.format(now).split('-').map(Number) as [number, number, number];
   // Midnight starting the range in the studio's zone: N-1 days before today's date, 00:00.
-  const startUtcMidnight = Date.UTC(y, m - 1, d - (days - 1));
-  const from = startUtcMidnight - studioOffsetMinutes(new Date(startUtcMidnight)) * 60_000;
+  const from = zonedDayStart(addDays(todayIn(tz, now), -(days - 1)), tz).getTime();
   const to = now.getTime();
   const shift = days * DAY_MS;
   const iso = (ms: number) => new Date(ms).toISOString();

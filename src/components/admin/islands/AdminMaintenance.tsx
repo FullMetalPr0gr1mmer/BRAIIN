@@ -1,4 +1,4 @@
-// Island entry for the maintenance screen (/admin/maintenance): a pre-F1 panel in the F3
-// shape (Admin v2 W0). The page hydrates this entry; the screen's code is in
-// screens/maintenance/.
+// Island entry for maintenance mode (/admin/maintenance, Admin v2 U9b). The page hydrates this
+// entry with the studio's time zone; the screen's code is in screens/maintenance/ (the
+// admin-screens chunk group: it is an editor on the field kit since U9b).
 export { default } from '@/components/admin/screens/maintenance/MaintenancePanel';

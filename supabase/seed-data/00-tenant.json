@@ -32,22 +32,26 @@
             {
               "network": "instagram",
               "handle": "@braiinstatiion",
-              "url": "https://instagram.com/braiinstatiion"
+              "url": "https://instagram.com/braiinstatiion",
+              "visible": true
             },
             {
               "network": "linkedin",
               "handle": "@braiin-statiion",
-              "url": "https://linkedin.com/company/braiin-statiion"
+              "url": "https://linkedin.com/company/braiin-statiion",
+              "visible": true
             },
             {
               "network": "behance",
               "handle": "@braiinstatiion",
-              "url": "https://behance.net/braiinstatiion"
+              "url": "https://behance.net/braiinstatiion",
+              "visible": true
             },
             {
               "network": "youtube",
               "handle": "@braiinstatiion",
-              "url": "https://youtube.com/@braiinstatiion"
+              "url": "https://youtube.com/@braiinstatiion",
+              "visible": true
             }
           ],
           "accepting_applications": false,

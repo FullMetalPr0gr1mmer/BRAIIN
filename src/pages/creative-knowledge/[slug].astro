@@ -2,12 +2,17 @@
 import BlogDetail from '@/components/BlogDetail.astro';
 import { getPostBySlug } from '@/lib/data/blog';
 import { setTierA } from '@/lib/http/cacheTags';
+import { blogPostCacheEntities } from '@/lib/http/routeTags';
 
 const { slug } = Astro.params;
 const post = slug ? await getPostBySlug(slug) : null;
 if (!post) return Astro.rewrite('/404');
 
-setTierA(Astro.response, { route: 'blog-post', locale: 'en', entities: [`blog:${post.slug}`] });
+setTierA(Astro.response, {
+  route: 'blog-post',
+  locale: 'en',
+  entities: blogPostCacheEntities(post.slug),
+});
 ---
 
 <BlogDetail locale="en" post={post} />

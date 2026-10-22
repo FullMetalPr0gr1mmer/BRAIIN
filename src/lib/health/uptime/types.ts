@@ -30,7 +30,8 @@ export interface UptimeReading {
 
 export interface UptimeProvider {
   readonly name: string;
-  read(now: Date): Promise<UptimeReading>;
+  /** `tz`: the studio's time zone (Admin v2 U9), whose days the strip counts. */
+  read(now: Date, tz?: string): Promise<UptimeReading>;
 }
 
 /** A provider's own failure that is not a transport one (the API said no, or made no sense). */

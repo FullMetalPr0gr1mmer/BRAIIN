@@ -1,3 +1,4 @@
+import { DEFAULT_TIME_ZONE, isStudioTimeZone } from '@schemas/timeZones';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   PROBE_COLUMNS,
@@ -310,12 +311,22 @@ export async function runHealthProbes(
 
   const { data, error } = await sb
     .from('tenants')
-    .select(`primary_domain, health_probes (${PROBE_COLUMNS})`)
+    // The studio's zone rides the same read (Admin v2 U9): the strip's days are its days.
+    .select(`primary_domain, health_probes (${PROBE_COLUMNS}), site_settings (timezone)`)
     .eq('id', tenantId)
     .maybeSingle();
   if (error) throw new Error(`read health_probes: ${error.message}`);
   if (!data) throw new Error('read health_probes: no such tenant');
-  const tenant = data as { primary_domain?: unknown; health_probes?: unknown };
+  const tenant = data as {
+    primary_domain?: unknown;
+    health_probes?: unknown;
+    site_settings?: unknown;
+  };
+  const settings = Array.isArray(tenant.site_settings)
+    ? tenant.site_settings[0]
+    : tenant.site_settings;
+  const zone = (settings as { timezone?: unknown } | null | undefined)?.timezone;
+  const tz = isStudioTimeZone(zone) ? zone : DEFAULT_TIME_ZONE;
   const prev = new Map<ProbeKind, ProbeRow>();
   for (const raw of Array.isArray(tenant.health_probes) ? tenant.health_probes : []) {
     const row = ProbeRowSchema.safeParse(raw);
@@ -338,7 +349,7 @@ export async function runHealthProbes(
     }
     if (!due(up, now, force)) return;
     try {
-      const reading = await provider.read(now);
+      const reading = await provider.read(now, tz);
       const facts = uptimeFacts(reading, up ? probeFacts('uptime', up.facts) : null, now);
       writes.push(
         nextProbe(

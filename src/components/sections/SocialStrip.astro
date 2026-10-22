@@ -81,12 +81,15 @@ const identity = await getIdentity(Astro.locals);
 const byLabel = new Map(Object.values(NETWORKS).map((n) => [n.label.toLowerCase(), n.icon]));
 const resolved = links
   ? links.map((l) => ({ ...l, icon: byLabel.get(l.label.toLowerCase()) }))
-  : identity.socials.map((sl) => ({
-      label: NETWORKS[sl.network].label,
-      user: sl.handle,
-      href: sl.url,
-      icon: NETWORKS[sl.network].icon,
-    }));
+  : // An account with "Show on the site" off (Admin v2 U9) stays in the admin only.
+    identity.socials
+      .filter((sl) => sl.visible !== false)
+      .map((sl) => ({
+        label: NETWORKS[sl.network].label,
+        user: sl.handle,
+        href: sl.url,
+        icon: NETWORKS[sl.network].icon,
+      }));
 ---
 
 <section

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { barsGeometry, datumSummary, formatNumber, n } from '@/lib/admin/charts';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import { useClock } from '@/components/admin/kit/clock';
 import {
   ACTIVE_MINUTES,
   MINUTES_SHOWN,
@@ -10,6 +11,7 @@ import {
   peopleWord,
   realtimeOf,
   updatedLine,
+  zoneWords,
   type RealtimeView,
 } from '@/lib/admin/stats/realtimeView';
 
@@ -40,7 +42,8 @@ export function stateLine(stop: Stop): string {
 }
 
 function MinuteBars({ view }: { view: RealtimeView }) {
-  const data = view.perMinute.map((m) => ({ label: minuteLabel(m.minute), value: m.views }));
+  const clock = useClock();
+  const data = view.perMinute.map((m) => ({ label: minuteLabel(m.minute, clock), value: m.views }));
   const g = barsGeometry(data, { height: 180 });
   const caption = `Page views per minute, the last ${MINUTES_SHOWN} minutes`;
   if (!g) {
@@ -96,7 +99,7 @@ function MinuteBars({ view }: { view: RealtimeView }) {
             <caption className="visually-hidden">{caption}</caption>
             <thead>
               <tr>
-                <th scope="col">Minute, Riyadh time</th>
+                <th scope="col">Minute, {zoneWords(clock)}</th>
                 <th scope="col" className="num">
                   Page views
                 </th>
@@ -118,6 +121,7 @@ function MinuteBars({ view }: { view: RealtimeView }) {
 }
 
 export default function Realtime({ initial }: RealtimeProps) {
+  const clock = useClock();
   const [view, setView] = useState<RealtimeView>(initial);
   const [stop, setStop] = useState<Stop>('none');
   const [failure, setFailure] = useState('');
@@ -168,7 +172,7 @@ export default function Realtime({ initial }: RealtimeProps) {
     void refresh();
   }
 
-  const updated = updatedLine(view);
+  const updated = updatedLine(view, clock);
   return (
     <div className="rt" data-paused={stop === 'none' ? undefined : ''}>
       <div className="rt__bar">
@@ -203,7 +207,9 @@ export default function Realtime({ initial }: RealtimeProps) {
           <div className="card__h">
             <div>
               <h2 className="card__t">Page views per minute</h2>
-              <p className="card__sub">The last {MINUTES_SHOWN} minutes, Riyadh time</p>
+              <p className="card__sub">
+                The last {MINUTES_SHOWN} minutes, {zoneWords(clock)}
+              </p>
             </div>
           </div>
           <MinuteBars view={view} />

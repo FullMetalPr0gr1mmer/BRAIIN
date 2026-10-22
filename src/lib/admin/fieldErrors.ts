@@ -269,7 +269,9 @@ export function badInputErrors(controls: readonly UnreadableControl[]): MappedEr
     const message =
       control.type === 'number'
         ? 'Enter a number, or clear the box.'
-        : 'Enter the whole date and time, or clear it.';
+        : control.type === 'date'
+          ? 'Enter the whole date, or clear it.'
+          : 'Enter the whole date and time, or clear it.';
     byId[control.id] = message;
     summary.push({ id: control.id, message: `${control.label || 'A field'}: ${message}` });
   }
