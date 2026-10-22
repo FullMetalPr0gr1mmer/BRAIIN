@@ -412,10 +412,6 @@ exports[`resource configs: toRow is what it was before R2 > blog 1`] = `
     "authorId": {
       "author_id": null,
     },
-    "body": {
-      "body": null,
-      "body_html": null,
-    },
     "categoryId": {
       "category_id": null,
     },
@@ -492,10 +488,6 @@ exports[`resource configs: toRow is what it was before R2 > blog 2`] = `
   "nulls": {
     "authorId": [
       "author_id",
-    ],
-    "body": [
-      "body",
-      "body_html",
     ],
     "categoryId": [
       "category_id",

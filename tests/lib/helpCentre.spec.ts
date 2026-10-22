@@ -1891,6 +1891,75 @@ describe('seo-and-redirects says what the SEO screen does (Admin v2 U10)', () =>
   });
 });
 
+describe('the Style-Finder and job applications guides (Admin v2 U8a)', () => {
+  const article = (slug: string) => SET.find((a) => a.slug === slug)!;
+  const text = (slug: string, lang: 'en' | 'ar') => textsOf(article(slug), lang).join(' ');
+  // The set as main left it before U8's migration: what job-applications was put over.
+  const u8 = MIGRATION_FILES.findIndex((f) => f.name.endsWith('_u8_editors.sql'));
+  const before = () => helpSet(MIGRATION_FILES.slice(0, u8)).set;
+
+  it('style-finder is new, at its own place, for the roles that open the three screens', () => {
+    expect(u8).toBeGreaterThan(0);
+    expect(before().some((g) => g.slug === 'style-finder')).toBe(false);
+    expect(article('style-finder')).toMatchObject({
+      sort_order: 115,
+      title: 'Style-Finder',
+      caps: ['ai.editContent', 'ai.config'],
+      screens: ['/admin/ai-questions', '/admin/ai-styles', '/admin/ai-config'],
+    });
+    expect(ROLES.filter((r) => mayRead(r, article('style-finder').caps))).toEqual([
+      'admin',
+      'content_creator',
+    ]);
+    expect(pageGuideFor('/admin/ai-questions/new', 'content_creator')).toBe('style-finder');
+    expect(pageGuideFor('/admin/ai-config', 'admin')).toBe('style-finder');
+    expect(pageGuideFor('/admin/ai-styles', 'seo')).toBeNull();
+  });
+
+  it('says the quiz is not live, with the stub’s own limits and the options’ cap', async () => {
+    const { AI_IP_LIMIT, AI_SESSION_LIMIT } = await import('@/lib/ai/rateLimit');
+    const { AiQuestionWriteSchema } = await import('@schemas/admin');
+    const en = text('style-finder', 'en');
+    const ar = text('style-finder', 'ar');
+    expect(en).toContain('It is not on the site yet');
+    expect(en).toContain(
+      `fixed at ${AI_IP_LIMIT} an hour per address and ${AI_SESSION_LIMIT} per visitor`,
+    );
+    expect(ar).toContain(`${AI_IP_LIMIT} في الساعة لكل عنوان و${AI_SESSION_LIMIT} لكل زائر`);
+    const many = Array.from({ length: 21 }, (_, i) => ({
+      value: `o${i}`,
+      label: { en: 'x', ar: 'س' },
+    }));
+    const base = { slug: 'q', prompt: { en: 'Q', ar: 'س' } };
+    expect(AiQuestionWriteSchema.safeParse({ ...base, options: many.slice(0, 20) }).success).toBe(
+      true,
+    );
+    expect(AiQuestionWriteSchema.safeParse({ ...base, options: many }).success).toBe(false);
+    expect(en).toContain('up to 20 options');
+    expect(ar).toContain('حتى 20 خيارًا');
+  });
+
+  it('job-applications changes only its first step, in both languages', () => {
+    const old = before().find((g) => g.slug === 'job-applications')!;
+    const now = article('job-applications');
+    expect(now.body.en[1]!.x).toEqual([
+      'Open an application to read it, and set its status as you review it. Opening one is recorded in the activity log; its contact details stay hidden until you reveal them.',
+      ...((old['body'] as HelpArticleRow['body']).en[1]!.x as string[]).slice(1),
+    ]);
+    expect((now.body.ar[1]!.x as string[]).slice(1)).toEqual(
+      ((old['body'] as HelpArticleRow['body']).ar[1]!.x as string[]).slice(1),
+    );
+    expect((now.body.ar[1]!.x as string[])[0]).toContain('ويُسجَّل فتحه في سجل النشاط');
+    const { body: _a, ...rest } = now;
+    const { body: _b, ...was } = HelpArticleSeedSchema.parse(old);
+    expect(rest).toEqual(was);
+    // The words the drawer shows are the guide's.
+    expect(text('job-applications', 'en')).toContain('Reveal contact details');
+    expect(text('job-applications', 'en')).toContain('Download CV');
+    expect(text('job-applications', 'en')).toContain('Erase application');
+  });
+});
+
 // ── 1e. The Sales guides (C10a) ─────────────────────────────────────────────────────────
 
 describe('the Sales guides (C10a): the-sales-role, and roles-and-access with five roles', () => {
@@ -2028,7 +2097,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
     expect(shown('admin')).toEqual(SET.map((a) => a.slug).sort());
   });
 
-  it('Content Creator: the basics, content, media and stats; no leads, PII, hiring, settings or SEO', () => {
+  it('Content Creator: the basics, content, media, the Style-Finder and stats; no leads, PII, hiring, settings or SEO', () => {
     expect(shown('content_creator')).toEqual([
       'collections-and-faq',
       'finding-your-way',
@@ -2036,6 +2105,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'previewing-changes',
       'roles-and-access',
       'saving-and-publishing',
+      'style-finder',
       'website-stats',
       'your-account',
       'your-dashboard',

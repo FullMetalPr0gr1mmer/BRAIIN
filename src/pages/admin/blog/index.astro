@@ -2,10 +2,15 @@
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminResourceTable from '@/components/admin/islands/AdminResourceTable';
 import { uiFor } from '@/lib/admin/uiSchema';
+import { canWriteResource } from '@/lib/admin/editorAccess';
 
 export const prerender = false;
 
+// Creative Knowledge (the blog). "New post" only for a role that writes posts (Admin v2 U8b:
+// SEO reads them, to edit their SEO); the API refuses a create whatever this shows.
 const ui = uiFor('blog');
+const role = Astro.locals.session?.role ?? 'content_creator';
+const canCreate = canWriteResource('blog', role);
 ---
 
 <AdminLayout title={ui.title}>
@@ -14,5 +19,5 @@ const ui = uiFor('blog');
   to intersection just adds a blank frame. Public routes use visible/idle — /admin is
   exempt from the CWV budgets (CLAUDE.md §6) and is gated on bundle size instead.
 -->
-  <AdminResourceTable client:load resource="blog" />
+  <AdminResourceTable client:load resource="blog" canCreate={canCreate} />
 </AdminLayout>

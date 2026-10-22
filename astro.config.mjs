@@ -34,9 +34,12 @@ const ADMIN_KIT_SCREEN =
 // admin-ui may import them, and admin-ui leaves the two editor islands alone
 // (ADMIN_EDITOR_ISLANDS): a group takes its modules' static dependencies, and admin-ui's
 // path rule also matches an island's entry module, so either would pull the field kit
-// back into admin-ui (tests/lib/adminBundle.spec.ts checks both).
+// back into admin-ui (tests/lib/adminBundle.spec.ts checks both). Admin v2 U8b: the shared SEO
+// editor (SeoPanel and its GooglePreview, screens/seo/) is the field kit's too, since every
+// tabbed editor's SEO tab draws it (ResourceForm imports it), and so are the tabs' rules
+// (editorTabs.ts); left in the SEO screen's group, every editor would import admin-screens.
 const ADMIN_FIELDS =
-  /[\\/]src[\\/](components[\\/]admin[\\/](FormField\.tsx$|fields[\\/]|screens[\\/](resources[\\/]ResourceForm|singleton[\\/]SingletonForm)\.tsx$)|lib[\\/]admin[\\/](formPayload|sectionUi|fieldErrors|fieldValues|entitySave|useEntitySave|saveMode|contrast|accentWords|linkables)\.ts$)/;
+  /[\\/]src[\\/](components[\\/]admin[\\/](FormField\.tsx$|fields[\\/]|screens[\\/](resources[\\/]ResourceForm|singleton[\\/]SingletonForm|seo[\\/](SeoPanel|GooglePreview))\.tsx$)|lib[\\/]admin[\\/](formPayload|sectionUi|fieldErrors|fieldValues|entitySave|useEntitySave|saveMode|contrast|accentWords|linkables|editorTabs)\.ts$)/;
 // The dashboard (Admin v2 U1): its island's eager code (Dashboard.tsx) stays in the island's
 // `AdminDashboard` entry chunk, and what it loads on first use (the Customize binder, the
 // drawers and modals) is the admin-dashboard group. Claimed by admin-ui's path rule, they and

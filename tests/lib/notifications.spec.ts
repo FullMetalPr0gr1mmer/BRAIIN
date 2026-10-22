@@ -178,7 +178,8 @@ describe('the bell: who gets what', () => {
     });
     expect(admin.items.find((item) => item.kind === 'applications')).toMatchObject({
       text: 'New application for Motion designer',
-      href: '/admin/applications',
+      // The bell opens that application in the screen's drawer (Admin v2 U8a).
+      href: '/admin/applications?open=a-1',
       detail: null,
     });
 

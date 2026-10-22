@@ -1,0 +1,59 @@
+/* Screen stylesheet: Job applications, /admin/applications (Admin v2 U8a). Linked only
+   through AdminLayout's `styles` prop (styles={['applications.css']}), after admin.css. The
+   table, the chips, the drawer, the cards, the stat rows, the badges and the revealed contact
+   block (.pii) are the kit's (admin.css); only the screen's own arrangement is here: the
+   list's column, the drawer's stack of cards, the crafts row, a long link that wraps instead
+   of widening the drawer, the CV line and the footer. Tokens only (tests/lib/adminStyles.spec.ts,
+   scripts/contrast-audit.mjs). */
+
+.apps {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-drawer {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-drawer > .card {
+  margin: 0;
+}
+
+.app-drawer__message {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.app-drawer__crafts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.app-drawer__link {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.app-drawer__cv {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-drawer__cv .admin-sub {
+  margin: 0;
+}
+
+.app-drawer__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  inline-size: 100%;
+}
