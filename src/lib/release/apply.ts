@@ -164,6 +164,7 @@ function requestOf(
   mode: 'publish' | 'dry_run',
   items: readonly CheckedItem[],
   note: string | undefined,
+  restores?: string,
 ): ApplyRequest {
   return ApplyRequestSchema.parse({
     p_actor: auth.userId,
@@ -171,7 +172,9 @@ function requestOf(
     p_mode: mode,
     p_items: items.map((i) => i.apply),
     p_note: note && note.length > 0 ? note : null,
-    p_kind: 'publish',
+    // A rollback names the version it restores (R10); R4 checks it is a live one of the tenant.
+    p_kind: restores ? 'rollback' : 'publish',
+    p_restores_release_id: restores ?? null,
   });
 }
 
@@ -273,9 +276,10 @@ export async function dryRun(
   auth: AuthContext,
   items: readonly CheckedItem[],
   note: string | undefined,
+  restores?: string,
 ): Promise<ReleaseCheck> {
   const check = checkOf(items, 'ran');
-  const { data, error } = await callApply(requestOf(auth, 'dry_run', items, note));
+  const { data, error } = await callApply(requestOf(auth, 'dry_run', items, note, restores));
   if (error) throw refusalOf(error, items);
   const report = DryRunReportSchema.safeParse(data);
   if (!report.success) throw new Error('apply_release (dry run) answered in the wrong shape');
@@ -289,8 +293,9 @@ export async function publish(
   auth: AuthContext,
   items: readonly CheckedItem[],
   note: string | undefined,
+  restores?: string,
 ): Promise<PublishResult> {
-  const answer = await callApply(requestOf(auth, 'publish', items, note));
+  const answer = await callApply(requestOf(auth, 'publish', items, note, restores));
   let data = answer.data;
   let landed = false;
   if (answer.error) {

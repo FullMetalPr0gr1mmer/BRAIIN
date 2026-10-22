@@ -1057,11 +1057,52 @@ describe('audit: one draft_save per draft per person per ten minutes', () => {
       email: 'a@x.test',
     };
     const now = Date.parse('2026-10-17T10:00:00Z');
-    const prev = { updated_by: ADMIN, updated_at: '2026-10-17T09:55:00Z', op: 'update' as const };
+    const prev = {
+      updated_by: ADMIN,
+      updated_at: '2026-10-17T09:55:00Z',
+      op: 'update' as const,
+      origin_kind: null,
+      version: 2,
+    };
     expect(shouldAudit(null, auth, 'update', now)).toBe(true);
     expect(shouldAudit(prev, auth, 'update', now)).toBe(false);
     expect(shouldAudit({ ...prev, updated_by: OTHER_USER }, auth, 'update', now)).toBe(true);
     expect(shouldAudit(prev, auth, 'delete', now)).toBe(true);
     expect(shouldAudit(prev, auth, 'update', now + DRAFT_AUDIT_WINDOW_MS)).toBe(true);
+    // A restore's change as the restore left it (R10: its write, then the mark, version 2) was
+    // audited as the restore, not as this entity's save; once edited (3) it coalesces again.
+    expect(shouldAudit({ ...prev, origin_kind: 'restore' }, auth, 'update', now)).toBe(true);
+    expect(shouldAudit({ ...prev, origin_kind: 'restore', version: 3 }, auth, 'update', now)).toBe(
+      false,
+    );
+  });
+
+  it('the first save on a restored change writes its draft_save; the next one coalesces (R10)', async () => {
+    // As POST /api/admin/releases/[id]/restore leaves it: written as this person (0104's lock
+    // keeps them as its author through the mark), at version 2, moments ago.
+    drafts().push(
+      draft({
+        payload: { slug: 'logo-then' },
+        base: { slug: 'logo' },
+        version: 2,
+        origin_kind: 'restore',
+        origin_release_id: RELEASE,
+        updated_at: new Date().toISOString(),
+      }),
+    );
+    let d = drafts()[0]!;
+    let res = await call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: { slug: 'logo-now', version: 3, ...editRef(d) },
+    });
+    expect(res.status).toBe(200);
+    expect(audits()).toEqual(['service.draft_save']);
+    d = drafts()[0]!;
+    res = await call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: { slug: 'logo-later', version: 3, ...editRef(d) },
+    });
+    expect(res.status).toBe(200);
+    expect(audits()).toEqual(['service.draft_save']);
   });
 });

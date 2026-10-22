@@ -165,6 +165,26 @@ export const PREVIEW_COPY = {
     other:
       '{n} changes put design samples on the page. The live site refuses that unless the owner has allowed samples there.',
   },
+  /**
+   * A published version shown as it was (Admin v2 R10, `?v=`): its content over today's code,
+   * so the lead says so; what the preview does not show is as it is now, not "when you publish".
+   */
+  version: {
+    lead: "Preview of version {v}, as it was published. It's shown with today's design and pictures.",
+    invalid: {
+      one: "1 item of this version can't be shown as it was.",
+      other: "{n} items of this version can't be shown as they were.",
+    },
+    notPreviewed: 'Redirects, the theme and who can see a page are shown as they are now.',
+    /** An untrusted render of a version: it names the version, never "your changes". */
+    untrusted: "This preview may not show version {v} as it was: part of it couldn't be read.",
+    /** The reasons whose words differ for a version (the rest read the same). */
+    reasons: {
+      'no-reads': "This page didn't read any of the version's content.",
+      truncated:
+        'More has changed since this version, or there is more content here, than the preview can read at once.',
+    } satisfies Partial<Record<UntrustedReason, string>>,
+  },
   notPreviewed: {
     search: "Search results aren't previewed.",
     rpc: "Part of this page isn't previewed.",

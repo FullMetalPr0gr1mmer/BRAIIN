@@ -34,7 +34,7 @@ type Payload = Record<string, unknown>;
 
 /** What a staged handler reads of a draft. */
 export const DRAFT_COLUMNS =
-  'id,entity_type,entity_id,op,payload,base,base_version,fields,label,version,created_at,updated_at,updated_by,release_id';
+  'id,entity_type,entity_id,op,payload,base,base_version,fields,label,version,created_at,updated_at,updated_by,release_id,origin_kind,origin_release_id';
 
 const StoredDraftSchema = ContentDraftRowSchema.pick({
   id: true,
@@ -51,8 +51,26 @@ const StoredDraftSchema = ContentDraftRowSchema.pick({
   updated_at: true,
   updated_by: true,
   release_id: true,
+}).extend({
+  // A restore's change (R10, 0062's provenance) and the version it restored (null for one
+  // snapshot): only the restore path's mark sets them. A reader that does not select them (an
+  // older stand-in) reads an ordinary change.
+  origin_kind: ContentDraftRowSchema.shape.origin_kind.default(null),
+  origin_release_id: ContentDraftRowSchema.shape.origin_release_id.default(null),
 });
 export type StoredDraft = z.infer<typeof StoredDraftSchema>;
+
+/**
+ * The version a restore's change holds until someone edits it (R10): the restore's own write
+ * (1), then its mark (2, the draft lock bumps every update). The mark lands only on a draft
+ * still at 1 with no provenance, so a restore's change at 2 is exactly as the restore left it.
+ */
+export const RESTORE_MARKED_VERSION = 2;
+
+/** A restore's change that no one has edited since the restore staged it. */
+export function untouchedRestore(draft: Pick<StoredDraft, 'origin_kind' | 'version'>): boolean {
+  return draft.origin_kind === 'restore' && draft.version === RESTORE_MARKED_VERSION;
+}
 
 /** The most drafts of one entity type a list overlays (decision D14, edge case 17). */
 export const DRAFT_LIST_CAP = 1000;
@@ -239,14 +257,21 @@ export function draftFields(derived: DerivedPatch): string[] {
  * Write a `draft_save` audit row for this save? Not when it amends a draft this person last
  * wrote less than ten minutes ago with the same op (P-5): an editor saving every few seconds
  * is one entry. Read from the draft row itself (no audit_log read: Content Creator cannot).
+ * A restore's change as the restore left it was audited as the restore (`versions.restore`,
+ * naming the version, not the entity), though it names the person who restored it (0104): the
+ * first save on top of it is this entity's first `draft_save`.
  */
 export function shouldAudit(
-  previous: Pick<StoredDraft, 'updated_by' | 'updated_at' | 'op'> | null,
+  previous: Pick<
+    StoredDraft,
+    'updated_by' | 'updated_at' | 'op' | 'origin_kind' | 'version'
+  > | null,
   auth: AuthContext,
   op: DraftOp,
   now: number = Date.now(),
 ): boolean {
   if (!previous) return true;
+  if (untouchedRestore(previous)) return true;
   if (previous.updated_by !== auth.userId || previous.op !== op) return true;
   const at = Date.parse(previous.updated_at);
   return !Number.isFinite(at) || now - at >= DRAFT_AUDIT_WINDOW_MS;

@@ -27,6 +27,8 @@ export interface Db {
   now: () => string;
   /** A database error to answer a call with instead of running it (a refusal, a 23505). */
   fail?: (call: Call) => { code: string; message: string } | null | undefined;
+  /** Another rpc's answer (R10: `release_as_of`), or undefined for the stand-in's own. */
+  rpc?: (fn: string, args: Row) => { data: unknown; error: unknown } | undefined;
 }
 
 let seq = 0;
@@ -81,7 +83,7 @@ const project = (row: Row, names: { as: string; from: string }[] | null): Row =>
   return out;
 };
 
-type Filter = [kind: 'eq' | 'neq' | 'is' | 'in' | 'ilike', column: string, value: unknown];
+type Filter = [kind: 'eq' | 'neq' | 'is' | 'in' | 'ilike' | 'lt', column: string, value: unknown];
 
 function matches(row: Row, filters: Filter[]): boolean {
   return filters.every(([kind, column, value]) => {
@@ -90,6 +92,7 @@ function matches(row: Row, filters: Filter[]): boolean {
     if (kind === 'neq') return v !== null && v !== undefined && String(v) !== String(value);
     if (kind === 'is') return v === value || (value === null && v === undefined);
     if (kind === 'in') return (value as unknown[]).map(String).includes(String(v));
+    if (kind === 'lt') return v !== null && v !== undefined && (v as number) < (value as number);
     const term = String(value).replace(/^%|%$/g, '').replace(/\\(.)/g, '$1').toLowerCase();
     return typeof v === 'string' && v.toLowerCase().includes(term);
   });
@@ -157,6 +160,7 @@ function query(db: Db, table: string) {
     is: (c: string, v: unknown) => (filters.push(['is', c, v]), b),
     in: (c: string, v: unknown[]) => (filters.push(['in', c, v]), b),
     ilike: (c: string, v: unknown) => (filters.push(['ilike', c, v]), b),
+    lt: (c: string, v: unknown) => (filters.push(['lt', c, v]), b),
     order: (c: string, o?: { ascending?: boolean }) => (
       (order = { column: c, ascending: o?.ascending ?? true }),
       b
@@ -253,6 +257,9 @@ function writeDraftsRpc(db: Db, args: Row) {
         created_by: db.user,
         updated_by: db.user,
         release_id: null,
+        // The provenance a restore's mark sets (0062); a new draft carries none.
+        origin_kind: null,
+        origin_release_id: null,
       };
       drafts.push(row);
       out.push({
@@ -365,6 +372,8 @@ export function client(db: Db) {
           : { data: db.flag, error: null };
       }
       if (fn === 'write_drafts') return writeDraftsRpc(db, args);
+      const other = db.rpc?.(fn, args);
+      if (other) return other;
       if (fn === 'release_read_rows') return readRowsRpc(db, args);
       return { data: null, error: { code: 'XX000', message: `unexpected rpc ${fn}` } };
     },
