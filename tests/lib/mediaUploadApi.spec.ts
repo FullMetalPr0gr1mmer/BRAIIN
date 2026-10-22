@@ -43,6 +43,8 @@ const state = vi.hoisted(() => ({
   audits: [] as { action: string; detail?: Record<string, unknown> }[],
   // What media_usage answers (v4, 0066: a fourth column, `pending`).
   usage: [] as Record<string, unknown>[],
+  // The purges after a save (Admin v2 R7): a replace purges media:all, an upload nothing.
+  purges: [] as string[][],
 }));
 
 vi.mock('cloudflare:workers', () => ({
@@ -90,6 +92,13 @@ vi.mock('cloudflare:workers', () => ({
 }));
 vi.mock('@/lib/supabase/client', () => ({ supabaseConfigured: () => state.configured }));
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+vi.mock('@/lib/http/purge', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  purgeAfterSave: async (_tenant: string, tags: readonly string[]) => {
+    state.purges.push([...tags]);
+    return { status: 'skipped', tags: [...tags], requests: 0 };
+  },
+}));
 vi.mock('@/lib/admin/audit', () => ({
   writeAudit: async (_sb: unknown, _auth: unknown, entry: { action: string }) => {
     state.events.push(`audit:${entry.action}`);
@@ -269,12 +278,15 @@ beforeEach(() => {
   state.updates = [];
   state.audits = [];
   state.usage = [];
+  state.purges = [];
 });
 
 describe('POST /api/admin/media/upload', () => {
   it('stores one WebP master, scaled to 2,560 px, with no EXIF, then the row, then the audit', async () => {
     const { status, body } = await call(UPLOAD, uploadRequest(await photo(4000, 3000)));
     expect(status).toBe(200);
+    // A new asset is on no page yet: nothing to purge (Admin v2 R7).
+    expect(state.purges).toEqual([]);
     expect(state.events).toEqual([
       'live',
       'limit:media-upload',
@@ -560,6 +572,8 @@ describe('POST /api/admin/media/[id]/replace', () => {
     expect(update['storage_path']).not.toBe(OLD_KEY);
     expect(update['storage_path']).toBe(state.uploads[0]!.key);
     expect(state.removed).toEqual([]);
+    // Every page that shows the asset now shows the new file (Admin v2 R7).
+    expect(state.purges).toEqual([['media:all']]);
     expect(state.audits[0]).toMatchObject({ action: 'media_asset.replace' });
     expect(state.audits[0]?.detail).not.toHaveProperty('previousFile');
     // U4 review sec-1: media_assets keeps no history, so the audit row is the one record of
