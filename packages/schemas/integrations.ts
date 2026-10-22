@@ -97,7 +97,8 @@ export const CalendlyUrlSchema = z
  * PATCH /api/admin/integrations: any of the three (null clears one) and the version the
  * editor loaded (0 before the first save, H7). Strict: the legacy jsonb keys (`ga4`,
  * `searchConsole`, `calendly`, `recaptcha`) and anything else are a 422, so no free-form
- * value, and no secret, reaches the row through the admin.
+ * value reaches the row through the admin. A shape cannot tell a pasted key from a code, so
+ * the Search Console field says its code is published on the home page.
  */
 export const IntegrationsSchema = z
   .object({

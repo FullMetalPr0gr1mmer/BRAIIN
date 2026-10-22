@@ -82,7 +82,7 @@ describe('the editor and the route name the same columns', () => {
       expect(INTEGRATION_COLUMNS.split(',')).toContain(field.column);
       expect(INTEGRATION_DEFAULTS).toHaveProperty(field.column!, null);
     }
-    // Never the legacy jsonb boxes (U15 drops them).
+    // Never the legacy jsonb boxes (the contract step after U11's deploy revokes them).
     for (const legacy of ['ga4', 'search_console', 'calendly', 'recaptcha']) {
       expect(INTEGRATION_COLUMNS.split(',')).not.toContain(legacy);
     }
@@ -92,5 +92,48 @@ describe('the editor and the route name the same columns', () => {
     for (const message of Object.values(INTEGRATION_MESSAGES)) {
       expect(message).not.toMatch(/[–—]/);
     }
+  });
+});
+
+// The row is not "public identifiers only" yet (U11 review): until the contract step, a
+// small migration of its own right after U11's deploy, the legacy jsonb boxes stay readable
+// and writable by Admin and SEO tokens through the API, and a shape cannot tell a pasted key
+// from a code. The three places that state the row say so, and the Search Console field tells
+// the person its code is public.
+describe('the legacy jsonb residual is stated, never denied', () => {
+  const flat = (text: string) => text.replace(/\s+/g, ' ');
+  const claude = readFileSync('CLAUDE.md', 'utf8')
+    .split('\n')
+    .find((line) => line.startsWith('- **U11, integrations'));
+  const deviations = /- \*\*Integrations\*\*:\n((?: {2,}.*\n)+)/.exec(
+    readFileSync('docs/admin-v2/deviations.md', 'utf8'),
+  )?.[1];
+  const migration = MIGRATIONS.find((m) => /^\d{4}_integrations\.sql$/.test(m.name));
+  const header = migration
+    ? readFileSync(join(DIR, migration.name), 'utf8').split('\nset local lock_timeout')[0]
+    : undefined;
+
+  it.each([
+    ['CLAUDE.md', claude],
+    ['the deviations register', deviations],
+    ['the migration header', header],
+  ])('%s names the residual and the contract step', (_name, text) => {
+    expect(text).toBeDefined();
+    const said = flat(text!);
+    expect(said).not.toMatch(
+      /no secret fits|no secret, no markup|holds (typed )?public identifiers only/,
+    );
+    expect(said).toMatch(/Admin and SEO tokens/);
+    expect(said).toContain('contract step');
+    expect(said).toContain('not tied to U15 or O-18');
+  });
+
+  it('the Search Console field says its code is published, which anon reads', () => {
+    expect(SEARCH_CONSOLE_FIELD.help).toContain(
+      'The code is published on the home page, where anyone can read it, so paste nothing secret here.',
+    );
+    expect(migration?.sql).toMatch(
+      /grant select \(tenant_id, search_console_token\) on public\.site_integrations to anon;/,
+    );
   });
 });

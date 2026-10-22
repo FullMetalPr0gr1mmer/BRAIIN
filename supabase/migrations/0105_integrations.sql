@@ -15,8 +15,10 @@
 --
 --   1. app.role_manages_integrations(r): settings.integrations (Admin, SEO), one helper per
 --      capability (CLAUDE.md §8), held equal to ROLE_CAPS by tests/authz/sqlHelpers.spec.ts.
---   2. Three typed columns holding PUBLIC identifiers only, each with a CHECK no secret, no
---      markup and no foreign host can pass: ga4_measurement_id (G- and 4 to 15 capitals or
+--   2. Three typed columns for PUBLIC identifiers, each with a CHECK no markup, no quote and
+--      no foreign host can pass (a shape cannot tell a pasted key from a code: the Search
+--      Console field says its code is published on the home page, and anon reads that column):
+--      ga4_measurement_id (G- and 4 to 15 capitals or
 --      digits), search_console_token (the content of Google's verification meta tag: 10 to
 --      100 of A-Z a-z 0-9 _ -), calendly_url (https://calendly.com/ and up to three path
 --      segments, no query, no fragment, at most 200 characters). The same patterns are
@@ -26,7 +28,11 @@
 --   3. No backfill from the legacy jsonb: the boxes never had a shape. A NOTICE counts the
 --      rows that hold any (a count, never a value): the owner reads it at the push, and clears
 --      by hand anything secret pasted there before. The jsonb columns stay, granted as before,
---      for the Worker deployed until this slice's own deploy; U15 drops them.
+--      for the Worker deployed until this slice's own deploy: until then, and until the
+--      contract step, Admin and SEO tokens can still read and write them through the API (the
+--      residual; this slice's code never does). The contract step is a small migration of its
+--      own right after that deploy, not tied to U15 or O-18: it revokes authenticated INSERT
+--      and UPDATE, then SELECT, on ga4, search_console, calendly and recaptcha, or drops them.
 --   4. Row security, the tenant predicate first everywhere: staff read, insert and update
 --      narrowed from every CMS role to Admin + SEO (§5 Integrations: Content Creator and
 --      Developer hold none of it; until now only the Worker refused them), TO authenticated;
@@ -101,7 +107,7 @@ begin
     from public.site_integrations
    where ga4 <> '{}'::jsonb or search_console <> '{}'::jsonb
       or calendly <> '{}'::jsonb or recaptcha <> '{}'::jsonb;
-  raise notice 'U11: % site_integrations row(s) hold legacy integration JSON (not shown, not copied; check them before the merge, U15 drops the columns)', n;
+  raise notice 'U11: % site_integrations row(s) hold legacy integration JSON (not shown, not copied; check them before the merge: Admin and SEO can read them until the contract step)', n;
 end $$;
 
 -- ═══ 4. Row security (the fence before any grant, 0011 §5) ═══════════════════════════════

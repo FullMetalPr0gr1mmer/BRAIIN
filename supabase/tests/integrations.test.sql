@@ -157,7 +157,7 @@ select is(_state($$ insert into public.site_integrations (tenant_id)
 select _as('11100000-0000-0000-0000-0000000000a1', 'admin', '11100000-0000-0000-0000-000000000001');
 select is(_rows($$ update public.site_integrations set recaptcha = '{}'::jsonb
                    where tenant_id = '11100000-0000-0000-0000-000000000001' $$),
-  1, 'the legacy jsonb stays writable until U15 drops it (the deployed Worker''s window)');
+  1, 'the legacy jsonb stays writable until the contract step (the deployed Worker''s window)');
 
 -- ── 3. Content Creator, Developer and Sales: nothing ─────────────────────────
 select _as('11100000-0000-0000-0000-0000000000c1', 'content_creator', '11100000-0000-0000-0000-000000000001');

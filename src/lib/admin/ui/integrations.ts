@@ -18,7 +18,7 @@ export const SEARCH_CONSOLE_FIELD: FieldDef = {
   label: 'Search Console verification code',
   kind: 'text',
   column: 'search_console_token',
-  help: 'In Search Console choose the HTML tag method, then paste the whole tag or just the code inside content.',
+  help: 'In Search Console choose the HTML tag method, then paste the whole tag or just the code inside content. The code is published on the home page, where anyone can read it, so paste nothing secret here.',
 };
 
 export const CALENDLY_FIELD: FieldDef = {

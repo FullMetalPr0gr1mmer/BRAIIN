@@ -7,7 +7,8 @@ import { INTEGRATION_COLUMNS, INTEGRATION_DEFAULTS } from '@/lib/admin/integrati
 // in the database since migration 0105, numbered at merge). Typed public identifiers only:
 // the GA4 measurement id, the Search Console verification code and the Calendly link, each a
 // CHECKed column whose pattern is packages/schemas/integrations.ts. The legacy jsonb boxes
-// are neither read nor written here any more (U15 drops them).
+// are neither read nor written here any more (the contract step after U11's deploy revokes
+// them).
 //
 // Immediate, never staged (P-3): not in the release registry, so `singletonEntry` finds no
 // entry and the save is live whatever the release flag says. The audit row names the

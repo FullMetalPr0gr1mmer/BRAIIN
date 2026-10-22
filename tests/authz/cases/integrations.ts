@@ -2,8 +2,8 @@ import type { Case } from '../harness';
 
 // Settings › Integrations (§5 "Integrations", Admin + SEO): GA4, Search Console, Calendly,
 // reCAPTCHA. Its own table, site_integrations, because RLS is row-level (§2 amendment).
-// Since Admin v2 U11 the row holds typed public identifiers only, so the write sends one of
-// them (null clears it); the legacy jsonb keys are a 422 (tests/schemas/integrations.spec.ts).
+// Since Admin v2 U11 the route writes typed public identifiers only, so the write sends one
+// of them (null clears it); the legacy jsonb keys are a 422 (tests/schemas/integrations.spec.ts).
 
 export const cases: readonly Case[] = [
   {
