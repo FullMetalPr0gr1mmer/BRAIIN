@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
-import type { AsOfAnswer } from '@schemas/release';
+import { RELEASE_ENTITY_TYPES, type AsOfAnswer } from '@schemas/release';
 import type { Role } from '@/lib/auth/types';
 import { client, resetIds, T, type Db, type Row } from '../fixtures/stagedDb';
 import {
@@ -79,6 +79,9 @@ const { POST: RESTORE } = await import('@/pages/api/admin/releases/[id]/restore'
 const { GET: HISTORY } = await import('@/pages/api/admin/history/index');
 const { POST: HISTORY_RESTORE } = await import('@/pages/api/admin/history/restore');
 const { RESTORE_COPY } = await import('@/lib/release/restore');
+const { RELEASE_REGISTRY } = await import('@/lib/release/registry');
+const { derivePatch } = await import('@/lib/release/overlay');
+const { fullPayload, SAMPLE_LINKED_IDS } = await import('../fixtures/restoreImages');
 const { ROLLBACK_COPY } = await import('@/lib/release/endpoints');
 
 const BI = (en: string, ar: string) => ({ en, ar });
@@ -96,6 +99,8 @@ const SECTION = id(7);
 const THEME = id(8);
 const STAT = id(9);
 const OTHER_PROJECT = id(10);
+/** The page the samples' visibility setting names. */
+const PAGE_A = '0f0f0f0f-0000-4000-8000-00000000000a';
 
 const release = (over: Row): Row => ({
   tenant_id: T,
@@ -1423,5 +1428,61 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
       'services',
       'write_drafts',
     ]);
+  });
+
+  it('restoring a version that changed every type, with links and addresses, stays inside 50 (tripwire)', async () => {
+    // Every restorable type changed since v1, every column moved, each image linking to the
+    // samples' rows (a picture, a discipline, a page …) and writing an address: the worst case
+    // R6's all-types publish has too. The links of a table the restore reads anyway are asked
+    // with its live rows; the rest cost one read per table.
+    const tables: Record<string, Row[]> = {
+      content_releases: [release({ id: V1, number: 1 })],
+      profiles: [{ id: ADMIN, tenant_id: T, role: 'admin', is_active: true, locked_until: null }],
+      staff_directory: [],
+      portfolio_services: [],
+      portfolio_media: [],
+    };
+    for (const table of [
+      'media_assets',
+      'disciplines',
+      'sectors',
+      'clients',
+      'services',
+      'portfolio',
+      'pages',
+      'categories',
+      'team_members',
+      'navigation',
+    ]) {
+      tables[table] = SAMPLE_LINKED_IDS.map((linked) => ({ id: linked, tenant_id: T }));
+    }
+    const entities: AsOfAnswer['entities'] = [];
+    let n = 0;
+    for (const type of RELEASE_ENTITY_TYPES) {
+      if (type === 'team_member') continue;
+      const entry = RELEASE_REGISTRY[type];
+      n += 1;
+      const entityId = entry.key === 'tenant_id' ? T : id(5000 + n);
+      const live: Row = { tenant_id: T, version: 1 };
+      if (entry.key === 'id') live['id'] = entityId;
+      if (type === 'page_visibility') Object.assign(live, { page_id: PAGE_A, mode: 'public' });
+      (tables[entry.table] ??= []).push(live);
+      const image = derivePatch(entry, 'create', fullPayload(type)).patch;
+      entities.push({
+        entity_type: type,
+        entity_id: entityId,
+        before: { ...image, ...(entry.key === 'id' ? { id: entityId } : {}), tenant_id: T },
+        exists_now: true,
+      });
+    }
+    const db = seed(tables, asOf(1, entities));
+    const res = await restore(db);
+    expect(res.status).toBe(200);
+    expect((res.data['staged'] as Row[]).length).toBe(n);
+    // In production the session's two (the user, the profile) come first.
+    const SESSION = 2;
+    expect(db.calls.length + SESSION).toBeLessThanOrEqual(50);
+    // Pinned, so a new type, link or address shows here before it shows on the Free plan.
+    expect(db.calls.length).toBe(43);
   });
 });

@@ -63,6 +63,8 @@ export const RESTORE_COPY = {
     'Some of what this version changes has unpublished changes. Publish or discard them first.',
   forbidden: 'This version includes changes your role can’t publish. Ask an Admin.',
   notRestorable: "Some of this version can't come back as it was.",
+  tooWide:
+    'This version changed too many kinds of content to restore in one go. Restore a more recent version first.',
   noSnapshot: "That saved version doesn't exist.",
   noHistory: 'History isn’t kept for team members yet.',
 } as const;
@@ -94,8 +96,21 @@ const REFUSALS = [
   reasons: readonly RestoreItem['reason'][];
 }[];
 
+/**
+ * The Workers Free plan's 50 subrequests a request (P-15), less what a restore spends outside
+ * its plan: the session's two (the user, the profile), the flag, the version (or the snapshot)
+ * and the ledger (or the snapshot's version) before it; the re-read, the writer, the mark and
+ * the audit row after. The plan counts its own reads before it sends them and stops at this,
+ * so a restore never runs out of subrequests halfway (its changes staged, their mark or its
+ * audit row not written).
+ */
+export const RESTORE_PLAN_BUDGET = 50 - (2 + 3 + 4);
+
 /** A refusal of the whole restore, every entity named, or null. */
-function refusal(plan: RestorePlan): Response | null {
+export function restoreRefusal(plan: RestorePlan): Response | null {
+  if (plan.overBudget !== undefined) {
+    return json({ ok: false, error: 'too-many', detail: RESTORE_COPY.tooWide }, 422);
+  }
   const groups = REFUSALS.map((g) => ({
     g,
     items: plan.refused.filter((r) => (g.reasons as readonly string[]).includes(r.reason)),
@@ -237,8 +252,10 @@ export async function restoreVersion(ctx: Ctx<RestoreVersionRequest>): Promise<u
       422,
     );
   }
-  const plan = await planRestore(sb, auth, asOfTargets(state.entities));
-  const refused = refusal(plan);
+  const plan = await planRestore(sb, auth, asOfTargets(state.entities), {
+    budget: RESTORE_PLAN_BUDGET,
+  });
+  const refused = restoreRefusal(plan);
   if (refused) return refused;
   const scope = input.pageId ? 'page' : 'site';
   if (plan.changes.length === 0) {
@@ -299,10 +316,13 @@ export async function restoreSnapshot(ctx: Ctx<HistoryRestoreRequest>): Promise<
     return json({ ok: false, error: 'not-found', detail: RESTORE_COPY.noSnapshot }, 404);
   }
   // A snapshot keeps the row (a case study's link sets are not in it: they stay as they are).
-  const plan = await planRestore(sb, auth, [
-    { entry, entityId: input.entityId, before: image as Row, existsNow: true },
-  ]);
-  const refused = refusal(plan);
+  const plan = await planRestore(
+    sb,
+    auth,
+    [{ entry, entityId: input.entityId, before: image as Row, existsNow: true }],
+    { budget: RESTORE_PLAN_BUDGET },
+  );
+  const refused = restoreRefusal(plan);
   if (refused) return refused;
   // The version that wrote the snapshot, named in the answer and the audit row. The staged change
   // is marked a restore with no version: one item restored is a publish, not a rollback of the

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RELEASE_ENTITY_TYPES, type ReleaseEntityType } from '@schemas/release';
+import { RELEASE_ENTITY_TYPES } from '@schemas/release';
 import { RELEASE_REGISTRY } from '@/lib/release/registry';
 import { derivePatch } from '@/lib/release/overlay';
 import {
@@ -13,7 +13,7 @@ import { dropFields } from '@/lib/release/drafts';
 import { narrowed } from '@/lib/release/revert';
 import type { PortfolioMediaItem } from '@schemas/admin';
 import { mediaItemToRow } from '@/lib/admin/resources/portfolio';
-import { samplesFor } from '../fixtures/resourceSamples';
+import { fullPayload } from '../fixtures/restoreImages';
 
 // A stored row back to the change that writes it (Admin v2 R10, src/lib/release/rowPayload.ts).
 // For every release-managed type: a full change (every payload key the entity knows) is mapped
@@ -22,38 +22,6 @@ import { samplesFor } from '../fixtures/resourceSamples';
 // cannot read fails here, before a restore could stage something the version did not hold.
 
 type Row = Record<string, unknown>;
-
-const BI = (en: string, ar: string) => ({ en, ar });
-const PAGE = '0f0f0f0f-0000-4000-8000-00000000000a';
-
-/** Values that make one type's full sample pass its schema (the fixture's are plain values). */
-const OVERRIDES: Partial<Record<ReleaseEntityType, Row>> = {
-  service: { valuePoints: [{ title: BI('Point', 'نقطة'), text: BI('Why', 'لماذا') }] },
-  portfolio: { keywords: [BI('Brand', 'هوية')] },
-  service_case: {
-    problems: [{ problem: BI('Problem', 'مشكلة'), solution: BI('Solution', 'حل') }],
-  },
-  page_section: { type: 'cta', content: { heading: BI('Heading', 'عنوان') } },
-  page_visibility: {
-    target: { pageId: PAGE },
-    mode: 'hidden',
-    redirectPageId: null,
-    hideFrom: '2026-11-02',
-    showOn: '2026-11-09',
-  },
-};
-
-/** The sample payload of one type: every key it knows, never a schedule. */
-function fullPayload(type: ReleaseEntityType): Row {
-  const entry = RELEASE_REGISTRY[type];
-  const samples = samplesFor(type);
-  const out: Row = {};
-  for (const key of [...Object.keys(entry.fields), ...entry.childKeys]) {
-    if (key === 'scheduledFor' || !(key in samples)) continue;
-    out[key] = samples[key];
-  }
-  return { ...out, ...(OVERRIDES[type] ?? {}) };
-}
 
 describe('rowToPayload: every type round-trips', () => {
   for (const type of RELEASE_ENTITY_TYPES) {

@@ -4,6 +4,7 @@ import type { AsOfEntity } from '@schemas/release';
 import type { AuthContext, Role } from '@/lib/auth/types';
 import { asOfChanges, asOfTargets } from '@/lib/release/asOf';
 import { planRestore } from '@/lib/release/revert';
+import { restoreRefusal } from '@/lib/release/restore';
 import { RELEASE_REGISTRY } from '@/lib/release/registry';
 import { client, T, type Row } from '../fixtures/stagedDb';
 import { ADMIN, makeDb } from '../fixtures/stagedRoute';
@@ -287,6 +288,65 @@ describe('planRestore: what a restore stages against live', () => {
     } finally {
       toRow.mockRestore();
     }
+  });
+
+  it('counts its reads before it sends them: past its budget it reads nothing more and says so', async () => {
+    const live = { id: SERVICE, tenant_id: T, slug: 'logo', title: BI('Now', 'الآن'), version: 3 };
+    const targets = asOfTargets([
+      e('service', SERVICE, { ...live, slug: 'logo-then', poster_media_id: MEDIA }),
+      e('portfolio', PROJECT, project({ slug: 'spring-then', title: BI('Then', 'سابقا') })),
+    ]);
+    // Two tables and the pending changes: three reads before planning.
+    let tables = makeDb({ services: [live], portfolio: [project()] });
+    let plan = await planRestore(client(tables) as unknown as SupabaseClient, auth(), targets, {
+      budget: 2,
+    });
+    expect(plan).toEqual({ changes: [], refused: [], kept: [], overBudget: 3 });
+    expect(tables.calls).toEqual([]);
+    // Then the picture (a table it does not read) and the slugs of both: three more.
+    tables = makeDb({ services: [live], portfolio: [project()], media_assets: [] });
+    plan = await planRestore(client(tables) as unknown as SupabaseClient, auth(), targets, {
+      budget: 5,
+    });
+    expect(plan.overBudget).toBe(6);
+    expect(tables.calls.map((c) => c.name).sort()).toEqual([
+      'content_drafts',
+      'portfolio',
+      'services',
+    ]);
+    // Within it, the same plan reads all six.
+    tables = makeDb({ services: [live], portfolio: [project()], media_assets: [] });
+    plan = await planRestore(client(tables) as unknown as SupabaseClient, auth(), targets, {
+      budget: 6,
+    });
+    expect(plan.overBudget).toBeUndefined();
+    expect(tables.calls).toHaveLength(6);
+    expect(restoreRefusal({ changes: [], refused: [], kept: [], overBudget: 51 })?.status).toBe(
+      422,
+    );
+  });
+
+  it('a link to a row of a table it reads anyway is answered by that read', async () => {
+    const live = { id: SERVICE, tenant_id: T, slug: 'logo', title: BI('Now', 'الآن'), version: 3 };
+    const tables = makeDb({
+      services: [live],
+      portfolio: [project()],
+      ...links([]),
+    });
+    const plan = await planRestore(
+      client(tables) as unknown as SupabaseClient,
+      auth(),
+      asOfTargets([
+        e('service', SERVICE, { ...live, title: BI('Then', 'سابقا') }),
+        e('portfolio_children', PROJECT, { service_ids: [SERVICE, id(77)], media: [] }),
+      ]),
+    );
+    // The project's sets name the restored service (there) and another (gone): the services
+    // read asked both, so no read of its own.
+    expect(plan.refused).toMatchObject([
+      { entityType: 'portfolio', entityId: PROJECT, reason: 'link-gone', field: 'serviceIds' },
+    ]);
+    expect(tables.calls.filter((c) => c.name === 'services')).toHaveLength(1);
   });
 
   it('gone since and already gone: nothing; created since and already gone: nothing', async () => {

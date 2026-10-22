@@ -54,6 +54,16 @@ export interface RestorePlan {
   refused: RestoreItem[];
   /** What it leaves as it is, and says so. */
   kept: RestoreItem[];
+  /**
+   * The reads the plan would have needed, when they were more than its budget: nothing past the
+   * budget was read, and the restore is refused before anything is staged (P-15).
+   */
+  overBudget?: number;
+}
+
+export interface PlanOptions {
+  /** The most reads the plan may send (the request's 50 subrequests, less the rest of it). */
+  budget?: number;
 }
 
 /** Kinds whose change is a full replace (R3b): every column written, `fields` the moved ones. */
@@ -61,33 +71,97 @@ const FULL_REPLACE: ReadonlySet<RegistryEntry['kind']> = new Set(['entitySeo', '
 
 const keyOf = (type: string, id: string) => `${type}:${id}`;
 
-/** The live rows of the targets, read under the person's RLS, by type and id. */
-async function readLiveRows(
-  sb: SupabaseClient,
-  auth: AuthContext,
+/** Rows of the tenant whose presence is known: the ids asked of each table, and those found. */
+interface Known {
+  asked: Map<string, Set<string>>;
+  found: Set<string>;
+}
+
+/** Ids by table, a set per table. */
+function addTo(map: Map<string, Set<string>>, table: string, id: unknown): void {
+  if (typeof id !== 'string') return;
+  const ids = map.get(table) ?? new Set<string>();
+  ids.add(id);
+  map.set(table, ids);
+}
+
+/**
+ * Every row the targets' images at the version link to, by table (P-15): asked with the live
+ * rows of a table the restore reads anyway, so the links of the state it brings back cost a
+ * read only on a table it does not otherwise read (the media library, team members). A superset
+ * of the links a change writes: an edit writes the image's own values of the columns that
+ * moved, a create all of them, and link sets the ledger's.
+ */
+function imageLinks(targets: readonly AsOfTarget[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const t of targets) {
+    const image = t.before;
+    if (image) {
+      for (const spec of RELEASE_LINKS[t.entry.entityType] ?? []) {
+        if (!spec.service) addTo(out, spec.table, image[spec.column]);
+      }
+      if (t.entry.kind === 'entitySeo') {
+        const table = SEO_TARGET_TABLES[String(image['entity_type'])];
+        if (table) addTo(out, table, image['entity_id']);
+      }
+    }
+    const sets = t.children;
+    if (Array.isArray(sets?.service_ids)) {
+      for (const id of sets.service_ids as unknown[]) addTo(out, 'services', id);
+    }
+    if (Array.isArray(sets?.media)) {
+      for (const row of sets.media as Row[]) addTo(out, 'media_assets', row?.['media_id']);
+    }
+  }
+  return out;
+}
+
+/** The tables the live read asks, each with its entry and the ids it asks for. */
+function liveQueries(
   targets: readonly AsOfTarget[],
-): Promise<Map<string, Row>> {
+  links: ReadonlyMap<string, ReadonlySet<string>>,
+): Map<string, { entry: RegistryEntry; ids: Set<string> }> {
   const byTable = new Map<string, { entry: RegistryEntry; ids: Set<string> }>();
   for (const t of targets) {
     const group = byTable.get(t.entry.table) ?? { entry: t.entry, ids: new Set<string>() };
     group.ids.add(t.entityId);
     byTable.set(t.entry.table, group);
   }
-  const out = new Map<string, Row>();
+  // A table keyed by id that the images link to: those ids join its read.
+  for (const { entry, ids } of byTable.values()) {
+    if (entry.key !== 'id') continue;
+    for (const id of links.get(entry.table) ?? []) ids.add(id);
+  }
+  return byTable;
+}
+
+/**
+ * The live rows of the targets, read under the person's RLS, by type and id; and, for the
+ * tables read, which of the ids asked are there (a link to any of them is then known).
+ */
+async function readLiveRows(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  queries: ReadonlyMap<string, { entry: RegistryEntry; ids: Set<string> }>,
+): Promise<{ rows: Map<string, Row>; known: Known }> {
+  const rows = new Map<string, Row>();
+  const known: Known = { asked: new Map(), found: new Set() };
   await Promise.all(
-    [...byTable.values()].map(async ({ entry, ids }) => {
+    [...queries.values()].map(async ({ entry, ids }) => {
       const { data, error } = await sb
         .from(entry.table)
         .select(stagedSelect(entry, `${entry.key},version`))
         .eq('tenant_id', auth.tenantId)
         .in(entry.key, [...ids]);
       if (error) throw new Error(`read ${entry.table}: ${error.message}`);
+      if (entry.key === 'id') known.asked.set(entry.table, ids);
       for (const row of (data ?? []) as unknown as Row[]) {
-        out.set(keyOf(entry.entityType, String(row[entry.key])), row);
+        rows.set(keyOf(entry.entityType, String(row[entry.key])), row);
+        if (entry.key === 'id') known.found.add(keyOf(entry.table, String(row['id'])));
       }
     }),
   );
-  return out;
+  return { rows, known };
 }
 
 /** A case study's link sets as they are live, in the payload's shape, by project. */
@@ -365,33 +439,47 @@ function neededLinks(changes: readonly PlannedChange[]): Needed[] {
   return out;
 }
 
-/**
- * The links of the restored state that name nothing: a row that is gone now and that the
- * restore does not bring back (or that the restore itself removes). Existence is read under the
- * person's RLS, in the tenant (ids only): every CMS role reads the registry tables and the media
- * library.
- */
-async function goneLinks(
-  sb: SupabaseClient,
-  auth: AuthContext,
-  changes: readonly PlannedChange[],
-): Promise<RestoreItem[]> {
+/** The rows these changes create and remove, by table and id. */
+function movesOf(changes: readonly PlannedChange[]): {
+  created: Set<string>;
+  removed: Set<string>;
+} {
   const created = new Set<string>();
   const removed = new Set<string>();
   for (const c of changes) {
     if (c.op === 'create') created.add(keyOf(c.entry.table, c.entityId));
     if (c.op === 'delete') removed.add(keyOf(c.entry.table, c.entityId));
   }
-  const needed = neededLinks(changes);
+  return { created, removed };
+}
+
+/** What the links of these changes need asked: the ids the live read did not already ask. */
+function linkQueries(changes: readonly PlannedChange[], known: Known): Map<string, Set<string>> {
+  const { created, removed } = movesOf(changes);
   const ask = new Map<string, Set<string>>();
-  for (const n of needed) {
+  for (const n of neededLinks(changes)) {
     const k = keyOf(n.table, n.id);
-    if (created.has(k) || removed.has(k)) continue;
-    const ids = ask.get(n.table) ?? new Set<string>();
-    ids.add(n.id);
-    ask.set(n.table, ids);
+    if (created.has(k) || removed.has(k) || known.asked.get(n.table)?.has(n.id)) continue;
+    addTo(ask, n.table, n.id);
   }
-  const present = new Set<string>();
+  return ask;
+}
+
+/**
+ * The links of the restored state that name nothing: a row that is gone now and that the
+ * restore does not bring back (or that the restore itself removes). Existence is read under the
+ * person's RLS, in the tenant (ids only): every CMS role reads the registry tables and the media
+ * library. `known` is what the live read already saw; `ask` (linkQueries) the rest.
+ */
+async function goneLinks(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  changes: readonly PlannedChange[],
+  known: Known,
+  ask: ReadonlyMap<string, ReadonlySet<string>>,
+): Promise<RestoreItem[]> {
+  const { created, removed } = movesOf(changes);
+  const present = new Set<string>(known.found);
   await Promise.all(
     [...ask].map(async ([table, ids]) => {
       const { data, error } = await sb
@@ -406,7 +494,7 @@ async function goneLinks(
   );
   const out: RestoreItem[] = [];
   const seen = new Set<string>();
-  for (const n of needed) {
+  for (const n of neededLinks(changes)) {
     const k = keyOf(n.table, n.id);
     if (created.has(k) || (!removed.has(k) && present.has(k))) continue;
     const once = `${n.change.entry.entityType}:${n.change.entityId}:${n.field}`;
@@ -431,12 +519,19 @@ export async function planRestore(
   sb: SupabaseClient,
   auth: AuthContext,
   targets: readonly AsOfTarget[],
+  options: PlanOptions = {},
 ): Promise<RestorePlan> {
+  const budget = options.budget ?? Infinity;
   const projects = targets
     .filter((t) => t.entry.entityType === 'portfolio' && t.children !== undefined)
     .map((t) => t.entityId);
-  const [live, links, pending] = await Promise.all([
-    readLiveRows(sb, auth, targets),
+  const queries = liveQueries(targets, imageLinks(targets));
+  // The reads, counted before they are sent (P-15): the live rows (one per table), a case
+  // study's link sets (two), the pending changes (one).
+  const first = queries.size + (projects.length > 0 ? 2 : 0) + (targets.length > 0 ? 1 : 0);
+  if (first > budget) return { changes: [], refused: [], kept: [], overBudget: first };
+  const [{ rows: live, known }, links, pending] = await Promise.all([
+    readLiveRows(sb, auth, queries),
     readLiveLinkSets(sb, auth, projects),
     readPending(sb, auth, targets),
   ]);
@@ -480,9 +575,15 @@ export async function planRestore(
     }
     changes.push(full);
   }
+  // Then one read per table a link names that the live read did not ask, and one per table
+  // whose addresses the restore writes: counted first, and past the budget nothing is read.
+  const linksAsked = linkQueries(intended, known);
+  const addressesAsked = addressQueries(intended);
+  const total = first + linksAsked.size + addressesAsked.size;
+  if (total > budget) return { changes: [], refused: [], kept: [], overBudget: total };
   const [gone, taken] = await Promise.all([
-    goneLinks(sb, auth, intended),
-    takenAddresses(sb, auth, intended),
+    goneLinks(sb, auth, intended, known, linksAsked),
+    takenAddresses(sb, auth, intended, addressesAsked),
   ]);
   refused.push(...gone, ...taken);
   // An area the person may not read: its type and id, never its words.
@@ -499,29 +600,46 @@ function addressColumn(entry: RegistryEntry): string | null {
   return entry.columns.includes('slug') ? 'slug' : null;
 }
 
+/** An address read: the table's entry, its address column and the values asked. */
+interface AddressQuery {
+  entry: RegistryEntry;
+  column: string;
+  values: Set<string>;
+}
+
+/** The address reads a set of changes needs: per table, the addresses it writes. */
+function addressQueries(changes: readonly PlannedChange[]): Map<string, AddressQuery> {
+  const asked = new Map<string, AddressQuery>();
+  for (const c of changes) {
+    const column = addressColumn(c.entry);
+    const value = column ? c.derived.patch[column] : undefined;
+    if (!column || c.op === 'delete' || typeof value !== 'string') continue;
+    const group = asked.get(c.entry.table) ?? { entry: c.entry, column, values: new Set<string>() };
+    group.values.add(value);
+    asked.set(c.entry.table, group);
+  }
+  return asked;
+}
+
 /**
  * The changes whose address (slug, redirect source) another live item now holds, one that the
  * restore leaves as it is (one it removes or gives another address is the apply's to order: a
  * swap within one release is the dry run's to report, edge case 6). The unique index would
- * refuse the publish; the restore says so first. Read under the person's RLS, in the tenant.
+ * refuse the publish; the restore says so first. Read under the person's RLS, in the tenant;
+ * `asked` is addressQueries' answer for these changes.
  */
 async function takenAddresses(
   sb: SupabaseClient,
   auth: AuthContext,
   changes: readonly PlannedChange[],
+  asked: ReadonlyMap<string, AddressQuery>,
 ): Promise<RestoreItem[]> {
   const moving = new Set<string>();
-  const asked = new Map<string, { entry: RegistryEntry; column: string; values: Set<string> }>();
   for (const c of changes) {
     const column = addressColumn(c.entry);
-    if (!column) continue;
-    if (c.op === 'delete' || column in c.derived.patch)
+    if (column && (c.op === 'delete' || column in c.derived.patch)) {
       moving.add(keyOf(c.entry.table, c.entityId));
-    const value = c.derived.patch[column];
-    if (c.op === 'delete' || typeof value !== 'string') continue;
-    const group = asked.get(c.entry.table) ?? { entry: c.entry, column, values: new Set<string>() };
-    group.values.add(value);
-    asked.set(c.entry.table, group);
+    }
   }
   const holders = new Map<string, string[]>();
   await Promise.all(
