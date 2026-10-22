@@ -7,7 +7,13 @@ import LinkTabs from '@/components/admin/ui/LinkTabs.astro';
 import Note from '@/components/admin/ui/Note.astro';
 import Refused from '@/components/admin/ui/Refused.astro';
 import { can } from '@/lib/authz/matrix';
-import { CONSENT_VERSION, formFacts, type FormId } from '@/lib/admin/forms/overview';
+import {
+  CONSENT_VERSION,
+  FORM_IDS,
+  formFacts,
+  formsTabHref,
+  type FormId,
+} from '@/lib/admin/forms/overview';
 import { getIdentity } from '@/lib/identity';
 
 export const prerender = false;
@@ -23,13 +29,12 @@ export const prerender = false;
 // It reads nothing of its own: the facts are code, and the applications switch is the public
 // identity the shell has already read for the brand.
 
-const PATH = '/admin/forms';
 const session = Astro.locals.session;
 const allowed = Boolean(session && can(session.role, 'settings.general') === 'full');
 if (!allowed) Astro.response.status = 403;
 
-const tab: FormId = Astro.url.searchParams.get('tab') === 'join' ? 'join' : 'inquiry';
-const href = (id: FormId) => (id === 'inquiry' ? PATH : `${PATH}?tab=join`);
+const asked = Astro.url.searchParams.get('tab');
+const tab: FormId = FORM_IDS.find((id) => id === asked) ?? FORM_IDS[0];
 const facts = formFacts();
 const form = facts[tab];
 const mayEditPages = Boolean(session && can(session.role, 'pages.write') === 'full');
@@ -52,11 +57,8 @@ const accepting =
       <>
         <LinkTabs
           label="Forms"
-          current={href(tab)}
-          tabs={[
-            { label: facts.inquiry.name, href: href('inquiry') },
-            { label: facts.join.name, href: href('join') },
-          ]}
+          current={formsTabHref(tab)}
+          tabs={FORM_IDS.map((id) => ({ label: facts[id].name, href: formsTabHref(id) }))}
         />
         <p class="frm-where">{form.where}</p>
         <div class="grid grid--2-1">

@@ -297,6 +297,10 @@ export const EXTRA_LINKS: readonly NavTab[] = [
     label: 'Leads, filtered',
     caps: ['leads.manage'],
   },
+  // The Forms overview's Join tab (Admin v2 U11): the applications badge, Admin's "Change it
+  // in General" link and the consent version render only there. tests/lib/adminRoutes.spec.ts
+  // holds every tab of the overview (formsTabHref) to this list.
+  { href: '/admin/forms?tab=join', label: 'Forms, Join form', caps: ['settings.general'] },
 ];
 
 /**

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ROLES, type Role } from '@/lib/auth/types';
 import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
 import { reachableHrefs } from '@/lib/admin/nav';
+import { FORM_IDS, formsTabHref } from '@/lib/admin/forms/overview';
 import * as resources from '@/lib/admin/resources';
 import type { ResourceConfig } from '@/lib/admin/resource';
 import {
@@ -269,6 +270,20 @@ describe('the sweep route map', () => {
     // U10: the redirects list moved to /admin/seo; its no-JS pages are still swept.
     expect(paths).toContain('/admin/redirects/new');
     expect(paths).toContain('/admin/redirects/[id]');
+  });
+
+  it('every tab of the Forms overview is swept for the roles that may open it (U11)', () => {
+    for (const role of ROLES) {
+      const paths = new Set(sweepRoutes(role).map((r) => r.path));
+      for (const id of FORM_IDS) {
+        const href = formsTabHref(id);
+        if (ROLE_CAPS[role]['settings.general'] === 'full') {
+          expect(paths, `${role} ${href}`).toContain(href);
+        } else {
+          expect(paths, `${role} ${href}`).not.toContain(href);
+        }
+      }
+    }
   });
 
   it('every role is swept on its own account and bell pages (Admin v2 F8)', () => {

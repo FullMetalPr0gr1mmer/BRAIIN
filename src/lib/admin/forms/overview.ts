@@ -22,7 +22,20 @@ import { APPLY_LIMITS, CONTACT_LIMITS } from '@/lib/http/publicRateLimit';
 // is left as it starts (blank text, no craft picked, a box unticked); the limits are
 // EXC-004's constants. tests/lib/formsOverview.spec.ts holds each fact to its source.
 
-export type FormId = 'inquiry' | 'join';
+/** The overview's tabs, in their order; the first is the bare page. */
+export const FORM_IDS = ['inquiry', 'join'] as const;
+export type FormId = (typeof FORM_IDS)[number];
+
+/** The Forms screen's address. */
+export const FORMS_PATH = '/admin/forms';
+
+/**
+ * Each tab's link (zero JS: a tab is a URL of the page). tests/lib/adminRoutes.spec.ts holds
+ * every one to the per-role sweep (tests/admin/routes.ts EXTRA_LINKS).
+ */
+export function formsTabHref(id: FormId): string {
+  return id === FORM_IDS[0] ? FORMS_PATH : `${FORMS_PATH}?tab=${id}`;
+}
 
 export interface FormFieldFact {
   /** The schema key the control fills. */
