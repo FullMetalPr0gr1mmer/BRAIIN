@@ -257,6 +257,9 @@ function writeDraftsRpc(db: Db, args: Row) {
         created_by: db.user,
         updated_by: db.user,
         release_id: null,
+        // The provenance a restore's mark sets (0062); a new draft carries none.
+        origin_kind: null,
+        origin_release_id: null,
       };
       drafts.push(row);
       out.push({
