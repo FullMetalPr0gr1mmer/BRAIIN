@@ -291,6 +291,7 @@ create table public.content_release_items (
 `requiredCaps(item)`:
 - the area's caps from §1.1;
 - plus `content.archiveDelete` when op = delete or the status goes to archived (redirects: `redirects.manage`);
+- plus `content.archiveDelete` for an update of a row archived live that sets no status of its own (as built in hotfix H12: the archive gates let only an Admin write a row that stays archived, and the apply runs as the publisher);
 - a content-area item needs its write cap **and** `content.publish`.
 
 Release publish matrix (doc table under §5, proven against `ROLE_CAPS` by `tests/authz/releaseMatrix.spec.ts`):

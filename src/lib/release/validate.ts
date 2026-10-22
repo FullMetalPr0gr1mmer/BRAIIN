@@ -42,9 +42,12 @@ import { pick, stagedSelect } from './staged';
 //   1. the drafts, read under the publisher's RLS: each must be there, unclaimed, at the version
 //      the person saw (else 409 pending-changed, naming them);
 //   2. the capabilities the change needs (`requiredCaps`, from ROLE_CAPS: a content type's write
-//      capability and `content.publish`, `content.archiveDelete` for a removal or an archive), the
-//      Worker layer of the two (403 naming the drafts and who could publish them); a null is
-//      "no role publishes this" (R2's note), never "nothing needed";
+//      capability and `content.publish`, `content.archiveDelete` for a removal, an archive, or
+//      a change that keeps an archived row archived), the Worker layer of the two (403 naming
+//      the drafts and who could publish them); a null is "no role publishes this" (R2's note),
+//      never "nothing needed". The live rows are read first for it (`readLive`, one read per
+//      table, the same read step 4 uses), because whether a row stays archived is live's
+//      (hotfix H12: the archive gates refuse that write to anyone but an Admin);
 //   3. the person, re-read live (`liveRecheck`, by the caller: a demoted or locked person's
 //      token passes RLS for up to an hour, so publishing re-reads them at the moment it runs);
 //   4. the change re-derived from its UNTRUSTED payload (the entity's schema and `toRow`, A3-13),
@@ -133,11 +136,23 @@ export async function loadSelection(
   return drafts;
 }
 
+/** The live row's status, keyed as `readLive` keys it; null when there is none to read. */
+function liveStatusOf(live: ReadonlyMap<string, Row>, draft: StoredDraft): string | null {
+  const status = live.get(`${draft.entity_type}:${draft.entity_id}`)?.['status'];
+  return typeof status === 'string' ? status : null;
+}
+
 /**
  * The Worker's capability check, per change: every capability its publish needs, in full. A
  * 403 names the drafts refused, the first capability missing, and who could publish each.
+ * `live` is `readLive` of the same drafts: a change to a row archived live that keeps it
+ * archived needs `content.archiveDelete` (`keepsArchived`, hotfix H12).
  */
-export function assertMayPublish(auth: AuthContext, drafts: readonly StoredDraft[]): void {
+export function assertMayPublish(
+  auth: AuthContext,
+  drafts: readonly StoredDraft[],
+  live: ReadonlyMap<string, Row>,
+): void {
   const refused: { draftId: string; waitingFor: string[] }[] = [];
   let missing: Capability | null = null;
   for (const draft of drafts) {
@@ -146,6 +161,7 @@ export function assertMayPublish(auth: AuthContext, drafts: readonly StoredDraft
       entityType: draft.entity_type,
       op: draft.op,
       patch: status ? { status } : null,
+      liveStatus: liveStatusOf(live, draft),
     } as const;
     const caps = requiredCaps(ref);
     const lacking = caps === null ? null : caps.find((cap) => ROLE_CAPS[auth.role][cap] !== 'full');
@@ -214,8 +230,12 @@ function asIssue(err: unknown): ReleaseIssue {
   throw err;
 }
 
-/** The live rows the selection changes, one read per table (the whole writable allowlist). */
-async function readLive(
+/**
+ * The live rows the selection changes, one read per table (the whole writable allowlist, the
+ * status included), keyed `<entity type>:<id>`. Read once per request: the capability check
+ * (step 2) and the check over the state the selection leaves (steps 4 and 5) share it.
+ */
+export async function readLive(
   sb: SupabaseClient,
   auth: AuthContext,
   drafts: readonly StoredDraft[],
@@ -560,17 +580,16 @@ const labelText = (label: unknown, fallback: string): string => {
 
 /**
  * Steps 4 and 5 over the selected drafts (already loaded, capability-checked and the person
- * re-read): the report of every change and, for a clean one, its apply item.
+ * re-read): the report of every change and, for a clean one, its apply item. `live` is the
+ * `readLive` the capability check used.
  */
 export async function checkSelection(
   sb: SupabaseClient,
   auth: AuthContext,
   drafts: readonly StoredDraft[],
+  live: ReadonlyMap<string, Row>,
 ): Promise<SelectionCheck> {
-  const [live, seoTaken] = await Promise.all([
-    readLive(sb, auth, drafts),
-    readSeoTargets(sb, auth, drafts),
-  ]);
+  const seoTaken = await readSeoTargets(sb, auth, drafts);
   const items = drafts.map((draft) =>
     derive(
       draft,
