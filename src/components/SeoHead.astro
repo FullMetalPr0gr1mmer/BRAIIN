@@ -55,8 +55,11 @@ const {
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 // The Search Console verification code (Admin v2 U11), read on an indexable home page only:
 // Google checks the HTML tag method there, a noindex page asks to be left out, and no other
-// route pays the read. It runs beside the identity's, and is null (no tag) unless an Admin or
-// SEO set one (src/lib/data/siteVerification.ts), so with none the head is the one it was.
+// route pays the read. It starts before this head awaits anything (the identity is already
+// read by then: the page's loadHead awaited the same memo), so it overlaps the reads the rest
+// of the layout starts, such as the header's and footer's navigation, which Astro renders
+// alongside. Keep it ahead of every await here. It is null (no tag) unless an Admin or SEO
+// set one (src/lib/data/siteVerification.ts), so with none the head is the one it was.
 const claimsSite = logicalPath === '/' && !robots.includes('noindex');
 const verification = claimsSite ? getSearchConsoleToken() : Promise.resolve(null);
 // og:site_name is the brand from the public identity — shared with the header and footer

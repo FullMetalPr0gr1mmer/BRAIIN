@@ -7,7 +7,9 @@ import { renderComponent } from './harness';
 // U11; this one proves what a code adds: exactly one `google-site-verification` meta, after
 // the robots meta, on an indexable home page in either language, and nothing anywhere else.
 // The loader is stubbed here (a vi.mock is per file), so the read is counted too: a page
-// that cannot carry the tag never asks for it.
+// that cannot carry the tag never asks for it. The identity is wrapped so a test can hold it:
+// the read must start before the head awaits anything, so that it overlaps the reads the rest
+// of the layout starts (the header's and footer's navigation) instead of following them.
 
 const CODE = 'abcDEF012_-xyzVerification';
 const getSearchConsoleToken = vi.fn<() => Promise<string | null>>();
@@ -15,6 +17,18 @@ const getSearchConsoleToken = vi.fn<() => Promise<string | null>>();
 vi.mock('@/lib/data/siteVerification', () => ({
   getSearchConsoleToken: () => getSearchConsoleToken(),
 }));
+
+const identityGate = vi.hoisted(() => ({ held: null as Promise<void> | null }));
+vi.mock('@/lib/identity', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/identity')>();
+  return {
+    ...real,
+    getIdentity: async (locals: Parameters<typeof real.getIdentity>[0]) => {
+      if (identityGate.held) await identityGate.held;
+      return real.getIdentity(locals);
+    },
+  };
+});
 
 const ROBOTS = '<meta name="robots" content="index,follow">';
 const TAG = (code: string) => `<meta name="google-site-verification" content="${code}">`;
@@ -63,6 +77,24 @@ describe('the verification tag', () => {
     const html = await renderComponent(SeoHead, { ...props });
     expect(html).not.toContain('google-site-verification');
     expect(getSearchConsoleToken).not.toHaveBeenCalled();
+  });
+
+  test('the read starts before the head awaits anything, the identity included', async () => {
+    let release: () => void = () => {};
+    identityGate.held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      getSearchConsoleToken.mockResolvedValueOnce(CODE);
+      const rendering = renderComponent(SeoHead, { ...HOME, locale: 'en' });
+      // The identity is still held, and the head has already asked for the code.
+      await vi.waitFor(() => expect(getSearchConsoleToken).toHaveBeenCalledTimes(1));
+      release();
+      expect(await rendering).toContain(TAG(CODE));
+    } finally {
+      release();
+      identityGate.held = null;
+    }
   });
 
   test('a value stays inside its quoted attribute, never markup of its own', async () => {
