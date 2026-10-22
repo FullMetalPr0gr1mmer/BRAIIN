@@ -61,6 +61,8 @@ export async function loadShellState(
   nav: readonly NavGroup[],
   env: { SESSION?: KVNamespace },
   preload?: ShellPreload,
+  /** The studio's time zone (Admin v2 U9): which day the bell's "goes live today" is. */
+  tz?: string,
 ): Promise<ShellState> {
   const wanted = [
     ...new Set(
@@ -89,7 +91,12 @@ export async function loadShellState(
     settle(() => adminEnvironment(sb, auth.tenantId)),
     preload?.feed
       ? Promise.resolve(preload.feed)
-      : settle(() => loadNotifications(sb, auth, { maintenance: () => maintenanceRead })),
+      : settle(() =>
+          loadNotifications(sb, auth, {
+            maintenance: () => maintenanceRead,
+            ...(tz ? { tz } : {}),
+          }),
+        ),
     ...wanted.map((key) => settle(() => COUNTERS[key](sb, auth.tenantId))),
   ]);
 

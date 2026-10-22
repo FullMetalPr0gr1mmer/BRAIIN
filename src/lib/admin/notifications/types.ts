@@ -37,6 +37,8 @@ export interface SourceContext {
   maintenance: () => Promise<MaintenanceState | null>;
   /** Resolve readable labels (one more read): the drawer does, the bell's count does not. */
   labels: boolean;
+  /** The studio's time zone (Admin v2 U9): the zone every date and "today" is read in. */
+  tz: string;
 }
 
 /**

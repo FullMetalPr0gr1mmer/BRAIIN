@@ -353,7 +353,11 @@ describe('StatsAudience', () => {
   const hours = Array.from({ length: 24 }, (_, h) => (h === 21 ? 50 : h === 14 ? 40 : h));
 
   it('draws 24 hours, Riyadh time, its table hour for hour, and names the busiest', async () => {
-    const html = await render(StatsAudience, { summary: summary(null), hours });
+    const html = await render(StatsAudience, {
+      summary: summary(null),
+      hours,
+      zone: 'Asia/Riyadh',
+    });
     const fig = figure(html, 'stats-hours');
     expect(tableCells(fig)).toEqual(hours.map((v, h) => [String(h), formatNumber(v)]));
     expect(html).toContain('Riyadh time. Good to know when to post and when to answer.');
@@ -370,6 +374,13 @@ describe('StatsAudience', () => {
     expect(html).toContain('Devices, countries, cities and sources are not collected');
   });
 
+  it('names the studio’s zone the hours were grouped in (Admin v2 U9)', async () => {
+    const html = await render(StatsAudience, { summary: summary(null), hours, zone: 'Asia/Qatar' });
+    expect(html).toContain('Doha time. Good to know when to post and when to answer.');
+    expect(html).toContain('Page views by hour of day, Doha time');
+    expect(html).not.toContain('Riyadh');
+  });
+
   it('says there were no visits instead of drawing empty charts', async () => {
     const empty: PageviewSummary = {
       range,
@@ -377,7 +388,11 @@ describe('StatsAudience', () => {
       previous: null,
       firstDay: '2026-09-01',
     };
-    const html = await render(StatsAudience, { summary: empty, hours: hours.map(() => 0) });
+    const html = await render(StatsAudience, {
+      summary: empty,
+      hours: hours.map(() => 0),
+      zone: 'Asia/Riyadh',
+    });
     expect(html).toContain('No visits counted in this period.');
     expect(html).not.toContain('chart-fig');
   });

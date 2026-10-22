@@ -2,6 +2,7 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 import { runJobs } from './daily';
 import { HEALTH_JOBS } from './health';
 import { DAILY_JOBS, type CronJob } from './jobs';
+import { MAINTENANCE_RECONCILE_JOB } from './maintenanceReconcile';
 import { RELEASE_JOBS } from './releases';
 
 // The Worker's cron schedules (wrangler.jsonc `triggers.crons`), dispatched by
@@ -17,8 +18,9 @@ import { RELEASE_JOBS } from './releases';
 export const SCHEDULES: Readonly<Record<string, readonly CronJob[]>> = {
   // Daily at 03:23 UTC (06:23 in Riyadh): purges, retention, re-syncs, the lead indexing.
   '23 3 * * *': DAILY_JOBS,
-  // Every 10 minutes: site health's readings (Admin v2 G2).
-  '*/10 * * * *': HEALTH_JOBS,
+  // Every 10 minutes: site health's readings (Admin v2 G2), then maintenance's reconcile
+  // (Admin v2 U9b: "Back on" written to the row, the edge healed toward off).
+  '*/10 * * * *': [...HEALTH_JOBS, MAINTENANCE_RECONCILE_JOB],
   // Every minute: what a published release still owes the edge (Admin v2 R7).
   '* * * * *': RELEASE_JOBS,
 };

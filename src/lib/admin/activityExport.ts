@@ -1,3 +1,5 @@
+import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
+import { zoneOffsetMs } from '@/lib/time/zone';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActivityFilters } from '@schemas/audit';
 import type { AuthContext } from '@/lib/auth/types';
@@ -80,7 +82,7 @@ function withDetail(row: Record<string, unknown>): ActivityRow {
 
 export const ACTIVITY_CSV_HEADER = [
   'when_utc',
-  'when_riyadh',
+  'when_studio',
   'who',
   'role',
   'kind',
@@ -91,20 +93,30 @@ export const ACTIVITY_CSV_HEADER = [
 ] as const;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /**
- * "15 Oct 2026, 12:30" in the studio's clock: the string relTime's formatDateTime prints,
- * computed from the fixed offset (Asia/Riyadh is UTC+3 all year) instead of through
- * Intl.DateTimeFormat, which costs about 17 µs a call (three formatToParts), most of a row's
- * CPU in a 1,000-row file. tests/lib/activityExport.spec.ts holds the two equal.
+ * A writer of "15 Oct 2026, 12:30" in the studio's clock (Admin v2 U9: its zone): the string
+ * relTime's formatDateTime prints. Intl costs about 17 µs a call, most of a row's CPU in a
+ * 1,000-row file, so the zone's offset is asked once per UTC hour the rows fall in (every
+ * listed zone changes its offset only on a whole hour) and the rest is arithmetic.
+ * tests/lib/activityExport.spec.ts holds the two equal, across London's and Cairo's changes.
  */
-export function riyadhDateTime(at: string): string {
-  const time = Date.parse(at);
-  if (Number.isNaN(time)) return '';
-  const d = new Date(time + RIYADH_OFFSET_MS);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}, ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+export function studioDateTimeWriter(tz: string = DEFAULT_TIME_ZONE): (at: string) => string {
+  const offsets = new Map<number, number>();
+  return (at: string) => {
+    const time = Date.parse(at);
+    if (Number.isNaN(time)) return '';
+    const hour = Math.floor(time / HOUR_MS);
+    let offset = offsets.get(hour);
+    if (offset === undefined) {
+      offset = zoneOffsetMs(hour * HOUR_MS, tz);
+      offsets.set(hour, offset);
+    }
+    const d = new Date(time + offset);
+    return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}, ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  };
 }
 
 export interface ActivityRead {
@@ -123,12 +135,13 @@ export async function readActivityRows(
   tenantId: string,
   filters: ActivityFilters,
   cap: number = ACTIVITY_EXPORT_CAP,
+  tz: string = DEFAULT_TIME_ZONE,
 ): Promise<ActivityRead> {
   const want = cap + 1;
   const rows: ActivityRow[] = [];
   let before: number | null = null;
   for (let n = 0; n < MAX_PAGES; n += 1) {
-    let query = applyFilters(sb.from('audit_log').select(EXPORT_COLUMNS), tenantId, filters);
+    let query = applyFilters(sb.from('audit_log').select(EXPORT_COLUMNS), tenantId, filters, tz);
     if (before !== null) query = query.lt('id', before);
     const { data, error } = await query
       .order('id', { ascending: false })
@@ -153,7 +166,9 @@ export async function toActivityRecords(
   sb: SupabaseClient,
   auth: Pick<AuthContext, 'tenantId'>,
   rows: readonly ActivityRow[],
+  tz: string = DEFAULT_TIME_ZONE,
 ): Promise<Record<string, unknown>[]> {
+  const studioDateTime = studioDateTimeWriter(tz);
   const ids = rows.map((row) => row.actor_id).filter((id): id is string => typeof id === 'string');
   const people = ids.length > 0 ? await readPeople(sb, auth.tenantId, ids) : new Map();
   return rows.map((row) => {
@@ -161,7 +176,7 @@ export async function toActivityRecords(
     const who = personOf(row, people);
     return {
       when_utc: typeof row.created_at === 'string' ? new Date(row.created_at).toISOString() : '',
-      when_riyadh: typeof row.created_at === 'string' ? riyadhDateTime(row.created_at) : '',
+      when_studio: typeof row.created_at === 'string' ? studioDateTime(row.created_at) : '',
       // A member switched off keeps their name, marked; one removed altogether has none.
       who: who.former && who.known ? `${who.name} (former member)` : who.name,
       role: who.roleLabel ?? '',

@@ -20,6 +20,8 @@ import {
 import { daysOf, rangeOfDays } from '@/lib/admin/stats/range';
 import { loadRealtime } from '@/lib/admin/stats/realtime';
 import { realtimeOf, updatedLine } from '@/lib/admin/stats/realtimeView';
+import { clockFor } from '@/lib/admin/relTime';
+import { ClockProvider } from '@/components/admin/kit/clock';
 import {
   funnelSteps,
   inquiryWithoutService,
@@ -211,6 +213,12 @@ describe('busiest hours', () => {
     expect(hoursOf(null)).toEqual(Array.from({ length: 24 }, () => 0));
   });
 
+  it('groups the hours in the studio’s zone when the page names one (Admin v2 U9)', async () => {
+    const { sb, calls } = client({ busy_hours: () => [] });
+    await loadBusyHours(sb, auth, range, 'Europe/London');
+    expect(calls[0]?.args).toMatchObject({ p_tz: 'Europe/London' });
+  });
+
   it('names the busiest four by views, ties by the earlier hour, only hours with views', () => {
     const views = Array.from({ length: 24 }, () => 0);
     views[9] = 5;
@@ -242,7 +250,10 @@ describe('realtime', () => {
     expect(view.activeVisits).toBe(7);
     expect(view.perMinute).toHaveLength(30);
     expect(view.perMinute[29]?.views).toBe(30);
-    expect(updatedLine(view)).toBe('Updated 14:59, Riyadh time');
+    expect(updatedLine(view, clockFor('Asia/Riyadh'))).toBe('Updated 14:59, Riyadh time');
+    // The studio's clock (Admin v2 U9): another zone, another hour and its city.
+    expect(updatedLine(view, clockFor('Asia/Dubai'))).toBe('Updated 15:59, Dubai time');
+    expect(updatedLine(realtimeOf(null), clockFor('UTC'))).toBe('');
   });
 
   it('reads the JSON route’s own answer the same way (the island re-reads it)', () => {
@@ -263,6 +274,19 @@ describe('realtime', () => {
     expect(html).not.toContain('aria-live');
     expect(stateLine('auto')).toBe('Updates paused after 30 minutes.');
     expect(stateLine('paused')).toBe('Updates paused.');
+  });
+
+  it('prints the minutes on the clock its page hands it (Admin v2 U9)', () => {
+    const html = renderToStaticMarkup(
+      createElement(ClockProvider, {
+        tz: 'Europe/London',
+        children: createElement(Realtime, { initial: realtimeOf(answer) }),
+      }),
+    );
+    expect(html).toContain('Updated 12:59, London time. Updates every minute.');
+    expect(html).toContain('The last 30 minutes, London time');
+    expect(html).toContain('Minute, London time');
+    expect(html).not.toContain('Riyadh');
   });
 });
 

@@ -388,6 +388,12 @@
     sans-serif;
   --ad-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
+  /* Maintenance's "What visitors see" (Admin v2 U9b, maintenance.css): the midnight scrim
+     over the hero still, and that scrim over a WHITE still, the worst case its words sit on
+     (scripts/contrast-audit.mjs checks them on it). */
+  --ad-mnt-scrim: color-mix(in srgb, var(--ad-midnight) 75%, transparent);
+  --ad-mnt-scrim-worst: color-mix(in srgb, var(--ad-midnight) 75%, #ffffff);
+
   /* Layout. The main column's padding is named because the topbar bleeds through it. */
   --ad-side: 256px;
   --ad-top: 64px;
@@ -4689,4 +4695,38 @@ dialog.drw[data-size='wide'] {
   .ch-swatch {
     fill: CanvasText;
   }
+}
+
+/* An editor's groups (EditorForm `groups`, Admin v2 U9): the prototype's settings cards, in
+   two columns that stack as .grid--2 does; a closed card is a <details> whose summary is
+   the card's title band. */
+.editor__col {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.editor__col > .card + .card,
+.editor__cols + .card,
+.editor__cols + .editor__group,
+.editor__group + .editor__group {
+  margin-top: 18px;
+}
+
+.editor__col > .card + .card {
+  margin-top: 0;
+}
+
+.editor__group-sub {
+  margin: -8px 0 14px;
+}
+
+details.editor__group > summary {
+  cursor: pointer;
+}
+
+details.editor__group:not([open]) > summary {
+  margin-bottom: -20px;
+  border-bottom: 0;
 }

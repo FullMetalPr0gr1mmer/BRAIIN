@@ -5,24 +5,29 @@ import Note from '@/components/admin/ui/Note.astro';
 import BarsV from '@/components/admin/ui/charts/BarsV.astro';
 import Donut from '@/components/admin/ui/charts/Donut.astro';
 import Line from '@/components/admin/ui/charts/Line.astro';
+import { timeZoneCity } from '@schemas/timeZones';
 import { formatNumber } from '@/lib/admin/charts';
 import { busiestHours, hourLabel } from '@/lib/admin/stats/hours';
 import type { PageviewSummary } from '@/lib/admin/stats/pageviews';
 import { dayLabel } from '@/lib/admin/stats/range';
 
 // Website stats, Audience (Admin v2 G1a; the prototype's opsStatsAudience, screens_ops.js,
-// less what is not collected): the busiest hours of the day in Riyadh time, then English and
+// less what is not collected): the busiest hours of the day on the studio's clock (Riyadh by
+// default; site_settings.timezone since Admin v2 U9), then English and
 // Arabic page views day by day and the language split (moved here from the Overview). The
 // prototype's countries, cities, browsers, devices and new versus returning are L5 (they
 // need a persistent id or new capture): the note says they are not collected. Zero JS.
 
 interface Props {
   summary: PageviewSummary;
-  /** Page views per hour of the day, 0 to 23, Riyadh time. */
+  /** Page views per hour of the day, 0 to 23, in `zone`. */
   hours: readonly number[];
+  /** The studio's time zone, which the hours were grouped in. */
+  zone: string;
 }
 
-const { summary, hours } = Astro.props;
+const { summary, hours, zone } = Astro.props;
+const zoneWords = `${timeZoneCity(zone)} time`;
 const { current, range } = summary;
 const views = current.total;
 const busiest = busiestHours(hours);
@@ -58,11 +63,11 @@ const busiestLine =
       <Card
         level={2}
         title="Busiest hours"
-        sub="Riyadh time. Good to know when to post and when to answer."
+        sub={`${zoneWords}. Good to know when to post and when to answer.`}
       >
         <BarsV
           id="stats-hours"
-          caption="Page views by hour of day, Riyadh time"
+          caption={`Page views by hour of day, ${zoneWords}`}
           captionVisible={false}
           data={hours.map((value, hour) => ({ label: String(hour), value }))}
           height={180}

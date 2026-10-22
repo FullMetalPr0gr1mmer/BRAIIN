@@ -6,7 +6,8 @@ import Kpi from '@/components/admin/kit/Kpi';
 import Note from '@/components/admin/kit/Note';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { showFlash } from '@/lib/admin/flash';
-import { formatDateTime, isoOf, relTime } from '@/lib/admin/relTime';
+import { isoOf } from '@/lib/admin/relTime';
+import { useClock } from '@/components/admin/kit/clock';
 import { toast } from '@/lib/admin/toast';
 import { deltaOf, MIN_RESPONSE_SAMPLE, type LeadKpis } from '@/lib/crm/leadKpis';
 import type { LeadsFrame } from '@/lib/crm/leadPage';
@@ -154,6 +155,7 @@ export default function LeadsList({
   permissions,
   now: renderedAt,
 }: LeadsListProps) {
+  const { formatDateTime, relTime, zone } = useClock();
   const { stages, people, disciplines } = frame;
   const [filters, setFilters] = useState<LeadFilters>(start);
   const [q, setQ] = useState('');
@@ -183,7 +185,7 @@ export default function LeadsList({
     if (`${location.pathname}${location.search}` !== href) history.replaceState(null, '', href);
     document
       .querySelector('[data-lead-export]')
-      ?.setAttribute('href', exportHrefOf(filters, new Date()));
+      ?.setAttribute('href', exportHrefOf(filters, new Date(), zone));
   }, [filters]);
 
   // The list: read again whenever a filter, the search or a change asks; the server's first
@@ -196,7 +198,7 @@ export default function LeadsList({
     }
     const controller = new AbortController();
     setBusy(true);
-    const body = { ...listQueryOf(filters, new Date()), ...(q ? { q } : {}) };
+    const body = { ...listQueryOf(filters, new Date(), zone), ...(q ? { q } : {}) };
     adminFetch<LeadPage>('/api/admin/leads/query', {
       method: 'POST',
       body,
@@ -235,7 +237,7 @@ export default function LeadsList({
     const controller = new AbortController();
     adminFetch<LeadSummaryAnswer>('/api/admin/leads/summary', {
       method: 'POST',
-      body: summaryQueryOf(filters, new Date()),
+      body: summaryQueryOf(filters, new Date(), zone),
       signal: controller.signal,
     })
       .then(setSummary)

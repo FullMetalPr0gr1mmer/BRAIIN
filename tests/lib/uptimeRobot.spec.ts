@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { uptimeProvider, UptimeProviderError } from '@/lib/health/uptime';
+import { dayKeyIn } from '@/lib/time/zone';
 import {
   MONITOR_IDS,
   readingOf,
   requestBody,
-  riyadhDay,
   stripRanges,
   uptimeRobot,
 } from '@/lib/health/uptime/uptimeRobot';
@@ -98,7 +98,7 @@ describe('the request', () => {
     expect(days[0]!.start).toBe(Date.parse('2026-07-17T21:00:00Z'));
     for (let i = 1; i < 90; i += 1) expect(days[i]!.start - days[i - 1]!.start).toBe(86_400_000);
     // 22:30 UTC is already the next day in Riyadh.
-    expect(riyadhDay(Date.parse('2026-10-15T22:30:00Z'))).toBe('2026-10-16');
+    expect(dayKeyIn(Date.parse('2026-10-15T22:30:00Z'), 'Asia/Riyadh')).toBe('2026-10-16');
     const body = requestBody('k', undefined, NOW);
     const sent = body.get('custom_uptime_ranges')!.split('-');
     expect(sent).toHaveLength(90);

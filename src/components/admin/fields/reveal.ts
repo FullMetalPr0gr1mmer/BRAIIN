@@ -20,7 +20,10 @@ export function revealField(id: string): void {
  * once the field has rendered it visible. False when there is no such element.
  */
 export function revealAndFocus(id: string): boolean {
-  if (typeof document === 'undefined' || !document.getElementById(id)) return false;
+  if (typeof document === 'undefined') return false;
+  const target = document.getElementById(id);
+  if (!target) return false;
+  openDetailsAround(target);
   revealField(id);
   requestAnimationFrame(() => {
     const element = document.getElementById(id);
@@ -29,6 +32,23 @@ export function revealAndFocus(id: string): boolean {
     element.scrollIntoView({ block: 'center' });
   });
   return true;
+}
+
+/**
+ * Opens every closed `<details>` the element sits in (Admin v2 U9: an editor's Advanced card),
+ * innermost first, so it can be seen and focused. Returns how many it opened.
+ */
+export function openDetailsAround(element: Element): number {
+  let opened = 0;
+  let details = element.parentElement?.closest('details') ?? null;
+  while (details) {
+    if (!details.open) {
+      details.open = true;
+      opened += 1;
+    }
+    details = details.parentElement?.closest('details') ?? null;
+  }
+  return opened;
 }
 
 /** Calls `handler(id)` for every reveal request while the component is mounted. */

@@ -1,7 +1,8 @@
 import type { Monitor, UptimeDay } from '@schemas/healthProbe';
 import type { ChartTable } from '../charts';
 import { THRESHOLDS } from '@/lib/health/thresholds';
-import { formatDate, relTime } from '../relTime';
+import { clockFor, type Clock } from '../relTime';
+import { timeZoneCity } from '@schemas/timeZones';
 import { formatRatio, type ProbeView } from './probes';
 
 // The Uptime card's pure parts (Admin v2 G2): the 90-day strip's day states, its table
@@ -35,8 +36,13 @@ export function stripSummary(days: readonly UptimeDay[]): string {
   return none > 0 ? `${base}; no reading on ${none}.` : `${base}.`;
 }
 
-/** The strip as a table: the days with downtime only, newest first (Riyadh days). */
-export function stripTable(days: readonly UptimeDay[]): ChartTable {
+/**
+ * The strip as a table: the days with downtime only, newest first. The days are the studio's
+ * (Admin v2 U9: the probe counts them in its zone, src/lib/health/probes.ts), each a calendar
+ * date, printed as written (on UTC's clock at noon, so no zone moves it).
+ */
+export function stripTable(days: readonly UptimeDay[], tz?: string): ChartTable {
+  const { formatDate } = clockFor('UTC');
   const rows = days
     .filter((d) => {
       const state = dayState(d.ratio);
@@ -44,12 +50,12 @@ export function stripTable(days: readonly UptimeDay[]): ChartTable {
     })
     .reverse()
     .map((d) => [
-      formatDate(`${d.day}T12:00:00+03:00`, { year: 'always' }),
+      formatDate(`${d.day}T12:00:00Z`, { year: 'always' }),
       formatRatio(d.ratio ?? 0),
       DAY_STATE_WORDS[dayState(d.ratio)],
     ]);
   return {
-    head: ['Day (Riyadh)', 'Uptime', 'What happened'],
+    head: [`Day (${timeZoneCity(clockFor(tz).zone)})`, 'Uptime', 'What happened'],
     rows: rows.length > 0 ? rows : [['No day with downtime', '', '']],
   };
 }
@@ -118,7 +124,12 @@ export function noReadingLine(probe: ProbeAttempts | null): string {
 }
 
 /** The note above an older reading when the last try failed; null when it did not. */
-export function failedReadLine(probe: ProbeAttempts | null, now: number): string | null {
+export function failedReadLine(
+  probe: ProbeAttempts | null,
+  now: number,
+  clock: Clock = clockFor(null),
+): string | null {
+  const { relTime } = clock;
   if (!probe || probe.readOk || probe.failures === 0) return null;
   const last = probe.okAt ? ` Last reading ${relTime(probe.okAt, now)}.` : '';
   return `The monitor did not answer ${tries(probe.failures)}. ${pace(probe.failures)}${last}`;

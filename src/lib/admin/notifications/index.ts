@@ -1,3 +1,4 @@
+import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { NOTIFICATION_KINDS, type NotificationKind } from '@schemas/adminPrefs';
@@ -51,6 +52,8 @@ export interface LoadOptions {
   /** Readable labels (the drawer); the shell's count skips them. */
   labels?: boolean;
   now?: Date;
+  /** The studio's time zone (Admin v2 U9); the default zone when the caller has none. */
+  tz?: string;
 }
 
 async function settle<T>(work: () => Promise<T>): Promise<T | null> {
@@ -73,6 +76,7 @@ export async function loadNotifications(
     now,
     maintenance: options.maintenance,
     labels: options.labels ?? false,
+    tz: options.tz ?? DEFAULT_TIME_ZONE,
   };
   const sources = NOTIFICATION_KINDS.map((kind) => NOTIFICATION_SOURCES[kind]).filter((source) =>
     source.visible(auth.role),

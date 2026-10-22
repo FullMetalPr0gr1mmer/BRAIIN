@@ -1,3 +1,4 @@
+import { MAINTENANCE_DEFAULTS } from '@schemas/maintenance';
 import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
@@ -6,7 +7,7 @@ import { NOTIFICATION_KINDS } from '@schemas/adminPrefs';
 import type { MaintenanceState } from '@/lib/http/maintenance';
 import { NOTIFICATION_SOURCES, loadNotifications } from '@/lib/admin/notifications';
 import { MAX_ITEMS, WINDOW_DAYS } from '@/lib/admin/notifications/types';
-import { riyadhDay } from '@/lib/admin/notifications/scheduled';
+import { studioDay as riyadhDay } from '@/lib/admin/notifications/scheduled';
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 
@@ -102,11 +103,13 @@ const maintenanceOn = (changedAt: string | undefined) => async (): Promise<Maint
   active: true,
   allowlist: ['203.0.113.9'],
   ...(changedAt ? { changedAt } : {}),
+  snapshot: { ...MAINTENANCE_DEFAULTS, active: true, allowlist: ['203.0.113.9'] },
 });
 
 const noMaintenance = async (): Promise<MaintenanceState | null> => ({
   active: false,
   allowlist: [],
+  snapshot: MAINTENANCE_DEFAULTS,
 });
 
 describe('the bell: who gets what', () => {
@@ -366,6 +369,35 @@ describe('the bell: what an item says', () => {
       // The allowlist never reaches the bell.
       expect(JSON.stringify(feed), role).not.toContain('203.0.113.9');
     }
+  });
+
+  it('maintenance: a "Back on" day that came says it turned off by itself (Admin v2 U9b)', async () => {
+    const at = ago(5);
+    const feed = await loadNotifications(fakeDb(FULL).sb, auth('admin'), {
+      maintenance: async () => ({
+        active: false,
+        endedByDate: true,
+        changedAt: at,
+        allowlist: [],
+        snapshot: { ...MAINTENANCE_DEFAULTS, active: true, until: '2026-10-10', untilAt: at },
+      }),
+      now: NOW,
+    });
+    const item = feed.items.find((i) => i.kind === 'maintenance');
+    expect(item?.text).toBe('Maintenance mode turned off by itself');
+    expect(item?.detail).toBe('Its Back on day came. Visitors can reach the site again.');
+    expect(item?.at).toBe(at);
+  });
+
+  it('scheduled: "today" and the time are the studio’s zone (Admin v2 U9)', async () => {
+    const { studioDay } = await import('@/lib/admin/notifications/scheduled');
+    // 22:30 UTC on the 10th is the 11th in Riyadh and in Dubai, still the 10th in London.
+    const at = new Date('2026-10-10T22:30:00.000Z');
+    expect(studioDay(at, 'Asia/Dubai')).toEqual({
+      start: '2026-10-10T20:00:00.000Z',
+      end: '2026-10-11T20:00:00.000Z',
+    });
+    expect(studioDay(at, 'Europe/London').start).toBe('2026-10-09T23:00:00.000Z');
   });
 
   it('maintenance: nothing for a switch older than the window, or one never stamped', async () => {

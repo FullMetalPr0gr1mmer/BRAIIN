@@ -18,8 +18,8 @@ export const prerender = false;
 export const GET = defineAdminRoute({
   cap: 'audit.view',
   input: ActivityQuerySchema,
-  handler: async ({ auth, sb, input }) => {
-    const result = await loadActivity(sb, auth, input);
+  handler: async ({ auth, sb, input, studioTimeZone }) => {
+    const result = await loadActivity(sb, auth, input, [], await studioTimeZone());
     return {
       rows: result.entries.map((entry) => ({
         id: entry.id,

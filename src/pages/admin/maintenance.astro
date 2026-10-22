@@ -1,13 +1,26 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminMaintenance from '@/components/admin/islands/AdminMaintenance';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 
 export const prerender = false;
+
+// Maintenance mode (Admin v2 U9b): `maintenance.manage` (Admin, Developer). Any other role gets
+// the layout with the refusal and a 403, and nothing is read; the island takes the studio's
+// time zone ("Back on" is midnight in it).
+
+const session = Astro.locals.session;
+const allowed = Boolean(session && can(session.role, 'maintenance.manage') === 'full');
+if (!allowed) Astro.response.status = 403;
+const tz = allowed ? await studioTimeZone(Astro.locals) : '';
 ---
 
 <AdminLayout
   title="Maintenance mode"
-  subtitle="Checked at the edge before the cache lookup, so switching it on takes effect without a purge."
+  subtitle="Take the whole site offline behind a page that says you are back soon."
+  styles={['maintenance.css']}
 >
-  <AdminMaintenance client:load />
+  {!allowed ? <Refused /> : <AdminMaintenance client:load tz={tz} />}
 </AdminLayout>

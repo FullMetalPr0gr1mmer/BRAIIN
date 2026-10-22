@@ -14,7 +14,9 @@ import { siteProfileSingleton } from '@/lib/admin/singletons/siteProfile';
 // Admin only, in both server layers (Pillar 1): the kernel's `applications.manage` (Admin only
 // in ROLE_CAPS) plus `settings.general` (the row's own write capability) and `guardWrite` in
 // the Worker; the 0019 guard trigger in the database (42501 → 403). No version: the write names
-// one boolean and is idempotent, so a stale form cannot overwrite anything else.
+// one boolean and is idempotent, so a stale form cannot overwrite anything else. `changed` says
+// whether it wrote (Admin v2 U9): the General screen's identity form takes the returned version
+// only after a write of its own, and only when the row moved by exactly one.
 
 export const prerender = false;
 
@@ -39,7 +41,7 @@ export const PATCH = defineAdminRoute({
     const before = existing ? existing.accepting_applications === true : false;
     // Nothing to change: no write, no audit row (the switch is already where it was asked).
     if (next === before) {
-      return { acceptingApplications: next, version: existing?.version ?? 0 };
+      return { acceptingApplications: next, version: existing?.version ?? 0, changed: false };
     }
 
     let row: { version: number; accepting_applications: boolean } | null;
@@ -77,6 +79,7 @@ export const PATCH = defineAdminRoute({
     return {
       acceptingApplications: row?.accepting_applications === true,
       version: row?.version ?? 0,
+      changed: true,
     };
   },
 });

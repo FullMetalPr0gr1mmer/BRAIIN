@@ -3,9 +3,13 @@ import Badge from '@/components/admin/ui/Badge.astro';
 import EmptyState from '@/components/admin/ui/EmptyState.astro';
 import Pager from '@/components/admin/ui/Pager.astro';
 import { offsetOf, pageInfo, pageParam, rangeText } from '@/lib/admin/pager';
-import { formatDateTime, isoOf, relTime } from '@/lib/admin/relTime';
+import { isoOf } from '@/lib/admin/relTime';
+import { studioClock } from '@/lib/admin/studioTimeZone';
 import { LOG_LEVEL_LABEL, type LogLevel, type LogPage } from '@/lib/admin/health/logs';
 import type { BadgeTone } from '@/lib/admin/tones';
+
+// The studio's clock (Admin v2 U9: `site_settings.timezone`, read once per request).
+const { formatDateTime, relTime } = await studioClock(Astro.locals);
 
 // The Errors tab's table (Admin v2 U2; it replaces /admin/logs): when, the level as a word,
 // the source and the message, newest first, 25 a page. A row's detail opens in place

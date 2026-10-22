@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ActivityQuerySchema, type ActivityFilters, type ActivityQuery } from '@schemas/audit';
 import type { AuthContext, Role } from '@/lib/auth/types';
+import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
+import { zonedDayEnd, zonedDayStart } from '@/lib/time/zone';
 import { isRole } from '@/lib/auth/types';
 import { ROLE_LABELS } from '@/lib/authz/capLabels';
 import { describe, kindFilter, type ActivityDescription, type ActivityRow } from './auditLabels';
@@ -24,19 +26,17 @@ const ROW_COLUMNS = 'id,actor_id,actor_role,action,entity_type,entity_id,detail,
 /** How many of the newest entries the chain check walks. */
 export const CHAIN_WINDOW = 100;
 
-/** The studio's offset from UTC (Asia/Riyadh: +03:00 all year, no daylight saving). */
-const RIYADH_OFFSET_MS = 3 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** The first instant of a Riyadh day, as the UTC ISO string Postgres compares with. */
-export function riyadhDayStart(day: string): string {
-  const [year, month, date] = day.split('-').map(Number) as [number, number, number];
-  return new Date(Date.UTC(year, month - 1, date) - RIYADH_OFFSET_MS).toISOString();
+/**
+ * The first instant of a day in the studio's zone (Admin v2 U9: `site_settings.timezone`), as
+ * the UTC ISO string Postgres compares with. Daylight saving (London, Cairo) is followed.
+ */
+export function studioDayStart(day: string, tz: string = DEFAULT_TIME_ZONE): string {
+  return zonedDayStart(day, tz).toISOString();
 }
 
-/** The first instant AFTER a Riyadh day: `to` is inclusive of its whole day. */
-export function riyadhDayEnd(day: string): string {
-  return new Date(Date.parse(riyadhDayStart(day)) + DAY_MS).toISOString();
+/** The first instant AFTER a studio day: `to` is inclusive of its whole day. */
+export function studioDayEnd(day: string, tz: string = DEFAULT_TIME_ZONE): string {
+  return zonedDayEnd(day, tz).toISOString();
 }
 
 /**
@@ -52,11 +52,16 @@ interface Filterable {
 }
 
 /** The filters, applied in one place for the page, its count and the export. */
-export function applyFilters<T>(query: T, tenantId: string, filters: ActivityFilters): T {
+export function applyFilters<T>(
+  query: T,
+  tenantId: string,
+  filters: ActivityFilters,
+  tz: string = DEFAULT_TIME_ZONE,
+): T {
   let q = (query as unknown as Filterable).eq('tenant_id', tenantId);
   if (filters.actor) q = q.eq('actor_id', filters.actor);
-  if (filters.from) q = q.gte('created_at', riyadhDayStart(filters.from));
-  if (filters.to) q = q.lt('created_at', riyadhDayEnd(filters.to));
+  if (filters.from) q = q.gte('created_at', studioDayStart(filters.from, tz));
+  if (filters.to) q = q.lt('created_at', studioDayEnd(filters.to, tz));
   if (filters.entityType) q = q.eq('entity_type', filters.entityType);
   if (filters.entityId) q = q.eq('entity_id', filters.entityId);
   if (filters.kind) q = q.or(kindFilter(filters.kind));
@@ -227,12 +232,14 @@ async function readPage(
   tenantId: string,
   query: ActivityQuery,
   page: number,
+  tz: string,
 ): Promise<{ rows: ActivityRow[]; total: number; outOfRange: boolean }> {
   const offset = offsetOf(page, PAGE_SIZE);
   const { data, error, count } = await applyFilters(
     sb.from('audit_log').select(ROW_COLUMNS, { count: 'exact' }),
     tenantId,
     query,
+    tz,
   )
     .order('id', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1);
@@ -247,11 +254,13 @@ async function countMatching(
   sb: SupabaseClient,
   tenantId: string,
   query: ActivityQuery,
+  tz: string,
 ): Promise<number> {
   const { error, count } = await applyFilters(
     sb.from('audit_log').select('id', { count: 'exact', head: true }),
     tenantId,
     query,
+    tz,
   );
   if (error) throw new Error(`activity count: ${error.code ?? 'no code'}`);
   return count ?? 0;
@@ -268,10 +277,11 @@ export async function loadActivity(
   auth: Pick<AuthContext, 'tenantId'>,
   query: ActivityQuery,
   extraPeople: readonly string[] = [],
+  tz: string = DEFAULT_TIME_ZONE,
 ): Promise<ActivityPage> {
   const tenantId = auth.tenantId;
   const [first, chain] = await Promise.all([
-    readPage(sb, tenantId, query, query.page),
+    readPage(sb, tenantId, query, query.page, tz),
     readChain(sb, tenantId),
   ]);
 
@@ -279,11 +289,13 @@ export async function loadActivity(
   let page = query.page;
   if (read.outOfRange || (read.rows.length === 0 && page > 1)) {
     const total =
-      read.outOfRange && read.total === 0 ? await countMatching(sb, tenantId, query) : read.total;
+      read.outOfRange && read.total === 0
+        ? await countMatching(sb, tenantId, query, tz)
+        : read.total;
     const last = Math.max(1, Math.ceil(total / PAGE_SIZE));
     if (last < page) {
       page = last;
-      read = await readPage(sb, tenantId, query, last);
+      read = await readPage(sb, tenantId, query, last, tz);
     }
   }
 

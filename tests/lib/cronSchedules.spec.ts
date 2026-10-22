@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// The Worker's cron schedules (Admin v2 G2 and R7, src/lib/cron/schedules.ts): the keys are exactly
+// The Worker's cron schedules (Admin v2 G2, U9b and R7, src/lib/cron/schedules.ts): the keys are exactly
 // wrangler.jsonc's `triggers.crons`, each schedule's declared budgets fit the Workers Free
 // plan's 50 subrequests, the health job runs at its worst within the budget it declares
 // (dailyJobs.spec's method: every awaited query, every fetch, two per log line), and a cron
@@ -59,6 +59,7 @@ vi.mock('astro:env/server', async (importOriginal) => ({
 const { SCHEDULES, runSchedule } = await import('@/lib/cron/schedules');
 const { DAILY_JOBS } = await import('@/lib/cron/jobs');
 const { HEALTH_JOBS } = await import('@/lib/cron/health');
+const { MAINTENANCE_RECONCILE_JOB } = await import('@/lib/cron/maintenanceReconcile');
 const { RELEASE_JOBS } = await import('@/lib/cron/releases');
 const { runJobs } = await import('@/lib/cron/daily');
 
@@ -86,7 +87,9 @@ describe('the schedules (src/lib/cron/schedules.ts)', () => {
   it('are exactly the cron triggers wrangler.jsonc declares', () => {
     expect(Object.keys(SCHEDULES).sort()).toEqual(wranglerCrons().sort());
     expect(SCHEDULES['23 3 * * *']).toBe(DAILY_JOBS);
-    expect(SCHEDULES['*/10 * * * *']).toBe(HEALTH_JOBS);
+    // Every 10 minutes: the health probes, then maintenance's reconcile (Admin v2 U9b joined
+    // G2's schedule, the plan's §5.7 default, rather than taking a trigger of its own).
+    expect(SCHEDULES['*/10 * * * *']).toEqual([...HEALTH_JOBS, MAINTENANCE_RECONCILE_JOB]);
     // Admin v2 R7: what published releases still owe the edge, every minute.
     expect(SCHEDULES['* * * * *']).toBe(RELEASE_JOBS);
   });
@@ -109,18 +112,24 @@ describe('the schedules (src/lib/cron/schedules.ts)', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('dispatches by cron string: the health schedule runs the health job only', async () => {
+  it('dispatches by cron string: the 10-minute schedule runs its two jobs, in order', async () => {
     const ran: string[] = [];
-    const original = HEALTH_JOBS[0]!.run;
-    (HEALTH_JOBS[0] as { run: () => Promise<void> }).run = async () => {
-      ran.push('health-probes');
-    };
+    const jobs = SCHEDULES['*/10 * * * *']! as unknown as {
+      name: string;
+      run: () => Promise<void>;
+    }[];
+    const originals = jobs.map((job) => job.run);
+    for (const job of jobs) {
+      job.run = async () => {
+        ran.push(job.name);
+      };
+    }
     try {
       await runSchedule('*/10 * * * *');
     } finally {
-      (HEALTH_JOBS[0] as { run: () => Promise<void> }).run = original;
+      jobs.forEach((job, i) => (job.run = originals[i]!));
     }
-    expect(ran).toEqual(['health-probes']);
+    expect(ran).toEqual(['health-probes', 'maintenance-reconcile']);
     expect(state.requests).toEqual([]);
   });
 

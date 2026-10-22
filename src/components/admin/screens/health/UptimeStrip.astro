@@ -2,8 +2,11 @@
 import ChartFigure from '@/components/admin/ui/charts/ChartFigure.astro';
 import type { UptimeDay } from '@schemas/healthProbe';
 import { dayState, stripSummary, stripTable } from '@/lib/admin/health/uptime';
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
+import { timeZoneCity } from '@schemas/timeZones';
 
-// The 90-day uptime strip (Admin v2 G2; the prototype's .up): one bar per Riyadh day, oldest
+// The 90-day uptime strip (Admin v2 G2; the prototype's .up): one bar per studio day (its zone
+// since Admin v2 U9), oldest
 // first, coloured by its state through a data attribute (no style=). The bars are
 // decoration for sighted readers (aria-hidden); the figure's summary and its "View as table"
 // carry the same days in words, the days with downtime listed (one dataset). The visible
@@ -16,14 +19,15 @@ interface Props {
 
 const { days } = Astro.props;
 const summary = stripSummary(days);
+const tz = await studioTimeZone(Astro.locals);
 ---
 
 <ChartFigure
   id="uptime-strip"
-  caption="Uptime over the last 90 days, by Riyadh day"
+  caption={`Uptime over the last 90 days, by ${timeZoneCity(tz)} day`}
   captionVisible={false}
   summary={summary}
-  table={stripTable(days)}
+  table={stripTable(days, tz)}
   empty={days.length === 0}
   emptyText="No daily readings yet."
 >
