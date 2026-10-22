@@ -12,7 +12,8 @@ export const prerender = false;
 // this static route before [id].astro.
 const screen = collectionScreen(Astro.locals.session, 'testimonials', 'new');
 // Admin v2 U6: a project's "Add a quote" links here with `?project=<id>`, so the new quote
-// starts linked to that project (only a uuid is taken; the server checks the link's tenant).
+// starts linked to that project: only a uuid is taken, as the drawer's starting value, which
+// the project picker shows and the save validates like any value the person picks.
 const project = Astro.url.searchParams.get('project');
 const presets = project && isUuid(project) ? { portfolioId: project } : undefined;
 ---
