@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { RECRUITMENT_POLICY_VERSION } from '@consent/recruitment';
 import {
@@ -8,10 +9,22 @@ import {
   CV_MAX_BYTES,
 } from '@schemas/application';
 import { LeadInputSchema } from '@schemas/lead';
-import { CONTACT_FIELD_TO_LEAD, CONTACT_FORM_FIELDS } from '@/lib/forms/contactPayload';
+import {
+  CONTACT_FIELD_TO_LEAD,
+  CONTACT_FORM_FIELDS,
+  type ContactField,
+  type ContactFormVariant,
+} from '@/lib/forms/contactPayload';
 import { CONTACT_FORM_COPY } from '@/lib/forms/contactCopy';
 import { APPLY_LIMITS, CONTACT_LIMITS } from '@/lib/http/publicRateLimit';
-import { CONSENT_VERSION, CV_LIMIT, formFacts, perWindow } from '@/lib/admin/forms/overview';
+import {
+  CONSENT_VERSION,
+  CV_LIMIT,
+  INQUIRY_PLACES,
+  formFacts,
+  inquiryFieldOrder,
+  perWindow,
+} from '@/lib/admin/forms/overview';
 
 // The Forms overview (Admin v2 U11, /admin/forms) states facts the code decides, and is held
 // to each here: the fields are the ones each form renders, in its order; "Required" is what
@@ -22,17 +35,103 @@ import { CONSENT_VERSION, CV_LIMIT, formFacts, perWindow } from '@/lib/admin/for
 const facts = formFacts();
 const source = (path: string) => readFileSync(path, 'utf8');
 
+/** Every .astro file under src that renders the inquiry form, and the variant it asks for. */
+function contactFormCallSites(): Map<string, string[]> {
+  const sites = new Map<string, string[]>();
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.name.endsWith('.astro')) {
+        const text = source(path);
+        for (const call of text.matchAll(/<ContactForm\b[^>]*?>/g)) {
+          const variant = /\bfields="([a-z]+)"/.exec(call[0])?.[1] ?? '(none)';
+          const file = path.split(sep).join('/');
+          sites.set(variant, [...(sites.get(variant) ?? []), file]);
+        }
+      }
+    }
+  };
+  walk('src');
+  return sites;
+}
+
+const VARIANTS = Object.keys(CONTACT_FORM_FIELDS) as ContactFormVariant[];
+const has = (variant: ContactFormVariant, field: ContactField) =>
+  (CONTACT_FORM_FIELDS[variant] as readonly ContactField[]).includes(field);
+
 describe('the inquiry form', () => {
-  it('lists the controls the Contact page renders, in its order, then the consent box', () => {
-    expect(source('src/components/sections/ContactInquiry.astro')).toContain('fields="full"');
+  it('names a place for every variant, each held to the one section that renders it', () => {
+    expect(Object.keys(INQUIRY_PLACES).sort()).toEqual([...VARIANTS].sort());
+    expect(Object.fromEntries(contactFormCallSites())).toEqual({
+      compact: ['src/components/sections/HomeContact.astro'],
+      full: ['src/components/sections/ContactInquiry.astro'],
+      hello: ['src/components/sections/Hello.astro'],
+    });
+    // Where those sections are: the home page, Contact, and /services and each service page.
+    expect(INQUIRY_PLACES).toEqual({
+      compact: 'the home page',
+      full: 'the Contact page',
+      hello: 'the services pages',
+    });
+    expect(facts.inquiry.where).toContain(
+      'On the home page, the Contact page and the services pages, in English and Arabic.',
+    );
+  });
+
+  it('lists every field any variant asks for, keeping each one’s order, then the consent box', () => {
+    const order = inquiryFieldOrder();
+    expect(order).toEqual([
+      'name',
+      'email',
+      'company',
+      'phone',
+      'service',
+      'budget',
+      'deadline',
+      'message',
+    ]);
+    expect([...order].sort()).toEqual(
+      [...new Set(VARIANTS.flatMap((v) => [...CONTACT_FORM_FIELDS[v]]))].sort(),
+    );
+    for (const variant of VARIANTS) {
+      expect(
+        order.filter((f) => has(variant, f)),
+        variant,
+      ).toEqual([...CONTACT_FORM_FIELDS[variant]]);
+    }
     expect(facts.inquiry.fields.map((f) => f.key)).toEqual([
-      ...CONTACT_FORM_FIELDS.full.map((f) => CONTACT_FIELD_TO_LEAD[f]),
+      ...order.map((f) => CONTACT_FIELD_TO_LEAD[f]),
       'consentMarketing',
     ]);
     expect(facts.inquiry.fields.map((f) => f.label)).toEqual([
-      ...CONTACT_FORM_FIELDS.full.map((f) => CONTACT_FORM_COPY.en[f]),
+      ...order.map((f) => CONTACT_FORM_COPY.en[f]),
       CONTACT_FORM_COPY.en.consent,
     ]);
+  });
+
+  it('marks a field asked only in some places with those places; the phone is the services pages’', () => {
+    const hints = Object.fromEntries(facts.inquiry.fields.map((f) => [f.key, f.hint]));
+    expect(hints).toEqual({
+      name: undefined,
+      email: undefined,
+      company: undefined,
+      phone: 'Only on the services pages',
+      serviceOfInterest: undefined,
+      budgetBand: 'Only on the Contact page and the services pages',
+      timelineText: 'Only on the Contact page',
+      message: undefined,
+      consentMarketing: undefined,
+    });
+    for (const field of inquiryFieldOrder()) {
+      const askedBy = VARIANTS.filter((v) => has(v, field));
+      const hint = hints[CONTACT_FIELD_TO_LEAD[field]];
+      if (askedBy.length === VARIANTS.length) expect(hint, field).toBeUndefined();
+      else for (const v of askedBy) expect(hint, field).toContain(INQUIRY_PLACES[v]);
+    }
+    // The phone is optional, and the server keeps it encrypted like the e-mail.
+    expect(facts.inquiry.fields.find((f) => f.key === 'phone')?.required).toBe(false);
+    expect(LeadInputSchema.shape.phone.safeParse(undefined).success).toBe(true);
   });
 
   it('marks required what the schema refuses blank: name, e-mail and message', () => {

@@ -289,7 +289,7 @@ select app.put_help_guide($guide$
     "en": [
       {
         "t": "p",
-        "x": "Forms shows the two forms on the site, the inquiry form on Contact and the application form on Join: the fields each one asks for and how each one keeps spam out. The fields are fixed. Each one is checked on the server, and contact details are stored encrypted."
+        "x": "Forms shows the two forms on the site, the inquiry form on the home page, the Contact page and the services pages, and the application form on Join: the fields each one asks for and how each one keeps spam out. The fields are fixed. Each one is checked on the server, and contact details are stored encrypted."
       },
       {
         "t": "h",
@@ -298,7 +298,7 @@ select app.put_help_guide($guide$
       {
         "t": "ol",
         "x": [
-          "The inquiry form needs a name, an e-mail and a message. The company, the service, the budget, when it is needed and the agreement to be contacted are optional.",
+          "The inquiry form needs a name, an e-mail and a message. The company, a phone number, the service, the budget, when it is needed and the agreement to be contacted are optional. Not every place asks for all of them: only the services pages ask for a phone number, the Contact page and the services pages for the budget, and only the Contact page for when it is needed.",
           "The Join form needs a name, an e-mail, a phone number, a city, the role, the experience, how the person wants to work, when they could start, a portfolio link, a message and the box that lets you keep the application. The crafts, LinkedIn, the CV and the box for future roles are optional. A CV is a PDF or Word file of up to 10 MB."
         ]
       },
@@ -335,7 +335,7 @@ select app.put_help_guide($guide$
     "ar": [
       {
         "t": "p",
-        "x": "تعرض شاشة Forms نموذجَي الموقع، نموذج الاستفسار في صفحة التواصل ونموذج التقديم في صفحة الانضمام: الحقول التي يطلبها كل منهما، وكيف يصد كل منهما الرسائل المزعجة. الحقول ثابتة، ويُتحقق من كل حقل على الخادم، وتُحفظ بيانات التواصل مشفّرة."
+        "x": "تعرض شاشة Forms نموذجَي الموقع، نموذج الاستفسار في الصفحة الرئيسية وصفحة التواصل وصفحات الخدمات، ونموذج التقديم في صفحة الانضمام: الحقول التي يطلبها كل منهما، وكيف يصد كل منهما الرسائل المزعجة. الحقول ثابتة، ويُتحقق من كل حقل على الخادم، وتُحفظ بيانات التواصل مشفّرة."
       },
       {
         "t": "h",
@@ -344,7 +344,7 @@ select app.put_help_guide($guide$
       {
         "t": "ol",
         "x": [
-          "يحتاج نموذج الاستفسار إلى اسم وبريد إلكتروني ورسالة. أما الشركة والخدمة والميزانية وموعد الحاجة والموافقة على التواصل فاختيارية.",
+          "يحتاج نموذج الاستفسار إلى اسم وبريد إلكتروني ورسالة. أما الشركة ورقم الجوال والخدمة والميزانية وموعد الحاجة والموافقة على التواصل فاختيارية. ولا يطلب كل مكان هذه الحقول كلها: صفحات الخدمات وحدها تطلب رقم الجوال، وصفحة التواصل وصفحات الخدمات تطلبان الميزانية، وصفحة التواصل وحدها تطلب موعد الحاجة.",
           "يحتاج نموذج الانضمام إلى اسم وبريد إلكتروني ورقم جوال ومدينة والوظيفة والخبرة وطريقة العمل المفضلة وموعد البدء ورابط أعمال ورسالة، والخانة التي تسمح بحفظ الطلب. أما الحِرف ولينكدإن والسيرة الذاتية وخانة الوظائف المستقبلية فاختيارية. السيرة الذاتية ملف PDF أو Word حتى 10 ميجابايت."
         ]
       },

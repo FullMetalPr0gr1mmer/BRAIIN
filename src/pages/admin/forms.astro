@@ -13,9 +13,10 @@ import { getIdentity } from '@/lib/identity';
 export const prerender = false;
 
 // Forms (Admin v2 U11, docs/admin-v2/ui.md "Integrations, Forms, Notifications (AV-20)"): a
-// read-only overview of the site's two forms, the inquiry form on Contact and the
-// application form on Join, as the code decides them (src/lib/admin/forms/overview.ts): the
-// fields and which are required, the protections (the hidden field, the EXC-004 limits, no
+// read-only overview of the site's two forms, the inquiry form (on the home page, Contact and
+// the services pages, each asking some of its fields) and the application form on Join, as the
+// code decides them (src/lib/admin/forms/overview.ts): the fields, which are required and where
+// each is asked, the protections (the hidden field, the EXC-004 limits, no
 // captcha yet), the consent version Join stores, and where the words around each form are
 // edited. Zero JS: tabs are links (`?tab=join`). settings.general (Admin, Developer: the forms
 // config is General's, P-2); a role without it gets the layout with the refusal and a 403.

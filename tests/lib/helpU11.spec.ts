@@ -197,6 +197,22 @@ describe('the forms guide gives the numbers the code holds', () => {
       facts[id].fields.filter((f) => f.required).map((f) => f.key);
     expect(required('inquiry')).toEqual(['name', 'email', 'message']);
     expect(en()).toContain('The inquiry form needs a name, an e-mail and a message.');
+    // Every field of the three variants, and the places that ask one when not all do, as
+    // the overview marks them (tests/lib/formsOverview.spec.ts holds those to the forms).
+    const hint = (key: string) => facts.inquiry.fields.find((f) => f.key === key)?.hint;
+    expect(en()).toContain(
+      'the inquiry form on the home page, the Contact page and the services pages',
+    );
+    expect(en()).toContain(
+      'The company, a phone number, the service, the budget, when it is needed and the agreement to be contacted are optional.',
+    );
+    expect(hint('phone')).toBe('Only on the services pages');
+    expect(en()).toContain('only the services pages ask for a phone number');
+    expect(hint('budgetBand')).toBe('Only on the Contact page and the services pages');
+    expect(en()).toContain('the Contact page and the services pages for the budget');
+    expect(hint('timelineText')).toBe('Only on the Contact page');
+    expect(en()).toContain('only the Contact page for when it is needed');
+    expect(ar()).toContain('صفحات الخدمات وحدها تطلب رقم الجوال');
     expect(required('join')).toEqual([
       'name',
       'email',

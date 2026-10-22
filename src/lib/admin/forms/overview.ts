@@ -4,17 +4,23 @@ import { ApplicationInputSchema, CV_MAX_BYTES } from '@schemas/application';
 import { LeadInputSchema } from '@schemas/lead';
 import { APPLY_FORM_COPY } from '@/lib/forms/applicationCopy';
 import { CONTACT_FORM_COPY } from '@/lib/forms/contactCopy';
-import { CONTACT_FIELD_TO_LEAD, CONTACT_FORM_FIELDS } from '@/lib/forms/contactPayload';
+import {
+  CONTACT_FIELD_TO_LEAD,
+  CONTACT_FORM_FIELDS,
+  type ContactField,
+  type ContactFormVariant,
+} from '@/lib/forms/contactPayload';
 import { APPLY_LIMITS, CONTACT_LIMITS } from '@/lib/http/publicRateLimit';
 
 // The Forms overview (Admin v2 U11, docs/admin-v2/ui.md "Integrations, Forms, Notifications
 // (AV-20)"): what the site's two forms ask for and how each keeps spam out, read-only (E8
 // makes the forms configurable). Every fact is DERIVED from the code that decides it, so the
-// screen cannot drift from the forms: the fields from the variant the Contact page renders
-// (CONTACT_FORM_FIELDS.full) and from the Join form's controls; each label is the one the
-// visitor reads; "Required" is whatever the server's schema refuses when the control is left
-// as it starts (blank text, no craft picked, a box unticked); the limits are EXC-004's
-// constants. tests/lib/formsOverview.spec.ts holds each fact to its source.
+// screen cannot drift from the forms: the fields from every variant the site renders of the
+// inquiry form (CONTACT_FORM_FIELDS: home, Contact, the services pages), each marked with the
+// places that ask it when not all do, and from the Join form's controls; each label is the
+// one the visitor reads; "Required" is whatever the server's schema refuses when the control
+// is left as it starts (blank text, no craft picked, a box unticked); the limits are
+// EXC-004's constants. tests/lib/formsOverview.spec.ts holds each fact to its source.
 
 export type FormId = 'inquiry' | 'join';
 
@@ -59,15 +65,69 @@ export const CV_LIMIT = `${Math.round(CV_MAX_BYTES / (1024 * 1024))} MB`;
 const contactLabel = (field: keyof typeof CONTACT_FIELD_TO_LEAD): string =>
   CONTACT_FORM_COPY.en[field];
 
-/** The inquiry form on Contact: the full variant, in the order the page renders it. */
+/**
+ * Where each variant of the inquiry form is on the site, in words: the section that renders it
+ * (`fields="..."` on ContactForm) is HomeContact (home), ContactInquiry (Contact) and Hello
+ * (closing /services and every service page). tests/lib/formsOverview.spec.ts holds each to its
+ * call site, and a new variant to a place here.
+ */
+export const INQUIRY_PLACES = {
+  compact: 'the home page',
+  full: 'the Contact page',
+  hello: 'the services pages',
+} as const satisfies Record<ContactFormVariant, string>;
+
+const INQUIRY_VARIANTS = Object.keys(CONTACT_FORM_FIELDS) as ContactFormVariant[];
+
+/** "a", "a and b", "a, b and c". */
+function inWords(items: readonly string[]): string {
+  return items.length < 2
+    ? (items[0] ?? '')
+    : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+/**
+ * Every variant's fields as one list that keeps each variant's order: a field one variant adds
+ * goes right after the field it follows there.
+ */
+export function inquiryFieldOrder(): ContactField[] {
+  const out: ContactField[] = [];
+  for (const variant of INQUIRY_VARIANTS) {
+    const list: readonly ContactField[] = CONTACT_FORM_FIELDS[variant];
+    list.forEach((field, i) => {
+      if (out.includes(field)) return;
+      const after = list
+        .slice(0, i)
+        .reverse()
+        .find((f) => out.includes(f));
+      out.splice(after === undefined ? 0 : out.indexOf(after) + 1, 0, field);
+    });
+  }
+  return out;
+}
+
+/** The places that ask for a field, when not all of them do. */
+function askedOnlyOn(field: ContactField): string | undefined {
+  const variants = INQUIRY_VARIANTS.filter((v) =>
+    (CONTACT_FORM_FIELDS[v] as readonly ContactField[]).includes(field),
+  );
+  if (variants.length === INQUIRY_VARIANTS.length) return undefined;
+  return `Only on ${inWords(variants.map((v) => INQUIRY_PLACES[v]))}`;
+}
+
+/**
+ * The inquiry form: every field any of its variants asks for, in the order the pages render
+ * them, each marked with the places that ask it when not every place does.
+ */
 function inquiryFields(): FormFieldFact[] {
   const shape = LeadInputSchema.shape;
-  const fields: FormFieldFact[] = CONTACT_FORM_FIELDS.full.map((field) => {
+  const fields: FormFieldFact[] = inquiryFieldOrder().map((field) => {
     const key = CONTACT_FIELD_TO_LEAD[field];
     return {
       key,
       label: contactLabel(field),
       required: refusesUntouched(shape[key], undefined),
+      hint: askedOnlyOn(field),
     };
   });
   fields.push({
@@ -149,7 +209,7 @@ export function formFacts(): Record<FormId, FormFacts> {
     inquiry: {
       id: 'inquiry',
       name: 'Inquiry form',
-      where: 'On the Contact page, in English and Arabic.',
+      where: `On ${inWords(INQUIRY_VARIANTS.map((v) => INQUIRY_PLACES[v]))}, in English and Arabic. Some fields are asked only in some of those places, as noted under them.`,
       fields: inquiryFields(),
       limits: [
         `${perWindow(CONTACT_LIMITS.perIp.max, CONTACT_LIMITS.perIp.windowSeconds)} from one internet address`,

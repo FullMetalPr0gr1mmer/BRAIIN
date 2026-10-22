@@ -35,6 +35,9 @@ test('the inquiry form and the Join form, as the code decides them', async ({ pa
   const required = (key: string) => page.locator(`li[data-field="${key}"] .badge`);
   await expect(required('name')).toHaveText('Required');
   await expect(required('company')).toHaveText('Optional');
+  // Every variant's fields: the phone is the services pages' alone, and says so.
+  await expect(required('phone')).toHaveText('Optional');
+  await expect(page.locator('li[data-field="phone"]')).toContainText('Only on the services pages');
   await expect(page.getByText('Captcha: Not set up.')).toBeVisible();
   await expect(page.getByText(/^Rate limits: up to 10 an hour/)).toBeVisible();
   await check(page, 'inquiry');
