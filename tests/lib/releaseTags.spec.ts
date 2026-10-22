@@ -4,6 +4,7 @@ import { RELEASE_ENTITY_TYPES } from '@schemas/release';
 import { ALWAYS_TAGS } from '@/lib/http/cacheTags';
 import { COLLAPSE_TAG, purgeTagSet } from '@/lib/http/purge';
 import { LLMS_CACHE_TAG, SITEMAP_CACHE_TAG, TIER_A_ROUTES } from '@/lib/http/routeTags';
+import { rssCacheTag } from '@/lib/seo/rss';
 import { RELEASE_REGISTRY } from '@/lib/release/registry';
 import {
   releaseTags,
@@ -272,5 +273,13 @@ describe('the closure (every tag a release emits is stamped by a route)', () => 
     }
     expect(SITEMAP_CACHE_TAG.split(',')).toContain(COLLAPSE_TAG);
     expect(LLMS_CACHE_TAG.split(',')).toContain(COLLAPSE_TAG);
+  });
+
+  it('the RSS feeds carry tenant:default too, so a collapsed purge reaches them', () => {
+    for (const locale of ['en', 'ar'] as const) {
+      const tags = rssCacheTag(locale).split(',');
+      expect(tags, locale).toContain(COLLAPSE_TAG);
+      expect(tags, locale).toEqual(expect.arrayContaining(['blog:all', `rss:${locale}`]));
+    }
   });
 });
