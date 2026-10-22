@@ -21,7 +21,8 @@ import {
 //     is not about one field, and the 409 banner with "Reload their version";
 //   - the language bar when any field is bilingual: English / العربية / Both for the whole
 //     form, and "Arabic missing: N" with "Next gap";
-//   - `children` (a screen's own notes, such as the edge warning), then the fields;
+//   - `children` (a screen's own notes, such as the edge warning), then the fields, in one
+//     card (with `heading`, the card's header band: the prototype's `card(title, sub)`);
 //   - the action bar: Save (Ctrl/⌘+S too), the way back, where the save stands
 //     (SaveStatus) and the version ("Not saved yet" for a singleton never saved).
 // It takes the save from useEntitySave and holds no save state of its own.
@@ -40,6 +41,11 @@ export interface EditorFormProps {
    * Enter in it still saves.
    */
   after?: ReactNode;
+  /**
+   * Admin v2 U11: the fields' card's header (the prototype's `.card__h`: a title, an h2 under
+   * the page's h1, and a line under it), for a screen whose form is one named card.
+   */
+  heading?: { title: string; sub?: string | undefined } | undefined;
 }
 
 const LANGUAGE_KINDS = new Set(['bilingual', 'prose', 'richtext']);
@@ -63,6 +69,7 @@ export default function EditorForm({
   canAdvanced,
   children,
   after,
+  heading,
 }: EditorFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   // Errors found here before anything is sent (a number or a date the browser could not
@@ -159,6 +166,14 @@ export default function EditorForm({
       {children}
 
       <div className="card">
+        {heading && (
+          <div className="card__h">
+            <div>
+              <h2 className="card__t">{heading.title}</h2>
+              {heading.sub && <p className="card__sub">{heading.sub}</p>}
+            </div>
+          </div>
+        )}
         {fields.map((field) => (
           <Field
             key={field.name}

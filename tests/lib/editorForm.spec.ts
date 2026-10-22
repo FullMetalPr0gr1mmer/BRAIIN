@@ -60,6 +60,18 @@ describe('EditorForm', () => {
     expect(html).not.toMatch(/\sstyle=/);
   });
 
+  it('a heading is the header band of the fields card; without one the card has none (U11)', () => {
+    const html = render(fakeSave(), [FIELDS[0]!], {
+      heading: { title: 'In-admin notifications', sub: 'The bell at the top' },
+    });
+    expect(html).toContain(
+      '<div class="card"><div class="card__h"><div><h2 class="card__t">In-admin notifications</h2><p class="card__sub">The bell at the top</p></div></div>',
+    );
+    // The header comes before the fields, inside their card.
+    expect(html.indexOf('card__h')).toBeLessThan(html.indexOf('id="f-slug"'));
+    expect(render(fakeSave(), [FIELDS[0]!])).not.toContain('card__h');
+  });
+
   it('no language bar for a form with no bilingual field', () => {
     const html = render(fakeSave(), [FIELDS[0]!]);
     expect(html).not.toContain('Editing language');

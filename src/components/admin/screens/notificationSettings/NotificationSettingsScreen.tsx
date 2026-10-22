@@ -14,6 +14,15 @@ import { useEntitySave } from '@/lib/admin/useEntitySave';
 
 export const NOTIFICATION_SETTINGS_ENDPOINT = '/api/admin/me/notification-settings';
 
+/**
+ * The prototype's card head (screens_ops.js:
+ * `card('In-admin notifications', 'The bell at the top', …)`).
+ */
+export const NOTIFICATION_SETTINGS_CARD = {
+  title: 'In-admin notifications',
+  sub: 'The bell at the top',
+} as const;
+
 export interface NotificationSettingsScreenProps {
   switches: readonly NotificationSwitch[];
 }
@@ -30,7 +39,7 @@ export default function NotificationSettingsScreen({ switches }: NotificationSet
     { fields },
   );
   return (
-    <EditorForm save={save} fields={fields} submitLabel="Save">
+    <EditorForm save={save} fields={fields} submitLabel="Save" heading={NOTIFICATION_SETTINGS_CARD}>
       <Note>
         Turning one off only quiets the bell. Everything still shows on its own screen, and the
         admin sends no e-mail or WhatsApp messages.
