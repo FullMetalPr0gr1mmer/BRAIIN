@@ -1475,6 +1475,10 @@ button[role='switch'][aria-checked='true']::before {
   font-weight: 700;
 }
 
+/* The bar sits beside the floated legend while its one line fits there, else below it. A flex
+   box is a new formatting context, which Chromium will squeeze to 0px beside a float that
+   fills the line (a long label at 320px), so its switch spilled past the page; fit-content is
+   its one line, never wider than the field. */
 .f--group > .f__bar {
   display: flex;
   align-items: center;
@@ -1482,6 +1486,7 @@ button[role='switch'][aria-checked='true']::before {
   flex-wrap: wrap;
   gap: 6px 10px;
   min-height: 22px;
+  min-inline-size: fit-content;
   margin-bottom: 7px;
 }
 

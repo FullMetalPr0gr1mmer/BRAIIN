@@ -297,6 +297,14 @@ describe('admin.css: a table never widens the page (WCAG 1.4.10, F4b pre-merge r
     expect(scrollers).toEqual(expect.arrayContaining(['admin.css .table-wrap', 'leads.css .kb']));
   });
 
+  // A group field's label bar is a flex box beside the field's floated legend. Chromium
+  // squeezes such a box to 0px beside a float that fills the line, so with a long label at
+  // 320px the EN | AR switch spilled 19px past the page (U8: the blog editor's SEO tab;
+  // tests/admin/blog.e2e.ts measures it). Its one line, capped at the field, pushes it below.
+  it('a group field’s label bar keeps its one line, so a long label pushes it below', () => {
+    expect(ADMIN).toMatch(/\n\.f--group > \.f__bar\s*\{[^}]*min-inline-size:\s*fit-content;/);
+  });
+
   it('the kit page stack lets a wide card shrink to the page', () => {
     expect(SCREENS['kit.css']).toMatch(
       /\.kit__stack\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,

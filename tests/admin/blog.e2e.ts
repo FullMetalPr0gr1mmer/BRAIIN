@@ -56,11 +56,69 @@ async function axeClean(page: Page, where: string) {
   ).toEqual([]);
 }
 
+/**
+ * No sideways scroll. A failure names its cause: the outermost elements that reach past the
+ * right edge while their parent's box does not (the box that grew, or the content that spilled
+ * out of a box that fits), each with its ancestor chain (box right, display, overflow), so one
+ * CI run says what to fix.
+ */
 async function noSidewaysScroll(page: Page, where: string) {
-  const over = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(over, `${where}: sideways scroll`).toBeLessThanOrEqual(0);
+  const { over, causes } = await page.evaluate(() => {
+    const root = document.documentElement;
+    const edge = root.clientWidth + 0.5;
+    const name = (el: Element) => {
+      const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/) : [];
+      const tag = el.tagName.toLowerCase() + (el.id ? `#${el.id}` : '');
+      return (
+        tag +
+        cls
+          .filter(Boolean)
+          .map((c) => `.${c}`)
+          .join('')
+      );
+    };
+    const reach = (el: HTMLElement) => {
+      const box = el.getBoundingClientRect();
+      return Math.max(box.right, box.left + el.scrollWidth);
+    };
+    const describe = (el: HTMLElement) => {
+      const s = getComputedStyle(el);
+      const box = el.getBoundingClientRect();
+      return `${name(el)}[w=${Math.round(box.width)} right=${Math.round(box.right)} ${s.display} ${s.position} ox=${s.overflowX} minw=${s.minWidth}]`;
+    };
+    const shown = [...document.querySelectorAll<HTMLElement>('body *')].filter(
+      (el) => el.getClientRects().length > 0,
+    );
+    const causes = shown
+      .filter((el) => {
+        const right = el.getBoundingClientRect().right;
+        const parent = el.parentElement;
+        // A box that crosses the edge inside a parent that fits: the box that grew.
+        if (right > edge) return !parent || parent.getBoundingClientRect().right <= edge;
+        // A box that fits but whose own text spills (no child element crosses the edge).
+        return (
+          reach(el) > edge &&
+          ![...el.children].some((c) => c instanceof HTMLElement && reach(c) > edge)
+        );
+      })
+      .slice(0, 4)
+      .map((el) => {
+        const chain: string[] = [];
+        for (
+          let p = el.parentElement;
+          p && p !== document.body && chain.length < 8;
+          p = p.parentElement
+        ) {
+          chain.push(describe(p));
+        }
+        return `${describe(el)} reach=${Math.round(reach(el))} in ${chain.join(' < ')}`;
+      });
+    return { over: root.scrollWidth - root.clientWidth, causes };
+  });
+  expect(
+    over,
+    `${where}: sideways scroll; caused by: ${causes.join(' | ') || 'none found'}`,
+  ).toBeLessThanOrEqual(0);
 }
 
 async function watchCsp(page: Page) {
