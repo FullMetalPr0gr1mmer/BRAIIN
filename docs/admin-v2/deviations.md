@@ -287,7 +287,7 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     SELECT) requires `app.role_views_audit(app.live_role())`, so a demoted, deactivated or
     locked Admin or Developer token reads no entry at PostgREST; the names the log shows come
     through `public.audit_people`, which answers nobody for such a token either.
-  - *Closed by U11 (the integrations migration, numbered at merge).* `site_integrations`:
+  - *Closed by U11 (0105, the integrations migration).* `site_integrations`:
     `site_integrations_live` (RESTRICTIVE, FOR ALL) requires
     `app.role_manages_integrations(app.live_role())`, so a demoted, deactivated or locked
     Admin or SEO token reads and writes nothing of it at PostgREST; the staff read is also

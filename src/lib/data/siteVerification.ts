@@ -7,7 +7,7 @@ import { contentClient } from './source';
 // `google-site-verification` meta tag, which SeoHead emits on the home pages once an Admin or
 // SEO has set it on /admin/integrations. Public by design (Google reads it from the page), so
 // anon reads it: `site_integrations`' one anon column, under a policy fenced to the launch
-// tenant (migration 0105, numbered at merge). Nothing else of the row reaches a visitor.
+// tenant (migration 0105). Nothing else of the row reaches a visitor.
 //
 // Never throws, and never fails the page: no tag is harmless (the site was verified, or is
 // not yet), so an unconfigured database, a refused or failed read, no row and a value that is

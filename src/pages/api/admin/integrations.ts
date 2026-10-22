@@ -4,7 +4,7 @@ import { INTEGRATION_COLUMNS, INTEGRATION_DEFAULTS } from '@/lib/admin/integrati
 
 // Third-party integrations (Admin v2 U11, §5 "Integrations"): Admin + SEO in both layers
 // (`settings.integrations` here; app.role_manages_integrations plus a RESTRICTIVE live check
-// in the database since migration 0105, numbered at merge). Typed public identifiers only:
+// in the database since migration 0105). Typed public identifiers only:
 // the GA4 measurement id, the Search Console verification code and the Calendly link, each a
 // CHECKed column whose pattern is packages/schemas/integrations.ts. The legacy jsonb boxes
 // are neither read nor written here any more (the contract step after U11's deploy revokes

@@ -14,7 +14,7 @@ import { APPLY_LIMITS, CONTACT_LIMITS } from '@/lib/http/publicRateLimit';
 import { helpSet, readMigrations } from '../fixtures/helpSet';
 
 // The guides Admin v2 U11 puts through H11's catalog (one app.put_help_guide each, in the
-// integrations migration, numbered at merge): `integrations` and `forms-and-spam`, new,
+// integrations migration, 0105): `integrations` and `forms-and-spam`, new,
 // `your-account` again, for the bell's settings screen, and `the-sales-role` again, because
 // that screen is the one setting a Sales account opens. Each is held to its file in
 // docs/admin-v2/guides (byte for byte), to the revision the migrations before it leave, to

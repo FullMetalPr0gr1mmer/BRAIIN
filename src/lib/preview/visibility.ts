@@ -89,7 +89,7 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
   ],
   // 0098 (Admin v2 U7): never the version, the schedule, the publish date or the actors.
   faq_items: ['id', 'tenant_id', 'question', 'answer', 'status', 'sort_order'],
-  // 0105 (Admin v2 U11, numbered at merge): the Search Console code the home page's head
+  // 0105 (Admin v2 U11): the Search Console code the home page's head
   // carries, and the tenant; never the GA4 id, the Calendly link or the legacy jsonb.
   site_integrations: ['tenant_id', 'search_console_token'],
   // 0028: never is_placeholder, the schedule, version or the actors.

@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 -- 0105 — Integrations, typed (Admin v2 U11, AV-20). Forward-only: EXPAND, plus one narrowing
--- the deployed Worker tolerates (the staff read of site_integrations, below). Built with a
--- placeholder number; the number is assigned at merge (scripts/renumber-migration.mjs).
+-- the deployed Worker tolerates (the staff read of site_integrations, below). Built with the
+-- placeholder 0105, kept at the merge train: it sorts above R10's 0104 (check-migrations.mjs).
 -- Depends on 0001 (tenants, app.effective_tenant_id), 0009 (public.site_integrations, its
 -- triggers), 0011 (the grant regime), 0013 (app.current_role), 0033 (app.live_role), 0038 (the
 -- release registry, which this table stays out of), 0069 (H11: the help-guide catalog,
@@ -55,8 +55,9 @@
 -- were searched for every `from('site_integrations')` and every function naming it (the
 -- result is in the as-built). Immediate, never staged (P-3): not in app.release_entities.
 --
--- Production as of 2026-10-21: PostgreSQL 17.6, one tenant; the ledger holds every migration
--- through 0100. CLAUDE.md §3 (Pillar 1), §5 (Integrations), §8 (Admin v2 lanes, UI), §9.
+-- Production as of 2026-10-22: PostgreSQL 17.6, one tenant; the ledger holds every migration
+-- through 0101, and the merge train pushes U9's 0102, R7's 0103 and R10's 0104, in that order,
+-- before this one (none of them touches site_integrations or the four guides put here). CLAUDE.md §3 (Pillar 1), §5 (Integrations), §8 (Admin v2 lanes, UI), §9.
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 
 -- A busy table fails the push instead of queueing behind it: the push is retried later.
