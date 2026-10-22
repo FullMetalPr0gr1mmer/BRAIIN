@@ -73,7 +73,10 @@ describe('asOfTargets: the ledger’s answer as entities', () => {
     ]);
     expect(target).toMatchObject({ entityId: PROJECT, before: undefined, existsNow: true });
     // Link sets that did not exist then (a project created since): empty sets.
-    expect(asOfTargets([e('portfolio_children', PROJECT, null)])[0]!.children).toEqual({});
+    expect(asOfTargets([e('portfolio_children', PROJECT, null)])[0]!.children).toEqual({
+      service_ids: [],
+      media: [],
+    });
   });
 
   it('never a team member (owner item O-12), never a type the registry does not know', () => {

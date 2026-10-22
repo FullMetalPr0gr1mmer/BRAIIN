@@ -88,7 +88,8 @@ export function asOfTargets(entities: readonly AsOfEntity[]): AsOfTarget[] {
       before: undefined,
       existsNow: true,
     };
-    target.children = (e.before ?? {}) as LinkSetsImage;
+    // No sets then (they began since): both empty, so a restore or a preview clears them.
+    target.children = (e.before ?? { service_ids: [], media: [] }) as LinkSetsImage;
     out.set(key, target);
   }
   return [...out.values()];
