@@ -56,40 +56,68 @@ async function axeClean(page: Page, where: string) {
   ).toEqual([]);
 }
 
-/** No sideways scroll; a failure names the elements reaching furthest past the right edge. */
+/**
+ * No sideways scroll. A failure names its cause: the outermost elements that reach past the
+ * right edge while their parent's box does not (the box that grew, or the content that spilled
+ * out of a box that fits), each with its ancestor chain (box right, display, overflow), so one
+ * CI run says what to fix.
+ */
 async function noSidewaysScroll(page: Page, where: string) {
-  const { over, past } = await page.evaluate(() => {
+  const { over, causes } = await page.evaluate(() => {
     const root = document.documentElement;
-    const edge = root.clientWidth;
-    // An element's content can run past its own box (unbreakable text, a nowrap row), so its
-    // reach is the further of its box edge and its content edge; the deepest one is the cause.
-    const depth = (el: Element) => {
-      let d = 0;
-      for (let p = el.parentElement; p; p = p.parentElement) d += 1;
-      return d;
-    };
-    const past = [...document.querySelectorAll<HTMLElement>('body *')]
-      .filter((el) => el.getClientRects().length > 0)
-      .map((el) => {
-        const box = el.getBoundingClientRect();
-        return { el, right: Math.max(box.right, box.left + el.scrollWidth), depth: depth(el) };
-      })
-      .filter(({ right }) => right > edge + 0.5)
-      .sort((a, b) => b.depth - a.depth || b.right - a.right)
-      .slice(0, 6)
-      .map(({ el, right }) => {
-        const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/) : [];
-        const name = el.tagName.toLowerCase() + (el.id ? `#${el.id}` : '');
-        return `${name}${cls
+    const edge = root.clientWidth + 0.5;
+    const name = (el: Element) => {
+      const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/) : [];
+      const tag = el.tagName.toLowerCase() + (el.id ? `#${el.id}` : '');
+      return (
+        tag +
+        cls
           .filter(Boolean)
           .map((c) => `.${c}`)
-          .join('')} right=${Math.round(right)}`;
+          .join('')
+      );
+    };
+    const reach = (el: HTMLElement) => {
+      const box = el.getBoundingClientRect();
+      return Math.max(box.right, box.left + el.scrollWidth);
+    };
+    const describe = (el: HTMLElement) => {
+      const s = getComputedStyle(el);
+      const box = el.getBoundingClientRect();
+      return `${name(el)}[w=${Math.round(box.width)} right=${Math.round(box.right)} ${s.display} ${s.position} ox=${s.overflowX} minw=${s.minWidth}]`;
+    };
+    const shown = [...document.querySelectorAll<HTMLElement>('body *')].filter(
+      (el) => el.getClientRects().length > 0,
+    );
+    const causes = shown
+      .filter((el) => {
+        const right = el.getBoundingClientRect().right;
+        const parent = el.parentElement;
+        // A box that crosses the edge inside a parent that fits: the box that grew.
+        if (right > edge) return !parent || parent.getBoundingClientRect().right <= edge;
+        // A box that fits but whose own text spills (no child element crosses the edge).
+        return (
+          reach(el) > edge &&
+          ![...el.children].some((c) => c instanceof HTMLElement && reach(c) > edge)
+        );
+      })
+      .slice(0, 4)
+      .map((el) => {
+        const chain: string[] = [];
+        for (
+          let p = el.parentElement;
+          p && p !== document.body && chain.length < 8;
+          p = p.parentElement
+        ) {
+          chain.push(describe(p));
+        }
+        return `${describe(el)} reach=${Math.round(reach(el))} in ${chain.join(' < ')}`;
       });
-    return { over: root.scrollWidth - root.clientWidth, past };
+    return { over: root.scrollWidth - root.clientWidth, causes };
   });
   expect(
     over,
-    `${where}: sideways scroll; past the edge: ${past.join('; ') || 'none'}`,
+    `${where}: sideways scroll; caused by: ${causes.join(' | ') || 'none found'}`,
   ).toBeLessThanOrEqual(0);
 }
 
