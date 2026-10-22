@@ -196,7 +196,9 @@ describe('the web app manifests (/manifest.webmanifest, /ar/manifest.webmanifest
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/manifest+json; charset=utf-8');
     expect(res.headers.get('cache-control')).toBe('public, max-age=3600');
-    expect(res.headers.get('cache-tag')).toBe('route:manifest,locale:en,site:identity,media:all');
+    expect(res.headers.get('cache-tag')).toBe(
+      'tenant:default,route:manifest,locale:en,site:identity,media:all',
+    );
     expect(JSON.parse(await res.text()).icons).toEqual([]);
   });
 

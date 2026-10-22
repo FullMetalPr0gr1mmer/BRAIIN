@@ -4,6 +4,7 @@ import { RELEASE_ENTITY_TYPES } from '@schemas/release';
 import { ALWAYS_TAGS } from '@/lib/http/cacheTags';
 import { COLLAPSE_TAG, purgeTagSet } from '@/lib/http/purge';
 import { LLMS_CACHE_TAG, SITEMAP_CACHE_TAG, TIER_A_ROUTES } from '@/lib/http/routeTags';
+import { manifestCacheTag } from '@/lib/seo/manifest';
 import { rssCacheTag } from '@/lib/seo/rss';
 import { RELEASE_REGISTRY } from '@/lib/release/registry';
 import {
@@ -280,6 +281,14 @@ describe('the closure (every tag a release emits is stamped by a route)', () => 
       const tags = rssCacheTag(locale).split(',');
       expect(tags, locale).toContain(COLLAPSE_TAG);
       expect(tags, locale).toEqual(expect.arrayContaining(['blog:all', `rss:${locale}`]));
+    }
+  });
+
+  it('the web app manifests (U9) carry tenant:default too, and what an identity or icon change purges', () => {
+    for (const locale of ['en', 'ar'] as const) {
+      const tags = manifestCacheTag(locale).split(',');
+      expect(tags, locale).toContain(COLLAPSE_TAG);
+      expect(tags, locale).toEqual(expect.arrayContaining(['site:identity', 'media:all']));
     }
   });
 });
