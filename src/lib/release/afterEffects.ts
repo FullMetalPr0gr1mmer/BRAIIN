@@ -172,7 +172,10 @@ export async function afterPublish(args: {
   const { tags } =
     items === null ? { tags: [COLLAPSE_TAG] } : await releaseTags(items, publisherSlugs(sb, auth));
   const outcome = await purgeTags(auth.tenantId, tags, { source: 'release', ...args.purge });
-  const nextAt = outcome.status === 'failed' ? purgeRetryAt(1) : null;
+  const nextAt =
+    outcome.status === 'failed'
+      ? purgeRetryAt(1, (args.purge?.now ?? Date.now)(), args.purge?.random ?? Math.random)
+      : null;
 
   if (outcome.status === 'skipped') {
     void writeSystemLog({

@@ -349,3 +349,157 @@ describe('the memo', () => {
     expect(db.calls).toHaveLength(1);
   });
 });
+
+describe('many reads in one request (Admin v2 R7, O-16: public.release_read_rows)', () => {
+  const uid = (n: number) => `0f0f0f0f-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const setup = (tables: Record<string, Row[]>) => {
+    const db = makeDb(tables);
+    return { db, live: liveDb(client(db) as unknown as SupabaseClient, auth) };
+  };
+
+  it('reads keyed by id or tenant go together, in order, projected, the caller’s tenant only', async () => {
+    const { db, live } = setup({
+      services: [
+        { id: uid(1), tenant_id: T, slug: 'logo', status: 'published' },
+        { id: uid(2), tenant_id: OTHER, slug: 'theirs', status: 'published' },
+      ],
+      media_assets: [{ id: uid(3), tenant_id: T, kind: 'image', alt: null }],
+      site_profile: [{ tenant_id: T, brand_name: 'Studio' }],
+    });
+    const answers = await live.listMany([
+      { table: 'services', query: { columns: 'id,slug', in: { id: [uid(1), uid(2)] } } },
+      { table: 'media_assets', query: { columns: 'id,kind,alt', in: { id: [uid(3)] } } },
+      { table: 'site_profile', query: { columns: 'brand_name', in: { tenant_id: [T] } } },
+    ]);
+    expect(answers).toEqual([
+      [{ id: uid(1), slug: 'logo' }],
+      [{ id: uid(3), kind: 'image', alt: null }],
+      [{ brand_name: 'Studio' }],
+    ]);
+    expect(db.calls).toEqual([
+      {
+        kind: 'rpc',
+        name: 'release_read_rows',
+        values: {
+          p_tenant: T,
+          p_reads: [
+            { table: 'services', columns: ['id', 'slug'], key: 'id', ids: [uid(1), uid(2)] },
+            { table: 'media_assets', columns: ['id', 'kind', 'alt'], key: 'id', ids: [uid(3)] },
+            { table: 'site_profile', columns: ['brand_name'], key: 'tenant_id', ids: [T] },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it('a read it cannot serve exactly (an order, a limit, an eq, another key, a non-uuid) goes as before', async () => {
+    const { db, live } = setup({
+      services: [{ id: uid(1), tenant_id: T, slug: 'logo', status: 'published' }],
+    });
+    await live.listMany([
+      { table: 'services', query: { columns: 'id', in: { id: [uid(1)] } } },
+      { table: 'services', query: { columns: 'id', in: { slug: ['logo'] } } },
+      { table: 'services', query: { columns: 'id', in: { id: ['s1'] } } },
+      { table: 'services', query: { columns: 'id', eq: { slug: 'logo' } } },
+      {
+        table: 'services',
+        query: { columns: 'id', in: { id: [uid(1)] }, order: { column: 'slug' } },
+      },
+      { table: 'services', query: { columns: 'id', in: { id: [uid(1)] }, limit: 1 } },
+      { table: 'services', query: { columns: 'id:slug', in: { id: [uid(1)] } } },
+    ]);
+    const rpc = db.calls.filter((c) => c.kind === 'rpc');
+    expect(rpc).toHaveLength(1);
+    expect((rpc[0]!.values as { p_reads: unknown[] }).p_reads).toEqual([
+      { table: 'services', columns: ['id'], key: 'id', ids: [uid(1)] },
+    ]);
+    expect(db.calls.filter((c) => c.kind === 'from' && c.name === 'services')).toHaveLength(6);
+  });
+
+  it('an empty read asks nothing; more than 40 reads or 500 ids take more requests, joined', async () => {
+    const { db, live } = setup({});
+    expect(
+      await live.listMany([{ table: 'services', query: { columns: 'id', in: { id: [] } } }]),
+    ).toEqual([[]]);
+    expect(db.calls).toEqual([]);
+
+    const many = Array.from({ length: 41 }, (_, n) => ({
+      table: 'services',
+      query: { columns: 'id', in: { id: [uid(n + 1)] } },
+    }));
+    await live.listMany(many);
+    expect(db.calls.filter((c) => c.name === 'release_read_rows')).toHaveLength(2);
+
+    db.calls.length = 0;
+    const ids = Array.from({ length: 501 }, (_, n) => uid(n + 100));
+    db.tables['services'] = [
+      { id: ids[0], tenant_id: T },
+      { id: ids[500], tenant_id: T },
+    ];
+    const [rows] = await live.listMany([
+      { table: 'services', query: { columns: 'id', in: { id: ids } } },
+    ]);
+    expect(rows).toEqual([{ id: ids[0] }, { id: ids[500] }]);
+    const sent = db.calls[0]!.values as { p_reads: { ids: string[] }[] };
+    expect(sent.p_reads.map((r) => r.ids.length)).toEqual([500, 1]);
+  });
+
+  it('a refused read throws, naming the tables', async () => {
+    const { db, live } = setup({});
+    db.fail = (call) =>
+      call.name === 'release_read_rows' ? { code: '42501', message: 'staff only' } : null;
+    await expect(
+      live.listMany([{ table: 'services', query: { columns: 'id', in: { id: [uid(1)] } } }]),
+    ).rejects.toThrow(/read services/);
+  });
+
+  it('over the layers: the live reads of every table in one request, the same answer as list', async () => {
+    const { db, live } = setup({
+      services: [
+        { id: uid(1), tenant_id: T, slug: 'logo', status: 'published' },
+        { id: uid(2), tenant_id: T, slug: 'old', status: 'published' },
+      ],
+      disciplines: [{ id: uid(5), tenant_id: T, status: 'draft' }],
+    });
+    const layered = layeredDb(
+      live,
+      fixedLayers(
+        new Map([
+          [
+            'services',
+            new Map<string, LayerChange>([
+              [uid(2), { op: 'update', patch: { slug: 'new' } }],
+              [uid(9), { op: 'create', row: { id: uid(9), tenant_id: T, slug: 'web' } }],
+            ]),
+          ],
+        ]),
+      ),
+    );
+    const reads = [
+      { table: 'services', query: { columns: 'id,slug', in: { id: [uid(1), uid(2), uid(9)] } } },
+      { table: 'disciplines', query: { columns: 'id,status', in: { id: [uid(5)] } } },
+    ];
+    const many = await layered.listMany(reads);
+    expect(db.calls.map((c) => `${c.kind}:${c.name}`)).toEqual(['rpc:release_read_rows']);
+    const one = await Promise.all(reads.map((r) => layered.list(r.table, r.query)));
+    expect(many).toEqual(one);
+    expect(many[0]).toEqual(
+      expect.arrayContaining([
+        { id: uid(1), slug: 'logo' },
+        { id: uid(2), slug: 'new' },
+        { id: uid(9), slug: 'web' },
+      ]),
+    );
+  });
+
+  it('the memo asks each read once, and a later list of the same read costs nothing', async () => {
+    const { db, live } = setup({ disciplines: [{ id: uid(5), tenant_id: T }] });
+    const memo = memoDb(live);
+    const read = { table: 'disciplines', query: { columns: 'id', in: { id: [uid(5)] } } };
+    await memo.listMany([read, read]);
+    await memo.listMany([read]);
+    expect(await memo.list(read.table, read.query)).toEqual([{ id: uid(5) }]);
+    expect(db.calls).toHaveLength(1);
+  });
+});
