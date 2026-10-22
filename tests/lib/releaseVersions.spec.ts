@@ -5,6 +5,7 @@ import type { Role } from '@/lib/auth/types';
 import { client, resetIds, T, type Db, type Row } from '../fixtures/stagedDb';
 import {
   ADMIN,
+  OTHER_USER,
   auditRowsOf,
   callRoute,
   draftRow,
@@ -28,6 +29,8 @@ const svc = vi.hoisted(() => ({
   /** content_drafts writes by the service role (the restore's mark). */
   marks: [] as Record<string, unknown>[],
   failMark: false,
+  /** Runs just before the mark: a co-author's save landing between the write and the mark. */
+  beforeMark: null as (() => void) | null,
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -40,6 +43,7 @@ vi.mock('@/lib/supabase/server', () => ({
         ...q,
         update: (values: Record<string, unknown>) => {
           svc.marks.push(values);
+          svc.beforeMark?.();
           if (svc.failMark) {
             return {
               eq: () => ({
@@ -222,6 +226,7 @@ beforeEach(() => {
   svc.logs = [];
   svc.marks = [];
   svc.failMark = false;
+  svc.beforeMark = null;
 });
 
 // ---- the versions --------------------------------------------------------------------------
@@ -412,6 +417,15 @@ describe('GET /api/admin/releases/[id]: one version’s changes', () => {
     expect(JSON.stringify(res.body)).not.toContain('Logo');
   });
 
+  it('a rollback names the number of the version it restored, read apart (not in this read)', async () => {
+    const db = seed();
+    const res = await as('admin', db, DETAIL, 'GET', `/api/admin/releases/${V3}`, undefined, {
+      id: V3,
+    });
+    expect(res.status).toBe(200);
+    expect(res.data['release']).toMatchObject({ id: V3, kind: 'rollback', restores: 1 });
+  });
+
   it('a version that is not there, or not an id, is 404', async () => {
     const db = seed();
     for (const v of [id(999), 'nope']) {
@@ -557,6 +571,32 @@ describe('POST /api/admin/releases/[id]/restore', () => {
     expect(res.data).toMatchObject({ staged: [], marked: true });
     expect(writerCalls(db)).toEqual([]);
     expect(auditRowsOf(db)).toEqual([]);
+  });
+
+  it('a derived column today renders differently is no change on its own (body_html)', async () => {
+    const body = {
+      en: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hi' }] }],
+      },
+    };
+    // The body is as it was; its cached HTML is not what today's renderer makes of it.
+    const live = liveService({ body, body_html: { en: '<p>rendered by an older build</p>' } });
+    const db = seed(
+      { services: [live] },
+      asOf(1, [
+        {
+          entity_type: 'service',
+          entity_id: SERVICE,
+          before: { ...live, body_html: { en: '<p>Hi, as it was cached then</p>' } },
+          exists_now: true,
+        },
+      ]),
+    );
+    const res = await restore(db);
+    expect(res.status).toBe(200);
+    expect(res.data).toMatchObject({ staged: [], marked: true });
+    expect(writerCalls(db)).toEqual([]);
   });
 
   it('one page: the ledger is asked for that page, the audit says so', async () => {
@@ -914,6 +954,10 @@ describe('POST /api/admin/releases/[id]/restore', () => {
     const res = await restore(db, V1, {}, 'developer');
     expect(res.status).toBe(200);
     expect(res.data['kept']).toMatchObject([{ entityType: 'site_profile', reason: 'kept' }]);
+    // The audit row says one item was left as it is (a count, never what it was).
+    expect(auditRowsOf(db).find((r) => r['action'] === 'versions.restore')).toMatchObject({
+      detail: { count: 1, kept: 1, types: ['page_visibility'] },
+    });
     const [call] = writerCalls(db);
     expect((call!.values as Row)['p_ops']).toMatchObject([
       {
@@ -977,6 +1021,32 @@ describe('POST /api/admin/releases/[id]/restore', () => {
     });
     expect(res.status).toBe(403);
     expect(writerCalls(db)).toEqual([]);
+  });
+
+  it('the mark never lands on a change a co-author saved after the restore wrote it', async () => {
+    const db = seed(
+      {},
+      asOf(1, [
+        {
+          entity_type: 'service',
+          entity_id: SERVICE,
+          before: liveService({ title: BI('Old', 'قديم') }),
+          exists_now: true,
+        },
+      ]),
+    );
+    // Between the restore's write (version 1) and its mark, a colleague saves the change (2).
+    svc.beforeMark = () => {
+      for (const d of db.tables['content_drafts']!) {
+        Object.assign(d, { version: 2, updated_by: OTHER_USER, payload: { title: BI('X', 'س') } });
+      }
+    };
+    const res = await restore(db);
+    expect(res.status).toBe(200);
+    expect(res.data['marked']).toBe(false);
+    const [draft] = db.tables['content_drafts']!;
+    expect(draft).toMatchObject({ version: 2, origin_kind: null, updated_by: OTHER_USER });
+    expect(svc.logs).toContainEqual(expect.objectContaining({ source: 'release:restore' }));
   });
 
   it('a mark that does not land leaves ordinary pending changes: logged, never a failed restore', async () => {
@@ -1143,6 +1213,28 @@ describe('GET /api/admin/history', () => {
     );
     expect(res.status).toBe(200);
     expect((res.data['versions'] as Row[]).map((v) => v['number'])).toEqual([3, 1]);
+    // A release that never went live (failed) changed nothing: it is no version of the page.
+    db.tables['content_releases']!.push(
+      release({ id: id(905), number: null, status: 'failed', published_at: null }),
+    );
+    db.tables['content_release_items']!.push({
+      id: 5,
+      tenant_id: T,
+      release_id: id(905),
+      entity_type: 'page',
+      entity_id: PAGE,
+      op: 'update',
+      before: {},
+      after: {},
+    });
+    const again = await as(
+      'developer',
+      db,
+      HISTORY,
+      'GET',
+      `/api/admin/history?entityType=page&entityId=${PAGE}&scope=page`,
+    );
+    expect((again.data['versions'] as Row[]).map((v) => v['id'])).toEqual([V3, V1]);
     // Developer reads pages (maintenance.manage) but publishes none.
     expect(res.data['restorable']).toBe(false);
   });

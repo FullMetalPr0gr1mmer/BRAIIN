@@ -371,6 +371,15 @@ describe('a version through the preview route', () => {
     ]);
   });
 
+  it('a redirect the page answers stays inside the preview, on the same version', async () => {
+    signIn(answer(2, SINCE));
+    const next: Next = async () =>
+      new Response(null, { status: 301, headers: { location: '/services/logo' } });
+    const res = await run(context('/admin/preview/services?v=2'), next);
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe('/admin/preview/services/logo?v=2');
+  });
+
   it('a malformed version is a 400, before anything is read', async () => {
     signIn(answer(2, SINCE));
     const { next, calls } = servicesPage();
