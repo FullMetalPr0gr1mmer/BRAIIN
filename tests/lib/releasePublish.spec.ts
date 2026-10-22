@@ -998,7 +998,8 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
   // A clean publish touching every registry type, end to end (Admin v2 R7, O-16): measured at
   // 26 on the merged tree (2026-10-22), plus the one slug read a release whose images do not
   // carry its pages' slugs adds. A cache zone's purge adds at most 4 more (the budget read, the
-  // request and its one retry, the release.purge row): 31, under the Free plan's 50.
+  // request and its one retry, the release.purge row): 31, under the Free plan's 50. A rollback
+  // of the same changes (R10) adds its own two reads: 28 on the merged tree (2026-10-22).
   const MAX_PUBLISH = 27;
   const PURGE_SET_UP = 4;
   it('a 60-change release of linked services costs a handful of reads, not one per rule', async () => {
@@ -1147,7 +1148,20 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
     expect(drafts.length).toBeGreaterThanOrEqual(20);
     expect(db.calls.length + svc.calls.length).toBeLessThanOrEqual(MAX_READS);
   });
-  it('O-16: a clean publish of one change of EVERY registry type, counted end to end, is under 50', async () => {
+
+  /**
+   * A clean release of one change of EVERY registry type, published end to end, and the
+   * subrequests it cost. `rollback` (R10 over R7, counted on the merged tree): the same changes
+   * as a version's restore leaves them (marked, at version 2), published as the rollback naming
+   * that version, which adds its own check (the restore's open changes and the version).
+   */
+  async function publishEveryType(kind: 'publish' | 'rollback'): Promise<number> {
+    svc.calls = [];
+    svc.logs = [];
+    syncs.redirects = 0;
+    syncs.visibility = 0;
+    syncs.tenants = [];
+    const RESTORED = id(3190);
     // Admin v2 R7 brought the per-table reads into one request each (public.release_read_rows):
     // the live rows, then every link. This is a release that passes every check and publishes,
     // touching all 22 types at once, with every read the rules can make (a redirect's route
@@ -1207,6 +1221,8 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
         { id: VIS, tenant_id: T, page_id: PAGE2, template: null, mode: 'public', version: 1 },
       ],
       faq_items: [row(FAQ)],
+      // The version a rollback names: published, the tenant's.
+      content_releases: [{ id: RESTORED, tenant_id: T, number: 1, status: 'published' }],
     };
     const change = (
       n: number,
@@ -1224,6 +1240,11 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
         payload,
         base,
         ...(op === 'create' ? { base_version: null } : {}),
+        // As a restore leaves its changes: its write (1), then the mark (2). A restore stages no
+        // team member (O-12); the rollback keeps one so both counts cover the same changes.
+        ...(kind === 'rollback'
+          ? { origin_kind: 'restore', origin_release_id: RESTORED, version: 2 }
+          : {}),
       });
     const drafts = [
       change(1, 'category', CATEGORY, { name: BI('News', 'أخبار') }, { name: null }),
@@ -1327,14 +1348,34 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
     svc.answer = (fn) =>
       fn === 'record_release_purge' ? { data: null, error: null } : published(11, items);
 
-    const res = await run(PUBLISH, db, select(...drafts));
+    const body = kind === 'rollback' ? { ...select(...drafts), kind } : select(...drafts);
+    const res = await run(PUBLISH, db, body);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(syncs).toMatchObject({ redirects: 1, visibility: 1 });
+    expect(applyCalls()[0]?.args).toMatchObject(
+      kind === 'rollback'
+        ? { p_kind: 'rollback', p_restores_release_id: RESTORED, p_note: 'Restored v1' }
+        : { p_kind: 'publish', p_restores_release_id: null },
+    );
 
     const SESSION = 2;
     const SNAPSHOTS = 2 * syncs.redirects + 4 * syncs.visibility;
-    const used = SESSION + db.calls.length + svc.calls.length + 2 * svc.logs.length + SNAPSHOTS;
-    expect(used).toBeLessThanOrEqual(MAX_PUBLISH);
+    return SESSION + db.calls.length + svc.calls.length + 2 * svc.logs.length + SNAPSHOTS;
+  }
+
+  it('O-16: a clean publish of one change of EVERY registry type, counted end to end, is under 50', async () => {
+    expect(await publishEveryType('publish')).toBeLessThanOrEqual(MAX_PUBLISH);
     expect(MAX_PUBLISH + PURGE_SET_UP).toBeLessThan(50);
+  });
+
+  it('the rollback of a version that changed EVERY registry type costs the publish and two reads (R10 over R7)', async () => {
+    // A rollback is a release (R10): R7's batched check, the apply and every after-effect, plus
+    // its own check of the selection (the restore's open changes and the version, together).
+    const ROLLBACK_READS = 2;
+    const publishCost = await publishEveryType('publish');
+    const rollbackCost = await publishEveryType('rollback');
+    expect(rollbackCost).toBe(publishCost + ROLLBACK_READS);
+    expect(rollbackCost).toBeLessThanOrEqual(MAX_PUBLISH + ROLLBACK_READS);
+    expect(MAX_PUBLISH + ROLLBACK_READS + PURGE_SET_UP).toBeLessThan(50);
   });
 });
