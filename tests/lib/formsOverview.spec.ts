@@ -17,9 +17,12 @@ import {
 } from '@/lib/forms/contactPayload';
 import { CONTACT_FORM_COPY } from '@/lib/forms/contactCopy';
 import { APPLY_LIMITS, CONTACT_LIMITS } from '@/lib/http/publicRateLimit';
+import { SECTION_TYPES } from '@schemas/sectionTypes';
+import { DEFAULT_SERVICES_SECTIONS } from '@/lib/sections/types';
 import {
   CONSENT_VERSION,
   CV_LIMIT,
+  FORM_WORDING,
   INQUIRY_PLACES,
   formFacts,
   inquiryFieldOrder,
@@ -226,6 +229,53 @@ describe('the Join form', () => {
     expect(source('src/components/ApplicationForm.astro')).toContain(
       'value={RECRUITMENT_POLICY_VERSION}',
     );
+  });
+});
+
+describe('where the words around each form are edited', () => {
+  // Each form sits in a section a page in Pages composes, but a service page renders its
+  // "Say hello" block itself, with fixed words: the screen must not send anyone to Pages for it.
+  const renderer = source('src/components/SectionRenderer.astro');
+
+  it('the home page, Contact, the Services page and Join render theirs in a section', () => {
+    for (const [type, component] of [
+      ['contact', 'HomeContact'],
+      ['contactInquiry', 'ContactInquiry'],
+      ['hello', 'Hello'],
+      ['joinApply', 'JoinApply'],
+    ] as const) {
+      expect(SECTION_TYPES, type).toContain(type);
+      expect(renderer, type).toContain(`  ${type}: ${component},\n`);
+    }
+    expect(DEFAULT_SERVICES_SECTIONS.map((s) => s.type)).toContain('hello');
+    expect(facts.inquiry.wording[0]).toBe(
+      'On the home page, the Contact page and the Services page, the words around the form, such as its heading, are edited with that page, in Pages.',
+    );
+    expect(facts.join.wording).toEqual(FORM_WORDING.join);
+    expect(facts.join.wording.join(' ')).toContain('edited with the Join page, in Pages');
+  });
+
+  it('a service page renders the Hello block itself, with fixed words that name the service', () => {
+    const page = source('src/components/service/ServicePage.astro');
+    const calls = [...page.matchAll(/<Hello\b[\s\S]*?\/>/g)].map((m) => m[0]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('headingOverride={serviceHelloHeading(name, locale)}');
+    expect(calls[0]).toContain('leadOverride={copy.helloLead}');
+    expect(calls[0]).not.toContain('{...');
+    expect(source('src/components/sections/Hello.astro')).toContain(
+      'Direct props (never reachable from CMS content',
+    );
+    expect(facts.inquiry.wording).toContain(
+      'On each service page those words are fixed, and the heading names the service.',
+    );
+    // No line of the inquiry tab sends every place to Pages.
+    expect(facts.inquiry.wording.join(' ')).not.toMatch(/the page that holds it/);
+  });
+
+  it('the screen says what the overview says, line by line', () => {
+    const page = source('src/pages/admin/forms.astro');
+    expect(page).toContain('form.wording.map(');
+    expect(page).not.toContain('page that holds it');
   });
 });
 

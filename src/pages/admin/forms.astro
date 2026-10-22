@@ -24,8 +24,9 @@ export const prerender = false;
 // code decides them (src/lib/admin/forms/overview.ts): the fields, which are required and where
 // each is asked, the protections (the hidden field, the EXC-004 limits, no
 // captcha yet), the consent version Join stores, and where the words around each form are
-// edited. Zero JS: tabs are links (`?tab=join`). settings.general (Admin, Developer: the forms
-// config is General's, P-2); a role without it gets the layout with the refusal and a 403.
+// edited, place by place (a service page's are fixed). Zero JS: tabs are links (`?tab=join`).
+// settings.general (Admin, Developer: the forms config is General's, P-2); a role without it
+// gets the layout with the refusal and a 403.
 // It reads nothing of its own: the facts are code, and the applications switch is the public
 // identity the shell has already read for the brand.
 
@@ -116,10 +117,9 @@ const accepting =
               </ul>
             </Card>
             <Card title="Text on the page">
-              <p class="frm-text">
-                The heading, the lead line and the other words around the form are edited with the
-                page that holds it.
-              </p>
+              {form.wording.map((line) => (
+                <p class="frm-text">{line}</p>
+              ))}
               {mayEditPages ? (
                 <a class="btn" href="/admin/pages">
                   Open Pages

@@ -231,6 +231,19 @@ describe('the forms guide gives the numbers the code holds', () => {
     );
   });
 
+  it('says where the words around each form are edited, place by place, as the overview does', () => {
+    // A service page's "Say hello" block has fixed words (tests/lib/formsOverview.spec.ts
+    // holds that to ServicePage.astro): the guide must not send anyone to Pages for it.
+    const fixed = 'On each service page those words are fixed, and the heading names the service.';
+    expect(formFacts().inquiry.wording).toContain(fixed);
+    expect(en()).toContain(fixed);
+    expect(en()).toContain(
+      'On the home page, the Contact page, the Services page and Join, the words around each form, such as its heading, are edited with that page, in Pages',
+    );
+    expect(en()).not.toContain('the page that holds it');
+    expect(ar()).toContain('أما في صفحة كل خدمة فهذه النصوص ثابتة، ويحمل العنوان اسم الخدمة.');
+  });
+
   it('the fail modes are the routes’ (EXC-004)', () => {
     expect(source('src/lib/http/publicRateLimit.ts')).toContain('the apply path fails CLOSED');
     expect(source('src/lib/http/publicRateLimit.ts')).toContain('the contact form fails');

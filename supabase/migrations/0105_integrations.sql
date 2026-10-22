@@ -329,7 +329,7 @@ select app.put_help_guide($guide$
       },
       {
         "t": "p",
-        "x": "The heading, the lead line and the other words around each form are edited with the page that holds it, in Pages, by the roles that edit pages. Admins open and close job applications in General settings."
+        "x": "On the home page, the Contact page, the Services page and Join, the words around each form, such as its heading, are edited with that page, in Pages, by the roles that edit pages. On each service page those words are fixed, and the heading names the service. Admins open and close job applications in General settings."
       }
     ],
     "ar": [
@@ -375,7 +375,7 @@ select app.put_help_guide($guide$
       },
       {
         "t": "p",
-        "x": "يُحرَّر العنوان والسطر التمهيدي وبقية النصوص حول كل نموذج مع الصفحة التي تحمله، في Pages، وذلك للأدوار التي تحرر الصفحات. ويفتح المسؤولون (Admin) التقديم على الوظائف ويغلقونه من General settings."
+        "x": "في الصفحة الرئيسية وصفحة التواصل وصفحة الخدمات وصفحة الانضمام تُحرَّر النصوص حول كل نموذج، ومنها عنوانه، مع تلك الصفحة في Pages، وذلك للأدوار التي تحرر الصفحات. أما في صفحة كل خدمة فهذه النصوص ثابتة، ويحمل العنوان اسم الخدمة. ويفتح المسؤولون (Admin) التقديم على الوظائف ويغلقونه من General settings."
       }
     ]
   }

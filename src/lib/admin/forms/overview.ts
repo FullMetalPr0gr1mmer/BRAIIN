@@ -58,6 +58,8 @@ export interface FormFacts {
   limits: readonly string[];
   /** What happens when the limit cannot be checked (the route's choice, EXC-004). */
   unchecked: string;
+  /** Where the words around the form (its heading, its lead) are edited, place by place. */
+  wording: readonly string[];
 }
 
 /** True when the schema refuses the value an untouched control sends. */
@@ -91,6 +93,25 @@ export const INQUIRY_PLACES = {
 } as const satisfies Record<ContactFormVariant, string>;
 
 const INQUIRY_VARIANTS = Object.keys(CONTACT_FORM_FIELDS) as ContactFormVariant[];
+
+/**
+ * Where the words around each form come from. Every place renders its form inside a section of
+ * a page composed in Pages (SectionRenderer: `contact` on the home page, `contactInquiry` on
+ * Contact, `hello` closing the Services page, `joinApply` on Join), so its words (the heading,
+ * and the lead where the section has one) are edited with that page, with one exception: each
+ * service page renders the Hello block itself (src/components/service/ServicePage.astro), with
+ * fixed words and a heading that names the service (`headingOverride`, `leadOverride`: never
+ * CMS content). tests/lib/formsOverview.spec.ts holds both to the code.
+ */
+export const FORM_WORDING = {
+  inquiry: [
+    'On the home page, the Contact page and the Services page, the words around the form, such as its heading, are edited with that page, in Pages.',
+    'On each service page those words are fixed, and the heading names the service.',
+  ],
+  join: [
+    'The words around the form, such as its heading and lead line, are edited with the Join page, in Pages.',
+  ],
+} as const satisfies Record<FormId, readonly string[]>;
 
 /** "a", "a and b", "a, b and c". */
 function inWords(items: readonly string[]): string {
@@ -229,6 +250,7 @@ export function formFacts(): Record<FormId, FormFacts> {
       ],
       unchecked:
         'If the count cannot be checked, the send still goes through, so no inquiry is lost.',
+      wording: FORM_WORDING.inquiry,
     },
     join: {
       id: 'join',
@@ -241,6 +263,7 @@ export function formFacts(): Record<FormId, FormFacts> {
       ],
       unchecked:
         'If the counts cannot be checked, the send is refused for now, because it carries a file.',
+      wording: FORM_WORDING.join,
     },
   };
 }
