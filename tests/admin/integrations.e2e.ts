@@ -213,9 +213,15 @@ test.describe('as SEO, end to end', () => {
       const one = await drawerOf(first!, 'Google Analytics 4');
       const two = await drawerOf(second!, 'Google Analytics 4');
       await one.getByLabel('Google Analytics measurement ID').fill('G-U11FIRST1');
+      // Wait for the first save's answer, not for the screen: the typed value and "Version N"
+      // are both on it before the PATCH returns, so the second save could otherwise land first.
+      const firstSaved = first!.waitForResponse(
+        (r) => r.url().endsWith('/api/admin/integrations') && r.request().method() === 'PATCH',
+      );
       await one.getByRole('button', { name: 'Save' }).click();
+      const saved = await firstSaved;
+      expect(saved.status(), await saved.text()).toBe(200);
       await expect(one.getByLabel('Google Analytics measurement ID')).toHaveValue('G-U11FIRST1');
-      await expect(one.getByText(/^Version \d+$/)).toBeVisible();
 
       await two.getByLabel('Google Analytics measurement ID').fill('G-U11SECOND');
       const answer = second!.waitForResponse(
