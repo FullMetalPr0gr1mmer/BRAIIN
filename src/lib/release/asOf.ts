@@ -65,6 +65,8 @@ export interface AsOfTarget {
   existsNow: boolean;
   /** A case study's link sets at vN, when they changed since. */
   children?: LinkSetsImage;
+  /** Gone now: the first-publish date it held when it was removed (0104's apply keeps it). */
+  removedPublishedAt?: string | null;
 }
 
 /** The ledger's answer as registry entities, a case study's link sets beside its row. */
@@ -77,6 +79,9 @@ export function asOfTargets(entities: readonly AsOfEntity[]): AsOfTarget[] {
       entityId: e.entity_id,
       before: e.before,
       existsNow: e.exists_now,
+      ...(e.removed_published_at !== undefined
+        ? { removedPublishedAt: e.removed_published_at }
+        : {}),
     });
   }
   for (const e of entities) {
@@ -101,6 +106,11 @@ export interface AsOfChange {
   entityId: string;
   op: DraftOp;
   payload: Payload;
+  /**
+   * A removal since coming back: the first-publish date it held when it was removed, which the
+   * apply gives back to a restored row (0104), so the preview shows that date, not today's.
+   */
+  publishedAt?: string;
 }
 
 /**
@@ -128,11 +138,13 @@ export function asOfChanges(targets: readonly AsOfTarget[]): AsOfChange[] {
       if (t.existsNow) out.push({ entityType, entityId: t.entityId, op: 'delete', payload: {} });
       continue;
     }
+    const back = !t.existsNow && typeof t.removedPublishedAt === 'string';
     out.push({
       entityType,
       entityId: t.entityId,
       op: t.existsNow ? 'update' : 'create',
       payload: rowToPayload(t.entry, t.before, t.children),
+      ...(back ? { publishedAt: t.removedPublishedAt as string } : {}),
     });
   }
   return out;

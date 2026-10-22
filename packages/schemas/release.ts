@@ -763,6 +763,8 @@ export const AsOfEntitySchema = z.object({
   before: z.record(z.string(), z.unknown()).nullable(),
   exists_now: z.boolean(),
   page_id: z.string().nullable().optional(),
+  /** Gone now: the first-publish date it held when it was removed (a restore gives it back). */
+  removed_published_at: z.string().nullable().optional(),
 });
 export type AsOfEntity = z.infer<typeof AsOfEntitySchema>;
 

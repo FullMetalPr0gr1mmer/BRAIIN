@@ -145,6 +145,24 @@ describe('the dataset at a version', () => {
     expect(assessPreview(report).state).toBe('ok');
   });
 
+  it('a row the version brings back shows the date it kept, as the publish keeps it (0104)', async () => {
+    const back = (n: number, removed?: string | null): AsOfAnswer['entities'][number] => ({
+      entity_type: 'service',
+      entity_id: id(n),
+      before: { slug: `back-${n}`, title: BI('Back', 'عودة'), status: 'published' },
+      exists_now: false,
+      ...(removed === undefined ? {} : { removed_published_at: removed }),
+    });
+    const { read } = source(
+      version(answer(2, [back(811, '2025-05-05T00:00:00+00:00'), back(812, null), back(813)])),
+    );
+    const rows = await read('services', 'id,published_at');
+    expect(rows).toContainEqual({ id: id(811), published_at: '2025-05-05T00:00:00+00:00' });
+    // Never removed with a date: a first publish, today's.
+    expect(rows).toContainEqual({ id: id(812), published_at: NOW.toISOString() });
+    expect(rows).toContainEqual({ id: id(813), published_at: NOW.toISOString() });
+  });
+
   it('counts, never shows, the changes in an area the role does not read (Developer)', async () => {
     const pageThen: AsOfAnswer['entities'][number] = {
       entity_type: 'page',

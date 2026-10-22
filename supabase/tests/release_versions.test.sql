@@ -16,11 +16,14 @@
 --     (another tenant, a bad number or limit, no such version); per role: admin, content_creator, seo and developer read it, a sales claim
 --     and another tenant's admin read no version, anon cannot call it;
 --   • the draft lock (restated): the restore's mark by the service role sets the provenance
---     and keeps the change's author; a staff caller is stamped as before.
+--     and keeps the change's author; a staff caller is stamped as before;
+--   • apply_release (restated): a create a restore staged keeps the published_at its row had
+--     when it was removed; an ordinary create, or a restored row never seen removed, is
+--     stamped now().
 -- CLAUDE.md §3 (Pillar 4), §8 (versioning; Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(54);
+select plan(58);
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────
 insert into public.tenants (id, name) values
@@ -356,6 +359,62 @@ select is(
   (select updated_by::text from public.content_drafts
     where id = '10400000-0000-0000-0005-000000000001'),
   '10400000-0000-0000-0000-0000000000d1', 'an unbound write that names a user is stamped with them');
+
+-- ── 7. A restored row keeps its first-publish date (0104's apply_release) ───────────
+-- With releases switched on for tenant A (rolled back with this file), one publish of three
+-- service creates: R, a restore's (its mark) of a row the ledger saw removed with a date; N, an
+-- ordinary create of an id the ledger also saw removed; F, a restore's of a row the ledger never
+-- saw removed. R keeps its date; N and F are first publishes, stamped now().
+insert into app.release_tenants (tenant_id) values ('10400000-0000-0000-0000-00000000000a');
+select set_config('request.jwt.claims', '', true);
+insert into public.content_release_items (tenant_id, release_id, entity_type, entity_id, op, before, after) values
+  ('10400000-0000-0000-0000-00000000000a', '10400000-0000-0000-0003-000000000004', 'service',
+   '10400000-0000-0000-0007-000000000001', 'delete',
+   '{"slug":"r10-back","status":"published","published_at":"2026-01-02T03:04:05+00:00"}', null),
+  ('10400000-0000-0000-0000-00000000000a', '10400000-0000-0000-0003-000000000004', 'service',
+   '10400000-0000-0000-0007-000000000002', 'delete',
+   '{"slug":"r10-new","status":"published","published_at":"2026-01-02T03:04:05+00:00"}', null);
+-- The state at v3 says what date R held when it was removed (the version preview shows it).
+set local role authenticated;
+select _as_a('10400000-0000-0000-0000-0000000000a1', 'admin');
+select is(_entity(_as_of(3), '10400000-0000-0000-0007-000000000001') ->> 'removed_published_at',
+  '2026-01-02T03:04:05+00:00',
+  'release_as_of: a row gone now carries the first-publish date it held when it was removed');
+reset role;
+select set_config('request.jwt.claims', '', true);
+insert into public.content_drafts (id, tenant_id, entity_type, entity_id, op, payload, origin_kind, origin_release_id) values
+  ('10400000-0000-0000-0008-000000000001', '10400000-0000-0000-0000-00000000000a', 'service',
+   '10400000-0000-0000-0007-000000000001', 'create', '{}', 'restore', '10400000-0000-0000-0003-000000000003'),
+  ('10400000-0000-0000-0008-000000000002', '10400000-0000-0000-0000-00000000000a', 'service',
+   '10400000-0000-0000-0007-000000000002', 'create', '{}', null, null),
+  ('10400000-0000-0000-0008-000000000003', '10400000-0000-0000-0000-00000000000a', 'service',
+   '10400000-0000-0000-0007-000000000003', 'create', '{}', 'restore', '10400000-0000-0000-0003-000000000003');
+set local role service_role;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select lives_ok($$
+  select public.apply_release('10400000-0000-0000-0000-0000000000a1', 'admin', 'publish',
+    (select jsonb_agg(jsonb_build_object(
+              'draft_id', d.id, 'draft_version', 1, 'entity_type', 'service', 'entity_id', d.entity_id,
+              'op', 'create', 'base', '{}'::jsonb,
+              'patch', jsonb_build_object('slug', 'r10-' || right(d.entity_id::text, 1),
+                                          'title', '{"en":"Back","ar":"عودة"}'::jsonb,
+                                          'status', 'published'))
+              order by d.id)
+       from public.content_drafts d
+      where d.id in ('10400000-0000-0000-0008-000000000001', '10400000-0000-0000-0008-000000000002',
+                     '10400000-0000-0000-0008-000000000003'))) $$,
+  'the admin publishes the three creates');
+reset role;
+select is(
+  (select published_at from public.services where id = '10400000-0000-0000-0007-000000000001'),
+  '2026-01-02T03:04:05+00:00'::timestamptz,
+  'a row a restore brings back keeps the first-publish date it had when it was removed');
+select is(
+  (select string_agg(right(id::text, 1) || '=' || (published_at = now())::text, ',' order by id)
+     from public.services
+    where id in ('10400000-0000-0000-0007-000000000002', '10400000-0000-0000-0007-000000000003')),
+  '2=true,3=true',
+  'an ordinary create, and a restored row the ledger never saw removed, are first publishes (now)');
 
 select * from finish();
 rollback;

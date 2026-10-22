@@ -333,6 +333,9 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
   const deletedIds = new Map<DatasetTable, Set<string>>();
   let draftsLoaded: Promise<PreviewError | null> | null = null;
 
+  /** A version's creates that bring a removed row back: the first-publish date it keeps. */
+  const keptDates = new Map<string, string>();
+
   /** The changes back to a version, as drafts the overlay lays over live (R10). */
   function versionDrafts(asOf: VersionPreview): Draft[] {
     if (asOf.truncated) noteOnce(report.truncated, 'content_release_items');
@@ -341,6 +344,9 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
       if (!readsEntity(role, RELEASE_REGISTRY[change.entityType])) {
         report.draftsNotShown += 1;
         continue;
+      }
+      if (change.op === 'create' && change.publishedAt !== undefined) {
+        keptDates.set(`${change.entityType}:${change.entityId}`, change.publishedAt);
       }
       drafts.push({
         id: `${change.entityType}:${change.entityId}`,
@@ -529,6 +535,9 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
           continue;
         }
         stamp(table, null, next, change.patch);
+        // A row a version brings back keeps the date it had (0104's apply), not today's.
+        const kept = keptDates.get(draft.id);
+        if (kept !== undefined && PUBLISHED_AT_TABLES.includes(table)) next['published_at'] = kept;
         rows.push(next);
         if (sampleLive(table, next)) report.samples += 1;
       }
