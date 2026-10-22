@@ -1,4 +1,5 @@
 import { CF_CACHE_PURGE_TOKEN, CF_ZONE_ID } from 'astro:env/server';
+import { PUBLIC_MEDIA_COLUMNS } from '@schemas/content';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { serviceClient } from '@/lib/supabase/server';
 import { outboundJson, OutboundError, type OutboundOptions } from './outbound';
@@ -225,9 +226,10 @@ export async function purgeTags(
 }
 
 /**
- * The purge after an IMMEDIATE save (never staged, releases.md §1.2): a media alt or file
- * purges `media:all` (every Tier A response stamps it: every head renders the default share
- * image, a media row, src/lib/http/cacheTags.ts ALWAYS_TAGS); a page's
+ * The purge after an IMMEDIATE save (never staged, releases.md §1.2): a media save that moves
+ * a public column (alt, the file: `mediaChangeIsPublic`) purges `media:all` (every Tier A
+ * response stamps it: every head renders the default share image, a media row,
+ * src/lib/http/cacheTags.ts ALWAYS_TAGS); a page's
  * visibility purges its page, the menus, the sitemap and llms.txt (`visibilityPurgeTags`), so a
  * page that leaves public leaves every cached copy of itself. Awaited after the commit and
  * never fatal: nothing is sent, read or logged while not set up (O-3), so the save behaves as
@@ -254,3 +256,43 @@ export async function purgeAfterSave(
 
 /** What a media save purges: every Tier A response stamps it (cacheTags.ts ALWAYS_TAGS). */
 export const MEDIA_PURGE_TAGS = ['media:all'] as const;
+
+/**
+ * The columns of a media row a public page renders: `PUBLIC_MEDIA_COLUMNS` (0024's anon
+ * grant), but its id. Tags, folder and the display name are the library's own.
+ */
+export const MEDIA_PUBLIC_FIELDS: readonly string[] = PUBLIC_MEDIA_COLUMNS.split(',').filter(
+  (column) => column !== 'id',
+);
+
+/** A value as JSON with its keys in order, so two reads of one jsonb compare equal. */
+function canonical(value: unknown): string {
+  if (value === undefined || value === '') return 'null';
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    );
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * Whether a media save changed what a public page renders, so that its `media:all` purge is
+ * owed: a public column (`fields`) whose value moved between the row before the save and the
+ * row it returned. An edit of tags, folder or the name alone purges nothing (each purge spends
+ * the Free plan's 5 a minute and the day's budget, and a refused one after an immediate save
+ * is not retried). Not knowing is a change: no `before`, or a field the answer lacks, purges,
+ * since purging is safe and missing one is not.
+ */
+export function mediaChangeIsPublic(
+  before: Readonly<Record<string, unknown>> | null | undefined,
+  after: Readonly<Record<string, unknown>>,
+  fields: readonly string[] = MEDIA_PUBLIC_FIELDS,
+): boolean {
+  if (!before) return true;
+  return fields.some(
+    (field) => !(field in after) || canonical(before[field]) !== canonical(after[field]),
+  );
+}
