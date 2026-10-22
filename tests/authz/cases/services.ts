@@ -59,6 +59,18 @@ export const cases: readonly Case[] = [
     body: { items: [{ id: UUID, sortOrder: 10 }] },
     allow: ['admin', 'content_creator'],
   },
+  {
+    // Hotfix H12: the archive gates let only an Admin write a row that stays archived, so the
+    // route refuses the whole move up front (content.archiveDelete) rather than half of it.
+    // What it writes, and another tenant's ids: tests/authz/reorder.spec.ts.
+    name: 'services reorder naming an archived row (Admin only)',
+    load: () => import('@/pages/api/admin/services/reorder'),
+    method: 'POST',
+    url: '/api/admin/services/reorder',
+    body: { items: [{ id: UUID, sortOrder: 10 }] },
+    row: { id: UUID, version: 1, status: 'archived' },
+    allow: ['admin'],
+  },
   // ---- Round 2 (0028): disciplines and service cases — service content (§5 Services) ----
   {
     name: 'disciplines list',
@@ -113,6 +125,15 @@ export const cases: readonly Case[] = [
     url: '/api/admin/disciplines/reorder',
     body: { items: [{ id: UUID, sortOrder: 10 }] },
     allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'disciplines reorder naming an archived row (Admin only)',
+    load: () => import('@/pages/api/admin/disciplines/reorder'),
+    method: 'POST',
+    url: '/api/admin/disciplines/reorder',
+    body: { items: [{ id: UUID, sortOrder: 10 }] },
+    row: { id: UUID, version: 1, status: 'archived' },
+    allow: ['admin'],
   },
   {
     name: 'service cases list',
