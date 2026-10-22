@@ -824,6 +824,9 @@ export const RESTORE_REASONS = [
   'address-taken',
   // Its stored image no longer reads as a change the editor could make.
   'unrestorable',
+  // A quote whose consent a restore cannot bring back (R10): one removed since, or one the
+  // restore would publish while its consent is not recorded now.
+  'consent',
   // Left as it is: no role removes it through a release (the site identity, SEO details).
   'kept',
 ] as const;

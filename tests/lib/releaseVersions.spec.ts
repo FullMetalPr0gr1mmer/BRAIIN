@@ -767,6 +767,40 @@ describe('POST /api/admin/releases/[id]/restore', () => {
     expect(writerCalls(db)).toEqual([]);
   });
 
+  it('a quote removed since is 422 on consent for a Content Creator: never re-created with its old consent', async () => {
+    const QUOTE = id(61);
+    const db = seed(
+      { testimonials: [] },
+      asOf(1, [
+        {
+          entity_type: 'testimonial',
+          entity_id: QUOTE,
+          before: {
+            id: QUOTE,
+            slug: 'rana',
+            quote: BI('It was great', 'كان رائعا'),
+            author_name: BI('Rana', 'رنا'),
+            placements: [],
+            consent_obtained_at: '2026-09-01T00:00:00+00:00',
+            consent_reference: 'email 2026-09-01',
+            is_placeholder: false,
+            status: 'published',
+            sort_order: 1,
+          },
+          exists_now: false,
+        },
+      ]),
+    );
+    const res = await restore(db, V1, {}, 'content_creator');
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({
+      error: 'not-restorable',
+      items: [{ entityType: 'testimonial', entityId: QUOTE, reason: 'consent' }],
+    });
+    expect(writerCalls(db)).toEqual([]);
+    expect(JSON.stringify(res.body)).not.toContain('email 2026-09-01');
+  });
+
   it('a link to a row the same restore brings back passes', async () => {
     const db = seed(
       { disciplines: [] },
@@ -1466,6 +1500,8 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
       const live: Row = { tenant_id: T, version: 1 };
       if (entry.key === 'id') live['id'] = entityId;
       if (type === 'page_visibility') Object.assign(live, { page_id: PAGE_A, mode: 'public' });
+      // A quote's consent is never restored (it stays as it is now): recorded now.
+      if (type === 'testimonial') live['consent_obtained_at'] = '2026-09-01T00:00:00+00:00';
       (tables[entry.table] ??= []).push(live);
       const image = derivePatch(entry, 'create', fullPayload(type)).patch;
       entities.push({

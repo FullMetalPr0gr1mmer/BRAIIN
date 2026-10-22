@@ -66,6 +66,28 @@ export interface PlanOptions {
   budget?: number;
 }
 
+/**
+ * A quote's consent record (0028's consent gate, PDPL): a fact about now, never a version's to
+ * bring back. A restore never writes these columns, never brings back a quote removed since
+ * (its consent may have been withdrawn: it is added again, with consent recorded again), and
+ * never publishes a quote whose consent is not recorded now.
+ */
+const CONSENT_COLUMNS: Readonly<Partial<Record<string, readonly string[]>>> = {
+  testimonial: ['consent_obtained_at', 'consent_reference'],
+};
+
+/** Whether a change leaves a quote live (published or scheduled) with no consent recorded now. */
+function liveWithoutConsent(entry: RegistryEntry, patch: Readonly<Row>, live: Readonly<Row>) {
+  if (!CONSENT_COLUMNS[entry.entityType]) return false;
+  const status = typeof patch['status'] === 'string' ? patch['status'] : live['status'];
+  const sample = (patch['is_placeholder'] ?? live['is_placeholder']) === true;
+  return (
+    (status === 'published' || status === 'scheduled') &&
+    !sample &&
+    (live['consent_obtained_at'] === null || live['consent_obtained_at'] === undefined)
+  );
+}
+
 /** Kinds whose change is a full replace (R3b): every column written, `fields` the moved ones. */
 const FULL_REPLACE: ReadonlySet<RegistryEntry['kind']> = new Set(['entitySeo', 'pageVisibility']);
 
@@ -340,6 +362,10 @@ function planOne(
     return { change: { entry, entityId, op: 'delete', write, derived: empty, labelRow: live } };
   }
   const before = t.before;
+  // A quote removed since stays removed: its consent is not a version's to bring back.
+  if (!live && CONSENT_COLUMNS[entry.entityType]) {
+    return { refused: item(entry, entityId, before, 'consent') };
+  }
   // Removed since: it comes back, with its own id and its link sets.
   if (!live) {
     const back = restorePatch(entry, 'create', before, t.children);
@@ -366,7 +392,9 @@ function planOne(
   if (!back.ok) {
     return { refused: item(entry, entityId, before, 'unrestorable', { columns: back.columns }) };
   }
-  const moved = movedColumns(back.derived.patch, live);
+  // Never the consent record: it stays as it is now.
+  const consent = CONSENT_COLUMNS[entry.entityType] ?? [];
+  const moved = movedColumns(back.derived.patch, live).filter((c) => !consent.includes(c));
   const linksMoved = t.children !== undefined && !jsonEqual(back.derived.children, liveLinks ?? {});
   if (moved.length === 0 && !linksMoved) return {};
 
@@ -379,6 +407,9 @@ function planOne(
     payload = dropFields(entry, back.payload, moved);
     if (!linksMoved) for (const key of entry.childKeys) delete payload[key];
     derived = narrowed(entry, back.derived, payload);
+  }
+  if (liveWithoutConsent(entry, derived.patch, live)) {
+    return { refused: item(entry, entityId, before, 'consent') };
   }
   const base = recordBase(null, live, derived.patch);
   const write = put(

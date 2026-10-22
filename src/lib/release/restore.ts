@@ -87,7 +87,7 @@ const REFUSALS = [
     error: 'not-restorable',
     status: 422,
     detail: RESTORE_COPY.notRestorable,
-    reasons: ['unrestorable', 'link-gone', 'address-taken'],
+    reasons: ['unrestorable', 'link-gone', 'address-taken', 'consent'],
   },
 ] as const satisfies readonly {
   error: string;

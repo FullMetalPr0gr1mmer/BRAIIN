@@ -349,6 +349,76 @@ describe('planRestore: what a restore stages against live', () => {
     expect(tables.calls.filter((c) => c.name === 'services')).toHaveLength(1);
   });
 
+  describe('a quote’s consent is never a version’s to bring back (R10, PDPL)', () => {
+    const QUOTE = id(60);
+    const quote = (over: Row = {}): Row => ({
+      id: QUOTE,
+      tenant_id: T,
+      slug: 'rana',
+      quote: BI('It was great', 'كان رائعا'),
+      author_name: BI('Rana', 'رنا'),
+      author_role: null,
+      client_id: null,
+      portfolio_id: null,
+      avatar_media_id: null,
+      placements: [],
+      consent_obtained_at: '2026-09-01T00:00:00+00:00',
+      consent_reference: 'email 2026-09-01',
+      is_placeholder: false,
+      status: 'published',
+      sort_order: 1,
+      version: 3,
+      ...over,
+    });
+
+    it('a quote removed since stays removed: refused on consent, never staged', async () => {
+      const plan = await planRestore(
+        db({ testimonials: [] }),
+        auth('content_creator'),
+        asOfTargets([e('testimonial', QUOTE, quote(), false)]),
+      );
+      expect(plan.changes).toEqual([]);
+      expect(plan.refused).toMatchObject([
+        { entityType: 'testimonial', entityId: QUOTE, reason: 'consent' },
+      ]);
+    });
+
+    it('consent withdrawn since (cleared, unpublished): the restore would publish it, so it is refused', async () => {
+      const withdrawn = quote({
+        status: 'draft',
+        consent_obtained_at: null,
+        consent_reference: null,
+      });
+      const plan = await planRestore(
+        db({ testimonials: [withdrawn] }),
+        auth('admin'),
+        asOfTargets([e('testimonial', QUOTE, quote())]),
+      );
+      expect(plan.changes).toEqual([]);
+      expect(plan.refused).toMatchObject([{ entityId: QUOTE, reason: 'consent' }]);
+    });
+
+    it('an edit since: the words come back, the consent record stays as it is now', async () => {
+      const now = quote({
+        quote: BI('It was fine', 'كان جيدا'),
+        consent_obtained_at: '2026-10-01T00:00:00+00:00',
+        consent_reference: 'signed form 2026-10-01',
+      });
+      const plan = await planRestore(
+        db({ testimonials: [now] }),
+        auth('content_creator'),
+        asOfTargets([e('testimonial', QUOTE, quote())]),
+      );
+      expect(plan.refused).toEqual([]);
+      expect(plan.changes[0]!.write).toMatchObject({
+        op: 'update',
+        payload: { quote: BI('It was great', 'كان رائعا') },
+        fields: ['quote'],
+      });
+      expect(Object.keys(plan.changes[0]!.derived.patch)).toEqual(['quote']);
+    });
+  });
+
   it('gone since and already gone: nothing; created since and already gone: nothing', async () => {
     const sb = db({ services: [] });
     const plan = await planRestore(sb, auth(), asOfTargets([e('service', SERVICE, null, false)]));

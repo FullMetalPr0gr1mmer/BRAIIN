@@ -295,6 +295,24 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     R14's checklist records the outcome (pgTAP `snapshot_coverage.test.sql` names the
     exemption).
 
+- **A removed quote stays in the history: an R14 blocker** (Admin v2 R10, 0104; tied to R16,
+  history redaction, owner and legal).
+  - *The gap.* A quote is published only with the person's recorded consent (0028). When it is
+    removed, because the person withdrew consent or for any other reason, the release ledger
+    (`content_release_items`, R4) and the history (`content_versions`) keep its words, the
+    person's name and role and its consent record, and R10's preview of an older version shows
+    it to staff as it was. Nothing public: the ledger and the history are CMS staff's, and the
+    preview is a staff render.
+  - *What R10 does.* A restore never brings a removed quote back and never writes a consent
+    record (an edit gets its words back and keeps today's record); one that would publish a
+    quote with no consent recorded now is refused. So no restore re-publishes a quote whose
+    consent was withdrawn.
+  - *What closes it.* R16 redacts a removed quote from the ledger and the history (and so from
+    a version's preview), on the owner's and counsel's retention decision; or the owner accepts
+    the staff-only copies until R16, and R14's runbook says so.
+  - *Owner:* Kareem (R16). *Expiry:* R14's switch-on. *Closes when* R16 is decided and R14's
+    checklist records the outcome.
+
 ## The client's TDD, row by row
 
 Checked by the coverage reviewer against the three designs on 2026-10-03
