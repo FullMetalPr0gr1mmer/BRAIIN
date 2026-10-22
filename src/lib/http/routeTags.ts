@@ -10,9 +10,12 @@ import { SERVICES_CACHE_ENTITIES } from '@/lib/services/servicesPage';
 // (home, services, a service, contact, join) are named here; the ones that lived in the .astro
 // files (About, Our Work, All projects, a case study) moved here, `media:all` added: those
 // pages show posters and images, and a media alt or tag save purges `media:all` (README, "What
-// the mapping found"). The blog's routes gained `team:all`: a post shows its author's name. tests/lib/sectionReads.spec.ts walks this table: every route within 30
-// tags with every section a composed page could hold, and every tag a release or a media save
-// purges stamped by at least one route.
+// the mapping found"). Every Tier A response carries `media:all` anyway (ALWAYS_TAGS in
+// cacheTags.ts: every head renders the default share image, a media row), Join, the blog,
+// search and the legal pages included. The blog's routes gained `team:all`: a post shows its
+// author's name. tests/lib/sectionReads.spec.ts walks this table: every route within 30 tags
+// with every section a composed page could hold, `media:all` on every route, and every tag a
+// release or a media save purges stamped by at least one route.
 
 export const ABOUT_CACHE_ENTITIES = [
   'page:about',

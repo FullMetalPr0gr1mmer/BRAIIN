@@ -225,8 +225,9 @@ export async function purgeTags(
 }
 
 /**
- * The purge after an IMMEDIATE save (never staged, releases.md §1.2): a media alt, tag, folder
- * or file purges `media:all` (every Tier A page that shows a media row stamps it); a page's
+ * The purge after an IMMEDIATE save (never staged, releases.md §1.2): a media alt or file
+ * purges `media:all` (every Tier A response stamps it: every head renders the default share
+ * image, a media row, src/lib/http/cacheTags.ts ALWAYS_TAGS); a page's
  * visibility purges its page, the menus, the sitemap and llms.txt (`visibilityPurgeTags`), so a
  * page that leaves public leaves every cached copy of itself. Awaited after the commit and
  * never fatal: nothing is sent, read or logged while not set up (O-3), so the save behaves as
@@ -251,5 +252,5 @@ export async function purgeAfterSave(
   return outcome;
 }
 
-/** What a media save purges: every page that shows a media row stamps it (routeTags.ts). */
+/** What a media save purges: every Tier A response stamps it (cacheTags.ts ALWAYS_TAGS). */
 export const MEDIA_PURGE_TAGS = ['media:all'] as const;

@@ -98,6 +98,19 @@ describe('every Tier A route (src/lib/http/routeTags.ts)', () => {
     }
   });
 
+  it('every Tier A route stamps media:all, whatever it lists: every head renders a media row', () => {
+    // The default share image (seo_defaults.default_og_media, src/lib/seo/head.ts) is on every
+    // page, and a media save purges media:all only (MEDIA_PURGE_TAGS): Join, the blog, search
+    // and the legal pages read no media in their sections and must still carry it.
+    for (const tag of MEDIA_PURGE_TAGS) expect(ALWAYS_TAGS, tag).toContain(tag);
+    for (const { route, entities } of TIER_A_ROUTES) {
+      for (const locale of ['en', 'ar'] as const) {
+        const tags = tierATags({ route, locale, entities });
+        for (const tag of MEDIA_PURGE_TAGS) expect(tags, `${route} ${locale}`).toContain(tag);
+      }
+    }
+  });
+
   it('every Tier A page file names a route of the table, and a composed one stamps its sections', () => {
     const known = new Map(TIER_A_ROUTES.map((r) => [r.route, r]));
     const seen = new Set<string>();

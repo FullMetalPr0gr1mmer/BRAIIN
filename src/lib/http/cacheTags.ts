@@ -7,15 +7,20 @@ import type { Locale } from '@schemas/primitives';
 // Every Tier-A page carries `site:identity` and `nav:all` as well as its own tags,
 // because the header, footer and head of EVERY page render the public identity and the
 // navigation: a brand or menu edit must be able to purge the whole site by two tags,
-// not by enumerating routes.
+// not by enumerating routes. And `media:all` (Admin v2 R7): every page's head renders a URL
+// built from a media row (the default share image, `seo_defaults.default_og_media`, through
+// src/lib/seo/head.ts), so a media save, whose purge is `media:all`, must reach every page.
 
 export const TIER_A_CACHE_CONTROL = 'public, s-maxage=31536000, stale-while-revalidate=86400';
 
 /** Cloudflare purges at most 30 tags per request; one response never needs more. */
 export const MAX_TAGS = 30;
 
-/** On every Tier A response: a collapsed purge (`tenant:default`), the identity, the menus. */
-export const ALWAYS_TAGS = ['tenant:default', 'site:identity', 'nav:all'] as const;
+/**
+ * On every Tier A response: a collapsed purge (`tenant:default`), the identity, the menus, and
+ * the media rows every head renders (the share image).
+ */
+export const ALWAYS_TAGS = ['tenant:default', 'site:identity', 'nav:all', 'media:all'] as const;
 const ALWAYS = ALWAYS_TAGS;
 
 type HasHeaders = { headers: Headers };
