@@ -2174,7 +2174,72 @@ describe('the Style-Finder and job applications guides (Admin v2 U8a)', () => {
   });
 });
 
-// ── 1e. The Sales guides (C10a) ─────────────────────────────────────────────────────────
+// ── 1e. The Services and Projects guide (U5 + U6) ───────────────────────────────────────
+
+describe('services-and-projects (U5 + U6), a new guide put by its migration', () => {
+  const article = () => SET.find((a) => a.slug === 'services-and-projects')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+
+  it('is put once, at revision 0 (new), by the services and projects migration', () => {
+    const puts = HELP.edits.filter((e) => e.slug === 'services-and-projects');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts[0]?.file).toMatch(/^\d{4}_services_projects\.sql$/);
+    expect(HELP.revisions.get('services-and-projects')).toBe(1);
+  });
+
+  it('takes the free place 42 (after saving 40, before collections 45), for the writers and SEO', () => {
+    expect(article().sort_order).toBe(42);
+    expect(article().tags).toEqual(['content']);
+    expect(article().screens).toEqual([
+      '/admin/services',
+      '/admin/disciplines',
+      '/admin/portfolio',
+    ]);
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual([
+      'admin',
+      'content_creator',
+      'seo',
+    ]);
+    expect(pageGuideFor('/admin/services', 'content_creator')).toBe('services-and-projects');
+    expect(pageGuideFor('/admin/disciplines/1234', 'admin')).toBe('services-and-projects');
+    expect(pageGuideFor('/admin/portfolio/new', 'content_creator')).toBe('services-and-projects');
+    expect(pageGuideFor('/admin/portfolio', 'developer')).toBeNull();
+  });
+
+  it('gives the caps and the tabs as the code has them, in both languages', async () => {
+    const { ADMIN_MAX_CASE_PROBLEMS, ADMIN_MAX_VALUE_POINTS } = await import('@schemas/content');
+    const { servicesUi } = await import('@/lib/admin/ui/services');
+    const { PROJECT_TABS } = await import('@/components/admin/screens/projects/view');
+    const list = (labels: string[]) =>
+      `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+    const serviceTabs = (servicesUi.tabs ?? []).map((t) => t.label);
+    const projectTabs = PROJECT_TABS.map((t) => t.label);
+    expect(text('en')).toContain(`in tabs: ${list(serviceTabs)}.`);
+    expect(text('en')).toContain(`in tabs: ${list(projectTabs)}.`);
+    expect(text('en')).toContain(`at most ${ADMIN_MAX_VALUE_POINTS} value cards`);
+    expect(text('en')).toContain(`at most ${ADMIN_MAX_CASE_PROBLEMS} problems`);
+    expect(text('ar')).toContain(`${ADMIN_MAX_VALUE_POINTS} بطاقات قيمة على الأكثر`);
+    expect(text('ar')).toContain(`${ADMIN_MAX_CASE_PROBLEMS} مشكلات على الأكثر`);
+    for (const label of [...serviceTabs, ...projectTabs]) expect(text('ar')).toContain(label);
+  });
+
+  it('names the controls the screens draw', () => {
+    for (const words of [
+      'Move up',
+      'Move down',
+      'Save changes',
+      'Manage tags',
+      'Hidden',
+      'Featured',
+    ]) {
+      expect(text('en'), words).toContain(words);
+    }
+    expect(text('en')).toContain('switch off Placeholder');
+  });
+});
+
+// ── 1f. The Sales guides (C10a) ─────────────────────────────────────────────────────────
 
 describe('the Sales guides (C10a): the-sales-role, and roles-and-access with five roles', () => {
   const article = () => SET.find((a) => a.slug === 'the-sales-role')!;
