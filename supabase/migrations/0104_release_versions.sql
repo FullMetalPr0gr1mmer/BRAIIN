@@ -29,7 +29,8 @@
 --     N" is the ledger's own order: items whose id is above the last item of any version up to
 --     N. `portfolio_children` items give a case study's link sets at vN; team members are never
 --     captured (owner item O-12) and never answered. p_page limits it to one page and its
---     sections (the page editor's page-scoped restore). SECURITY INVOKER: staff read the ledger
+--     sections (the page editor's page-scoped restore): a section on that page at vN, and one
+--     on it now (moved onto it since, its restore sends it back where it was). SECURITY INVOKER: staff read the ledger
 --     under RLS (content_releases_read, content_release_items_read: CMS staff of the tenant),
 --     so a Sales token, another tenant or a stale role read nothing (P0002); EXECUTE for
 --     authenticated only, anon nothing. One subrequest (P-15).
@@ -186,7 +187,12 @@ begin
            (l.op <> 'delete') as exists_now,
            case when f.entity_type = 'page_section'
                 then coalesce(f.before ->> 'page_id', l.after ->> 'page_id', l.before ->> 'page_id')
-           end as page_id
+           end as page_id,
+           -- The page a section is on now (it exists): one moved onto a page since belongs to
+           -- that page's restore too, which sends it back where it was at vN.
+           case when f.entity_type = 'page_section' and l.op <> 'delete'
+                then l.after ->> 'page_id'
+           end as page_now
       from firsts f
       join lasts l on l.entity_type = f.entity_type and l.entity_id = f.entity_id
   ), scoped as (
@@ -194,7 +200,8 @@ begin
       from touched t
      where p_page is null
         or (t.entity_type = 'page' and t.entity_id = p_page)
-        or (t.entity_type = 'page_section' and t.page_id = p_page::text)
+        or (t.entity_type = 'page_section'
+            and (t.page_id = p_page::text or t.page_now = p_page::text))
   )
   select pg_catalog.jsonb_build_object(
            'release', v_release,

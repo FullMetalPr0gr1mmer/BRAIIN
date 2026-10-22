@@ -12,15 +12,15 @@
 --     only gains its number;
 --   • release_as_of over a ledger of three versions with a system item, a removal, link sets,
 --     a page and its section, and a team member (never answered): the state at v1, v2 and v3,
---     the page scope, the limit; refusals (another tenant, a bad number or limit, no such
---     version); per role: admin, content_creator, seo and developer read it, a sales claim
+--     the page scope (a section moved onto the page since included), the limit; refusals
+--     (another tenant, a bad number or limit, no such version); per role: admin, content_creator, seo and developer read it, a sales claim
 --     and another tenant's admin read no version, anon cannot call it;
 --   • the draft lock (restated): the restore's mark by the service role sets the provenance
 --     and keeps the change's author; a staff caller is stamped as before.
 -- CLAUDE.md §3 (Pillar 4), §8 (versioning; Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(52);
+select plan(54);
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────
 insert into public.tenants (id, name) values
@@ -293,6 +293,27 @@ select is(
   (select count(*)::int from public.content_release_items
     where tenant_id = '10400000-0000-0000-0000-00000000000a'),
   8, 'and the ledger is as written (eight items)');
+
+-- ── 5b. A page's restore follows a section moved onto it since ─────────────────────
+-- v4 moves section Y from page Q (where it was at v3) onto page P (F1): restoring P to v3
+-- takes Y too (it is on P now), and sends it back to Q (its image at v3).
+insert into public.content_releases (id, tenant_id, number, kind, status, published_at, published_by) values
+  ('10400000-0000-0000-0003-000000000004', '10400000-0000-0000-0000-00000000000a', 4, 'publish', 'published', now(), '10400000-0000-0000-0000-0000000000a1');
+insert into public.content_release_items (tenant_id, release_id, entity_type, entity_id, op, before, after) values
+  ('10400000-0000-0000-0000-00000000000a', '10400000-0000-0000-0003-000000000004', 'page_section',
+   '10400000-0000-0000-0004-0000000000e2', 'update',
+   '{"page_id":"10400000-0000-0000-0004-0000000000f2","type":"text"}',
+   '{"page_id":"10400000-0000-0000-0004-0000000000f1","type":"text"}');
+set local role authenticated;
+select _as_a('10400000-0000-0000-0000-0000000000a1', 'admin');
+select is(
+  _entity(_as_of(3, 200, '10400000-0000-0000-0004-0000000000f1'), '10400000-0000-0000-0004-0000000000e2')
+    #>> '{before,page_id}',
+  '10400000-0000-0000-0004-0000000000f2',
+  'restoring a page: a section moved onto it since is in its scope, as it was (on its old page)');
+select is((_as_of(3, 200, '10400000-0000-0000-0004-0000000000f2') ->> 'total')::int, 1,
+  'and in the scope of the page it was on at that version');
+reset role;
 
 -- ── 6. The restore's mark keeps the change's author (0104's draft lock) ────────────
 -- A change the content creator staged (written as the migration role naming them: no role
