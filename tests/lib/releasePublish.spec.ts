@@ -249,7 +249,7 @@ describe('the selection, the capabilities and the person', () => {
     expect(res.status).toBe(403);
   });
 
-  it('a rollback is refused until versions can be restored (R10)', async () => {
+  it('a rollback of changes no restore staged is refused on its kind (R10)', async () => {
     const draft = serviceEdit({ title: BI('A', 'ب') }, {});
     const res = await run(PUBLISH, seed({ content_drafts: [draft] }), {
       ...select(draft),
