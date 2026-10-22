@@ -228,6 +228,7 @@ const state = vi.hoisted(() => ({
   ctx: null as AuthContext | null,
   client: null as unknown,
   rpcs: [] as { fn: string; args: Record<string, unknown> }[],
+  logs: [] as unknown[],
 }));
 vi.mock('@/lib/auth/session', () => ({
   createSessionClient: () => state.client,
@@ -237,7 +238,12 @@ vi.mock('@/lib/auth/session', () => ({
 vi.mock('@/lib/auth/context', () => ({
   resolveAuthContext: async () => ({ ctx: state.ctx, revoke: false }),
 }));
-vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+vi.mock('@/lib/data/systemLog', () => ({
+  writeSystemLog: async (entry: unknown) => {
+    state.logs.push(entry);
+    return true;
+  },
+}));
 
 const { onRequest } = await import('@/middleware');
 type Next = (payload?: unknown) => Promise<Response>;
@@ -291,6 +297,7 @@ beforeEach(() => {
   state.ctx = null;
   state.client = null;
   state.rpcs.length = 0;
+  state.logs.length = 0;
   __kv.clear();
   clearVisibilityMemo();
 });
@@ -324,6 +331,25 @@ describe('a version through the preview route', () => {
     expect(res.status).toBe(404);
     expect(await res.text()).toContain("That version doesn't exist.");
     expect(calls).toEqual([]);
+  });
+
+  it('a ledger that cannot be read is a plain 503, logged with the route only', async () => {
+    signIn(answer(2, SINCE));
+    (state.client as { rpc: unknown }).rpc = async () => ({
+      data: null,
+      error: { code: '08006', message: 'connection lost' },
+    });
+    const { next, calls } = servicesPage();
+    const res = await run(context('/admin/preview/services?v=2'), next);
+    expect(res.status).toBe(503);
+    expect(calls).toEqual([]);
+    expect(state.logs).toEqual([
+      expect.objectContaining({
+        level: 'error',
+        source: 'preview',
+        detail: { route: '/services' },
+      }),
+    ]);
   });
 
   it('a malformed version is a 400, before anything is read', async () => {

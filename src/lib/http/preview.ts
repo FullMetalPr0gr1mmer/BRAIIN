@@ -194,9 +194,23 @@ export async function handlePreview(
   // A version: the state at it, from the ledger, under the person's own RLS (R10).
   let asOf: VersionPreview | undefined;
   if (target.version !== undefined) {
-    const state = await readAsOf(locals.supabase, who, target.version, {
-      limit: AS_OF_PREVIEW_MAX,
-    });
+    let state;
+    try {
+      state = await readAsOf(locals.supabase, who, target.version, { limit: AS_OF_PREVIEW_MAX });
+    } catch {
+      // The ledger could not be read (a dropped connection, a shape the Worker does not know):
+      // said plainly and logged with the route only, never a half-read version.
+      await deps.log({
+        level: 'error',
+        source: 'preview',
+        message: 'A version could not be read for its preview.',
+        detail: { route: target.route },
+      });
+      return {
+        response: plain(503, "This version couldn't be read just now. Reload to try again."),
+        rendered: false,
+      };
+    }
     if (!state) return { response: plain(404, "That version doesn't exist."), rendered: false };
     asOf = {
       number: state.release.number,
