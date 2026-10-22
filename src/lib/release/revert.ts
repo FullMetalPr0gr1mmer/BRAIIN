@@ -167,6 +167,28 @@ const item = (
   ...extra,
 });
 
+/**
+ * The round trip's change cut down to the payload's keys: the columns those keys write (their
+ * `fields`, which name every column a key writes or feeds, so keys that feed one column stay
+ * together), with the values the whole image derived, and their link sets. Deriving the
+ * trimmed payload again would give the same columns (tests/lib/resourceFields.spec.ts) at the
+ * cost of a second parse and, for a rich-text body, a second render (P-15: 10 ms of CPU).
+ */
+export function narrowed(
+  entry: RegistryEntry,
+  whole: DerivedPatch,
+  payload: Readonly<Payload>,
+): DerivedPatch {
+  const columns = new Set(Object.keys(payload).flatMap((key) => entry.fields[key] ?? []));
+  const keep = (from: Readonly<Row>) =>
+    Object.fromEntries(Object.entries(from).filter(([column]) => columns.has(column)));
+  return {
+    patch: keep(whole.patch),
+    children: Object.fromEntries(Object.entries(whole.children).filter(([key]) => key in payload)),
+    exempt: keep(whole.exempt),
+  };
+}
+
 /** Which columns of an update differ from live (derived columns never decide a change). */
 function movedColumns(patch: Readonly<Row>, live: Readonly<Row>): string[] {
   return Object.keys(patch).filter(
@@ -282,7 +304,7 @@ function planOne(
   } else {
     payload = dropFields(entry, back.payload, moved);
     if (!linksMoved) for (const key of entry.childKeys) delete payload[key];
-    derived = derivePatch(entry, 'update', payload);
+    derived = narrowed(entry, back.derived, payload);
   }
   const base = recordBase(null, live, derived.patch);
   const write = put(

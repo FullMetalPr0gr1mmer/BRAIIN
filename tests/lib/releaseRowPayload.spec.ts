@@ -9,6 +9,8 @@ import {
   rowToPayload,
 } from '@/lib/release/rowPayload';
 import { jsonEqual } from '@/lib/release/deepEqual';
+import { dropFields } from '@/lib/release/drafts';
+import { narrowed } from '@/lib/release/revert';
 import type { PortfolioMediaItem } from '@schemas/admin';
 import { mediaItemToRow } from '@/lib/admin/resources/portfolio';
 import { samplesFor } from '../fixtures/resourceSamples';
@@ -76,6 +78,43 @@ describe('rowToPayload: every type round-trips', () => {
       }
       expect(Object.keys(back.derived.patch).sort()).toEqual(Object.keys(image).sort());
       expect(jsonEqual(back.derived.children, first.children), `${type} link sets`).toBe(true);
+    });
+  }
+});
+
+describe('a restore derives its change once (P-15)', () => {
+  // planRestore cuts the round trip's whole change down to the keys whose columns moved
+  // (`narrowed`) instead of deriving the cut payload again: the same columns and values, for
+  // any one key moved and for all of them.
+  const PARTIAL: ReadonlySet<string> = new Set(['entitySeo', 'pageVisibility']);
+  for (const type of RELEASE_ENTITY_TYPES) {
+    const entry = RELEASE_REGISTRY[type];
+    if (PARTIAL.has(entry.kind)) continue;
+    it(`${type}: the cut change equals a fresh derive of the cut payload`, () => {
+      const payload = fullPayload(type);
+      const image: Row = { ...derivePatch(entry, 'create', payload).patch };
+      const children =
+        entry.childKeys.length > 0
+          ? {
+              service_ids: payload['serviceIds'],
+              media: (payload['media'] as PortfolioMediaItem[]).map(mediaItemToRow),
+            }
+          : null;
+      const back = restorePatch(entry, 'update', image, children);
+      expect(back).toMatchObject({ ok: true });
+      if (!back.ok) return;
+      const moves = [
+        ...Object.keys(back.payload).map((key) => entry.fields[key] ?? []),
+        Object.keys(back.derived.patch),
+      ];
+      for (const moved of moves) {
+        const cut = dropFields(entry, back.payload, moved);
+        const fresh = derivePatch(entry, 'update', cut);
+        const once = narrowed(entry, back.derived, cut);
+        expect(once.patch, `${type} ${moved.join(',')}`).toEqual(fresh.patch);
+        expect(once.children, `${type} ${moved.join(',')} sets`).toEqual(fresh.children);
+        expect(once.exempt).toEqual(fresh.exempt);
+      }
     });
   }
 });

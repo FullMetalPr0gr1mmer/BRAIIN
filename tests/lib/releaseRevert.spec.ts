@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AsOfEntity } from '@schemas/release';
 import type { AuthContext, Role } from '@/lib/auth/types';
 import { asOfChanges, asOfTargets } from '@/lib/release/asOf';
 import { planRestore } from '@/lib/release/revert';
+import { RELEASE_REGISTRY } from '@/lib/release/registry';
 import { client, T, type Row } from '../fixtures/stagedDb';
 import { ADMIN, makeDb } from '../fixtures/stagedRoute';
 
@@ -266,6 +267,26 @@ describe('planRestore: what a restore stages against live', () => {
     const plan = await planRestore(sb, auth('seo'), asOfTargets([e('entity_seo', SEO, null)]));
     expect(plan.changes).toEqual([]);
     expect(plan.kept).toMatchObject([{ entityType: 'entity_seo', entityId: SEO, reason: 'kept' }]);
+  });
+
+  it('an edit is derived once: one parse and toRow per changed entity, not two (P-15)', async () => {
+    const live = { id: SERVICE, tenant_id: T, slug: 'logo', title: BI('Now', 'الآن'), version: 3 };
+    const sb = db({ services: [live] });
+    const toRow = vi.spyOn(RELEASE_REGISTRY.service.resource!, 'toRow');
+    try {
+      const plan = await planRestore(
+        sb,
+        auth(),
+        asOfTargets([e('service', SERVICE, { ...live, title: BI('Then', 'سابقا') })]),
+      );
+      expect(plan.changes[0]!.write).toMatchObject({
+        payload: { title: BI('Then', 'سابقا') },
+        fields: ['title'],
+      });
+      expect(toRow).toHaveBeenCalledTimes(1);
+    } finally {
+      toRow.mockRestore();
+    }
   });
 
   it('gone since and already gone: nothing; created since and already gone: nothing', async () => {
