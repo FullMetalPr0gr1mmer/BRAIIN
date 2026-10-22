@@ -160,6 +160,165 @@ const publishOff: readonly Case[] = (
   row: SERVICE_DRAFT,
 }));
 
+// R10: versions, history and restore. The reads admit every CMS role that reads a
+// release-managed area (each change is then listed only in an area the person reads); an
+// entity's history needs that entity's area. A restore admits every publisher, then refuses,
+// per change it would stage, what the person cannot publish (P-2): one version holding one
+// theme change (Admin, Developer) and one holding one service change (Admin, Content Creator),
+// so a Content Creator restoring the theme's version is refused (the cross-area row). The stub's
+// one row is the version, the live row and the history snapshot at once.
+const VERSION_ROW = {
+  id: UUID,
+  tenant_id: TENANT,
+  number: 1,
+  status: 'published',
+  kind: 'publish',
+  version: 2,
+  seq: 1,
+  name: 'Night',
+  title: VALID_BILINGUAL,
+  snapshot: { title: { en: 'Before', ar: 'قبل' } },
+};
+const asOf = (entityType: string, before: Record<string, unknown>) => ({
+  release: {
+    id: UUID,
+    number: 1,
+    kind: 'publish',
+    note: null,
+    published_at: '2026-10-18T08:00:00Z',
+    published_by: UUID,
+  },
+  cutoff: 3,
+  total: 1,
+  entities: [{ entity_type: entityType, entity_id: UUID, before, exists_now: true, page_id: null }],
+});
+const staged = (entityType: string) => [
+  { action: 'put', draft_id: UUID, entity_type: entityType, entity_id: UUID, version: 1 },
+];
+
+const versions: readonly Case[] = [
+  {
+    name: 'versions list',
+    load: () => import('@/pages/api/admin/releases/index'),
+    method: 'GET',
+    url: '/api/admin/releases',
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+  },
+  {
+    name: 'version detail',
+    load: () => import('@/pages/api/admin/releases/[id]'),
+    method: 'GET',
+    url: `/api/admin/releases/${UUID}`,
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    row: VERSION_ROW,
+  },
+  {
+    name: 'version restore: a theme change',
+    load: () => import('@/pages/api/admin/releases/[id]/restore'),
+    method: 'POST',
+    url: `/api/admin/releases/${UUID}/restore`,
+    body: {},
+    allow: ['admin', 'developer'],
+    releases: true,
+    row: VERSION_ROW,
+    rpcs: {
+      release_as_of: asOf('custom_theme', { name: 'Day' }),
+      write_drafts: staged('custom_theme'),
+    },
+  },
+  {
+    name: 'version restore: a service change',
+    load: () => import('@/pages/api/admin/releases/[id]/restore'),
+    method: 'POST',
+    url: `/api/admin/releases/${UUID}/restore`,
+    body: {},
+    allow: ['admin', 'content_creator'],
+    releases: true,
+    row: VERSION_ROW,
+    rpcs: {
+      release_as_of: asOf('service', { title: { en: 'Before', ar: 'قبل' } }),
+      write_drafts: staged('service'),
+    },
+  },
+  {
+    name: 'version restore: one page',
+    load: () => import('@/pages/api/admin/releases/[id]/restore'),
+    method: 'POST',
+    url: `/api/admin/releases/${UUID}/restore`,
+    body: { pageId: UUID },
+    allow: ['admin', 'content_creator'],
+    releases: true,
+    row: VERSION_ROW,
+    rpcs: {
+      release_as_of: asOf('page', { title: { en: 'Before', ar: 'قبل' } }),
+      write_drafts: staged('page'),
+    },
+  },
+  {
+    name: 'version restore (releases off)',
+    load: () => import('@/pages/api/admin/releases/[id]/restore'),
+    method: 'POST',
+    url: `/api/admin/releases/${UUID}/restore`,
+    body: {},
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    row: VERSION_ROW,
+  },
+  {
+    name: 'history: a service',
+    load: () => import('@/pages/api/admin/history/index'),
+    method: 'GET',
+    url: `/api/admin/history?entityType=service&entityId=${UUID}`,
+    allow: ['admin', 'content_creator', 'seo'],
+    row: VERSION_ROW,
+  },
+  {
+    name: 'history: a page and its sections',
+    load: () => import('@/pages/api/admin/history/index'),
+    method: 'GET',
+    url: `/api/admin/history?entityType=page&entityId=${UUID}&scope=page`,
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    row: VERSION_ROW,
+  },
+  {
+    name: 'history restore: a service',
+    load: () => import('@/pages/api/admin/history/restore'),
+    method: 'POST',
+    url: '/api/admin/history/restore',
+    body: { entityType: 'service', entityId: UUID, seq: 1 },
+    allow: ['admin', 'content_creator'],
+    releases: true,
+    row: VERSION_ROW,
+    rpcs: { write_drafts: staged('service') },
+  },
+  {
+    name: 'history restore (releases off)',
+    load: () => import('@/pages/api/admin/history/restore'),
+    method: 'POST',
+    url: '/api/admin/history/restore',
+    body: { entityType: 'service', entityId: UUID, seq: 1 },
+    allow: ['admin', 'content_creator', 'seo'],
+    row: VERSION_ROW,
+  },
+  {
+    // A rollback publishes a restore's changes of one version: the per-change gate is the
+    // publish's own (R6).
+    name: 'release publish: a rollback of a service change',
+    load: () => import('@/pages/api/admin/releases/index'),
+    method: 'POST',
+    url: '/api/admin/releases',
+    body: { items: [{ draftId: UUID, draftVersion: 1 }], kind: 'rollback' },
+    allow: ['admin', 'content_creator'],
+    releases: true,
+    row: {
+      ...SERVICE_DRAFT,
+      origin_kind: 'restore',
+      origin_release_id: UUID,
+      number: 1,
+      status: 'published',
+    },
+  },
+];
+
 export const cases: readonly Case[] = [
   {
     name: 'services create (releases on)',
@@ -322,4 +481,5 @@ export const cases: readonly Case[] = [
   ...perItem,
   ...publishItems,
   ...publishOff,
+  ...versions,
 ];

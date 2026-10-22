@@ -26,6 +26,9 @@ import { namesOf, type Person } from './versions';
 type Row = Record<string, unknown>;
 type Ctx = AdminRouteContext<HistoryQuery>;
 
+/** Ledger items read per query of a page's history (a page's and its sections' changes). */
+const PAGE_ITEMS_MAX = 1000;
+
 export interface HistoryVersion {
   seq: number;
   /** The row's own version when it was saved. */
@@ -66,7 +69,12 @@ export async function entityHistory(ctx: Ctx): Promise<unknown> {
   if (input.scope === 'page') {
     if (entry.entityType !== 'page') {
       return json(
-        { ok: false, error: 'validation', field: 'scope', detail: 'Only a page has a page history.' },
+        {
+          ok: false,
+          error: 'validation',
+          field: 'scope',
+          detail: 'Only a page has a page history.',
+        },
         422,
       );
     }
@@ -104,11 +112,9 @@ export async function entityHistory(ctx: Ctx): Promise<unknown> {
 
   const rows = ((page.data ?? []) as unknown as Row[]).slice(0, VERSIONS_PAGE);
   const exists = live.data !== null && live.data !== undefined;
-  const numbers = await releaseNumbers(
-    sb,
-    auth,
-    [...new Set(rows.map((r) => r['release_id']).filter((v): v is string => typeof v === 'string'))],
-  );
+  const numbers = await releaseNumbers(sb, auth, [
+    ...new Set(rows.map((r) => r['release_id']).filter((v): v is string => typeof v === 'string')),
+  ]);
 
   // A removed entity: the version that removed it (the ledger's delete item), when one did.
   let removed: { release: { id: string; number: number | null } | null; at: string } | null = null;
@@ -157,19 +163,17 @@ export async function entityHistory(ctx: Ctx): Promise<unknown> {
           restore: draft['origin_kind'] === 'restore',
         }
       : null,
-    versions: rows.map(
-      (r, i): HistoryVersion => ({
-        seq: Number(r['seq']),
-        version: Number(r['version']),
-        at: String(r['created_at']),
-        by: named(r['created_by']),
-        release:
-          typeof r['release_id'] === 'string'
-            ? { id: r['release_id'], number: numbers.get(r['release_id']) ?? null }
-            : null,
-        live: i === 0 && input.before === undefined && exists,
-      }),
-    ),
+    versions: rows.map((r, i): HistoryVersion => ({
+      seq: Number(r['seq']),
+      version: Number(r['version']),
+      at: String(r['created_at']),
+      by: named(r['created_by']),
+      release:
+        typeof r['release_id'] === 'string'
+          ? { id: r['release_id'], number: numbers.get(r['release_id']) ?? null }
+          : null,
+      live: i === 0 && input.before === undefined && exists,
+    })),
     more: ((page.data ?? []) as unknown[]).length > VERSIONS_PAGE,
   };
 }
@@ -178,33 +182,31 @@ export async function entityHistory(ctx: Ctx): Promise<unknown> {
 async function pageHistory(ctx: Ctx): Promise<unknown> {
   const { sb, auth, input } = ctx;
   const page = input.entityId;
-  // Items naming the page, and items of sections whose image (before or after) names it; the
-  // ledger's (tenant, type, entity) index serves the first, the release index the join below.
-  const [own, sections, names, enabled] = await Promise.all([
+  // Items naming the page, and items of sections whose image before or after names it (a
+  // section moved between pages counts for both); the ledger's (tenant, type, entity) index
+  // serves each. Items no release made (out-of-band writes) belong to no version.
+  const items = (column: 'entity_id' | 'before->>page_id' | 'after->>page_id') =>
     sb
       .from('content_release_items')
       .select('release_id')
       .eq('tenant_id', auth.tenantId)
-      .eq('entity_type', 'page')
-      .eq('entity_id', page)
-      .not('release_id', 'is', null)
-      .limit(1000),
-    sb
-      .from('content_release_items')
-      .select('release_id')
-      .eq('tenant_id', auth.tenantId)
-      .eq('entity_type', 'page_section')
-      .or(`before->>page_id.eq.${page},after->>page_id.eq.${page}`)
-      .not('release_id', 'is', null)
-      .limit(1000),
+      .eq('entity_type', column === 'entity_id' ? 'page' : 'page_section')
+      .eq(column, page)
+      .limit(PAGE_ITEMS_MAX);
+  const [own, before, after, names, enabled] = await Promise.all([
+    items('entity_id'),
+    items('before->>page_id'),
+    items('after->>page_id'),
     namesOf(sb, auth),
     ctx.releasesEnabled(),
   ]);
-  if (own.error) throw new Error(`read page history: ${own.error.message}`);
-  if (sections.error) throw new Error(`read section history: ${sections.error.message}`);
+  for (const read of [own, before, after]) {
+    if (read.error) throw new Error(`read page history: ${read.error.message}`);
+  }
   const ids = [
     ...new Set(
-      [...((own.data ?? []) as Row[]), ...((sections.data ?? []) as Row[])]
+      [own, before, after]
+        .flatMap((read) => (read.data ?? []) as Row[])
         .map((r) => r['release_id'])
         .filter((v): v is string => typeof v === 'string'),
     ),

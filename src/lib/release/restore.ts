@@ -251,13 +251,14 @@ export async function restoreVersion(ctx: Ctx<RestoreVersionRequest>): Promise<u
 /** `POST /api/admin/history/restore`. */
 export async function restoreSnapshot(ctx: Ctx<HistoryRestoreRequest>): Promise<unknown> {
   const { sb, auth, input } = ctx;
-  if (!(await ctx.releasesEnabled())) {
-    return json({ ok: false, error: 'releases-off', detail: RESTORE_COPY.off }, 409);
-  }
   const entry = RELEASE_REGISTRY[input.entityType];
-  // Its history is read only by who reads its area (the history route's own rule).
+  // Its history is read only by who reads its area (the history route's own rule), whatever
+  // the release flag says.
   if (!mayRead(auth.role, entry)) {
     throw new AuthorizationError(entry.readCaps.join('|'), `history of ${entry.entityType}`);
+  }
+  if (!(await ctx.releasesEnabled())) {
+    return json({ ok: false, error: 'releases-off', detail: RESTORE_COPY.off }, 409);
   }
   if (entry.entityType === 'team_member') {
     return json({ ok: false, error: 'validation', detail: RESTORE_COPY.noHistory }, 422);
