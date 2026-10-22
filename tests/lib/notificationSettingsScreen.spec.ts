@@ -27,6 +27,7 @@ const loaded = (values: Record<string, unknown>): EntitySave => ({
   message: null,
   save: async () => true,
   reloadTheirs: async () => undefined,
+  adoptVersion: () => undefined,
 });
 
 const state = vi.hoisted(() => ({ values: {} as Record<string, unknown> }));
