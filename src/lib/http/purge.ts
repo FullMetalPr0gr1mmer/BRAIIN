@@ -9,11 +9,20 @@ import { outboundJson, OutboundError, type OutboundOptions } from './outbound';
 //
 // What it purges with: the Cloudflare zone API, by Cache-Tag (`POST /zones/{zone}/purge_cache
 // {tags}`, available on every plan; the Free plan allows 5 purge requests a minute). That is
-// the backend for a zone cache in front of the Worker. Workers Cache (`wrangler.jsonc`
-// `cache`) and Astro's cache provider (`astro.config.mjs` `cache`) would need their own
-// backend (`ctx.cache.purge`), and maintenance would have to purge everything when it goes on
-// (their hits skip the Worker): neither is built, so tests/lib/cacheLayer.spec.ts refuses
-// either while PURGE_BACKENDS lacks it.
+// the backend for the Tier A cache the design names (releases.md §5.3, R43/KAN-20): the zone's
+// cache as the WORKER reads and fills it through the Cache API on the custom domain, whose
+// entries a tag purge reaches. Cloudflare runs a Worker before the zone's cache and never
+// caches a response the Worker builds by itself, so that lookup is the Worker's own and sits
+// in src/middleware.ts AFTER the maintenance check and the page-visibility check (the
+// "pre-cache" checks, CLAUDE.md §3; src/lib/http/maintenance.ts): maintenance, its allowlist
+// and a hidden page's window then hold for cached pages with no purge at all. The lookup is not
+// built yet (O-3, KAN-20), and tests/lib/cacheLayer.spec.ts refuses one anywhere else.
+// What a purge clears is then what a cached page renders: its content, and the menus, the
+// sitemap and llms.txt that list pages (a page-visibility save's tags). Workers Cache
+// (`wrangler.jsonc` `cache`) and Astro's cache provider (`astro.config.mjs` `cache`) are other
+// layers: their hits are answered before the middleware runs, they need their own backend
+// (`ctx.cache.purge`) and maintenance would have to purge everything when it goes on; neither
+// is built, so tests/lib/cacheLayer.spec.ts refuses either while PURGE_BACKENDS lacks it.
 //
 // Not set up (owner item O-3: no zone and no Zone · Cache Purge token yet; KAN-20): every purge
 // is `skipped`, nothing is sent and nothing is read. On *.workers.dev no layer stores a Tier A

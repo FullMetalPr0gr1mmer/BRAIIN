@@ -43,8 +43,8 @@ export const PATCH = defineAdminRoute({
       version: input.version,
     });
     const sync = await syncVisibilityToEdge(sb, auth);
-    // What a cache in front of the Worker clears (Admin v2 R7; nothing is sent while no cache
-    // zone is set up, O-3).
+    // What a Tier A cache clears: the page and the menus, sitemap and llms.txt that list it
+    // (Admin v2 R7; nothing is sent while no cache zone is set up, O-3).
     const purgeTags = target.kind === 'page' ? visibilityPurgeTags(target) : [];
     await purgeAfterSave(auth.tenantId, purgeTags, 'visibility');
     audit({

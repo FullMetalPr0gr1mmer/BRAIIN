@@ -29,8 +29,9 @@ export const POST = defineAdminRoute({
     await liveRecheck(auth);
     const { setting, slug } = await savePagePassword(sb, auth, input);
     const sync = await syncVisibilityToEdge(sb, auth);
-    // A cached copy of the page must not outlive its password (Admin v2 R7; nothing is sent
-    // while no cache zone is set up, O-3).
+    // A page behind a password leaves the menus, the sitemap and llms.txt of every cached page
+    // (the page itself is gated before any cache lookup: Admin v2 R7; nothing is sent while no
+    // cache zone is set up, O-3).
     const purgeTags = visibilityPurgeTags({ kind: 'page', slug });
     await purgeAfterSave(auth.tenantId, purgeTags, 'visibility');
     return { setting, kvSynced: sync.kvSynced, purgeTags };

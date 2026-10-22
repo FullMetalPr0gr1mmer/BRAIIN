@@ -22,8 +22,9 @@ import {
 //        says whether the edge took it (`kvSynced`). Immediate until releases switch on
 //        (D8): R3 adds the staged branch here, and R7 re-syncs after an apply or a rollback.
 //
-// `purgeTags` is what a cache in front of the Worker has to clear for this change (a page that
-// leaves public must leave every cached copy): after the save they are purged through the
+// `purgeTags` is what a Tier A cache has to clear for this change: the page, and the menus,
+// the sitemap and llms.txt that list it on every cached page (the page itself is refused by
+// the middleware's check before any cache lookup). After the save they are purged through the
 // purge seam (Admin v2 R7, src/lib/http/purge.ts), which sends nothing while no cache zone is
 // set up (O-3), so the answer is as before.
 
