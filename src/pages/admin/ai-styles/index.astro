@@ -1,8 +1,10 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminResourceTable from '@/components/admin/islands/AdminResourceTable';
+import Note from '@/components/admin/ui/Note.astro';
 import { uiFor } from '@/lib/admin/uiSchema';
 import { can } from '@/lib/authz/matrix';
+import { STYLE_FINDER_NOT_LIVE } from '@/lib/admin/styleFinderCopy';
 
 export const prerender = false;
 
@@ -13,9 +15,12 @@ const role = Astro.locals.session?.role;
 const canArchive = role !== undefined && can(role, 'content.archiveDelete') === 'full';
 
 const ui = uiFor('ai-styles');
+// The quiz is not live (Admin v2 U8a): said to the roles that edit it, on the server, zero JS.
+const mayEdit = role !== undefined && can(role, 'ai.editContent') === 'full';
 ---
 
 <AdminLayout title={ui.title}>
+  {mayEdit && <Note tone="info">{STYLE_FINDER_NOT_LIVE}</Note>}
   <!--
   `client:load` rather than `client:visible`: this island IS the page, so deferring it
   to intersection just adds a blank frame. Public routes use visible/idle — /admin is

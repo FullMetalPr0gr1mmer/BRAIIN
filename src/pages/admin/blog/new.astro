@@ -2,12 +2,33 @@
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
 import { uiFor } from '@/lib/admin/uiSchema';
+import { canWriteResource, seoAccess } from '@/lib/admin/editorAccess';
+import { firstTab, visibleTabs } from '@/lib/admin/editorTabs';
 
 export const prerender = false;
 
+// A new post (Admin v2 U8b: in tabs). Its SEO tab says to save the post first: SEO belongs
+// to a post that exists. A role without `blog.write` sees the form read-only (the API refuses
+// a create anyway; the list offers such a role no "New post").
 const ui = uiFor('blog');
+const role = Astro.locals.session?.role ?? 'content_creator';
+const readOnly = !canWriteResource('blog', role);
+const seo = seoAccess(role);
+const initialTab = firstTab(
+  visibleTabs(ui.tabs ?? [], { seoAccess: seo }),
+  Astro.url.searchParams.get('tab'),
+  { readOnly, seoAccess: seo },
+);
 ---
 
 <AdminLayout title={`New ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="blog" id={null} />
+  <AdminResourceForm
+    client:load
+    resource="blog"
+    id={null}
+    readOnly={readOnly}
+    initialTab={initialTab}
+    seoAccess={seo}
+    seo={null}
+  />
 </AdminLayout>
