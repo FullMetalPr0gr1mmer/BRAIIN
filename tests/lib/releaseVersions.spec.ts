@@ -79,6 +79,7 @@ const { POST: RESTORE } = await import('@/pages/api/admin/releases/[id]/restore'
 const { GET: HISTORY } = await import('@/pages/api/admin/history/index');
 const { POST: HISTORY_RESTORE } = await import('@/pages/api/admin/history/restore');
 const { RESTORE_COPY } = await import('@/lib/release/restore');
+const { ROLLBACK_COPY } = await import('@/lib/release/endpoints');
 
 const BI = (en: string, ar: string) => ({ en, ar });
 const id = (n: number) => `0e0e0e0e-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -1179,6 +1180,8 @@ describe('POST /api/admin/releases with kind rollback', () => {
       base: { title: BI('Logo Design', 'تصميم الشعار') },
       origin_kind: 'restore',
       origin_release_id: V1,
+      // As the restore leaves it: its write (1), then the mark (2).
+      version: 2,
       ...over,
     });
   const publishBody = (drafts: Row[], extra: Row = {}) => ({
@@ -1241,6 +1244,65 @@ describe('POST /api/admin/releases with kind rollback', () => {
       expect(res.body['field']).toBe('kind');
     }
     expect(applyArgs()).toBeUndefined();
+  });
+
+  it('a restored change edited since the restore is 422 on kind: it no longer holds the version', async () => {
+    const edited = restored({ version: 3 });
+    const db = seed({ content_drafts: [edited] });
+    const res = await as(
+      'admin',
+      db,
+      PUBLISH,
+      'POST',
+      '/api/admin/releases',
+      publishBody([edited]),
+    );
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ field: 'kind', detail: ROLLBACK_COPY.edited });
+    expect(applyArgs()).toBeUndefined();
+  });
+
+  it('a part of a version’s restore is 422 on kind; the whole of it publishes as the rollback', async () => {
+    const other = restored({
+      id: id(81),
+      entity_id: SERVICE_2,
+      payload: { title: BI('Web', 'ويب') },
+    });
+    const tables = {
+      content_drafts: [restored(), other],
+      services: [liveService(), liveService({ id: SERVICE_2, slug: 'web' })],
+    };
+    let db = seed(structuredClone(tables));
+    let res = await as(
+      'admin',
+      db,
+      PUBLISH,
+      'POST',
+      '/api/admin/releases',
+      publishBody([restored()]),
+    );
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ field: 'kind', detail: ROLLBACK_COPY.partial });
+    expect(applyArgs()).toBeUndefined();
+    // The same part, published as a plain release, is a publish.
+    res = await as('admin', db, PUBLISH, 'POST', '/api/admin/releases', {
+      ...publishBody([restored()]),
+      kind: 'publish',
+    });
+    expect(res.status).toBe(200);
+    expect(applyArgs()).toMatchObject({ p_kind: 'publish' });
+    svc.calls = [];
+    db = seed(structuredClone(tables));
+    res = await as(
+      'admin',
+      db,
+      PUBLISH,
+      'POST',
+      '/api/admin/releases',
+      publishBody([restored(), other]),
+    );
+    expect(res.status).toBe(200);
+    expect(applyArgs()).toMatchObject({ p_kind: 'rollback', p_restores_release_id: V1 });
   });
 
   it('a restore of a version that is no longer a published version is 422 on kind', async () => {

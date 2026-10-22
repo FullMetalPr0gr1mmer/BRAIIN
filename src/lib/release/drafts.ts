@@ -34,7 +34,7 @@ type Payload = Record<string, unknown>;
 
 /** What a staged handler reads of a draft. */
 export const DRAFT_COLUMNS =
-  'id,entity_type,entity_id,op,payload,base,base_version,fields,label,version,created_at,updated_at,updated_by,release_id,origin_kind';
+  'id,entity_type,entity_id,op,payload,base,base_version,fields,label,version,created_at,updated_at,updated_by,release_id,origin_kind,origin_release_id';
 
 const StoredDraftSchema = ContentDraftRowSchema.pick({
   id: true,
@@ -52,9 +52,11 @@ const StoredDraftSchema = ContentDraftRowSchema.pick({
   updated_by: true,
   release_id: true,
 }).extend({
-  // A restore's change (R10, 0062's provenance): only the restore path's mark sets it. A reader
-  // that does not select it (an older stand-in) reads an ordinary change.
+  // A restore's change (R10, 0062's provenance) and the version it restored (null for one
+  // snapshot): only the restore path's mark sets them. A reader that does not select them (an
+  // older stand-in) reads an ordinary change.
   origin_kind: ContentDraftRowSchema.shape.origin_kind.default(null),
+  origin_release_id: ContentDraftRowSchema.shape.origin_release_id.default(null),
 });
 export type StoredDraft = z.infer<typeof StoredDraftSchema>;
 

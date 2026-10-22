@@ -1,10 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { PublishRequest } from '@schemas/release';
+import { RELEASE_MAX_ITEMS, type PublishRequest } from '@schemas/release';
 import type { AuthContext } from '@/lib/auth/types';
 import { json, type AdminRouteContext } from '@/lib/admin/route';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { checkOf, dryRun, publish } from './apply';
-import type { StoredDraft } from './drafts';
+import { untouchedRestore, type StoredDraft } from './drafts';
 import {
   assertMayPublish,
   checkSelection,
@@ -22,10 +22,13 @@ import {
 // Releases off (every tenant until R14): both answer 409 `releases-off` and read nothing more,
 // so nothing here changes what any save does today.
 //
-// A rollback (R10, `kind: 'rollback'`) publishes the changes a restore staged: every selected
-// change must carry the restore's mark for one version (`origin_kind`, `origin_release_id`, which
-// only the restore path writes), and the release then names that version
-// (`restores_release_id`) with the default note "Restored vN". Anything else is 422 on `kind`.
+// A rollback (R10, `kind: 'rollback'`) publishes the changes a restore staged, and only as the
+// restore left them: every selected change carries the restore's mark for one version
+// (`origin_kind`, `origin_release_id`, which only the restore path writes), none was edited
+// since (an edited one no longer holds the version), and the selection is every open change of
+// that version's restore (a part of it would leave the site between two versions). The release
+// then names that version (`restores_release_id`) with the default note "Restored vN".
+// Anything else is 422 on `kind`; the same changes can still be published as a plain release.
 
 type Ctx = AdminRouteContext<PublishRequest>;
 
@@ -67,51 +70,55 @@ export async function handleRelease(ctx: Ctx, mode: 'validate' | 'publish'): Pro
   }
 }
 
-export const ROLLBACK_DETAIL =
-  'A rollback publishes the changes restored from one version, and only those.';
+export const ROLLBACK_COPY = {
+  notRestore: 'A rollback publishes the changes restored from one version, and only those.',
+  edited:
+    'Some of these restored changes were edited after the restore, so they no longer hold that version. Publish them as a release instead.',
+  partial:
+    'A rollback publishes every change restored from that version together. Select them all, or publish these as a release instead.',
+} as const;
 
 /**
  * The version a rollback restores: the one every selected change was restored from, live and
- * published in the caller's tenant. Read under the person's RLS. Else 422 on `kind`.
+ * published in the caller's tenant, with every open change of that restore selected and none
+ * edited since. Read under the person's RLS (CMS staff read every draft of the tenant). Else
+ * 422 on `kind`.
  */
 async function rollbackOf(
   sb: SupabaseClient,
   auth: AuthContext,
   drafts: readonly StoredDraft[],
 ): Promise<{ id: string; number: number }> {
-  const refuse = () =>
-    new ReleaseRefusal(422, {
-      ok: false,
-      error: 'validation',
-      field: 'kind',
-      detail: ROLLBACK_DETAIL,
-    });
-  const { data, error } = await sb
-    .from('content_drafts')
-    .select('id,origin_kind,origin_release_id')
-    .eq('tenant_id', auth.tenantId)
-    .in(
-      'id',
-      drafts.map((d) => d.id),
-    );
-  if (error) throw new Error(`read restore marks: ${error.message}`);
-  const rows = (data ?? []) as Record<string, unknown>[];
+  const refuse = (detail: string) =>
+    new ReleaseRefusal(422, { ok: false, error: 'validation', field: 'kind', detail });
   const origins = new Set(
-    rows.map((r) => (r['origin_kind'] === 'restore' ? r['origin_release_id'] : null)),
+    drafts.map((d) => (d.origin_kind === 'restore' ? d.origin_release_id : null)),
   );
   const [origin] = [...origins];
-  if (rows.length !== drafts.length || origins.size !== 1 || typeof origin !== 'string') {
-    throw refuse();
-  }
-  const release = await sb
-    .from('content_releases')
-    .select('id,number')
-    .eq('tenant_id', auth.tenantId)
-    .eq('id', origin)
-    .eq('status', 'published')
-    .maybeSingle();
+  if (origins.size !== 1 || typeof origin !== 'string') throw refuse(ROLLBACK_COPY.notRestore);
+  if (!drafts.every(untouchedRestore)) throw refuse(ROLLBACK_COPY.edited);
+  const [set, release] = await Promise.all([
+    sb
+      .from('content_drafts')
+      .select('id')
+      .eq('tenant_id', auth.tenantId)
+      .eq('origin_kind', 'restore')
+      .eq('origin_release_id', origin)
+      .limit(RELEASE_MAX_ITEMS + 1),
+    sb
+      .from('content_releases')
+      .select('id,number')
+      .eq('tenant_id', auth.tenantId)
+      .eq('id', origin)
+      .eq('status', 'published')
+      .maybeSingle(),
+  ]);
+  if (set.error) throw new Error(`read the restore's changes: ${set.error.message}`);
   if (release.error) throw new Error(`read restored version: ${release.error.message}`);
   const number = (release.data as Record<string, unknown> | null)?.['number'];
-  if (typeof number !== 'number') throw refuse();
+  if (typeof number !== 'number') throw refuse(ROLLBACK_COPY.notRestore);
+  const selected = new Set(drafts.map((d) => d.id));
+  const open = ((set.data ?? []) as Record<string, unknown>[]).map((r) => String(r['id']));
+  if (open.some((draftId) => !selected.has(draftId))) throw refuse(ROLLBACK_COPY.partial);
   return { id: origin, number };
 }

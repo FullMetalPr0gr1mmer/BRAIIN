@@ -300,17 +300,18 @@ const versions: readonly Case[] = [
     row: VERSION_ROW,
   },
   {
-    // A rollback publishes a restore's changes of one version: the per-change gate is the
-    // publish's own (R6).
+    // A rollback publishes a restore's changes of one version, as the restore left them (its
+    // write and its mark: version 2): the per-change gate is the publish's own (R6).
     name: 'release publish: a rollback of a service change',
     load: () => import('@/pages/api/admin/releases/index'),
     method: 'POST',
     url: '/api/admin/releases',
-    body: { items: [{ draftId: UUID, draftVersion: 1 }], kind: 'rollback' },
+    body: { items: [{ draftId: UUID, draftVersion: 2 }], kind: 'rollback' },
     allow: ['admin', 'content_creator'],
     releases: true,
     row: {
       ...SERVICE_DRAFT,
+      version: 2,
       origin_kind: 'restore',
       origin_release_id: UUID,
       number: 1,
