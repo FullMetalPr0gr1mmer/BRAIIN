@@ -4,8 +4,8 @@
 -- placeholder number; the number is assigned at merge (scripts/renumber-migration.mjs).
 -- Depends on 0001 (tenants, app.effective_tenant_id), 0009 (public.site_integrations, its
 -- triggers), 0011 (the grant regime), 0013 (app.current_role), 0033 (app.live_role), 0038 (the
--- release registry, which this table stays out of) and 0069 (H11: the help-guide catalog,
--- app.put_help_guide).
+-- release registry, which this table stays out of), 0069 (H11: the help-guide catalog,
+-- app.put_help_guide) and 0097 (C10a: the Sales role and its guide, put again here).
 --
 -- WHY. site_integrations held four free-form jsonb boxes (ga4, search_console, calendly,
 -- recaptcha) that any CMS staff token could read, and a box that takes any JSON takes a
@@ -40,7 +40,8 @@
 --      tenant_id and search_console_token only; nothing else for anyone (no TRUNCATE,
 --      REFERENCES or TRIGGER; MAINTAIN on 17+). No sequence (the key is the tenant).
 --   6. The guides, through H11's catalog: integrations (new, place 62), forms-and-spam (new,
---      place 85), your-account (the bell's settings screen and one line, on U17's text).
+--      place 85), your-account (the bell's settings screen and one line, on U17's text),
+--      the-sales-role (the bell's settings are the one setting Sales opens, on C10a's text).
 --
 -- The narrowing is safe in one push: the deployed Worker reads and writes this row only as
 -- Admin or SEO (assertCap, settings.integrations), and a real session's token carries the
@@ -160,6 +161,9 @@ grant select (tenant_id, search_console_token) on public.site_integrations to an
 --                    Forms screen, for settings.general.
 --   your-account     revision 2 (U17's 0072 left it there): /admin/settings/notifications among
 --                    its screens and one line on the bell's settings.
+--   the-sales-role   revision 1 (C10a's 0097 left it there): a Sales account now opens one
+--                    setting, the bell's own (Settings › Notifications), so "no setting"
+--                    becomes "no site setting" and one line names it, in both languages.
 select app.put_help_guide($guide$
 {
   "slug": "integrations",
@@ -515,6 +519,100 @@ select app.put_help_guide($guide$
 }
 $guide$::jsonb, 2);
 
+select app.put_help_guide($guide$
+{
+  "slug": "the-sales-role",
+  "sort_order": 65,
+  "minutes": 2,
+  "tags": [
+    "leads",
+    "team"
+  ],
+  "screens": [
+    "/admin/leads"
+  ],
+  "caps": [
+    "leads.manage"
+  ],
+  "title": "The Sales role",
+  "title_ar": "دور Sales (المبيعات)",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Sales is the role for the people who follow up inquiries. A Sales account works leads and nothing else: it opens no page, site setting, media or job application, and it cannot change anyone's role."
+      },
+      {
+        "t": "h",
+        "x": "What Sales can do"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "See every lead, move it through the stages, assign it, star it, tag it and give it a value, like anyone who works leads.",
+          "Reveal one lead's contact details, budget and timeline at a time. Each reveal is logged against the account that made it, up to 60 an hour for each person and 300 an hour for the whole team.",
+          "Read and add notes, log a call or a message, and add a lead by hand. Opening a lead's notes is logged too, within a limit of the same size.",
+          "Open the dashboard and the website stats.",
+          "Choose what the bell shows in Settings › Notifications. That setting is the account's own, and the only one Sales opens."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "What Sales cannot do"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Export leads to a file: the Export CSV button does not show.",
+          "Erase a lead, or receive a new lead's contact details in a notification. Sales reveals them on the lead's page instead, one lead at a time.",
+          "Change content, the site's settings, people or the theme, or read job applications, the logs or the activity log."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "An Admin makes someone Sales in Settings › Users & roles. Give each person a display name, so the people a lead can be assigned to are easy to tell apart."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "دور Sales (المبيعات) مخصّص لمن يتابعون الاستفسارات. يعمل حساب Sales على العملاء المحتملين فقط: لا يفتح الصفحات ولا إعدادات الموقع ولا الوسائط ولا طلبات التوظيف، ولا يستطيع تغيير دور أي شخص."
+      },
+      {
+        "t": "h",
+        "x": "ما يستطيعه Sales"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "يرى كل العملاء المحتملين، وينقلهم عبر المراحل، ويسندهم، ويميّزهم بنجمة، ويضع لهم الوسوم والقيمة، مثل كل من يعمل على العملاء المحتملين.",
+          "يكشف بيانات التواصل والميزانية والمدة الزمنية لعميل محتمل واحد في كل مرة. يُسجَّل كل كشف باسم الحساب الذي قام به، بحد أقصى 60 مرة في الساعة لكل شخص و300 مرة في الساعة للفريق كله.",
+          "يقرأ الملاحظات ويضيفها، ويسجّل مكالمة أو رسالة، ويضيف عميلًا محتملًا يدويًا. يُسجَّل فتح ملاحظات العميل المحتمل أيضًا، ضمن حد بالحجم نفسه.",
+          "يفتح لوحة المعلومات وإحصاءات الموقع.",
+          "يختار ما يعرضه الجرس من Settings › Notifications. هذا الإعداد خاص بحسابه، وهو الإعداد الوحيد الذي يفتحه Sales."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "ما لا يستطيعه Sales"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "تصدير العملاء المحتملين إلى ملف: لا يظهر له زر Export CSV.",
+          "محو عميل محتمل، أو تلقّي بيانات التواصل لعميل محتمل جديد في إشعار. يكشفها Sales في صفحة العميل المحتمل بدلًا من ذلك، عميلًا واحدًا في كل مرة.",
+          "تغيير المحتوى أو إعدادات الموقع أو الأشخاص أو المظهر، أو قراءة طلبات التوظيف أو السجلات أو سجل النشاط."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "يجعل المسؤول (Admin) شخصًا ما Sales من Settings › Users & roles. امنح كل شخص اسمًا ظاهرًا، ليسهل التمييز بين من يمكن إسناد العميل المحتمل إليهم."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 1);
+
 -- ═══ Postconditions ═══════════════════════════════════════════════════════════════════════
 -- Each block says what it checks. Expressions are read as pg_get_expr prints them (each
 -- operator in parentheses, an AND list in one pair; a function's schema printed only when it
@@ -728,11 +826,12 @@ begin
 
   -- ---- 10. The guides: in the catalog at the revision this file leaves, in their places, and
   -- every tenant holds each, field for field as the catalog renders it ------------------------
-  v_want := array['forms-and-spam 1 85', 'integrations 1 62', 'your-account 3 20'];
+  v_want := array['forms-and-spam 1 85', 'integrations 1 62', 'the-sales-role 2 65',
+                   'your-account 3 20'];
   select array_agg(format('%s %s %s', c.slug, c.revision, c.sort_order) order by c.slug collate "C")
     into v_got
     from app.help_guide_catalog c
-   where c.slug in ('integrations', 'forms-and-spam', 'your-account');
+   where c.slug in ('integrations', 'forms-and-spam', 'your-account', 'the-sales-role');
   if v_got is distinct from v_want then
     raise exception 'U11: the catalog holds %, expected %', v_got, v_want;
   end if;
@@ -743,7 +842,8 @@ begin
   end if;
   select string_agg(format('%s/%s', t.id, g.slug), ', ') into v_bad
     from public.tenants t
-    cross join (values ('integrations'), ('forms-and-spam'), ('your-account')) as g(slug)
+    cross join (values ('integrations'), ('forms-and-spam'), ('your-account'),
+                       ('the-sales-role')) as g(slug)
    where not exists (
      select 1
        from public.help_articles h

@@ -6,6 +6,7 @@ import { CV_MAX_BYTES } from '@schemas/application';
 import { ROLES } from '@/lib/auth/types';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
 import { mayRead, pageGuideFor } from '@/lib/admin/help';
+import { visibleNav } from '@/lib/admin/nav';
 import { settings } from '@/lib/admin/nav/settings';
 import { INTEGRATION_TILES } from '@/lib/admin/integrations/tiles';
 import { formFacts } from '@/lib/admin/forms/overview';
@@ -13,8 +14,9 @@ import { APPLY_LIMITS, CONTACT_LIMITS } from '@/lib/http/publicRateLimit';
 import { helpSet, readMigrations } from '../fixtures/helpSet';
 
 // The guides Admin v2 U11 puts through H11's catalog (one app.put_help_guide each, in the
-// integrations migration, numbered at merge): `integrations` and `forms-and-spam`, new, and
-// `your-account` again, for the bell's settings screen. Each is held to its file in
+// integrations migration, numbered at merge): `integrations` and `forms-and-spam`, new,
+// `your-account` again, for the bell's settings screen, and `the-sales-role` again, because
+// that screen is the one setting a Sales account opens. Each is held to its file in
 // docs/admin-v2/guides (byte for byte), to the revision the migrations before it leave, to
 // its place and readers, and to the code behind what it says. tests/lib/helpCentre.spec.ts
 // holds every guide to the rules all guides keep.
@@ -37,7 +39,7 @@ const readers = (slug: string) => ROLES.filter((role) => mayRead(role, guide(slu
 const source = (path: string) => readFileSync(path, 'utf8');
 
 describe('the guides the integrations migration puts (Admin v2 U11)', () => {
-  it('puts exactly three, each at the revision the migrations before it leave', () => {
+  it('puts exactly four, each at the revision the migrations before it leave', () => {
     expect(MIGRATION, 'the integrations migration').toBeDefined();
     expect(HELP.edits.filter((e) => e.file === MIGRATION!.name)).toEqual([
       { file: MIGRATION!.name, op: 'put', slug: 'integrations', revision: 0 },
@@ -48,13 +50,20 @@ describe('the guides the integrations migration puts (Admin v2 U11)', () => {
         slug: 'your-account',
         revision: BEFORE.revisions.get('your-account')!,
       },
+      {
+        file: MIGRATION!.name,
+        op: 'put',
+        slug: 'the-sales-role',
+        revision: BEFORE.revisions.get('the-sales-role')!,
+      },
     ]);
     expect(HELP.revisions.get('integrations')).toBe(1);
     expect(HELP.revisions.get('forms-and-spam')).toBe(1);
     expect(HELP.revisions.get('your-account')).toBe(BEFORE.revisions.get('your-account')! + 1);
+    expect(HELP.revisions.get('the-sales-role')).toBe(BEFORE.revisions.get('the-sales-role')! + 1);
     // Nothing else moved.
-    const others = (set: typeof HELP.set) =>
-      set.filter((g) => !['integrations', 'forms-and-spam', 'your-account'].includes(g.slug));
+    const mine = ['integrations', 'forms-and-spam', 'your-account', 'the-sales-role'];
+    const others = (set: typeof HELP.set) => set.filter((g) => !mine.includes(g.slug));
     expect(others(HELP.set)).toEqual(others(BEFORE.set));
   });
 
@@ -64,7 +73,7 @@ describe('the guides the integrations migration puts (Admin v2 U11)', () => {
         /^select app\.put_help_guide\(\$guide\$\r?\n([\s\S]*?)\r?\n\$guide\$::jsonb, \d+\);/gm,
       ),
     ].map((m) => m[1]!);
-    expect(literals).toHaveLength(3);
+    expect(literals).toHaveLength(4);
     for (const literal of literals) {
       const slug = (JSON.parse(literal) as { slug: string }).slug;
       expect(literal, slug).toBe(
@@ -126,6 +135,55 @@ describe('the guides the integrations migration puts (Admin v2 U11)', () => {
     expect(text('your-account', 'en')).toContain('open Notifications under Settings');
     expect(text('your-account', 'en')).toContain('Turning one off only quiets the bell');
     expect(settings.links.map((l) => l.label)).toContain('Notifications');
+  });
+});
+
+describe('the-sales-role names the one setting Sales opens (the bell settings, U11)', () => {
+  const before = () =>
+    HelpArticleSeedSchema.parse(BEFORE.set.find((g) => g.slug === 'the-sales-role'));
+  const flat = (g: HelpArticleRow, lang: 'en' | 'ar') =>
+    g.body[lang].flatMap((b) => (Array.isArray(b.x) ? b.x : [b.x]));
+
+  it('Sales sees Settings › Notifications in its menu, and nothing else of Settings', () => {
+    const groups = visibleNav('sales');
+    expect(groups.find((g) => g.title === 'Settings')?.links.map((l) => l.label)).toEqual([
+      'Notifications',
+    ]);
+  });
+
+  it("keeps C10a's place, title, caps and screens; says no site setting, and names its own", () => {
+    const keep = (g: HelpArticleRow) => [
+      g.sort_order,
+      g.title,
+      g.title_ar,
+      g.caps,
+      g.tags,
+      g.screens,
+    ];
+    expect(keep(guide('the-sales-role'))).toEqual(keep(before()));
+    const en = text('the-sales-role', 'en');
+    const ar = text('the-sales-role', 'ar');
+    expect(en).not.toContain('it opens no page, setting,');
+    expect(en).toContain('it opens no page, site setting, media or job application');
+    expect(en).toContain(
+      "Choose what the bell shows in Settings › Notifications. That setting is the account's own, and the only one Sales opens.",
+    );
+    expect(en).toContain("Change content, the site's settings, people or the theme");
+    expect(ar).toContain('لا يفتح الصفحات ولا إعدادات الموقع');
+    expect(ar).toContain('Settings › Notifications');
+    // One line added in each language, and every other block as C10a left it but the two
+    // words that become "site settings".
+    for (const lang of ['en', 'ar'] as const) {
+      const added = flat(guide('the-sales-role'), lang).filter(
+        (line) => !flat(before(), lang).includes(line),
+      );
+      expect(added, lang).toHaveLength(3);
+      expect(
+        guide('the-sales-role').body[lang].map((b) => b.t),
+        lang,
+      ).toEqual(before().body[lang].map((b) => b.t));
+    }
+    expect(flat(guide('the-sales-role'), 'en')).toHaveLength(flat(before(), 'en').length + 1);
   });
 });
 
