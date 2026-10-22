@@ -311,6 +311,29 @@ function writeDraftsRpc(db: Db, args: Row) {
   return { data: out, error: null };
 }
 
+/**
+ * public.release_read_rows (0103, Admin v2 R7): many reads in one request, the caller's tenant
+ * only, each `key = any(ids)`, projected to the columns asked (["*"] is every column), in order.
+ * The stand-in has no RLS: its tables hold what the caller may read.
+ */
+function readRowsRpc(db: Db, args: Row) {
+  if (args['p_tenant'] !== T) return { data: null, error: { code: '42501', message: 'tenant' } };
+  const reads = args['p_reads'] as { table: string; columns: string[]; key: string; ids: string[] }[];
+  if (!Array.isArray(reads) || reads.length < 1 || reads.length > 40) {
+    return { data: null, error: { code: '22023', message: 'reads' } };
+  }
+  const out = reads.map(({ table, columns, key, ids }) =>
+    (db.tables[table] ?? [])
+      .filter((row) => row['tenant_id'] === T && ids.includes(String(row[key])))
+      .map((row) =>
+        columns[0] === '*'
+          ? { ...row }
+          : Object.fromEntries(columns.filter((c) => c in row).map((c) => [c, row[c]])),
+      ),
+  );
+  return { data: structuredClone(out), error: null };
+}
+
 export function client(db: Db) {
   return {
     from: (table: string) => query(db, table),
@@ -329,6 +352,7 @@ export function client(db: Db) {
           : { data: db.flag, error: null };
       }
       if (fn === 'write_drafts') return writeDraftsRpc(db, args);
+      if (fn === 'release_read_rows') return readRowsRpc(db, args);
       return { data: null, error: { code: 'XX000', message: `unexpected rpc ${fn}` } };
     },
   };

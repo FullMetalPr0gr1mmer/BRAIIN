@@ -214,7 +214,11 @@ function asIssue(err: unknown): ReleaseIssue {
   throw err;
 }
 
-/** The live rows the selection changes, one read per table (the whole writable allowlist). */
+/**
+ * The live rows the selection changes (the whole writable allowlist of each table), every table
+ * in ONE request (`liveDb(...).listMany`, public.release_read_rows: Admin v2 R7, O-16), under
+ * the publisher's RLS.
+ */
 async function readLive(
   sb: SupabaseClient,
   auth: AuthContext,
@@ -227,20 +231,22 @@ async function readLive(
     group.ids.add(draft.entity_id);
     byTable.set(entry.table, group);
   }
-  const out = new Map<string, Row>();
-  await Promise.all(
-    [...byTable.values()].map(async ({ entry, ids }) => {
-      const { data, error } = await sb
-        .from(entry.table)
-        .select(stagedSelect(entry, `${entry.key},version`))
-        .eq('tenant_id', auth.tenantId)
-        .in(entry.key, [...ids]);
-      if (error) throw new Error(`read ${entry.table}: ${error.message}`);
-      for (const row of (data ?? []) as unknown as Row[]) {
-        out.set(`${entry.entityType}:${String(row[entry.key])}`, row);
-      }
-    }),
+  const groups = [...byTable.values()];
+  const answers = await liveDb(sb, auth).listMany(
+    groups.map(({ entry, ids }) => ({
+      table: entry.table,
+      query: {
+        columns: stagedSelect(entry, `${entry.key},version`),
+        in: { [entry.key]: [...ids] },
+      },
+    })),
   );
+  const out = new Map<string, Row>();
+  groups.forEach(({ entry }, index) => {
+    for (const row of answers[index] ?? []) {
+      out.set(`${entry.entityType}:${String(row[entry.key])}`, row);
+    }
+  });
   return out;
 }
 
@@ -429,7 +435,11 @@ function linksOf(item: Derived): { written: LinkUse[]; kept: LinkUse[] } {
   return { written, kept };
 }
 
-/** The tables and ids the rules will ask about, read in one query per table and primed. */
+/**
+ * The tables and ids the rules will ask about, primed: every table the publisher reads in ONE
+ * request over the state the release leaves (`db.listMany`; Admin v2 R7, O-16), a team member's
+ * account apart.
+ */
 async function primeLinks(
   db: MemoDb,
   sb: SupabaseClient,
@@ -445,37 +455,52 @@ async function primeLinks(
     byTable.set(spec.table, group);
   }
   const found = new Map<string, Set<string>>();
-  await Promise.all(
-    [...byTable.entries()].map(async ([table, { ids, service }]) => {
-      const list = [...ids];
-      const isMedia = table === 'media_assets';
-      // A team member's account: staff read only their own profile, so existence in the tenant
-      // is read with the service client (ids only, nothing returned to anyone).
-      const rows = service
-        ? await liveDb(serviceClient(), auth).list(table, { columns: 'id', in: { id: list } })
-        : await db.list(table, {
-            columns: isMedia ? 'id,kind,alt' : 'id',
-            in: { id: list },
-          });
-      const have = new Set(rows.map((r) => String(r['id'])));
-      found.set(table, have);
-      for (const id of list) db.primeExists(table, id, {}, have.has(id));
-      if (isMedia) {
-        // The poster rules ask "an image of this site" and "its alt text": answered from here.
-        for (const row of rows) {
-          const id = String(row['id']);
-          db.primeExists(table, id, { kind: 'image' }, row['kind'] === 'image');
-          db.primeFirst(table, { columns: 'alt', eq: { id } }, { alt: row['alt'] ?? null });
-        }
-        for (const id of list) {
-          if (!have.has(id)) {
-            db.primeExists(table, id, { kind: 'image' }, false);
-            db.primeFirst(table, { columns: 'alt', eq: { id } }, null);
-          }
+  const groups = [...byTable.entries()].map(([table, { ids, service }]) => ({
+    table,
+    list: [...ids],
+    service,
+  }));
+  const mine = groups.filter((g) => !g.service);
+  const [answers, theirs] = await Promise.all([
+    db.listMany(
+      mine.map(({ table, list }) => ({
+        table,
+        query: { columns: table === 'media_assets' ? 'id,kind,alt' : 'id', in: { id: list } },
+      })),
+    ),
+    // A team member's account: staff read only their own profile, so existence in the tenant
+    // is read with the service client (ids only, nothing returned to anyone).
+    Promise.all(
+      groups
+        .filter((g) => g.service)
+        .map((g) =>
+          liveDb(serviceClient(), auth).list(g.table, { columns: 'id', in: { id: g.list } }),
+        ),
+    ),
+  ]);
+  const rowsOf = new Map<string, Row[]>();
+  mine.forEach((g, index) => rowsOf.set(g.table, answers[index] ?? []));
+  groups.filter((g) => g.service).forEach((g, index) => rowsOf.set(g.table, theirs[index] ?? []));
+  for (const { table, list } of groups) {
+    const rows = rowsOf.get(table) ?? [];
+    const have = new Set(rows.map((r) => String(r['id'])));
+    found.set(table, have);
+    for (const id of list) db.primeExists(table, id, {}, have.has(id));
+    if (table === 'media_assets') {
+      // The poster rules ask "an image of this site" and "its alt text": answered from here.
+      for (const row of rows) {
+        const id = String(row['id']);
+        db.primeExists(table, id, { kind: 'image' }, row['kind'] === 'image');
+        db.primeFirst(table, { columns: 'alt', eq: { id } }, { alt: row['alt'] ?? null });
+      }
+      for (const id of list) {
+        if (!have.has(id)) {
+          db.primeExists(table, id, { kind: 'image' }, false);
+          db.primeFirst(table, { columns: 'alt', eq: { id } }, null);
         }
       }
-    }),
-  );
+    }
+  }
   return found;
 }
 
