@@ -303,10 +303,14 @@ function detect(file: ScannedFile): Finding[] {
   return out;
 }
 
+// The scan parses every source file, so it is made once for both tests that read it.
+let scanned: Finding[] | null = null;
 const findings = (): Finding[] =>
-  [...scanTree('src'), ...scanTree('packages')].flatMap((file) => detect(file));
+  (scanned ??= [...scanTree('src'), ...scanTree('packages')].flatMap((file) => detect(file)));
 
-describe('no code path folds Arabic digits (source scan)', () => {
+// It takes about 3 s alone (more with every admin screen U5 and U6 add), so a full parallel
+// run can pass the 5 s default: the scan's tests get the time a whole-tree parse needs.
+describe('no code path folds Arabic digits (source scan)', { timeout: 30_000 }, () => {
   it('refuses every fold outside the allow-list', () => {
     const outside = findings().filter((f) => !(f.path in ALLOWED));
     expect(outside, JSON.stringify(outside, null, 2)).toEqual([]);
