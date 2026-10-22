@@ -167,15 +167,18 @@ describe('the contact composition', () => {
     expect(faqShown([{ type: 'hero' }, { type: 'contactInquiry' }], faq)).toBe(false);
   });
 
-  it('one FAQ read feeds both the band and the FAQPage (ContactPage.astro)', () => {
+  it('one FAQ read feeds both the band and the FAQPage (src/lib/sections/contactPage.ts)', () => {
     // The route reads the FAQ once and hands that one array to the band (withContactData)
     // and to the JSON-LD (buildFaqSchema), gated on the band showing: two reads could
     // disagree (a publish between them), and the structured data would then describe
-    // questions the page does not show.
-    const page = readFileSync(join(process.cwd(), 'src/components/ContactPage.astro'), 'utf8');
+    // questions the page does not show. Since Admin v2 R7 the route loads it (so it can tag
+    // the sections it renders before its headers are set), and the component reads nothing.
+    const component = readFileSync(join(process.cwd(), 'src/components/ContactPage.astro'), 'utf8');
+    expect(component).not.toMatch(/getFaq\(|getPageComposition\(|getPublishedDisciplines\(/);
+    const page = readFileSync(join(process.cwd(), 'src/lib/sections/contactPage.ts'), 'utf8');
     expect(page.match(/getFaq\(/g)).toHaveLength(1);
-    expect(page).toMatch(/getFaq\(locale\),\n\]\);/);
-    expect(page).toMatch(/const \[composition, \{ seo \}, groups, faq\] = await Promise\.all/);
+    expect(page).toMatch(/getFaq\(locale\),\n\s*\]\);/);
+    expect(page).toMatch(/const \[composition, head, groups, faq\] = await Promise\.all/);
     expect(page).toMatch(/withContactData\([^;]*\{\s*groups,\s*faq,\s*\}\);/);
     expect(page).toContain(
       'faqShown(sections, faq) ? [breadcrumb, buildFaqSchema(faq)] : [breadcrumb]',
