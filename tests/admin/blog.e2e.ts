@@ -56,11 +56,41 @@ async function axeClean(page: Page, where: string) {
   ).toEqual([]);
 }
 
+/** No sideways scroll; a failure names the elements reaching furthest past the right edge. */
 async function noSidewaysScroll(page: Page, where: string) {
-  const over = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(over, `${where}: sideways scroll`).toBeLessThanOrEqual(0);
+  const { over, past } = await page.evaluate(() => {
+    const root = document.documentElement;
+    const edge = root.clientWidth;
+    // An element's content can run past its own box (unbreakable text, a nowrap row), so its
+    // reach is the further of its box edge and its content edge; the deepest one is the cause.
+    const depth = (el: Element) => {
+      let d = 0;
+      for (let p = el.parentElement; p; p = p.parentElement) d += 1;
+      return d;
+    };
+    const past = [...document.querySelectorAll<HTMLElement>('body *')]
+      .filter((el) => el.getClientRects().length > 0)
+      .map((el) => {
+        const box = el.getBoundingClientRect();
+        return { el, right: Math.max(box.right, box.left + el.scrollWidth), depth: depth(el) };
+      })
+      .filter(({ right }) => right > edge + 0.5)
+      .sort((a, b) => b.depth - a.depth || b.right - a.right)
+      .slice(0, 6)
+      .map(({ el, right }) => {
+        const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/) : [];
+        const name = el.tagName.toLowerCase() + (el.id ? `#${el.id}` : '');
+        return `${name}${cls
+          .filter(Boolean)
+          .map((c) => `.${c}`)
+          .join('')} right=${Math.round(right)}`;
+      });
+    return { over: root.scrollWidth - root.clientWidth, past };
+  });
+  expect(
+    over,
+    `${where}: sideways scroll; past the edge: ${past.join('; ') || 'none'}`,
+  ).toBeLessThanOrEqual(0);
 }
 
 async function watchCsp(page: Page) {
