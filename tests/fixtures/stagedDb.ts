@@ -327,6 +327,14 @@ function readRowsRpc(db: Db, args: Row) {
   if (!Array.isArray(reads) || reads.length < 1 || reads.length > 40) {
     return { data: null, error: { code: '22023', message: 'reads' } };
   }
+  if (reads.reduce((sum, read) => sum + read.ids.length, 0) > 2000) {
+    return { data: null, error: { code: '22023', message: 'ids' } };
+  }
+  if (
+    reads.some((r) => r.key === 'tenant_id' && !['seo_defaults', 'site_profile'].includes(r.table))
+  ) {
+    return { data: null, error: { code: '22023', message: 'key' } };
+  }
   const out = reads.map(({ table, columns, key, ids }) =>
     (db.tables[table] ?? [])
       .filter((row) => row['tenant_id'] === T && ids.includes(String(row[key])))

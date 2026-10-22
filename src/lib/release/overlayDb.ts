@@ -67,6 +67,17 @@ export type TableLayer = ReadonlyMap<string, LayerChange>;
 export const RELEASE_READS_MAX = 40;
 /** Ids one read carries at most (0103 holds the same literal). */
 export const RELEASE_READ_IDS_MAX = 500;
+/**
+ * Ids one request carries at most, over all its reads (0103 holds the same literal): each id
+ * names one row at most, so a request answers 2,000 rows at most however its reads repeat.
+ */
+export const RELEASE_READ_TOTAL_IDS_MAX = 2_000;
+/**
+ * The tables read by `tenant_id`: the per-tenant singletons, one row a tenant (the registry's
+ * `key: 'tenant_id'`; tests/lib/overlayDb.spec.ts holds them equal). 0103 refuses a
+ * `tenant_id` read of any other table, which would be the whole table in one read.
+ */
+export const RELEASE_SINGLETON_TABLES: readonly string[] = ['seo_defaults', 'site_profile'];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const COLUMN = /^[a-z_][a-z0-9_]{0,62}$/;
@@ -83,6 +94,7 @@ function batchRead(
   if (filters.length !== 1) return null;
   const [key, values] = filters[0]!;
   if (key !== 'id' && key !== 'tenant_id') return null;
+  if (key === 'tenant_id' && !RELEASE_SINGLETON_TABLES.includes(table)) return null;
   if (!values.every((v) => UUID.test(v))) return null;
   const names = namesOf(query.columns);
   const columns = names ?? ['*'];
@@ -93,14 +105,15 @@ function batchRead(
 /**
  * `public.release_read_rows` (0103): many reads in one request, as the caller (SECURITY
  * INVOKER: RLS, the RESTRICTIVE gates and the column grants bind as for a PostgREST read),
- * in the caller's tenant. Past 40 reads or 500 ids a read, it takes more than one request.
+ * in the caller's tenant. Past 40 reads, 500 ids a read or 2,000 ids in all, it takes more
+ * than one request.
  */
 async function readRows(
   sb: Db,
   tenantId: string,
   reads: readonly { table: string; columns: string[]; key: 'id' | 'tenant_id'; ids: string[] }[],
 ): Promise<Row[][]> {
-  // Each read split into chunks of at most 500 ids; the chunks sent 40 to a request.
+  // Each read split into chunks of at most 500 ids.
   const chunks: { read: number; table: string; columns: string[]; key: string; ids: string[] }[] =
     [];
   reads.forEach((read, index) => {
@@ -108,9 +121,25 @@ async function readRows(
       chunks.push({ ...read, read: index, ids: read.ids.slice(at, at + RELEASE_READ_IDS_MAX) });
     }
   });
+  // The chunks in order, a request closed before it would pass 40 reads or 2,000 ids.
+  const batches: (typeof chunks)[] = [];
+  let open: typeof chunks = [];
+  let ids = 0;
+  for (const chunk of chunks) {
+    if (
+      open.length === RELEASE_READS_MAX ||
+      (open.length > 0 && ids + chunk.ids.length > RELEASE_READ_TOTAL_IDS_MAX)
+    ) {
+      batches.push(open);
+      open = [];
+      ids = 0;
+    }
+    open.push(chunk);
+    ids += chunk.ids.length;
+  }
+  if (open.length > 0) batches.push(open);
   const out: Row[][] = reads.map(() => []);
-  for (let at = 0; at < chunks.length; at += RELEASE_READS_MAX) {
-    const batch = chunks.slice(at, at + RELEASE_READS_MAX);
+  for (const batch of batches) {
     const { data, error } = await sb.rpc('release_read_rows', {
       p_tenant: tenantId,
       p_reads: batch.map(({ table, columns, key, ids }) => ({ table, columns, key, ids })),

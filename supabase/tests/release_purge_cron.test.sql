@@ -13,14 +13,16 @@
 --                      leased five minutes, so the next claim takes another tenant's, then none.
 --   release_read_rows  CMS staff of their own tenant only (a Sales token, anon, another tenant
 --                      and the service role are refused); registry tables and media_assets
---                      only, columns the table has, keyed by id or tenant_id, the ids uuids;
---                      the caller's rows only, projected, in order; SECURITY INVOKER.
+--                      only, columns the table has, keyed by id (tenant_id only for a
+--                      singleton the registry keys by its tenant, never services or
+--                      media_assets), the ids uuids, 2,000 at most over all the reads; the
+--                      caller's rows only, projected, in order; SECURITY INVOKER.
 --
 -- No row exists in production until releases are switched on (R14) and a zone is set up (O-3).
 -- Run with `supabase test db`. CLAUDE.md §2 (the Cache-Tag limits), §3 (Pillars 1 and 4), §9.
 
 begin;
-select plan(40);
+select plan(43);
 
 -- ── Fixtures (as the migration role: RLS bypassed, no claims) ─────────────────────────
 insert into public.tenants (id, name) values
@@ -52,7 +54,12 @@ insert into public.content_releases (id, tenant_id, number, kind, status, publis
   ('71030000-0000-0000-000d-000000000009', '71030000-0000-0000-0000-00000000000b', 1, 'publish',
    'published', now() - interval '1 hour', 'failed', 1, now() - interval '1 minute', '{page:about}');
 
--- Rows for the batched read: two services in A, one in B; a media row in A; A's identity.
+-- Rows for the batched read: two services in A, one in B; each site's identity (a singleton).
+insert into public.site_profile (tenant_id, brand_name, contact_email, location) values
+  ('71030000-0000-0000-0000-00000000000a', '{"en":"Purge A","ar":"أ"}', 'a@example.com',
+   '{"en":"Riyadh","ar":"الرياض"}'),
+  ('71030000-0000-0000-0000-00000000000b', '{"en":"Purge B","ar":"ب"}', 'b@example.com',
+   '{"en":"Jeddah","ar":"جدة"}');
 insert into public.services (id, tenant_id, slug, title, status) values
   ('71030000-0000-0000-0001-000000000001', '71030000-0000-0000-0000-00000000000a', 'r7-logo',
    '{"en":"Logo","ar":"شعار"}', 'published'),
@@ -227,10 +234,26 @@ select is(
     jsonb_build_array(jsonb_build_object('status', 'draft'))),
   'a Content Creator reads her own site''s rows, projected, one array per read, in order; another site''s id reads nothing');
 select is(
-  jsonb_array_length(public.release_read_rows('71030000-0000-0000-0000-00000000000a', jsonb_build_array(
-    jsonb_build_object('table', 'services', 'columns', jsonb_build_array('*'), 'key', 'tenant_id',
-      'ids', jsonb_build_array('71030000-0000-0000-0000-00000000000a')))) -> 0),
-  2, '["*"] by tenant_id reads every row of the caller''s site (a singleton''s key)');
+  (select jsonb_agg(r -> 'tenant_id') from jsonb_array_elements(
+     public.release_read_rows('71030000-0000-0000-0000-00000000000a', jsonb_build_array(
+       jsonb_build_object('table', 'site_profile', 'columns', jsonb_build_array('*'), 'key', 'tenant_id',
+         'ids', jsonb_build_array('71030000-0000-0000-0000-00000000000a',
+                                  '71030000-0000-0000-0000-00000000000b')))) -> 0) r),
+  '["71030000-0000-0000-0000-00000000000a"]'::jsonb,
+  '["*"] by tenant_id reads a singleton''s one row of the caller''s site; another site''s reads nothing');
+select throws_ok($$ select public.release_read_rows('71030000-0000-0000-0000-00000000000a',
+    '[{"table":"services","columns":["*"],"key":"tenant_id","ids":["71030000-0000-0000-0000-00000000000a"]}]') $$,
+  '22023', null, 'tenant_id is no key for a table of many rows a site (services): it would be the whole table');
+select throws_ok($$ select public.release_read_rows('71030000-0000-0000-0000-00000000000a',
+    '[{"table":"media_assets","columns":["id"],"key":"tenant_id","ids":["71030000-0000-0000-0000-00000000000a"]}]') $$,
+  '22023', null, 'nor for media_assets');
+select throws_ok(
+  format($$ select public.release_read_rows('71030000-0000-0000-0000-00000000000a', %L::jsonb) $$,
+         (select jsonb_agg(jsonb_build_object('table', 'services', 'columns', jsonb_build_array('id'),
+                  'key', 'id', 'ids', (select jsonb_agg('71030000-0000-0000-0001-000000000001'::text)
+                                         from generate_series(1, 500))))
+            from generate_series(1, 5))),
+  '22023', null, 'more than 2,000 ids over the reads of one request is refused, repeats included');
 select throws_ok($$ select public.release_read_rows('71030000-0000-0000-0000-00000000000b',
     '[{"table":"services","columns":["id"],"key":"id","ids":["71030000-0000-0000-0001-000000000009"]}]') $$,
   '42501', null, 'another site''s tenant is refused');

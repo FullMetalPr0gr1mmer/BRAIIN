@@ -5,12 +5,14 @@ import {
   layeredDb,
   liveDb,
   memoDb,
+  RELEASE_READ_TOTAL_IDS_MAX,
+  RELEASE_SINGLETON_TABLES,
   type LayerChange,
   type TableLayer,
 } from '@/lib/release/overlayDb';
 import { pendingDb } from '@/lib/release/layers';
 import { stagedUpdate } from '@/lib/release/staged';
-import { registryByTable } from '@/lib/release/registry';
+import { RELEASE_REGISTRY, registryByTable } from '@/lib/release/registry';
 import { redirectResource } from '@/lib/admin/resources/redirects';
 import { assertLinkInTenant } from '@/lib/admin/resources/shared';
 import { liveRouteRefusal } from '@/lib/admin/redirectRules';
@@ -415,6 +417,66 @@ describe('many reads in one request (Admin v2 R7, O-16: public.release_read_rows
       { table: 'services', columns: ['id'], key: 'id', ids: [uid(1)] },
     ]);
     expect(db.calls.filter((c) => c.kind === 'from' && c.name === 'services')).toHaveLength(6);
+  });
+
+  it('a tenant-keyed read goes in the batch only for a singleton; another table’s as before', async () => {
+    const { db, live } = setup({
+      site_profile: [{ tenant_id: T, brand_name: 'Studio' }],
+      services: [{ id: uid(1), tenant_id: T, slug: 'logo' }],
+      media_assets: [{ id: uid(3), tenant_id: T, kind: 'image' }],
+    });
+    const answers = await live.listMany([
+      { table: 'site_profile', query: { columns: 'brand_name', in: { tenant_id: [T] } } },
+      { table: 'services', query: { columns: 'id', in: { tenant_id: [T] } } },
+      { table: 'media_assets', query: { columns: 'id', in: { tenant_id: [T] } } },
+    ]);
+    expect(answers).toEqual([[{ brand_name: 'Studio' }], [{ id: uid(1) }], [{ id: uid(3) }]]);
+    const rpc = db.calls.filter((c) => c.kind === 'rpc');
+    expect(rpc).toHaveLength(1);
+    expect(
+      (rpc[0]!.values as { p_reads: { table: string }[] }).p_reads.map((r) => r.table),
+    ).toEqual(['site_profile']);
+    expect(db.calls.filter((c) => c.kind === 'from').map((c) => c.name)).toEqual([
+      'services',
+      'media_assets',
+    ]);
+  });
+
+  it('the singletons it reads by tenant are the registry’s (0103 refuses any other)', () => {
+    const singletons = Object.values(RELEASE_REGISTRY)
+      .filter((entry) => entry.key === 'tenant_id')
+      .map((entry) => entry.table)
+      .sort();
+    expect([...RELEASE_SINGLETON_TABLES].sort()).toEqual(singletons);
+  });
+
+  it('more than 2,000 ids in all take more requests, each within the bound, joined in order', async () => {
+    const { db, live } = setup({});
+    const reads = Array.from({ length: 5 }, (_, r) => ({
+      table: 'services',
+      query: {
+        columns: 'id',
+        in: { id: Array.from({ length: 500 }, (_, n) => uid(10_000 + r * 1000 + n)) },
+      },
+    }));
+    db.tables['services'] = [
+      { id: uid(10_000), tenant_id: T },
+      { id: uid(14_499), tenant_id: T },
+    ];
+    const answers = await live.listMany(reads);
+    expect(answers[0]).toEqual([{ id: uid(10_000) }]);
+    expect(answers[4]).toEqual([{ id: uid(14_499) }]);
+    const sent = db.calls
+      .filter((c) => c.name === 'release_read_rows')
+      .map((c) => (c.values as { p_reads: { ids: string[] }[] }).p_reads);
+    expect(sent.map((batch) => batch.reduce((sum, r) => sum + r.ids.length, 0))).toEqual([
+      2000, 500,
+    ]);
+    for (const batch of sent) {
+      expect(batch.reduce((sum, r) => sum + r.ids.length, 0)).toBeLessThanOrEqual(
+        RELEASE_READ_TOTAL_IDS_MAX,
+      );
+    }
   });
 
   it('an empty read asks nothing; more than 40 reads or 500 ids take more requests, joined', async () => {

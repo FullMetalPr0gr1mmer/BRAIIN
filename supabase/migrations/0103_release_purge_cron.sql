@@ -34,7 +34,10 @@
 --      caller: SECURITY INVOKER, so RLS, the RESTRICTIVE gates and the column grants bind
 --      exactly as a PostgREST read of the same table would. CMS staff only, the token's own
 --      tenant only, only registry tables and media_assets, only columns the table has (each
---      quoted with %I), keyed by `id` or `tenant_id` with the values bound as uuid[].
+--      quoted with %I), keyed by `id` (or `tenant_id` for a per-tenant singleton) with the
+--      values bound as uuid[], and at most 2,000 ids over all its reads: each id names one row
+--      at most, so one call answers no more rows than about twice what PostgREST's max_rows
+--      lets a single request return, however its reads repeat.
 --
 -- No capability, no app.role_* helper, no registry row, no screen and no guide: the purge
 -- and the cron are the system's, and the read gives staff nothing PostgREST does not.
@@ -180,19 +183,24 @@ grant execute on function public.claim_release_purges(int) to service_role;
 -- ═══ 4. One read for a publish's check (O-16) ════════════════════════════════════════════
 -- p_reads: 1 to 40 objects, each exactly {table, columns, key, ids}: `table` a registry table
 -- (app.release_entities, read as the caller: CMS staff read it, 0038) or media_assets;
--- `columns` 1 to 200 column names of that table, or ["*"]; `key` 'id' or 'tenant_id' (a
--- singleton's key); `ids` 1 to 500 uuids. Answers an array with one array of rows per read,
--- in order (each read's rows by its key), each row as to_jsonb prints it (the shape PostgREST
--- answers). Nothing is
--- spliced but %I-quoted names the catalog confirmed; the tenant and the ids are bound.
--- RELEASE_READS_MAX and RELEASE_READ_IDS_MAX in src/lib/release/overlayDb.ts
--- (tests/lib/overlayDb.spec.ts holds them equal to the literals here).
+-- `columns` 1 to 200 column names of that table, or ["*"]; `key` 'id', or 'tenant_id' only
+-- for a table the registry keys by its tenant (a per-tenant singleton: one row a tenant), so
+-- no read is a whole table; `ids` 1 to 500 uuids, and at most 2,000 over all the reads (`id`
+-- is every table's key, so each id names one row at most and the call answers 2,000 rows at
+-- most). Answers an array with one array of rows per read, in order (each read's rows by its
+-- key), each row as to_jsonb prints it (the shape PostgREST answers). Nothing is spliced but
+-- %I-quoted names the catalog confirmed; the tenant and the ids are bound.
+-- RELEASE_READS_MAX, RELEASE_READ_IDS_MAX, RELEASE_READ_TOTAL_IDS_MAX and
+-- RELEASE_SINGLETON_TABLES in src/lib/release/overlayDb.ts (tests/lib/purgeCronSql.spec.ts
+-- holds the literals here equal to them; tests/lib/overlayDb.spec.ts holds the singletons
+-- equal to the registry's).
 create or replace function public.release_read_rows(p_tenant uuid, p_reads jsonb)
   returns jsonb
   language plpgsql stable security invoker set search_path = ''
 as $$
 declare
   c_name constant text := '^[a-z_][a-z0-9_]{0,62}$';
+  c_total_ids constant int := 2000;
   v_read jsonb;
   v_table text;
   v_key text;
@@ -214,6 +222,13 @@ begin
   if p_reads is null or pg_catalog.jsonb_typeof(p_reads) is distinct from 'array'
      or pg_catalog.jsonb_array_length(p_reads) < 1 or pg_catalog.jsonb_array_length(p_reads) > 40 then
     raise exception 'release_read_rows: 1 to 40 reads' using errcode = '22023';
+  end if;
+  -- At most 2,000 ids over every read, counted before anything is read (a read whose ids are
+  -- not an array is refused below).
+  if (select coalesce(sum(case when pg_catalog.jsonb_typeof(r -> 'ids') = 'array'
+                               then pg_catalog.jsonb_array_length(r -> 'ids') else 0 end), 0)
+        from pg_catalog.jsonb_array_elements(p_reads) r) > c_total_ids then
+    raise exception 'release_read_rows: at most 2,000 ids in one call' using errcode = '22023';
   end if;
 
   for v_read in select e.value from pg_catalog.jsonb_array_elements(p_reads) with ordinality as e
@@ -242,12 +257,18 @@ begin
       raise exception 'release_read_rows: not a table this read serves' using errcode = '22023';
     end if;
 
-    -- The key: id or tenant_id, a column of the table.
+    -- The key: id, or tenant_id where the registry keys the table by its tenant (a singleton,
+    -- one row a tenant): a tenant_id read of any other table (media_assets included) would be
+    -- the whole table in one read. A column of the table either way.
     if v_key is null or v_key not in ('id', 'tenant_id')
+       or (v_key = 'tenant_id'
+           and not exists (select 1 from app.release_entities e
+                            where e.table_name = v_table and e.key_column = 'tenant_id'))
        or not exists (select 1 from pg_catalog.pg_attribute a
                        where a.attrelid = v_rel and a.attname = v_key
                          and a.attnum > 0 and not a.attisdropped) then
-      raise exception 'release_read_rows: the key is id or tenant_id' using errcode = '22023';
+      raise exception 'release_read_rows: the key is id, or tenant_id for a singleton'
+        using errcode = '22023';
     end if;
 
     -- The ids: 1 to 500 uuids, bound as uuid[].
