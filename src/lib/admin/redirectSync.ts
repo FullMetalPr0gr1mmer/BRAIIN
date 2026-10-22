@@ -40,11 +40,25 @@ export async function syncRedirectsToEdge(
   sb: SupabaseClient,
   auth: AuthContext,
 ): Promise<RedirectSyncResult> {
+  return syncRedirectsOfTenant(sb, auth.tenantId);
+}
+
+/**
+ * The same rebuild for one tenant, with the client the caller names. A save passes its own
+ * RLS-bound client (above); after a published release the system rebuilds with the service
+ * client, scoped to the release's tenant (Admin v2 R7: a documented system-actor exception,
+ * like the daily cron's re-syncs; it reads only that tenant's rules and returns nothing to
+ * anyone). NEVER throws.
+ */
+export async function syncRedirectsOfTenant(
+  sb: SupabaseClient,
+  tenantId: string,
+): Promise<RedirectSyncResult> {
   try {
     const { data, error } = await sb
       .from('redirects')
       .select('source_path,target_path,status')
-      .eq('tenant_id', auth.tenantId)
+      .eq('tenant_id', tenantId)
       .order('source_path', { ascending: true })
       .limit(REDIRECT_MAP_LIMIT);
     if (error) throw new Error(`read redirects: ${error.message}`);
@@ -61,7 +75,7 @@ export async function syncRedirectsToEdge(
       level: 'error',
       source: 'admin:redirect.sync',
       message: err instanceof Error ? err.message : 'redirect sync failed',
-      detail: { tenantId: auth.tenantId },
+      detail: { tenantId },
     });
     return { kvSynced: false, count: 0, truncated: false };
   }

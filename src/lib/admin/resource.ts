@@ -166,6 +166,9 @@ export interface ResourceConfig {
     row: Row;
     input: ResourcePayload;
     operation: 'create' | 'update';
+    /** An update's row as it was before the write, when the PATCH read it (the rules'
+     *  read, with `columns`); null otherwise, and absent on a create. */
+    before?: Row | null;
   }) => Promise<HookResult | void>;
   /**
    * The DELETE counterpart of `afterWrite` (same contract). `row` is the row as it was
@@ -453,7 +456,14 @@ export function itemRoutes(config: ResourceConfig): {
           );
       const effect = config.afterWrite
         ? await runHook(config, 'afterWrite', () =>
-            config.afterWrite!({ auth, sb, row, input: payload, operation: 'update' }),
+            config.afterWrite!({
+              auth,
+              sb,
+              row,
+              input: payload,
+              operation: 'update',
+              before: stored,
+            }),
           )
         : {};
       // The status a save MOVED the item to, and from, so the activity log can say

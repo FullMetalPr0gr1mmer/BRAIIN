@@ -18,6 +18,7 @@ import {
   uploadMediaObject,
   type ObjectRemoval,
 } from '@/lib/media/storage';
+import { MEDIA_PURGE_TAGS, purgeAfterSave } from '@/lib/http/purge';
 import { serviceClient } from '@/lib/supabase/server';
 
 // POST /api/admin/media/[id]/replace — a new file for an existing image (Admin v2 U3). The
@@ -127,6 +128,9 @@ export const POST = defineAdminRoute({
           : { previousFile: previous, ...(previousKey ? { previousKey } : {}) }),
       },
     });
+    // Every page that shows the asset now shows the new file (Admin v2 R7: `media:all`; nothing
+    // is sent while no cache zone is set up, O-3).
+    await purgeAfterSave(auth.tenantId, MEDIA_PURGE_TAGS, 'media');
     const out = mediaResource.fromRow ? mediaResource.fromRow(row) : row;
     return previous === null ? out : { ...out, previous_file: previous };
   },

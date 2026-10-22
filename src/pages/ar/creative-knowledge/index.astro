@@ -2,9 +2,10 @@
 import BlogIndex from '@/components/BlogIndex.astro';
 import { getPublishedPosts } from '@/lib/data/blog';
 import { setTierA } from '@/lib/http/cacheTags';
+import { BLOG_CACHE_ENTITIES } from '@/lib/http/routeTags';
 
 const posts = await getPublishedPosts();
-setTierA(Astro.response, { route: 'blog', locale: 'ar', entities: ['blog:all'] });
+setTierA(Astro.response, { route: 'blog', locale: 'ar', entities: BLOG_CACHE_ENTITIES });
 ---
 
 <BlogIndex locale="ar" posts={posts} />

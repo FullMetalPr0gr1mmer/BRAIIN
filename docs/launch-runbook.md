@@ -1356,9 +1356,16 @@ Developer:
 The homepage cannot be hidden (the database refuses it for every writer, the service role
 included): to take the whole site down, use maintenance mode (§5). A page hidden from the
 sitemap may stay in a crawler's copy for up to an hour (`max-age=3600`). Nothing caches Tier A
-in front of the Worker yet; when a cache arrives (L9, KAN-20), a page that leaves public must
-also be purged (the save answers the tags: `page:<slug>` or `services:all`/`portfolio:all`,
-`nav:all`, `route:sitemap`, `route:llms`), which R7 wires.
+yet. **Precondition for any Tier A cache (L9, KAN-20, O-3; Admin v2 R7):** it is the Worker's
+own lookup (the Cache API on the custom domain), made in `src/middleware.ts` after the
+maintenance check and this visibility check, never a layer whose hits skip them (Workers
+Cache, Astro's route cache: `tests/lib/cacheLayer.spec.ts` refuses all three until then); so
+maintenance, its allowlist and a hidden page's windows hold for cached pages with no purge.
+A visibility save still purges (the save answers the tags: `page:<slug>` or
+`services:all`/`portfolio:all`, `nav:all`, `route:sitemap`, `route:llms`), which R7 wires,
+because every cached page's menus, the sitemap and llms.txt list pages; before the switch-on,
+R14 adds a second purge after the snapshot's few minutes and one when a hide window starts or
+ends (the R7 as-built, Open).
 
 ### 6k. Uptime monitor: site health's readings (migration 0067, Admin v2 G2, owner item O-20)
 

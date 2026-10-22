@@ -91,6 +91,11 @@ export function makeStubClient(options: StubOptions = {}) {
     rpc: async (fn: string, args?: Record<string, unknown>) => {
       if (typeof args?.['p_tenant'] === 'string') observedTenantFilters.push(args['p_tenant']);
       if (fn === 'releases_enabled' && options.releases) return { data: true, error: null };
+      // A publish's batched read (Admin v2 R7, `release_read_rows`): one answer per read, each
+      // the rows every list query answers, as a read through `from()` resolves.
+      if (fn === 'release_read_rows' && Array.isArray(args?.['p_reads'])) {
+        return { data: (args['p_reads'] as unknown[]).map(() => rows), error: null };
+      }
       return { data: null, error: null };
     },
     auth: {

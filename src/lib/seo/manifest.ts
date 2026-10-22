@@ -16,6 +16,16 @@ import { manifestIcons } from './siteIcons';
 // Tier A: public, edge-cached an hour like llms.txt, tagged with the identity and media so a
 // purge on publish reaches it.
 
+/**
+ * A manifest's Cache-Tag: its route and language, the identity it names (`site:identity`), the
+ * icons it lists (`media:all`), and `tenant:default`, the tag a collapsed purge sends (more
+ * than 30 tags, an orphaned release, a slug it could not resolve: Admin v2 R7), so no purge
+ * misses it, as the RSS feeds, the sitemap and llms.txt.
+ */
+export function manifestCacheTag(locale: Locale): string {
+  return `tenant:default,route:manifest,locale:${locale},site:identity,media:all`;
+}
+
 export const MANIFEST_THEME_COLOR = '#000d30';
 export const MANIFEST_BACKGROUND_COLOR = '#ffffff';
 
@@ -59,7 +69,7 @@ export async function manifestResponse(context: Pick<APIContext, 'locals'>, loca
     headers: {
       'content-type': 'application/manifest+json; charset=utf-8',
       'cache-control': 'public, max-age=3600',
-      'cache-tag': `route:manifest,locale:${locale},site:identity,media:all`,
+      'cache-tag': manifestCacheTag(locale),
     },
   });
 }

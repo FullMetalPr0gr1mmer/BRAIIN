@@ -6,7 +6,7 @@ import { contentClient } from './source';
 
 // The FAQ (Admin v2 U7, migration 0098): the ONE loader behind two things that must never
 // disagree, the Contact page's FAQ band (FaqAccordion.astro, handed these rows as route
-// data) and the FAQPage JSON-LD in its head (ContactPage.astro builds it from the SAME
+// data) and the FAQPage JSON-LD in its head (src/lib/sections/contactPage.ts builds it from the SAME
 // array). Structured data that describes questions the page does not visibly contain is a
 // manual-action category, so the route loads this once and hands the one result to both.
 //

@@ -2,6 +2,7 @@
 import CaseStudyPage from '@/components/case-study/CaseStudyPage.astro';
 import { loadCaseStudyPage } from '@/lib/portfolio/casePage';
 import { setTierA } from '@/lib/http/cacheTags';
+import { caseStudyCacheEntities } from '@/lib/http/routeTags';
 
 // A case study, Arabic twin (UI v2 PR11) — see src/pages/portfolio/[slug].astro. An
 // unknown or unpublished slug is a REAL 404 (status 404) on the ARABIC 404 page.
@@ -13,14 +14,7 @@ if (!page) return Astro.rewrite('/ar/404');
 setTierA(Astro.response, {
   route: 'portfolio-item',
   locale,
-  entities: [
-    `portfolio:${page.study.slug}`,
-    'portfolio:all',
-    'sectors:all',
-    'clients:all',
-    'services:all',
-    'testimonials:all',
-  ],
+  entities: caseStudyCacheEntities(page.study.slug),
 });
 ---
 

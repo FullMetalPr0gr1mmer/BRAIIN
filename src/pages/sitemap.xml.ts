@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { SITEMAP_CACHE_TAG } from '@/lib/http/routeTags';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { localizedPath } from '@/lib/i18n';
 import { getPublishedServices } from '@/lib/data/services';
@@ -119,7 +120,7 @@ export const GET: APIRoute = async (context) => {
       // TODO(KAN-20): swap max-age for a Cache-Tag purge on publish so the sitemap
       // reflects a publish immediately instead of lagging up to an hour.
       'cache-control': 'public, max-age=3600',
-      'cache-tag': 'route:sitemap,sitemap:all',
+      'cache-tag': SITEMAP_CACHE_TAG,
     },
   });
 };

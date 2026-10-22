@@ -193,6 +193,12 @@ function roleNoun(detail: Detail): string {
   return isRole(role) ? `the ${ROLE_LABELS[role]} role` : 'a role';
 }
 
+/** "version 15" from a release row's detail, else "a version". */
+function versionNoun(detail: Detail): string {
+  const n = detail['number'] ?? detail['version'];
+  return typeof n === 'number' && Number.isInteger(n) && n > 0 ? `version ${n}` : 'a version';
+}
+
 // ── Every other action, by its exact key ──────────────────────────────────────────────────
 
 const EXACT: Readonly<Record<string, Label>> = {
@@ -407,6 +413,21 @@ const EXACT: Readonly<Record<string, Label>> = {
     noun: null,
   },
 
+  // A release's cache purge (Admin v2 R7), written when a purge request was sent to the
+  // cache after a publish: the pages the release changed, cleared from the cache. Only `done`
+  // says it worked; a request the cache refused or that failed (a 429, a 5xx: the minute cron
+  // tries again) says it did not.
+  'release.purge': {
+    kind: 'publishing',
+    verb: (detail) => {
+      const status = str(detail['status']);
+      return status === null || status === 'done'
+        ? 'Refreshed the cached pages of'
+        : 'Could not refresh the cached pages of';
+    },
+    noun: versionNoun,
+  },
+
   // Job applications (Admin only). No chip covers them: they show under All.
   'application.view': { kind: 'other', verb: 'Opened', noun: 'a job application' },
   'application.view_pii': {
@@ -422,19 +443,13 @@ const EXACT: Readonly<Record<string, Label>> = {
 /**
  * Actions known by their prefix: a release (`release.publish`, Admin v2 R4/R6) is a publish
  * of the whole site's pending changes, "Published version 15". R6 may give each kind of
- * release its own words; until then they read alike.
+ * release its own words; until then they read alike. `release.purge` (R7) has its own entry
+ * in EXACT, which is read first.
  */
 const PREFIXES: readonly { prefix: string; label: Label }[] = [
   {
     prefix: 'release.',
-    label: {
-      kind: 'publishing',
-      verb: 'Published',
-      noun: (detail) => {
-        const n = detail['number'] ?? detail['version'];
-        return typeof n === 'number' && Number.isInteger(n) && n > 0 ? `version ${n}` : 'a version';
-      },
-    },
+    label: { kind: 'publishing', verb: 'Published', noun: versionNoun },
   },
 ];
 
