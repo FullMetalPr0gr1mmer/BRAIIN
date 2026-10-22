@@ -13,10 +13,12 @@ import { json, type AdminRouteContext } from '@/lib/admin/route';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { serviceClient } from '@/lib/supabase/server';
-import { STAGE_ANY_CAP } from './draftEndpoints';
+import { AuthorizationError } from '@/lib/authz/errors';
+import { mayRead, STAGE_ANY_CAP } from './draftEndpoints';
 import { writeDrafts } from './drafts';
 import { RELEASE_REGISTRY } from './registry';
-import { asOfTargets, planRestore, readAsOf, type PlannedChange, type RestorePlan } from './revert';
+import { asOfTargets, readAsOf } from './asOf';
+import { planRestore, type PlannedChange, type RestorePlan } from './revert';
 
 // Restoring a version (Admin v2 R10; releases.md A3-8, §6.2, §7 "Restore confirm", §8 edge cases
 // 5, 14, 23). SERVER ONLY. A restore never writes the live site: it stages the state at a version
@@ -34,11 +36,13 @@ import { asOfTargets, planRestore, readAsOf, type PlannedChange, type RestorePla
 // (revert.ts), refused whole, with every entity named, when one has a pending change (409
 // `pending-changes`), when the person cannot publish one of the changes (403 `forbidden`, with
 // who could: Admin and the publishers only, P-2), or when one cannot come back as it was (422
-// `not-restorable`: a link to something gone, an image today's schema refuses); more than one
-// release can carry (60, P-15) is 422 `too-many`; the person re-read live; then one
-// `write_drafts` call under their own RLS (the drafts' policies and the draft lock bind as for any
-// save), and the restore's mark on those drafts (`origin_kind`, `origin_release_id`) by the
-// service role, which the draft lock lets no staff token write. Audit `versions.restore` or
+// `not-restorable`: an image today's schema refuses, a link to something gone, an address
+// another item now holds); more than one release can carry (60, P-15) is 422 `too-many`; the
+// person re-read live; then one `write_drafts` call under their own RLS (the drafts' policies
+// and the draft lock bind as for any save), and the restore's mark on those drafts
+// (`origin_kind`, `origin_release_id`) by the service role, which the draft lock lets no staff
+// token write and which keeps the person as the changes' author (0104). The per-item restore
+// also needs the entity's area read, as its history does. Audit `versions.restore` or
 // `<type>.history_restore`: ids, counts and types, never a value.
 
 type Ctx<T> = AdminRouteContext<T>;
@@ -54,7 +58,8 @@ export const RESTORE_COPY = {
     `This version is ${total} changes away from the live site. Restore a more recent version first.`,
   tooMany: (count: number) =>
     `Restoring this version would stage ${count} changes, more than one release can publish (${RELEASE_MAX_ITEMS}). Restore a more recent version first.`,
-  pending: 'Some of what this version changes has unpublished changes. Publish or discard them first.',
+  pending:
+    'Some of what this version changes has unpublished changes. Publish or discard them first.',
   forbidden: 'This version includes changes your role can’t publish. Ask an Admin.',
   notRestorable: "Some of this version can't come back as it was.",
   noSnapshot: "That saved version doesn't exist.",
@@ -65,20 +70,36 @@ export const RESTORE_COPY = {
 function refusal(plan: RestorePlan): Response | null {
   const of = (reason: RestoreItem['reason']) => plan.refused.filter((r) => r.reason === reason);
   if (of('pending').length > 0) {
-    return json({ ok: false, error: 'pending-changes', detail: RESTORE_COPY.pending, items: of('pending') }, 409);
+    return json(
+      { ok: false, error: 'pending-changes', detail: RESTORE_COPY.pending, items: of('pending') },
+      409,
+    );
   }
   if (of('forbidden').length > 0) {
-    return json({ ok: false, error: 'forbidden', detail: RESTORE_COPY.forbidden, items: of('forbidden') }, 403);
+    return json(
+      { ok: false, error: 'forbidden', detail: RESTORE_COPY.forbidden, items: of('forbidden') },
+      403,
+    );
   }
   if (plan.refused.length > 0) {
     return json(
-      { ok: false, error: 'not-restorable', detail: RESTORE_COPY.notRestorable, items: plan.refused },
+      {
+        ok: false,
+        error: 'not-restorable',
+        detail: RESTORE_COPY.notRestorable,
+        items: plan.refused,
+      },
       422,
     );
   }
   if (plan.changes.length > RELEASE_MAX_ITEMS) {
     return json(
-      { ok: false, error: 'too-many', detail: RESTORE_COPY.tooMany(plan.changes.length), count: plan.changes.length },
+      {
+        ok: false,
+        error: 'too-many',
+        detail: RESTORE_COPY.tooMany(plan.changes.length),
+        count: plan.changes.length,
+      },
       422,
     );
   }
@@ -120,7 +141,8 @@ async function stage(
       .is('origin_kind', null)
       .select('id,version');
     if (error) throw new Error(error.message);
-    for (const row of (data ?? []) as Row[]) versions.set(String(row['id']), Number(row['version']));
+    for (const row of (data ?? []) as Row[])
+      versions.set(String(row['id']), Number(row['version']));
     marked = Array.isArray(data) && data.length === written.length;
   } catch (err) {
     void writeSystemLog({
@@ -162,7 +184,8 @@ const typesOf = (changes: readonly PlannedChange[]) =>
 export async function restoreVersion(ctx: Ctx<RestoreVersionRequest>): Promise<unknown> {
   const { sb, auth, input, params } = ctx;
   const id = Uuid.safeParse(params['id']);
-  if (!id.success) return json({ ok: false, error: 'not-found', detail: RESTORE_COPY.missing }, 404);
+  if (!id.success)
+    return json({ ok: false, error: 'not-found', detail: RESTORE_COPY.missing }, 404);
   if (!(await ctx.releasesEnabled())) {
     return json({ ok: false, error: 'releases-off', detail: RESTORE_COPY.off }, 409);
   }
@@ -184,7 +207,12 @@ export async function restoreVersion(ctx: Ctx<RestoreVersionRequest>): Promise<u
   if (!state) return json({ ok: false, error: 'not-found', detail: RESTORE_COPY.missing }, 404);
   if (state.total > RESTORE_SCAN_MAX) {
     return json(
-      { ok: false, error: 'too-many', detail: RESTORE_COPY.tooFar(state.total), count: state.total },
+      {
+        ok: false,
+        error: 'too-many',
+        detail: RESTORE_COPY.tooFar(state.total),
+        count: state.total,
+      },
       422,
     );
   }
@@ -211,7 +239,13 @@ export async function restoreVersion(ctx: Ctx<RestoreVersionRequest>): Promise<u
       kept: plan.kept.length,
     },
   });
-  return { release: { id: id.data, number }, scope, staged, kept: plan.kept, marked } satisfies RestoreResult;
+  return {
+    release: { id: id.data, number },
+    scope,
+    staged,
+    kept: plan.kept,
+    marked,
+  } satisfies RestoreResult;
 }
 
 /** `POST /api/admin/history/restore`. */
@@ -221,6 +255,10 @@ export async function restoreSnapshot(ctx: Ctx<HistoryRestoreRequest>): Promise<
     return json({ ok: false, error: 'releases-off', detail: RESTORE_COPY.off }, 409);
   }
   const entry = RELEASE_REGISTRY[input.entityType];
+  // Its history is read only by who reads its area (the history route's own rule).
+  if (!mayRead(auth.role, entry)) {
+    throw new AuthorizationError(entry.readCaps.join('|'), `history of ${entry.entityType}`);
+  }
   if (entry.entityType === 'team_member') {
     return json({ ok: false, error: 'validation', detail: RESTORE_COPY.noHistory }, 422);
   }

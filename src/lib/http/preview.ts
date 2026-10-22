@@ -9,7 +9,14 @@ import { localizedPagePath, targetForPath } from '@/lib/visibility/routes';
 import { pageAccess } from '@/lib/visibility/scope';
 import { PREVIEW_PREFIX, READ_ONLY_ENDPOINTS, toPreviewPath } from '@/lib/admin/preview/paths';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { canPreview, createPreviewSource, PREVIEW_READ_CAPS } from '@/lib/preview/dataset';
+import {
+  canPreview,
+  createPreviewSource,
+  PREVIEW_READ_CAPS,
+  type VersionPreview,
+} from '@/lib/preview/dataset';
+import { AS_OF_PREVIEW_MAX } from '@schemas/release';
+import { asOfChanges, asOfTargets, readAsOf } from '@/lib/release/asOf';
 import { assessPreview, previewLogFields } from '@/lib/preview/report';
 import { injectRibbon, renderRibbon, type RibbonVerdict } from '@/lib/preview/ribbon';
 import { previewTarget, twinPath } from '@/lib/preview/routes';
@@ -31,6 +38,13 @@ import { previewTarget, twinPath } from '@/lib/preview/routes';
 //      buffers the response inside the scope (R8). The page code is the public page's.
 //   6. The verdict, read only now that the render is over; an untrusted render is logged
 //      to system_logs (counts and names, never a row), then the ribbon is spliced in.
+//
+// A version (`?v=N`, Admin v2 R10; releases.md slice R10): before step 5, the state at version
+// N, read from the ledger under the person's own RLS in one call (`release_as_of`, 0104: CMS
+// staff only); no such version (releases off, a number never published, another tenant's) is
+// a 404 that renders nothing. The page is then rendered with the changes back to N in place of
+// the pending changes, and the ribbon says which version it shows. An old version's content is
+// shown with today's code, design and pictures (releases.md, slice R10's risks).
 //
 // Page visibility (U14a, U14b) follows the LIVE snapshot, as R8 decided for pending
 // visibility changes: a hidden or link-only page renders (staff preview it) with a ribbon
@@ -99,8 +113,19 @@ function plain(status: number, text: string, extra: Record<string, string> = {})
   });
 }
 
+/** The preview's own parameters a link inside it keeps (`only`, or `v`). */
+function keepParams(target: URL, only: readonly string[] | undefined, version: number | undefined) {
+  if (only) target.searchParams.set('only', only.join(','));
+  if (version !== undefined) target.searchParams.set('v', String(version));
+}
+
 /** A redirect the public page answered, kept inside the preview when it can be. */
-function keepInPreview(response: Response, url: URL, only: readonly string[] | undefined) {
+function keepInPreview(
+  response: Response,
+  url: URL,
+  only: readonly string[] | undefined,
+  version: number | undefined,
+) {
   const location = response.headers.get('location');
   if (response.status < 300 || response.status > 399 || !location) return response;
   let to: URL;
@@ -113,7 +138,7 @@ function keepInPreview(response: Response, url: URL, only: readonly string[] | u
   const inside = toPreviewPath(`${to.pathname}${to.search}`);
   if (!inside) return response;
   const target = new URL(inside, url);
-  if (only) target.searchParams.set('only', only.join(','));
+  keepParams(target, only, version);
   const out = new Response(null, { status: response.status, headers: response.headers });
   out.headers.set('location', `${target.pathname}${target.search}${to.hash}`);
   return out;
@@ -156,11 +181,28 @@ export async function handlePreview(
         rendered: false,
       };
     }
+    if (resolved.reason === 'bad-version') {
+      return { response: plain(400, "That version can't be previewed."), rendered: false };
+    }
     return { response: await deps.fallthrough(), rendered: false };
   }
   const { target } = resolved;
   if (!locals.supabase) {
     return { response: plain(403, "Your role can't preview the site."), rendered: false };
+  }
+
+  // A version: the state at it, from the ledger, under the person's own RLS (R10).
+  let asOf: VersionPreview | undefined;
+  if (target.version !== undefined) {
+    const state = await readAsOf(locals.supabase, who, target.version, {
+      limit: AS_OF_PREVIEW_MAX,
+    });
+    if (!state) return { response: plain(404, "That version doesn't exist."), rendered: false };
+    asOf = {
+      number: state.release.number,
+      changes: asOfChanges(asOfTargets(state.entities)),
+      truncated: state.total > state.entities.length,
+    };
   }
 
   let source;
@@ -169,6 +211,7 @@ export async function handlePreview(
       supabase: locals.supabase,
       session: locals.session,
       ...(target.only ? { only: target.only } : {}),
+      ...(asOf ? { asOf } : {}),
     });
   } catch (err) {
     if (err instanceof AuthorizationError) {
@@ -218,7 +261,7 @@ export async function handlePreview(
     }
   }
 
-  response = keepInPreview(response, url, target.only);
+  response = keepInPreview(response, url, target.only, target.version);
   const type = response.headers.get('content-type') ?? '';
   if (type.includes('text/html') && response.body !== null) {
     const ribbon = renderRibbon({
@@ -228,6 +271,7 @@ export async function handlePreview(
       twin: twinPath(target),
       twinLocale: target.locale === 'ar' ? 'en' : 'ar',
       ...(target.only ? { only: target.only } : {}),
+      ...(target.version !== undefined ? { version: target.version } : {}),
     });
     const html = injectRibbon(await response.text(), ribbon);
     const headers = new Headers(response.headers);

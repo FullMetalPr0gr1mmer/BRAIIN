@@ -820,6 +820,8 @@ export const RESTORE_REASONS = [
   'forbidden',
   // The version links to something that is gone and that the restore does not bring back.
   'link-gone',
+  // Its address (a slug, a redirect's source) now belongs to another item.
+  'address-taken',
   // Its stored image no longer reads as a change the editor could make.
   'unrestorable',
   // Left as it is: no role removes it through a release (the site identity, SEO details).

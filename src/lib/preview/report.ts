@@ -165,6 +165,18 @@ export const PREVIEW_COPY = {
     other:
       '{n} changes put design samples on the page. The live site refuses that unless the owner has allowed samples there.',
   },
+  /**
+   * A published version shown as it was (Admin v2 R10, `?v=`): its content over today's code,
+   * so the lead says so; what the preview does not show is as it is now, not "when you publish".
+   */
+  version: {
+    lead: "Preview of version {v}, as it was published. It's shown with today's design and pictures.",
+    invalid: {
+      one: "1 item of this version can't be shown as it was.",
+      other: "{n} items of this version can't be shown as they were.",
+    },
+    notPreviewed: 'Redirects, the theme and who can see a page are shown as they are now.',
+  },
   notPreviewed: {
     search: "Search results aren't previewed.",
     rpc: "Part of this page isn't previewed.",

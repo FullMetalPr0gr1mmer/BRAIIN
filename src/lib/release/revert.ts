@@ -1,165 +1,40 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import {
-  AsOfAnswerSchema,
-  RELEASE_ENTITY_TYPES,
-  type AsOfAnswer,
-  type AsOfEntity,
-  type DraftLabel,
-  type DraftOp,
-  type ReleaseEntityType,
-  type RestoreItem,
-  type WriteDraftsOp,
-} from '@schemas/release';
+import type { DraftLabel, DraftOp, RestoreItem, WriteDraftsOp } from '@schemas/release';
 import type { AuthContext } from '@/lib/auth/types';
 import { mediaRowToItem } from '@/lib/admin/resources/portfolio';
 import { canPublish, waitingFor } from './caps';
 import { jsonEqual } from './deepEqual';
+import { mayRead } from './draftEndpoints';
 import { draftLabel, dropFields } from './drafts';
 import { RELEASE_LINKS, SEO_TARGET_TABLES } from './links';
 import { derivePatch, recordBase, type DerivedPatch } from './overlay';
+import type { AsOfTarget } from './asOf';
 import { RELEASE_REGISTRY, type RegistryEntry } from './registry';
-import {
-  childrenPayload,
-  DERIVED_COLUMNS,
-  restorePatch,
-  rowToPayload,
-  type LinkSetsImage,
-} from './rowPayload';
+import { childrenPayload, DERIVED_COLUMNS, restorePatch } from './rowPayload';
 import { put, stagedSelect } from './staged';
 
-// The state at a version, and what restoring it would stage (Admin v2 R10; releases.md A3-8,
-// §6.2). SERVER ONLY.
+// What restoring a version would stage (Admin v2 R10; releases.md A3-8, §6.2). SERVER ONLY.
 //
-// The state at version N comes from the ledger in one call, `public.release_as_of` (0104): for
-// every entity changed after vN (by a release or out of band), the image before its earliest such
-// change, which is its state at vN (null: it did not exist then), and whether it exists now.
-// Two readers use it:
-//   • the preview of a version (`?v=N`): the changes from vN back to now, laid over live in
-//     place of the pending changes (`asOfChanges`, no live read needed: R8's dataset reads live);
-//   • the restore (`planRestore`): per entity, what would bring live back to vN, read against the
-//     live row so a column already as it was is not a change, and staged as pending changes:
-//       an update  the columns (and a case study's link sets) that differ from live;
-//       a create   an entity removed since comes back with its own id;
-//       a removal  an entity created since goes;
-//     refused, entity by entity, when it already has a pending change, when the person cannot
-//     publish the change (P-2: Admin and the publishers), when a link of the version names
-//     something that is gone and that the restore does not bring back (a deleted picture, a team
-//     member: never captured), or when its image no longer reads as a change (rowPayload.ts). A
-//     removal no role publishes (the site identity, an entity's SEO details) is left as it is
-//     and listed (`kept`).
+// The state at version N is asOf.ts's (the ledger, in one call). The restore (`planRestore`)
+// reads it per entity against live, so a column already as it was is not a change, and plans
+// what would bring live back to vN, as pending changes:
+//   an update  the columns (and a case study's link sets) that differ from live;
+//   a create   an entity removed since comes back with its own id;
+//   a removal  an entity created since goes;
+// refused, entity by entity, when it already has a pending change, when the person cannot
+// publish the change (P-2: Admin and the publishers), when its image no longer reads as a
+// change (rowPayload.ts), when a link of the version names something that is gone and that the
+// restore does not bring back (a deleted picture, a team member: never captured), or when its
+// address (a slug, a redirect's source) now belongs to another item the restore leaves as it
+// is (releases.md §8 edge case 5: reported, never forced). A removal no role publishes (the
+// site identity, an entity's SEO details) is left as it is and listed (`kept`). An item of an
+// area the person may not read is named by its type alone (no label).
 // Team members are never in the ledger (owner item O-12): a version does not hold them, and a
 // restore leaves them as they are.
 
 type Row = Record<string, unknown>;
 type Payload = Record<string, unknown>;
 type Put = Extract<WriteDraftsOp, { action: 'put' }>;
-
-/** The state at version N for the caller's tenant, or null when there is no such version. */
-export async function readAsOf(
-  sb: SupabaseClient,
-  auth: AuthContext,
-  number: number,
-  opts: { limit: number; pageId?: string | undefined },
-): Promise<AsOfAnswer | null> {
-  const { data, error } = await sb.rpc('release_as_of', {
-    p_tenant: auth.tenantId,
-    p_number: number,
-    p_limit: opts.limit,
-    p_page: opts.pageId ?? null,
-  });
-  if (error) {
-    if ((error as { code?: string }).code === 'P0002') return null;
-    throw new Error(`release_as_of: ${(error as { code?: string }).code ?? ''} ${error.message}`);
-  }
-  const parsed = AsOfAnswerSchema.safeParse(data);
-  if (!parsed.success) throw new Error('release_as_of answered in the wrong shape');
-  return parsed.data;
-}
-
-const isRegistryType = (type: string): type is ReleaseEntityType =>
-  (RELEASE_ENTITY_TYPES as readonly string[]).includes(type);
-
-/** One registry entity the state at a version differs on. */
-export interface AsOfTarget {
-  entry: RegistryEntry;
-  entityId: string;
-  /**
-   * Its image at vN: null when it did not exist then; undefined when only its link sets
-   * changed since (a case study whose row is as it was).
-   */
-  before: Row | null | undefined;
-  /** Whether the ledger says it exists now (the restore reads live to be sure). */
-  existsNow: boolean;
-  /** A case study's link sets at vN, when they changed since. */
-  children?: LinkSetsImage;
-}
-
-/** The ledger's answer as registry entities, a case study's link sets beside its row. */
-export function asOfTargets(entities: readonly AsOfEntity[]): AsOfTarget[] {
-  const out = new Map<string, AsOfTarget>();
-  for (const e of entities) {
-    if (!isRegistryType(e.entity_type) || e.entity_type === 'team_member') continue;
-    out.set(`${e.entity_type}:${e.entity_id}`, {
-      entry: RELEASE_REGISTRY[e.entity_type],
-      entityId: e.entity_id,
-      before: e.before,
-      existsNow: e.exists_now,
-    });
-  }
-  for (const e of entities) {
-    if (e.entity_type !== 'portfolio_children') continue;
-    const key = `portfolio:${e.entity_id}`;
-    const target = out.get(key) ?? {
-      entry: RELEASE_REGISTRY.portfolio,
-      entityId: e.entity_id,
-      before: undefined,
-      existsNow: true,
-    };
-    target.children = (e.before ?? {}) as LinkSetsImage;
-    out.set(key, target);
-  }
-  return [...out.values()];
-}
-
-/** One change of a version's preview: what the overlay lays over live. */
-export interface AsOfChange {
-  entityType: ReleaseEntityType;
-  entityId: string;
-  op: DraftOp;
-  payload: Payload;
-}
-
-/**
- * The preview of version N (R8's dataset in its as-of mode): each entity as it was, from the
- * ledger alone. An edit carries the whole image (the overlay replaces the row's columns); a
- * removal since comes back as a create; a creation since goes. A payload that no longer reads
- * is reported by the dataset like an invalid pending change.
- */
-export function asOfChanges(targets: readonly AsOfTarget[]): AsOfChange[] {
-  const out: AsOfChange[] = [];
-  for (const t of targets) {
-    const { entityType } = t.entry;
-    if (t.before === undefined) {
-      if (t.children) {
-        out.push({ entityType, entityId: t.entityId, op: 'update', payload: childrenPayload(t.children) });
-      }
-      continue;
-    }
-    if (t.before === null) {
-      if (t.existsNow) out.push({ entityType, entityId: t.entityId, op: 'delete', payload: {} });
-      continue;
-    }
-    out.push({
-      entityType,
-      entityId: t.entityId,
-      op: t.existsNow ? 'update' : 'create',
-      payload: rowToPayload(t.entry, t.before, t.children),
-    });
-  }
-  return out;
-}
-
-// ---- the restore -------------------------------------------------------------------------------
 
 /** One pending change a restore stages. */
 export interface PlannedChange {
@@ -294,7 +169,9 @@ const item = (
 /** Which columns of an update differ from live (derived columns never decide a change). */
 function movedColumns(patch: Readonly<Row>, live: Readonly<Row>): string[] {
   return Object.keys(patch).filter(
-    (column) => !DERIVED_COLUMNS.includes(column) && !(column in live && jsonEqual(patch[column], live[column])),
+    (column) =>
+      !DERIVED_COLUMNS.includes(column) &&
+      !(column in live && jsonEqual(patch[column], live[column])),
   );
 }
 
@@ -303,7 +180,11 @@ function planOne(
   t: AsOfTarget,
   live: Row | undefined,
   liveLinks: Payload | undefined,
-): { change?: Omit<PlannedChange, 'label'> & { labelRow: Row }; kept?: RestoreItem; refused?: RestoreItem } {
+): {
+  change?: Omit<PlannedChange, 'label'> & { labelRow: Row };
+  kept?: RestoreItem;
+  refused?: RestoreItem;
+} {
   const { entry, entityId } = t;
   // Only the link sets moved: restore them on the row as it stands.
   if (t.before === undefined) {
@@ -314,9 +195,21 @@ function planOne(
     try {
       derived = derivePatch(entry, 'update', children);
     } catch {
-      return { refused: item(entry, entityId, live, 'unrestorable', { columns: ['serviceIds', 'media'] }) };
+      return {
+        refused: item(entry, entityId, live, 'unrestorable', { columns: ['serviceIds', 'media'] }),
+      };
     }
-    const write = put(entry, entityId, 'update', children, derived, {}, live['version'] as number, live, null);
+    const write = put(
+      entry,
+      entityId,
+      'update',
+      children,
+      derived,
+      {},
+      live['version'] as number,
+      live,
+      null,
+    );
     return { change: { entry, entityId, op: 'update', write, derived, labelRow: live } };
   }
   // A visibility setting made since: no setting is what "public" means, so it goes back to
@@ -336,7 +229,17 @@ function planOne(
     if (!live) return {};
     const empty: DerivedPatch = { patch: {}, children: {}, exempt: {} };
     if (entry.removeCap === null) return { kept: item(entry, entityId, live, 'kept') };
-    const write = put(entry, entityId, 'delete', {}, empty, {}, live['version'] as number, live, null);
+    const write = put(
+      entry,
+      entityId,
+      'delete',
+      {},
+      empty,
+      {},
+      live['version'] as number,
+      live,
+      null,
+    );
     return { change: { entry, entityId, op: 'delete', write, derived: empty, labelRow: live } };
   }
   const before = t.before;
@@ -346,8 +249,20 @@ function planOne(
     if (!back.ok) {
       return { refused: item(entry, entityId, before, 'unrestorable', { columns: back.columns }) };
     }
-    const write = put(entry, entityId, 'create', back.payload, back.derived, {}, null, before, null);
-    return { change: { entry, entityId, op: 'create', write, derived: back.derived, labelRow: before } };
+    const write = put(
+      entry,
+      entityId,
+      'create',
+      back.payload,
+      back.derived,
+      {},
+      null,
+      before,
+      null,
+    );
+    return {
+      change: { entry, entityId, op: 'create', write, derived: back.derived, labelRow: before },
+    };
   }
   // Changed since: the columns (and link sets) that differ from live.
   const back = restorePatch(entry, 'update', before, t.children);
@@ -355,8 +270,7 @@ function planOne(
     return { refused: item(entry, entityId, before, 'unrestorable', { columns: back.columns }) };
   }
   const moved = movedColumns(back.derived.patch, live);
-  const linksMoved =
-    t.children !== undefined && !jsonEqual(back.derived.children, liveLinks ?? {});
+  const linksMoved = t.children !== undefined && !jsonEqual(back.derived.children, liveLinks ?? {});
   if (moved.length === 0 && !linksMoved) return {};
 
   let payload: Payload;
@@ -370,7 +284,17 @@ function planOne(
     derived = derivePatch(entry, 'update', payload);
   }
   const base = recordBase(null, live, derived.patch);
-  const write = put(entry, entityId, 'update', payload, derived, base, live['version'] as number, before, null);
+  const write = put(
+    entry,
+    entityId,
+    'update',
+    payload,
+    derived,
+    base,
+    live['version'] as number,
+    before,
+    null,
+  );
   if (FULL_REPLACE.has(entry.kind)) write.fields = moved;
   return { change: { entry, entityId, op: 'update', write, derived, labelRow: before } };
 }
@@ -393,7 +317,8 @@ function neededLinks(changes: readonly PlannedChange[]): Needed[] {
       // A team member's account link is never restored (team members are not in the ledger).
       if (spec.service) continue;
       const value = patch[spec.column];
-      if (typeof value === 'string') out.push({ table: spec.table, id: value, field: spec.field, change });
+      if (typeof value === 'string')
+        out.push({ table: spec.table, id: value, field: spec.field, change });
     }
     if (change.entry.kind === 'entitySeo' && change.op === 'create') {
       const table = SEO_TARGET_TABLES[String(patch['entity_type'])];
@@ -403,7 +328,8 @@ function neededLinks(changes: readonly PlannedChange[]): Needed[] {
     }
     if (Array.isArray(children['serviceIds'])) {
       for (const id of children['serviceIds']) {
-        if (typeof id === 'string') out.push({ table: 'services', id, field: 'serviceIds', change });
+        if (typeof id === 'string')
+          out.push({ table: 'services', id, field: 'serviceIds', change });
       }
     }
     if (Array.isArray(children['media'])) {
@@ -451,7 +377,8 @@ async function goneLinks(
         .eq('tenant_id', auth.tenantId)
         .in('id', [...ids]);
       if (error) throw new Error(`read ${table}: ${error.message}`);
-      for (const row of (data ?? []) as unknown as Row[]) present.add(keyOf(table, String(row['id'])));
+      for (const row of (data ?? []) as unknown as Row[])
+        present.add(keyOf(table, String(row['id'])));
     }),
   );
   const out: RestoreItem[] = [];
@@ -509,14 +436,92 @@ export async function planRestore(
     const ref = {
       entityType: t.entry.entityType,
       op: full.op,
-      patch: typeof full.derived.patch['status'] === 'string' ? { status: full.derived.patch['status'] } : null,
+      patch:
+        typeof full.derived.patch['status'] === 'string'
+          ? { status: full.derived.patch['status'] }
+          : null,
     } as const;
     if (!canPublish(auth.role, ref)) {
-      refused.push(item(t.entry, t.entityId, labelRow, 'forbidden', { waitingFor: waitingFor(ref) }));
+      refused.push(
+        item(t.entry, t.entityId, labelRow, 'forbidden', { waitingFor: waitingFor(ref) }),
+      );
       continue;
     }
     changes.push(full);
   }
   if (refused.length === 0) refused.push(...(await goneLinks(sb, auth, changes)));
-  return { changes, refused, kept };
+  if (refused.length === 0) refused.push(...(await takenAddresses(sb, auth, changes)));
+  // An area the person may not read: its type and id, never its words.
+  const named = (r: RestoreItem): RestoreItem =>
+    r.label !== null && !mayRead(auth.role, RELEASE_REGISTRY[r.entityType])
+      ? { ...r, label: null }
+      : r;
+  return { changes, refused: refused.map(named), kept: kept.map(named) };
+}
+
+/** The column that is unique per tenant on a registry table: a slug, a redirect's source. */
+function addressColumn(entry: RegistryEntry): string | null {
+  if (entry.entityType === 'redirect') return 'source_path';
+  return entry.columns.includes('slug') ? 'slug' : null;
+}
+
+/**
+ * The changes whose address (slug, redirect source) another live item now holds, one that the
+ * restore leaves as it is (one it removes or gives another address is the apply's to order: a
+ * swap within one release is the dry run's to report, edge case 6). The unique index would
+ * refuse the publish; the restore says so first. Read under the person's RLS, in the tenant.
+ */
+async function takenAddresses(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  changes: readonly PlannedChange[],
+): Promise<RestoreItem[]> {
+  const moving = new Set<string>();
+  const asked = new Map<string, { entry: RegistryEntry; column: string; values: Set<string> }>();
+  for (const c of changes) {
+    const column = addressColumn(c.entry);
+    if (!column) continue;
+    if (c.op === 'delete' || column in c.derived.patch)
+      moving.add(keyOf(c.entry.table, c.entityId));
+    const value = c.derived.patch[column];
+    if (c.op === 'delete' || typeof value !== 'string') continue;
+    const group = asked.get(c.entry.table) ?? { entry: c.entry, column, values: new Set<string>() };
+    group.values.add(value);
+    asked.set(c.entry.table, group);
+  }
+  const holders = new Map<string, string[]>();
+  await Promise.all(
+    [...asked.values()].map(async ({ entry, column, values }) => {
+      const { data, error } = await sb
+        .from(entry.table)
+        .select(`id,${column}`)
+        .eq('tenant_id', auth.tenantId)
+        .in(column, [...values]);
+      if (error) throw new Error(`read ${entry.table}: ${error.message}`);
+      for (const row of (data ?? []) as unknown as Row[]) {
+        // A slug is citext: compared without case, as the unique index compares it.
+        const k = keyOf(entry.table, String(row[column]).toLowerCase());
+        holders.set(k, [...(holders.get(k) ?? []), String(row['id'])]);
+      }
+    }),
+  );
+  const out: RestoreItem[] = [];
+  for (const c of changes) {
+    const column = addressColumn(c.entry);
+    const value = column ? c.derived.patch[column] : undefined;
+    if (c.op === 'delete' || !column || typeof value !== 'string') continue;
+    const others = (holders.get(keyOf(c.entry.table, value.toLowerCase())) ?? []).filter(
+      (id) => id !== c.entityId && !moving.has(keyOf(c.entry.table, id)),
+    );
+    if (others.length === 0) continue;
+    out.push({
+      entityType: c.entry.entityType,
+      entityId: c.entityId,
+      label: c.label,
+      reason: 'address-taken',
+      field:
+        Object.entries(c.entry.fields).find(([, cols]) => cols.includes(column))?.[0] ?? column,
+    });
+  }
+  return out;
 }

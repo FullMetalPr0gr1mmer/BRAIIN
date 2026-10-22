@@ -321,6 +321,20 @@ const EXACT: Readonly<Record<string, Label>> = {
     verb: 'Threw away several unpublished changes',
     noun: null,
   },
+  // A version's content staged again as unpublished changes (Admin v2 R10): an edit until it is
+  // published (the rollback is a release, a publish). Ids, counts and types only.
+  'versions.restore': {
+    kind: 'edits',
+    verb: 'Restored',
+    noun: (detail) => {
+      const n = detail['number'];
+      const which =
+        typeof n === 'number' && Number.isInteger(n) && n > 0 ? `version ${n}` : 'a version';
+      return detail['scope'] === 'page'
+        ? `a page as it was in ${which}`
+        : `${which} as unpublished changes`;
+    },
+  },
 
   // Settings
   // The job-application intake switch, written at once whatever the release flag (R3b).
@@ -477,8 +491,8 @@ function draftNoun(type: string): Label['noun'] {
 
 /**
  * The pending-change actions of every release-managed type (Admin v2 R3): a change saved or
- * thrown away (the resource kernel's own are in KERNEL), and a conflict settled. Edits until
- * they are published; a release is the publish.
+ * thrown away (the resource kernel's own are in KERNEL), a conflict settled, and an earlier
+ * version restored (R10). Edits until they are published; a release is the publish.
  */
 const DRAFT_LABELS: ReadonlyMap<string, Label> = new Map(
   RELEASE_ENTITY_TYPES.flatMap((type) => {
@@ -486,6 +500,11 @@ const DRAFT_LABELS: ReadonlyMap<string, Label> = new Map(
     const titled = hasTitleSource(type);
     const labels: [string, Label][] = [
       [`${type}.draft_resolve`, { kind: 'edits', verb: 'Settled a conflict on', noun, titled }],
+      // One item's earlier version staged again (Admin v2 R10, the history drawer's Restore).
+      [
+        `${type}.history_restore`,
+        { kind: 'edits', verb: 'Restored an earlier version of', noun, titled },
+      ],
     ];
     if (!KERNEL.has(`${type}.draft_save`)) {
       labels.push([`${type}.draft_save`, { kind: 'edits', verb: draftSaveVerb, noun, titled }]);
