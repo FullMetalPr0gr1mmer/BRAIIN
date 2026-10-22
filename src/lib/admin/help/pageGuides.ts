@@ -31,7 +31,14 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     slug: 'your-account',
     caps: [],
     // /admin/2fa (U17): the two factor page, a full session's setup and management.
-    screens: ['/admin/account', '/admin/notifications', '/admin/2fa'],
+    // /admin/settings/notifications (U11): the bell's settings, every member's own (a deeper
+    // path than General's /admin/settings, so it needs its own entry: the longest wins).
+    screens: [
+      '/admin/account',
+      '/admin/notifications',
+      '/admin/2fa',
+      '/admin/settings/notifications',
+    ],
   },
   { slug: 'roles-and-access', caps: [], screens: ['/admin/users'] },
   {
@@ -76,6 +83,14 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     caps: ['seo.globalDefaults', 'redirects.manage'],
     screens: ['/admin/seo', '/admin/redirects'],
   },
+  // Admin v2 U11: the integrations screen (Admin + SEO) and the forms overview
+  // (settings.general), each a new guide put by the integrations migration.
+  {
+    slug: 'integrations',
+    caps: ['settings.integrations'],
+    screens: ['/admin/integrations'],
+  },
+  { slug: 'forms-and-spam', caps: ['settings.general'], screens: ['/admin/forms'] },
   { slug: 'working-with-leads', caps: ['leads.manage'], screens: ['/admin/leads'] },
   // Admin v2 C9a: its guide is put by 0091 (H11's catalog).
   { slug: 'crm-settings', caps: ['crm.settings'], screens: ['/admin/crm/settings'] },
