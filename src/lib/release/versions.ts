@@ -44,7 +44,10 @@ export interface Person {
 }
 
 /** The staff directory (F8): names by id; empty when it cannot be read (the list still stands). */
-export async function namesOf(sb: SupabaseClient, auth: AuthContext): Promise<Map<string, string | null>> {
+export async function namesOf(
+  sb: SupabaseClient,
+  auth: AuthContext,
+): Promise<Map<string, string | null>> {
   const names = new Map<string, string | null>();
   const { data, error } = await sb.rpc('staff_directory', { p_tenant: auth.tenantId });
   if (error || !Array.isArray(data)) return names;
