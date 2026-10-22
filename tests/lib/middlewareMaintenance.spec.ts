@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAINTENANCE_DEFAULTS, type MaintenanceSnapshot } from '@schemas/maintenance';
 import { MAINTENANCE_KV_KEY } from '@/lib/http/maintenance';
+import { REDIRECTS_KV_KEY } from '@/lib/http/redirects';
 import { VISIBILITY_KV_KEY, clearVisibilityMemo } from '@/lib/http/visibility';
 import { __kv } from '../stubs/cloudflare-workers';
 
@@ -135,6 +136,19 @@ describe('who passes', () => {
     const res = await run(context('/about', '/about'), page().next);
     expect(res.status).toBe(200);
     expect(bypass.calls).toBe(1);
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(res.headers.get('cache-tag')).toBeNull();
+    expect(res.headers.get('x-robots-tag')).toBe('noindex');
+  });
+
+  it('a signed-in person sent on by an authored redirect: the redirect is private too', async () => {
+    set({ v: 2, active: true, staffBypass: true });
+    __kv.set(REDIRECTS_KV_KEY, JSON.stringify({ '/old': { to: '/about', status: 301 } }));
+    const missing: Next = async () =>
+      new Response('<html><body>404</body></html>', { status: 404 });
+    const res = await run(context('/old', undefined), missing);
+    expect(bypass.calls).toBe(1);
+    expect([res.status, res.headers.get('location')]).toEqual([301, '/about']);
     expect(res.headers.get('cache-control')).toBe('private, no-store');
     expect(res.headers.get('cache-tag')).toBeNull();
     expect(res.headers.get('x-robots-tag')).toBe('noindex');

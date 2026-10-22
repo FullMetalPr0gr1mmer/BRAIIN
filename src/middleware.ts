@@ -501,7 +501,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     REDIRECTABLE_METHODS.has(request.method)
   ) {
     const rule = lookupRedirect(url.pathname, await getRedirectMap(env));
-    if (rule) return secured(redirectResponse(rule, url));
+    if (rule) {
+      const redirected = await secured(redirectResponse(rule, url));
+      // Seen past the maintenance page or a password (U9b): private like step 5's answer, so
+      // the redirect a signed-in person sees is never cached for a visitor.
+      return unlocked !== null || bypassed ? hiddenAnswer(redirected) : redirected;
+    }
   }
 
   // 5) Apply the same headers to the rendered response; a link-only page is not indexed,

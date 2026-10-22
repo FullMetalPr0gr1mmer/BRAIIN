@@ -7,6 +7,7 @@ import {
   worthChecking,
 } from '@/lib/http/maintenanceBypass';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
+import { ROLES } from '@/lib/auth/types';
 
 // The staff bypass of maintenance (Admin v2 U9b, decision D15) FAILS CLOSED: only a context the
 // admin's own session check returns whole lets a request past the 503. No cookie, garbage, an
@@ -107,6 +108,18 @@ describe('the local pre-filter never grants, and keeps garbage away from the aut
       false,
     );
     expect(resolve).not.toHaveBeenCalled();
+  });
+
+  // The signed-in team (D14) is every member role, Sales included: a bypassed request renders
+  // the anonymous public page (the middleware never sets a session for it), so a member sees
+  // nothing a visitor would not once maintenance ends.
+  it.each(ROLES)('%s is a member role: worth asking the session check', (role) => {
+    const { jar: j } = jar({
+      [SESSION_COOKIE_NAME]: sessionCookie(
+        jwt({ sub: 'u', exp: NOW / 1000 + 60, app_metadata: { role } }),
+      ),
+    });
+    expect(worthChecking(j, NOW)).toBe(true);
   });
 });
 
