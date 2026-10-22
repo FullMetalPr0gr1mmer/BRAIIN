@@ -19,7 +19,17 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/settings/index'),
     method: 'PATCH',
     url: '/api/admin/settings',
-    body: { identity: {}, version: 1 },
+    // Admin v2 U9: the studio's time zone (the technical `identity` JSON left the form).
+    body: { timezone: 'Asia/Riyadh', version: 1 },
+    allow: ['admin', 'developer'],
+  },
+  {
+    // A shortened retention is a purge: the same two roles, and the live check in the DB.
+    name: 'general settings write, retention',
+    load: () => import('@/pages/api/admin/settings/index'),
+    method: 'PATCH',
+    url: '/api/admin/settings',
+    body: { retention: { spam_days: 30 }, version: 1 },
     allow: ['admin', 'developer'],
   },
   // Public identity singleton (migration 0019) — §5 "General settings": Admin + Developer.
@@ -38,6 +48,37 @@ export const cases: readonly Case[] = [
     method: 'PATCH',
     url: '/api/admin/site-profile',
     body: { brandName: VALID_BILINGUAL, version: 1 },
+    allow: ['admin', 'developer'],
+  },
+  {
+    // Admin v2 U9: the identity's new contact and brand fields, and a hidden social account.
+    name: 'site profile write, contact and brand',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'PATCH',
+    url: '/api/admin/site-profile',
+    body: {
+      tagline: VALID_BILINGUAL,
+      phoneE164: '+966500000001',
+      mapUrl: 'https://maps.app.goo.gl/abc',
+      socials: [
+        {
+          network: 'instagram',
+          handle: '@example',
+          url: 'https://instagram.com/example',
+          visible: false,
+        },
+      ],
+      version: 1,
+    },
+    allow: ['admin', 'developer'],
+  },
+  {
+    // The footer settings E6 edits are stored here, with the same gate.
+    name: 'site profile write, footer settings',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'PATCH',
+    url: '/api/admin/site-profile',
+    body: { footerShowEmail: true, version: 1 },
     allow: ['admin', 'developer'],
   },
   {
@@ -68,11 +109,31 @@ export const cases: readonly Case[] = [
     allow: ['admin', 'developer'],
   },
   {
+    // Maintenance v2 (Admin v2 U9b): the whole value, the staff bypass included.
     name: 'maintenance toggle',
     load: () => import('@/pages/api/admin/settings/maintenance'),
     method: 'PATCH',
     url: '/api/admin/settings/maintenance',
-    body: { active: true, allowlist: ['203.0.113.4'], version: 1 },
+    body: {
+      active: false,
+      allowlist: [],
+      staffBypass: true,
+      until: null,
+      showDate: false,
+      background: 'image',
+      showContact: true,
+      title: null,
+      message: null,
+      version: 1,
+    },
+    allow: ['admin', 'developer'],
+  },
+  {
+    // "Preview full screen": the saved page, as HTML, for the same two roles.
+    name: 'maintenance preview',
+    load: () => import('@/pages/api/admin/settings/maintenance/preview'),
+    method: 'GET',
+    url: '/api/admin/settings/maintenance/preview?lang=en',
     allow: ['admin', 'developer'],
   },
 ];

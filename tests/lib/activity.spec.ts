@@ -8,8 +8,8 @@ import {
   loadActivity,
   pagingUrl,
   readActivityQuery,
-  riyadhDayEnd,
-  riyadhDayStart,
+  studioDayEnd as riyadhDayEnd,
+  studioDayStart as riyadhDayStart,
   verifyChain,
 } from '@/lib/admin/activity';
 import { kindFilter } from '@/lib/admin/auditLabels';

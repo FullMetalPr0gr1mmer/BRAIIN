@@ -36,7 +36,9 @@ import {
   secondLine,
 } from '@/components/admin/screens/resources/ResourceTable';
 import { pageInfo } from '@/lib/admin/pager';
-import { formatDate } from '@/lib/admin/relTime';
+import { clockFor } from '@/lib/admin/relTime';
+
+const { formatDate } = clockFor('Asia/Riyadh');
 
 // The React kit (Admin v2 F4b, docs/admin-v2/ui.md AV-07), rendered to markup the way an
 // island's server render is: the ARIA each piece promises, the words it says, and no style

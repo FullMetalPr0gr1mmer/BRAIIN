@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CTA_IDS, INQUIRY_CTAS, INQUIRY_PATH, SERVICE_PATH } from '@schemas/analytics';
 import { GOAL_METRICS } from '@schemas/analyticsGoals';
 import { trackHref } from '@/lib/analytics/track';
-import { ADMIN_TIME_ZONE } from '@/lib/admin/relTime';
+import { STUDIO_TIME_ZONES } from '@schemas/timeZones';
 
 // The website stats' vocabulary (Admin v2 G1) is written twice: in TypeScript, where the
 // public site sends and the ingest checks it, and in migration 0071, where the rollups count
@@ -113,7 +113,9 @@ describe('TypeScript and migration 0071 say the same', () => {
     const readerZones = zones(MIGRATION, /p_tz not in \(([\s\S]*?)\) then/);
     expect(crmZones.length).toBeGreaterThan(5);
     expect(readerZones).toEqual(crmZones);
-    expect(readerZones).toContain(ADMIN_TIME_ZONE);
+    // The studio's zone (site_settings.timezone, Admin v2 U9) is what the page passes: every
+    // value the setting can hold is one the reader takes.
+    expect(readerZones).toEqual(STUDIO_TIME_ZONES.map((z) => z.value));
   });
 
   it('a click id fits the rollup’s key and the goal’s cta CHECK', () => {

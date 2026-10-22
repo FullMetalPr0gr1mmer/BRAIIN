@@ -43,7 +43,7 @@ import { faqUi } from '@/lib/admin/ui/faq';
 import { faqShown } from '@/lib/sections/contact';
 import { EXTRA_LINKS, pageFileFor } from '../admin/routes';
 import { MAX_GOALS } from '@schemas/analyticsGoals';
-import { ADMIN_TIME_ZONE } from '@/lib/admin/relTime';
+import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
 import {
   ACTIVE_MINUTES,
   REALTIME_AUTO_STOP_MS,
@@ -1307,7 +1307,8 @@ describe('the guides say only what the admin does', () => {
     expect(SCORE_WEIGHTS).toEqual({ speed: 40, checks: 40, uptime: 20 });
     expect(uptimePoints(100)).toBe(100);
     expect(uptimePoints(99)).toBe(0);
-    expect(SCHEDULES['*/10 * * * *']).toBe(HEALTH_JOBS);
+    // The health probes run every 10 minutes (Admin v2 U9b's reconcile shares the trigger).
+    expect(SCHEDULES['*/10 * * * *']).toContain(HEALTH_JOBS[0]);
     expect(THRESHOLDS.domainFailDays).toBe(30);
     expect(THRESHOLDS.certificateFailDays).toBe(14);
     // Six failed reads at 10 minutes: an hour.
@@ -1339,7 +1340,14 @@ describe('the guides say only what the admin does', () => {
     expect(en).toContain('its readings arrive here every 10 minutes');
     expect(en).toContain('green when the site was up all day');
     expect(en).toContain('red when it was down for more than 14 minutes');
-    expect(en).toContain('Days run midnight to midnight in Riyadh');
+    // The strip's days are the studio's (Admin v2 U9): the probe asks for them in its zone and
+    // the card names the zone's city.
+    expect(en).toContain("Days follow the studio's time zone");
+    expect(en).not.toContain('midnight to midnight in Riyadh');
+    expect(source('src/lib/health/probes.ts')).toContain('provider.read(now, tz)');
+    expect(source('src/components/admin/screens/health/UptimeStrip.astro')).toContain(
+      'by ${timeZoneCity(tz)} day',
+    );
     expect(en).toContain('Check now asks for a fresh reading at once, up to 6 times an hour');
     expect(en).toContain('the card says Not set up and the score leaves uptime out');
     expect(en).toContain('about once a day');
@@ -1358,7 +1366,9 @@ describe('the guides say only what the admin does', () => {
       '14 يومًا',
     ])
       expect(ar, fact).toContain(fact);
-    expect(ar).toContain('بتوقيت الرياض');
+    // The studio's days since Admin v2 U9, as the English says.
+    expect(ar).toContain('تتبع الأيام المنطقة الزمنية للاستوديو');
+    expect(ar).not.toContain('بتوقيت الرياض');
   });
 
   it('the dashboard guide says what the dashboard does (U1)', async () => {
@@ -1459,9 +1469,12 @@ describe('website-stats as G1 rewrites it (docs/admin-v2/guides/website-stats.js
   ) as unknown;
   const guide = HelpArticleSeedSchema.parse(RAW_GUIDE);
   const G1_FILE = '0071_stats_v2.sql';
-  // The guide as main left it: every migration but this one (the put's revision guard and the
-  // place, screens and capabilities it keeps are read against it).
-  const BEFORE = helpSet(MIGRATION_FILES.filter((f) => f.name !== G1_FILE));
+  // The guide as main left it before 0071: the migrations that sort before it (the put's
+  // revision guard and the place, screens and capabilities it keeps are read against it), and
+  // as 0071 left it. By file order, not "all but 0071": a later put of the guide (Admin v2 U9's
+  // 0102, one sentence) names the revision 0071 left, which reads as stale without 0071.
+  const BEFORE = helpSet(MIGRATION_FILES.filter((f) => f.name < G1_FILE));
+  const AT_G1 = helpSet(MIGRATION_FILES.filter((f) => f.name <= G1_FILE));
   const base = HelpArticleSeedSchema.parse(BEFORE.set.find((a) => a.slug === 'website-stats')!);
   const en = textsOf(guide, 'en').join('\n');
   const ar = textsOf(guide, 'ar').join('\n');
@@ -1535,10 +1548,21 @@ describe('website-stats as G1 rewrites it (docs/admin-v2/guides/website-stats.js
     expect(en).toContain('Devices, countries and sources are not collected.');
   });
 
-  it('says the busiest hours are in Riyadh time', () => {
-    expect(ADMIN_TIME_ZONE).toBe('Asia/Riyadh');
-    expect(en).toContain('busiest hours of the day in Riyadh time');
-    expect(ar).toContain('بتوقيت الرياض');
+  it('says the busiest hours are in the studio’s time zone, which the card names (Admin v2 U9)', () => {
+    expect(en).toContain(
+      "busiest hours of the day in the studio's time zone, which the card names",
+    );
+    expect(en).not.toContain('busiest hours of the day in Riyadh');
+    expect(ar).toContain('بتوقيت المنطقة الزمنية للاستوديو، كما تذكرها البطاقة');
+    // The page groups them in the studio's zone; the card names its city.
+    const page = source('src/pages/admin/analytics/index.astro');
+    expect(page).toContain('const studioTz = await studioTimeZone(Astro.locals);');
+    expect(page).toContain('loadBusyHours(sb, session, range, studioTz)');
+    const card = source('src/components/admin/screens/stats/StatsAudience.astro');
+    expect(card).toContain('const zoneWords = `${timeZoneCity(zone)} time`;');
+    expect(card).toContain('sub={`${zoneWords}. Good to know when to post and when to answer.`}');
+    // "3 am in Riyadh" for the UTC day stays a fact of Riyadh's zone, the default one.
+    expect(DEFAULT_TIME_ZONE).toBe('Asia/Riyadh');
   });
 
   it('says what realtime counts, how often it updates, when it stops and how long minutes are kept', () => {
@@ -1587,20 +1611,26 @@ describe('website-stats as G1 rewrites it (docs/admin-v2/guides/website-stats.js
       },
     ]);
     // It changes the guide, so the catalog moves it by one.
-    expect(HELP.revisions.get('website-stats')).toBe(
+    expect(AT_G1.revisions.get('website-stats')).toBe(
       (BEFORE.revisions.get('website-stats') ?? 0) + 1,
     );
-    // The set the migrations leave holds the file's guide exactly, and nothing else moved.
+    // The set the migrations leave holds the file's guide exactly, and 0071 moved nothing else.
     expect(SET.find((a) => a.slug === 'website-stats')).toEqual(guide);
-    expect(HELP.set.filter((g) => g.slug !== 'website-stats')).toEqual(
+    expect(AT_G1.set.filter((g) => g.slug !== 'website-stats')).toEqual(
       BEFORE.set.filter((g) => g.slug !== 'website-stats'),
     );
-    // The put's literal is the guide file byte for byte (only its trailing newline dropped).
-    const literal =
-      /^select app\.put_help_guide\(\$guide\$\r?\n([\s\S]*?)\r?\n\$guide\$::jsonb, \d+\);/m.exec(
-        MIGRATION,
-      )?.[1];
-    expect(literal).toBe(
+    // 0071's literal is the guide as 0071 left it; the LATEST put of the guide is the file
+    // byte for byte (only its trailing newline dropped): Admin v2 U9's 0102 changed a sentence.
+    const PUT =
+      /^select app\.put_help_guide\(\$guide\$\r?\n([\s\S]*?)\r?\n\$guide\$::jsonb, \d+\);/gm;
+    const literalsOf = (sql: string) => [...sql.matchAll(PUT)].map((m) => m[1] ?? '');
+    expect(JSON.parse(literalsOf(MIGRATION)[0] ?? 'null')).toEqual(
+      AT_G1.set.find((g) => g.slug === 'website-stats'),
+    );
+    const latest = MIGRATION_FILES.flatMap((f) => literalsOf(f.sql))
+      .filter((l) => (JSON.parse(l) as { slug?: unknown }).slug === 'website-stats')
+      .at(-1);
+    expect(latest).toBe(
       readFileSync('docs/admin-v2/guides/website-stats.json', 'utf8').replace(/\r?\n$/, ''),
     );
     expect(helpSetViolations(MIGRATION_FILES)).toEqual([]);
@@ -1890,6 +1920,184 @@ describe('seo-and-redirects says what the SEO screen does (Admin v2 U10)', () =>
   });
 });
 
+describe('U9’s guides say what General settings and maintenance do (Admin v2 U9)', () => {
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const article = (slug: string) => SET.find((a) => a.slug === slug)!;
+  const text = (slug: string, lang: 'en' | 'ar') => textsOf(article(slug), lang).join('\n');
+  // By its name, not its number: the number is assigned at merge (renumber-migration.mjs).
+  const U9 = MIGRATION_FILES.find((f) => f.name.endsWith('_general_maintenance.sql'))!;
+  const PRIOR = helpSet(MIGRATION_FILES.filter((f) => f.name < U9.name));
+  const PUT =
+    /^select app\.put_help_guide\(\$guide\$\r?\n([\s\S]*?)\r?\n\$guide\$::jsonb, \d+\);/gm;
+  const filed = (slug: string) =>
+    readFileSync(`docs/admin-v2/guides/${slug}.json`, 'utf8').replace(/\r?\n$/, '');
+
+  it('general-settings is settings.general’s, on its screen, just before maintenance-mode', () => {
+    expect(article('general-settings')).toMatchObject({
+      sort_order: 98,
+      title: 'General settings',
+      caps: ['settings.general'],
+      screens: ['/admin/settings'],
+    });
+    expect(article('maintenance-mode')).toMatchObject({
+      sort_order: 100,
+      caps: ['maintenance.manage'],
+      screens: ['/admin/maintenance'],
+    });
+    for (const role of ROLES) {
+      expect(mayRead(role, ['settings.general']), role).toBe(
+        ROLE_CAPS[role]['settings.general'] === 'full',
+      );
+    }
+  });
+
+  it('general-settings states the rules the code and the database hold', async () => {
+    const en = text('general-settings', 'en');
+    const ar = text('general-settings', 'ar');
+    // Icons: square uploads of at least 512 px (the trigger, the public read, the hints).
+    const { ICON_MIN_PX } = await import('@/lib/data/siteProfile');
+    expect(ICON_MIN_PX).toBe(512);
+    expect(U9.sql).toContain('m.width = m.height and m.width >= 512');
+    expect(source('src/lib/admin/ui/profile.ts')).toContain('Square, at least 512 px');
+    expect(en).toContain(`a square picture at least ${ICON_MIN_PX} pixels wide`);
+    expect(ar).toContain(`${ICON_MIN_PX} بكسل`);
+    expect(en).toContain('Until one is chosen, the site links no icon.');
+    // The map link's hosts.
+    const { isMapLink } = await import('@schemas/siteProfile');
+    expect(isMapLink('https://maps.app.goo.gl/abc')).toBe(true);
+    expect(isMapLink('https://maps.apple.com/?q=x')).toBe(true);
+    expect(isMapLink('https://www.google.com/maps/place/x')).toBe(true);
+    expect(isMapLink('https://example.com/maps')).toBe(false);
+    expect(en).toContain('must be a Google Maps or Apple Maps link');
+    // "Show on the site" is the repeater's label, in both languages' text.
+    expect(source('src/lib/admin/ui/profile.ts')).toContain("label: 'Show on the site'");
+    expect(en).toContain('Show on the site off');
+    expect(ar).toContain('Show on the site');
+    // Only an admin opens or closes job applications: the switch's note.
+    expect(source('src/components/admin/screens/general/ApplicationsSwitch.tsx')).toContain(
+      "LOCKED_NOTE = 'Only an admin can open or close job applications.'",
+    );
+    expect(en).toContain('Only an admin can open or close job applications.');
+    // Retention: any value up to each limit may be saved, so a horizon can be lengthened
+    // too (spam from its default 30 days to 90), never past its limit (the field's hint).
+    const { RETENTION_LIMITS, RetentionSchema } = await import('@schemas/settings');
+    const { siteSettingsSingleton: settingsRow } =
+      await import('@/lib/admin/singletons/siteSettings');
+    const defaults = settingsRow.defaults['retention'] as Record<
+      keyof typeof RETENTION_LIMITS,
+      number
+    >;
+    for (const key of Object.keys(RETENTION_LIMITS) as (keyof typeof RETENTION_LIMITS)[]) {
+      const { max } = RETENTION_LIMITS[key];
+      expect(RetentionSchema.safeParse({ [key]: max }).success, key).toBe(true);
+      expect(RetentionSchema.safeParse({ [key]: max + 1 }).success, key).toBe(false);
+      expect(defaults[key], key).toBeLessThanOrEqual(max);
+    }
+    expect(defaults.spam_days).toBeLessThan(RETENTION_LIMITS.spam_days.max);
+    expect(source('src/lib/admin/ui/settings.ts')).toContain(
+      'Each can be shortened, never extended past its limit',
+    );
+    expect(en).toContain('each can be shortened, and never set past its limit.');
+    expect(en).not.toContain('never extended');
+    expect(ar).toContain('ولا يمكن ضبطها أطول من حدها الأقصى');
+    expect(ar).not.toContain('ولا يمكن تمديدها');
+    // What the zone moves, and what keeps Riyadh days.
+    expect(en).toContain('the busiest hours in website stats, the uptime days in site health');
+    expect(en).toContain('Page visibility keeps Riyadh days.');
+    expect(source('src/components/admin/screens/visibility/VisibilityList.tsx')).toContain(
+      "clockFor('Asia/Riyadh')",
+    );
+    expect(text('page-visibility', 'en')).toContain('Riyadh time');
+  });
+
+  it('maintenance-mode states what the panel and the edge do', async () => {
+    const en = text('maintenance-mode', 'en');
+    const ar = text('maintenance-mode', 'ar');
+    const ui = source('src/lib/admin/ui/maintenance.ts');
+    for (const label of [
+      'Show email and WhatsApp buttons',
+      'Show the date to visitors',
+      'Signed in team still sees the site',
+    ]) {
+      expect(ui, label).toContain(`label: '${label}'`);
+      expect(en, label).toContain(label);
+      expect(ar, label).toContain(label);
+    }
+    expect(ui).toContain("label: 'Back on (optional)'");
+    expect(en).toContain('Back on ends maintenance by itself at midnight');
+    expect(ui).toContain("{ value: 'image', label: 'The hero image' }");
+    expect(ui).toContain("{ value: 'black', label: 'Plain black' }");
+    expect(en).toContain('the hero image or plain black');
+    const { MAINTENANCE_MAX_DAYS_AHEAD } = await import('@schemas/maintenance');
+    expect(en).toContain(`Pick a day up to ${MAINTENANCE_MAX_DAYS_AHEAD} days ahead.`);
+    expect(ar).toContain(`خلال ${MAINTENANCE_MAX_DAYS_AHEAD} يومًا`);
+    expect(source('src/components/admin/screens/maintenance/TurnOnDialog.tsx')).toContain(
+      'Turn on',
+    );
+    expect(en).toContain('Choose Turn on and confirm.');
+    expect(source('src/components/admin/screens/maintenance/MaintenancePanel.tsx')).toContain(
+      'Preview full screen',
+    );
+    expect(en).toContain('Preview full screen opens the page as visitors see it');
+    expect(source('src/components/admin/ui/Topbar.astro')).toContain('Maintenance on');
+    expect(en).toContain('the top bar says Maintenance on');
+    // Fail-closed: a sign in that cannot be checked sees the page (the bypass's own header).
+    expect(source('src/lib/http/maintenanceBypass.ts')).toContain('FAIL CLOSED, every way');
+    expect(en).toContain(
+      'If their sign in cannot be checked, they see the maintenance page like everyone else.',
+    );
+    // An expired access token is refused before the check (the bypass's local pre-filter),
+    // though the admin renews that same session: whoever has been away opens an admin page
+    // first. The guide, the field's hint and the runbook say so; none says "sign in again".
+    expect(source('src/lib/http/maintenanceBypass.ts')).toContain(
+      'if (claims.exp * 1000 <= now) return false;',
+    );
+    const renew = 'open any admin page first (it renews the sign in), then reload the site';
+    expect(en).toContain(`Someone who has been away a while should ${renew}.`);
+    expect(ar).toContain('يفتح أي صفحة في لوحة الإدارة أولًا');
+    expect(source('src/lib/admin/ui/maintenance.ts')).toContain(
+      'After time away, open any admin page first to renew the sign in.',
+    );
+    const runbook = source('docs/launch-runbook.md').replace(/\s+/g, ' ');
+    expect(runbook).toContain(renew);
+    expect(runbook).not.toContain('or a second step owed): sign in again.');
+    // Temporary to search engines: a 503 with Retry-After.
+    expect(source('src/lib/http/maintenance.ts')).toContain("'retry-after': String(");
+    expect(en).toContain('Search engines are told the break is temporary');
+  });
+
+  it('puts its four guides at the revisions main left, each literal its filed text', () => {
+    const literals = [...U9.sql.matchAll(PUT)].map((m) => m[1] ?? '');
+    const slugs = ['general-settings', 'maintenance-mode', 'website-stats', 'site-health-and-logs'];
+    expect(HELP.edits.filter((e) => e.file === U9.name)).toEqual(
+      slugs.map((slug) => ({
+        file: U9.name,
+        op: 'put',
+        slug,
+        revision: PRIOR.revisions.get(slug) ?? 0,
+      })),
+    );
+    expect(literals).toEqual(slugs.map(filed));
+    // The two guides of other slices change one sentence each, in both languages.
+    for (const slug of ['website-stats', 'site-health-and-logs']) {
+      const before = PRIOR.set.find((g) => g.slug === slug)!;
+      const after = HELP.set.find((g) => g.slug === slug)!;
+      const { body: b0, ...rest0 } = before as unknown as { body: Record<string, unknown[]> };
+      const { body: b1, ...rest1 } = after as unknown as { body: Record<string, unknown[]> };
+      expect(rest1, slug).toEqual(rest0);
+      for (const lang of ['en', 'ar'] as const) {
+        const flat = (blocks: unknown[]) =>
+          blocks.flatMap((b) => {
+            const x = (b as { x: unknown }).x;
+            return Array.isArray(x) ? x : [x];
+          });
+        const changed = flat(b1[lang]!).filter((x, i) => x !== flat(b0[lang]!)[i]);
+        expect(changed.length, `${slug} ${lang}`).toBe(1);
+      }
+    }
+  });
+});
+
 describe('the Style-Finder and job applications guides (Admin v2 U8a)', () => {
   const article = (slug: string) => SET.find((a) => a.slug === slug)!;
   const text = (slug: string, lang: 'en' | 'ar') => textsOf(article(slug), lang).join(' ');
@@ -2127,6 +2335,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
   it('Developer: the basics, media, leads and their personal data, maintenance, stats and site health; no hiring', () => {
     expect(shown('developer')).toEqual([
       'finding-your-way',
+      'general-settings',
       'maintenance-mode',
       'media-library',
       'page-visibility',

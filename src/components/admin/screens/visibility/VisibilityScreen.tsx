@@ -4,7 +4,8 @@ import Note from '@/components/admin/kit/Note';
 import Icon from '@/components/admin/kit/Icon';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { toast } from '@/lib/admin/toast';
-import { relTime } from '@/lib/admin/relTime';
+import { pageTimeZone } from '@/components/admin/kit/clock';
+import { clockFor, type Clock } from '@/lib/admin/relTime';
 import { CONFIRM_SUB, EDGE_MISSED, MODE_COPY } from '@/lib/admin/visibilityCopy';
 import { visibilityRevision } from '@/lib/http/visibility';
 import VisibilityList, { itemTitle } from './VisibilityList';
@@ -24,7 +25,11 @@ const API = '/api/admin/page-visibility';
  * many are restricted: hidden to link only, a new redirect or new days keep the count and
  * still leave the live site behind.
  */
-export function edgeLine(list: ListAnswer): { tone: 'info' | 'warn'; text: string } {
+export function edgeLine(
+  list: ListAnswer,
+  clock: Clock = clockFor(pageTimeZone()),
+): { tone: 'info' | 'warn'; text: string } {
+  const { relTime } = clock;
   const edge = list.edge;
   if (edge === null) return { tone: 'warn', text: 'The live site’s copy could not be read.' };
   const restricted = [...list.pages, ...list.templates].filter(

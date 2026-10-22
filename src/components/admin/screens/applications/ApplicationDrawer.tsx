@@ -7,7 +7,6 @@ import {
 } from '@schemas/application';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
-import { formatDate } from '@/lib/admin/relTime';
 import { toast } from '@/lib/admin/toast';
 import {
   APPLICATION_STATUS_LABEL,
@@ -24,6 +23,7 @@ import {
   type ApplicationDetail,
 } from '@/lib/admin/applicationView';
 import Drawer from '@/components/admin/kit/Drawer';
+import { useClock } from '@/components/admin/kit/clock';
 import { Badge } from '@/components/admin/kit/StatusBadge';
 
 // One application in the kit's wide drawer (Admin v2 U8a, ui.md AV-17: the look of the
@@ -87,6 +87,8 @@ export default function ApplicationDrawer({
   onChanged,
   onErased,
 }: ApplicationDrawerProps) {
+  // The application arrives after mount, so the page's zone is the clock (kit/clock.tsx).
+  const clock = useClock();
   const [detail, setDetail] = useState<ApplicationDetail | null>(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -290,7 +292,7 @@ export default function ApplicationDrawer({
               Details
             </h3>
             <dl className="stat-rows">
-              {detailRows(detail).map(([label, value]) => (
+              {detailRows(detail, clock).map(([label, value]) => (
                 <div className="stat-row" key={label}>
                   <dt>{label}</dt>
                   <dd dir="auto">{value}</dd>
@@ -468,7 +470,7 @@ export default function ApplicationDrawer({
               <div className="stat-row">
                 <dt>Agreed</dt>
                 <dd>
-                  {formatDate(detail.consent_at, { year: 'always' })} (notice{' '}
+                  {clock.formatDate(detail.consent_at, { year: 'always' })} (notice{' '}
                   {detail.consent_version})
                 </dd>
               </div>
@@ -480,7 +482,7 @@ export default function ApplicationDrawer({
               )}
               <div className="stat-row">
                 <dt>Kept until</dt>
-                <dd>{formatDate(detail.retention_delete_after, { year: 'always' })}</dd>
+                <dd>{clock.formatDate(detail.retention_delete_after, { year: 'always' })}</dd>
               </div>
             </dl>
             {detail.status !== 'spam' && (

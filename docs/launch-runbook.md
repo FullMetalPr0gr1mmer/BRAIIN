@@ -1468,6 +1468,47 @@ like any other content (P-3) and a scheduled question goes live through
 
 ---
 
+### 6n. General settings and maintenance v2 (migration 0102, Admin v2 U9)
+
+The letter is the next free one when U9 merges; renumber if a sibling took it.
+
+**Apply before the merge** (expand only; rule 5): 0102 adds columns, CHECKs, the icon keys,
+`site_settings.timezone` (copied from `crm_settings.timezone`; only rows that differ are
+written), the RESTRICTIVE live writes on `site_profile` and `site_settings` and the two tables'
+grants (authenticated loses an inherited DELETE on `site_settings` that nothing used). The old
+Worker reads the new shapes: the identity loader selects named columns, `media_usage` keeps its
+four columns, and the maintenance KV value it reads is v1 until the first v2 save. Read back
+with the U9 read-back query; every value must match its expected line.
+
+**After the deploy, before relying on maintenance v2:**
+
+1. Open Settings › Maintenance mode and Save once (without turning it on): the value becomes v2,
+   with "Signed in team still sees the site" on (decision D14). Until a v2 save, a stored value
+   reads with the bypass OFF (fail closed), which only matters while maintenance is on.
+2. To prove the staff bypass on production: turn maintenance on, then open the site in a
+   private window (the 503, Retry-After, `no-store`) and in the signed-in browser (the site,
+   `Cache-Control: private, no-store`, `X-Robots-Tag: noindex`); turn it off. A signed-in
+   person who still gets the 503 either has an access token that expired while they were away
+   (the bypass refuses it before asking, though the admin would renew it): open any admin page
+   first (it renews the sign in), then reload the site; or has a session the admin refuses too
+   (switched off, locked, or a second step owed): sign in, or finish the second step, first.
+3. `kvSynced: false` after a save means the row changed but the edge did not: the site is
+   still doing what it did before. Save again; the 10-minute reconcile heals an edge that says
+   on while the row says off, never the other way round (a row on with the edge off is logged
+   as an error in Site health's logs until someone saves).
+4. "Back on" ends maintenance at 00:00 of that day in the studio's time zone (Settings ›
+   General › Region and data); the reconcile then writes the row and audits
+   `maintenance.auto_disable` within ten minutes.
+
+**Icons.** Nothing is linked until the owner sets a favicon and an app icon (square uploads of at
+least 512 px). After setting them, `/_image` serves each as PNG at 32, 180, 192 and 512 only
+(four transformations per picture), and `/manifest.webmanifest` lists the app icon.
+
+**Rollback.** Revert the Worker; 0102 stays (expand only). If the RESTRICTIVE live writes ever
+need lifting, drop `site_profile_live_insert`, `site_profile_live_update`,
+`site_settings_live_insert` and `site_settings_live_update` (the permissive policies of 0001 and
+0019 still gate by role).
+
 ## 7. Cloudflare WAF (CLAUDE.md §3)
 
 Not code; nothing enforces these until they are created.
@@ -1608,3 +1649,21 @@ operator script or Edge Function truncates any of them (`tests/lib/noTruncate.sp
 that does; seeds and restores run as the migration role). Its triggers are inert while
 `app.release_tenants` is empty, and an older Worker parses `media_usage`'s new `pending` column
 as an unknown key it drops. A Worker rollback across R5's PR is safe.
+
+0102 (Admin v2 U9) does not move the line either. It is expand only but for one privilege
+removal: its stated grants withdraw DELETE, TRUNCATE, REFERENCES and TRIGGER on
+`site_profile` and `site_settings` from `authenticated` and `service_role` (what the bootstrap
+ALL had left; `site_settings_write` admitted an Admin or Developer DELETE), and no build since
+the line, operator script or Edge Function deletes or truncates either row
+(`tests/lib/noSingletonDelete.spec.ts` and `tests/lib/noTruncate.spec.ts` fail one that does).
+Everything else an older Worker meets it ignores: it names its columns (never `*`), reads
+`media_usage`'s `site_profile` rows by its own words, and is refused by the live write
+policies only for a stale token its own session check refuses. A Worker rollback across U9's
+PR is safe, with one effect while maintenance is on: the older middleware reads only the
+switch and the allowlist of the KV value, so the 503 loses its copy, buttons, "Back on" and
+the staff bypass (signed-in staff see it too, and it does not end by itself) until someone
+turns maintenance off. Should a singleton row ever need deleting (a tenant's removal), do it
+as the migration role in a reviewed step, and change that spec in the same PR; to give the
+API roles DELETE back: `grant delete on public.site_settings to authenticated;` (and the same
+for `site_profile`), knowing `site_settings_write` then admits an Admin or Developer DELETE
+again.

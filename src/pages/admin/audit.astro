@@ -1,4 +1,5 @@
 ---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import Icon from '@/components/admin/ui/Icon.astro';
 import LinkChips from '@/components/admin/ui/LinkChips.astro';
@@ -66,7 +67,13 @@ let directory: { id: string; name: string; role: string | null }[] = [];
 
 if (allowed && session && sb) {
   const [loaded, staff] = await Promise.all([
-    loadActivity(sb, session, query, query.actor ? [query.actor] : []).catch(async (err) => {
+    loadActivity(
+      sb,
+      session,
+      query,
+      query.actor ? [query.actor] : [],
+      await studioTimeZone(Astro.locals),
+    ).catch(async (err) => {
       await writeSystemLog({
         level: 'error',
         source: 'admin:audit.view',

@@ -1,81 +1,140 @@
-// Maintenance-mode + IP-allowlist as a Worker-level PRE-CACHE check (CLAUDE.md
-// Pillar 1): a 503 is returned before the edge-cache lookup, so it coexists with
-// the long-`s-maxage` Tier-A cache without a purge. `/admin` and `/api` are exempt.
-// Source of truth is `site_settings` (flag + allowlist), snapshotted into KV.
+// Maintenance mode + IP allowlist as a Worker-level PRE-CACHE check (CLAUDE.md Pillar 1): a
+// 503 is returned before the edge-cache lookup, so it coexists with the long-`s-maxage`
+// Tier-A cache without a purge. `/admin`, `/api`, `/healthz` and `/_image` are exempt.
+// Source of truth is `site_settings.maintenance`, snapshotted into KV.
+//
+// Admin v2 U9b (maintenance v2): the KV value carries everything the 503 needs (the switch,
+// the allowlist, the bilingual copy, the background, the contact buttons, "Back on" and its
+// instant, the staff bypass: packages/schemas/maintenance.ts), so the request path reads ONE
+// KV value and no database. The site comes back at the "Back on" instant with no write: every
+// reader here sees the EFFECTIVE state (`getMaintenanceState`), and the cron's reconcile flips
+// the stored switch afterwards (src/lib/cron/maintenanceReconcile.ts).
 
+import {
+  maintenanceInForce,
+  readMaintenance,
+  type MaintenanceContact,
+  type MaintenanceSnapshot,
+} from '@schemas/maintenance';
+import type { Locale } from '@schemas/primitives';
 import { IDENTITY_FALLBACK } from '@/lib/identity/fallback';
+import { maintenancePage } from '@/lib/maintenance/page';
 
+export { normalizeIp } from '@schemas/maintenance';
+
+/** What every reader of the switch sees: in force now or not, and why. */
 export interface MaintenanceState {
+  /** In force NOW: the stored switch is on and "Back on" has not come. */
   active: boolean;
   allowlist: readonly string[];
   /**
    * When `active` last flipped, as an ISO timestamp (Admin v2 F8: the bell's "Maintenance
-   * mode was turned on/off"). Absent on a value written before it existed. Never read by
-   * the pre-cache check, which needs only `active` and the allowlist.
+   * mode was turned on/off"): the "Back on" instant when it ended by itself (U9b). Absent on
+   * a value written before F8.
    */
   changedAt?: string;
-}
-
-/** An ISO timestamp the snapshot may carry, or nothing. */
-function changedAtOf(value: unknown): { changedAt: string } | Record<string, never> {
-  return typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value))
-    ? { changedAt: value }
-    : {};
+  /** True when the stored switch is still on but "Back on" has passed (the bell says so). */
+  endedByDate?: boolean;
+  /** The value as stored, read leniently (the 503's copy, buttons and bypass). */
+  snapshot: MaintenanceSnapshot;
 }
 
 export const MAINTENANCE_KV_KEY = 'site:maintenance';
 
-// The 503 names the studio from the code fallback, deliberately NOT from site_profile:
-// this page is answered before the edge cache on every request during maintenance, and
-// maintenance is exactly when the database may be the thing being worked on. A Postgres
-// round-trip here would put the DB back on the critical path this check exists to avoid.
-// The brand is a fixed string with no markup, so it needs no escaping.
-const MAINTENANCE_BRAND = IDENTITY_FALLBACK.brandName.en;
+/** The effective state of a stored value at `now`. */
+export function effectiveState(snapshot: MaintenanceSnapshot, now: number): MaintenanceState {
+  const active = maintenanceInForce(snapshot, now);
+  const endedByDate = snapshot.active && !active;
+  const changedAt = endedByDate ? (snapshot.untilAt ?? undefined) : snapshot.changedAt;
+  return {
+    active,
+    allowlist: snapshot.allowlist,
+    ...(changedAt ? { changedAt } : {}),
+    ...(endedByDate ? { endedByDate: true } : {}),
+    snapshot,
+  };
+}
 
 /**
- * Snapshots the flag into KV, which is what the middleware actually reads.
+ * Snapshots the value into KV, which is what the middleware actually reads.
  *
  * `site_settings` stays the source of truth, but the pre-cache check runs before the
  * edge-cache lookup on EVERY public request — a Postgres round-trip there would put the
  * database on the critical path of every cache hit, which is the opposite of what
  * Tier A is for. So the admin writes both: the row for durability and audit, this key
- * for the read path.
+ * for the read path. False when the write did not happen (no binding, a KV error).
  */
 export async function putMaintenanceState(
   env: { SESSION?: KVNamespace },
-  state: MaintenanceState,
+  snapshot: MaintenanceSnapshot,
 ): Promise<boolean> {
   try {
     if (!env.SESSION) return false;
-    await env.SESSION.put(
-      MAINTENANCE_KV_KEY,
-      JSON.stringify({
-        active: state.active,
-        allowlist: [...state.allowlist],
-        ...changedAtOf(state.changedAt),
-      }),
-    );
+    await env.SESSION.put(MAINTENANCE_KV_KEY, JSON.stringify(snapshot));
     return true;
   } catch {
     return false;
   }
 }
 
-export async function getMaintenanceState(env: {
+/**
+ * The edge's value for a stored ROW and the current contact buttons, normalised as the
+ * edge reads it. Every setting (the switch, the bypass, the allowlist, the words, "Back on")
+ * comes from the row, the source of truth; never from KV's own copy, which a read can return
+ * up to a minute stale in its location. Only the buttons, a snapshot of the identity, are
+ * taken from elsewhere.
+ */
+export function edgeValueOf(
+  row: MaintenanceSnapshot,
+  contact: MaintenanceContact,
+): MaintenanceSnapshot {
+  return readMaintenance({ ...row, contact });
+}
+
+const canonical = (value: unknown): string =>
+  JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v as Record<string, unknown>).sort(([a], [b]) =>
+            a < b ? -1 : a > b ? 1 : 0,
+          ),
+        )
+      : v,
+  );
+
+/** Whether two values say the same in every field (key order aside). */
+export function sameMaintenance(a: MaintenanceSnapshot, b: MaintenanceSnapshot): boolean {
+  return canonical(a) === canonical(b);
+}
+
+/**
+ * The KV value as stored (leniently read), or null when there is none or it cannot be read.
+ * For the admin and the reconcile, which must tell "unreadable" from "off".
+ */
+export async function readMaintenanceSnapshot(env: {
   SESSION?: KVNamespace;
-}): Promise<MaintenanceState> {
+}): Promise<MaintenanceSnapshot | null> {
   try {
     const raw = await env.SESSION?.get(MAINTENANCE_KV_KEY);
-    if (!raw) return { active: false, allowlist: [] };
-    const parsed = JSON.parse(raw) as Partial<Record<keyof MaintenanceState, unknown>>;
-    return {
-      active: parsed.active === true,
-      allowlist: Array.isArray(parsed.allowlist) ? (parsed.allowlist as string[]) : [],
-      ...changedAtOf(parsed.changedAt),
-    };
+    return raw ? readMaintenance(raw) : null;
   } catch {
-    // Fail OPEN for maintenance (never lock the whole site out on a KV blip).
-    return { active: false, allowlist: [] };
+    return null;
+  }
+}
+
+/**
+ * The effective state at `now`. Fails OPEN for the switch (never lock the whole site out on
+ * a KV blip: off), and the snapshot's bypass reads off then too (packages/schemas/maintenance.ts).
+ */
+export async function getMaintenanceState(
+  env: { SESSION?: KVNamespace },
+  now: number = Date.now(),
+): Promise<MaintenanceState> {
+  try {
+    const raw = await env.SESSION?.get(MAINTENANCE_KV_KEY);
+    return effectiveState(readMaintenance(raw ?? null), now);
+  } catch {
+    return effectiveState(readMaintenance(null), now);
   }
 }
 
@@ -86,36 +145,40 @@ export function clientIp(request: Request): string | null {
   return xff ? (xff.split(',')[0]?.trim() ?? null) : null;
 }
 
+/** The seconds a client should wait: until "Back on" (60 s to a day), else an hour (D11). */
+export function retryAfterSeconds(snapshot: MaintenanceSnapshot, now: number): number {
+  if (!snapshot.untilAt) return 3600;
+  const ms = Date.parse(snapshot.untilAt) - now;
+  if (!Number.isFinite(ms)) return 3600;
+  return Math.min(86_400, Math.max(60, Math.ceil(ms / 1000)));
+}
+
 /**
- * The 503 page. Takes the request's CSP nonce because this response now carries the same
- * strict CSP as every other one, and that CSP has no 'unsafe-inline' — the previous
- * version styled itself with inline `style=` attributes, which the policy blocks. It only
- * escaped notice because the maintenance branch returned before headers were applied.
- * Styles therefore live in a single nonced <style> block.
+ * The 503. Takes the request's CSP nonce because this response carries the same strict CSP
+ * as every other one, and that CSP has no 'unsafe-inline': the page's styles are in one
+ * nonced <style> block (src/lib/maintenance/page.ts). `no-store`: a cache must never keep a
+ * maintenance page past the window. No `noindex`: a 503 already says "temporary".
  */
-export function maintenanceResponse(nonce: string): Response {
-  // Allowlist the base64 alphabet rather than stripping "dangerous" characters. A
-  // denylist here is wrong twice over: this string lands in an HTML attribute AND in the
-  // CSP header, so `>`, spaces and `;` all break something even with quotes removed.
-  // generateNonce() only ever emits base64, so this is belt-and-braces — but the belt
-  // has to actually be a belt.
-  const safeNonce = nonce.replace(/[^A-Za-z0-9+/=]/g, '');
-  const html =
-    '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
-    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<title>Down for maintenance</title>' +
-    `<style nonce="${safeNonce}">` +
-    'body{font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#0b0b0f;color:#e8e8ea;' +
-    'display:grid;place-items:center;min-height:100vh;margin:0}' +
-    'main{text-align:center;padding:2rem}h1{margin:0 0 .5rem}p{opacity:.7}' +
-    '</style></head>' +
-    '<body><main><h1>Back shortly</h1>' +
-    `<p>${MAINTENANCE_BRAND} is undergoing scheduled maintenance.</p></main></body></html>`;
+export function maintenanceResponse(
+  nonce: string,
+  snapshot: MaintenanceSnapshot,
+  locale: Locale,
+  now: number,
+  logoSrc: string | null,
+): Response {
+  const html = maintenancePage({
+    nonce,
+    snapshot,
+    locale,
+    now,
+    logoSrc,
+    fallbackBrand: IDENTITY_FALLBACK.brandName,
+  });
   return new Response(html, {
     status: 503,
     headers: {
       'content-type': 'text/html; charset=utf-8',
-      'retry-after': '3600',
+      'retry-after': String(retryAfterSeconds(snapshot, now)),
       'cache-control': 'no-store',
     },
   });

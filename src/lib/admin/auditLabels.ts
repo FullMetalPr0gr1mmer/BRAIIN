@@ -332,6 +332,14 @@ const EXACT: Readonly<Record<string, Label>> = {
   },
   'maintenance.enable': { kind: 'settings', verb: 'Switched on', noun: 'maintenance mode' },
   'maintenance.disable': { kind: 'settings', verb: 'Switched off', noun: 'maintenance mode' },
+  // Maintenance v2 (U9b): a change of the page or of who sees the site, and the cron's
+  // switch-off on the "Back on" day.
+  'maintenance.update': { kind: 'settings', verb: 'Changed', noun: 'the maintenance page' },
+  'maintenance.auto_disable': {
+    kind: 'settings',
+    verb: 'Switched off by itself',
+    noun: 'maintenance mode',
+  },
   // Page visibility (U14a): the page is titled; a template is named by its kind.
   'page_visibility.update': {
     kind: 'settings',

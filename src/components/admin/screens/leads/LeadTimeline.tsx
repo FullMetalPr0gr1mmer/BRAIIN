@@ -1,5 +1,6 @@
 import { useId } from 'react';
-import { formatDateTime, isoOf, relTime } from '@/lib/admin/relTime';
+import { isoOf } from '@/lib/admin/relTime';
+import { useClock } from '@/components/admin/kit/clock';
 import type { LeadEventRow } from '@/lib/crm/leadPage';
 import { actorName, eventSentence, type PeopleById, type StagesByKey } from '@/lib/crm/leadView';
 
@@ -29,6 +30,7 @@ export default function LeadTimeline({
   error,
   onMore,
 }: Props) {
+  const { formatDateTime, relTime } = useClock();
   const id = useId();
   return (
     <section className="card" aria-labelledby={`${id}-h`}>

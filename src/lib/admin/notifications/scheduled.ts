@@ -1,21 +1,21 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { can } from '@/lib/authz/matrix';
+import { DEFAULT_TIME_ZONE, timeZoneCity } from '@schemas/timeZones';
+import { dayKeyIn, zonedDayEnd, zonedDayStart } from '@/lib/time/zone';
+import { clockFor } from '../relTime';
 import { PER_SOURCE, type NotificationSource, type SourceItem } from './types';
 
 // "<title> goes live today": the services and posts scheduled for today, for the roles that
-// write that content. "Today" is the Riyadh day, because that is the day the copy names
-// ("At 15:00, Riyadh time") and the day the people reading it live in; the database's
-// current_date is UTC's, which put tomorrow's 00:00 to 03:00 items under "today" every
-// evening. So the two tables are read directly, through the caller's RLS-bound client,
-// between the Riyadh day's two midnights.
+// write that content. "Today" is the studio's day (its zone, `site_settings.timezone`, since
+// Admin v2 U9), because that is the day the copy names ("At 15:00, Riyadh time") and the day
+// the people reading it live in; the database's current_date is UTC's, which put tomorrow's
+// 00:00 to 03:00 items under "today" every evening. So the two tables are read directly,
+// through the caller's RLS-bound client, between the studio's day's two midnights.
 //
 // An item counts as new from the later of that day's start and its own last change: the
 // first look of the day shows it, "Mark all as read" clears it, and one scheduled (or moved
 // to today) after the person last marked the bell read lights the bell again.
-
-const TIME_ZONE = 'Asia/Riyadh';
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface ScheduledRow {
   id: string;
@@ -39,35 +39,16 @@ function titleOf(value: unknown): string | null {
   return null;
 }
 
-const RIYADH_TIME = new Intl.DateTimeFormat('en-GB', {
-  timeZone: TIME_ZONE,
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
-const RIYADH_PARTS = new Intl.DateTimeFormat('en-US', {
-  timeZone: TIME_ZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hourCycle: 'h23',
-});
-
-/** The Riyadh calendar day that holds `now`, as the UTC instants [start, end). */
-export function riyadhDay(now: Date): { start: string; end: string } {
-  const parts = RIYADH_PARTS.formatToParts(now);
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    Number(parts.find((p) => p.type === type)?.value);
-  const [year, month, day] = [part('year'), part('month'), part('day')];
-  // The zone's offset at `now`: its wall clock read as if it were UTC, less the instant
-  // (to the second, as the wall clock is).
-  const wall = Date.UTC(year, month - 1, day, part('hour'), part('minute'), part('second'));
-  const offset = wall - Math.floor(now.getTime() / 1000) * 1000;
-  const start = Date.UTC(year, month - 1, day) - offset;
-  return { start: new Date(start).toISOString(), end: new Date(start + DAY_MS).toISOString() };
+/** The studio's calendar day that holds `now`, as the UTC instants [start, end). */
+export function studioDay(
+  now: Date,
+  tz: string = DEFAULT_TIME_ZONE,
+): { start: string; end: string } {
+  const day = dayKeyIn(now, tz);
+  return {
+    start: zonedDayStart(day, tz).toISOString(),
+    end: zonedDayEnd(day, tz).toISOString(),
+  };
 }
 
 const timeOf = (value: string | null): number => {
@@ -89,19 +70,20 @@ export interface GoingLive {
 
 // One read per request, whoever asks first: the bell (in the shell, on every admin render)
 // and the dashboard's "Going live today" (U1) want the same two reads, so the answer is kept
-// per request client (one per request, src/middleware.ts) and Riyadh day.
+// per request client (one per request, src/middleware.ts) and studio day.
 const MEMO = new WeakMap<object, Map<string, Promise<GoingLive[]>>>();
 
 /**
- * The services and posts scheduled for the Riyadh day that holds `now`, soonest first: at
+ * The services and posts scheduled for the studio's day that holds `now`, soonest first: at
  * most PER_SOURCE of each, through the caller's RLS-bound client. Throws when a read fails.
  */
 export function goingLiveToday(
   sb: SupabaseClient,
   auth: Pick<AuthContext, 'tenantId'>,
   now: Date,
+  tz: string = DEFAULT_TIME_ZONE,
 ): Promise<GoingLive[]> {
-  const { start, end } = riyadhDay(now);
+  const { start, end } = studioDay(now, tz);
   const key = `${auth.tenantId}:${start}`;
   const perClient = MEMO.get(sb) ?? new Map<string, Promise<GoingLive[]>>();
   MEMO.set(sb, perClient);
@@ -150,9 +132,11 @@ export function goingLiveToday(
 export const scheduled: NotificationSource = {
   kind: 'scheduled',
   visible: (role) => can(role, 'services.write') === 'full' || can(role, 'blog.write') === 'full',
-  async load({ sb, auth, now }) {
-    const dayStart = Date.parse(riyadhDay(now).start);
-    const items: SourceItem[] = (await goingLiveToday(sb, auth, now)).map((row) => {
+  async load({ sb, auth, now, tz }) {
+    const dayStart = Date.parse(studioDay(now, tz).start);
+    const { formatTime } = clockFor(tz);
+    const city = timeZoneCity(tz);
+    const items: SourceItem[] = (await goingLiveToday(sb, auth, now, tz)).map((row) => {
       const at = Date.parse(row.at);
       const changed = row.updatedAt ? Date.parse(row.updatedAt) : Number.NaN;
       return {
@@ -160,7 +144,7 @@ export const scheduled: NotificationSource = {
         kind: 'scheduled',
         icon: 'cal',
         text: `${row.title ?? 'An item'} goes live today`,
-        detail: `At ${RIYADH_TIME.format(at)}, Riyadh time`,
+        detail: `At ${formatTime(at)}, ${city} time`,
         at: row.at,
         since: new Date(
           Number.isFinite(changed) ? Math.max(dayStart, changed) : dayStart,

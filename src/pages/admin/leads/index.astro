@@ -1,4 +1,5 @@
 ---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminLeadsList from '@/components/admin/islands/AdminLeadsList';
 import Icon from '@/components/admin/ui/Icon.astro';
@@ -9,6 +10,9 @@ import { exportHrefOf, parseLeadFilters } from '@/lib/crm/leadUrl';
 import { leadsSubline } from '@/lib/crm/leadView';
 
 export const prerender = false;
+
+// The studio's time zone (Admin v2 U9): the island prints its dates in it, server and browser.
+const studioTz = await studioTimeZone(Astro.locals);
 
 // The leads list (Admin v2 C4b, crm.md §11 screen 1): the KPIs, the chips, the search, the
 // filters, the table and its bulk bar. The first view is rendered here, for the filters the
@@ -39,7 +43,7 @@ const [frame, initial] =
   allowed && session && sb
     ? await Promise.all([
         readLeadsFrame(sb, session).catch(() => null),
-        readLeadsListInitial(sb, session, filters, now),
+        readLeadsListInitial(sb, session, filters, now, studioTz),
       ])
     : [null, null];
 const summary = initial?.summary ?? null;
@@ -51,7 +55,7 @@ const subtitle = summary
 <AdminLayout title="Leads" subtitle={subtitle} styles={['leads.css']}>
   {
     allowed && permissions.canExport && (
-      <a slot="actions" class="btn" href={exportHrefOf(filters, now)} data-lead-export>
+      <a slot="actions" class="btn" href={exportHrefOf(filters, now, studioTz)} data-lead-export>
         <Icon name="download" size={16} />
         Export CSV<span class="visually-hidden"> of the leads these filters show</span>
       </a>
@@ -75,6 +79,7 @@ const subtitle = summary
     ) : (
       <AdminLeadsList
         client:load
+        tz={studioTz}
         frame={frame}
         initial={{ summary, page: initial?.page ?? null }}
         filters={filters}

@@ -10,6 +10,9 @@ import type { APIRoute } from 'astro';
 // kernel ran. This drives the real routes over a tenant with no row yet.
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+// Maintenance v2 (Admin v2 U9b) re-reads the profile through the service role before a write
+// (tests/lib/maintenanceRoute.spec.ts drives that); this spec is about the first save.
+vi.mock('@/lib/admin/liveRecheck', () => ({ liveRecheck: async () => undefined }));
 
 const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER = '11111111-1111-4111-8111-111111111111';

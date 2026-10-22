@@ -2,9 +2,12 @@
 import EmptyState from '../EmptyState.astro';
 import ListRow from '../ListRow.astro';
 import Badge from '../Badge.astro';
-import { relTime } from '@/lib/admin/relTime';
+import { studioClock } from '@/lib/admin/studioTimeZone';
 import { BADGE_TONES, type BadgeTone } from '@/lib/admin/tones';
 import type { LeadsData } from '@/lib/admin/dashboard/loaders';
+
+// The studio's clock (Admin v2 U9: `site_settings.timezone`, read once per request).
+const { relTime } = await studioClock(Astro.locals);
 
 // The latest inquiries (Admin v2 U1, `leads`, lead roles only): the 6 newest, the safe
 // columns only (§3): the name, what they asked about, the stage and when. Never a budget or

@@ -26,6 +26,7 @@ import { RANGE_PARAM, STAT_RANGES, rangeFrom, statsHref } from '@/lib/admin/stat
 import { loadRealtime } from '@/lib/admin/stats/realtime';
 import type { RealtimeView } from '@/lib/admin/stats/realtimeView';
 import { loadVisitSummary, type VisitSummary } from '@/lib/admin/stats/visits';
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 
 export const prerender = false;
 
@@ -60,6 +61,8 @@ const asked = url.searchParams.get('tab');
 const tab: Tab = TABS.find((t) => t.id === asked && t.id !== 'overview')?.id ?? 'overview';
 const range = rangeFrom(url);
 const setsGoals = Boolean(session && can(session.role, 'analytics.goals') === 'full');
+// The busiest hours and the realtime minutes are on the studio's clock (Admin v2 U9).
+const studioTz = await studioTimeZone(Astro.locals);
 
 let overview: { summary: PageviewSummary; visits: VisitSummary; leads: LeadKpis | null } | null =
   null;
@@ -95,7 +98,7 @@ if (allowed && session && sb) {
     } else if (tab === 'audience') {
       const [summary, hours] = await Promise.all([
         loadPageviewSummary(sb, session, range, null, { previous: false }),
-        loadBusyHours(sb, session, range),
+        loadBusyHours(sb, session, range, studioTz),
       ]);
       audience = { summary, hours };
     } else {
@@ -163,8 +166,10 @@ const rangeHref = (days: number) => statsHref(PATH, url, { [RANGE_PARAM]: String
             )}
           </StatsConversions>
         )}
-        {audience && <StatsAudience summary={audience.summary} hours={audience.hours} />}
-        {realtime && <AdminRealtime client:load initial={realtime} />}
+        {audience && (
+          <StatsAudience summary={audience.summary} hours={audience.hours} zone={studioTz} />
+        )}
+        {realtime && <AdminRealtime client:load initial={realtime} tz={studioTz} />}
       </>
     )
   }

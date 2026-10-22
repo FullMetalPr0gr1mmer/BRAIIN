@@ -1,4 +1,6 @@
 import type { APIRoute } from 'astro';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { writeSystemLog } from '@/lib/data/systemLog';
 import { z } from 'zod';
 import type { Access, Capability } from '@/lib/authz/matrix';
 import type { AuthContext } from '@/lib/auth/types';
@@ -26,6 +28,7 @@ export function rethrowWriteError(
   verb: string,
   error: { code?: string; message: string; details?: string | null },
   foreignKeys: ConstraintFields = {},
+  checks: ConstraintFields = {},
 ): never {
   if (error.code === '42501')
     throw new AuthorizationError(cap, `database refused the ${table} write`);
@@ -39,9 +42,14 @@ export function rethrowWriteError(
   }
   // 23514 = a CHECK constraint the schema could not see, because a PATCH names only the
   // fields it changes and the check spans stored ones (site_profile: a WhatsApp display
-  // form needs the E.164 number it displays). Bad input, so 422 — not a 500.
-  if (error.code === '23514')
+  // form needs the E.164 number it displays). Bad input, so 422 — not a 500. A constraint
+  // the config names (Admin v2 U9: an icon that is not a square upload) is a 422 on its field.
+  if (error.code === '23514') {
+    const name = constraintOf(error);
+    const known = name ? checks[name] : undefined;
+    if (known) throw new ValidationError(known.message, known.field);
     throw new ValidationError(`the change conflicts with a stored value on '${table}'`);
+  }
   throw new Error(`${verb} ${table}: ${error.message}`);
 }
 
@@ -82,6 +90,21 @@ export interface SingletonConfig {
    * save naming a missing record is a 422 on that field (seo_defaults' share image, 0073).
    */
   foreignKeys?: ConstraintFields;
+  /**
+   * The row's CHECKs (and a guard trigger's refusals named as one) → the field and message a
+   * refused value (23514) reports (Admin v2 U9: site_profile's icons and phone pair).
+   */
+  constraintFields?: ConstraintFields;
+  /**
+   * Runs after a successful live write, before the audit row is queued (Admin v2 U9b: a new
+   * contact snapshot for the maintenance page). Best effort: it never fails the save, and
+   * what it returns joins the audit detail.
+   */
+  afterWrite?: (ctx: {
+    auth: AuthContext;
+    sb: SupabaseClient;
+    row: Record<string, unknown>;
+  }) => Promise<Record<string, unknown> | void>;
   /** Returned by GET when no row exists yet. */
   defaults: Record<string, unknown>;
   /**
@@ -100,6 +123,32 @@ export interface SingletonConfig {
     existing: Record<string, unknown> | null,
     values: Record<string, unknown>,
   ) => void;
+}
+
+/** A config's afterWrite, which never fails the save: a throw is logged and reported. */
+async function runAfterWrite(
+  config: SingletonConfig,
+  auth: AuthContext,
+  sb: SupabaseClient,
+  row: unknown,
+): Promise<Record<string, unknown>> {
+  try {
+    return (
+      (await config.afterWrite?.({
+        auth,
+        sb,
+        row: (row ?? {}) as Record<string, unknown>,
+      })) ?? {}
+    );
+  } catch (err) {
+    await writeSystemLog({
+      level: 'warn',
+      source: `admin:${config.writeCap}`,
+      message: `${config.table}: the follow-up after a save failed`,
+      detail: { reason: err instanceof Error ? err.message.slice(0, 200) : 'unknown' },
+    });
+    return { afterWrite: 'failed' };
+  }
 }
 
 export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH: APIRoute } {
@@ -162,7 +211,14 @@ export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH
         // 23505 = someone else inserted between our read and our write.
         if (error) {
           if (error.code === '23505') throw new OptimisticLockError(config.table);
-          rethrowWriteError(config.table, config.writeCap, 'create', error, config.foreignKeys);
+          rethrowWriteError(
+            config.table,
+            config.writeCap,
+            'create',
+            error,
+            config.foreignKeys,
+            config.constraintFields,
+          );
         }
         row = data;
       } else {
@@ -175,17 +231,25 @@ export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH
           .select(config.columns)
           .maybeSingle();
         if (error) {
-          rethrowWriteError(config.table, config.writeCap, 'update', error, config.foreignKeys);
+          rethrowWriteError(
+            config.table,
+            config.writeCap,
+            'update',
+            error,
+            config.foreignKeys,
+            config.constraintFields,
+          );
         }
         if (!data) throw new OptimisticLockError(config.table);
         row = data;
       }
 
+      const effect = config.afterWrite ? await runAfterWrite(config, auth, sb, row) : {};
       audit({
         action: `${config.entity}.update`,
         entityType: config.entity,
         entityId: auth.tenantId,
-        detail: { fields: Object.keys(values) },
+        detail: { fields: Object.keys(values), ...effect },
       });
       return row;
     },

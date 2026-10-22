@@ -40,8 +40,8 @@ export const prerender = false;
 
 export const GET = defineAdminRoute({
   cap: 'siteHealth.view',
-  handler: async ({ auth, sb }) => {
-    const report = await loadHealthReport(sb, auth);
+  handler: async ({ auth, sb, studioTimeZone }) => {
+    const report = await loadHealthReport(sb, auth, Date.now(), await studioTimeZone());
     const metrics = VITAL_METRICS.map((metric) => {
       const row = report.vitals ? siteVital(report.vitals, metric) : null;
       const rating = judged(row);

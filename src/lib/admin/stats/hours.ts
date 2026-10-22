@@ -1,14 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
-import { ADMIN_TIME_ZONE } from '@/lib/admin/relTime';
+import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
 import type { DateRange } from './range';
 import { count, list, readError } from './read';
 
 // The Audience tab's busiest hours (Admin v2 G1a): page views per hour of the day over the
 // range, read from rollup_hourly_pageviews through public.busy_hours (migration 0071). The
 // rollup counts whole UTC hours; the reader groups them by the local hour of the zone the
-// Worker names, Riyadh by default (ADMIN_TIME_ZONE), so a studio time zone setting can
-// replace the constant with no SQL change (the reader accepts 0035's allow-list).
+// Worker names: the studio's (site_settings.timezone, Admin v2 U9), which the page reads with
+// studioTimeZone(), Riyadh by default. The reader accepts 0035's allow-list, which is the
+// settings' closed list (STUDIO_TIME_ZONES), so no SQL changed.
 
 const SOURCE = 'admin:stats';
 
@@ -29,7 +30,7 @@ export async function loadBusyHours(
   sb: SupabaseClient,
   auth: AuthContext,
   range: DateRange,
-  timeZone: string = ADMIN_TIME_ZONE,
+  timeZone: string = DEFAULT_TIME_ZONE,
 ): Promise<number[]> {
   const { data, error } = await sb.rpc('busy_hours', {
     p_tenant: auth.tenantId,

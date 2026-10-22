@@ -1,7 +1,8 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
-import { formatDateTime, isoOf, relTime } from '@/lib/admin/relTime';
+import { isoOf } from '@/lib/admin/relTime';
+import { useClock } from '@/components/admin/kit/clock';
 import { FORMER_MEMBER } from '@/lib/crm/leadView';
 
 // The notes thread (Admin v2 C4b, crm.md §11 screen 3): read when the page opens, for the
@@ -28,6 +29,7 @@ interface Props {
 }
 
 export default function LeadNotes({ leadId, me, canDelete, onChanged }: Props) {
+  const { formatDateTime, relTime } = useClock();
   const id = useId();
   const [notes, setNotes] = useState<NoteRow[] | null>(null);
   const [unavailable, setUnavailable] = useState(false);

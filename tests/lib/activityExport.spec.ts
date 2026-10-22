@@ -269,7 +269,14 @@ describe('the lockdown, in order', () => {
       ]),
     );
     expect(String(read.calls.find(([m]) => m === 'select')?.[1][0])).not.toMatch(/hash/);
-    expect(rpcs).toEqual([{ fn: 'audit_people', args: { p_tenant: TENANT, p_ids: [AMAL] } }]);
+    // The people lookup, and the studio's zone (the file's `when_studio` column, Admin v2 U9)
+    // through public.studio_time_zone(), which takes no argument: the token's own tenant.
+    expect(rpcs.filter((r) => r.fn !== 'studio_time_zone')).toEqual([
+      { fn: 'audit_people', args: { p_tenant: TENANT, p_ids: [AMAL] } },
+    ]);
+    expect(rpcs.filter((r) => r.fn === 'studio_time_zone')).toEqual([
+      { fn: 'studio_time_zone', args: undefined },
+    ]);
   });
 });
 
@@ -341,6 +348,8 @@ describe('the file', () => {
     expect(text).not.toContain('sara@acme.example');
     expect(text).not.toContain('should-never-be-read');
     expect(text).not.toContain('Called twice');
+    // No title is looked up (no entity table is read); the studio's time zone, the file's
+    // `when_studio` column (Admin v2 U9), is an rpc, not a table read.
     expect(new Set(reads.map((r) => r.table))).toEqual(new Set(['audit_log']));
   });
 
@@ -396,8 +405,10 @@ describe('the file', () => {
 
 describe('the studio clock, without Intl', () => {
   it('prints what relTime’s formatDateTime prints, across days, months and years', async () => {
-    const { riyadhDateTime } = await import('@/lib/admin/activityExport');
-    const { formatDateTime } = await import('@/lib/admin/relTime');
+    const { studioDateTimeWriter } = await import('@/lib/admin/activityExport');
+    const { clockFor } = await import('@/lib/admin/relTime');
+    const riyadhDateTime = studioDateTimeWriter('Asia/Riyadh');
+    const { formatDateTime } = clockFor('Asia/Riyadh');
     const start = Date.UTC(2025, 11, 31, 18, 0);
     for (let i = 0; i < 400; i += 1) {
       // Steps of 7 h 13 min: every hour of the day, both sides of midnight and of a new year.
@@ -406,5 +417,32 @@ describe('the studio clock, without Intl', () => {
     }
     expect(riyadhDateTime('2026-12-31T21:30:00.000+00:00')).toBe('1 Jan 2027, 00:30');
     expect(riyadhDateTime('not a time')).toBe('');
+  });
+
+  it('follows the studio’s zone, daylight saving included (Admin v2 U9)', async () => {
+    const { studioDateTimeWriter } = await import('@/lib/admin/activityExport');
+    const { clockFor } = await import('@/lib/admin/relTime');
+    const { STUDIO_TIME_ZONES } = await import('@schemas/timeZones');
+    const sweep = (tz: string, start: number, steps: number, stepMin: number) => {
+      const write = studioDateTimeWriter(tz);
+      const { formatDateTime } = clockFor(tz);
+      for (let i = 0; i < steps; i += 1) {
+        const at = new Date(start + i * stepMin * 60_000).toISOString();
+        expect(write(at), `${tz} ${at}`).toBe(formatDateTime(at));
+      }
+    };
+    // Every zone across the year, in 1 d 7 h 13 min steps (every hour of the day comes up).
+    for (const { value: tz } of STUDIO_TIME_ZONES) sweep(tz, Date.UTC(2026, 0, 1, 0, 7), 300, 1873);
+    // Around each 2026 change, minute by minute through the hours either side: London
+    // (29 Mar 01:00 UTC, 25 Oct 01:00 UTC) and Cairo (its last Friday of April and last
+    // Thursday of October, at midnight local).
+    for (const [tz, at] of [
+      ['Europe/London', Date.UTC(2026, 2, 29, 1)],
+      ['Europe/London', Date.UTC(2026, 9, 25, 1)],
+      ['Africa/Cairo', Date.UTC(2026, 3, 23, 22)],
+      ['Africa/Cairo', Date.UTC(2026, 9, 29, 21)],
+    ] as const) {
+      sweep(tz, at - 3 * 3_600_000, (6 * 60) / 7, 7);
+    }
   });
 });

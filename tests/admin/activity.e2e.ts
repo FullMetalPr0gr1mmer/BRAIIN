@@ -148,7 +148,7 @@ for (const role of ['admin', 'developer'] as const) {
         expect(file.headers()['cache-control']).toContain('no-store');
         const text = await file.text();
         expect(text.replace(/^﻿/, '').split('\r\n')[0]).toBe(
-          '"when_utc","when_riyadh","who","role","kind","what","item_type","item_id","changed_fields"',
+          '"when_utc","when_studio","who","role","kind","what","item_type","item_id","changed_fields"',
         );
         expect(text).not.toMatch(/prev_hash|"hash"/);
       }

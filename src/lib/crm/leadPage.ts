@@ -202,10 +202,11 @@ export async function readLeadsListInitial(
   auth: AuthContext,
   filters: LeadFilters,
   now: Date,
+  tz?: string,
 ): Promise<LeadsListInitial> {
   const [summary, page] = await Promise.all([
-    readLeadSummary(sb, auth.tenantId, summaryQueryOf(filters, now)).catch(() => null),
-    readLeadList(sb, auth.tenantId, listQueryOf(filters, now)).catch(() => null),
+    readLeadSummary(sb, auth.tenantId, summaryQueryOf(filters, now, tz)).catch(() => null),
+    readLeadList(sb, auth.tenantId, listQueryOf(filters, now, tz)).catch(() => null),
   ]);
   return { summary, page };
 }
@@ -216,8 +217,9 @@ export async function readBoardInitial(
   auth: AuthContext,
   filters: LeadFilters,
   now: Date,
+  tz?: string,
 ): Promise<BoardColumn[] | null> {
-  const { perStage, ...rest } = boardQueryOf(filters, now);
+  const { perStage, ...rest } = boardQueryOf(filters, now, undefined, tz);
   return readLeadBoard(sb, auth.tenantId, { ...rest, per_stage: perStage }).catch(() => null);
 }
 
@@ -228,11 +230,12 @@ async function readNeighbours(
   id: string,
   filters: LeadFilters,
   now: Date,
+  tz?: string,
 ): Promise<{ prev: string | null; next: string | null }> {
   const { data, error } = await sb.rpc('lead_neighbours', {
     p_tenant: auth.tenantId,
     p_id: id,
-    p_filter: neighboursQueryOf(filters, now),
+    p_filter: neighboursQueryOf(filters, now, tz),
   });
   const pickId = (value: unknown) => (typeof value === 'string' && UUID.test(value) ? value : null);
   if (error || !data || typeof data !== 'object') return { prev: null, next: null };
@@ -290,11 +293,12 @@ export async function readLeadDetail(
   filters: LeadFilters,
   now: Date,
   canEditServices: boolean,
+  tz?: string,
 ): Promise<LeadDetailInitial> {
   const row = await getRow<Record<string, unknown>>(sb, 'leads', auth, id, LEAD_WRITE_COLUMNS);
   const [labels, neighbours, first, serviceHref] = await Promise.all([
     resolveLeadInterests(sb, auth.tenantId, [row]),
-    readNeighbours(sb, auth, id, filters, now),
+    readNeighbours(sb, auth, id, filters, now, tz),
     readFirstEvents(sb, auth, id),
     canEditServices ? readServiceHref(sb, auth, row['service_of_interest']) : null,
     writeAudit(sb, auth, {
