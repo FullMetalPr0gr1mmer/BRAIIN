@@ -26,6 +26,12 @@ import { releaseTags, type SlugLookup, type SlugTable } from './tags';
 //      a failure when the minute cron tries again (src/lib/cron/releases.ts).
 //   4. When a purge was sent: an audit row, `release.purge`, as the publisher (counts and codes,
 //      never a tag's value beyond what the release's own audit row already names).
+//
+// A scheduled release the minute cron fires (R11, `afterFire`) has no publisher's request: the
+// same steps run as the system, its slugs read with the service client scoped to the release's
+// tenant (no publisher's RLS to read them under), and no audit row for the purge (the cron is no
+// person: system_logs, as R7's retries); the release's own `release.publish` row names its
+// scheduler, written by the apply.
 
 type Item = ApplyResult['items'][number];
 
@@ -80,6 +86,36 @@ export async function rebuildSnapshots(
     kvSynced = (kvSynced ?? true) && synced;
   }
   return kvSynced;
+}
+
+/**
+ * Slugs read as the system (a scheduled release the cron fired, R11): the service client, the
+ * release's tenant only, one request per table asked (at most the four of SLUG_TABLES).
+ */
+export function systemSlugs(tenantId: string): SlugLookup {
+  return async (reads) => {
+    const svc = serviceClient();
+    const answers = await Promise.all(
+      reads.map(({ table, ids }) =>
+        svc
+          .from(table)
+          .select('id,slug')
+          .eq('tenant_id', tenantId)
+          .in('id', [...ids]),
+      ),
+    );
+    const out = new Map<SlugTable, Map<string, string>>();
+    reads.forEach(({ table }, index) => {
+      const { data, error } = answers[index]!;
+      if (error) throw new Error(`read ${table} slugs: ${error.message}`);
+      const slugs = out.get(table) ?? new Map<string, string>();
+      for (const row of (data ?? []) as Record<string, unknown>[]) {
+        if (typeof row['slug'] === 'string') slugs.set(String(row['id']), row['slug']);
+      }
+      out.set(table, slugs);
+    });
+    return out;
+  };
 }
 
 /** Slugs read as the publisher, every table in one request (public.release_read_rows, 0103). */
@@ -166,12 +202,60 @@ export async function afterPublish(args: {
   items: readonly Item[] | null;
   purge?: Partial<Omit<PurgeOptions, 'source'>>;
 }): Promise<AfterPublishResult> {
-  const { sb, auth, releaseId, number, items } = args;
-  const kvSynced = await rebuildSnapshots(auth.tenantId, snapshotNeeds(items));
+  const { sb, auth, releaseId, number } = args;
+  return runAfterEffects({
+    tenantId: auth.tenantId,
+    releaseId,
+    number,
+    items: args.items,
+    slugs: publisherSlugs(sb, auth),
+    ...(args.purge ? { purge: args.purge } : {}),
+    // A purge was sent: its row in the activity log, in its own words (auditLabels).
+    onSent: async (outcome) => {
+      await writeAudit(sb, auth, {
+        action: 'release.purge',
+        entityType: 'release',
+        entityId: releaseId,
+        detail: {
+          number,
+          status: outcome.status,
+          tags: outcome.tags.length,
+          ...(outcome.reason ? { reason: outcome.reason } : {}),
+        },
+      });
+    },
+  });
+}
 
-  const { tags } =
-    items === null ? { tags: [COLLAPSE_TAG] } : await releaseTags(items, publisherSlugs(sb, auth));
-  const outcome = await purgeTags(auth.tenantId, tags, { source: 'release', ...args.purge });
+/**
+ * Everything after a scheduled release went live (R11, the minute cron): the same steps as a
+ * publish's, as the system (above). Never throws but where a step's own helper does not.
+ */
+export async function afterFire(args: {
+  tenantId: string;
+  releaseId: string;
+  number: number;
+  items: readonly Item[] | null;
+  purge?: Partial<Omit<PurgeOptions, 'source'>>;
+}): Promise<AfterPublishResult> {
+  return runAfterEffects({ ...args, slugs: systemSlugs(args.tenantId) });
+}
+
+/** The steps both share: the snapshots, the purge, its record, and `onSent` when one was sent. */
+async function runAfterEffects(args: {
+  tenantId: string;
+  releaseId: string;
+  number: number;
+  items: readonly Item[] | null;
+  slugs: SlugLookup;
+  purge?: Partial<Omit<PurgeOptions, 'source'>>;
+  onSent?: (outcome: Awaited<ReturnType<typeof purgeTags>>) => Promise<void>;
+}): Promise<AfterPublishResult> {
+  const { tenantId, releaseId, number, items } = args;
+  const kvSynced = await rebuildSnapshots(tenantId, snapshotNeeds(items));
+
+  const { tags } = items === null ? { tags: [COLLAPSE_TAG] } : await releaseTags(items, args.slugs);
+  const outcome = await purgeTags(tenantId, tags, { source: 'release', ...args.purge });
   const nextAt =
     outcome.status === 'failed'
       ? purgeRetryAt(1, (args.purge?.now ?? Date.now)(), args.purge?.random ?? Math.random)
@@ -193,26 +277,15 @@ export async function afterPublish(args: {
     });
   }
   await recordPurge({
-    tenantId: auth.tenantId,
+    tenantId,
     releaseId,
     status: outcome.status,
     tags: outcome.tags.length > 0 ? outcome.tags : tags,
     nextAt,
     sideEffects: kvSynced === undefined ? {} : { kvSynced },
   });
-  if (outcome.requests > 0 || outcome.status === 'done') {
-    // A purge was sent: its row in the activity log, in its own words (auditLabels).
-    await writeAudit(sb, auth, {
-      action: 'release.purge',
-      entityType: 'release',
-      entityId: releaseId,
-      detail: {
-        number,
-        status: outcome.status,
-        tags: outcome.tags.length,
-        ...(outcome.reason ? { reason: outcome.reason } : {}),
-      },
-    });
+  if ((outcome.requests > 0 || outcome.status === 'done') && args.onSent) {
+    await args.onSent(outcome);
   }
   return kvSynced === undefined
     ? { purge: outcome.status, tags: outcome.tags }

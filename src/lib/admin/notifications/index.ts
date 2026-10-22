@@ -8,6 +8,7 @@ import { applications } from './applications';
 import { health } from './health';
 import { leads } from './leads';
 import { maintenance } from './maintenance';
+import { releases } from './releases';
 import { scheduled } from './scheduled';
 import { MAX_ITEMS, type NotificationItem, type NotificationSource } from './types';
 
@@ -30,6 +31,7 @@ export const NOTIFICATION_SOURCES: Readonly<Record<NotificationKind, Notificatio
   scheduled,
   maintenance,
   health,
+  releases,
 };
 
 export interface NotificationFeed {
