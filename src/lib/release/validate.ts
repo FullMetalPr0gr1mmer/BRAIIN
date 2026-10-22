@@ -469,17 +469,33 @@ async function primeLinks(
     [...byTable.entries()].map(async ([table, { ids, service }]) => {
       const list = [...ids];
       const isMedia = table === 'media_assets';
+      // A post's author (U8b, D11): the publish rule asks for the member's status, read here
+      // with the ids, under the caller's RLS and through the state the release leaves.
+      const isAuthor = table === 'team_members' && !service;
       // A team member's account: staff read only their own profile, so existence in the tenant
       // is read with the service client (ids only, nothing returned to anyone).
       const rows = service
         ? await liveDb(serviceClient(), auth).list(table, { columns: 'id', in: { id: list } })
         : await db.list(table, {
-            columns: isMedia ? 'id,kind,alt' : 'id',
+            columns: isMedia ? 'id,kind,alt' : isAuthor ? 'id,status' : 'id',
             in: { id: list },
           });
       const have = new Set(rows.map((r) => String(r['id'])));
       found.set(table, have);
       for (const id of list) db.primeExists(table, id, {}, have.has(id));
+      if (isAuthor) {
+        // requirePublishedAuthor's question (blog.ts), answered for every author at once: one
+        // read per release, not one per author (P-15). A member the read cannot see is null,
+        // which the rule refuses, as it would have refused the live answer.
+        const statusOf = new Map(rows.map((row) => [String(row['id']), row['status'] ?? null]));
+        for (const id of list) {
+          db.primeFirst(
+            table,
+            { columns: 'status', eq: { id } },
+            statusOf.has(id) ? { status: statusOf.get(id) } : null,
+          );
+        }
+      }
       if (isMedia) {
         // The poster rules ask "an image of this site" and "its alt text": answered from here.
         for (const row of rows) {

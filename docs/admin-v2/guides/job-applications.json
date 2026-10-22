@@ -1,0 +1,56 @@
+{
+  "slug": "job-applications",
+  "sort_order": 90,
+  "minutes": 3,
+  "tags": [
+    "hiring"
+  ],
+  "screens": [
+    "/admin/applications"
+  ],
+  "caps": [
+    "applications.manage"
+  ],
+  "title": "Job applications",
+  "title_ar": "طلبات التوظيف",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Applications sent from the Join page arrive here. The form on the site is open only while Accepting job applications is ticked in General settings, which only an Admin can change."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Open an application to read it, and set its status as you review it. Opening one is recorded in the activity log; its contact details stay hidden until you reveal them.",
+          "Reveal contact details shows the e-mail and phone, and Download CV fetches the file. Both are logged against your account.",
+          "Erase application removes the application and its CV for good. Use it when someone asks for their data to be deleted.",
+          "Applications are kept 12 months, or 24 if the applicant agreed to be considered for future roles. One marked spam goes after 30 days."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "CVs are not scanned for viruses. Open them with care, and keep them inside the team."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تصل هنا الطلبات المرسلة من صفحة Join. ولا يكون النموذج في الموقع مفتوحًا إلا عند تفعيل Accepting job applications في الإعدادات العامة، وتغييره للمسؤول (Admin) فقط."
+      },
+      {
+        "t": "ol",
+        "x": [
+          "افتح الطلب لقراءته، وحدّد حالته أثناء مراجعته. ويُسجَّل فتحه في سجل النشاط، وتبقى بيانات التواصل مخفية حتى تُظهرها.",
+          "يُظهر Reveal contact details البريد الإلكتروني والهاتف، ويجلب Download CV الملف، ويُسجَّل الاثنان باسم حسابك.",
+          "يحذف Erase application الطلب وسيرته الذاتية نهائيًا. استخدمه عندما يطلب أحد حذف بياناته.",
+          "تُحفظ الطلبات 12 شهرًا، أو 24 شهرًا إذا وافق المتقدم على النظر في طلبه لوظائف مستقبلية. والطلب المعلَّم كرسالة مزعجة (spam) يُحذف بعد 30 يومًا."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "لا تُفحص السير الذاتية بحثًا عن الفيروسات. افتحها بحذر وأبقِها داخل الفريق."
+      }
+    ]
+  }
+}

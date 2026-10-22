@@ -34,6 +34,11 @@ export interface RichTextProps {
   describedBy?: string | undefined;
   /** The link dialog (FormField passes fields/LinkDialog). Without one, no link button. */
   linkDialog?: ComponentType<LinkDialogProps> | undefined;
+  /**
+   * Admin v2 U8b: shown, not edited (a read-only editor): not editable, no toolbar. A prop,
+   * not a context, so this lazy chunk imports nothing new from the shared admin code.
+   */
+  readOnly?: boolean | undefined;
 }
 
 const EMPTY: TiptapDoc = { type: 'doc', content: [] };
@@ -68,6 +73,7 @@ export default function RichText({
   invalid,
   describedBy,
   linkDialog: LinkDialog,
+  readOnly = false,
 }: RichTextProps) {
   const [linking, setLinking] = useState<{ href: string } | null>(null);
   const editor = useEditor({
@@ -81,6 +87,7 @@ export default function RichText({
       }),
     ],
     content: asEditorContent(value ?? EMPTY),
+    editable: !readOnly,
     // Astro renders islands on the server first; Tiptap must not try to measure a DOM
     // that does not exist yet.
     immediatelyRender: false,
@@ -99,6 +106,7 @@ export default function RichText({
         role: 'textbox',
         'aria-multiline': 'true',
         ...(id ? { id } : {}),
+        ...(readOnly ? { 'aria-readonly': 'true' } : {}),
         ...(invalid ? { 'aria-invalid': 'true' } : {}),
         ...(describedBy ? { 'aria-describedby': describedBy } : {}),
       },
@@ -117,6 +125,11 @@ export default function RichText({
     if (JSON.stringify(editor.getJSON()) === JSON.stringify(next)) return;
     editor.commands.setContent(asEditorContent(next), { emitUpdate: false });
   }, [editor, value]);
+
+  // A read-only editor stays so: the flag can change after the editor was made.
+  useEffect(() => {
+    if (editor && editor.isEditable === readOnly) editor.setEditable(!readOnly, false);
+  }, [editor, readOnly]);
 
   if (!editor) return <div className="rich rich--loading">Loading the editor…</div>;
 
@@ -140,6 +153,14 @@ export default function RichText({
       {text}
     </button>
   );
+
+  if (readOnly) {
+    return (
+      <div className="rich" data-readonly="">
+        <EditorContent editor={editor} />
+      </div>
+    );
+  }
 
   return (
     <div className="rich">
