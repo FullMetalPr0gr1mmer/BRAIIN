@@ -88,44 +88,51 @@ type Priv = 'select' | 'insert' | 'update';
 type Grants = Record<'anon' | 'authenticated', Record<Priv, Set<string>>>;
 
 /**
- * Who may name which column, replayed from the newest `revoke all on public.site_integrations`
- * (the contract's restatement: it clears every role, so nothing before it counts) through
- * every grant and revoke after it, in file order. A table-level grant names every column.
+ * Who may name which column, replayed through every migration in order, as PostgreSQL keeps
+ * it: a grant or revoke naming the table (alone or in a list of tables) adds or removes its
+ * columns for each role it names (a table-level one: every column the table has then), and a
+ * dropped column takes its privileges with it.
  */
-function grantsNow(): Grants {
-  const all = MIGRATIONS.map((m) => m.sql).join('\n');
-  const at = all.toLowerCase().lastIndexOf('revoke all on public.site_integrations from');
-  expect(at, 'a migration restates the grants from nothing').toBeGreaterThan(-1);
+function grantsAfter(files: readonly { sql: string }[]): Grants {
   const empty = () => ({
     select: new Set<string>(),
     insert: new Set<string>(),
     update: new Set<string>(),
   });
   const out: Grants = { anon: empty(), authenticated: empty() };
-  const kept = columnsAfter(MIGRATIONS);
   const statement =
-    /\b(grant|revoke)\s+([a-z, ]+?)\s*(?:\(([^)]*)\))?\s+on\s+(?:table\s+)?public\.site_integrations\s+(?:to|from)\s+([a-z_, ]+);/gi;
-  for (const m of all.slice(at).matchAll(statement)) {
-    const [, verb, privs, list, roles] = m;
-    const columns = list ? list.split(',').map((c) => c.trim().toLowerCase()) : [...kept];
-    for (const role of roles!.split(',').map((r) => r.trim().toLowerCase())) {
-      if (role !== 'anon' && role !== 'authenticated') continue;
-      const named =
-        privs!.toLowerCase().trim() === 'all' ? ['select', 'insert', 'update'] : privs!.split(',');
-      for (const p of named.map((x) => x.trim()) as Priv[]) {
-        if (!(p in out[role])) continue;
-        for (const c of columns) {
-          if (verb!.toLowerCase() === 'grant') out[role][p].add(c);
-          else out[role][p].delete(c);
+    /\b(grant|revoke)\s+([a-z,\s]+?)\s*(?:\(([^)]*)\))?\s+on\s+(?:table\s+)?((?:public\.[a-z_0-9]+\s*,\s*)*public\.[a-z_0-9]+)\s+(?:to|from)\s+([a-z_,\s]+?)\s*;/gi;
+  files.forEach(({ sql }, i) => {
+    const has = columnsAfter(files.slice(0, i + 1));
+    for (const m of sql.matchAll(statement)) {
+      const [, verb, privs, list, tables, roles] = m;
+      const named = tables!.split(',').map((t) => t.trim().toLowerCase());
+      if (!named.includes('public.site_integrations')) continue;
+      const columns = list ? list.split(',').map((c) => c.trim().toLowerCase()) : [...has];
+      const which = /\ball\b/i.test(privs!)
+        ? ['select', 'insert', 'update']
+        : privs!.split(',').map((x) => x.trim().toLowerCase());
+      for (const role of roles!.split(',').map((r) => r.trim().toLowerCase())) {
+        if (role !== 'anon' && role !== 'authenticated') continue;
+        for (const p of which) {
+          if (!(p in out[role])) continue;
+          for (const c of columns) {
+            if (verb!.toLowerCase() === 'grant') out[role][p as Priv].add(c);
+            else out[role][p as Priv].delete(c);
+          }
         }
       }
     }
-  }
+    for (const role of Object.values(out)) {
+      for (const set of Object.values(role))
+        for (const c of [...set]) if (!has.has(c)) set.delete(c);
+    }
+  });
   return out;
 }
 
 const KEPT_NOW = columnsAfter(MIGRATIONS);
-const GRANTS = grantsNow();
+const GRANTS = grantsAfter(MIGRATIONS);
 
 // ── The recording client: every read and write a reader makes, by table ──────────────────────
 interface Call {
@@ -245,19 +252,30 @@ beforeEach(() => {
 describe('the table the contract leaves', () => {
   it('the migrations before the contract still hold the four boxes (the replay sees them)', () => {
     expect(CONTRACT, 'the contract migration exists').toBeDefined();
-    const before = columnsAfter(MIGRATIONS.filter((m) => m.name < CONTRACT!.name));
-    for (const legacy of LEGACY) expect(before.has(legacy), legacy).toBe(true);
+    const earlier = MIGRATIONS.filter((m) => m.name < CONTRACT!.name);
+    const before = columnsAfter(earlier);
+    const staff = grantsAfter(earlier).authenticated;
+    for (const legacy of LEGACY) {
+      expect(before.has(legacy), legacy).toBe(true);
+      // ...and staff could read and write them, as the residual said (the replay is not blind).
+      expect(staff.select.has(legacy) && staff.update.has(legacy), `staff on ${legacy}`).toBe(true);
+    }
   });
 
   it('after every migration the table holds the typed values, the key, the version and the stamps', () => {
     expect([...KEPT_NOW].sort()).toEqual(KEPT);
   });
 
-  it('the contract counts the boxes and refuses before it drops anything', () => {
+  it('the contract locks the table, counts the boxes and refuses before it drops anything', () => {
     const sql = CONTRACT!.sql;
+    // The lock first: no write can land between the count and the drop.
+    const lock = sql.search(/lock table public\.site_integrations in access exclusive mode;/);
+    const count = sql.search(/where ga4 <> '\{\}'::jsonb or search_console <> '\{\}'::jsonb/);
     const refuse = sql.search(/raise exception 'U11c: % site_integrations row\(s\) hold legacy/);
     const drop = sql.search(/alter table public\.site_integrations\s+drop column/);
-    expect(refuse).toBeGreaterThan(-1);
+    expect(lock).toBeGreaterThan(-1);
+    expect(count).toBeGreaterThan(lock);
+    expect(refuse).toBeGreaterThan(count);
     expect(drop).toBeGreaterThan(refuse);
     for (const legacy of LEGACY) expect(sql).toMatch(new RegExp(`drop column ${legacy}[,;]`));
     expect(sql).not.toMatch(/drop column[^;]*\bcascade\b/i);

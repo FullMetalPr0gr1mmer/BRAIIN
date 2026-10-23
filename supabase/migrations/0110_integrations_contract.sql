@@ -26,7 +26,8 @@
 -- The owner then reads those rows in the dashboard and clears them (or, to keep them, turns
 -- this file into a revoke: docs/admin-v2/as-built/U11c.md).
 --
---   1. The precondition: no row of any tenant holds legacy JSON (anything but '{}').
+--   1. The precondition, under the drop's own lock (so nothing is written between the count
+--      and the drop): no row of any tenant holds legacy JSON (anything but '{}').
 --   2. The four columns dropped, RESTRICT: an object that depends on one (a view, a policy, a
 --      constraint) fails the push instead of going with it. Their column privileges go with
 --      them (PostgreSQL drops a dropped column's ACL).
@@ -56,6 +57,12 @@
 set local lock_timeout = '5s';
 
 -- ═══ 1. Nothing written into the boxes since 0105 ═══════════════════════════════════════════
+-- The table is locked first, in the mode the drop takes anyway (ACCESS EXCLUSIVE), so no write
+-- can land between the count and the drop. The lock_timeout above bounds the wait for it, and
+-- it ends with this file's transaction; until then readers of the table queue behind it (the
+-- home pages' verification read, which never fails the page, and the Integrations screen).
+lock table public.site_integrations in access exclusive mode;
+
 -- A count, never a value. The columns are NOT NULL with '{}' as their default (0009), so any
 -- other value (an object with keys, an array, a string, JSON null) is something someone wrote.
 do $$
