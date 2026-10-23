@@ -29,6 +29,8 @@ import { pageAccessCookieName, verifyAccessCookie } from '@/lib/visibility/acces
 import { pageAccessGate } from '@/lib/visibility/gate';
 import { withPageAccess } from '@/lib/visibility/scope';
 import { handlePreview, previewConnectSources } from '@/lib/http/preview';
+import { ga4Reads } from '@/lib/http/ga4';
+import { getGa4MeasurementId } from '@/lib/data/ga4';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { localeFromPath } from '@/lib/i18n';
@@ -237,7 +239,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // first place. Buffering the body is acceptable at dev latency only.
   const secured = async (
     response: Response,
-    extra: { noForms?: boolean; connectOnly?: readonly string[] } = {},
+    extra: { noForms?: boolean; connectOnly?: readonly string[]; ga4?: boolean } = {},
   ): Promise<Response> => {
     const isHtml = (response.headers.get('content-type') ?? '').includes('text/html');
     let out = response;
@@ -258,6 +260,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
       ...(isAdmin ? { frameSelf: true } : {}),
       ...(extra.noForms ? { noForms: true } : {}),
       ...(extra.connectOnly ? { connectOnly: extra.connectOnly } : {}),
+      // GA4's hosts (Admin v2 U15) on an HTML page whose layout renders the loader, only.
+      ...(extra.ga4 && isHtml ? { ga4: true } : {}),
     });
     if (isPrivate) out.headers.set('Cache-Control', PRIVATE_CACHE);
     if (isPrivate) {
@@ -483,6 +487,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
     );
   }
 
+  // 2b) Google Analytics 4 (Admin v2 U15, src/lib/http/ga4.ts): with the code-owned switch on,
+  //     a public page route answered publicly reads the measurement id ONCE, started here so
+  //     it overlaps the page's own reads, and the promise rides `locals` to the layout, which
+  //     renders the same-origin loader for an id (src/components/Ga4Loader.astro). After the
+  //     render the same answer decides the CSP (step 5), so a page lists Google's hosts
+  //     exactly when it carries the loader. With the switch off (production until the owner
+  //     signs off the notice) nothing is read and nothing changes. One subrequest of the
+  //     Workers Free plan's 50 per page while on; none while off, and none on any other route.
+  const ga4 = ga4Reads({
+    method: request.method,
+    routePattern: context.routePattern,
+    internal: isAdmin || isApi || isHealth || isImage,
+    private: unlocked !== null || bypassed,
+  })
+    ? getGa4MeasurementId()
+    : null;
+  if (ga4) locals.ga4 = ga4;
+
   // 3) Render. A page whose password this request answered renders inside the page-access
   //    scope, which is the only thing that lets its sections be read (src/lib/data/
   //    pageSections.ts reads them as the service role, for that one page).
@@ -509,10 +531,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  // 5) Apply the same headers to the rendered response; a link-only page is not indexed,
+  // 5) Apply the same headers to the rendered response (with GA4's hosts when step 2b's read
+  //    found an id: the layout then carries the loader); a link-only page is not indexed,
   //    and an unlocked page is private: never stored by any cache, never indexed, and
   //    carrying no cache tag a purge could mistake for a public page's.
-  const out = await secured(rendered);
+  const out = await secured(rendered, ga4 && (await ga4) ? { ga4: true } : {});
   if (gate.action === 'noindex') out.headers.set('X-Robots-Tag', 'noindex');
   if (unlocked !== null || bypassed) {
     // A page unlocked by its password, or one a signed-in person sees past the maintenance
