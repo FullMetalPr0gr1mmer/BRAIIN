@@ -30,6 +30,7 @@ import KitGallery from '@/components/admin/screens/kit/KitGallery';
 import { KIT_ROWS, KIT_SECTIONS } from '@/components/admin/screens/kit/samples';
 import {
   deleteMessage,
+  removeMessage,
   nameLang,
   nameOf,
   renderCell,
@@ -549,8 +550,12 @@ describe('ResourceTable on the kit', () => {
     );
     expect(deleteMessage('Service', 'شعار')).toContain('“\u2068شعار\u2069”');
     const source = readFileSync('src/components/admin/screens/resources/ResourceTable.tsx', 'utf8');
+    // Admin v2 R12: with releases on the same row is named in the removal's words instead.
     expect(source).toMatch(
-      /confirmDialog\(\{\s*message: deleteMessage\(ui\.singular, rowName\(row\)\)/,
+      /confirmDialog\(\{\s*message: staged\s*\? removeMessage\(ui\.singular, rowName\(row\)\)\s*: deleteMessage\(ui\.singular, rowName\(row\)\)/,
+    );
+    expect(removeMessage('Service', 'Logo design')).toBe(
+      'Remove the service “\u2068Logo design\u2069” from the site? The removal is saved as an unpublished change, and nothing leaves the site until it is published.',
     );
   });
 

@@ -159,7 +159,7 @@ describe('the savebar', () => {
   it('the words carry no dash (P-12)', () => {
     const counts = savebarCounts(buildRows([item(1), item(2, { publishableByMe: false })]));
     for (const words of [savebarLead(counts), savebarSub(counts), discardMineWords(3)]) {
-      expect(words).not.toMatch(/[–—]/);
+      expect(words).not.toMatch(/[\u2013\u2014]/);
     }
   });
 });
@@ -244,7 +244,7 @@ describe('the selection', () => {
         rows.find((r) => r.key === id(2))!,
         needs,
       ),
-    ).toBe('Included because “⁨Service 1⁩” needs it');
+    ).toBe('Included because “\u2068Service 1\u2069” needs it');
     // Unticking the needed one unticks its dependant too.
     const after = toggleRow(
       rows,

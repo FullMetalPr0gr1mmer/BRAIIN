@@ -470,7 +470,7 @@ describe('draft mode (Admin v2 R12)', () => {
     expect(removal.pendingRemoval).toBe(true);
     // Live mode never reads `pendingRemoval`: no live row carries it.
     expect(loaded({ ...ROW, pendingRemoval: true }).pendingRemoval).toBe(false);
-    expect(DRAFT_GONE_WORDS['draft-discarded']).not.toMatch(/[–—]/);
+    expect(DRAFT_GONE_WORDS['draft-discarded']).not.toMatch(/[\u2013\u2014]/);
   });
 
   it('reads the change’s conflict and a row gone under it', () => {

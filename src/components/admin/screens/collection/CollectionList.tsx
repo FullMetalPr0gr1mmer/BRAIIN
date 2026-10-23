@@ -1,6 +1,7 @@
 import type { MouseEvent, RefObject } from 'react';
 import Icon from '@/components/admin/kit/Icon';
 import ListRow from '@/components/admin/kit/ListRow';
+import PendingBadge, { pendingKindOf } from '@/components/admin/kit/PendingBadge';
 import { MoveButtons, SortHandle, SortHint } from '@/components/admin/kit/Sortable';
 import { Badge } from '@/components/admin/kit/StatusBadge';
 import { useSortable } from '@/components/admin/kit/useSortable';
@@ -11,7 +12,8 @@ import type { CollectionPermissions } from './fields';
 // first read has rows, so the Sortable core binds to a list that exists (it binds when this
 // mounts). Each row: a handle, the icon, the item's words, its badges, Move up / Move down,
 // and Duplicate and Edit (shown on hover and whenever focus is in the row). The title is a
-// real link to the item; the screen opens it in the drawer.
+// real link to the item; the screen opens it in the drawer. Admin v2 R12: a row with a pending
+// change (releases on: the list read adds `draft`) wears its badge after the item's own.
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -70,6 +72,7 @@ export default function CollectionList({
           if (!row) return null;
           const title = def.rowTitle(row);
           const copyable = permissions.write && def.copy !== undefined && def.copy(row) !== null;
+          const pending = pendingKindOf(row);
           return (
             <ListRow
               key={id}
@@ -88,6 +91,7 @@ export default function CollectionList({
                       {badge.label || undefined}
                     </Badge>
                   ))}
+                  {pending && <PendingBadge kind={pending} />}
                   {canSort && <MoveButtons label={title} />}
                 </>
               }

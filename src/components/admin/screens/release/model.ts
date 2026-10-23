@@ -448,7 +448,7 @@ export function includedBecause(
     .map(([dependant]) => rowOfDraft(rows, dependant)?.label)
     .filter((label): label is string => typeof label === 'string' && label !== row.label);
   if (by.length === 0) return null;
-  const names = [...new Set(by)].map((label) => `“⁨${label}⁩”`);
+  const names = [...new Set(by)].map((label) => `“\u2068${label}\u2069”`);
   return `Included because ${names.join(' and ')} ${names.length === 1 ? 'needs' : 'need'} it`;
 }
 
