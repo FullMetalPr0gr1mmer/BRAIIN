@@ -4,6 +4,7 @@ import Icon from '@/components/admin/kit/Icon';
 import Note from '@/components/admin/kit/Note';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { toast } from '@/lib/admin/toast';
+import { announcePending } from '@/lib/admin/releaseEvents';
 import { uiFor } from '@/lib/admin/uiSchema';
 import { collectionOf, type CollectionDef } from './collections';
 import { copyPayload } from './copy';
@@ -140,10 +141,12 @@ export default function CollectionScreen({ collection, open, permissions }: Coll
     setRows(order.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
     setError('');
     try {
-      await adminFetch(`/api/admin/${def.slug}/reorder`, {
+      const moved = await adminFetch<Record<string, unknown>>(`/api/admin/${def.slug}/reorder`, {
         method: 'POST',
         body: { items: changes },
       });
+      // R12: a staged reorder answers what it staged; the savebar counts the new order.
+      if ('staged' in moved) announcePending();
       toast('Order updated.', 'ok');
     } catch (err) {
       setRows(before);
@@ -166,6 +169,7 @@ export default function CollectionScreen({ collection, open, permissions }: Coll
         body: payload,
       });
       const newId = String(created['id']);
+      if ('draft' in created) announcePending();
       // Right after the original: the copy and the rows after it renumbered, nothing above.
       const changes = duplicateChanges(
         renumberable(rows, permissions.remove).map((r) => ({
@@ -263,8 +267,11 @@ export default function CollectionScreen({ collection, open, permissions }: Coll
             toast('Saved.', 'ok');
             void load();
           }}
-          onDeleted={() => {
-            toast('Deleted.', 'ok');
+          onDeleted={(staged) => {
+            toast(
+              staged ? 'Removal saved. It comes off the site when it is published.' : 'Deleted.',
+              'ok',
+            );
             void load();
           }}
         />

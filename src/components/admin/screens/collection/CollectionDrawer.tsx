@@ -5,6 +5,7 @@ import Note from '@/components/admin/kit/Note';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import FieldShell, { describedBy } from '@/components/admin/fields/FieldShell';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import { announcePending } from '@/lib/admin/releaseEvents';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { uiFor, type FieldDef } from '@/lib/admin/uiSchema';
@@ -38,7 +39,8 @@ export interface CollectionDrawerProps {
   onClose: () => void;
   onCreated: (row: Row) => void;
   onSaved: () => void;
-  onDeleted: () => void;
+  /** Admin v2 R12: `staged` when the removal is a pending change (releases on). */
+  onDeleted: (staged?: boolean) => void;
 }
 
 export default function CollectionDrawer({
@@ -115,8 +117,13 @@ export default function CollectionDrawer({
     setBusy(true);
     setDeleteError('');
     try {
-      await adminFetch(`/api/admin/${def.slug}/${id}`, { method: 'DELETE' });
-      onDeleted();
+      const result = await adminFetch<Record<string, unknown>>(`/api/admin/${def.slug}/${id}`, {
+        method: 'DELETE',
+      });
+      // R12: with releases on the answer names the pending removal (or the new item thrown away).
+      const staged = 'draft' in result;
+      if (staged) announcePending();
+      onDeleted(staged);
       setOpen(false);
     } catch (err) {
       setDeleteError(describeError(err));
