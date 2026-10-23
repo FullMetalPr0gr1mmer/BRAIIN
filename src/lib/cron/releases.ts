@@ -197,6 +197,9 @@ export const ClaimedScheduleSchema = z.object({
 });
 export type ClaimedSchedule = z.infer<typeof ClaimedScheduleSchema>;
 
+/** What a claimed release names at the least: its tenant and its id (to fail it). */
+const ClaimedIdsSchema = z.object({ tenant_id: z.string().uuid(), release_id: z.string().uuid() });
+
 export interface FireRun {
   /** What the minute did with the release it claimed; `none` when nothing was due. */
   outcome: 'none' | 'published' | 'skipped' | 'failed' | 'busy';
@@ -242,7 +245,7 @@ export function fireCheck(
 
 /** Fails the release closed, as the system, and says so in one line (no person, no value). */
 async function failRelease(
-  due: ClaimedSchedule,
+  due: Pick<ClaimedSchedule, 'tenant_id' | 'release_id'>,
   failure: ReleaseFailureCode,
   draftIds?: readonly string[],
 ): Promise<FireRun> {
@@ -271,10 +274,18 @@ export async function fireDueRelease(
     p_limit: RELEASE_FIRE_LIMIT,
   });
   if (error) throw new Error(`claim_scheduled_releases: ${error.message}`);
-  const parsed = z.array(ClaimedScheduleSchema).safeParse(data ?? []);
-  if (!parsed.success) throw new Error('claim_scheduled_releases answered in the wrong shape');
-  const due = parsed.data[0];
-  if (!due) return { outcome: 'none' };
+  const rows: unknown = data ?? [];
+  if (!Array.isArray(rows)) throw new Error('claim_scheduled_releases answered in the wrong shape');
+  if (rows.length === 0) return { outcome: 'none' };
+  const parsed = ClaimedScheduleSchema.safeParse(rows[0]);
+  if (!parsed.success) {
+    // A release whose stored changes no longer read (a type this build does not know) can never
+    // be checked: it fails closed now, rather than being claimed again at every lease's end.
+    const ids = ClaimedIdsSchema.safeParse(rows[0]);
+    if (!ids.success) throw new Error('claim_scheduled_releases answered in the wrong shape');
+    return failRelease(ids.data, 'error');
+  }
+  const due = parsed.data;
 
   const check = fireCheck(due);
   if ('failure' in check) return failRelease(due, check.failure);

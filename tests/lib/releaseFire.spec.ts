@@ -326,6 +326,16 @@ describe('a fire fails closed', () => {
     expect(purges).not.toBeNull();
   });
 
+  it('a claimed release whose changes no longer read fails closed (never claimed again and again)', async () => {
+    state.answers['claim_scheduled_releases'] = ok([
+      due({ items: [{ entity_type: 'gaming_teaser', op: 'update', status: null }] }),
+    ]);
+    const run = await fireDueRelease();
+    expect(run).toEqual({ outcome: 'failed', releaseId: REL, failure: 'error' });
+    expect(calls('apply_release')).toEqual([]);
+    expect(calls('fail_scheduled_release')[0]!.args).toMatchObject({ p_code: 'error' });
+  });
+
   it('a failure the release could not be told is logged so, and tried again', async () => {
     state.answers['claim_scheduled_releases'] = ok([due({ scheduler: null })]);
     state.answers['fail_scheduled_release'] = () => ({
