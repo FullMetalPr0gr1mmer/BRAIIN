@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { INTEGRATION_TILES, removeQuestion, tileStatus } from '@/lib/admin/integrations/tiles';
+import {
+  INTEGRATION_TILES,
+  integrationTiles,
+  removeQuestion,
+  tileStatus,
+} from '@/lib/admin/integrations/tiles';
 import { integrationsView } from '@/lib/admin/integrations/view';
 
 // The Integrations screen's tiles (Admin v2 U11): honest statuses. "Set up" only where the
@@ -57,9 +62,52 @@ describe('the tiles', () => {
   });
 
   it('never claim a connection, never use a dash, never spell the brand (P-12)', () => {
-    const words = JSON.stringify(INTEGRATION_TILES);
+    const words = JSON.stringify([INTEGRATION_TILES, integrationTiles(true)]);
     expect(words).not.toMatch(/connected/i);
     expect(words).not.toMatch(/[–—]/);
     expect(words).not.toMatch(/braiin/i);
+  });
+});
+
+describe('the GA4 tile follows the switch (Admin v2 U15)', () => {
+  const ga4 = (live: boolean) => integrationTiles(live).find((t) => t.key === 'ga4')!;
+
+  it('off (every production build until the notice is signed off): the tiles above, unchanged', () => {
+    expect(integrationTiles(false)).toBe(INTEGRATION_TILES);
+    expect(tileStatus(ga4(false), ALL)).toEqual({ label: 'Saved', tone: 'sky' });
+  });
+
+  it('off, a saved id says on the tile and in the drawer why it does not load yet', () => {
+    expect(ga4(false).waiting?.text).toBe(
+      'Not loading yet. It waits for the privacy notice to name Google, which the site owner approves.',
+    );
+    expect(
+      ga4(false)
+        .notes.map((n) => n.text)
+        .join(' '),
+    ).toContain(
+      'first the privacy notice has to say that visit data goes to Google, and the site owner has to approve that wording',
+    );
+    expect(
+      ga4(false)
+        .notes.map((n) => n.text)
+        .join(' '),
+    ).toContain('only for visitors who accept analytics cookies');
+  });
+
+  it('on: Set up, no waiting note, behind analytics consent; every other tile as it was', () => {
+    expect(tileStatus(ga4(true), ALL)).toEqual({ label: 'Set up', tone: 'ok' });
+    expect(tileStatus(ga4(true), NONE).label).toBe('Not set up');
+    expect(ga4(true).waiting).toBeUndefined();
+    expect(
+      ga4(true)
+        .notes.map((n) => n.text)
+        .join(' '),
+    ).toContain('Nothing from Google loads before they do');
+    expect(ga4(true).field).toBe(ga4(false).field);
+    expect(integrationTiles(true).map((t) => t.key)).toEqual(INTEGRATION_TILES.map((t) => t.key));
+    for (const tile of integrationTiles(true)) {
+      if (tile.key !== 'ga4') expect(tile, tile.key).toBe(byKey(tile.key));
+    }
   });
 });
