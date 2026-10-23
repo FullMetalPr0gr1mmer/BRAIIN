@@ -8,6 +8,7 @@ import {
   readCrmSettings,
   saveCrmSettings,
   saveLeadStages,
+  SETTINGS_COLUMNS,
   settingsPatch,
   settingsView,
   stagesView,
@@ -241,6 +242,7 @@ interface Call {
   table?: string;
   rpc?: string;
   update?: Record<string, unknown>;
+  select?: string;
   args?: Record<string, unknown>;
   eq: [string, unknown][];
 }
@@ -250,7 +252,7 @@ function fakeDb(answer: { data?: unknown; error?: Record<string, unknown> | null
   const builder = (call: Call) => {
     const b: Record<string, unknown> = {};
     b['update'] = (values: Record<string, unknown>) => ((call.update = values), b);
-    b['select'] = () => b;
+    b['select'] = (columns?: string) => ((call.select = columns), b);
     b['order'] = () => b;
     b['eq'] = (col: string, val: unknown) => (call.eq.push([col, val]), b);
     b['maybeSingle'] = async () => ({ data: answer.data ?? null, error: answer.error ?? null });
@@ -277,7 +279,6 @@ describe('saving the settings', () => {
     version: 4,
     scoring: DEFAULT_SCORING,
     sla_hours: 12,
-    timezone: 'Asia/Riyadh',
     assignment_rule: 'manual',
     assignment_pool: [],
     assignment_fixed_to: null,
@@ -420,6 +421,23 @@ describe('what the screen reads', () => {
     expect(answer.settings.version).toBe(2);
   });
 
+  // Admin v2 C14a: the studio's zone is site_settings.timezone (U9), and the deprecated
+  // crm_settings.timezone is the contract's to drop (C14b), so neither the read nor a save's
+  // answer names it: the screen works on the schema before and after that migration.
+  it('never names the deprecated crm_settings.timezone, reading or saving', async () => {
+    const read = fakeDb({ data: { version: 2, sla_hours: 24 } });
+    const answer = await readCrmSettings(read.sb, AUTH);
+    const saved = fakeDb({ data: { version: 3, sla_hours: 12 } });
+    await saveCrmSettings(saved.sb, AUTH, { version: 2, slaHours: 12 });
+    for (const call of [read.calls[0]!, saved.calls[0]!]) {
+      expect(call.table).toBe('crm_settings');
+      expect(call.select?.split(',')).toEqual(SETTINGS_COLUMNS.split(','));
+    }
+    expect(SETTINGS_COLUMNS.split(',')).not.toContain('timezone');
+    expect(Object.keys(saved.calls[0]!.update ?? {})).not.toContain('timezone');
+    expect(answer.settings).not.toHaveProperty('timezone');
+  });
+
   it('shapes rows leniently: unknown keys dropped, counts joined by stage', () => {
     expect(
       settingsView({
@@ -521,7 +539,6 @@ describe('the screen’s own rules', () => {
         version: 1,
         scoring: { returning: 3 },
         slaHours: 24,
-        timezone: 'Asia/Riyadh',
         assignment: { rule: 'manual', pool: [], fixedTo: null },
         updatedAt: null,
       }),

@@ -52,8 +52,8 @@ import { encryptPII, decryptPII, importPIIKey } from './pii.js';
 import { toCsv } from './csv.js';
 
 const MATERIAL = 'k'.repeat(44);
-const HEADER = ['id', 'lead_number', 'created_at', 'status', 'stage', 'spam', 'name', 'company',
-  'email', 'phone', 'budget', 'timeline', 'timeline_band', 'service_of_interest', 'service_label',
+const HEADER = ['id', 'lead_number', 'created_at', 'stage', 'spam', 'name', 'company',
+  'email', 'phone', 'budget', 'timeline', 'service_of_interest', 'service_label',
   'service_label_ar', 'discipline_of_interest', 'discipline_label', 'discipline_label_ar', 'locale',
   'message', 'assignee', 'value_sar', 'tags', 'score', 'source', 'channel', 'notes_count'];
 
@@ -67,7 +67,7 @@ function body(n) {
 
 function record(row) {
   return {
-    id: row.id, lead_number: row.lead_number, created_at: row.created_at, status: row.status,
+    id: row.id, lead_number: row.lead_number, created_at: row.created_at,
     stage: 'Proposal sent', spam: row.is_spam ? 'yes' : 'no', name: row.name, company: row.company,
     service_of_interest: row.service_of_interest, service_label: 'Logo design',
     service_label_ar: 'تصميم الشعار', discipline_of_interest: row.discipline_of_interest,
@@ -88,12 +88,12 @@ export default {
       for (let i = 0; i < n; i += 1) {
         rows.push({
           id: crypto.randomUUID(), kind: 'contact', locale: 'ar', name: 'سارة أحمد ' + i,
-          company: 'Acme Trading', message, service_of_interest: 'logo', status: 'in_progress',
+          company: 'Acme Trading', message, service_of_interest: 'logo',
           consent_marketing: false, created_at: '2026-10-01T10:00:00.123456+00:00',
           updated_at: '2026-10-01T10:00:00.123456+00:00', discipline_of_interest: null,
           lead_number: i, stage_id: crypto.randomUUID(), is_spam: false,
           assigned_to: crypto.randomUUID(), value_sar: 50000, tags: ['VIP', 'Urgent'], score: 40,
-          source: 'web_form', channel: 'unknown', timeline_band: null,
+          source: 'web_form', channel: 'unknown',
           email_enc: await encryptPII('person' + i + '@example.test', MATERIAL),
           phone_enc: await encryptPII('+966500000000', MATERIAL),
           budget_enc: await encryptPII('gt_200k', MATERIAL),
@@ -115,7 +115,6 @@ export default {
         r.phone = await decryptPII(row.phone_enc, key);
         r.budget = await decryptPII(row.budget_enc, key);
         r.timeline = await decryptPII(row.timeline_text_enc, key);
-        r.timeline_band = row.timeline_band;
         r.notes_count = 0;
       }
       records.push(r);

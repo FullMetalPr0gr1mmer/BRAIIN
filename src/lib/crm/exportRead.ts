@@ -5,8 +5,8 @@ import type { LeadExportQuery } from '@schemas/crm';
 // tests/lib/leadGrants.spec.ts looks for it).
 //
 // The filters are the list's (public.leads_list, 0036), so a link from the list exports what
-// the list shows: spam only when asked for (a legacy `?status=spam` link asks too), `from`
-// inclusive and `to` exclusive.
+// the list shows: spam only when asked for, `from` inclusive and `to` exclusive. (A legacy
+// `?status=` link is refused by LeadExportQuerySchema since C14a: the column is going.)
 //
 // The read is keyset-paged on (created_at, id), newest first: each page asks for the leads
 // after the last one it has. Offset paging over a moving table repeats or skips a row when a
@@ -98,8 +98,7 @@ export function disciplineFilter(discipline: string, services: readonly string[]
 
 /** Is the export asking for spam? Only when it says so, as on the list. */
 export function exportsSpam(input: LeadExportQuery): boolean {
-  if (input.spam !== undefined) return input.spam === 'true';
-  return input.status === 'spam';
+  return input.spam === 'true';
 }
 
 /** Up to `cap` leads, page by page, and whether more match. */

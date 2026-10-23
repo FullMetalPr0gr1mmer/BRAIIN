@@ -10,37 +10,37 @@ import { can } from '@/lib/authz/matrix';
 // disagreeing is that budget and internal notes get emailed to someone the CMS itself
 // refuses to show them to. The rule has to have one home.
 //
-// `leads.pii` gates: budget · timeline · internal_notes · ip_inet — the exact four
-// columns CLAUDE.md §3 restricts to Admin + Developer. Content Creator and SEO hold
-// neither `leads.manage` nor `leads.pii`, so they get nothing at all. "timeline" is two
-// columns since migration 0017: the legacy `timeline_band` select value and the encrypted
-// free-text deadline the v2 contact form collects (`timeline_text_enc`).
+// `leads.pii` gates: budget · timeline (and the contact ciphertext), the columns CLAUDE.md §3
+// restricts to Admin + Developer, and to Sales one lead at a time. Content Creator and SEO hold
+// neither `leads.manage` nor `leads.pii`, so they get nothing at all. The timeline is the
+// encrypted free-text deadline (`timeline_text_enc`, 0017); a legacy band was moved into it by
+// the daily cron (0035).
+//
+// Since Admin v2 C14a no code here names the legacy columns the contract slice drops
+// (`status`, `internal_notes`, `ip_inet`, `timeline_band`; C14b): every list below names only
+// columns that exist before and after that migration, so the Worker runs on both schemas.
+// tests/lib/leadsContract.spec.ts holds that line.
 //
 // Since migration 0033 the database holds the same line. A staff token can SELECT only
 // SAFE_LEAD_COLUMNS (plus tenant_id): the caller's own client (`sb`) asking for any other
 // lead column gets a permission error, whatever the role. The gated columns are read as
 // the service role, and only two audited paths return them to a person: the per-lead
-// reveal (src/lib/crm/reveal.ts, behind both GET /api/admin/leads/[id]?pii=1 and the CRM's
-// POST /reveal) and the CSV export (export.ts). Two server-side processes read them and
-// return nothing: the signed notify-lead hook, which stores field names only, and the
-// daily index cron (src/lib/crm/indexBackfill.ts), which keeps HMACs and signal names.
+// reveal (src/lib/crm/reveal.ts, behind the CRM's POST /api/admin/leads/[id]/reveal) and the
+// CSV export (export.ts). Two server-side processes read them and return nothing: the signed
+// notify-lead hook, which stores field names only, and the daily index cron
+// (src/lib/crm/indexBackfill.ts), which keeps HMACs and signal names.
 // tests/lib/leadGrants.spec.ts names every reader.
 
-export const SENSITIVE_LEAD_COLUMNS = [
-  'budget_enc',
-  'timeline_band',
-  'timeline_text_enc',
-  'internal_notes',
-  'ip_inet',
-] as const;
+export const SENSITIVE_LEAD_COLUMNS = ['budget_enc', 'timeline_text_enc'] as const;
 
 /**
- * Columns safe for any role that can see leads at all (mirrors the leads_safe view).
+ * Columns safe for any role that can see leads at all (the leads_safe view's first columns,
+ * less the legacy `status` the contract slice drops: a lead moves by its stage, C14a).
  * `discipline_of_interest` (0028) is the "{Discipline}, help me choose" answer — not
- * sensitive, the view's last column.
+ * sensitive.
  */
 export const SAFE_LEAD_COLUMNS =
-  'id,kind,locale,name,company,message,service_of_interest,status,consent_marketing,created_at,updated_at,discipline_of_interest';
+  'id,kind,locale,name,company,message,service_of_interest,consent_marketing,created_at,updated_at,discipline_of_interest';
 
 /**
  * The ciphertext and the gated columns. `authenticated` cannot read any of them (0033):
@@ -50,8 +50,7 @@ export const SAFE_LEAD_COLUMNS =
  * disclose the budget band and the timeline, so they leave only through the audited reveal,
  * named in its audit row (decision D7). The export does not carry them.
  */
-export const GATED_LEAD_COLUMNS =
-  'email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,internal_notes,ip_inet,score_signals';
+export const GATED_LEAD_COLUMNS = 'email_enc,phone_enc,budget_enc,timeline_text_enc,score_signals';
 
 /**
  * The pipeline's columns (0034 to 0041): readable by every lead worker, none of them
