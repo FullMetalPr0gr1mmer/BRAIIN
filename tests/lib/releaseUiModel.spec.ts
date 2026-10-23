@@ -24,6 +24,7 @@ import {
   savebarLead,
   savebarShown,
   savebarSub,
+  selectedRows,
   toggleRow,
   waitingWords,
   whoWords,
@@ -259,6 +260,29 @@ describe('the selection', () => {
     expect([...withNeeds(waiting, only1, needs).ids]).toEqual([id(1)]);
     // A waiting row cannot be ticked by hand either.
     expect([...toggleRow(waiting, only1, waiting[1]!, true, needs)]).toEqual([id(1)]);
+  });
+
+  it('a change the person unticked is never ticked back: what needs it leaves with it', () => {
+    const rows = buildRows([item(1), item(2, { op: 'create' })]);
+    const needs = new Map([[id(1), [id(2)]]]);
+    // The person unticked 2; the check then says 1 needs it.
+    const { ids, added, dropped } = withNeeds(rows, new Set([id(1)]), needs, new Set([id(2)]));
+    expect([...ids]).toEqual([]);
+    expect(added).toEqual([]);
+    expect(dropped).toEqual([id(1)]);
+    // Ticked again by hand, it is no longer refused, and it is kept.
+    expect([...withNeeds(rows, new Set([id(1), id(2)]), needs, new Set()).ids].sort()).toEqual([
+      id(1),
+      id(2),
+    ]);
+  });
+
+  it('counts the selection in rows, as the bar does (a reordered list is one)', () => {
+    const order = (n: number) => item(n, { fields: ['sort_order'] });
+    const rows = buildRows([item(1), order(2), order(3)]);
+    expect(selectedRows(rows, new Set([id(1), id(2), id(3)]))).toBe(2);
+    // Half a reorder is no row (rows are ticked whole).
+    expect(selectedRows(rows, new Set([id(2)]))).toBe(0);
   });
 });
 

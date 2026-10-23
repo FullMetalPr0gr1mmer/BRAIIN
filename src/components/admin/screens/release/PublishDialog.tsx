@@ -29,7 +29,9 @@ import {
   publishedWords,
   refsOf,
   rowCheck,
+  rowOfDraft,
   rowsByArea,
+  selectedRows,
   toggleRow,
   waitingWords,
   whoWords,
@@ -112,6 +114,10 @@ export default function PublishDialog({
   const [working, setWorking] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [compares, setCompares] = useState<ReadonlyMap<string, CompareResult>>(new Map());
+  // The changes the person unticked themselves: never ticked back for a dependant, which
+  // leaves with them instead (model.ts withNeeds); and what left that way, said once.
+  const [unticked, setUnticked] = useState<ReadonlySet<string>>(new Set());
+  const [leftWith, setLeftWith] = useState('');
   const openedRef = useRef(false);
   const seededRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -137,6 +143,8 @@ export default function PublishDialog({
       setCompares(new Map());
       setCheck(null);
       setNote('');
+      setUnticked(new Set());
+      setLeftWith('');
     }
     if (seededRef.current || summary === null) return;
     seededRef.current = true;
@@ -185,8 +193,16 @@ export default function PublishDialog({
           if (!live) return;
           setCheck(result);
           setRefused(new Map());
-          const grown = withNeeds(rows, ids, needsOf(result));
-          if (grown.added.length > 0) setIds(grown.ids);
+          const grown = withNeeds(rows, ids, needsOf(result), unticked);
+          if (grown.added.length > 0 || grown.dropped.length > 0) setIds(grown.ids);
+          if (grown.dropped.length > 0) {
+            const names = [
+              ...new Set(grown.dropped.map((d) => rowOfDraft(rows, d)?.label ?? 'A change')),
+            ].map((label) => `“\u2068${label}\u2069”`);
+            setLeftWith(
+              `${names.join(' and ')} left the selection too: ${names.length === 1 ? 'it needs' : 'they need'} a change you unticked.`,
+            );
+          }
         })
         .catch((err: unknown) => {
           if (!live) return;
@@ -326,7 +342,8 @@ export default function PublishDialog({
         : false;
 
   const groups = rowsByArea(rows);
-  const count = selection.length;
+  // Rows, as the bar counts them (a reordered list is one change).
+  const count = selectedRows(rows, ids);
   const ready = mode === 'publish' && check !== null && check.ok && !checking;
   const title =
     mode === 'publish'
@@ -407,6 +424,11 @@ export default function PublishDialog({
           </p>
         )}
         {!outcome && capped && mode === 'publish' && <p className="pub__capped">{COPY.capped}</p>}
+        {!outcome && leftWith && (
+          <p className="pub__capped" role="status">
+            {leftWith}
+          </p>
+        )}
         {!outcome && rows.length === 0 && <p className="admin-sub">No unpublished changes.</p>}
         {!outcome &&
           groups.map((group) => (
@@ -461,9 +483,20 @@ export default function PublishDialog({
                             id={inputId}
                             checked={on}
                             aria-describedby={metaId}
-                            onChange={(event) =>
-                              setIds(toggleRow(rows, ids, row, event.target.checked, needs))
-                            }
+                            onChange={(event) => {
+                              const on = event.target.checked;
+                              const drafts = row.items.map((item) => item.draftId);
+                              setUnticked((current) => {
+                                const next = new Set(current);
+                                for (const draftId of drafts) {
+                                  if (on) next.delete(draftId);
+                                  else next.add(draftId);
+                                }
+                                return next;
+                              });
+                              setLeftWith('');
+                              setIds(toggleRow(rows, ids, row, on, needs));
+                            }}
                           />
                         ) : null}
                       </span>

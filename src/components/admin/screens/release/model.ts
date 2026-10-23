@@ -374,33 +374,53 @@ export function needsOf(check: ReleaseCheck | null): Map<string, string[]> {
 
 /**
  * Ticks what the selection needs (the check's `requires`): each needed change the person may
- * publish joins, with its whole row; `includedFor` says, per change that joined, which
- * selected changes need it ("Included because 'X' needs it"). A needed change the person may
- * not publish stays out, and the check keeps its dependant's error.
+ * publish joins, with its whole row ("Included because 'X' needs it", `includedBecause`). A
+ * change the person unticked themselves (`unticked`) is never ticked back: the changes that
+ * need it leave the selection with it instead ("Unticking one unticks its dependants", which
+ * the check can only say once it has seen the selection without it). A needed change the
+ * person may not publish stays out, and the check keeps its dependant's error.
  */
 export function withNeeds(
   rows: readonly ChangeRow[],
   ids: ReadonlySet<string>,
   needs: Needs,
-): { ids: Set<string>; added: string[] } {
-  const next = new Set(ids);
+  unticked: ReadonlySet<string> = new Set(),
+): { ids: Set<string>; added: string[]; dropped: string[] } {
+  let next = new Set(ids);
   const added: string[] = [];
-  let grew = true;
-  while (grew) {
-    grew = false;
+  const dropped: string[] = [];
+  let moved = true;
+  while (moved) {
+    moved = false;
     for (const [dependant, needed] of needs) {
       if (!next.has(dependant)) continue;
+      const refused = needed.find((draftId) => !next.has(draftId) && unticked.has(draftId));
+      if (refused !== undefined) {
+        const row = rowOfDraft(rows, dependant);
+        if (row) next = toggleRow(rows, next, row, false, needs);
+        else next.delete(dependant);
+        dropped.push(dependant);
+        moved = true;
+        continue;
+      }
       for (const draftId of needed) {
         if (next.has(draftId)) continue;
         const row = rowOfDraft(rows, draftId);
         if (!row?.publishable) continue;
         for (const item of row.items) next.add(item.draftId);
         added.push(draftId);
-        grew = true;
+        moved = true;
       }
     }
   }
-  return { ids: next, added };
+  return { ids: next, added, dropped };
+}
+
+/** How many rows the selection holds whole (a reorder of a list is one, as the bar counts). */
+export function selectedRows(rows: readonly ChangeRow[], ids: ReadonlySet<string>): number {
+  return rows.filter(
+    (row) => row.items.length > 0 && row.items.every((item) => ids.has(item.draftId)),
+  ).length;
 }
 
 /** Ticks or unticks one row; unticking also unticks every selected change that needs it. */
@@ -542,7 +562,8 @@ export function discardSelectedWords(rows: readonly ChangeRow[], ids: ReadonlySe
   const chosen = rows.flatMap((row) => row.items.filter((item) => ids.has(item.draftId)));
   const others = chosen.filter((item) => !item.mine);
   const names = [...new Set(others.map((item) => item.updatedByName ?? 'someone else'))];
-  const lead = `Discard ${plural(chosen.length, 'change')}?`;
+  // Counted as the bar and the dialog count: a reordered list is one change.
+  const lead = `Discard ${plural(selectedRows(rows, ids), 'change')}?`;
   if (others.length === 0) {
     return `${lead} They will be thrown away. The live site doesn’t change. This can’t be undone.`;
   }
