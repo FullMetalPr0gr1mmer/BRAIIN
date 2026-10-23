@@ -743,7 +743,8 @@ export function fixtureTables(): Record<string, Row[]> {
         footer_show_social: false,
       },
     ],
-    // Admin v2 U11: a visitor reads the Search Console code and the tenant, nothing else.
+    // Admin v2 U11: a visitor reads the Search Console code and the tenant; U15 (0109): and
+    // the GA4 id. Never the Calendly link, the version or the stamps.
     site_integrations: [
       {
         tenant_id: TENANT,
