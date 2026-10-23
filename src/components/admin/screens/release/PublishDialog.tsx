@@ -121,7 +121,10 @@ export default function PublishDialog({
   const openedRef = useRef(false);
   const seededRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
-  const needs = useMemo(() => needsOf(check), [check]);
+  // What each change needs, as every check of this dialog has said it (a check over a
+  // selection that already holds what a change needs says nothing of it): so a change ticked
+  // because another needs it keeps saying why, and unticking it unticks its dependants at once.
+  const [needs, setNeeds] = useState<ReadonlyMap<string, readonly string[]>>(new Map());
   const known = useMemo(
     () => new Set(rows.flatMap((row) => row.items.map((item) => item.draftId))),
     [rows],
@@ -145,6 +148,7 @@ export default function PublishDialog({
       setNote('');
       setUnticked(new Set());
       setLeftWith('');
+      setNeeds(new Map());
     }
     if (seededRef.current || summary === null) return;
     seededRef.current = true;
@@ -193,7 +197,10 @@ export default function PublishDialog({
           if (!live) return;
           setCheck(result);
           setRefused(new Map());
-          const grown = withNeeds(rows, ids, needsOf(result), unticked);
+          const merged = new Map(needs);
+          for (const [dependant, needed] of needsOf(result)) merged.set(dependant, needed);
+          setNeeds(merged);
+          const grown = withNeeds(rows, ids, merged, unticked);
           if (grown.added.length > 0 || grown.dropped.length > 0) setIds(grown.ids);
           if (grown.dropped.length > 0) {
             const names = [
@@ -432,9 +439,11 @@ export default function PublishDialog({
         {!outcome && rows.length === 0 && <p className="admin-sub">No unpublished changes.</p>}
         {!outcome &&
           groups.map((group) => (
-            <section
+            // A group, not a region: the dialog's areas are no landmarks of the page.
+            <div
               key={group.area}
               className="pub__area"
+              role="group"
               aria-labelledby={`pub-area-${group.area}`}
             >
               <h3 id={`pub-area-${group.area}`} className="pub__area-title">
@@ -486,12 +495,13 @@ export default function PublishDialog({
                             onChange={(event) => {
                               const on = event.target.checked;
                               const drafts = row.items.map((item) => item.draftId);
+                              // A tick is a fresh choice: what it needs may come along again
+                              // (the check ticks it, saying why). An untick is remembered, so
+                              // the check takes what needs it out instead of ticking it back.
                               setUnticked((current) => {
+                                if (on) return new Set();
                                 const next = new Set(current);
-                                for (const draftId of drafts) {
-                                  if (on) next.delete(draftId);
-                                  else next.add(draftId);
-                                }
+                                for (const draftId of drafts) next.add(draftId);
                                 return next;
                               });
                               setLeftWith('');
@@ -595,7 +605,7 @@ export default function PublishDialog({
                   );
                 })}
               </ul>
-            </section>
+            </div>
           ))}
         {!outcome && mode === 'publish' && (
           <div className="field pub__note">

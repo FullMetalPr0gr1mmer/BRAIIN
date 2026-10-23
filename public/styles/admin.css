@@ -4542,6 +4542,8 @@ dialog.drw[data-size='wide'] {
 /* The kit's gallery draws it in the page. */
 .savebar[data-inline] {
   position: static;
+  inline-size: auto;
+  max-inline-size: 100%;
   margin-inline: 0;
 }
 
