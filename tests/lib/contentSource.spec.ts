@@ -79,6 +79,7 @@ const CONTENT_LOADERS = [
   'src/lib/data/serviceCases.ts',
   'src/lib/data/services.ts',
   'src/lib/data/siteProfile.ts',
+  'src/lib/data/siteVerification.ts',
   'src/lib/data/statistics.ts',
   'src/lib/data/taxonomy.ts',
   'src/lib/data/team.ts',

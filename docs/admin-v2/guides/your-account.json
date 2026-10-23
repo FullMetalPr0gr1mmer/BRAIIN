@@ -1,0 +1,130 @@
+{
+  "slug": "your-account",
+  "sort_order": 20,
+  "minutes": 4,
+  "tags": [
+    "account",
+    "basics"
+  ],
+  "screens": [
+    "/admin/account",
+    "/admin/notifications",
+    "/admin/2fa",
+    "/admin/settings/notifications"
+  ],
+  "caps": [],
+  "title": "Your account, password and bell",
+  "title_ar": "حسابك وكلمة المرور والإشعارات",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Your account holds your display name (shown at the bottom of the menu and, to Admins, in Users & roles), your password, and a plain list of what your role can do. Open it from your name at the bottom of the menu."
+      },
+      {
+        "t": "h",
+        "x": "Changing your password"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Type your current password, then the new one twice. A new password has at least 10 characters.",
+          "Five wrong current passwords within 15 minutes lock your account for 15 minutes, as on the sign-in page.",
+          "Once the change goes through, every other device you are signed in on is signed out. This one stays signed in."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Your e-mail address"
+      },
+      {
+        "t": "p",
+        "x": "Changing it needs outgoing e-mail, which is not set up yet, so your account shows Not set up for now."
+      },
+      {
+        "t": "h",
+        "x": "The bell"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "It shows up to 30 items from the last 14 days: new inquiries and job applications for the roles that handle them, services and posts going live today for the roles that write them, and maintenance switched on or off for everyone.",
+          "Mark all as read marks what you were shown. Anything that arrives while the list is open stays new.",
+          "To choose what it tells you about, open Notifications under Settings. Each kind of news your role gets has its own switch. Turning one off only quiets the bell: everything still shows on its own screen."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Two factor authentication (2FA)"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "With 2FA on, signing in asks for a 6-digit code from an authenticator app on your phone after your password, so a password alone does not get anyone in. To turn it on, open Two factor authentication in your account and choose Set up.",
+          "Add the account to your app: type the key the page shows, or, on the phone that has the app, choose Add it to the app. Then type the 6-digit code the app shows and choose Turn on 2FA.",
+          "From then on, after your password the admin asks for a code from the app. Five wrong codes within 15 minutes lock your account for 15 minutes, as wrong passwords do.",
+          "To turn it off, choose Manage and type a current code. If your team requires 2FA, it stays on."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "Lost your phone? Ask an Admin to reset your 2FA in Users & roles. That signs you out on every device, and you can set 2FA up again with your new phone."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "يضم حسابك اسم العرض (ويظهر أسفل القائمة، وللمسؤولين في Users & roles)، وكلمة المرور، وقائمة واضحة بما يستطيع دورك فعله. افتحه من اسمك أسفل القائمة."
+      },
+      {
+        "t": "h",
+        "x": "تغيير كلمة المرور"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "اكتب كلمة المرور الحالية، ثم الجديدة مرتين. يجب ألا تقل كلمة المرور الجديدة عن 10 أحرف.",
+          "خمس محاولات خاطئة لكلمة المرور الحالية خلال 15 دقيقة تقفل حسابك 15 دقيقة، كما في صفحة تسجيل الدخول.",
+          "بعد نجاح التغيير يُسجَّل خروجك من كل جهاز آخر كنت مسجّلًا فيه، ويبقى هذا الجهاز مسجّلًا."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "بريدك الإلكتروني"
+      },
+      {
+        "t": "p",
+        "x": "يحتاج تغييره إلى خدمة إرسال البريد، وهي غير مُعدّة بعد، لذلك يظهر في حسابك Not set up حاليًا."
+      },
+      {
+        "t": "h",
+        "x": "الجرس"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "يعرض حتى 30 عنصرًا من آخر 14 يومًا: الاستفسارات الجديدة وطلبات التوظيف للأدوار التي تتولاها، والخدمات والمقالات التي تُنشر اليوم للأدوار التي تكتبها، وتشغيل وضع الصيانة أو إيقافه للجميع.",
+          "يحدّد Mark all as read ما عُرض عليك كمقروء، وما يصل أثناء فتح القائمة يبقى جديدًا.",
+          "لتختار ما يخبرك به، افتح Notifications ضمن Settings. لكل نوع من الأخبار التي يتلقاها دورك مفتاح خاص به. إيقاف أحدها يُسكت الجرس فقط، ويبقى كل شيء ظاهرًا في شاشته."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "التحقق بخطوتين (2FA)"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "عند تشغيل 2FA يطلب تسجيل الدخول، بعد كلمة المرور، رمزًا من 6 أرقام من تطبيق مصادقة على هاتفك، فلا تكفي كلمة المرور وحدها لدخول أي شخص. لتشغيله افتح Two factor authentication في حسابك واختر Set up.",
+          "أضف الحساب إلى تطبيقك: اكتب المفتاح الذي تعرضه الصفحة، أو اختر Add it to the app على الهاتف الذي يحمل التطبيق. ثم اكتب الرمز المكوّن من 6 أرقام الذي يعرضه التطبيق واختر Turn on 2FA.",
+          "بعد ذلك تطلب لوحة الإدارة رمزًا من التطبيق بعد كلمة المرور. خمسة رموز خاطئة خلال 15 دقيقة تقفل حسابك 15 دقيقة، كما تفعل كلمات المرور الخاطئة.",
+          "لإيقافه اختر Manage واكتب رمزًا حاليًا. إذا كان فريقك يشترط 2FA فإنه يبقى مفعّلًا."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "فقدت هاتفك؟ اطلب من مسؤول (Admin) إعادة ضبط 2FA الخاص بك من Users & roles. يُسجَّل بذلك خروجك من كل جهاز، ثم تستطيع إعداد 2FA من جديد بهاتفك الجديد."
+      }
+    ]
+  }
+}

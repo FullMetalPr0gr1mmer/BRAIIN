@@ -35,7 +35,10 @@ import { ANON_COLUMNS, createMirror, visibilityClosure } from './visibility';
 // than their own token reads (tests/lib/contentSource.spec.ts holds src/lib/preview to it).
 // Staff read every row of these tables whatever its status (supabase/tests/
 // preview_dataset.test.sql pins that); the mirror (visibility.ts) then keeps what a visitor
-// would see.
+// would see. One exception: site_integrations (Admin v2 U11) is Admin + SEO only (§5), so a
+// Content Creator's or Developer's dataset holds no row of it. No preview emits the Search
+// Console tag in any case: a preview is noindex (BaseLayout), and SeoHead reads the code only
+// for an indexable home page.
 //
 // Live rows, lazily per table: the first query that needs a table (directly, through an
 // embed, or because a visibility rule reads it) reads it whole, memoised for the request.
@@ -43,7 +46,7 @@ import { ANON_COLUMNS, createMirror, visibilityClosure } from './visibility';
 // pages with `range()` in key order and an exact count, and paging stops at the COUNT, not
 // at a short page (a project whose max_rows is lower still reads every row). A table is
 // capped (PREVIEW_ROW_CAP, media PREVIEW_MEDIA_ROW_CAP); more rows than that marks the
-// render untrusted rather than silently showing a partial table. The five tables anon
+// render untrusted rather than silently showing a partial table. The six tables anon
 // reads by column are read with exactly anon's columns.
 //
 // Pending changes: one paged read of content_drafts per request, each row parsed. A draft is

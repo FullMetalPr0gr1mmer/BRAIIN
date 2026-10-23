@@ -25,7 +25,9 @@ import {
 //     is not about one field, and the 409 banner with "Reload their version";
 //   - the language bar when any field is bilingual: English / العربية / Both for the whole
 //     form, and "Arabic missing: N" with "Next gap";
-//   - `children` (a screen's own notes, such as the edge warning), then the fields;
+//   - `children` (a screen's own notes, such as the edge warning), then the fields, in one
+//     card (with `heading`, U11, the card's header band: the prototype's `card(title, sub)`)
+//     or, given `groups` (U9), in the groups' titled cards;
 //   - the action bar: Save (Ctrl/⌘+S too), the way back, where the save stands
 //     (SaveStatus) and the version ("Not saved yet" for a singleton never saved).
 // It takes the save from useEntitySave and holds no save state of its own.
@@ -88,6 +90,11 @@ export interface EditorFormProps {
   readOnlyNote?: ReactNode;
   /** The record's public address ("Open on site"), or null; given the saved values. */
   publicHref?: ((values: Readonly<Record<string, unknown>>) => string | null) | undefined;
+  /**
+   * Admin v2 U11: the fields' card's header (the prototype's `.card__h`: a title, an h2 under
+   * the page's h1, and a line under it), for a form with no tabs that is one named card.
+   */
+  heading?: { title: string; sub?: string | undefined } | undefined;
 }
 
 const LANGUAGE_KINDS = new Set(['bilingual', 'prose', 'richtext']);
@@ -185,6 +192,7 @@ export default function EditorForm({
   readOnly = false,
   readOnlyNote,
   publicHref,
+  heading,
 }: EditorFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   // Errors found here before anything is sent (a number or a date the browser could not
@@ -283,12 +291,27 @@ export default function EditorForm({
     if (!readOnly) submit();
   };
 
-  // The fields' cards: the groups' (U9) when there are any, else one card as before.
-  const fieldsBlock = (shown: readonly FieldDef[], cards: readonly FieldGroup[]) =>
+  // The fields' cards: the groups' (U9) when there are any, else one card as before, with
+  // `head`'s header band (U11) when the form is that one named card (groups title their own).
+  const fieldsBlock = (
+    shown: readonly FieldDef[],
+    cards: readonly FieldGroup[],
+    head?: EditorFormProps['heading'],
+  ) =>
     cards.length > 0 ? (
       <GroupedFields groups={cards} slots={slots} fields={shown} renderField={renderField} />
     ) : (
-      <div className="card">{shown.map(renderField)}</div>
+      <div className="card">
+        {head && (
+          <div className="card__h">
+            <div>
+              <h2 className="card__t">{head.title}</h2>
+              {head.sub && <p className="card__sub">{head.sub}</p>}
+            </div>
+          </div>
+        )}
+        {shown.map(renderField)}
+      </div>
     );
   // Groups compose inside a field tab (U8.md): a group renders in the tab that holds all of
   // its fields; one that would span two tabs is drawn in neither, its fields plain in theirs.
@@ -321,7 +344,7 @@ export default function EditorForm({
           </div>
         );
       })
-    : fieldsBlock(fields, groups ?? []);
+    : fieldsBlock(fields, groups ?? [], heading);
   if (readOnly) {
     // A disabled fieldset turns every control in it off (a rich text is told separately:
     // a contenteditable ignores it).

@@ -140,7 +140,17 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     cap: 'maintenance.manage',
     render: 'server',
   },
-  { href: '/admin/integrations', api: '/api/admin/integrations', cap: 'settings.integrations' },
+  // Admin v2 U11: Integrations reads its row on the server and refuses itself (a 403 and
+  // Refused.astro) for Content Creator and Developer. The Forms overview is server-rendered
+  // from code and has no JSON twin of its own: its capability is General's (the forms config
+  // is settings.general, P-2), so the API probe asks General's read.
+  {
+    href: '/admin/integrations',
+    api: '/api/admin/integrations',
+    cap: 'settings.integrations',
+    render: 'server',
+  },
+  { href: '/admin/forms', api: '/api/admin/settings', cap: 'settings.general', render: 'server' },
   { href: '/admin/themes', api: '/api/admin/themes', cap: 'theme.edit' },
   // Admin v2 U10: SEO is server-rendered with in-page tabs (Pages, Redirects, Site wide); a
   // role holding none of its capabilities gets the page's own 403. The redirects list moved
@@ -300,6 +310,10 @@ export const EXTRA_LINKS: readonly NavTab[] = [
     label: 'Leads, filtered',
     caps: ['leads.manage'],
   },
+  // The Forms overview's Join tab (Admin v2 U11): the applications badge, Admin's "Change it
+  // in General" link and the consent version render only there. tests/lib/adminRoutes.spec.ts
+  // holds every tab of the overview (formsTabHref) to this list.
+  { href: '/admin/forms?tab=join', label: 'Forms, Join form', caps: ['settings.general'] },
 ];
 
 /**

@@ -1,9 +1,21 @@
 import { IntegrationsSchema } from '@schemas/admin';
 import { singletonRoutes } from '@/lib/admin/singleton';
+import { INTEGRATION_COLUMNS, INTEGRATION_DEFAULTS } from '@/lib/admin/integrations/load';
 
-// Third-party integration config — Admin + SEO (`settings.integrations`). Read is
-// staff-wide because the consent banner and analytics dashboards need to know whether
-// GA4 is configured; write is the narrow pair.
+// Third-party integrations (Admin v2 U11, §5 "Integrations"): Admin + SEO in both layers
+// (`settings.integrations` here; app.role_manages_integrations plus a RESTRICTIVE live check
+// in the database since migration 0105). Typed public identifiers only:
+// the GA4 measurement id, the Search Console verification code and the Calendly link, each a
+// CHECKed column whose pattern is packages/schemas/integrations.ts. The legacy jsonb boxes
+// are neither read nor written here any more (the contract step after U11's deploy revokes
+// them).
+//
+// Immediate, never staged (P-3): not in the release registry, so `singletonEntry` finds no
+// entry and the save is live whatever the release flag says. The audit row names the
+// columns saved, never their values (queued, as every singleton's: the values are public and
+// no personal data is involved). A Search Console code is public in the home page's head as
+// soon as it is saved; nothing caches Tier A today, and the purge seam (R7) owes
+// `site:identity` a purge on this save.
 
 export const prerender = false;
 
@@ -13,15 +25,18 @@ export const { GET, PATCH } = singletonRoutes({
   readCaps: ['settings.integrations'],
   readAccess: ['full'],
   writeCap: 'settings.integrations',
-  columns: 'tenant_id,ga4,search_console,calendly,recaptcha,version,updated_at',
+  columns: INTEGRATION_COLUMNS,
   schema: IntegrationsSchema,
-  defaults: { ga4: {}, search_console: {}, calendly: {}, recaptcha: {} },
+  defaults: INTEGRATION_DEFAULTS,
   toRow: (input) => {
     const out: Record<string, unknown> = {};
-    if (input['ga4'] !== undefined) out['ga4'] = input['ga4'];
-    if (input['searchConsole'] !== undefined) out['search_console'] = input['searchConsole'];
-    if (input['calendly'] !== undefined) out['calendly'] = input['calendly'];
-    if (input['recaptcha'] !== undefined) out['recaptcha'] = input['recaptcha'];
+    if (input['ga4MeasurementId'] !== undefined) {
+      out['ga4_measurement_id'] = input['ga4MeasurementId'];
+    }
+    if (input['searchConsoleToken'] !== undefined) {
+      out['search_console_token'] = input['searchConsoleToken'];
+    }
+    if (input['calendlyUrl'] !== undefined) out['calendly_url'] = input['calendlyUrl'];
     return out;
   },
 });
