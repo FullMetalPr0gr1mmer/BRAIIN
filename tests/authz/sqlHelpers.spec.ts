@@ -22,6 +22,7 @@ const HELPER_CAPABILITY: Record<string, Capability> = {
   role_manages_visibility: 'maintenance.manage',
   role_analytics_goals: 'analytics.goals',
   role_general_settings: 'settings.general',
+  role_manages_integrations: 'settings.integrations',
 };
 
 const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');

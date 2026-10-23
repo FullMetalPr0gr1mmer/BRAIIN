@@ -650,8 +650,9 @@ describe('the guides say only what the admin does', () => {
         expect(kept, `${slug} ${lang}`).toEqual(before.body[lang]);
       }
     }
-    // /admin/2fa is your-account's screen (corrections rule 4), offered by its page head.
-    expect(SET.find((a) => a.slug === 'your-account')?.screens).toEqual([
+    // /admin/2fa is your-account's screen (corrections rule 4), offered by its page head. (U11
+    // puts the guide again with the bell's settings screen after it: tests/lib/helpU11.spec.ts.)
+    expect(throughU17.find((a) => a.slug === 'your-account')?.screens).toEqual([
       '/admin/account',
       '/admin/notifications',
       '/admin/2fa',
@@ -2322,6 +2323,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
   it('SEO: the basics, the media library (it opens it), SEO and redirects, and stats', () => {
     expect(shown('seo')).toEqual([
       'finding-your-way',
+      'integrations',
       'media-library',
       'previewing-changes',
       'roles-and-access',
@@ -2335,6 +2337,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
   it('Developer: the basics, media, leads and their personal data, maintenance, stats and site health; no hiring', () => {
     expect(shown('developer')).toEqual([
       'finding-your-way',
+      'forms-and-spam',
       'general-settings',
       'maintenance-mode',
       'media-library',

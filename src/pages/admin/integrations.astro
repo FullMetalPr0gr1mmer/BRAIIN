@@ -1,13 +1,56 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminSingletonForm from '@/components/admin/islands/AdminSingletonForm';
+import AdminIntegrations from '@/components/admin/islands/AdminIntegrations';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { loadIntegrations } from '@/lib/admin/integrations/load';
+import type { IntegrationsView } from '@/lib/admin/integrations/view';
+import { writeSystemLog } from '@/lib/data/systemLog';
 
 export const prerender = false;
+
+// Integrations (Admin v2 U11, docs/admin-v2/ui.md "Integrations, Forms, Notifications
+// (AV-20)"): Google Analytics 4, Google Search Console, Calendly and the captcha, as tiles
+// with honest statuses, each tool's one typed field in a drawer. settings.integrations
+// (Admin, SEO); a role without it gets the layout with the refusal and a 403, and nothing is
+// read (CLAUDE.md §5: Content Creator and Developer hold none of it). The row is read here,
+// as the person (RLS decides again), so the statuses are in the server HTML.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = Boolean(session && sb && can(session.role, 'settings.integrations') === 'full');
+if (!allowed) Astro.response.status = 403;
+const canSeeForms = Boolean(session && can(session.role, 'settings.general') === 'full');
+
+let initial: IntegrationsView | null = null;
+if (allowed && session && sb) {
+  try {
+    initial = await loadIntegrations(sb, session);
+  } catch (err) {
+    await writeSystemLog({
+      level: 'error',
+      source: 'admin:integrations',
+      message: err instanceof Error ? err.message : 'integrations read failed',
+      detail: { path: Astro.url.pathname },
+    });
+  }
+}
 ---
 
 <AdminLayout
   title="Integrations"
-  subtitle="GA4, Search Console, Calendly and reCAPTCHA. GA4 stays consent-gated and secondary to first-party analytics."
+  subtitle="Connect the tools you already use. Nothing here is needed for the site to run."
+  styles={['integrations.css']}
 >
-  <AdminSingletonForm client:load config="integrations" />
+  {
+    !allowed ? (
+      <Refused />
+    ) : initial ? (
+      <AdminIntegrations client:load initial={initial} canSeeForms={canSeeForms} />
+    ) : (
+      <p class="msg" data-kind="error" role="alert">
+        The integrations could not be read just now. Reload the page to try again.
+      </p>
+    )
+  }
 </AdminLayout>

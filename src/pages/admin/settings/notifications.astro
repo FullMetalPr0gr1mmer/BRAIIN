@@ -1,0 +1,24 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminNotificationSettings from '@/components/admin/islands/AdminNotificationSettings';
+import { notificationSwitches } from '@/lib/admin/notificationSettings';
+
+export const prerender = false;
+
+// The bell's settings (Admin v2 U11, docs/admin-v2/ui.md "Integrations, Forms, Notifications
+// (AV-20)", §2.8): every member's own (the nav offers it to every role through
+// `analytics.read`, which all hold). One switch per kind of item the person's role gets, from
+// ROLE_CAPS through each bell source, so the page reads nothing itself; the island loads and
+// saves the person's own preferences (/api/admin/me/notification-settings). The bell's list
+// is /admin/notifications, which links here.
+
+const session = Astro.locals.session;
+const switches = session ? notificationSwitches(session.role) : [];
+---
+
+<AdminLayout
+  title="Notification settings"
+  subtitle="Choose what the bell at the top tells you about."
+>
+  <AdminNotificationSettings client:load switches={switches} />
+</AdminLayout>
