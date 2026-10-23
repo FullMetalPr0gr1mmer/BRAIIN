@@ -1,12 +1,15 @@
--- pgTAP: integrations, typed (Admin v2 U11, migration 0105_integrations.sql; CLAUDE.md §5
--- "Integrations"). Run with `supabase test db`.
+-- pgTAP: integrations, typed (Admin v2 U11, migration 0105_integrations.sql, and its contract
+-- U11c, 0110_integrations_contract.sql; CLAUDE.md §5 "Integrations"). Run with
+-- `supabase test db`.
 --
 --   • the catalog: RLS forced, the exact policy set, the helper answers settings.integrations
---     for every role, the grants by column (anon reads the Search Console code and the tenant,
---     nothing else; staff never DELETE, nor UPDATE the key, the version or the stamps), and
---     the table stays out of the release registry (immediate, P-3);
---   • Admin and SEO read, add and change the row (the version moves, the actor is stamped,
---     the legacy jsonb is still writable for the Worker deployed until this slice's deploy);
+--     for every role, the table's columns (the four legacy jsonb boxes are gone since the
+--     contract), the grants by column (anon reads the Search Console code and the tenant,
+--     nothing else; staff hold the three typed values, the key, the version and updated_at,
+--     never DELETE, nor UPDATE the key, the version or the stamps), and the table stays out
+--     of the release registry (immediate, P-3);
+--   • Admin and SEO read, add and change the row (the version moves, the actor is stamped;
+--     a statement naming a legacy box is refused, 42703: there is nothing left to write);
 --   • Content Creator, Developer and Sales read nothing and change nothing (RLS: since U11
 --     the staff read is Admin + SEO, not every CMS role);
 --   • anon reads the launch tenant's Search Console code and nothing else of the row (42501 on
@@ -22,7 +25,7 @@
 -- tenant anon resolves to (app.default_tenant_id()).
 
 begin;
-select plan(45);
+select plan(47);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name, created_at) values
@@ -114,6 +117,25 @@ select is(
     where a.attrelid = 'public.site_integrations'::regclass and a.attnum > 0 and not a.attisdropped
       and has_column_privilege('anon', a.attrelid, a.attnum, 'select')),
   'search_console_token,tenant_id', 'anon may read the Search Console code and the tenant, no other column');
+select is(
+  (select string_agg(a.attname::text, ',' order by a.attname::text collate "C")
+     from pg_attribute a
+    where a.attrelid = 'public.site_integrations'::regclass and a.attnum > 0 and not a.attisdropped),
+  'calendly_url,ga4_measurement_id,search_console_token,tenant_id,updated_at,updated_by,version',
+  'the table holds the three typed values, the key, the version and the stamps: the legacy jsonb is gone (U11c)');
+select is(
+  (select string_agg(p.priv || ':' || (
+            select string_agg(a.attname::text, ',' order by a.attname::text collate "C")
+              from pg_attribute a
+             where a.attrelid = 'public.site_integrations'::regclass and a.attnum > 0
+               and not a.attisdropped
+               and has_column_privilege('authenticated', a.attrelid, a.attnum, p.priv)),
+          '; ' order by p.ord)
+     from (values (1, 'select'), (2, 'insert'), (3, 'update')) as p(ord, priv)),
+  'select:calendly_url,ga4_measurement_id,search_console_token,tenant_id,updated_at,version; '
+  || 'insert:calendly_url,ga4_measurement_id,search_console_token,tenant_id; '
+  || 'update:calendly_url,ga4_measurement_id,search_console_token',
+  'staff hold the typed values, the key, the version and updated_at, column by column, and nothing else');
 select ok(
   not has_table_privilege('authenticated', 'public.site_integrations', 'delete, truncate, references, trigger')
   and not has_column_privilege('authenticated', 'public.site_integrations', 'tenant_id', 'update')
@@ -155,9 +177,10 @@ select is(_state($$ insert into public.site_integrations (tenant_id)
                     values ('11100000-0000-0000-0000-000000000001') $$),
   '23505', 'a second first save is the primary key''s refusal (the route answers 409), not RLS''s');
 select _as('11100000-0000-0000-0000-0000000000a1', 'admin', '11100000-0000-0000-0000-000000000001');
-select is(_rows($$ update public.site_integrations set recaptcha = '{}'::jsonb
-                   where tenant_id = '11100000-0000-0000-0000-000000000001' $$),
-  1, 'the legacy jsonb stays writable until the contract step (the deployed Worker''s window)');
+select is(_state($$ update public.site_integrations set recaptcha = '{"secret": "x"}'::jsonb
+                    where tenant_id = '11100000-0000-0000-0000-000000000001' $$)
+          || '/' || _state($$ select search_console from public.site_integrations $$),
+  '42703/42703', 'an admin token can neither write nor read a legacy box: the contract dropped them (U11c)');
 
 -- ── 3. Content Creator, Developer and Sales: nothing ─────────────────────────
 select _as('11100000-0000-0000-0000-0000000000c1', 'content_creator', '11100000-0000-0000-0000-000000000001');
@@ -194,8 +217,8 @@ select is(_state($$ select ga4_measurement_id from public.site_integrations $$),
   '42501', 'anon cannot read the GA4 id');
 select is(_state($$ select calendly_url from public.site_integrations $$),
   '42501', 'anon cannot read the Calendly link');
-select is(_state($$ select recaptcha from public.site_integrations $$),
-  '42501', 'anon cannot read the legacy jsonb');
+select is(_state($$ select version, updated_at from public.site_integrations $$),
+  '42501', 'anon cannot read the version or the stamps');
 select is(_state($$ select * from public.site_integrations $$),
   '42501', 'anon cannot read the whole row');
 select is(_state($$ update public.site_integrations set search_console_token = 'AnonCode_abcdef0123' $$),
