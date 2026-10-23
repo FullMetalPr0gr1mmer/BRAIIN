@@ -1610,14 +1610,20 @@ meets columns it ignores) but **not across a contraction** (§5a): the older Wor
 what the contraction took away, and nothing automated stops it (`wrangler rollback` bypasses
 CI, and the guard accepts a production ahead of the checkout). Never roll back past the code
 PR of the newest contraction production has applied; past that line, fix forward through a
-PR (§5b). Today the line is #43 (merged as `cc8c6c4`) once `0033` is applied: a Worker older
-than #43 reads lead columns `0033` revoked from staff tokens, so the PII reveal, every lead
-update and the PII export fail (42501); the lead list and the plain lead view keep working.
-Before a rollback, check that the target contains the line: CI's deploys carry their commit
-in the version message (`ci <sha> run <id>`), so `git merge-base --is-ancestor cc8c6c4 <sha>`
-must succeed; versions deployed before this pipeline carry no commit, so place them by deploy
-time against `cc8c6c4`'s deploy. A new contraction moves the line: its migration PR updates
-this paragraph.
+PR (§5b). Today the line is #106 (Admin v2 U11, merged as `1083159`) once
+`0110_integrations_contract.sql` (U11c) is applied: it drops `site_integrations`' four legacy
+jsonb columns (`ga4`, `search_console`, `calendly`, `recaptcha`), which a Worker older than
+#106 selects and writes on the Integrations screen and its route, so that screen fails to load
+and save (42703, the column does not exist); the rest of the admin and every public page keep
+working (no public page read the table before #106). Behind it is #43 (merged as `cc8c6c4`),
+the line since `0033`: a Worker older than #43 also reads lead columns `0033` revoked from
+staff tokens, so the PII reveal, every lead update and the PII export fail (42501); the lead
+list and the plain lead view keep working. Before a rollback, check that the target contains
+the line: CI's deploys carry their commit in the version message (`ci <sha> run <id>`), so
+`git merge-base --is-ancestor 1083159 <sha>` must succeed (`cc8c6c4` is its ancestor, so the
+one check covers both lines); versions deployed before this pipeline carry no commit, and all
+of them are older than both. A new contraction moves the line: its migration PR updates this
+paragraph.
 
 0037 (#51) does not move the line. It revoked staff write privileges on the eight tables
 staff only read (the telemetry tables, the pageview rollup, the search, consent and
