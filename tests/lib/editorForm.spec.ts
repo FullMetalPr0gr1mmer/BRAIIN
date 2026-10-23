@@ -289,3 +289,109 @@ describe('EditorForm in tabs and read-only (Admin v2 U8b)', () => {
     expect(source).toContain('if (!readOnly) submit();');
   });
 });
+
+// ── Admin v2 R12: release mode ──────────────────────────────────────────────────────────────
+// Set only by the server's answer (`save.mode === 'draft'`): with releases off no save has it,
+// and every test above renders the form as it was.
+
+describe('EditorForm in release mode (Admin v2 R12)', () => {
+  const LIFECYCLE: FieldDef[] = [
+    ...FIELDS,
+    {
+      name: 'status',
+      label: 'Status',
+      kind: 'select',
+      options: [
+        { value: 'draft', label: 'Draft' },
+        { value: 'scheduled', label: 'Scheduled' },
+        { value: 'published', label: 'Published' },
+        { value: 'archived', label: 'Archived' },
+      ],
+    },
+    { name: 'scheduledFor', label: 'Scheduled for', kind: 'datetime' },
+  ];
+  const DRAFT = {
+    id: '77777777-7777-4777-8777-000000000001',
+    version: 2,
+    op: 'update' as const,
+    fields: ['title'],
+    releaseId: null,
+    conflict: [] as string[],
+    liveMissing: false,
+    invalid: false,
+  };
+  const staged = (patch: Partial<EntitySave> = {}) =>
+    fakeSave({
+      mode: 'draft',
+      draft: DRAFT,
+      pendingRemoval: false,
+      gone: null,
+      flush: () => undefined,
+      adoptRow: () => undefined,
+      values: { slug: 'logo', title: { en: 'Logo', ar: 'الشعار' }, status: 'published' },
+      ...patch,
+    });
+
+  it('live mode draws no release UI: the status select and the schedule stay', () => {
+    const html = render(fakeSave(), LIFECYCLE);
+    expect(html).not.toContain('draft-note');
+    expect(html).not.toContain('Visible on the site');
+    expect(html).toContain('id="f-scheduledFor"');
+    expect(html).toContain('<select');
+    expect(html).toContain('Version 4');
+  });
+
+  it('a pending change: its badge, Discard changes, the visibility switch, no schedule', () => {
+    const html = render(staged({ status: 'saved', savedAt: '2026-10-23T08:05:00Z' }), LIFECYCLE);
+    expect(html).toContain('Unpublished changes');
+    expect(html).toContain('Saved, not live yet: it goes live when it is published.');
+    expect(html).toContain('>Discard changes</button>');
+    expect(html).toMatch(/role="switch"[^>]*aria-checked="true"/);
+    expect(html).toContain('Visible on the site');
+    expect(html).toContain('Archived');
+    expect(html).not.toContain('id="f-scheduledFor"');
+    expect(html).not.toContain('<select');
+    expect(html).toContain('Live version 4');
+    expect(html).toContain('Saved as an unpublished change at');
+  });
+
+  it('nothing pending yet (draft null): no notice, the form saves a new change', () => {
+    const html = render(staged({ draft: null }), LIFECYCLE);
+    expect(html).not.toContain('draft-note');
+    expect(html).toContain('Visible on the site');
+  });
+
+  it('a staged removal is read only with Undo removal; a new item says it is not live', () => {
+    const removal = render(staged({ pendingRemoval: true, draft: { ...DRAFT, op: 'delete' } }));
+    expect(removal).toContain('Will be removed');
+    expect(removal).toContain('>Undo removal</button>');
+    expect(removal).toContain('<fieldset class="editor-ro" disabled="">');
+    expect(removal).not.toContain('type="submit"');
+    const fresh = render(staged({ version: 0, draft: { ...DRAFT, op: 'create', version: 1 } }));
+    expect(fresh).toContain('New · not live yet');
+    expect(fresh).toContain('Not live yet');
+  });
+
+  it('a conflict names its fields and offers Keep my version, Use the live version, Compare', () => {
+    const html = render(staged({ draft: { ...DRAFT, conflict: ['title'] } }));
+    expect(html).toContain('Changed on the live site');
+    expect(html).toContain('Service name');
+    for (const label of ['Keep my version', 'Use the live version', 'Compare']) {
+      expect(html).toContain(`>${label}</button>`);
+    }
+  });
+
+  it('a scheduled change is read only; one gone under the form says so and offers Save again', () => {
+    const scheduled = render(staged({ draft: { ...DRAFT, releaseId: DRAFT.id } }));
+    expect(scheduled).toContain('Scheduled to go live. It is locked until then.');
+    expect(scheduled).toContain('<fieldset class="editor-ro" disabled="">');
+    const gone = render(staged({ draft: null, gone: 'draft-published', dirty: true }));
+    expect(gone).toContain('This change was published while you were editing.');
+    expect(gone).toContain('>Save again</button>');
+  });
+
+  it('the words carry no dash (P-12)', () => {
+    const html = render(staged({ draft: { ...DRAFT, conflict: ['title'] } }));
+    expect(html.replace(/<[^>]+>/g, ' ')).not.toMatch(/[\u2013\u2014]/);
+  });
+});
