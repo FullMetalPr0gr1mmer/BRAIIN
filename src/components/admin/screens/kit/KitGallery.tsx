@@ -1,4 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { Role } from '@/lib/auth/types';
+import ReleaseUi from '@/components/admin/screens/release/ReleaseUi';
+import { sampleReleaseApi } from '@/components/admin/screens/release/sampleApi';
 import { Field } from '@/components/admin/FormField';
 import {
   ArabicGapsProvider,
@@ -44,6 +47,11 @@ import {
 export interface KitGalleryProps {
   /** The tab the URL names (`?tab=`), read on the server so the first paint is right. */
   tab: KitTab;
+  /**
+   * Admin v2 R12: the signed-in CMS role, for the Publishing card (the savebar and the publish
+   * dialog over made-up changes, as that role sees them); null for Sales: no card.
+   */
+  publishing?: Role | null | undefined;
 }
 
 const LABEL: Record<string, string> = Object.fromEntries(
@@ -58,7 +66,7 @@ type StatusFilter = 'all' | KitRow['status'];
 type Language = 'en' | 'ar' | 'both';
 type ShownState = Exclude<SaveState, 'idle'>;
 
-export default function KitGallery({ tab }: KitGalleryProps) {
+export default function KitGallery({ tab, publishing = null }: KitGalleryProps) {
   return (
     <div className="kit__stack">
       <KpisDemo />
@@ -73,7 +81,28 @@ export default function KitGallery({ tab }: KitGalleryProps) {
       </div>
       <FormDemo />
       <FieldsDemo />
+      {publishing && <PublishingDemo role={publishing} />}
     </div>
+  );
+}
+
+/**
+ * The savebar and the publish dialog (Admin v2 R12) over made-up changes, as this role sees
+ * them (who may publish what is ROLE_CAPS's, as on the server): the same components the
+ * AdminSavebar island draws once releases are on, here in the page and sending nothing.
+ */
+function PublishingDemo({ role }: { role: Role }) {
+  const api = useMemo(() => sampleReleaseApi(role), [role]);
+  return (
+    <section className="card" aria-labelledby="kit-publishing-h" data-kit="publishing">
+      <h3 id="kit-publishing-h" className="card-title">
+        Publishing
+      </h3>
+      <p className="kit__line">
+        The bar and the dialog over sample changes, as your role sees them. Nothing is sent.
+      </p>
+      <ReleaseUi api={api} role={role} inline />
+    </section>
   );
 }
 
