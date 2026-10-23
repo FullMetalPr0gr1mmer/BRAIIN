@@ -18,6 +18,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *   the editor    Basics | Case study | Breakdown & gallery | SEO | Publishing; the gallery
  *                 reordered from the keyboard (handle, Space, ArrowLeft, Space) and saved in
  *                 ONE PATCH (one save_portfolio call), the hero and the breakdown untouched;
+ *                 a breakdown item added (it stays while it holds nothing yet, and when its
+ *                 picture is removed), its kind and picture chosen, and saved in ONE PATCH;
  *                 the publish requirements say the poster is missing; "Add a quote" opens the
  *                 testimonial drawer with this project chosen;
  *   SEO           the editor opens on its SEO tab, the content read-only, no testimonial card,
@@ -270,6 +272,74 @@ test.describe('as content_creator', () => {
     // The other roles' items came back whole, the set in one order (hero, film, breakdown, gallery).
     expect(after.map(([role]) => role)).toEqual(['hero', 'breakdown', 'gallery', 'gallery']);
     expect(after.find(([role]) => role === 'hero')?.[1]).toBe(stills[0]);
+  });
+
+  test('the editor: a breakdown item added, its picture chosen, saved in one call', async ({
+    page,
+  }) => {
+    page.on('dialog', (dialog) => void dialog.accept());
+    await ready(page, `/admin/portfolio/${projectId}?tab=breakdown`);
+    const items = page.getByRole('list', { name: 'Breakdown', exact: true }).locator(':scope > li');
+    await expect(items).toHaveCount(1);
+    // The new item stays while it holds nothing yet, and while only its kind is chosen.
+    await page.getByRole('button', { name: 'Add breakdown', exact: true }).click();
+    await expect(items).toHaveCount(2);
+    await page.locator('#f-breakdown-1-breakdownKind').selectOption('process');
+    await expect(items).toHaveCount(2);
+
+    const picture = items.nth(1).getByRole('group', { name: 'Picture, or the video’s poster' });
+    const choose = async () => {
+      await picture.getByRole('button', { name: /^(Choose|Change)…$/ }).click();
+      const picker = page.getByRole('dialog', { name: 'Picture, or the video’s poster: choose' });
+      await expect(picker).toBeVisible();
+      const tile = picker.locator('button.mi[aria-pressed]').first();
+      await tile.click();
+      await expect(tile).toHaveAttribute('aria-pressed', 'true');
+      await picker.getByRole('button', { name: 'Use image', exact: true }).click();
+      await expect(picker).toBeHidden();
+    };
+    await choose();
+    // Removing the picture keeps the item and its kind; then it is chosen again.
+    await picture.getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect(items).toHaveCount(2);
+    await expect(page.locator('#f-breakdown-1-breakdownKind')).toHaveValue('process');
+    await choose();
+
+    const writes: string[] = [];
+    page.on('request', (req) => {
+      if (req.method() !== 'GET' && new URL(req.url()).pathname.startsWith('/api/admin/')) {
+        writes.push(`${req.method()} ${new URL(req.url()).pathname}`);
+      }
+    });
+    const saved = page.waitForResponse(
+      (res) =>
+        new URL(res.url()).pathname === `/api/admin/portfolio/${projectId}` &&
+        res.request().method() === 'PATCH',
+    );
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    const response = await saved;
+    expect(response.status(), await response.text()).toBe(200);
+    expect(writes).toEqual([`PATCH /api/admin/portfolio/${projectId}`]);
+
+    const { data, error } = await service()
+      .from('portfolio_media')
+      .select('role,kind,breakdown_kind,media_id')
+      .eq('portfolio_id', projectId)
+      .eq('role', 'breakdown')
+      .order('sort_order');
+    expect(error).toBeNull();
+    expect((data ?? []).map((r) => [r.kind, r.breakdown_kind])).toEqual([
+      ['image', 'sketch'],
+      ['image', 'process'],
+    ]);
+    expect(data?.[1]?.media_id, 'the chosen picture').toBeTruthy();
+    expect((await storedMedia()).map(([role]) => role)).toEqual([
+      'hero',
+      'breakdown',
+      'breakdown',
+      'gallery',
+      'gallery',
+    ]);
   });
 
   test('the publish requirements and the testimonial card', async ({ page }) => {

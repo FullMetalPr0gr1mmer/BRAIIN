@@ -9,9 +9,16 @@
 // (tests/lib/projectEditor.spec.ts); the hook that wires it is ProjectEditor.tsx.
 //
 //   kind     each item's `kind` follows what it holds: a video clip makes it a video (its
-//            picture is then the poster), a picture alone an image. Nothing chosen is no item
-//            (an empty hero or final film is not sent).
-//   kept     every key an item holds that its control does not draw (a hero's caption, a
+//            picture is then the poster), a picture alone an image; an item holding neither
+//            yet is an image, or a video for the final film (it is a film).
+//   kept     a breakdown or gallery item is always an item, however little it holds yet: the
+//            person added it (RepeaterField's "Add breakdown" makes an empty one), and the
+//            view is read back from the set, so an item left out of the set would vanish
+//            from its control at once, and removing a picture would take its caption with
+//            it. The hero and the final film are no item when they hold nothing the control
+//            draws (an emptied hero is "none"; a film's length alone is kept). The server
+//            refuses an item that is not complete, and the refusal lands on its control.
+//   other    every key an item holds that its control does not draw (a hero's caption, a
 //            gallery video's clip) rides along unchanged, so a reorder or an edit elsewhere
 //            never loses what is stored.
 //   errors   the server names an item by its place in the set (`media.3.mediaId`); the
@@ -100,11 +107,33 @@ export function splitMedia(media: unknown): { view: MediaView; layout: Slot[] } 
   return { view, layout };
 }
 
-/** One item of the set, its kind following what it holds; null when it holds nothing. */
+/** True when a text value holds something. */
+function hasText(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+/**
+ * Whether a control's value is an item of the set: a breakdown or gallery item always (see
+ * the header), the hero when it holds a picture or a video, the final film when it holds
+ * either or the length it shows.
+ */
+function isItem(role: MediaRole, item: Item): boolean {
+  if (role === 'breakdown' || role === 'gallery') return true;
+  if (hasClip(item) || hasPicture(item)) return true;
+  return role === 'final' && hasText(item['durationLabel']);
+}
+
+/** One item of the set, its kind following what it holds; null when it is no item. */
 function asItem(role: MediaRole, item: Item): Item | null {
-  const clip = hasClip(item);
-  if (!clip && !hasPicture(item)) return null;
-  return { ...item, role, kind: clip ? 'video' : 'image' };
+  if (!isItem(role, item)) return null;
+  const kind = hasClip(item)
+    ? 'video'
+    : hasPicture(item)
+      ? 'image'
+      : role === 'final'
+        ? 'video'
+        : 'image';
+  return { ...item, role, kind };
 }
 
 /** The four controls' values → the set the save sends, and where each item came from. */

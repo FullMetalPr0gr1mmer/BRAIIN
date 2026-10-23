@@ -198,6 +198,84 @@ describe('the media set as four role controls (media.ts)', () => {
     expect(view.gallery.map((i) => i['mediaId'])).toEqual([M2]);
     expect(layout[1]).toEqual({ role: 'gallery', index: 0 });
   });
+
+  it('"Add breakdown" adds an item that stays, however little it holds yet', () => {
+    const loaded = loadedMedia(SEEDED);
+    const { view } = splitMedia(loaded);
+    // RepeaterField's Add commits the list with an empty item at its end (newItem gives {}).
+    const added = setView(loaded, 'breakdown', [...view.breakdown, {}]);
+    const shown = splitMedia(added).view.breakdown;
+    expect(shown).toHaveLength(2);
+    expect(shown[1]).toEqual({ kind: 'image' });
+    // Choosing its kind first keeps it too, and the next choice builds on it.
+    const kinded = setView(added, 'breakdown', [shown[0], { ...shown[1], breakdownKind: 'bts' }]);
+    const after = splitMedia(kinded).view.breakdown;
+    expect(after).toHaveLength(2);
+    expect(after[1]).toMatchObject({ kind: 'image', breakdownKind: 'bts' });
+    const pictured = setView(kinded, 'breakdown', [after[0], { ...after[1], mediaId: M3 }]);
+    expect(splitMedia(pictured).view.breakdown[1]).toMatchObject({
+      kind: 'image',
+      breakdownKind: 'bts',
+      mediaId: M3,
+    });
+    // Everything else stays as it was.
+    expect(pictured.filter((i) => i['role'] !== 'breakdown')).toEqual(
+      added.filter((i) => i['role'] !== 'breakdown'),
+    );
+  });
+
+  it('an item not complete yet is sent, and its refusal lands on the item', () => {
+    const loaded = loadedMedia(SEEDED);
+    const { view } = splitMedia(loaded);
+    const media = setView(loaded, 'breakdown', [...view.breakdown, { breakdownKind: 'bts' }]);
+    const payload = formToPayload({ media }, portfolioUi.fields);
+    const parsed = PortfolioUpdateSchema.safeParse({ version: 1, ...payload });
+    expect(parsed.success).toBe(false);
+    const issues = (parsed.error?.issues ?? []).map((issue) => ({
+      path: issue.path.join('.'),
+      message: issue.message,
+    }));
+    const moved = remapMediaErrors(
+      mapIssues(issues, portfolioUi.fields, 'f', { media }),
+      splitMedia(media).layout,
+    );
+    expect(Object.keys(moved.byId)).toEqual(['f-breakdown-1-mediaId']);
+    expect(moved.summary.map((s) => s.message)).toEqual(['Breakdown 2: choose the image']);
+  });
+
+  it('removing a breakdown item’s picture keeps the item and its caption', () => {
+    const loaded = loadedMedia(SEEDED);
+    const { view } = splitMedia(loaded);
+    const next = setView(loaded, 'breakdown', [{ ...view.breakdown[0], mediaId: '' }]);
+    const item = splitMedia(next).view.breakdown;
+    expect(item).toHaveLength(1);
+    expect(item[0]).toMatchObject({
+      breakdownKind: 'sketch',
+      layout: 'wide',
+      caption: { en: 'A', ar: 'أ' },
+      mediaId: '',
+    });
+    // A gallery item is kept the same way: only its Remove button takes it away.
+    const gallery = setView(loaded, 'gallery', [{ ...view.gallery[0], mediaId: '' }]);
+    expect(splitMedia(gallery).view.gallery).toHaveLength(1);
+  });
+
+  it('a final film’s length typed before the film is kept; an emptied film is none', () => {
+    const loaded = loadedMedia(SEEDED.filter((row) => row.role !== 'final'));
+    const typed = setView(loaded, 'finalFilm', { durationLabel: '1:30' });
+    expect(splitMedia(typed).view.finalFilm).toEqual({ durationLabel: '1:30', kind: 'video' });
+    // Not a film yet, so the server says so on the film's own control.
+    const parsed = PortfolioUpdateSchema.safeParse({
+      version: 1,
+      ...formToPayload({ media: typed }, portfolioUi.fields),
+    });
+    const paths = (parsed.error?.issues ?? []).map((issue) => issue.path.join('.'));
+    const k = typed.findIndex((i) => i['role'] === 'final');
+    expect(paths).toEqual([`media.${k}.clip`]);
+    expect(viewIdOf(`f-media-${k}-clip`, splitMedia(typed).layout)).toBe('f-finalFilm-clip');
+    const cleared = setView(typed, 'finalFilm', { durationLabel: '', kind: 'video' });
+    expect(cleared.filter((i) => i['role'] === 'final')).toEqual([]);
+  });
 });
 
 describe('the server’s errors land on the control holding the item', () => {
