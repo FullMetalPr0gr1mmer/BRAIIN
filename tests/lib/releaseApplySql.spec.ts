@@ -138,11 +138,14 @@ describe.each(APPLY_FILES)('%s', (file) => {
       expect(head).not.toMatch(/security definer/);
     });
 
-    it('takes the full signature now (schedule and fire arrive with R11)', () => {
+    it('takes the full signature; before R11 it refuses schedule and fire, from R11 it runs them', () => {
       expect(TEXT).toContain(
         'public.apply_release(uuid, text, text, jsonb, text, text, uuid, uuid, timestamptz)',
       );
-      expect(fn).toMatch(/if p_mode in \('schedule', 'fire'\) then\s+raise exception[^;]*R11/);
+      const refuses = /if p_mode in \('schedule', 'fire'\) then\s+raise exception[^;]*R11/.test(fn);
+      const runs = fn.includes("p_mode not in ('publish', 'dry_run', 'schedule', 'fire')");
+      expect(refuses !== runs, file).toBe(true);
+      if (runs) expect(file >= '0105', file).toBe(true);
     });
 
     it('refuses every caller but the service role, before anything else', () => {
