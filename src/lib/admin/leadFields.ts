@@ -16,10 +16,10 @@ import { can } from '@/lib/authz/matrix';
 // encrypted free-text deadline (`timeline_text_enc`, 0017); a legacy band was moved into it by
 // the daily cron (0035).
 //
-// Since Admin v2 C14a no code here names the legacy columns the contract slice drops
-// (`status`, `internal_notes`, `ip_inet`, `timeline_band`; C14b): every list below names only
-// columns that exist before and after that migration, so the Worker runs on both schemas.
-// tests/lib/leadsContract.spec.ts holds that line.
+// Since Admin v2 C14a no query names the legacy columns the contract slice drops (C14b): every
+// projection below names only columns that exist before and after that migration, so the
+// Worker runs on both schemas. LEGACY_LEAD_COLUMNS names them once, for stripSensitive and the
+// tests, never for a query; tests/lib/leadsContract.spec.ts holds that line.
 //
 // Since migration 0033 the database holds the same line. A staff token can SELECT only
 // SAFE_LEAD_COLUMNS (plus tenant_id): the caller's own client (`sb`) asking for any other
@@ -32,6 +32,20 @@ import { can } from '@/lib/authz/matrix';
 // tests/lib/leadGrants.spec.ts names every reader.
 
 export const SENSITIVE_LEAD_COLUMNS = ['budget_enc', 'timeline_text_enc'] as const;
+
+/**
+ * The legacy lead columns the contract slice drops (C14b): the old status, the old notes field,
+ * the never-written address and the old plaintext band. No query names them since C14a (a lead
+ * moves by its stage, the notes are the audited thread, the band is in the encrypted
+ * timeline). Listed here only so stripSensitive keeps them out of a response while today's
+ * schema still holds them, and so the tests know what C14b removes.
+ */
+export const LEGACY_LEAD_COLUMNS = [
+  'status',
+  'internal_notes',
+  'ip_inet',
+  'timeline_band',
+] as const;
 
 /**
  * Columns safe for any role that can see leads at all (the leads_safe view's first columns,
@@ -95,6 +109,7 @@ export function canManageLeads(role: Role): boolean {
 export function stripSensitive<T extends Record<string, unknown>>(row: T): Partial<T> {
   const out: Record<string, unknown> = { ...row };
   for (const column of SENSITIVE_LEAD_COLUMNS) delete out[column];
+  for (const column of LEGACY_LEAD_COLUMNS) delete out[column];
   delete out['email_enc'];
   delete out['phone_enc'];
   delete out['score_signals'];
