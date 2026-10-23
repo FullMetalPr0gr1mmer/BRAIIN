@@ -45,6 +45,7 @@ const seo = await import('@/lib/data/seo');
 const serviceCases = await import('@/lib/data/serviceCases');
 const services = await import('@/lib/data/services');
 const siteProfile = await import('@/lib/data/siteProfile');
+const siteVerification = await import('@/lib/data/siteVerification');
 const statistics = await import('@/lib/data/statistics');
 const taxonomy = await import('@/lib/data/taxonomy');
 const team = await import('@/lib/data/team');
@@ -63,6 +64,7 @@ const MODULES = {
   serviceCases,
   services,
   siteProfile,
+  siteVerification,
   statistics,
   taxonomy,
   team,
@@ -281,6 +283,12 @@ const CASES: Record<string, () => Promise<void>> = {
     expect(value).toEqual({ favicon: null, appIcon: null });
     clean(report);
   },
+  'siteVerification.getSearchConsoleToken': async () => {
+    // Admin v2 U11: anon's one column of the row (the GA4 id beside it is never answered).
+    const { value, report } = await inPreview(() => siteVerification.getSearchConsoleToken());
+    expect(value).toBe('FixtureCode_0123456789');
+    clean(report);
+  },
   'statistics.getPublishedStatistics': async () => {
     const { value, report } = await inPreview(() =>
       statistics.getPublishedStatistics({ placement: 'about' }),
@@ -331,7 +339,7 @@ function clean(report: ReturnType<ReturnType<typeof createPreviewSource>['report
 }
 
 describe('every public loader, inside the preview scope', () => {
-  it('has a case for every exported loader function of the 16 files', () => {
+  it('has a case for every exported loader function of the 17 files', () => {
     const exported = Object.entries(MODULES).flatMap(([name, mod]) =>
       Object.entries(mod)
         .filter(([key, value]) => typeof value === 'function' && !PURE.has(key))

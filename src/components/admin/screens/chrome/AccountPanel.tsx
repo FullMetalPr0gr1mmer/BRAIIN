@@ -336,6 +336,21 @@ export default function AccountPanel({
           </span>
         </li>
         <li className="li">
+          {/* The bell's settings (Admin v2 U11, ui.md §2.9): a link, every member's own page. */}
+          <span className="li__ico" aria-hidden="true">
+            <Icon name="bell" />
+          </span>
+          <span className="li__main">
+            <span className="li__t">Notifications</span>
+            <span className="li__s">
+              What the bell at the top tells you about.{' '}
+              <a className="acct__link" href="/admin/settings/notifications">
+                Choose what the bell tells you
+              </a>
+            </span>
+          </span>
+        </li>
+        <li className="li">
           <span className="li__ico" aria-hidden="true">
             <Icon name="shield" />
           </span>

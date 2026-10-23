@@ -743,6 +743,17 @@ export function fixtureTables(): Record<string, Row[]> {
         footer_show_social: false,
       },
     ],
+    // Admin v2 U11: a visitor reads the Search Console code and the tenant, nothing else.
+    site_integrations: [
+      {
+        tenant_id: TENANT,
+        ga4_measurement_id: 'G-FIXTURE1',
+        search_console_token: 'FixtureCode_0123456789',
+        calendly_url: 'https://calendly.com/fixture',
+        version: 1,
+        updated_at: '2026-01-01T00:00:00+00:00',
+      },
+    ],
     seo_defaults: [
       {
         tenant_id: TENANT,

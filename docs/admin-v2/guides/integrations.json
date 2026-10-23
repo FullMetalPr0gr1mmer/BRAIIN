@@ -1,0 +1,112 @@
+{
+  "slug": "integrations",
+  "sort_order": 62,
+  "minutes": 3,
+  "tags": ["settings", "seo"],
+  "screens": ["/admin/integrations"],
+  "caps": ["settings.integrations"],
+  "title": "Integrations: Search Console, Analytics and Calendly",
+  "title_ar": "الربط بالأدوات: Search Console وAnalytics وCalendly",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Integrations links the site to tools you already use. Nothing here is a password or a secret key, and nothing here is needed for the site to run. Only Admins and the SEO role open this screen, and every change shows in the activity log."
+      },
+      {
+        "t": "h",
+        "x": "Google Search Console"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "In Search Console, add the site and choose the HTML tag method to prove you own it.",
+          "Copy the tag it shows. Here, choose Set up on Google Search Console, paste the whole tag or just the code inside content, and choose Save.",
+          "The home page, in English and in Arabic, carries the tag at once. Go back to Search Console and press Verify."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "Whoever sets this code can claim the site in Search Console and see its search data, so check with the site's owner before you change it."
+      },
+      {
+        "t": "h",
+        "x": "Google Analytics 4"
+      },
+      {
+        "t": "p",
+        "x": "Save the measurement ID that starts with G-. The site does not load Google Analytics yet. When it does, it will load only for visitors who accept analytics cookies, and the built-in website stats stay the main numbers."
+      },
+      {
+        "t": "h",
+        "x": "Calendly"
+      },
+      {
+        "t": "p",
+        "x": "Save your booking link, the one that starts with https://calendly.com/. No page shows a booking button yet."
+      },
+      {
+        "t": "h",
+        "x": "Captcha"
+      },
+      {
+        "t": "p",
+        "x": "Not set up yet: the provider is still to be chosen. Until then the forms are protected by a hidden field that only bots fill in, and by limits on how often one address can send."
+      },
+      {
+        "t": "tip",
+        "x": "To take a setting away, open it and choose Remove. You can add it again any time."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تربط شاشة Integrations الموقع بأدوات تستخدمها أصلًا. لا شيء هنا كلمة مرور أو مفتاح سري، ولا شيء هنا ضروري لعمل الموقع. لا يفتح هذه الشاشة إلا المسؤولون (Admin) ودور SEO، ويظهر كل تغيير في سجل النشاط."
+      },
+      {
+        "t": "h",
+        "x": "أداة Google Search Console"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "في Search Console أضف الموقع واختر طريقة وسم HTML لتثبت أنك تملكه.",
+          "انسخ الوسم الذي يعرضه. ثم اختر هنا Set up على Google Search Console، والصق الوسم كاملًا أو الرمز الذي داخل content فقط، واختر Save.",
+          "تحمل الصفحة الرئيسية بالعربية والإنجليزية الوسم فورًا. ارجع إلى Search Console واضغط Verify."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "من يضبط هذا الرمز يستطيع أن يطالب بالموقع في Search Console ويطّلع على بيانات البحث الخاصة به، لذا راجع مالك الموقع قبل أن تغيّره."
+      },
+      {
+        "t": "h",
+        "x": "أداة Google Analytics 4"
+      },
+      {
+        "t": "p",
+        "x": "احفظ معرّف القياس الذي يبدأ بـ G-. لا يحمّل الموقع Google Analytics بعد. وعندما يفعل، فلن يحمّله إلا للزوار الذين يقبلون ملفات تعريف الارتباط الخاصة بالتحليلات، وتبقى إحصاءات الموقع المدمجة هي الأرقام الأساسية."
+      },
+      {
+        "t": "h",
+        "x": "رابط Calendly"
+      },
+      {
+        "t": "p",
+        "x": "احفظ رابط الحجز الخاص بك، وهو الذي يبدأ بـ https://calendly.com/. لا تعرض أي صفحة زر حجز بعد."
+      },
+      {
+        "t": "h",
+        "x": "التحقق من الزائر (Captcha)"
+      },
+      {
+        "t": "p",
+        "x": "غير مُعدّ بعد، فمزوّد الخدمة لم يُختر حتى الآن. وإلى أن يُعدّ تحمي النماذجَ خانةٌ مخفية لا يملؤها إلا الروبوتات، وحدودٌ لعدد المرات التي يرسل فيها العنوان الواحد."
+      },
+      {
+        "t": "tip",
+        "x": "لإزالة إعداد افتحه واختر Remove، ويمكنك أن تضيفه من جديد في أي وقت."
+      }
+    ]
+  }
+}

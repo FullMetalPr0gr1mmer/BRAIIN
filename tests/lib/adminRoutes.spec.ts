@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ROLES, type Role } from '@/lib/auth/types';
 import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
 import { reachableHrefs } from '@/lib/admin/nav';
+import { FORM_IDS, formsTabHref } from '@/lib/admin/forms/overview';
 import * as resources from '@/lib/admin/resources';
 import type { ResourceConfig } from '@/lib/admin/resource';
 import {
@@ -271,6 +272,20 @@ describe('the sweep route map', () => {
     expect(paths).toContain('/admin/redirects/[id]');
   });
 
+  it('every tab of the Forms overview is swept for the roles that may open it (U11)', () => {
+    for (const role of ROLES) {
+      const paths = new Set(sweepRoutes(role).map((r) => r.path));
+      for (const id of FORM_IDS) {
+        const href = formsTabHref(id);
+        if (ROLE_CAPS[role]['settings.general'] === 'full') {
+          expect(paths, `${role} ${href}`).toContain(href);
+        } else {
+          expect(paths, `${role} ${href}`).not.toContain(href);
+        }
+      }
+    }
+  });
+
   it('every role is swept on its own account and bell pages (Admin v2 F8)', () => {
     for (const role of ROLES) {
       const paths = new Set(sweepRoutes(role).map((r) => r.path));
@@ -336,6 +351,8 @@ describe('the locked screens the refusals e2e opens', () => {
     expect(server.map((s) => s.href).sort()).toEqual([
       '/admin/analytics/search',
       '/admin/audit',
+      '/admin/forms',
+      '/admin/integrations',
       '/admin/leads',
       '/admin/leads/board',
       '/admin/maintenance',
@@ -431,6 +448,8 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
     Settings: [
       'General /admin/settings',
       'SEO /admin/seo',
+      'Forms /admin/forms',
+      'Notifications /admin/settings/notifications',
       'Integrations /admin/integrations',
       'Users & roles /admin/users',
       'Activity log /admin/audit',
@@ -455,6 +474,8 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
     ],
     Growth: ['Website stats /admin/analytics', 'Style-Finder /admin/ai-questions'],
     Appearance: ['Menus /admin/navigation'],
+    // Admin v2 U11: the bell's settings, every member's own.
+    Settings: ['Notifications /admin/settings/notifications'],
   },
   // Entity meta (so the content lists, not their bodies), media meta, SEO, integrations.
   seo: {
@@ -467,7 +488,11 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'Media library /admin/media',
     ],
     Growth: ['Website stats /admin/analytics'],
-    Settings: ['SEO /admin/seo', 'Integrations /admin/integrations'],
+    Settings: [
+      'SEO /admin/seo',
+      'Notifications /admin/settings/notifications',
+      'Integrations /admin/integrations',
+    ],
   },
   // Technical: media, leads, health, theme, settings, audit; no content, no applications.
   developer: {
@@ -476,13 +501,20 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
     CRM: ['Leads /admin/leads'],
     Growth: ['Website stats /admin/analytics', 'Site health /admin/site-health'],
     Appearance: ['Theme /admin/themes'],
-    Settings: ['General /admin/settings', 'Activity log /admin/audit'],
+    Settings: [
+      'General /admin/settings',
+      'Forms /admin/forms',
+      'Notifications /admin/settings/notifications',
+      'Activity log /admin/audit',
+    ],
   },
-  // Sales (C10a): works leads and reads the stats; no content, media, settings or logs.
+  // Sales (C10a): works leads and reads the stats; no content, media, site settings or logs.
+  // Its own bell's settings (Admin v2 U11) are every member's, as the account is.
   sales: {
     Overview: ['Dashboard /admin'],
     CRM: ['Leads /admin/leads'],
     Growth: ['Website stats /admin/analytics'],
+    Settings: ['Notifications /admin/settings/notifications'],
   },
 };
 

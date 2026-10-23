@@ -911,13 +911,9 @@ export const ExportQuerySchema = z.object({
 export { SiteSettingsSchema } from './settings';
 export { MaintenanceSchema } from './maintenance';
 
-export const IntegrationsSchema = z.object({
-  ga4: z.record(z.string(), z.unknown()).optional(),
-  searchConsole: z.record(z.string(), z.unknown()).optional(),
-  calendly: z.record(z.string(), z.unknown()).optional(),
-  recaptcha: z.record(z.string(), z.unknown()).optional(),
-  version: SingletonVersionSchema,
-});
+// Integrations (Admin v2 U11): typed public identifiers in their own module
+// (packages/schemas/integrations.ts), whose patterns are the database CHECKs'.
+export { IntegrationsSchema } from './integrations';
 
 // Theme tokens: their own module (packages/schemas/themeTokens.ts) so the preview bridge's
 // envelope can use them without this file (Admin v2 R9).

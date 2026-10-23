@@ -7,6 +7,8 @@
 export const CASE_MANIFEST: readonly string[] = [
   'account: my dashboard layout save',
   'account: my name',
+  'account: my notification settings read',
+  'account: my notification settings save',
   'account: my password',
   'account: my preferences read',
   'account: my preferences save',

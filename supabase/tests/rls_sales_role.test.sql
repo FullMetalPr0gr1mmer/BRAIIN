@@ -308,13 +308,13 @@ select ok(not app.is_member(), 'no role claim is no member');
 
 -- Every helper, for every value of the enum and none: a literal copy of CLAUDE.md §5.
 select is(
-  (select string_agg(format('%s:%s%s%s%s%s%s%s%s%s', r,
+  (select string_agg(format('%s:%s%s%s%s%s%s%s%s%s%s', r,
             app.role_works_leads(r)::int, app.role_analytics_read(r)::int, app.role_crm_erase(r)::int,
             app.role_manages_users(r)::int, app.role_views_audit(r)::int, app.role_site_health(r)::int,
             app.role_manages_visibility(r)::int, app.role_analytics_goals(r)::int,
-            app.role_crm_settings(r)::int), ' ' order by r)
+            app.role_crm_settings(r)::int, app.role_manages_integrations(r)::int), ' ' order by r)
      from unnest(enum_range(null::public.app_role)::text[] || array['anon']) r),
-  'admin:111111111 anon:000000000 content_creator:010000000 developer:110011100 sales:110000000 seo:010000010',
+  'admin:1111111111 anon:0000000000 content_creator:0100000000 developer:1100111000 sales:1100000000 seo:0100000101',
   'each helper answers its capability for each role: Sales works leads and reads the stats, nothing else');
 
 select is(

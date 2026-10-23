@@ -135,8 +135,14 @@ select ok(not has_table_privilege('anon', 'public.audit_log', 'select'),
   'anon CANNOT select public.audit_log');
 select ok(not has_table_privilege('anon', 'public.profiles', 'select'),
   'anon CANNOT select public.profiles');
-select ok(not has_table_privilege('anon', 'public.site_integrations', 'select'),
-  'anon CANNOT select public.site_integrations (API keys)');
+-- site_integrations (Admin v2 U11): no table privilege; of its columns anon reads only the
+-- Search Console code the home page's <head> carries anyway (and the tenant its row is in).
+select ok(not has_table_privilege('anon', 'public.site_integrations', 'select')
+          and has_column_privilege('anon', 'public.site_integrations', 'search_console_token', 'select')
+          and not has_column_privilege('anon', 'public.site_integrations', 'ga4_measurement_id', 'select')
+          and not has_column_privilege('anon', 'public.site_integrations', 'calendly_url', 'select')
+          and not has_column_privilege('anon', 'public.site_integrations', 'recaptcha', 'select'),
+  'anon CANNOT select public.site_integrations, only its Search Console code (U11)');
 
 -- ---- 7. UI v2 additions (0016, 0019) --------------------------------------------------
 -- The two new public surfaces are SELECT-only (the insert/update/delete/truncate sweep in
