@@ -400,6 +400,8 @@
   --ad-main-min: 32rem;
   --ad-pad-b: clamp(18px, 2.4vw, 28px);
   --ad-pad-i: clamp(16px, 2.4vw, 28px);
+  /* The savebar's height, for the scroll padding that keeps focus clear of it (R12). */
+  --ad-savebar: 64px;
 }
 
 /* A dialog's ::backdrop inherits from its dialog only from Chromium 122, and the
@@ -4482,6 +4484,364 @@ dialog.drw[data-size='wide'] {
 }
 
 /* ---- Motion and forced colours ---- */
+
+/* ---- Releases: the savebar, the publish dialog, pending changes (Admin v2 R12) ----
+   The prototype's .savebar (app.css 83-85): a fixed midnight pill at the bottom centre while
+   anything unpublished is waiting. AdminLayout draws it only with releases on, so with them
+   off none of this renders. It slides in from @starting-style (the reduced-motion block below
+   drops the transition), and while it shows, the page's scroll port ends above it so a focused
+   control is scrolled clear of it (WCAG 2.2 2.4.11, technique C43); its height is
+   --ad-savebar, a row on a wide screen and up to three on a narrow one. */
+:root:has(.savebar[data-shown]:not([data-inline])) {
+  scroll-padding-block-end: calc(var(--ad-savebar) + 16px);
+}
+
+.admin-body:has(.savebar[data-shown]:not([data-inline])) .admin-main {
+  padding-block-end: calc(var(--ad-savebar) + 32px);
+}
+
+@media (max-width: 640px) {
+  :root {
+    --ad-savebar: 132px;
+  }
+}
+
+.savebar {
+  position: fixed;
+  z-index: 50;
+  inset-inline: 0;
+  inset-block-end: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  inline-size: max-content;
+  max-inline-size: calc(100vw - 32px);
+  margin-inline: auto;
+  padding-block: 10px;
+  padding-inline: 18px 10px;
+  border-radius: var(--ad-r-pill);
+  background: var(--ad-midnight);
+  color: var(--ad-on-dark);
+  box-shadow: var(--ad-shadow);
+  font-size: 13.5px;
+  translate: 0 0;
+  opacity: 1;
+  transition:
+    translate 0.4s var(--ad-ease),
+    opacity 0.4s;
+}
+
+@starting-style {
+  .savebar {
+    translate: 0 120%;
+    opacity: 0;
+  }
+}
+
+/* The kit's gallery draws it in the page. */
+.savebar[data-inline] {
+  position: static;
+  margin-inline: 0;
+}
+
+@media (max-width: 640px) {
+  .savebar {
+    border-radius: var(--ad-r);
+  }
+}
+
+.savebar__dot {
+  flex: none;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--ad-warn);
+}
+
+.savebar__text {
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+}
+
+.savebar__lead,
+.savebar__sub,
+.savebar__error {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.savebar__lead {
+  font-weight: 700;
+}
+
+.savebar__sub {
+  color: var(--ad-side-text);
+  font-size: 12.5px;
+}
+
+.savebar__error {
+  margin-block-start: 4px;
+  font-weight: 600;
+}
+
+.savebar__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.savebar :focus-visible {
+  outline-color: var(--ad-focus-dark);
+}
+
+.savebar button[data-variant='ghost'],
+.savebar .btn[data-variant='ghost'] {
+  color: var(--ad-on-dark);
+}
+
+.savebar button[data-variant='ghost']:hover,
+.savebar .btn[data-variant='ghost']:hover {
+  background: var(--ad-side-hover);
+  color: var(--ad-on-dark);
+}
+
+/* Discard's menu opens above the bar, on a card. */
+.savebar__menu {
+  position: relative;
+}
+
+.savebar__list {
+  position: absolute;
+  inset-block-end: calc(100% + 8px);
+  inset-inline-start: 0;
+  z-index: 1;
+  display: grid;
+  gap: 2px;
+  inline-size: max-content;
+  max-inline-size: min(18rem, calc(100vw - 32px));
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  box-shadow: var(--ad-shadow);
+}
+
+.savebar__list[hidden] {
+  display: none;
+}
+
+.savebar__list button {
+  inline-size: 100%;
+  justify-content: flex-start;
+  border-color: transparent;
+  text-align: start;
+}
+
+.savebar__list :focus-visible {
+  outline-color: var(--ad-focus);
+}
+
+/* A pending change beside a row's live status (ResourceTable, the collection lists) and at the
+   head of an editor: a badge in words (releases.md §7 "Per-item badges"). */
+.badge--pending {
+  white-space: nowrap;
+}
+
+/* An editor's pending change (fields/DraftNotice.tsx). */
+.draft-note {
+  display: grid;
+  gap: 10px;
+  margin-block-end: 14px;
+  padding-block: 12px;
+  padding-inline: 14px;
+  border: 1px solid var(--ad-line-2);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+}
+
+.draft-note[data-kind='conflict'],
+.draft-note[data-kind='gone'] {
+  border-color: var(--ad-warn-text);
+}
+
+.draft-note__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.draft-note__line {
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+  margin: 0;
+}
+
+.draft-note__cols {
+  font-weight: 700;
+}
+
+.draft-note__acts {
+  margin: 0;
+}
+
+.draft-note__conflict {
+  display: grid;
+  gap: 10px;
+}
+
+/* Release mode's status: "Visible on the site", and Archived (fields/VisibilityField.tsx). */
+.f-visibility {
+  display: grid;
+  gap: 4px;
+}
+
+/* Compare: field, live now, yours (a .table-wrap, so it scrolls in its own box). */
+.cmp {
+  margin-block-start: 4px;
+}
+
+.cmp__en,
+.cmp__ar {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.cmp__ar {
+  font-family: var(--ad-font-ar);
+}
+
+/* The publish dialog (screens/release/PublishDialog.tsx): the changes by area, each a row. */
+.pub {
+  display: grid;
+  gap: 16px;
+}
+
+.pub__capped,
+.pub__outcome p {
+  margin: 0;
+}
+
+.pub__capped {
+  color: var(--ad-dim);
+}
+
+.pub__outcome {
+  display: grid;
+  gap: 8px;
+}
+
+.pub__area {
+  display: grid;
+  gap: 8px;
+}
+
+.pub__area-title {
+  margin: 0;
+  color: var(--ad-dim);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pub__rows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pub__row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  padding-block: 10px;
+  padding-inline: 12px;
+  border: 1px solid var(--ad-line-2);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+}
+
+.pub__row[data-state='waiting'] {
+  background: var(--ad-surface-2);
+}
+
+.pub__row[data-state='error'] {
+  border-color: var(--ad-err-text);
+}
+
+.pub__row[data-state='conflict'],
+.pub__row[data-state='warning'] {
+  border-color: var(--ad-warn-text);
+}
+
+/* The item E1's Publish asked for. */
+.pub__row[data-focus] {
+  border-color: var(--ad-primary);
+  background: var(--ad-primary-soft);
+}
+
+.pub__tick {
+  padding-block-start: 2px;
+}
+
+.pub__main {
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+}
+
+.pub__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.pub__label {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.pub__label-ar {
+  color: var(--ad-dim);
+  font-family: var(--ad-font-ar);
+  overflow-wrap: anywhere;
+}
+
+.pub__meta {
+  margin: 0;
+  color: var(--ad-dim);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.pub__status {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.pub__status p {
+  margin: 0;
+}
+
+.pub__fix {
+  justify-self: start;
+  color: var(--ad-primary);
+  font-weight: 700;
+}
+
+.pub__note textarea {
+  inline-size: 100%;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .admin-body *,

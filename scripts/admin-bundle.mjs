@@ -26,6 +26,9 @@
 //      pieces (admin-leads-lazy: Add a lead, Erase) but through import().
 //   7. the preview bridge (Admin v2 R9) loads neither React nor admin-ui: a `/admin/preview/**`
 //      render runs a public page, and its bridge needs zod and the envelope only (admin-zod).
+//   8. the savebar (Admin v2 R12, admin-release) is the savebar island's and the kit gallery's
+//      alone, and never loads the field kit: AdminLayout draws it on every screen while
+//      releases are on, so each screen's eager graph below counts it as part of the shell.
 //
 // Since C4b (owner item O-15, decided by the approved plan's default on 2026-10-18) check 3,
 // each admin screen's eager graph within ROUTE_BUDGET, is THE admin bundle gate; the
@@ -93,12 +96,20 @@ const OFF_SCREEN_GROUPS = [
   'admin-leads.',
   'admin-leads-lazy.',
   'admin-preview.',
+  'admin-release.',
 ];
 
 // A screen family's group and the chunks allowed to import it statically (check 6).
-const FAMILY_GROUPS = [{ group: 'admin-leads.', importers: /^(?:AdminLead|admin-leads-lazy\.)/ }];
+const FAMILY_GROUPS = [
+  { group: 'admin-leads.', importers: /^(?:AdminLead|admin-leads-lazy\.)/ },
+  // Admin v2 R12: the savebar's island, and the kit's gallery that draws it.
+  { group: 'admin-release.', importers: /^(?:AdminSavebar|AdminKit)\./ },
+];
 // What a family's group must never import statically: the field kit, and its own lazy part.
-const FAMILY_NEVER = { 'admin-leads.': ['admin-fields.', 'admin-leads-lazy.'] };
+const FAMILY_NEVER = {
+  'admin-leads.': ['admin-fields.', 'admin-leads-lazy.'],
+  'admin-release.': ['admin-fields.'],
+};
 // Groups reached only through import() (check 6).
 const LAZY_ONLY_GROUPS = ['admin-leads-lazy.'];
 
@@ -215,9 +226,13 @@ export function check(dir) {
   const renderer = files.find((f) => /^client\.[\w-]+\.js$/.test(f));
   const layout = find('AdminLayout.astro_');
   const chrome = find('AdminChrome.');
+  // Admin v2 R12: the savebar is on every admin screen while releases are on, so it is counted
+  // as part of the shell (with releases off no screen loads it: the count is the worst case).
+  const savebar = find('AdminSavebar.');
   const shell = new Set([
     ...(layout ? closure(layout, read) : []),
     ...(chrome ? closure(chrome, read) : []),
+    ...(savebar ? closure(savebar, read) : []),
     ...(renderer ? closure(renderer, read) : []),
   ]);
   const islands = files.filter(
