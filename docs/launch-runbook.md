@@ -276,6 +276,46 @@ as before. **Do not switch Require 2FA for everyone on until the new Worker is l
 one has no `/admin/2fa`). The residuals the owner accepts with O-25 are in
 `docs/admin-v2/deviations.md` ("Residual risks").
 
+### 2e. Google Analytics 4: the property, the notice, then the switch (Admin v2 U15, owner item O-18)
+
+Not a blocker. GA4 ships switched off: a measurement id saved on `/admin/integrations` loads
+nothing, and the tile says "Not loading yet" (`GA4_NOTICE_READY`, default `false`, absent from
+`wrangler.jsonc`'s `vars`). The privacy notice says the site's analytics are first-party, and GA4
+sends visit data to Google outside the Kingdom, so the order is fixed:
+
+1. **The property (O-18).** In Google Analytics, a GA4 property with one web stream for the
+   site's origin; note its measurement id (`G-…`). In the property's admin: **Data retention =
+   2 months**; **Google signals off**; **ads personalisation off** in every region; the account's
+   data-sharing settings off; enhanced measurement with page views on (form interactions and
+   site search may be turned off: the site strips query strings anyway). The notice drafts state
+   these settings, so keep them.
+2. **The notice sign-off.** The owner (with legal review of the cross-border transfer) approves
+   the EN and AR texts in `docs/admin-v2/as-built/U15.md` ("The notice drafts").
+3. **The switch-on PR**, one reviewed PR carrying all of it (`tests/lib/ga4Switch.spec.ts`
+   lists whatever is missing): the approved texts in `src/lib/legal/content.ts` with new
+   `updated` dates (EN and AR; the recruitment notice version moves only if its own text
+   does); the banner's copy (`ConsentBanner.astro`); `CONSENT_VERSION` 1 → 2 (everyone is asked
+   again, and a yes given to the first-party notice never loads Google); a "Cookie settings"
+   control on every page that reopens the banner (`data-consent-open`); the `integrations`
+   guide put through H11's catalog (it must stop saying the site does not load GA4); and
+   `"GA4_NOTICE_READY": "true"` in `vars`. Re-run the banner's layout and LCP gates
+   (`consent-banner.e2e.ts`, `layout-shift.e2e.ts`, Lighthouse): the banner's text is a first
+   mobile visit's LCP element.
+4. **The id.** After that PR's deploy, an Admin or SEO saves the measurement id on
+   `/admin/integrations`: it takes effect on the next page view (immediate, never staged).
+
+**What to check on production.** In a private window: before any choice, DevTools → Network
+shows nothing from `googletagmanager.com` or `google-analytics.com`, and the page's
+`Content-Security-Policy` lists those hosts. "Accept analytics": `gtag/js?id=G-…` once the page
+has loaded, then `g/collect` hits; GA4's Realtime report shows the visit. "Cookie settings" →
+"Reject non-essential": no further hits, and the `_ga` cookies are gone. Search
+(`/search?q=…`) never carries the loader. Over the first release cycle:
+`select created_at, message from system_logs where source = 'ga4-csp' order by id desc limit 20;`
+must stay empty; a row names a Google host the CSP refused, for a reviewed PR (CLAUDE.md §3).
+
+**Rollback.** Remove the id on `/admin/integrations` (immediate: the next page view loads
+nothing and lists no Google host); or a PR that takes `GA4_NOTICE_READY` out of `vars`.
+
 ## 3. Create and promote the first admin  ⛔ blocker
 
 `users.manage` is Admin-only, so there is no in-product path to the first admin.
