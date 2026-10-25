@@ -3,26 +3,27 @@ import { LeadPatchSchema, VERSIONED_LEAD_FIELDS } from '@schemas/crm';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { NotFoundError, ValidationError } from '@/lib/admin/errors';
 import { getRow, updateRow } from '@/lib/admin/crud';
-import { LEAD_WRITE_COLUMNS, canSeeLeadPii, stripSensitive } from '@/lib/admin/leadFields';
+import { LEAD_WRITE_COLUMNS, stripSensitive } from '@/lib/admin/leadFields';
 import { LEAD_CONSTRAINTS, leadPatchValues, leadWriteError } from '@/lib/crm/leadWrite';
-import { LEGACY_REVEAL_FIELDS, revealLead } from '@/lib/crm/reveal';
 import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 
-// A single lead. With `?pii=1` this is the legacy panel's contact-details reveal; the CRM
-// uses POST /api/admin/leads/[id]/reveal. Both go through revealLead (src/lib/crm/reveal.ts),
-// the one place the admin decrypts lead PII (CLAUDE.md Pillar 1: "role-checked decrypt
-// path as the gate of record"): live recheck, rate limit, RLS read, an audit row written
-// BEFORE anything gated is read (fail-closed), then the gated columns as the service role.
+// A single lead: its safe and pipeline columns (GET) and a pipeline change (PATCH). Never its
+// contact details. Since Admin v2 C14a the legacy panel's `?pii=1` alias is gone: GET reads no
+// query parameter at all, so `?pii=1` answers the same safe row, decrypts nothing and spends
+// no reveal slot. The one way to a lead's contact details is POST /api/admin/leads/[id]/reveal
+// (src/lib/crm/reveal.ts, CLAUDE.md Pillar 1: "role-checked decrypt path as the gate of
+// record"): live recheck, rate limit, RLS read, an audit row written BEFORE anything gated is
+// read (fail-closed), then the gated columns as the service role.
 //
-// Four gates stack here, and each one alone would be insufficient:
+// The gates on this route, each one alone insufficient:
 //   1. RLS       — `leads_read` scopes rows to Admin, Developer and Sales in-tenant
 //                  (`app.role_works_leads`, 0097), and the RESTRICTIVE `leads_live`
 //                  re-reads the profile, so a demoted, inactive or locked token sees no
 //                  lead at all (0033)
-//   2. GRANTS    — the caller's client can read only the safe columns (0033). The gated
-//                  ones are read as the service role, by revealLead and the export only
-//   3. assertCap — `leads.manage` for the row, `leads.pii` for the plaintext, then a live
-//                  recheck of the profile
+//   2. GRANTS    — the caller's client can read only the safe and pipeline columns (0033,
+//                  0041); the gated ones are read as the service role, by the reveal and the
+//                  export only
+//   3. assertCap — `leads.manage`
 //   4. the KEY   — the ciphertext is useless without LEAD_PII_ENC_KEY, which is an
 //                  `astro:env` secret the browser bundle cannot reach at all
 
@@ -36,27 +37,16 @@ function requireId(params: Record<string, string | undefined>): string {
 
 export const GET = defineAdminRoute({
   cap: 'leads.manage',
-  handler: async ({ auth, sb, url, params, audit }) => {
+  handler: async ({ auth, sb, params, audit }) => {
     const id = requireId(params);
-    const wantsPii = url.searchParams.get('pii') === '1' && canSeeLeadPii(auth.role);
-
-    if (!wantsPii) {
-      // The safe columns and the pipeline's (C4a): the assignee, value, star, read mark,
-      // tags and logged contact the lead page shows. Additive: the legacy panel reads the
-      // keys it knows and ignores the rest. Never a gated column (0033's grant refuses them).
-      const row = await getRow<Record<string, unknown>>(sb, 'leads', auth, id, LEAD_WRITE_COLUMNS);
-      // Readable labels for the interest slugs (Round 3) — derived, never columns.
-      const labels = await resolveLeadInterests(sb, auth.tenantId, [row]);
-      audit({ action: 'lead.view', entityType: 'lead', entityId: id, detail: { pii: false } });
-      return withInterestLabels(stripSensitive(row), labels);
-    }
-
-    // The legacy shape: the safe row, the gated-but-plain fields (timeline_band,
-    // internal_notes, ip_inet; not the score's reasons, which only the CRM's reveal returns)
-    // and the decrypted ones. Never a ciphertext column.
-    const { row, plain, decrypted } = await revealLead(auth, sb, id, LEGACY_REVEAL_FIELDS);
+    // The safe columns and the pipeline's (C4a): the assignee, value, star, read mark, tags
+    // and logged contact the lead page shows. Never a gated column (0033's grant refuses
+    // them), and never a legacy one (C14a: C14b drops them).
+    const row = await getRow<Record<string, unknown>>(sb, 'leads', auth, id, LEAD_WRITE_COLUMNS);
+    // Readable labels for the interest slugs (Round 3) — derived, never columns.
     const labels = await resolveLeadInterests(sb, auth.tenantId, [row]);
-    return { ...withInterestLabels(row, labels), ...plain, ...decrypted };
+    audit({ action: 'lead.view', entityType: 'lead', entityId: id, detail: { pii: false } });
+    return withInterestLabels(stripSensitive(row), labels);
   },
 });
 

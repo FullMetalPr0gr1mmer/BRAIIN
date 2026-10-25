@@ -360,8 +360,9 @@ describe('contact details after the reveal', () => {
     email: 'nora@example.test',
     phone: '+966 50 123 4567',
     budget: '75k_200k',
-    timeline: null,
-    timeline_band: 'asap',
+    // A legacy band, as the daily cron stored it in the encrypted timeline (0035): since C14a
+    // the reveal answers the timeline alone, never the plaintext band column.
+    timeline: 'As soon as possible (legacy band)',
     score_reasons: ['named_service' as const, 'budget_given' as const],
   };
 
@@ -382,6 +383,17 @@ describe('contact details after the reveal', () => {
     expect(out).toContain('Log contact');
     expect(out).not.toContain('lead-masked');
     expect(whatsappHref('+966 (50) 123-4567')).toBe('https://wa.me/966501234567');
+  });
+
+  it('says "Not given" for a lead with no timeline', () => {
+    const out = html(LeadContactCard, {
+      leadId: LEAD,
+      revealed: { ...revealed, timeline: null },
+      onRevealed: () => undefined,
+      onLogged: () => undefined,
+    });
+    expect(out).toContain('Not given');
+    expect(out).not.toContain('legacy band');
   });
 
   it('says why the lead scores what it scores, in words', () => {

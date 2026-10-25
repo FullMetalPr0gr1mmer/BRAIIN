@@ -1,50 +1,16 @@
-import { LeadListQuerySchema } from '@schemas/admin';
 import { LeadManualCreateSchema } from '@schemas/crm';
 import { assertCap } from '@/lib/authz/matrix';
 import { defineAdminRoute, json } from '@/lib/admin/route';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { claimPrivilegedOp, MANUAL_LEAD_LIMITS } from '@/lib/admin/rateLimit';
 import { addManualLead } from '@/lib/crm/manualLead';
-import { listRows } from '@/lib/admin/crud';
-import { SAFE_LEAD_COLUMNS, stripSensitive } from '@/lib/admin/leadFields';
-import { resolveLeadInterests, withInterestLabels } from '@/lib/leads/interestLabel';
 
-// Lead list — `leads.manage` (Admin + Developer). Content Creator and SEO hold `none`
-// and are refused by assertCap before a query is built.
-//
-// The LIST always projects the safe columns, even for a caller who holds `leads.pii`.
-// PII is fetched one lead at a time through `[id]`, which audits the view. A list that
-// decrypted every row would produce one audit entry ("listed leads") covering fifty
-// people's phone numbers, which is not the record PDPL Article-level accountability
-// wants — and it would decrypt fifty payloads to render a table showing names.
+// /api/admin/leads: adding a lead by hand (POST). The legacy panel's list, a GET here, went in
+// Admin v2 C14a: the CRM reads leads through POST /api/admin/leads/query (public.leads_list,
+// RLS, the live check and the column grants decide), its search in a body, never the address.
+// A GET here finds no handler (Astro answers 404; signed out, the middleware's 401 comes first).
 
 export const prerender = false;
-
-export const GET = defineAdminRoute({
-  cap: 'leads.manage',
-  input: LeadListQuerySchema,
-  handler: async ({ auth, sb, input }) => {
-    const { rows, total } = await listRows<Record<string, unknown>>(sb, 'leads', auth, {
-      columns: SAFE_LEAD_COLUMNS,
-      orderBy: { column: 'created_at', ascending: false },
-      filters: input.status ? { status: input.status } : {},
-      search: input.q ? { column: 'name', term: input.q } : undefined,
-      limit: input.limit,
-      offset: input.offset,
-    });
-
-    // Readable labels for the interest slugs (old or new), resolved once per page under
-    // the caller's connection — derived fields, never columns (Round 3).
-    const labels = await resolveLeadInterests(sb, auth.tenantId, rows);
-
-    return {
-      rows: rows.map((row) => withInterestLabels(stripSensitive(row), labels)),
-      total,
-      limit: input.limit,
-      offset: input.offset,
-    };
-  },
-});
 
 // Adding a lead by hand (Admin v2 C3, crm.md §7.2): `leads.manage` AND `leads.pii`, since
 // it writes a person's contact details, then a live recheck, because the lead is written

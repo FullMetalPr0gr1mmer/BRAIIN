@@ -57,6 +57,14 @@ import {
 // `x-export-truncated` header a screen can read, and in the file's name, which a plain
 // download link shows. The cap is set by CPU (EXPORT_ROW_CAP, measured): a PII export decrypts
 // four fields a row, so it imports the key once for the request, not once per field.
+//
+// Since Admin v2 C14a the export names none of the legacy columns the contract slice drops
+// (C14b), so it runs on the schema before and after that migration: no `status` column or
+// filter (a lead moves by its stage, which the file carries), no `timeline_band` (the daily
+// cron moved each band into the encrypted timeline, 0035), and never the notes field or the
+// address, as before. The notes are the thread: the file carries each lead's note COUNT, read
+// as the service role through public.crm_lead_note_counts, never a note's words (crm.md §9,
+// "Note bodies are not exported"); the words leave only through the thread's own audited door.
 
 export const prerender = false;
 
@@ -65,10 +73,10 @@ const PIPELINE_COLUMNS =
   'lead_number,stage_id,is_spam,assigned_to,value_sar,tags,score,source,channel';
 
 /**
- * The gated columns a PII export decrypts or carries: never the notes, never the address,
- * never the score's reasons (C4a: they leave only through the one-lead reveal, D7).
+ * The gated columns a PII export decrypts: never the score's reasons (C4a: they leave only
+ * through the one-lead reveal, D7).
  */
-const NOT_EXPORTED = new Set(['internal_notes', 'ip_inet', 'score_signals']);
+const NOT_EXPORTED = new Set(['score_signals']);
 const PII_COLUMNS = GATED_LEAD_COLUMNS.split(',')
   .filter((column) => !NOT_EXPORTED.has(column))
   .join(',');
@@ -77,7 +85,6 @@ const SAFE_HEADER = [
   'id',
   'lead_number',
   'created_at',
-  'status',
   'stage',
   'spam',
   'name',
@@ -104,7 +111,6 @@ const PII_HEADER = [
   'phone',
   'budget',
   'timeline',
-  'timeline_band',
   ...SAFE_HEADER.slice(SAFE_HEADER.indexOf('company') + 1),
   'notes_count',
 ];
@@ -140,7 +146,6 @@ function leadPage(
       .order('created_at', { ascending: false })
       .order('id', { ascending: true })
       .limit(limit);
-    if (input.status) query = query.eq('status', input.status);
     if (input.stage) query = query.eq('stage_id', input.stage);
     if (input.from) query = query.gte('created_at', input.from);
     if (input.to) query = query.lt('created_at', input.to);
@@ -213,7 +218,6 @@ export const GET = defineAdminRoute({
         withPii,
         from: input.from ?? null,
         to: input.to ?? null,
-        status: input.status ?? null,
         stage: input.stage ?? null,
         spam: input.spam ?? null,
         assigned: input.assigned ?? null,
@@ -345,8 +349,8 @@ async function toRecords(
 
   // `company` is business-contact data in leads_safe (0015), so it is in BOTH projections.
   // `budget` is exported as its human label (BUDGET_BAND_LABELS — the same map the form
-  // and the admin panel read), and `timeline` is the decrypted free-text deadline (0017),
-  // with the legacy select value alongside for rows that came through the old form.
+  // and the admin panel read), and `timeline` is the decrypted deadline: the visitor's own
+  // words (0017), or a legacy band's, which the daily cron stored there encrypted (0035).
   const key = svc && rows.length > 0 ? await importPIIKey(LEAD_PII_ENC_KEY) : null;
   const records: Record<string, unknown>[] = [];
   for (const row of rows) {
@@ -356,7 +360,6 @@ async function toRecords(
       id: row['id'],
       lead_number: row['lead_number'],
       created_at: row['created_at'],
-      status: row['status'],
       stage: typeof row['stage_id'] === 'string' ? (stages.get(row['stage_id']) ?? '') : '',
       spam: row['is_spam'] === true ? 'yes' : 'no',
       name: row['name'],
@@ -383,7 +386,6 @@ async function toRecords(
       const budget = await safeDecrypt(row['budget_enc'], key);
       record['budget'] = budget ? budgetBandLabel(budget) : budget;
       record['timeline'] = await safeDecrypt(row['timeline_text_enc'], key);
-      record['timeline_band'] = row['timeline_band'];
       const count = noteCounts[String(row['id'])];
       record['notes_count'] = typeof count === 'number' ? count : 0;
     }

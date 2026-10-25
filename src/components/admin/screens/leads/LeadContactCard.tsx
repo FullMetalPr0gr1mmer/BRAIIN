@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import Icon from '@/components/admin/kit/Icon';
-import { budgetBandLabel, TIMELINE_BAND_LABELS } from '@schemas/lead';
+import { budgetBandLabel } from '@schemas/lead';
 import { LEAD_CONTACT_CHANNELS, type LeadContactChannel, type ScoreSignal } from '@schemas/crm';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 
@@ -18,7 +18,6 @@ export interface Revealed {
   phone: string | null;
   budget: string | null;
   timeline: string | null;
-  timeline_band: string | null;
   score_reasons: ScoreSignal[];
 }
 
@@ -38,12 +37,9 @@ export function whatsappHref(phone: string): string {
   return `https://wa.me/${phone.replace(/[^0-9]/g, '')}`;
 }
 
+/** The visitor's own words, or a legacy band's (the cron stored it there, encrypted, 0035). */
 function timelineText(revealed: Revealed): string {
-  if (revealed.timeline) return revealed.timeline;
-  const band = revealed.timeline_band;
-  if (band && band in TIMELINE_BAND_LABELS)
-    return TIMELINE_BAND_LABELS[band as keyof typeof TIMELINE_BAND_LABELS];
-  return 'Not given';
+  return revealed.timeline || 'Not given';
 }
 
 interface Props {

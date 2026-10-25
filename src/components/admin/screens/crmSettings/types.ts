@@ -17,7 +17,6 @@ export interface CrmSettingsRow {
   version: number;
   scoring: Record<string, number>;
   slaHours: number;
-  timezone: string;
   assignment: { rule: string; pool: string[]; fixedTo: string | null };
   updatedAt: string | null;
 }

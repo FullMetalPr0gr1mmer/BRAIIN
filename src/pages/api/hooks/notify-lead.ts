@@ -115,11 +115,12 @@ export const POST: APIRoute = async ({ request }) => {
 
   const sb = serviceClient();
 
-  // Re-fetch server-side. The trigger told us WHICH lead, not WHAT it says.
+  // Re-fetch server-side. The trigger told us WHICH lead, not WHAT it says. Only columns that
+  // exist before and after the contract slice (Admin v2 C14a: no legacy band; C14b drops it).
   const { data: lead, error } = await sb
     .from('leads')
     .select(
-      'id,tenant_id,name,company,message,service_of_interest,discipline_of_interest,locale,email_enc,phone_enc,budget_enc,timeline_band,timeline_text_enc,created_at',
+      'id,tenant_id,name,company,message,service_of_interest,discipline_of_interest,locale,email_enc,phone_enc,budget_enc,timeline_text_enc,created_at',
     )
     .eq('tenant_id', parsed.data.tenant_id)
     .eq('id', parsed.data.lead_id)
@@ -169,8 +170,9 @@ export const POST: APIRoute = async ({ request }) => {
       email: await safeDecrypt(lead['email_enc']),
       phone: await safeDecrypt(lead['phone_enc']),
       budget: await safeDecrypt(lead['budget_enc']),
-      // v2 form: free-text deadline (0017); older leads carry only the band.
-      timeline: (await safeDecrypt(lead['timeline_text_enc'])) ?? lead['timeline_band'],
+      // The deadline (0017): the visitor's own words, or a legacy band's, which the daily
+      // cron stored there encrypted (0035). Since C14a nothing reads the plaintext band.
+      timeline: await safeDecrypt(lead['timeline_text_enc']),
     };
   }
 

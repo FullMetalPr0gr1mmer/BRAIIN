@@ -333,6 +333,33 @@ describe('the locked screens the refusals e2e opens', () => {
     }
   });
 
+  // The e2e asks each API with a GET (page.request.get), so the route must serve one: a
+  // POST-only route answers 404 to every role, never the 403 the test waits for (Admin v2
+  // C14a removed GET /api/admin/leads, the leads list's old twin). A GET of its own behind
+  // defineAdminRoute must refuse every role the screen refuses.
+  it('serve a GET that refuses every role the screen refuses', () => {
+    for (const entry of [...LOCKED_SCREENS, ...LOCKED_APIS]) {
+      const base = `src/pages${entry.api}`;
+      const file = existsSync(`${base}.ts`) ? `${base}.ts` : `${base}/index.ts`;
+      const code = readFileSync(file, 'utf8');
+      expect(code, `${entry.api} exports GET`).toMatch(
+        /export const (?:GET\b|\{[^}]*\bGET\b[^}]*\}\s*=)/,
+      );
+      const own = code.indexOf('export const GET = defineAdminRoute({');
+      if (own === -1) continue;
+      // The options before the handler: its capability and the levels it accepts
+      // (defineAdminRoute's default is 'full' only).
+      const options = code.slice(own, code.indexOf('handler', own));
+      const cap = /\bcap:\s*'([^']+)'/.exec(options)?.[1] as Capability | undefined;
+      expect(cap, `${entry.api}: GET's capability`).toBeDefined();
+      const access = /\baccess:\s*\[([^\]]*)\]/.exec(options)?.[1];
+      const accepted = access ? [...access.matchAll(/'([^']+)'/g)].map((m) => m[1]) : ['full'];
+      for (const role of refusedRoles(entry)) {
+        expect(accepted, `${entry.api} as ${role}`).not.toContain(ROLE_CAPS[role][cap!]);
+      }
+    }
+  });
+
   it('are refused to exactly the roles whose menu leaves them out, never to Admin', () => {
     for (const screen of LOCKED_SCREENS) {
       const refused = refusedRoles(screen);

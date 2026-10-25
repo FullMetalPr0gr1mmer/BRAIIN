@@ -1,17 +1,12 @@
 import { UUID, type Case } from '../harness';
 
-// Leads / PII (§5 "Leads", Admin + Developer, and Sales since Admin v2 C10a): the legacy
-// panel's routes, the CRM read side (Admin v2 C2a) and one lead in the CRM (C2b). Content
-// Creator and SEO get no lead access at all; Sales gets no export (export.csv).
+// Leads / PII (§5 "Leads", Admin + Developer, and Sales since Admin v2 C10a): one lead's safe
+// read, the export, the CRM read side (Admin v2 C2a) and one lead in the CRM (C2b). Content
+// Creator and SEO get no lead access at all; Sales gets no export (export.csv). The legacy
+// panel's list (GET /api/admin/leads) and its reveal alias (GET …/[id]?pii=1) went in C14a:
+// the POST reveal below is the one reveal (tests/lib/leadsContract.spec.ts).
 
 export const cases: readonly Case[] = [
-  {
-    name: 'leads list',
-    load: () => import('@/pages/api/admin/leads/index'),
-    method: 'GET',
-    url: '/api/admin/leads',
-    allow: ['admin', 'developer', 'sales'],
-  },
   {
     name: 'lead detail',
     load: () => import('@/pages/api/admin/leads/[id]'),
@@ -19,10 +14,11 @@ export const cases: readonly Case[] = [
     url: `/api/admin/leads/${UUID}`,
     allow: ['admin', 'developer', 'sales'],
   },
-  // The legacy panel's status save: leads.manage, then refused (422) for every role since
-  // C10a, as the legacy notes field is since C4b (tests/lib/leadsWrite.spec.ts).
+  // A PATCH that still sends the legacy status: leads.manage, then refused (422) for every
+  // role since C10a, as the legacy notes field is since C4b (tests/lib/leadsWrite.spec.ts).
+  // The refusal stays after C14a: it writes nothing, and it tells a stale client what to do.
   {
-    name: 'lead status (legacy panel)',
+    name: 'lead legacy status (refused with a 422)',
     load: () => import('@/pages/api/admin/leads/[id]'),
     method: 'PATCH',
     url: `/api/admin/leads/${UUID}`,
