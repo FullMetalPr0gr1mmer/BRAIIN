@@ -45,7 +45,11 @@ import { createSessionClient, clearSessionCookies, HOST_COOKIE_BASE } from '@/li
 import { resolveAuthContext } from '@/lib/auth/context';
 import { TWO_STEP_PATH } from '@/lib/auth/twoStep';
 import { expiredSignInForm, tooLargeSignInForm } from '@/lib/auth/expiredForm';
-import { PRIVATE_FORM_BODY_LIMIT, bodyWithinLimit } from '@/lib/auth/bodyLimit';
+import {
+  PRIVATE_FORM_BODY_LIMIT,
+  PUBLIC_API_BODY_LIMIT,
+  bodyWithinLimit,
+} from '@/lib/auth/bodyLimit';
 
 // The PRIMARY enforcement point for: maintenance pre-cache check → page visibility →
 // per-request CSP nonce → strict security headers → admin session + CSRF → render →
@@ -140,6 +144,18 @@ function routeKey(pathname: string): string {
 const isAdminPath = (path: string): boolean => path === '/admin' || path.startsWith('/admin/');
 const isApiPath = (path: string): boolean => path.startsWith('/api/');
 const isAdminApiPath = (path: string): boolean => path.startsWith('/api/admin/');
+
+/**
+ * Public write endpoints that bound their own bodies, so the middleware's public cap (H14)
+ * leaves them to it: the Join form's multipart (Content-Length up to APPLY_BODY_MAX_BYTES,
+ * 411/413 before a byte is read), the signed lead hook (readCapped) and the page password
+ * form (PRE_AUTH_BODY_LIMIT). By the route Astro matched.
+ */
+const OWN_BODY_LIMIT_ROUTES: ReadonlySet<string> = new Set([
+  '/api/apply',
+  '/api/hooks/notify-lead',
+  '/api/page-access',
+]);
 const isPreviewPath = (path: string): boolean =>
   path === '/admin/preview' || path.startsWith('/admin/preview/');
 
@@ -458,6 +474,22 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
     if (owesSecondStep) return secured(toSecondStep());
     if (!admitted) return secured(unauthenticated());
+  }
+
+  // 2) A public endpoint's body is bounded before any handler reads it (H14,
+  //    src/lib/auth/bodyLimit.ts PUBLIC_API_BODY_LIMIT): the public JSON endpoints parse
+  //    `request.json()` with no cap of their own. A write to /api/* outside /api/admin/ (the
+  //    private branch above bounds what the middleware itself reads there) unless the route
+  //    Astro matched keeps a limit of its own: by that route, so a path spelled like one of
+  //    them but routed to another endpoint is still bounded.
+  if (
+    isApi &&
+    !isAdminApi &&
+    !SAFE_METHODS.has(request.method) &&
+    !OWN_BODY_LIMIT_ROUTES.has(routeKey(matched)) &&
+    !(await bodyWithinLimit(request, PUBLIC_API_BODY_LIMIT))
+  ) {
+    return secured(jsonError(413, 'too-large'));
   }
 
   // 2a) The releases preview (Admin v2 R9): a staff render of a public page with the pending
