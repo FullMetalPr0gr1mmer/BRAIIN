@@ -11,6 +11,16 @@ import {
 } from '@/lib/release/draftEndpoints';
 import { PendingItemSchema, RELEASE_ENTITY_TYPES, type ReleaseEntityType } from '@schemas/release';
 import { resetIds, T, type Db, type Row } from '../fixtures/stagedDb';
+import { itemRoutes } from '@/lib/admin/resource';
+import { serviceResource } from '@/lib/admin/resources';
+import { uiFor } from '@/lib/admin/uiSchema';
+import {
+  buildSaveRequest,
+  entitySaveReducer,
+  initialSaveState,
+  type SaveTarget,
+} from '@/lib/admin/entitySave';
+import { announceSettled, onSettled } from '@/lib/admin/releaseEvents';
 import {
   ADMIN,
   auditRowsOf,
@@ -728,6 +738,81 @@ describe('settling a conflict', () => {
     const res = await settle({ version: 1, useLive: ['mode'] }, 'developer', id(7));
     expect([res.status, res.body['field']]).toEqual([422, 'useLive']);
     expect(drafts()[0]!['version']).toBe(1);
+  });
+});
+
+// ── An editor open while the publish dialog settles its change (R12 pre-merge review) ────────
+
+describe('an editor open on a change the publish dialog settles', () => {
+  beforeEach(() => {
+    db.tables['content_drafts'] = [serviceEdit()];
+  });
+  const item = itemRoutes(serviceResource);
+  const fields = uiFor('services').fields;
+  const target: SaveTarget = { kind: 'resource', slug: 'services' };
+  const opts = (body?: unknown) => ({
+    role: 'content_creator' as Role,
+    params: { id: S1 },
+    ...(body === undefined ? {} : { body }),
+  });
+  const get = () => callRoute(db, item.GET, 'GET', `/api/admin/services/${S1}`, opts());
+  const save = (body: unknown) =>
+    callRoute(db, item.PATCH, 'PATCH', `/api/admin/services/${S1}`, opts(body));
+  const SHORT = { en: 'Logos', ar: 'شعارات' };
+
+  it('the dialog tells the page, the editor reads the change again over what was typed, and its next save lands', async () => {
+    let state = entitySaveReducer(initialSaveState(fields, false), {
+      type: 'loaded',
+      row: (await get()).data,
+      fields,
+      versionFallback: 1,
+    });
+    expect(state.draft).toMatchObject({ id: id(1), version: 1, conflict: ['title'] });
+    // Typed, not saved yet (the blur has not happened).
+    state = entitySaveReducer(state, { type: 'set', name: 'shortTitle', value: SHORT });
+
+    // The publish dialog on the same page: Keep my version.
+    const settled = await callRoute(
+      db,
+      await resolve(),
+      'POST',
+      `/api/admin/drafts/${id(1)}/resolve`,
+      { body: { version: 1, keepMine: ['title'] }, role: 'content_creator', params: { id: id(1) } },
+    );
+    expect(settled.status, JSON.stringify(settled.body)).toBe(200);
+
+    // Left as it was, the editor's next save names the old version: "Someone else saved".
+    const stale = await save(buildSaveRequest(target, S1, state, fields).body);
+    expect([stale.status, stale.body['error']]).toEqual([409, 'draft-conflict']);
+
+    // The dialog's word reaches whoever listens for that change, and only for it.
+    vi.stubGlobal('window', new EventTarget());
+    try {
+      const heard: string[] = [];
+      const off = onSettled((draftId) => heard.push(draftId));
+      announceSettled(id(1));
+      off();
+      announceSettled(id(2));
+      expect(heard).toEqual([id(1)]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    // The editor reads the change again; what was typed since its last save stays.
+    state = entitySaveReducer(state, {
+      type: 'rebased',
+      row: (await get()).data,
+      fields,
+      versionFallback: 1,
+    });
+    expect(state.draft).toMatchObject({ id: id(1), version: 2, conflict: [] });
+    expect(state.values['shortTitle']).toEqual(SHORT);
+    expect(state).toMatchObject({ status: 'dirty', conflict: false, held: false });
+
+    const fresh = await save(buildSaveRequest(target, S1, state, fields).body);
+    expect(fresh.status, JSON.stringify(fresh.body)).toBe(200);
+    expect(drafts()[0]).toMatchObject({ version: 3 });
+    expect(drafts()[0]!['payload']).toMatchObject({ title: MINE, shortTitle: SHORT });
   });
 });
 

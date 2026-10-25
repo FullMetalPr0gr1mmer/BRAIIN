@@ -164,6 +164,12 @@ export type EntitySaveAction =
   | { type: 'scheduled' }
   /** Admin v2 R12: releases were switched off under the form; nothing was written. */
   | { type: 'releases-off' }
+  /**
+   * Admin v2 R12: the record read again after its pending change was settled elsewhere (the
+   * publish dialog moved its version): the server's row, with what was typed since the last
+   * save kept over it, so the next save names the change at its new version.
+   */
+  | { type: 'rebased'; row: Row; fields: readonly FieldDef[]; versionFallback: number }
   | { type: 'reset' }
   /**
    * Admin v2 U9: the row moved by ONE write this screen made itself on another column (the
@@ -416,6 +422,35 @@ export function entitySaveReducer(
         sent: null,
         held: true,
       };
+    case 'rebased': {
+      // Only between saves: the hook waits for a save on its way before it reads again.
+      if (state.phase !== 'ready') return state;
+      const fromServer = rowToForm(action.row, action.fields);
+      const values = { ...fromServer };
+      let typedSince = false;
+      for (const key of Object.keys(state.values)) {
+        if (!same(state.values[key], state.initial[key])) {
+          values[key] = state.values[key];
+          typedSince = true;
+        }
+      }
+      return {
+        ...state,
+        values,
+        initial: fromServer,
+        version: Number(action.row['version'] ?? action.versionFallback),
+        status: typedSince ? 'dirty' : 'idle',
+        errors: NO_ERRORS,
+        conflict: false,
+        message: null,
+        ...draftOf(action.row),
+        sent: null,
+        held: false,
+        autoBlocked: false,
+        gone: null,
+        releasesOff: false,
+      };
+    }
     case 'releases-off':
       // The values stay on screen; nothing was written. Autosave stops until a reload, which
       // reads the record live (no `draft` key) and leaves release mode.

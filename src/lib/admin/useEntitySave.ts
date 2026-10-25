@@ -17,7 +17,7 @@ import {
   type SaveTarget,
 } from './entitySave';
 import { errorsFromApi, type FieldErrors } from './fieldErrors';
-import { announcePending } from './releaseEvents';
+import { announcePending, onSettled } from './releaseEvents';
 import type { FieldDef } from './uiSchema';
 
 // The editor's save hook (Admin v2 F5a, ui.md §2.6, P-5): every editor saves through it,
@@ -152,6 +152,9 @@ export function useEntitySave(
   // asked for meanwhile, run once the first lands.
   const inFlight = useRef(false);
   const again = useRef(false);
+  // R12 review: the pending change was settled in the publish dialog while a save was on its
+  // way; read the record again once that save has landed.
+  const rebaseNext = useRef(false);
   const url = loadUrl(target, id);
 
   const load = useCallback(async () => {
@@ -191,6 +194,24 @@ export function useEntitySave(
         type: 'save-failed',
         message: `Their version could not be loaded: ${describeError(err)}`,
       });
+    }
+  }, [url, fields]);
+
+  // R12 review: the pending change was settled in the publish dialog (its version moved): read
+  // the record again and keep what was typed since the last save over it. A read that fails
+  // changes nothing (the next save then meets the conflict and says so).
+  const rebase = useCallback(async () => {
+    try {
+      const row = await adminFetch<Row>(url);
+      dispatch({
+        type: 'rebased',
+        row,
+        fields,
+        versionFallback: versionFallback(targetRef.current),
+      });
+      onRow.current?.(row);
+    } catch {
+      // Nothing to do: the form keeps what it shows.
     }
   }, [url, fields]);
 
@@ -292,13 +313,29 @@ export function useEntitySave(
     else if (decision === 'save') void run(true);
   }, [run, isNew]);
 
-  // A save asked for while one was on its way: once that one has landed (and rendered).
+  // A save asked for while one was on its way: once that one has landed (and rendered). A
+  // read asked for by a settle in the publish dialog goes first.
   useEffect(() => {
-    if (state.phase === 'ready' && again.current && !inFlight.current) {
+    if (state.phase !== 'ready' || inFlight.current) return;
+    if (rebaseNext.current) {
+      rebaseNext.current = false;
+      void rebase();
+    } else if (again.current) {
       again.current = false;
       flush();
     }
-  }, [state.phase, flush]);
+  }, [state.phase, flush, rebase]);
+
+  // R12 review: the publish dialog settled this record's pending change.
+  const draftId = state.draft?.id;
+  useEffect(() => {
+    if (!draftId) return;
+    return onSettled((settled) => {
+      if (settled !== draftId) return;
+      if (inFlight.current || latest.current.phase !== 'ready') rebaseNext.current = true;
+      else void rebase();
+    });
+  }, [draftId, rebase]);
 
   const dirty = isDirty(state);
 

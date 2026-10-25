@@ -454,6 +454,48 @@ describe('draft mode (Admin v2 R12)', () => {
     );
   });
 
+  it('read again after a settle elsewhere: the server’s row and change, what was typed kept', () => {
+    const typed = run(
+      loaded({ ...STAGED, draft: { ...DRAFT, conflict: ['title'] } }),
+      { type: 'set', name: 'slug', value: 'typed' },
+      { type: 'conflict' },
+    );
+    const settledRow = {
+      ...STAGED,
+      title: { en: 'Settled', ar: 'تمت' },
+      draft: { ...DRAFT, version: 4, conflict: [] },
+    };
+    const again = run(typed, {
+      type: 'rebased',
+      row: settledRow,
+      fields: FIELDS,
+      versionFallback: 1,
+    });
+    expect(again.values['slug']).toBe('typed');
+    expect(again.values['title']).toEqual({ en: 'Settled', ar: 'تمت' });
+    expect(again.initial['slug']).toBe('logo-new');
+    expect(again.draft).toMatchObject({ version: 4, conflict: [] });
+    expect(again).toMatchObject({ status: 'dirty', conflict: false, held: false });
+    expect(buildSaveRequest(SERVICES, 'r1', again, FIELDS).body).toMatchObject({
+      slug: 'typed',
+      draftVersion: 4,
+    });
+    // Nothing typed: clean on the new version.
+    const clean = run(loaded(STAGED), {
+      type: 'rebased',
+      row: settledRow,
+      fields: FIELDS,
+      versionFallback: 1,
+    });
+    expect(clean).toMatchObject({ status: 'idle' });
+    expect(isDirty(clean)).toBe(false);
+    // A save on its way is left alone: the hook reads again once it has landed.
+    const saving = run(typed, { type: 'save-start' });
+    expect(
+      run(saving, { type: 'rebased', row: settledRow, fields: FIELDS, versionFallback: 1 }),
+    ).toBe(saving);
+  });
+
   it('releases switched off under the form: held with words, until a reload reads it live', () => {
     const refused = run(
       loaded(STAGED),
