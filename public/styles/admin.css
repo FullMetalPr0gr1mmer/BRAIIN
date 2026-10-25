@@ -1218,6 +1218,7 @@ input[type='url'],
 input[type='search'],
 input[type='date'],
 input[type='datetime-local'],
+input[type='time'],
 input[type='tel'],
 select,
 textarea {
@@ -4843,6 +4844,53 @@ dialog.drw[data-size='wide'] {
 
 .pub__note textarea {
   inline-size: 100%;
+}
+
+/* When: Now | Schedule for [day] [time] (R11's schedule). A plain fieldset: the legend keeps
+   the browser's layout (outside the grid, .field-legend's own margin under it), the choice is
+   the segmented radios, the day and time wrap below. */
+.pub__when {
+  display: grid;
+  gap: 10px;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pub__when > .seg {
+  justify-self: start;
+}
+
+.pub__when > .msg {
+  margin: 0;
+}
+
+.pub__slot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+}
+
+.pub__slot > .field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.pub__slot input {
+  inline-size: auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  font-weight: 400;
+}
+
+.pub__zone {
+  margin: 0;
+  padding-block-end: 11px;
 }
 
 @media (prefers-reduced-motion: reduce) {

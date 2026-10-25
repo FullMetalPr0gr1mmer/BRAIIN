@@ -121,6 +121,33 @@ describe('the publish dialog', () => {
     expect(discard).toContain('Your role can’t throw this away.');
   });
 
+  it('asks When: Now by default; the day and the time appear only for Schedule for', async () => {
+    const html = await dialog('admin');
+    // A plain fieldset named by its own legend, the choice two native radios.
+    expect(html).toContain(
+      '<fieldset class="pub__when"><legend class="field-legend">When</legend>',
+    );
+    expect(html).toMatch(/<input type="radio" name="[^"]+" checked="" value="now"\/>Now/);
+    expect(html).toMatch(/<input type="radio" name="[^"]+" value="schedule"\/>Schedule for/);
+    expect(html).not.toContain('type="date"');
+    expect(html).not.toContain('type="time"');
+    // Nothing to review or throw away goes live at a time.
+    for (const mode of ['review', 'discard'] as const) {
+      expect(await dialog('admin', mode)).not.toContain('pub__when');
+    }
+  });
+
+  it('every id is the dialog’s own, so two dialogs on one page never share one', async () => {
+    const html = await dialog('admin');
+    const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]!);
+    expect(ids.length).toBeGreaterThan(5);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.filter((id) => id.startsWith('pub-'))).toEqual([]);
+    for (const ref of html.matchAll(/\s(?:for|aria-labelledby|aria-describedby)="([^"]+)"/g)) {
+      for (const id of ref[1]!.split(' ')) expect(ids, id).toContain(id);
+    }
+  });
+
   it('the dialog keeps its words free of dashes (P-12)', async () => {
     const text = (await dialog('admin')).replace(/<[^>]+>/g, ' ');
     expect(text).not.toMatch(/[\u2013\u2014]/);

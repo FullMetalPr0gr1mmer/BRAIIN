@@ -1,5 +1,11 @@
 import { AdminApiError, adminFetch } from '@/lib/admin/client';
-import type { CompareResult, PublishResult, ReleaseCheck, ResolveRequest } from '@schemas/release';
+import type {
+  CompareResult,
+  PublishResult,
+  ReleaseCheck,
+  ResolveRequest,
+  ScheduleResult,
+} from '@schemas/release';
 import type { PendingSummary } from './model';
 
 // What the savebar and the publish dialog ask the server (Admin v2 R12), behind one seam so
@@ -26,6 +32,11 @@ export interface ReleaseApi {
   validate(selection: PublishSelection): Promise<ReleaseCheck>;
   /** POST /api/admin/releases: publish now. */
   publish(selection: PublishSelection): Promise<PublishResult>;
+  /**
+   * POST /api/admin/releases with `scheduleAt` (R11): the same checks as a publish, then the
+   * changes are dry-run, stored on a scheduled release and locked until it goes live.
+   */
+  schedule(selection: PublishSelection & { scheduleAt: string }): Promise<ScheduleResult>;
   /** POST /api/admin/drafts/discard: mine (200 a request), or the ones named. */
   discard(
     request: { scope: 'mine' } | { items: PublishSelection['items'] },
@@ -67,6 +78,8 @@ export const LIVE_RELEASE_API: ReleaseApi = {
     }),
   publish: (selection) =>
     adminFetch<PublishResult>('/api/admin/releases', { method: 'POST', body: selection }),
+  schedule: (selection) =>
+    adminFetch<ScheduleResult>('/api/admin/releases', { method: 'POST', body: selection }),
   discard: (request) =>
     adminFetch<{ discarded: number; more?: boolean }>('/api/admin/drafts/discard', {
       method: 'POST',

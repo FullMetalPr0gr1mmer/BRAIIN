@@ -1,9 +1,14 @@
 import type { Role } from '@/lib/auth/types';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
+import type { Clock } from '@/lib/admin/relTime';
 import { RELEASE_ENTITY_META } from '@/lib/release/areas';
+import { addDays, todayIn, zonedInstant, zonedParts } from '@/lib/time/zone';
+import { timeZoneCity } from '@schemas/timeZones';
 import {
   RELEASE_AREAS,
   RELEASE_MAX_ITEMS,
+  RELEASE_SCHEDULE_MAX_DAYS,
+  RELEASE_SCHEDULE_MIN_MINUTES,
   type PendingItem,
   type PurgeStatus,
   type ReleaseArea,
@@ -551,7 +556,103 @@ export const COPY = {
   noteLabel: 'Note (optional), shown in Versions',
   removedLive: 'This item was removed on the live site. Discard the change.',
   conflictLead: 'Changed on the live site since this edit started',
+  whenLegend: 'When',
+  whenNow: 'Now',
+  whenSchedule: 'Schedule for',
+  dayLabel: 'Day',
+  timeLabel: 'Time',
+  // The publish endpoint's own words for a time outside its bounds (src/lib/release/
+  // endpoints.ts SCHEDULE_COPY, held equal by tests/lib/releaseUiModel.spec.ts), so the dialog
+  // and the server say the same thing whichever of them notices first.
+  scheduleTooSoon: `Choose a time at least ${RELEASE_SCHEDULE_MIN_MINUTES} minutes from now.`,
+  scheduleTooLate: 'Choose a time within the next year.',
+  scheduleIncomplete: 'Choose a day and a time.',
 } as const;
+
+// ---- the schedule ("When: Now | Schedule for [day] [time]", releases.md §7; R11's server) -------
+
+export type When = 'now' | 'schedule';
+
+const DAY_INPUT = /^(\d{4})-(\d{2})-(\d{2})$/;
+// A time input answers "HH:MM", or "HH:MM:SS" when it has a step under a minute.
+const TIME_INPUT = /^(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/;
+
+/**
+ * The instant a day and a time on the studio's clock name (`zone`: the studio's, Riyadh by
+ * default), or null while either is incomplete or not a real day. The browser's own zone plays
+ * no part: a date and a time input are wall-clock readings, placed in the studio's zone here.
+ */
+export function scheduleInstant(zone: string, day: string, time: string): Date | null {
+  const d = DAY_INPUT.exec(day);
+  const t = TIME_INPUT.exec(time);
+  if (!d || !t) return null;
+  const [year, month, date] = [Number(d[1]), Number(d[2]), Number(d[3])];
+  const [hour, minute] = [Number(t[1]), Number(t[2])];
+  if (hour > 23 || minute > 59) return null;
+  // A day that does not exist (31 Feb) is no day, not the one Date.UTC would roll it into.
+  const check = new Date(Date.UTC(year, month - 1, date));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() !== month - 1 ||
+    check.getUTCDate() !== date
+  ) {
+    return null;
+  }
+  return zonedInstant(zone, year, month, date, hour, minute);
+}
+
+/**
+ * What stops a scheduled time, in the endpoint's words, or null when it is fine: at least
+ * RELEASE_SCHEDULE_MIN_MINUTES ahead, at most RELEASE_SCHEDULE_MAX_DAYS. UX only: the
+ * endpoint judges again against its own clock (and the database, 1 minute to 366 days).
+ */
+export function scheduleProblem(at: Date | null, now: number): string | null {
+  if (!at) return COPY.scheduleIncomplete;
+  if (at.getTime() < now + RELEASE_SCHEDULE_MIN_MINUTES * 60_000) return COPY.scheduleTooSoon;
+  if (at.getTime() > now + RELEASE_SCHEDULE_MAX_DAYS * 86_400_000) return COPY.scheduleTooLate;
+  return null;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** The day and time inputs' values for an instant, on the studio's clock. */
+export function slotOf(at: Date, zone: string): { day: string; time: string } {
+  const p = zonedParts(at, zone);
+  return {
+    day: `${p.year}-${pad2(p.month)}-${pad2(p.day)}`,
+    time: `${pad2(p.hour)}:${pad2(p.minute)}`,
+  };
+}
+
+/**
+ * The time "Schedule for" starts at: the first whole hour on the studio's clock at least half
+ * an hour from now (14:05 gives 15:00, 14:40 gives 16:00), well clear of the 2-minute floor.
+ */
+export function defaultScheduleSlot(zone: string, now: number): { day: string; time: string } {
+  const p = zonedParts(now + 30 * 60_000, zone);
+  const roundUp = p.minute > 0 || p.second > 0 ? 1 : 0;
+  // zonedInstant takes hour 24 as the next day's midnight (Date.UTC carries it).
+  return slotOf(zonedInstant(zone, p.year, p.month, p.day, p.hour + roundUp, 0), zone);
+}
+
+/** The day input's bounds: today on the studio's clock to a year ahead. */
+export function scheduleDayBounds(zone: string, now: number): { min: string; max: string } {
+  const today = todayIn(zone, now);
+  return { min: today, max: addDays(today, RELEASE_SCHEDULE_MAX_DAYS) };
+}
+
+/** "Riyadh time": the studio's zone named by its city, beside the time input. */
+export function zoneWords(zone: string): string {
+  return `${timeZoneCity(zone)} time`;
+}
+
+/**
+ * The outcome of a schedule (releases.md §7): "Scheduled for 12 Oct 2026, 14:00 (Riyadh).
+ * These changes are locked until then." A success, so a toast.
+ */
+export function scheduledWords(at: string, clock: Clock): string {
+  return `Scheduled for ${clock.formatDateTime(at)} (${timeZoneCity(clock.zone)}). These changes are locked until then.`;
+}
 
 /** "Discard my changes" and "Discard selected" confirmations (releases.md §7). */
 export function discardMineWords(count: number): string {

@@ -5,9 +5,13 @@ import {
   type PendingItem,
   type ReleaseCheck,
 } from '@schemas/release';
+import { clockFor } from '@/lib/admin/relTime';
+import { SCHEDULE_COPY } from '@/lib/release/endpoints';
 import {
+  COPY,
   buildRows,
   changeKind,
+  defaultScheduleSlot,
   defaultSelection,
   discardMineWords,
   discardSelectedWords,
@@ -24,10 +28,15 @@ import {
   savebarLead,
   savebarShown,
   savebarSub,
+  scheduleDayBounds,
+  scheduledWords,
+  scheduleInstant,
+  scheduleProblem,
   selectedRows,
   toggleRow,
   waitingWords,
   whoWords,
+  zoneWords,
   withNeeds,
 } from '@/components/admin/screens/release/model';
 
@@ -387,5 +396,96 @@ describe('the words of an outcome', () => {
   it('Preview selection opens the preview of exactly the ticked changes', () => {
     expect(previewHref(new Set())).toBe('/admin/preview/');
     expect(previewHref(new Set([id(1), id(2)]))).toBe(`/admin/preview/?only=${id(1)},${id(2)}`);
+  });
+});
+
+describe('the schedule (When: Now | Schedule for, on the studio’s clock)', () => {
+  const at = (iso: string) => Date.parse(iso);
+
+  it('a day and a time are read on the studio’s clock, never the browser’s', () => {
+    expect(scheduleInstant('Asia/Riyadh', '2026-10-25', '15:00')?.toISOString()).toBe(
+      '2026-10-25T12:00:00.000Z',
+    );
+    expect(scheduleInstant('Asia/Dubai', '2026-10-25', '15:00')?.toISOString()).toBe(
+      '2026-10-25T11:00:00.000Z',
+    );
+    // London on either side of its clock change (25 Oct 2026, 02:00 BST becomes 01:00 GMT).
+    expect(scheduleInstant('Europe/London', '2026-10-24', '09:30')?.toISOString()).toBe(
+      '2026-10-24T08:30:00.000Z',
+    );
+    expect(scheduleInstant('Europe/London', '2026-10-26', '09:30')?.toISOString()).toBe(
+      '2026-10-26T09:30:00.000Z',
+    );
+    // A time input with seconds (a step under a minute) is still a time.
+    expect(scheduleInstant('UTC', '2026-10-25', '15:00:00')?.toISOString()).toBe(
+      '2026-10-25T15:00:00.000Z',
+    );
+  });
+
+  it('nothing is a time until both halves are, and no day rolls into another', () => {
+    for (const [day, time] of [
+      ['', '15:00'],
+      ['2026-10-25', ''],
+      ['2026-02-31', '10:00'],
+      ['2026-13-01', '10:00'],
+      ['2026-10-25', '24:00'],
+      ['2026-10-25', '10:60'],
+      ['25/10/2026', '10:00'],
+    ] as const) {
+      expect(scheduleInstant('Asia/Riyadh', day, time), `${day} ${time}`).toBeNull();
+    }
+  });
+
+  it('too soon, too far and incomplete are said in the endpoint’s own words', () => {
+    const now = at('2026-10-25T12:00:00Z');
+    expect(scheduleProblem(null, now)).toBe('Choose a day and a time.');
+    expect(scheduleProblem(new Date(now + 60_000), now)).toBe(SCHEDULE_COPY.tooSoon);
+    expect(scheduleProblem(new Date(now + 2 * 60_000), now)).toBeNull();
+    expect(scheduleProblem(new Date(now + 366 * 86_400_000), now)).toBeNull();
+    expect(scheduleProblem(new Date(now + 366 * 86_400_000 + 60_000), now)).toBe(
+      SCHEDULE_COPY.tooLate,
+    );
+    // The dialog and the server say the same thing whichever notices first.
+    expect(COPY.scheduleTooSoon).toBe(SCHEDULE_COPY.tooSoon);
+    expect(COPY.scheduleTooLate).toBe(SCHEDULE_COPY.tooLate);
+  });
+
+  it('Schedule for starts at the first whole hour at least half an hour away', () => {
+    // 14:05 in Riyadh: 15:00 today.
+    expect(defaultScheduleSlot('Asia/Riyadh', at('2026-10-25T11:05:00Z'))).toEqual({
+      day: '2026-10-25',
+      time: '15:00',
+    });
+    // 14:40: 16:00. 13:30 exactly: 14:00 (half an hour is enough).
+    expect(defaultScheduleSlot('Asia/Riyadh', at('2026-10-25T11:40:00Z')).time).toBe('16:00');
+    expect(defaultScheduleSlot('Asia/Riyadh', at('2026-10-25T10:30:00Z')).time).toBe('14:00');
+    // 23:45: 01:00 the next day, on the studio's calendar.
+    expect(defaultScheduleSlot('Asia/Riyadh', at('2026-10-25T20:45:00Z'))).toEqual({
+      day: '2026-10-26',
+      time: '01:00',
+    });
+    // Whatever the zone, the slot passes the endpoint's bounds.
+    for (const zone of ['Asia/Riyadh', 'Europe/London', 'UTC', 'Africa/Cairo']) {
+      const now = at('2026-10-25T00:59:00Z');
+      const slot = defaultScheduleSlot(zone, now);
+      expect(scheduleProblem(scheduleInstant(zone, slot.day, slot.time), now), zone).toBeNull();
+    }
+  });
+
+  it('the day input runs from today on the studio’s clock to a year ahead', () => {
+    // 01:00 in Riyadh on the 26th is still the 25th in London.
+    const now = at('2026-10-25T22:00:00Z');
+    expect(scheduleDayBounds('Asia/Riyadh', now)).toEqual({ min: '2026-10-26', max: '2027-10-27' });
+    expect(scheduleDayBounds('Europe/London', now).min).toBe('2026-10-25');
+  });
+
+  it('a schedule is said as releases.md §7 says it, with the studio’s city', () => {
+    expect(zoneWords('Asia/Riyadh')).toBe('Riyadh time');
+    expect(scheduledWords('2026-10-25T12:00:00Z', clockFor('Asia/Riyadh'))).toBe(
+      'Scheduled for 25 Oct 2026, 15:00 (Riyadh). These changes are locked until then.',
+    );
+    expect(scheduledWords('2026-10-25T12:00:00Z', clockFor('Asia/Riyadh'))).not.toMatch(
+      /[\u2013\u2014]/,
+    );
   });
 });

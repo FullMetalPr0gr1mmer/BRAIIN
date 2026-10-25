@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import Modal from '@/components/admin/kit/Modal';
 import { Badge } from '@/components/admin/kit/StatusBadge';
 import { useClock } from '@/components/admin/kit/clock';
@@ -20,6 +20,7 @@ import {
   COPY,
   EDGE_MISSED,
   buildRows,
+  defaultScheduleSlot,
   defaultSelection,
   discardSelectedWords,
   includedBecause,
@@ -31,13 +32,19 @@ import {
   rowCheck,
   rowOfDraft,
   rowsByArea,
+  scheduleDayBounds,
+  scheduledWords,
+  scheduleInstant,
+  scheduleProblem,
   selectedRows,
   toggleRow,
   waitingWords,
   whoWords,
   withNeeds,
+  zoneWords,
   type ChangeRow,
   type PendingSummary,
+  type When,
 } from './model';
 
 // The publish dialog (Admin v2 R12; releases.md §7 "Publish dialog", README P-2 and P-15,
@@ -57,8 +64,13 @@ import {
 // Outcomes: a published release is a toast (success only) unless the cache or the edge still
 // owe it, then the dialog says so and stays; every refusal is said in the dialog, on its rows
 // where it names them, never as a toast.
-// Scheduling ("When: Now | Schedule") is R11's: the publish endpoint refuses `scheduleAt`
-// until R11 adds it, so the dialog publishes now only (as-built R12).
+// When: Now, or Schedule for a day and a time on the studio's clock (Riyadh by default; R11's
+// `scheduleAt`, sent as an instant): the same checks, then the changes are stored on a
+// scheduled release and locked until it goes live ("Scheduled for 12 Oct 2026, 14:00
+// (Riyadh). These changes are locked until then."). A time too soon or too far is said under
+// the time, by the dialog first and by the endpoint again.
+// Every id is this dialog's own (useId): with releases on, /admin/kit draws two of them, the
+// layout's and the kit card's.
 
 export type DialogMode = 'publish' | 'review' | 'discard';
 
@@ -103,6 +115,7 @@ export default function PublishDialog({
   onChanged,
 }: PublishDialogProps) {
   const clock = useClock();
+  const uid = useId();
   const rows = useMemo(() => buildRows(summary?.items ?? []), [summary]);
   const [ids, setIds] = useState<Set<string>>(() => new Set());
   const [capped, setCapped] = useState(false);
@@ -118,6 +131,10 @@ export default function PublishDialog({
   // leaves with them instead (model.ts withNeeds); and what left that way, said once.
   const [unticked, setUnticked] = useState<ReadonlySet<string>>(new Set());
   const [leftWith, setLeftWith] = useState('');
+  // When it goes live: now, or at a day and a time on the studio's clock.
+  const [when, setWhen] = useState<When>('now');
+  const [slot, setSlot] = useState<{ day: string; time: string }>({ day: '', time: '' });
+  const [whenError, setWhenError] = useState('');
   const openedRef = useRef(false);
   const seededRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -149,6 +166,9 @@ export default function PublishDialog({
       setUnticked(new Set());
       setLeftWith('');
       setNeeds(new Map());
+      setWhen('now');
+      setSlot({ day: '', time: '' });
+      setWhenError('');
     }
     if (seededRef.current || summary === null) return;
     seededRef.current = true;
@@ -228,6 +248,12 @@ export default function PublishDialog({
 
   function handleRefusal(refusal: ReleaseRefusal) {
     const body = refusal.body;
+    // The endpoint's own judgement of the time (its clock, not the browser's): under the time.
+    if (refusal.status === 422 && body['field'] === 'scheduleAt') {
+      setWhenError(refusal.detail ?? COPY.scheduleTooSoon);
+      setNotice('');
+      return;
+    }
     if (refusal.status === 403 && Array.isArray(body['draftIds'])) {
       const waiting = (body['waitingFor'] ?? {}) as Record<string, string[]>;
       setRefused(
@@ -251,16 +277,40 @@ export default function PublishDialog({
     setNotice(refusalWords(refusal));
   }
 
+  function chooseWhen(next: When) {
+    setWhen(next);
+    setWhenError('');
+    if (next === 'schedule' && !slot.day && !slot.time) {
+      setSlot(defaultScheduleSlot(clock.zone, Date.now()));
+    }
+  }
+
   async function publish() {
     if (selection.length === 0) return;
+    let scheduleAt: string | undefined;
+    if (when === 'schedule') {
+      const at = scheduleInstant(clock.zone, slot.day, slot.time);
+      const problem = scheduleProblem(at, Date.now());
+      if (problem !== null || at === null) {
+        setWhenError(problem ?? COPY.scheduleIncomplete);
+        return;
+      }
+      scheduleAt = at.toISOString();
+    }
     setWorking(true);
     setNotice('');
+    setWhenError('');
     try {
       const trimmed = note.trim();
-      const result: PublishResult = await api.publish({
-        items: selection,
-        ...(trimmed ? { note: trimmed } : {}),
-      });
+      const request = { items: selection, ...(trimmed ? { note: trimmed } : {}) };
+      if (scheduleAt !== undefined) {
+        const scheduled = await api.schedule({ ...request, scheduleAt });
+        onChanged();
+        toast(scheduledWords(scheduled.release.scheduledFor, clock), 'ok');
+        onClose();
+        return;
+      }
+      const result: PublishResult = await api.publish(request);
       onChanged();
       const words = publishedWords(result.release.number, result.purge);
       const edgeMissed = result.kvSynced === false;
@@ -361,6 +411,9 @@ export default function PublishDialog({
   const sub =
     mode === 'publish' ? COPY.publishSub : mode === 'discard' ? COPY.discardSub : COPY.reviewSub;
   const plural = (n: number) => `${n} ${n === 1 ? 'change' : 'changes'}`;
+  // The day input's range (today to a year ahead, on the studio's clock), only when drawn.
+  const bounds =
+    when === 'schedule' ? scheduleDayBounds(clock.zone, Date.now()) : { min: '', max: '' };
 
   const footer = outcome ? (
     <button type="button" data-variant="primary" onClick={onClose}>
@@ -388,7 +441,13 @@ export default function PublishDialog({
           disabled={!ready || working || count === 0}
           onClick={() => void publish()}
         >
-          {working ? 'Publishing…' : `Publish ${plural(count)}`}
+          {when === 'schedule'
+            ? working
+              ? 'Scheduling…'
+              : `Schedule ${plural(count)}`
+            : working
+              ? 'Publishing…'
+              : `Publish ${plural(count)}`}
         </button>
       )}
       {mode === 'discard' && (
@@ -444,9 +503,9 @@ export default function PublishDialog({
               key={group.area}
               className="pub__area"
               role="group"
-              aria-labelledby={`pub-area-${group.area}`}
+              aria-labelledby={`${uid}-area-${group.area}`}
             >
-              <h3 id={`pub-area-${group.area}`} className="pub__area-title">
+              <h3 id={`${uid}-area-${group.area}`} className="pub__area-title">
                 {AREA_WORDS[group.area]}
               </h3>
               <ul className="pub__rows">
@@ -454,7 +513,7 @@ export default function PublishDialog({
                   const state = rowCheck(row, check);
                   const can = tickable(row);
                   const on = row.items.every((item) => ids.has(item.draftId));
-                  const inputId = `pub-${row.key}`;
+                  const inputId = `${uid}-${row.key}`;
                   const metaId = `${inputId}-meta`;
                   const because = includedBecause(rows, ids, row, needs);
                   const refusedWords = row.items
@@ -609,19 +668,86 @@ export default function PublishDialog({
           ))}
         {!outcome && mode === 'publish' && (
           <div className="field pub__note">
-            <label htmlFor="pub-note">{COPY.noteLabel}</label>
+            <label htmlFor={`${uid}-note`}>{COPY.noteLabel}</label>
             <textarea
-              id="pub-note"
+              id={`${uid}-note`}
               rows={2}
               maxLength={RELEASE_NOTE_MAX}
               value={note}
-              aria-describedby="pub-note-count"
+              aria-describedby={`${uid}-note-count`}
               onChange={(event) => setNote(event.target.value)}
             />
-            <p className="admin-sub" id="pub-note-count">
+            <p className="admin-sub" id={`${uid}-note-count`}>
               {note.length}/{RELEASE_NOTE_MAX}
             </p>
           </div>
+        )}
+        {!outcome && mode === 'publish' && (
+          // A plain fieldset: its legend keeps the browser's own layout (never floated beside
+          // a flex row), and the choice is native radios (the arrow keys are the browser's).
+          <fieldset className="pub__when">
+            <legend className="field-legend">{COPY.whenLegend}</legend>
+            <div className="seg">
+              {(['now', 'schedule'] as const).map((value) => (
+                <label key={value} className="seg__o">
+                  <input
+                    type="radio"
+                    name={`${uid}-when`}
+                    value={value}
+                    checked={when === value}
+                    onChange={() => chooseWhen(value)}
+                  />
+                  {value === 'now' ? COPY.whenNow : COPY.whenSchedule}
+                </label>
+              ))}
+            </div>
+            {when === 'schedule' && (
+              <div className="pub__slot">
+                <div className="field">
+                  <label htmlFor={`${uid}-day`}>{COPY.dayLabel}</label>
+                  <input
+                    type="date"
+                    id={`${uid}-day`}
+                    value={slot.day}
+                    min={bounds.min}
+                    max={bounds.max}
+                    required
+                    aria-invalid={whenError ? true : undefined}
+                    aria-describedby={whenError ? `${uid}-when-error` : undefined}
+                    onChange={(event) => {
+                      setSlot({ ...slot, day: event.target.value });
+                      setWhenError('');
+                    }}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor={`${uid}-time`}>{COPY.timeLabel}</label>
+                  <input
+                    type="time"
+                    id={`${uid}-time`}
+                    value={slot.time}
+                    required
+                    aria-invalid={whenError ? true : undefined}
+                    aria-describedby={
+                      whenError ? `${uid}-when-zone ${uid}-when-error` : `${uid}-when-zone`
+                    }
+                    onChange={(event) => {
+                      setSlot({ ...slot, time: event.target.value });
+                      setWhenError('');
+                    }}
+                  />
+                </div>
+                <p className="admin-sub pub__zone" id={`${uid}-when-zone`}>
+                  {zoneWords(clock.zone)}
+                </p>
+              </div>
+            )}
+            {whenError && (
+              <p className="msg" data-kind="error" id={`${uid}-when-error`} role="alert">
+                {whenError}
+              </p>
+            )}
+          </fieldset>
         )}
       </div>
     </Modal>

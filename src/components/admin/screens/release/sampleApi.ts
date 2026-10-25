@@ -9,6 +9,7 @@ import type {
   ReleaseCheck,
   ReleaseCheckItem,
   ReleaseEntityType,
+  ScheduleResult,
 } from '@schemas/release';
 import type { PublishSelection, ReleaseApi } from './api';
 import type { PendingSummary } from './model';
@@ -136,7 +137,7 @@ const CONFLICTED = 1;
 /** Logo Design (2) stays hidden until its discipline is published: a warning. */
 const WARNED = 2;
 
-function itemOf(sample: Sample, role: Role, version: number): PendingItem {
+function itemOf(sample: Sample, role: Role, version: number, scheduled = false): PendingItem {
   const ref: ReleaseItemRef = {
     entityType: sample.entityType,
     op: sample.op,
@@ -155,7 +156,7 @@ function itemOf(sample: Sample, role: Role, version: number): PendingItem {
     updatedBy: null,
     updatedByName: sample.by,
     updatedAt: AT,
-    scheduled: false,
+    scheduled,
     mine: sample.mine,
     publishableByMe: canPublish(role, ref),
     requiredCaps: caps ? [...caps] : null,
@@ -170,6 +171,8 @@ function itemOf(sample: Sample, role: Role, version: number): PendingItem {
 /** A made-up seam over the samples, as the given role sees them. */
 export function sampleReleaseApi(role: Role): ReleaseApi {
   let open = new Set(SAMPLES.map((s) => s.n));
+  // Samples a made-up scheduled release holds: locked, as the server's claimed drafts are.
+  const scheduled = new Set<number>();
   const versions = new Map<number, number>(SAMPLES.map((s) => [s.n, 1]));
   let conflicted = true;
   let number = 14;
@@ -231,7 +234,7 @@ export function sampleReleaseApi(role: Role): ReleaseApi {
   return {
     pending: (): Promise<PendingSummary> => {
       const items = SAMPLES.filter((s) => open.has(s.n)).map((s) =>
-        itemOf(s, role, versions.get(s.n) ?? 1),
+        itemOf(s, role, versions.get(s.n) ?? 1, scheduled.has(s.n)),
       );
       return settle({ items, total: items.length, truncated: false });
     },
@@ -255,10 +258,24 @@ export function sampleReleaseApi(role: Role): ReleaseApi {
         purge: 'skipped',
       });
     },
+    schedule: (selection): Promise<ScheduleResult> => {
+      const result = check(selection);
+      if (!result.ok) {
+        return Promise.reject(new Error('The sample check found something to fix.'));
+      }
+      const held = selection.items.flatMap((ref) => byDraft(ref.draftId) ?? []);
+      for (const sample of held) scheduled.add(sample.n);
+      return settle({
+        release: { id: id(998), scheduledFor: selection.scheduleAt, version: 1 },
+        items: held.map((s) => ({ entityType: s.entityType, entityId: id(100 + s.n), op: s.op })),
+        warnings: [],
+      });
+    },
     discard: (request) => {
+      // "Mine" leaves what a scheduled release holds, as R3b's does (its drafts are claimed).
       const gone =
         'scope' in request
-          ? SAMPLES.filter((s) => s.mine && open.has(s.n))
+          ? SAMPLES.filter((s) => s.mine && open.has(s.n) && !scheduled.has(s.n))
           : request.items.flatMap((ref) => byDraft(ref.draftId) ?? []);
       open = new Set([...open].filter((n) => !gone.some((s) => s.n === n)));
       return settle({ discarded: gone.length, more: false });

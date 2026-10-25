@@ -5,6 +5,7 @@ import {
   buildRows,
   savebarCounts,
   savebarLead,
+  selectedRows,
   type SavebarCounts,
 } from '@/components/admin/screens/release/model';
 import { sampleReleaseApi } from '@/components/admin/screens/release/sampleApi';
@@ -220,6 +221,91 @@ test.describe('the Publishing card, as admin: dependencies, discard, the keyboar
         .locator('.pub__row', { hasText: 'Sample Client' })
         .getByText(/Included because .*Sample Project.* needs it/),
     ).toBeVisible();
+  });
+
+  test('Schedule for: a time too soon is said under it; a good one locks the changes until then', async ({
+    page,
+  }) => {
+    // What the bar says once everything but the hero is scheduled: the model over the same
+    // samples, scheduled the same way (the dialog sends the time; the sample seam keeps it).
+    const api = sampleReleaseApi('admin');
+    const before = await api.pending();
+    const rest = before.items
+      .filter((item) => item.label?.['en'] !== 'Home: the hero')
+      .map((item) => ({ draftId: item.draftId, draftVersion: item.draftVersion }));
+    await api.schedule({
+      items: rest,
+      scheduleAt: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    const after = savebarCounts(buildRows((await api.pending()).items));
+    expect(after.publishable).toBe(1);
+    // The button counts rows as the bar does (the reordered services are one).
+    const chosen = selectedRows(buildRows(before.items), new Set(rest.map((r) => r.draftId)));
+
+    await open(page, '/admin/kit');
+    const bar = page
+      .locator('[data-kit="publishing"]')
+      .getByRole('region', { name: 'Unpublished changes' });
+    await bar.getByRole('button', { name: 'Publish…' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Publish to the website' });
+    await expect(dialog).toBeVisible();
+    // The hero is the one the live site moved under: leave it out of this release.
+    await dialog.getByRole('checkbox', { name: 'Home: the hero' }).uncheck();
+
+    // Now is the default; Schedule for draws the day and the time, filled in.
+    const when = dialog.getByRole('group', { name: 'When' });
+    await expect(when.getByRole('radio', { name: 'Now' })).toBeChecked();
+    await expect(dialog.getByLabel('Day', { exact: true })).toHaveCount(0);
+    await when.getByRole('radio', { name: 'Schedule for' }).check();
+    const day = dialog.getByLabel('Day', { exact: true });
+    const time = dialog.getByLabel('Time', { exact: true });
+    await expect(day).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
+    await expect(time).toHaveValue(/^\d{2}:00$/);
+    // The time input names the studio's clock it is read on.
+    await expect(time).toHaveAccessibleDescription(/ time$/);
+    const axe = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+    expect(axe.violations, JSON.stringify(axe.violations, null, 2)).toEqual([]);
+
+    const schedule = dialog.getByRole('button', { name: /^Schedule \d+ changes?$/ });
+    await expect(schedule).toBeEnabled();
+    await expect(schedule).toHaveText(`Schedule ${chosen} changes`);
+
+    // Midnight today, on the studio's clock (the day input's own minimum), has passed.
+    const today = await day.getAttribute('min');
+    expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    await day.fill(today!);
+    await time.fill('00:00');
+    await schedule.click();
+    await expect(dialog.getByRole('alert')).toHaveText(
+      'Choose a time at least 2 minutes from now.',
+    );
+    await expect(time).toHaveAttribute('aria-invalid', 'true');
+    await expect(dialog).toBeVisible();
+
+    // Noon tomorrow is fine.
+    const [y, m, d] = today!.split('-').map(Number) as [number, number, number];
+    const tomorrow = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+    await day.fill(tomorrow);
+    await time.fill('12:00');
+    await expect(dialog.getByRole('alert')).toHaveCount(0);
+    await schedule.click();
+    await expect(
+      page.locator('#admin-toasts .toast', {
+        hasText:
+          /Scheduled for \d{1,2} \w{3} \d{4}, 12:00 \(.+\)\. These changes are locked until then\./,
+      }),
+    ).toBeVisible();
+    await expect(dialog).toBeHidden();
+    await expect(bar.locator('.savebar__lead')).toHaveText(savebarLead(after));
+
+    // Open again: what the release holds is listed, locked, and only the hero can be ticked.
+    await bar.getByRole('button', { name: 'Publish…' }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('Scheduled: locked until it goes live')).toHaveCount(
+      after.scheduled,
+    );
+    await expect(dialog.getByRole('checkbox')).toHaveCount(1);
+    await expect(dialog.getByRole('checkbox', { name: 'Home: the hero' })).toBeVisible();
   });
 
   test('Escape closes the dialog and gives focus back to Publish…', async ({ page }) => {
