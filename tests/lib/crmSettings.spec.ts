@@ -252,7 +252,10 @@ function fakeDb(answer: { data?: unknown; error?: Record<string, unknown> | null
   const builder = (call: Call) => {
     const b: Record<string, unknown> = {};
     b['update'] = (values: Record<string, unknown>) => ((call.update = values), b);
-    b['select'] = (columns?: string) => ((call.select = columns), b);
+    b['select'] = (columns?: string) => {
+      if (columns !== undefined) call.select = columns;
+      return b;
+    };
     b['order'] = () => b;
     b['eq'] = (col: string, val: unknown) => (call.eq.push([col, val]), b);
     b['maybeSingle'] = async () => ({ data: answer.data ?? null, error: answer.error ?? null });
