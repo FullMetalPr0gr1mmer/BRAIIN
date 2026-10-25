@@ -64,6 +64,11 @@ import {
 // published post's slug, links nowhere until it is saved. Field groups
 // (U9a) compose inside a field tab: a group renders in its tab's card, never across two tabs.
 // The tab API is frozen in docs/admin-v2/as-built/U8.md for U5 and U6.
+// Admin v2 E1, the page editor, adds three props, each off unless asked for (without them the
+// output is byte for byte what it was): `hidden` (fields the save carries but the form never
+// draws: a section's `type`), `builtIn` (a field's built-in value, by name: the section
+// content field's prefill, F5b) and `languageBar: 'page'` (the screen draws the language
+// switch and "Arabic missing: N" for every column, and its providers wrap this form).
 
 export interface EditorFormProps {
   save: EntitySave;
@@ -107,6 +112,23 @@ export interface EditorFormProps {
   heading?: { title: string; sub?: string | undefined } | undefined;
   /** Admin v2 R12: the record in words for the discard confirm ("service"). */
   noun?: string | undefined;
+  /**
+   * Admin v2 E1: fields the save carries (loaded and sent) but the form never draws: a page
+   * section's `type`, which its content field reads to know its own fields.
+   */
+  hidden?: readonly string[] | undefined;
+  /**
+   * Admin v2 E1: a field's built-in value, by its name: what a section shows with nothing
+   * stored (F5b's `builtIn` prop of the section content field, wired by the page editor).
+   */
+  builtIn?: Readonly<Record<string, unknown>> | undefined;
+  /**
+   * Admin v2 E1: whose language bar this is. `own` (the default): the form draws English /
+   * العربية / Both and "Arabic missing: N" above its fields and keeps the language to
+   * itself. `page`: the screen holds them (the page editor's bar, for every column), so the
+   * form draws neither and reads the screen's language and gap list.
+   */
+  languageBar?: 'own' | 'page' | undefined;
 }
 
 const LANGUAGE_KINDS = new Set(['bilingual', 'prose', 'richtext']);
@@ -206,6 +228,9 @@ export default function EditorForm({
   publicHref,
   heading,
   noun = 'item',
+  hidden,
+  builtIn,
+  languageBar = 'own',
 }: EditorFormProps) {
   // R12: the server put this record in release mode (its answer carried `draft`).
   const draftMode = save.mode === 'draft';
@@ -296,7 +321,10 @@ export default function EditorForm({
   const bilingual = hasBilingual(fields);
   const errors = local ?? save.errors;
   // R12: in release mode the per-item schedule goes (a release is scheduled, never one item).
-  const shownFields = draftMode ? fields.filter((f) => !isItemSchedule(f)) : fields;
+  // E1: a hidden field is carried by the save, never drawn.
+  const drawn =
+    hidden && hidden.length > 0 ? fields.filter((f) => !hidden.includes(f.name)) : fields;
+  const shownFields = draftMode ? drawn.filter((f) => !isItemSchedule(f)) : drawn;
   const renderField = (field: FieldDef) =>
     draftMode && isLifecycleStatus(field) ? (
       <VisibilityField
@@ -316,6 +344,7 @@ export default function EditorForm({
         onChange={save.set}
         errors={errors.byId}
         canAdvanced={canAdvanced}
+        {...(builtIn && field.name in builtIn ? { builtIn: builtIn[field.name] } : {})}
       />
     );
   const onSubmit = (event: FormEvent) => {
@@ -419,7 +448,7 @@ export default function EditorForm({
         </div>
       )}
       {draftMode && <DraftNotice save={save} fields={fields} noun={noun} backHref={back?.href} />}
-      {bilingual && (
+      {bilingual && languageBar === 'own' && (
         <div className="editor__lang">
           <EditorLanguageSwitch />
           <ArabicMissingBar />
@@ -506,6 +535,8 @@ export default function EditorForm({
     form
   );
 
+  // E1: the screen holds the language and the gaps (its own providers, around this form).
+  if (languageBar === 'page') return content;
   return (
     <EditorLanguageProvider>
       <ArabicGapsProvider>{content}</ArabicGapsProvider>

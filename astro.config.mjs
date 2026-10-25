@@ -63,6 +63,7 @@ const ADMIN_EDITOR_ISLAND_NAMES = [
   'AdminMaintenance',
   'AdminMediaLibrary',
   'AdminNotificationSettings',
+  'AdminPageEditor',
   'AdminResourceForm',
   'AdminSeo',
   'AdminSingletonForm',
@@ -76,6 +77,7 @@ const ADMIN_EDITOR_SCREEN_DIRS = [
   'maintenance',
   'media',
   'notificationSettings',
+  'pageEditor',
   'seo',
 ];
 /** @param {readonly string[]} names */

@@ -407,3 +407,54 @@ describe('EditorForm in release mode (Admin v2 R12)', () => {
     expect(html.replace(/<[^>]+>/g, ' ')).not.toMatch(/[\u2013\u2014]/);
   });
 });
+
+// ── Admin v2 E1: the page editor's three props ──────────────────────────────────────────────
+// Each is off unless a screen asks for it: every test above renders without them.
+
+describe('EditorForm in the page editor (Admin v2 E1)', () => {
+  const SECTION: FieldDef[] = [
+    {
+      name: 'type',
+      label: 'Section type',
+      kind: 'select',
+      options: [{ value: 'cta', label: 'cta' }],
+    },
+    { name: 'content', label: 'Content', kind: 'sectionContent', typeField: 'type' },
+  ];
+  const section = () =>
+    fakeSave({
+      values: { type: 'cta', content: { values: {}, json: null } },
+    });
+  const BUILT_IN = {
+    heading: { en: 'Let’s make something', ar: 'لنصنع شيئاً' },
+    text: { en: 'Tell us about it.', ar: 'أخبرنا عنه.' },
+  };
+
+  it('a hidden field is carried, never drawn: the type a section’s content reads', () => {
+    const html = render(section(), SECTION, { hidden: ['type'] });
+    expect(html).not.toContain('id="f-type"');
+    expect(html).toContain('id="f-content"');
+    // The content field still knows its type: the call to action's own fields are drawn.
+    expect(html).toContain('id="f-content-heading-en"');
+    expect(render(section(), SECTION)).toContain('id="f-type"');
+  });
+
+  it('a built-in value reaches its field: the section shows the words the page shows now', () => {
+    const html = render(section(), SECTION, { hidden: ['type'], builtIn: { content: BUILT_IN } });
+    expect(html).toContain('value="Let’s make something"');
+    expect(html).toContain('value="لنصنع شيئاً"');
+    expect(html).toContain('Every field starts as the words the page already shows.');
+    const bare = render(section(), SECTION, { hidden: ['type'] });
+    expect(bare).not.toContain('Let’s make something');
+    expect(bare).toContain('Every field is optional. Leave one empty to keep the built-in copy.');
+  });
+
+  it('the screen’s language bar: the form draws no switch and no gap count of its own', () => {
+    const own = render(section(), SECTION, { hidden: ['type'] });
+    expect(own).toContain('class="editor__lang"');
+    const page = render(section(), SECTION, { hidden: ['type'], languageBar: 'page' });
+    expect(page).not.toContain('editor__lang');
+    expect(page).not.toContain('Editing language');
+    expect(page).toContain('id="f-content-heading-en"');
+  });
+});

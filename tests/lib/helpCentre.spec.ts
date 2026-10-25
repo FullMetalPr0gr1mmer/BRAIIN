@@ -1836,6 +1836,77 @@ describe('collections-and-faq (U7), a new guide put by the FAQ migration', () =>
   });
 });
 
+describe('editing-pages (E1), a new guide put by the page editor migration', () => {
+  const article = () => SET.find((a) => a.slug === 'editing-pages')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const EDITOR = 'src/components/admin/screens/pageEditor';
+
+  it('is put once, at revision 0 (new), by the migration that adds the section label', () => {
+    const puts = HELP.edits.filter((e) => e.slug === 'editing-pages');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts[0]?.file).toMatch(/^\d{4}_page_editor\.sql$/);
+    expect(HELP.revisions.get('editing-pages')).toBe(1);
+  });
+
+  it('takes the free place 41 (after saving 40), for the roles that edit pages', () => {
+    expect(article().sort_order).toBe(41);
+    expect(SET.filter((a) => a.sort_order === 41)).toHaveLength(1);
+    expect(article().tags).toEqual(['content']);
+    expect(article().screens).toEqual(['/admin/pages']);
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual(['admin', 'content_creator']);
+  });
+
+  it('says what the page editor does, in the words it uses', () => {
+    const en = text('en');
+    const ar = text('ar');
+    const column = source(`${EDITOR}/SectionsColumn.tsx`);
+    const model = source(`${EDITOR}/model.ts`);
+    // Order: the handle, and Move up / Move down (the kit's, on every row).
+    expect(en).toContain('Drag one by its handle, or use Move up and Move down');
+    expect(column).toContain('<SortHandle label={name}');
+    expect(column).toContain('<MoveButtons label={name} />');
+    // The eye, and the forms the routes keep.
+    expect(column).toContain('aria-label={`Show ${name} on the site`}');
+    expect(en).toContain('such as the contact form, says so: the page shows it either way');
+    expect(source(`${EDITOR}/library.ts`)).toContain('The inquiry form is always on this page');
+    // A new section: hidden, at the end.
+    expect(en).toContain('A new section starts hidden, at the end');
+    expect(model).toContain('visible: false,');
+    expect(model).toContain('sortOrder: last + ORDER_STEP,');
+    // Rename's 60 characters, and who deletes.
+    expect(en).toContain('a name of up to 60 characters, shown only here');
+    expect(source('packages/schemas/sectionTypes.ts')).toContain('SECTION_LABEL_MAX = 60;');
+    expect(en).toContain('Only an Admin can delete a section; anyone else can hide it instead.');
+    expect(ROLES.filter((r) => ROLE_CAPS[r]['content.archiveDelete'] === 'full')).toEqual([
+      'admin',
+    ]);
+    // The words: prefilled, Reset, the language bar, the gap count, Save and the conflict.
+    expect(source('src/components/admin/fields/SectionContentField.tsx')).toContain(
+      'Reset to the built-in copy',
+    );
+    for (const words of ['Reset to the built-in copy', 'Arabic missing', 'Next gap']) {
+      expect(en, words).toContain(words);
+      expect(ar, words).toContain(words);
+    }
+    expect(source('src/components/admin/fields/editorLanguage.tsx')).toContain(
+      '`Arabic missing: ${count}`',
+    );
+    expect(source(`${EDITOR}/SectionPanel.tsx`)).toContain('submitLabel="Save changes"');
+    expect(source('src/components/admin/fields/EditorForm.tsx')).toContain('Reload their version');
+    expect(en).toContain('you are asked to reload their version first');
+    // SEO: Admin and SEO change it, a Content Creator reads it.
+    expect(en).toContain('Admin and SEO change them; a Content Creator reads them.');
+    expect(ROLE_CAPS.admin['seo.entityMeta']).toBe('full');
+    expect(ROLE_CAPS.seo['seo.entityMeta']).toBe('full');
+    expect(ROLE_CAPS.content_creator['seo.entityMeta']).toBe('view');
+    // History: the open item's saves, who and when.
+    expect(en).toContain('History lists the saves of the open section, or of the page details');
+    expect(source(`${EDITOR}/history.ts`)).toContain('by: `Saved by ${who(v.by)}`');
+  });
+});
+
 // ── 1c. Guides filed before the catalog puts them ──────────────────────────────────────
 
 describe('filed guides (docs/admin-v2/guides)', () => {
@@ -2311,6 +2382,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
   it('Content Creator: the basics, content, media, the Style-Finder and stats; no leads, PII, hiring, settings or SEO', () => {
     expect(shown('content_creator')).toEqual([
       'collections-and-faq',
+      'editing-pages',
       'finding-your-way',
       'media-library',
       'previewing-changes',
