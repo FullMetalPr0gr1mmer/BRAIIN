@@ -473,6 +473,38 @@ describe('moving and cancelling a scheduled release (PATCH / DELETE /api/admin/r
     expect(callsOf('reschedule_release')).toEqual([]);
   });
 
+  it('a cancel re-reads the person live too: a demoted Admin is refused before the database', async () => {
+    // The release holds an archive, which only an Admin may cancel: the token still says admin,
+    // the profile says content creator. Only the live re-read can refuse it.
+    const db = seed({
+      content_releases: [release()],
+      content_drafts: [claimed({ payload: { status: 'archived' } })],
+    });
+    await asRole(db, 'content_creator');
+    svc.answer = (fn) =>
+      fn === 'unschedule_release'
+        ? { data: { release_id: REL, status: 'cancelled', released: 1 }, error: null }
+        : { data: null, error: null };
+    const res = await cancel(db, '?version=2', 'admin');
+    expect(res.status).toBe(403);
+    expect(res.body['error']).toBe('forbidden');
+    expect(callsOf('unschedule_release')).toEqual([]);
+    // The profile was read through the service client: the live re-read, not a capability.
+    expect(db.calls.some((c) => c.kind === 'from' && c.name === 'profiles')).toBe(true);
+  });
+
+  it('a cancel at a stale version is 409 conflict with the version the release is at', async () => {
+    const db = seed({ content_releases: [release()], content_drafts: [claimed()] });
+    svc.answer = (fn) =>
+      fn === 'unschedule_release'
+        ? { data: { release_id: REL, status: 'cancelled', released: 1 }, error: null }
+        : { data: null, error: null };
+    const res = await cancel(db, '?version=1');
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ error: 'conflict', entity: 'release', version: 2 });
+    expect(callsOf('unschedule_release')).toEqual([]);
+  });
+
   it('a move: reschedule_release as the person, at the version they saw', async () => {
     const db = seed({ content_releases: [release()], content_drafts: [claimed()] });
     const at = minutesAhead(30);

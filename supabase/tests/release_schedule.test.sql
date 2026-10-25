@@ -25,7 +25,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(100);
+select plan(103);
 
 -- ── 0. The catalog ──────────────────────────────────────────────────────────────────────
 select ok(
@@ -555,6 +555,13 @@ select is(
              now() + interval '2 hours') as f) s, public.content_releases r
     where r.id = _rel('kept')),
   '2 10700000-0000-0000-0000-0000000000a1', 'an Admin moves it (still theirs, version 1 to 2: the refusals changed nothing)');
+-- A cancel checks the person live and the version as a move does.
+select is(_fails($$ select public.unschedule_release('10700000-0000-0000-0000-0000000000a2', 'admin', _rel('kept'), 2) $$),
+  'BR403:actor', 'an inactive admin cannot cancel it');
+select is(_fails($$ select public.unschedule_release('10700000-0000-0000-0000-0000000000f1', 'sales', _rel('kept'), 2) $$),
+  'BR403:actor', 'a sales role cannot');
+select is(_fails($$ select public.unschedule_release('10700000-0000-0000-0000-0000000000a1', 'admin', _rel('kept'), 1) $$),
+  'BR409:conflict', 'a cancel at a stale version is refused');
 select is(
   (select f ->> 'status'
      from (select public.unschedule_release('10700000-0000-0000-0000-0000000000a1', 'admin', _rel('kept'), 2) as f) s),
