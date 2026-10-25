@@ -6,8 +6,10 @@ import { z } from 'zod';
 // at merge), and these patterns are the CHECKs' own: tests/lib/integrationsSql.spec.ts holds
 // the two equal, so a shape can never pass one layer and fail the other.
 //
-//   ga4_measurement_id    a GA4 measurement id, G- and 4 to 15 capitals or digits. Stored
-//                         only: loading GA4 needs a CSP change and the consent hook (U15).
+//   ga4_measurement_id    a GA4 measurement id, G- and 4 to 15 capitals or digits. Anon
+//                         reads it (U15, 0109); the public site loads GA4 with it only
+//                         behind analytics consent and the GA4_NOTICE_READY switch
+//                         (src/lib/http/ga4.ts), which is off until the notice names Google.
 //   search_console_token  the content of Google's verification meta tag, which SeoHead emits
 //                         on the home pages. A pasted whole tag is read for its content.
 //   calendly_url          a booking link on calendly.com itself, https, at most three path

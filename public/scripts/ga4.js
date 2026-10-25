@@ -16,7 +16,8 @@
  * the current consent version, so consent given to a notice that did not name Google never
  * loads it. Then: consent mode with analytics granted and every advertising signal denied,
  * Google signals and ad personalisation off, cookies on this host only, at most 180 days (the
- * consent cookie's own lifetime), and page addresses sent without their query or fragment.
+ * consent cookie's own lifetime), and page addresses sent without their query or fragment;
+ * gtag.js itself is asked for only once the page has loaded (never while it paints).
  *
  * ON WITHDRAWAL (the banner's `consent-updated` on this page; a choice changed in another tab,
  * followed as soon as this page is looked at again or restored from the back-forward cache):
@@ -152,7 +153,31 @@
     });
   }
 
+  /** The queue and the config are in the dataLayer. */
   let started = false;
+  /** gtag.js has been asked for (once a page, never again). */
+  let requested = false;
+
+  function request() {
+    if (requested || window[OFF] === true) return;
+    requested = true;
+    watchCsp();
+    const tag = document.createElement('script');
+    tag.async = true;
+    tag.src = GTAG + encodeURIComponent(id);
+    document.head.appendChild(tag);
+  }
+
+  /**
+   * gtag.js after the page's own `load`, never during it: a visitor who said yes on an earlier
+   * page would otherwise fetch and run Google's script while this page is still painting
+   * (CLAUDE.md §6: third-party code after LCP, as hls.js). The queue above keeps every call
+   * made meanwhile, so nothing is lost; a no given meanwhile means it is never asked for.
+   */
+  function requestAfterLoad() {
+    if (document.readyState === 'complete') request();
+    else addEventListener('load', request, { once: true });
+  }
 
   function start() {
     started = true;
@@ -178,11 +203,7 @@
     const referrer = bare(document.referrer);
     if (referrer) config.page_referrer = referrer;
     gtag('config', id, config);
-    watchCsp();
-    const tag = document.createElement('script');
-    tag.async = true;
-    tag.src = GTAG + encodeURIComponent(id);
-    document.head.appendChild(tag);
+    requestAfterLoad();
   }
 
   function stop() {
@@ -207,6 +228,8 @@
     } else if (window[OFF] === true) {
       window[OFF] = false;
       gtag('consent', 'update', { analytics_storage: 'granted' });
+      // A no that came before `load` left gtag.js unrequested: a yes again asks for it.
+      requestAfterLoad();
     }
   }
 

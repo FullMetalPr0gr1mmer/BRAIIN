@@ -39,6 +39,8 @@ interface Page {
   dispatchWindow: (type: string, event?: Record<string, unknown>) => void;
   /** The tab shown again or hidden (`document.visibilityState`, then `visibilitychange`). */
   show: (visible: boolean) => void;
+  /** The page finishes loading (`document.readyState`, then the window's `load`). */
+  loaded: () => void;
 }
 
 interface Options {
@@ -47,6 +49,8 @@ interface Options {
   cookies?: Record<string, string>;
   href?: string;
   referrer?: string;
+  /** The script runs while the page is still loading (a deferred script always does). */
+  loading?: boolean;
 }
 
 /** `name=value` for the consent cookie, as the banner writes it (or a raw value). */
@@ -61,6 +65,7 @@ function load(options: Options = {}): Page {
     cookies = {},
     href = 'https://www.example.test/services/logo?utm_source=x&email=a%40b.c#top',
     referrer = 'https://www.example.test/?q=secret',
+    loading = false,
   } = options;
   const jar = new Map(Object.entries(cookies));
   const writes: string[] = [];
@@ -77,6 +82,7 @@ function load(options: Options = {}): Page {
     currentScript: { getAttribute: (name: string) => attrs[name] ?? null },
     referrer,
     visibilityState: 'visible' as 'visible' | 'hidden',
+    readyState: (loading ? 'interactive' : 'complete') as 'interactive' | 'complete',
     get cookie() {
       return [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
     },
@@ -139,6 +145,10 @@ function load(options: Options = {}): Page {
     show: (visible) => {
       document.visibilityState = visible ? 'visible' : 'hidden';
       for (const fn of docListeners.get('visibilitychange') ?? []) fn({});
+    },
+    loaded: () => {
+      document.readyState = 'complete';
+      for (const fn of winListeners.get('load') ?? []) fn({});
     },
   };
 }
@@ -307,6 +317,50 @@ describe('after analytics consent', () => {
     page.dispatch('consent-updated');
     page.dispatch('consent-updated');
     expect(page.appended).toEqual([{ src: GTAG, async: true }]);
+  });
+});
+
+describe('gtag.js waits for the page to load', () => {
+  it('a yes found while the page is still loading queues at once and asks Google only at load', () => {
+    const page = load({ loading: true, cookies: { [CONSENT_COOKIE]: consentValue(choice(true)) } });
+    expect(page.dataLayer()!.map((entry) => entry[0])).toEqual([
+      'consent',
+      'consent',
+      'js',
+      'config',
+    ]);
+    expect(page.appended).toEqual([]);
+    page.loaded();
+    expect(page.appended).toEqual([{ src: GTAG, async: true }]);
+    page.loaded();
+    expect(page.appended).toHaveLength(1);
+  });
+
+  it('a no before load means Google is never asked; a yes again asks once, at load', () => {
+    const page = load({ loading: true, cookies: { [CONSENT_COOKIE]: consentValue(choice(true)) } });
+    page.setConsent(choice(false));
+    page.dispatch('consent-updated');
+    page.loaded();
+    expect(page.appended).toEqual([]);
+    expect(page.off()).toBe(true);
+    page.setConsent(choice(true));
+    page.dispatch('consent-updated');
+    expect(page.appended).toEqual([{ src: GTAG, async: true }]);
+    page.dispatch('consent-updated');
+    expect(page.appended).toHaveLength(1);
+  });
+
+  it('the Report-Only listener starts with the request, not before', () => {
+    const page = load({ loading: true, cookies: { [CONSENT_COOKIE]: consentValue(choice(true)) } });
+    const refused = {
+      blockedURI: 'https://x.google-analytics.com/g',
+      effectiveDirective: 'img-src',
+    };
+    page.dispatch('securitypolicyviolation', refused);
+    expect(page.beacons).toEqual([]);
+    page.loaded();
+    page.dispatch('securitypolicyviolation', refused);
+    expect(page.beacons).toHaveLength(1);
   });
 });
 
