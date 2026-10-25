@@ -114,11 +114,17 @@ function moduleFile(from: string, spec: string): string | null {
 
 const fileOf = (node: ts.Node) => node.getSourceFile().fileName.replace(/\.astro\.ts$/, '.astro');
 
-/** Every declaration of `name` in the file: a variable, a function, an import, a parameter. */
+/**
+ * Every declaration of `name` in the file: a variable, a function, an import, a parameter, or
+ * a name destructured from one (`const { a, ...rest } = row`).
+ */
 function declarations(ast: ts.SourceFile, name: string): ts.Node[] {
   return nodesOf(ast).filter(
     (node) =>
-      ((ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isFunctionDeclaration(node)) &&
+      ((ts.isVariableDeclaration(node) ||
+        ts.isParameter(node) ||
+        ts.isFunctionDeclaration(node) ||
+        ts.isBindingElement(node)) &&
         node.name !== undefined &&
         ts.isIdentifier(node.name) &&
         node.name.text === name) ||
@@ -145,6 +151,12 @@ function declarationWords(decl: ts.Node, seen: Set<ts.Node>, out: Set<string>): 
   seen.add(decl);
   if (ts.isVariableDeclaration(decl) && decl.initializer) {
     wordsOf(decl.initializer, seen, out);
+  } else if (ts.isBindingElement(decl)) {
+    // A destructured name holds part of what the pattern reads: all of it, to be strict.
+    let at: ts.Node = decl.parent;
+    while (ts.isObjectBindingPattern(at) || ts.isArrayBindingPattern(at) || ts.isBindingElement(at))
+      at = at.parent;
+    if (ts.isVariableDeclaration(at) || ts.isParameter(at)) declarationWords(at, seen, out);
   } else if (ts.isFunctionDeclaration(decl) && decl.body) {
     wordsOf(decl.body, seen, out);
   } else if (ts.isImportSpecifier(decl)) {
@@ -529,6 +541,13 @@ describe('no lead query names a dropped column, and no CRM settings query the ti
       hits("function read(c: string) { return sb.from('leads').select(c); } read('id,status');"),
     ).toBe(true);
     expect(hits("sb.from('leads').or('status.eq.new,is_spam.eq.true')")).toBe(true);
+    // A row built elsewhere and spread in after a destructuring (createLead's fallback insert).
+    expect(
+      hits(
+        "function put(row: R) { const { a, ...rest } = row; return sb.from('leads').insert({ ...rest }); }" +
+          " const lead = { id, status: 'new' }; put(lead);",
+      ),
+    ).toBe(true);
     expect(
       hits("sb.from('crm_settings').select('version,timezone')", new Set(['crm_settings'])),
     ).toBe(true);
@@ -546,11 +565,18 @@ describe('no lead query names a dropped column, and no CRM settings query the ti
 });
 
 describe('the removed routes stay removed', () => {
-  it('GET /api/admin/leads (the legacy list) is gone; adding a lead by hand stays', async () => {
-    const list = await import('@/pages/api/admin/leads/index');
-    expect('GET' in list).toBe(false);
-    expect(typeof (list as Record<string, unknown>)['POST']).toBe('function');
-  });
+  // The route module's graph is large: its first import can take seconds under a full run.
+  it(
+    'GET /api/admin/leads (the legacy list) is gone; adding a lead by hand stays',
+    {
+      timeout: 60_000,
+    },
+    async () => {
+      const list = await import('@/pages/api/admin/leads/index');
+      expect('GET' in list).toBe(false);
+      expect(typeof (list as Record<string, unknown>)['POST']).toBe('function');
+    },
+  );
 
   it('no endpoint case drives a removed route', () => {
     for (const testCase of CASES) {
