@@ -9,6 +9,8 @@ import {
   clip,
   COLLECTIONS,
   copySlug,
+  DELETE_WORDS,
+  deleteOutcome,
   deleteQuestion,
   textOf,
 } from '@/components/admin/screens/collection/collections';
@@ -132,6 +134,22 @@ describe('the rows: words and badges', () => {
     expect(deleteQuestion(COLLECTIONS['faq']!, 'سؤال')).toBe(
       'Delete the question “⁨سؤال⁩”? This cannot be undone.',
     );
+  });
+
+  // The three answers a DELETE gives (pinned in tests/lib/stagedKernel.spec.ts): releases off,
+  // a staged removal of a live row, and a pending new item thrown away (Admin v2 R12 review).
+  it('a Delete says what happened: deleted, a removal waiting for the publish, or thrown away', () => {
+    const id = '33333333-3333-4333-8333-333333333301';
+    expect(deleteOutcome({ deleted: id })).toBe('deleted');
+    expect(deleteOutcome({ deleted: id, pendingRemoval: true, draft: { id, op: 'delete' } })).toBe(
+      'removal',
+    );
+    // A pending new item was never on the site: nothing was staged, so no "removal" words.
+    const discarded = deleteOutcome({ deleted: id, draft: null });
+    expect(discarded).toBe('discarded');
+    expect(DELETE_WORDS[discarded]).not.toMatch(/removal|comes off the site/i);
+    expect(DELETE_WORDS.removal).toContain('when it is published');
+    expect(Object.values(DELETE_WORDS).join(' ')).not.toMatch(/[–—]/);
   });
 });
 
