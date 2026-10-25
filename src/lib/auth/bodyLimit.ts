@@ -31,6 +31,21 @@ export const PRE_AUTH_BODY_LIMIT = 16 * 1024;
  */
 export const PRIVATE_FORM_BODY_LIMIT = 1024 * 1024;
 
+/**
+ * 128 KB: a public endpoint's body (H14), refused by the middleware before any handler reads
+ * it. The public JSON endpoints (/api/contact, /api/consent, /api/rum, /api/analytics,
+ * /api/clientlog, /api/ai/style-finder) read `request.json()` with no cap of their own, so a
+ * visitor could post up to the platform's request limit (100 MB) and have it parsed and
+ * validated; with zod 3's array handling (GHSA-mrhx-c7xc-m3w5, EXC-013: every item of an
+ * over-long array is still parsed) that is a memory-exhaustion path. The largest body their
+ * schemas accept, every free-text character escaped to six bytes, is the Style-Finder's
+ * (40 answers: about 84 KB), then the contact form's (about 33 KB, plus a captcha token), so
+ * the cap never refuses a request a person can send; tests/lib/publicBodyLimit.spec.ts builds
+ * each worst case. The routes with a limit of their own (the Join form's multipart, the signed
+ * hook, the page password) keep it (src/middleware.ts).
+ */
+export const PUBLIC_API_BODY_LIMIT = 128 * 1024;
+
 /** A Content-Length a parser would accept: digits only. */
 const DECLARED_LENGTH = /^\d{1,15}$/;
 

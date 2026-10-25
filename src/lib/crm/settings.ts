@@ -9,16 +9,19 @@ import type { CrmSettingsSave, LeadStagesSave } from '@schemas/crm';
 // writes, shared by the routes (src/pages/api/admin/crm/settings.ts, stages.ts). Every read
 // and write goes through the caller's client, so RLS, the live check and the column grants
 // decide (0091); the Worker's crm.settings check is the second layer.
+//
+// No time zone (Admin v2 C14a): the studio's one zone is `site_settings.timezone` since U9
+// (0102, src/lib/admin/studioTimeZone.ts), and `crm_settings.timezone`, deprecated there, is the
+// contract's to drop (C14b), so nothing here names it.
 
 export const SETTINGS_COLUMNS =
-  'version,scoring,sla_hours,timezone,assignment_rule,assignment_pool,assignment_fixed_to,updated_at';
+  'version,scoring,sla_hours,assignment_rule,assignment_pool,assignment_fixed_to,updated_at';
 export const STAGE_COLUMNS = 'id,key,label,label_ar,tone,kind,is_initial,sort_order,version';
 
 export interface CrmSettingsView {
   version: number;
   scoring: Record<string, number>;
   slaHours: number;
-  timezone: string;
   assignment: { rule: string; pool: string[]; fixedTo: string | null };
   updatedAt: string | null;
 }
@@ -60,7 +63,6 @@ export function settingsView(row: Record<string, unknown>): CrmSettingsView {
     version: Number(row['version'] ?? 1),
     scoring,
     slaHours: Number(row['sla_hours'] ?? 24),
-    timezone: String(row['timezone'] ?? 'Asia/Riyadh'),
     assignment: {
       rule: String(row['assignment_rule'] ?? 'manual'),
       pool,

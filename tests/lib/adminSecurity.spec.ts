@@ -6,6 +6,7 @@ import {
   canManageLeads,
   receivesLeadPiiUnasked,
   GATED_LEAD_COLUMNS,
+  LEGACY_LEAD_COLUMNS,
   SAFE_LEAD_COLUMNS,
   stripSensitive,
 } from '@/lib/admin/leadFields';
@@ -117,17 +118,14 @@ describe('lead field visibility', () => {
   it('keeps every gated column out of the safe projection (the one staff tokens can read)', () => {
     const safe = SAFE_LEAD_COLUMNS.split(',');
     const gated = GATED_LEAD_COLUMNS.split(',');
-    for (const column of [
-      'budget_enc',
-      'timeline_band',
-      'timeline_text_enc',
-      'internal_notes',
-      'ip_inet',
-      'email_enc',
-      'phone_enc',
-    ]) {
+    for (const column of ['budget_enc', 'timeline_text_enc', 'email_enc', 'phone_enc']) {
       expect(safe, `safe projection leaked ${column}`).not.toContain(column);
       expect(gated, `${column} is not marked gated`).toContain(column);
+    }
+    // The legacy columns (C14a) are in neither: no query names them, and C14b drops them.
+    for (const column of LEGACY_LEAD_COLUMNS) {
+      expect(safe, column).not.toContain(column);
+      expect(gated, column).not.toContain(column);
     }
   });
 
@@ -138,6 +136,9 @@ describe('lead field visibility', () => {
       email_enc: 'x',
       phone_enc: 'y',
       budget_enc: 'z',
+      timeline_text_enc: 'w',
+      // The legacy columns, while today's schema holds them (C14a): never in a response.
+      status: 'new',
       timeline_band: '3-6m',
       internal_notes: 'private',
       ip_inet: '203.0.113.1',
