@@ -5,6 +5,7 @@ import {
   FireApplyRequestSchema,
   FireSkippedSchema,
   PUBLISHER_ROLES,
+  RELEASE_OVERDUE_MINUTES,
   ReleaseEntityTypeSchema,
   type PurgeStatus,
   type ReleaseFailureCode,
@@ -41,8 +42,10 @@ import type { CronJob } from './jobs';
 //    fails closed: `public.fail_scheduled_release` marks the release `failed` with a code and
 //    releases its drafts, with an error line under `cron:releases`; the dashboard lists it
 //    (`release_failed`, 0066) and the bell tells the roles that publish it
-//    (src/lib/admin/notifications/releases.ts). A busy database (a lock wait, a deadlock, no
-//    answer) leaves it scheduled, tried again once its lease ends. A minute that published a
+//    (src/lib/admin/notifications/releases.ts); one a person moved to a later time since the
+//    claim is left as it is. A busy database (a lock wait, a deadlock, no answer) leaves it
+//    scheduled, tried again once its lease ends. One that goes live more than
+//    RELEASE_OVERDUE_MINUTES late logs a warning saying by how much. A minute that published a
 //    release spends its subrequests on it; the purge retries below wait for the next minute.
 //
 // 2. Otherwise, what a published release still owes the edge (R7):
@@ -243,26 +246,37 @@ export function fireCheck(
   return all && due.items.length > 0 ? { role } : { failure: 'forbidden' };
 }
 
-/** Fails the release closed, as the system, and says so in one line (no person, no value). */
+/** What `fail_scheduled_release` answers when it left the release as it was. */
+const LeftAloneSchema = z.object({ failed: z.literal(false) });
+
+/**
+ * Fails the release closed, as the system, and says so in one line (no person, no value). The
+ * database leaves a release that changed since the claim (it went live, failed or was cancelled,
+ * or a person moved it to a later time): nothing failed, and the line says so.
+ */
 async function failRelease(
   due: Pick<ClaimedSchedule, 'tenant_id' | 'release_id'>,
   failure: ReleaseFailureCode,
   draftIds?: readonly string[],
 ): Promise<FireRun> {
-  const { error } = await serviceClient().rpc('fail_scheduled_release', {
+  const { data, error } = await serviceClient().rpc('fail_scheduled_release', {
     p_tenant: due.tenant_id,
     p_release: due.release_id,
     p_code: failure,
     p_draft_ids: draftIds && draftIds.length > 0 ? [...draftIds] : null,
   });
+  const leftAlone = !error && LeftAloneSchema.safeParse(data).success;
   await writeSystemLog({
-    level: 'error',
+    level: leftAlone ? 'info' : 'error',
     source: 'cron:releases',
     message: error
       ? `a scheduled release could not go live (${failure}) nor be marked failed; it is tried again`
-      : `a scheduled release could not go live (${failure}); its changes are pending again`,
+      : leftAlone
+        ? `a scheduled release could not go live (${failure}), but it changed meanwhile (moved, published or cancelled); it was left as it is`
+        : `a scheduled release could not go live (${failure}); its changes are pending again`,
     detail: { releaseId: due.release_id, failure },
   });
+  if (leftAlone) return { outcome: 'skipped', releaseId: due.release_id };
   return { outcome: 'failed', releaseId: due.release_id, failure };
 }
 
@@ -327,15 +341,23 @@ export async function fireDueRelease(
     items: result.success ? result.data.items : null,
     purge,
   });
+  // Late past the dashboard's "overdue" (a cron outage, a busy database): the line is a warning
+  // that says by how much (releases.md §4.6, `cron:releases`: fire failures and overdue releases).
+  const late = (purge.now ?? Date.now)() - Date.parse(due.scheduled_for);
+  const lateMinutes = late > RELEASE_OVERDUE_MINUTES * 60_000 ? Math.floor(late / 60_000) : null;
   await writeSystemLog({
-    level: 'info',
+    level: lateMinutes === null ? 'info' : 'warn',
     source: 'cron:releases',
-    message: 'a scheduled release went live',
+    message:
+      lateMinutes === null
+        ? 'a scheduled release went live'
+        : `a scheduled release went live ${lateMinutes} minutes late`,
     detail: {
       releaseId: due.release_id,
       number: number ?? null,
       items: due.items.length,
       purge: effects.purge,
+      ...(lateMinutes === null ? {} : { lateMinutes }),
     },
   });
   const run: FireRun = { outcome: 'published', releaseId: due.release_id, purge: effects.purge };

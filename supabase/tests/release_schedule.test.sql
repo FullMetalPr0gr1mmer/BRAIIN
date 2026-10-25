@@ -25,7 +25,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(94);
+select plan(96);
 
 -- ── 0. The catalog ──────────────────────────────────────────────────────────────────────
 select ok(
@@ -118,7 +118,8 @@ insert into public.services (id, tenant_id, slug, title, status, scheduled_for) 
    '{"en":"Legacy B","ar":"قديم ب"}', 'scheduled', now() - interval '1 minute');
 
 -- Tenant C, for the switches: the rows that would have gone live by themselves, each last
--- edited by someone (auth.uid() is what the actor trigger records).
+-- edited by someone (auth.uid() is what the actor trigger records); a FAQ scheduled with no
+-- time and a scheduled team member, which the legacy path never publishes.
 select set_config('request.jwt.claim.sub', '10700000-0000-0000-0000-0000000000cc', true);
 insert into public.services (id, tenant_id, slug, title, status, scheduled_for) values
   ('10700000-0000-0000-0001-0000000000c1', '10700000-0000-0000-0000-00000000000c', 'r11-c-s1',
@@ -425,6 +426,11 @@ select is(_fails($$ select public.fail_scheduled_release('10700000-0000-0000-000
   '22023', 'only a known failure code is recorded');
 select is(_fails($$ select public.fail_scheduled_release('10700000-0000-0000-0000-00000000000b', _rel('early'), 'error') $$),
   'P0002', 'other_tenant: a release is failed only in its own tenant');
+-- A release that is not due, as one a person moved later after the cron claimed it would be.
+select is(
+  (select format('%s %s', f ->> 'failed', f ->> 'status')
+     from (select public.fail_scheduled_release('10700000-0000-0000-0000-00000000000a', _rel('early'), 'scheduler') as f) s),
+  'false scheduled', 'a release that is no longer due (moved since its claim) is left scheduled, its drafts claimed');
 reset role;
 
 -- An inactive scheduler.
@@ -540,13 +546,16 @@ select is(
   'it publishes a due row of a tenant with releases off, and skips one of a tenant with releases on');
 
 -- ── 7. The switches (tenant C) ────────────────────────────────────────────────────────
--- An overdue post (written now: app.publish_scheduled() above would have published it), last
--- edited by C's content creator.
+-- Two overdue posts (written now: app.publish_scheduled() above would have published them), one
+-- last edited by C's content creator, one with no recorded editor.
 select set_config('request.jwt.claim.sub', '10700000-0000-0000-0000-0000000000cc', true);
 insert into public.blog_posts (id, tenant_id, slug, title, status, scheduled_for) values
   ('10700000-0000-0000-0002-0000000000c1', '10700000-0000-0000-0000-00000000000c', 'r11-c-post',
    '{"en":"C post","ar":"ج مقال"}', 'scheduled', now() - interval '1 minute');
 select set_config('request.jwt.claim.sub', '', true);
+insert into public.blog_posts (id, tenant_id, slug, title, status, scheduled_for) values
+  ('10700000-0000-0000-0002-0000000000c2', '10700000-0000-0000-0000-00000000000c', 'r11-c-news',
+   '{"en":"C news","ar":"ج خبر"}', 'scheduled', now() - interval '1 minute');
 set local role service_role;
 select throws_ok(
   $$ select app.enable_releases('10700000-0000-0000-0000-00000000000c', '10700000-0000-0000-0000-0000000000ca', '10700000-0000-0000-0000-0000000000ca') $$,
@@ -576,20 +585,20 @@ select is(
   (select format('%s %s %s %s %s', result ->> 'converted', result ->> 'legacy_releases',
                  result ->> 'fallback_scheduled', result ->> 'left_scheduled', result -> 'baseline' ->> 'number')
      from _out where name = 'enable'),
-  '4 4 2 1 1',
-  'four legacy rows in four releases (two on the fallback), one team member left, baseline v1');
+  '4 4 2 2 1',
+  'four legacy rows in four releases (two on the fallback); the timeless FAQ and the team member left; baseline v1');
 select is(
   (select string_agg(x, ' ' order by x) from (
      select slug::text || ':' || status::text as x from public.services where tenant_id = '10700000-0000-0000-0000-00000000000c'
      union all select slug::text || ':' || status::text from public.blog_posts where tenant_id = '10700000-0000-0000-0000-00000000000c'
      union all select 'faq:' || status::text from public.faq_items where tenant_id = '10700000-0000-0000-0000-00000000000c'
      union all select slug::text || ':' || status::text from public.team_members where tenant_id = '10700000-0000-0000-0000-00000000000c') s),
-  'faq:draft r11-c-ada:scheduled r11-c-post:draft r11-c-s1:draft r11-c-s2:draft r11-c-s3:draft',
-  'the converted rows are drafts now; the team member (never published by the legacy path) is left');
+  'faq:scheduled r11-c-ada:scheduled r11-c-news:draft r11-c-post:draft r11-c-s1:draft r11-c-s2:draft r11-c-s3:draft',
+  'the converted rows are drafts now; the FAQ with no time and the team member (never published by the legacy path) are left');
 select is(
   (select string_agg(format('%s:%s:%s', d.entity_type, d.payload, d.base), ' ' order by d.entity_type, d.entity_id)
      from public.content_drafts d where d.tenant_id = '10700000-0000-0000-0000-00000000000c' and d.release_id is not null),
-  'blog_post:{"status": "published"}:{"status": "draft"} faq_item:{"status": "published"}:{"status": "draft"} '
+  'blog_post:{"status": "published"}:{"status": "draft"} blog_post:{"status": "published"}:{"status": "draft"} '
   || 'service:{"status": "published"}:{"status": "draft"} service:{"status": "published"}:{"status": "draft"}',
   'each became a claimed pending change: published, from draft');
 select is(
@@ -599,7 +608,7 @@ select is(
   '10700000-0000-0000-0001-0000000000c1:10700000-0000-0000-0000-0000000000cc '
   || '10700000-0000-0000-0001-0000000000c2:10700000-0000-0000-0000-0000000000ca '
   || '10700000-0000-0000-0002-0000000000c1:10700000-0000-0000-0000-0000000000cc '
-  || '10700000-0000-0000-0003-0000000000c1:10700000-0000-0000-0000-0000000000ca',
+  || '10700000-0000-0000-0002-0000000000c2:10700000-0000-0000-0000-0000000000ca',
   'each goes live as its last editor while they may still publish it, else the fallback scheduler');
 select is(
   (select format('%s %s %s %s %s', r.kind, r.status, r.number, r.purge_status, r.published_by)
@@ -646,9 +655,9 @@ select is(
      select slug::text || ':' || status::text || ':' || (scheduled_for = now() + interval '1 hour') as x
        from public.services
       where id in ('10700000-0000-0000-0001-0000000000c1', '10700000-0000-0000-0001-0000000000c2')
-     union all select 'faq:' || status::text || ':' || (scheduled_for <= now())
-       from public.faq_items where tenant_id = '10700000-0000-0000-0000-00000000000c') s),
-  'faq:scheduled:true r11-c-s1:scheduled:true r11-c-s2:scheduled:true',
+     union all select slug::text || ':' || status::text || ':' || (scheduled_for = now() - interval '1 minute')
+       from public.blog_posts where id = '10700000-0000-0000-0002-0000000000c2') s),
+  'r11-c-news:scheduled:true r11-c-s1:scheduled:true r11-c-s2:scheduled:true',
   'each row is scheduled again at the time its release held');
 select is(
   (select format('%s %s %s %s', app.releases_enabled('10700000-0000-0000-0000-00000000000c'),
@@ -658,8 +667,12 @@ select is(
   'f 0 0 10700000-0000-0000-0000-0000000000ca',
   'releases are off, nothing pending or scheduled, and the releases.disable audit row names the operator');
 select ok(app.publish_scheduled() >= 1, 'app.publish_scheduled() runs for tenant C again');
-select is((select status::text from public.faq_items where id = '10700000-0000-0000-0003-0000000000c1'),
+select is((select status::text from public.blog_posts where id = '10700000-0000-0000-0002-0000000000c2'),
   'published', 'and publishes the due row the switch put back');
+select is(
+  (select format('%s %s', status, scheduled_for is null) from public.faq_items
+    where id = '10700000-0000-0000-0003-0000000000c1'),
+  'scheduled t', 'a row scheduled with no time is never published: not by the legacy path, nor by a switch');
 select is(_fails($$ select app.disable_releases('10700000-0000-0000-0000-00000000000c', '10700000-0000-0000-0000-0000000000ca') $$),
   '55000', 'switching off twice is refused');
 

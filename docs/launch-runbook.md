@@ -1546,15 +1546,16 @@ select app.disable_releases('<tenant id>', '<operator profile id>', p_discard_pe
 
 - **On** (`app.enable_releases`): refused (`55P03`) while a release is publishing, and (`55000`)
   when releases are on already or pending changes or scheduled releases remain from an earlier
-  time. Every row that `app.publish_scheduled()` would have published by itself and that is
-  `scheduled` becomes a pending change ("published") claimed by a `legacy_schedule` release at
-  its time (now, when it has none or the time passed: the next minute publishes it), its live
-  status moved to draft; releases group the rows by time and scheduler, at most 60 each. Each
-  goes live as the row's last editor while that person may still publish it, else as the
-  fallback scheduler (`fallback_scheduled` counts them). Scheduled team members, statistics and
-  certifications were never published by the legacy path; they are counted (`left_scheduled`)
-  and left as they are. Then the baseline version ("Releases switched on", version 1 the first
-  time), the flag, and a `releases.enable` audit row naming the operator, all in one transaction.
+  time. Every row that `app.publish_scheduled()` would have published by itself (`scheduled`,
+  with a time) becomes a pending change ("published") claimed by a `legacy_schedule` release at
+  that time (a time passed: the next minute publishes it), its live status moved to draft;
+  releases group the rows by time and scheduler, at most 60 each. Each goes live as the row's
+  last editor while that person may still publish it, else as the fallback scheduler
+  (`fallback_scheduled` counts them). What the legacy path never published by itself is counted
+  (`left_scheduled`) and left as it is: a row scheduled with no time, and scheduled team
+  members, statistics and certifications. Then the baseline version ("Releases switched on",
+  version 1 the first time), the flag, and a `releases.enable` audit row naming the operator, all
+  in one transaction.
 - **Off** (`app.disable_releases`): refused (`55P03`) while a release is publishing and
   (`55000`) when off already. Every draft write in flight lands first; then, if any change is
   pending or any release scheduled, it is refused (`55000`, with the counts) unless the discard
@@ -1570,7 +1571,9 @@ select app.disable_releases('<tenant id>', '<operator profile id>', p_discard_pe
   refused one) is marked failed with a reason code, its changes become pending again, and it
   shows on the dashboard ("Release that could not go live") and in the bell of the roles that
   publish it. Nothing is retried by itself: the changes are published or scheduled again by a
-  person.
+  person. A release someone moved to a later time while the cron was failing it is left as it
+  is. One that goes live more than five minutes late (a cron outage) is a warning under
+  `cron:releases` saying by how much.
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)
 

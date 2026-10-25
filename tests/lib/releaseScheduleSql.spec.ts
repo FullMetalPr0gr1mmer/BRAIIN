@@ -122,6 +122,15 @@ describe('the service-role functions', () => {
     }
   });
 
+  it('a failure leaves a release that is no longer scheduled or no longer due (moved since its claim)', () => {
+    const fn = bodyOf(SQL, 'public.fail_scheduled_release');
+    expect(fn).toContain('select r.status, r.scheduled_for into v_status, v_at');
+    expect(fn).toMatch(/if v_status <> 'scheduled' or v_at > pg_catalog\.now\(\) then\s+return/);
+    expect(fn.indexOf('v_at > pg_catalog.now()')).toBeLessThan(
+      fn.indexOf('update public.content_drafts'),
+    );
+  });
+
   it('the failure codes are RELEASE_FAILURE_CODES', () => {
     const fn = bodyOf(SQL, 'public.fail_scheduled_release');
     const list = /p_code not in \(([^)]*)\)/.exec(fn)?.[1] ?? '';
@@ -186,6 +195,21 @@ describe('the two switches', () => {
     const names = (list: string) => [...list.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
     expect(names(ours ?? '')).toEqual(names(theirs));
     expect(names(theirs).length).toBeGreaterThan(0);
+  });
+
+  it('enable converts exactly the rows app.publish_scheduled() publishes: scheduled, with a time', () => {
+    const latest = [...FILES]
+      .reverse()
+      .map(load)
+      .find((text) => text.includes('create or replace function app.publish_scheduled('));
+    expect(bodyOf(latest!, 'app.publish_scheduled')).toContain(
+      "where status = ''scheduled'' and scheduled_for is not null",
+    );
+    const fn = bodyOf(SQL, 'app.enable_releases');
+    // The read and the move to draft both name the time; a timeless row is only counted.
+    expect(fn.match(/t\.status = ''scheduled'' and t\.scheduled_for is not null/g)).toHaveLength(2);
+    expect(fn).toMatch(/t\.status = ''scheduled'' and t\.scheduled_for is null/);
+    expect(fn).not.toMatch(/coalesce\(t\.scheduled_for/);
   });
 
   it('disable needs the discard named when anything is pending, and holds the draft writes while it counts', () => {
