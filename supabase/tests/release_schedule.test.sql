@@ -25,7 +25,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(96);
+select plan(100);
 
 -- ── 0. The catalog ──────────────────────────────────────────────────────────────────────
 select ok(
@@ -108,6 +108,7 @@ insert into public.services (id, tenant_id, slug, title, status) values
   ('10700000-0000-0000-0001-000000000008', '10700000-0000-0000-0000-00000000000a', 'r11-s8', '{"en":"Eight","ar":"ثمانية"}', 'published'),
   ('10700000-0000-0000-0001-000000000009', '10700000-0000-0000-0000-00000000000a', 'r11-s9', '{"en":"Nine","ar":"تسعة"}', 'published'),
   ('10700000-0000-0000-0001-00000000000a', '10700000-0000-0000-0000-00000000000a', 'r11-s10', '{"en":"Ten","ar":"عشرة"}', 'published'),
+  ('10700000-0000-0000-0001-00000000000b', '10700000-0000-0000-0000-00000000000a', 'r11-s11', '{"en":"Eleven","ar":"أحد عشر"}', 'archived'),
   ('10700000-0000-0000-0001-0000000000c3', '10700000-0000-0000-0000-00000000000c', 'r11-c-s3', '{"en":"C three","ar":"ج ثلاثة"}', 'draft'),
   ('10700000-0000-0000-0001-0000000000b1', '10700000-0000-0000-0000-00000000000b', 'r11-sb', '{"en":"B","ar":"ب"}', 'published');
 -- Legacy scheduled rows, due: one in tenant A (releases on below) and one in tenant B (off).
@@ -535,6 +536,29 @@ select is(
 set local role service_role;
 select is(_fails($$ select public.unschedule_release('10700000-0000-0000-0000-0000000000a1', 'admin', _rel('mv'), 3) $$),
   'BR409:not-scheduled', 'a cancelled release cannot be cancelled again');
+reset role;
+
+-- An edit that sets no status to a row archived live keeps it archived: an Admin's to publish
+-- (hotfix H12, the archive gates), so an Admin's release holding one is an Admin's to move or
+-- cancel too, though its patch names no archive.
+select _stage('s11-kept', '10700000-0000-0000-0001-00000000000b', '{"title":{"en":"Once","ar":"مرة"}}');
+set local role service_role;
+insert into _out (name, result) select 'kept',
+  _sched('10700000-0000-0000-0000-0000000000a1', 'admin', array['s11-kept'], now() + interval '1 hour');
+select is(_fails($$ select public.reschedule_release('10700000-0000-0000-0000-0000000000c1', 'content_creator', _rel('kept'), 1, now() + interval '2 hours') $$),
+  'BR403:forbidden', 'content_creator CANNOT move a release holding an edit that keeps an archived row archived');
+select is(_fails($$ select public.unschedule_release('10700000-0000-0000-0000-0000000000c1', 'content_creator', _rel('kept'), 1) $$),
+  'BR403:forbidden', 'content_creator CANNOT cancel it either');
+select is(
+  (select format('%s %s', f ->> 'version', r.scheduled_by)
+     from (select public.reschedule_release('10700000-0000-0000-0000-0000000000a1', 'admin', _rel('kept'), 1,
+             now() + interval '2 hours') as f) s, public.content_releases r
+    where r.id = _rel('kept')),
+  '2 10700000-0000-0000-0000-0000000000a1', 'an Admin moves it (still theirs, version 1 to 2: the refusals changed nothing)');
+select is(
+  (select f ->> 'status'
+     from (select public.unschedule_release('10700000-0000-0000-0000-0000000000a1', 'admin', _rel('kept'), 2) as f) s),
+  'cancelled', 'and an Admin cancels it');
 reset role;
 
 -- ── 6. app.publish_scheduled() and scheduled releases never both act ───────────────────

@@ -405,6 +405,59 @@ describe('moving and cancelling a scheduled release (PATCH / DELETE /api/admin/r
     expect(svc.calls).toEqual([]);
   });
 
+  it('an edit that keeps a row archived live archived is an Admin’s to move or cancel (H12)', async () => {
+    // An Admin's release holding a title edit of a service that is archived on the live site:
+    // publishing it is an Admin's (the archive gates), so a content creator may neither move
+    // it (which would make it theirs, and it would fail as them) nor cancel it.
+    const db = seed({ content_releases: [release()], content_drafts: [claimed()] });
+    db.tables['services']![0]!['status'] = 'archived';
+    await asRole(db, 'content_creator');
+    const mv = await move(db, { version: 2, scheduleAt: minutesAhead(30) }, 'content_creator');
+    expect(mv.status).toBe(403);
+    expect(mv.body).toMatchObject({ capability: 'content.archiveDelete', waitingFor: ['admin'] });
+    const cc = await cancel(db, '?version=2', 'content_creator');
+    expect(cc.status).toBe(403);
+    expect(cc.body).toMatchObject({ capability: 'content.archiveDelete', waitingFor: ['admin'] });
+    expect(svc.calls).toEqual([]);
+    // Live was read as the person, in their tenant: the key and the status of that row only.
+    const reads = db.calls.filter((c) => c.kind === 'rpc' && c.name === 'release_read_rows');
+    expect(reads.map((c) => c.values)).toEqual([
+      {
+        p_tenant: T,
+        p_reads: [{ table: 'services', columns: ['id', 'status'], key: 'id', ids: [SERVICE] }],
+      },
+      {
+        p_tenant: T,
+        p_reads: [{ table: 'services', columns: ['id', 'status'], key: 'id', ids: [SERVICE] }],
+      },
+    ]);
+    // An Admin may: the same move reaches the database.
+    await asRole(db, 'admin');
+    svc.answer = (fn) => (fn === 'reschedule_release' ? moved : { data: null, error: null });
+    expect((await move(db, { version: 2, scheduleAt: minutesAhead(30) })).status).toBe(200);
+    // And once the row is live again, the edit is the content creator's to move.
+    db.tables['services']![0]!['status'] = 'published';
+    await asRole(db, 'content_creator');
+    expect(
+      (await move(db, { version: 2, scheduleAt: minutesAhead(30) }, 'content_creator')).status,
+    ).toBe(200);
+  });
+
+  it('a change that sets its own status, or creates a row, reads nothing of live', async () => {
+    const db = seed({
+      content_releases: [release()],
+      content_drafts: [claimed({ payload: { status: 'published' } })],
+    });
+    db.tables['services']![0]!['status'] = 'archived';
+    await asRole(db, 'content_creator');
+    svc.answer = (fn) => (fn === 'reschedule_release' ? moved : { data: null, error: null });
+    // A restore (archived to published) is not an archive: the content creator's.
+    expect(
+      (await move(db, { version: 2, scheduleAt: minutesAhead(30) }, 'content_creator')).status,
+    ).toBe(200);
+    expect(db.calls.filter((c) => c.kind === 'rpc' && c.name === 'release_read_rows')).toEqual([]);
+  });
+
   it('a new time under two minutes ahead is 422', async () => {
     const db = seed({ content_releases: [release()], content_drafts: [claimed()] });
     const res = await move(db, { version: 2, scheduleAt: minutesAhead(1) });

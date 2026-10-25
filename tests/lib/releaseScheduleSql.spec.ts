@@ -119,6 +119,14 @@ describe('the service-role functions', () => {
       expect(fn, name).toMatch(/p_role <> all \(e\.author_roles\)/);
       expect(fn, name).toMatch(/p_role <> all \(e\.delete_roles\)/);
       expect(fn, name).toContain('insert into public.audit_log');
+      // And for an edit that sets no status to a row archived live (hotfix H12, the Worker's
+      // `keepsArchived`): the live row's status, read under the lock, before anything is written.
+      expect(fn, name).toMatch(
+        /pg_catalog\.jsonb_typeof\(x\.value -> 'patch' -> 'status'\) is distinct from 'string'/,
+      );
+      const kept = fn.indexOf("if v_live = 'archived' then");
+      expect(kept, name).toBeGreaterThan(fn.indexOf('pg_advisory_xact_lock'));
+      expect(kept, name).toBeLessThan(fn.indexOf('update public.'));
     }
   });
 

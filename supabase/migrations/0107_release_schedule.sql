@@ -1061,11 +1061,13 @@ grant execute on function public.fail_scheduled_release(uuid, uuid, text, uuid[]
 -- the release holds is the caller's to publish, P-2) and re-reads the person; these check them
 -- again in the database, the second layer: the person live (active, unlocked, the role named, a
 -- CMS role, the tenant from the profile), their role among each change's author roles in the
--- registry (the roles RLS lets write it) and, for a removal or an archive, its delete roles;
--- the release scheduled and at the version the person saw (BR409 otherwise); under the
--- tenant's release lock, so neither races a fire. Audited in the same transaction, naming the
--- person (ids and the time only). A moved release goes live as the person who moved it: they
--- may publish all of it.
+-- registry (the roles RLS lets write it) and, for a removal, an archive, or an edit that sets
+-- no status of its own to a row archived live (it keeps the row archived: hotfix H12, an
+-- Admin's to publish under the archive gates, as the Worker's `keepsArchived` judges a
+-- publish), its delete roles; the release scheduled and at the version the person saw (BR409
+-- otherwise); under the tenant's release lock, so neither races a fire. Audited in the same
+-- transaction, naming the person (ids and the time only). A moved release goes live as the
+-- person who moved it: they may publish all of it.
 create or replace function public.reschedule_release(p_actor uuid, p_role text, p_release uuid,
                                                      p_version int, p_scheduled_for timestamptz)
   returns jsonb
@@ -1075,6 +1077,8 @@ declare
   v_tenant uuid;
   v_rel public.content_releases;
   v_version int;
+  v_kept record;
+  v_live text;
 begin
   if current_user::text <> 'service_role' then
     raise exception 'reschedule_release: only the service role moves a release' using errcode = '42501';
@@ -1128,6 +1132,25 @@ begin
     raise exception 'reschedule_release: this role cannot publish every change of the release'
       using errcode = 'BR403', detail = pg_catalog.jsonb_build_object('code', 'forbidden')::text;
   end if;
+  -- An edit that sets no status of its own to a row archived live keeps it archived: the
+  -- archive gates leave that to the delete roles (hotfix H12), as a publish of it.
+  for v_kept in
+    select e.table_name, e.key_column, x.value ->> 'entity_id' as entity_id
+      from pg_catalog.jsonb_array_elements(v_rel.payload) as x(value)
+      join app.release_entities e on e.entity_type = x.value ->> 'entity_type'
+     where e.has_status and x.value ->> 'op' = 'update'
+       and pg_catalog.jsonb_typeof(x.value -> 'patch' -> 'status') is distinct from 'string'
+       and p_role <> all (e.delete_roles)
+  loop
+    execute pg_catalog.format(
+      'select t.status::text from public.%I as t where t.tenant_id = $1 and t.%I = $2',
+      v_kept.table_name, v_kept.key_column)
+      into v_live using v_tenant, v_kept.entity_id::uuid;
+    if v_live = 'archived' then
+      raise exception 'reschedule_release: this role cannot publish every change of the release'
+        using errcode = 'BR403', detail = pg_catalog.jsonb_build_object('code', 'forbidden')::text;
+    end if;
+  end loop;
   update public.content_releases as r
      set scheduled_for = p_scheduled_for, scheduled_by = p_actor, fire_lease_until = null
    where r.tenant_id = v_tenant and r.id = p_release
@@ -1152,6 +1175,8 @@ declare
   v_tenant uuid;
   v_rel public.content_releases;
   v_released int;
+  v_kept record;
+  v_live text;
 begin
   if current_user::text <> 'service_role' then
     raise exception 'unschedule_release: only the service role cancels a release' using errcode = '42501';
@@ -1200,6 +1225,25 @@ begin
     raise exception 'unschedule_release: this role cannot publish every change of the release'
       using errcode = 'BR403', detail = pg_catalog.jsonb_build_object('code', 'forbidden')::text;
   end if;
+  -- An edit that sets no status of its own to a row archived live keeps it archived: the
+  -- archive gates leave that to the delete roles (hotfix H12), as a publish of it.
+  for v_kept in
+    select e.table_name, e.key_column, x.value ->> 'entity_id' as entity_id
+      from pg_catalog.jsonb_array_elements(v_rel.payload) as x(value)
+      join app.release_entities e on e.entity_type = x.value ->> 'entity_type'
+     where e.has_status and x.value ->> 'op' = 'update'
+       and pg_catalog.jsonb_typeof(x.value -> 'patch' -> 'status') is distinct from 'string'
+       and p_role <> all (e.delete_roles)
+  loop
+    execute pg_catalog.format(
+      'select t.status::text from public.%I as t where t.tenant_id = $1 and t.%I = $2',
+      v_kept.table_name, v_kept.key_column)
+      into v_live using v_tenant, v_kept.entity_id::uuid;
+    if v_live = 'archived' then
+      raise exception 'unschedule_release: this role cannot publish every change of the release'
+        using errcode = 'BR403', detail = pg_catalog.jsonb_build_object('code', 'forbidden')::text;
+    end if;
+  end loop;
   update public.content_drafts as d set release_id = null
    where d.tenant_id = v_tenant and d.release_id = p_release;
   get diagnostics v_released = row_count;
