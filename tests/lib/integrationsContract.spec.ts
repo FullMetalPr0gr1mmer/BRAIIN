@@ -281,6 +281,38 @@ describe('the table the contract leaves', () => {
     expect(sql).not.toMatch(/drop column[^;]*\bcascade\b/i);
   });
 
+  it('it refuses, before it restates them, when the grants are no longer the ones it replaces', () => {
+    // The restatement is 0105's grants on the kept columns. A migration between 0105 and the
+    // contract that changed them (U15's anon GA4 read) would be undone in silence, and the
+    // postconditions, which read the restatement back, would pass: the guard compares the
+    // grants it is about to replace with 0105's, whole, before anything is dropped.
+    const sql = CONTRACT!.sql;
+    const guard = sql.search(
+      /raise exception 'U11c: the grants on public\.site_integrations are no longer 0105''s/,
+    );
+    const drop = sql.search(/alter table public\.site_integrations\s+drop column/);
+    const revoke = sql.search(
+      /revoke all on public\.site_integrations from public, anon, authenticated, service_role;/,
+    );
+    expect(guard).toBeGreaterThan(sql.search(/lock table public\.site_integrations/));
+    expect(drop).toBeGreaterThan(guard);
+    expect(revoke).toBeGreaterThan(drop);
+    // What it expects is what the replay says the migrations before it leave.
+    const earlier = grantsAfter(MIGRATIONS.filter((m) => m.name < CONTRACT!.name));
+    const sorted = (s: Set<string>) => [...s].sort().join(',');
+    const want = /v_want constant text :=([\s\S]*?);\s*begin/.exec(sql)?.[1];
+    expect(want, 'the guard states the grants it expects').toBeDefined();
+    const stated = [...want!.matchAll(/'([^']*)'/g)].map((m) => m[1]).join('');
+    const replayed = [
+      `anon select:${sorted(earlier.anon.select)}`,
+      `authenticated insert:${sorted(earlier.authenticated.insert)}`,
+      `authenticated select:${sorted(earlier.authenticated.select)}`,
+      `authenticated update:${sorted(earlier.authenticated.update)}`,
+    ];
+    expect(earlier.anon.insert.size + earlier.anon.update.size).toBe(0);
+    expect(stated).toBe(replayed.join('; '));
+  });
+
   it('the grants it restates: staff the typed values, anon the Search Console code', () => {
     expect([...GRANTS.authenticated.select].sort()).toEqual([
       'calendly_url',

@@ -1621,9 +1621,9 @@ staff tokens, so the PII reveal, every lead update and the PII export fail (4250
 list and the plain lead view keep working. Before a rollback, check that the target contains
 the line: CI's deploys carry their commit in the version message (`ci <sha> run <id>`), so
 `git merge-base --is-ancestor 1083159 <sha>` must succeed (`cc8c6c4` is its ancestor, so the
-one check covers both lines); versions deployed before this pipeline carry no commit, and all
-of them are older than both. A new contraction moves the line: its migration PR updates this
-paragraph.
+one check covers both lines). Versions deployed before this pipeline (#41, merged after #43)
+carry no commit; every one of them is older than #106, so none is a rollback target. A new
+contraction moves the line: its migration PR updates this paragraph.
 
 0037 (#51) does not move the line. It revoked staff write privileges on the eight tables
 staff only read (the telemetry tables, the pageview rollup, the search, consent and

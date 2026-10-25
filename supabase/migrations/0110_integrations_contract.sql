@@ -26,8 +26,10 @@
 -- The owner then reads those rows in the dashboard and clears them (or, to keep them, turns
 -- this file into a revoke: docs/admin-v2/as-built/U11c.md).
 --
---   1. The precondition, under the drop's own lock (so nothing is written between the count
---      and the drop): no row of any tenant holds legacy JSON (anything but '{}').
+--   1. The preconditions, under the drop's own lock (so nothing is written between the count
+--      and the drop): no row of any tenant holds legacy JSON (anything but '{}'), and the
+--      grants 3. restates are still 0105's (a later change to them, U15's anon GA4 read,
+--      would otherwise be undone in silence: this file applies before U15's).
 --   2. The four columns dropped, RESTRICT: an object that depends on one (a view, a policy, a
 --      constraint) fails the push instead of going with it. Their column privileges go with
 --      them (PostgreSQL drops a dropped column's ACL).
@@ -56,7 +58,7 @@
 -- Transaction-local: it ends with this file.
 set local lock_timeout = '5s';
 
--- ═══ 1. Nothing written into the boxes since 0105 ═══════════════════════════════════════════
+-- ═══ 1. Nothing written into the boxes, and no grant changed, since 0105 ═══════════════════
 -- The table is locked first, in the mode the drop takes anyway (ACCESS EXCLUSIVE), so no write
 -- can land between the count and the drop. The lock_timeout above bounds the wait for it, and
 -- it ends with this file's transaction; until then readers of the table queue behind it (the
@@ -77,6 +79,41 @@ begin
     raise exception 'U11c: % site_integrations row(s) hold legacy integration JSON, so nothing is dropped', n
       using hint = 'Read those rows in the dashboard and clear anything secret, set ga4, search_console, '
                    || 'calendly and recaptcha back to ''{}'', then push again (docs/admin-v2/as-built/U11c.md).';
+  end if;
+end $$;
+
+-- The grants 3. restates are 0105's, so they must still be 0105's here: a migration applied
+-- after 0105 but before this file that changed them (U15's GA4 read widens anon's SELECT)
+-- would be undone in silence, and the postconditions below would not see it (they check the
+-- restatement). Every column privilege of anon and authenticated, compared whole (a table
+-- privilege, or PUBLIC's, shows on every column). Under the merge train's order (this file,
+-- then U15's) it holds; otherwise the push stops and nothing is dropped.
+do $$
+declare
+  v_got text;
+  v_want constant text :=
+    'anon select:search_console_token,tenant_id; '
+    || 'authenticated insert:calendly,calendly_url,ga4,ga4_measurement_id,recaptcha,search_console,'
+    || 'search_console_token,tenant_id; '
+    || 'authenticated select:calendly,calendly_url,ga4,ga4_measurement_id,recaptcha,search_console,'
+    || 'search_console_token,tenant_id,updated_at,version; '
+    || 'authenticated update:calendly,calendly_url,ga4,ga4_measurement_id,recaptcha,search_console,'
+    || 'search_console_token';
+begin
+  select string_agg(x.k, '; ' order by x.k collate "C") into v_got
+    from (select r.r || ' ' || p.p || ':'
+                 || string_agg(a.attname::text, ',' order by a.attname::text collate "C") as k
+            from (values ('anon'), ('authenticated')) as r(r)
+           cross join (values ('select'), ('insert'), ('update'), ('references')) as p(p)
+            join pg_attribute a
+              on a.attrelid = 'public.site_integrations'::regclass and a.attnum > 0
+             and not a.attisdropped
+           where has_column_privilege(r.r::name, a.attrelid, a.attnum, p.p)
+           group by r.r, p.p) as x;
+  if v_got is distinct from v_want then
+    raise exception 'U11c: the grants on public.site_integrations are no longer 0105''s (%), so restating 0105''s would undo a later change; nothing is dropped', v_got
+      using hint = 'Apply this file before the migration that changed them (renumber it), or restate '
+                   || 'that change in 3. as well (docs/admin-v2/as-built/U11c.md).';
   end if;
 end $$;
 
