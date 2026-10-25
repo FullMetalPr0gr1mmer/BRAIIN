@@ -18,10 +18,11 @@
  * Google signals and ad personalisation off, cookies on this host only, at most 180 days (the
  * consent cookie's own lifetime), and page addresses sent without their query or fragment.
  *
- * ON WITHDRAWAL (the banner's `consent-updated`, a choice changed in another tab, a page
- * restored from the back-forward cache): consent mode denied, Google's own off switch
- * (`ga-disable-<id>`), nothing more loaded, and the `_ga` cookies cleared as far as a page
- * can (this host and its parent domains). A page loaded without consent clears them too.
+ * ON WITHDRAWAL (the banner's `consent-updated` on this page; a choice changed in another tab,
+ * followed as soon as this page is looked at again or restored from the back-forward cache):
+ * consent mode denied, Google's own off switch (`ga-disable-<id>`), nothing more loaded, and
+ * the `_ga` cookies cleared as far as a page can (this host and its parent domains). A page
+ * loaded without consent clears them too.
  *
  * THE REPORT-ONLY CYCLE (U15's as-built): a request gtag.js makes to a host the CSP does not
  * list is refused by the browser, and this reports the directive and the host (never the URL,
@@ -211,6 +212,11 @@
 
   sync();
   document.addEventListener('consent-updated', sync);
+  // A cookie changed in another tab fires nothing here: re-read it whenever this page is shown
+  // again (switching back to its tab, or the back-forward cache restoring it).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') sync();
+  });
   addEventListener('pageshow', (event) => {
     if (event.persisted) sync();
   });

@@ -37,6 +37,8 @@ interface Page {
   setConsent: (state: Record<string, unknown> | null) => void;
   dispatch: (type: string, event?: Record<string, unknown>) => void;
   dispatchWindow: (type: string, event?: Record<string, unknown>) => void;
+  /** The tab shown again or hidden (`document.visibilityState`, then `visibilitychange`). */
+  show: (visible: boolean) => void;
 }
 
 interface Options {
@@ -74,6 +76,7 @@ function load(options: Options = {}): Page {
   const document = {
     currentScript: { getAttribute: (name: string) => attrs[name] ?? null },
     referrer,
+    visibilityState: 'visible' as 'visible' | 'hidden',
     get cookie() {
       return [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
     },
@@ -132,6 +135,10 @@ function load(options: Options = {}): Page {
     },
     dispatchWindow: (type, event = {}) => {
       for (const fn of winListeners.get(type) ?? []) fn(event);
+    },
+    show: (visible) => {
+      document.visibilityState = visible ? 'visible' : 'hidden';
+      for (const fn of docListeners.get('visibilitychange') ?? []) fn({});
     },
   };
 }
@@ -339,6 +346,34 @@ describe('on withdrawal', () => {
       'update',
       { analytics_storage: 'granted' },
     ]);
+    expect(page.appended).toHaveLength(1);
+  });
+
+  it('a choice changed in another tab is followed when this tab is shown again', () => {
+    const page = load({ cookies: { [CONSENT_COOKIE]: consentValue(choice(true)) } });
+    for (const [name, value] of Object.entries(GA_COOKIES)) page.jar.set(name, value);
+    page.show(false);
+    // The other tab says no: nothing fires here until this tab is looked at again.
+    page.setConsent(choice(false));
+    page.show(false);
+    expect(page.off()).toBe(false);
+    page.show(true);
+    expect(page.off()).toBe(true);
+    expect(page.dataLayer()!.at(-1)).toEqual([
+      'consent',
+      'update',
+      {
+        analytics_storage: 'denied',
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+      },
+    ]);
+    expect([...page.jar.keys()]).toEqual([CONSENT_COOKIE]);
+    // And a yes given there resumes here the same way, with no second request.
+    page.setConsent(choice(true));
+    page.show(true);
+    expect(page.off()).toBe(false);
     expect(page.appended).toHaveLength(1);
   });
 
