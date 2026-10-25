@@ -61,6 +61,7 @@ const { RELEASE_FAILURE_COPY, failureWords, FAILURE_NEXT } =
 const { RELEASE_FAILURE_CODES, RELEASE_SCHEDULE_MIN_MINUTES, RELEASE_ISSUE_CODES } =
   await import('@schemas/release');
 const { fireCheck } = await import('@/lib/cron/releases');
+const { SCHEDULE_COPY } = await import('@/lib/release/endpoints');
 
 const BI = (en: string, ar: string) => ({ en, ar });
 const id = (n: number) => `0f0f0f0f-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -177,12 +178,20 @@ describe('scheduling a release (POST /api/admin/releases with scheduleAt)', () =
   });
 
   it('a rollback goes live when it is published: never scheduled', async () => {
+    // Refused on its kind before its changes are read: a genuine restore set would pass the
+    // rollback's own checks (R10) and, without this, be scheduled as a plain publish.
     const db = seed({ content_drafts: [titleEdit()] });
     const res = await callRoute(db, PUBLISH, 'POST', '/api/admin/releases', {
       body: { ...select(titleEdit()), kind: 'rollback', scheduleAt: minutesAhead(60) },
     });
     expect(res.status).toBe(422);
-    expect(res.body).toMatchObject({ error: 'validation', field: 'kind' });
+    expect(res.body).toEqual({
+      ok: false,
+      error: 'validation',
+      field: 'kind',
+      detail: SCHEDULE_COPY.rollback,
+    });
+    expect(db.calls.filter((c) => c.kind === 'from')).toEqual([]);
     expect(svc.calls).toEqual([]);
   });
 
@@ -456,6 +465,36 @@ describe('moving and cancelling a scheduled release (PATCH / DELETE /api/admin/r
       (await move(db, { version: 2, scheduleAt: minutesAhead(30) }, 'content_creator')).status,
     ).toBe(200);
     expect(db.calls.filter((c) => c.kind === 'rpc' && c.name === 'release_read_rows')).toEqual([]);
+  });
+
+  it('reads the release and its changes in the person’s tenant only', async () => {
+    // Another site's scheduled release, and another site's draft naming this release's id: a
+    // read without the tenant would find the first and count the second (an archive, which a
+    // content creator may not move).
+    const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const theirs = release({ id: id(52), tenant_id: OTHER });
+    const stray = claimed({
+      id: draftId(9),
+      tenant_id: OTHER,
+      entity_id: id(53),
+      payload: { status: 'archived' },
+    });
+    const db = seed({ content_releases: [release(), theirs], content_drafts: [claimed(), stray] });
+    await asRole(db, 'content_creator');
+    const foreign = await move(
+      db,
+      { version: 2, scheduleAt: minutesAhead(30) },
+      'content_creator',
+      `/api/admin/releases/${id(52)}`,
+    );
+    expect(foreign.status).toBe(404);
+    svc.answer = (fn) =>
+      fn === 'unschedule_release'
+        ? { data: { release_id: REL, status: 'cancelled', released: 1 }, error: null }
+        : { data: null, error: null };
+    const res = await cancel(db, '?version=2', 'content_creator');
+    expect(res.status).toBe(200);
+    expect(res.data['draftIds']).toEqual([draftId(1)]);
   });
 
   it('a new time under two minutes ahead is 422', async () => {
