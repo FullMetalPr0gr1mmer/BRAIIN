@@ -5,7 +5,7 @@ import Note from '@/components/admin/kit/Note';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import FieldShell, { describedBy } from '@/components/admin/fields/FieldShell';
 import { adminFetch, describeError } from '@/lib/admin/client';
-import { announcePending } from '@/lib/admin/releaseEvents';
+import { announcePending, STAGED_DELETE } from '@/lib/admin/releaseEvents';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { uiFor, type FieldDef } from '@/lib/admin/uiSchema';
@@ -117,9 +117,12 @@ export default function CollectionDrawer({
     setBusy(true);
     setDeleteError('');
     try {
-      const result = await adminFetch<Record<string, unknown>>(`/api/admin/${def.slug}/${id}`, {
-        method: 'DELETE',
-      });
+      // R12: an item read through the release says so, so a switch-off since is refused.
+      const marker = save.mode === 'draft' ? STAGED_DELETE : '';
+      const result = await adminFetch<Record<string, unknown>>(
+        `/api/admin/${def.slug}/${id}${marker}`,
+        { method: 'DELETE' },
+      );
       // R12: with releases on the answer names the pending removal (or the new item thrown away).
       const staged = 'draft' in result;
       if (staged) announcePending();

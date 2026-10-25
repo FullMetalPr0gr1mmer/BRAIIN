@@ -15,6 +15,18 @@ import {
   serviceResource,
 } from '@/lib/admin/resources';
 import { stageTransition } from '@/lib/release/staged';
+import { STAGED_MARKER } from '@/lib/release/releasesOff';
+import {
+  autosaveDecision,
+  buildSaveRequest,
+  entitySaveReducer,
+  initialSaveState,
+  STAGED_KEY,
+  versionFallback,
+  type SaveTarget,
+} from '@/lib/admin/entitySave';
+import { STAGED_DELETE } from '@/lib/admin/releaseEvents';
+import { uiFor } from '@/lib/admin/uiSchema';
 import { DRAFT_AUDIT_WINDOW_MS, shouldAudit } from '@/lib/release/drafts';
 import { client, freshId, resetIds, type Db } from '../fixtures/stagedDb';
 
@@ -271,6 +283,123 @@ describe('releases off: every route does what it did before R3', () => {
       afterWrite.mock.calls.length,
       afterDelete.mock.calls.length,
     ]).toEqual([1, 1, 1]);
+  });
+});
+
+// ── Releases switched off under a screen still in release mode (R12 pre-merge review) ────
+
+describe('releases off: a write made in release mode is refused, never written live', () => {
+  beforeEach(() => {
+    db.flag = false;
+  });
+
+  const writes = () =>
+    db.calls.filter((c) =>
+      c.kind === 'rpc' ? c.name === 'write_drafts' : c.op !== undefined && c.op !== 'select',
+    );
+
+  for (const [what, ref] of [
+    [
+      'a pending change it names',
+      { draftId: '66666666-6666-4666-8666-666666666666', draftVersion: 1 },
+    ],
+    ['only its draftId', { draftId: '66666666-6666-4666-8666-666666666666' }],
+    ['the release-mode marker, nothing pending', { [STAGED_MARKER]: true }],
+  ] as const) {
+    it(`PATCH carrying ${what}: 409 releases-off, nothing read or written`, async () => {
+      const res = await call(services.PATCH, 'PATCH', {
+        id: S1,
+        body: { title: { en: 'Logos', ar: 'شعارات' }, version: 3, ...ref },
+      });
+      expect([res.status, res.body['error']]).toEqual([409, 'releases-off']);
+      expect(typeof res.body['detail']).toBe('string');
+      expect(writes()).toEqual([]);
+      expect(live()['title']).toEqual({ en: 'Logo', ar: 'شعار' });
+      expect(live()['version']).toBe(3);
+      expect(audits()).toEqual([]);
+    });
+  }
+
+  it('DELETE asked for in release mode (the list’s marker, or a draftVersion): 409, the row stays', async () => {
+    for (const query of [STAGED_DELETE, '?draftVersion=1']) {
+      const res = await call(services.DELETE, 'DELETE', { id: S2, query });
+      expect([res.status, res.body['error']]).toEqual([409, 'releases-off']);
+    }
+    expect(db.tables['services']!.some((r) => r['id'] === S2)).toBe(true);
+    expect(writes()).toEqual([]);
+    expect(audits()).toEqual([]);
+  });
+
+  it('with releases on the marker is ignored: a staged edit and a staged removal, as without it', async () => {
+    db.flag = true;
+    const edit = await call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: { title: { en: 'Logos', ar: 'شعارات' }, version: 3, [STAGED_MARKER]: true },
+    });
+    expect(edit.status).toBe(200);
+    expect(drafts()[0]!['payload']).toEqual({ title: { en: 'Logos', ar: 'شعارات' } });
+    const removal = await call(services.DELETE, 'DELETE', { id: S2, query: STAGED_DELETE });
+    expect(removal.status).toBe(200);
+    expect(removal.data).toMatchObject({ deleted: S2, pendingRemoval: true });
+    expect(liveWrites()).toEqual([]);
+  });
+
+  it('the editor and the server name the marker alike', () => {
+    expect(STAGED_KEY).toBe(STAGED_MARKER);
+    expect(STAGED_DELETE).toBe(`?${STAGED_MARKER}=1`);
+  });
+
+  // The review's case, through the real save machine: an editor that loaded with releases on
+  // (a pending change by someone else), then the owner switched releases off and threw every
+  // pending change away. The next blur's autosave must not write the form (live + the
+  // thrown-away change) to the live row.
+  it('an editor open across the switch-off: its autosave is refused and then holds', async () => {
+    const pending = draft({
+      payload: { title: { en: 'UNPUBLISHED by Admin', ar: 'غير منشور' } },
+      fields: ['title'],
+      base: { title: { en: 'Logo', ar: 'شعار' } },
+    });
+    const fields = uiFor('services').fields;
+    const target: SaveTarget = { kind: 'resource', slug: 'services' };
+    const load = (row: Row) =>
+      entitySaveReducer(initialSaveState(fields, false), {
+        type: 'loaded',
+        row,
+        fields,
+        versionFallback: versionFallback(target),
+      });
+
+    for (const withChange of [true, false]) {
+      db.flag = true;
+      db.tables['content_drafts'] = withChange ? [{ ...pending }] : [];
+      const read = await call(services.GET, 'GET', { id: S1, role: 'content_creator' });
+      let state = load(read.data);
+      expect(state.draft === undefined).toBe(false);
+
+      db.flag = false;
+      db.tables['content_drafts'] = [];
+      state = entitySaveReducer(state, {
+        type: 'set',
+        name: 'shortTitle',
+        value: { en: 'Logos', ar: 'شعارات' },
+      });
+      expect(autosaveDecision(state, false, false)).toBe('save');
+      const request = buildSaveRequest(target, S1, state, fields);
+      db.calls = [];
+      const res = await call(services.PATCH, request.method, {
+        id: S1,
+        body: request.body,
+        role: 'content_creator',
+      });
+      expect([res.status, res.body['error']]).toEqual([409, 'releases-off']);
+      expect(live()['title']).toEqual({ en: 'Logo', ar: 'شعار' });
+      expect(live()['short_title']).toBeNull();
+      expect(writes()).toEqual([]);
+
+      const held = entitySaveReducer(state, { type: 'releases-off' });
+      expect(held).toMatchObject({ held: true, releasesOff: true, status: 'error' });
+      expect(autosaveDecision(held, false, false)).toBe('no');
+    }
   });
 });
 

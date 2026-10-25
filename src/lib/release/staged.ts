@@ -318,7 +318,9 @@ function parsePatch(
   ref: { draftId: string; draftVersion: number } | null;
 } {
   const body = z.record(z.string(), z.unknown()).parse(raw);
-  const { draftId, draftVersion, ...rest } = body;
+  // `staged`: the editor's "made in release mode" marker (releasesOff.ts), read only by the
+  // live path; never part of the payload.
+  const { draftId, draftVersion, staged: _staged, ...rest } = body;
   const ref = DraftRefFieldsSchema.parse({ draftId, draftVersion });
   // With a draft named, the live version is not what the save is checked against (a pending
   // create has none): the schema still asks for one, so the draft's stands in.

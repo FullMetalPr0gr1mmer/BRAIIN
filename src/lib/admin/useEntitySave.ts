@@ -81,6 +81,8 @@ export interface EntitySave {
   pendingRemoval?: boolean;
   /** Admin v2 R12: the pending change went live or was thrown away under the form. */
   gone?: DraftGone | null;
+  /** Admin v2 R12: releases were switched off under the form; it offers a reload. */
+  releasesOff?: boolean;
   /** Admin v2 R12: save now if this is an unsaved pending change (blur, tab switch, ⌘S). */
   flush?(): void;
   /** Admin v2 R12: re-seed the form from a server row (after a resolve or a discard). */
@@ -253,6 +255,9 @@ export function useEntitySave(
             announcePending();
           } else if (code === 'scheduled') {
             dispatch({ type: 'scheduled' });
+          } else if (code === 'releases-off') {
+            // Releases were switched off under the form: nothing was written; hold for a reload.
+            dispatch({ type: 'releases-off' });
           } else if (code === 'draft-conflict' && typeof err.info.detail === 'string') {
             // The change is staged for removal, or its row is gone: the server's words.
             dispatch({ type: 'save-failed', message: err.info.detail, auto });
@@ -354,6 +359,7 @@ export function useEntitySave(
     draft: state.draft ?? null,
     pendingRemoval: state.pendingRemoval,
     gone: state.gone,
+    releasesOff: state.releasesOff,
     flush,
     adoptRow,
   };

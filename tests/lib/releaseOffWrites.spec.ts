@@ -329,6 +329,30 @@ describe('releases off (Admin v2 R3b): the singleton and entity-SEO routes are w
       }
     });
 
+    it(`${route.name}: a save made in release mode (a form open across the switch-off) is a 409 and writes nothing`, async () => {
+      const handler = (await route.load())[route.method] as APIRoute;
+      for (const ref of [
+        { draftId: '66666666-6666-4666-8666-666666666666', draftVersion: 2 },
+        { staged: true },
+      ]) {
+        touched = [];
+        const writes: Write[] = [];
+        const res = (await handler(
+          call(
+            route.method,
+            route.url,
+            { ...route.body, version: 3, ...ref },
+            client(route.stored, writes),
+          ),
+        )) as Response;
+        expect(res.status).toBe(409);
+        expect(((await res.json()) as { error: string }).error).toBe('releases-off');
+        expect(writes).toEqual([]);
+        // Refused before the live path reads anything: only the flag was asked.
+        expect(touched).toEqual([`rpc releases_enabled ${TENANT}`]);
+      }
+    });
+
     it(`${route.name}: a flag read that fails is a 500 and writes nothing`, async () => {
       const handler = (await route.load())[route.method] as APIRoute;
       const writes: Write[] = [];

@@ -13,6 +13,14 @@
 export const PENDING_EVENT = 'admin:pending';
 export const PUBLISH_EVENT = 'admin:publish';
 
+/**
+ * What a list's or a drawer's DELETE adds when its read came through the release (R12): the
+ * server's STAGED_MARKER (src/lib/release/releasesOff.ts). The staged DELETE ignores it; with
+ * releases switched off under the screen the live DELETE refuses it (409 `releases-off`) rather
+ * than delete for good a row the screen said it would only stage for removal.
+ */
+export const STAGED_DELETE = '?staged=1';
+
 export interface PublishEventDetail {
   entityId?: string | undefined;
 }

@@ -405,10 +405,20 @@ export default function EditorForm({
       onBlur={draftMode ? () => window.setTimeout(() => save.flush?.(), 0) : undefined}
     >
       <ErrorSummary errors={errors.summary} />
-      {save.message && (
+      {save.message && !save.releasesOff && (
         <p className="msg" data-kind="error" role="alert">
           {save.message}
         </p>
+      )}
+      {save.releasesOff && (
+        // R12: releases were switched off under the form. Nothing was saved; a reload reads
+        // the record live and the editor saves live from then on.
+        <div className="msg editor__conflict" data-kind="error" role="alert">
+          <span>{save.message}</span>
+          <button type="button" onClick={() => void save.reloadTheirs()}>
+            Reload
+          </button>
+        </div>
       )}
       {save.conflict && (
         <div className="msg editor__conflict" data-kind="error" role="alert">

@@ -138,6 +138,9 @@ export function describeError(err: unknown): string {
       return 'Your session expired. Reload the page and try again.';
     case 'rate-limit':
       return 'Rate limit reached. Try again in an hour.';
+    case 'releases-off':
+      // R12: a screen left open in release mode after publishing was switched off.
+      return err.info.detail ?? 'Publishing was switched off. Reload to edit the live site.';
     case 'not-set-up':
       // A feature that needs an account not provisioned yet (invites before SMTP, U12b).
       return 'Not set up yet: this needs email delivery, which is not connected.';

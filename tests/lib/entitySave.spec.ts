@@ -9,7 +9,9 @@ import {
   isDirty,
   loadUrl,
   readDraft,
+  RELEASES_OFF_WORDS,
   SCHEDULED_WORDS,
+  STAGED_KEY,
   versionFallback,
   type EntitySaveAction,
   type EntitySaveState,
@@ -368,6 +370,7 @@ describe('draft mode (Admin v2 R12)', () => {
     const req = buildSaveRequest(SERVICES, 'r1', live, FIELDS);
     expect(req.body).not.toHaveProperty('draftId');
     expect(req.body).not.toHaveProperty('draftVersion');
+    expect(req.body).not.toHaveProperty(STAGED_KEY);
     expect(Object.keys(req.body).sort()).toEqual(['slug', 'title', 'version', 'visible']);
     expect(readDraft(ROW)).toBeUndefined();
     // Every R12 member stays at its live-mode value.
@@ -383,21 +386,63 @@ describe('draft mode (Admin v2 R12)', () => {
     const state = run(loaded(STAGED), { type: 'set', name: 'slug', value: 'logo-newer' });
     expect(state.draft).toMatchObject({ id: DRAFT.id, version: 3, op: 'update' });
     const req = buildSaveRequest(SERVICES, 'r1', state, FIELDS);
-    expect(req.body).toMatchObject({ version: 4, draftId: DRAFT.id, draftVersion: 3 });
+    expect(req.body).toMatchObject({
+      version: 4,
+      draftId: DRAFT.id,
+      draftVersion: 3,
+      [STAGED_KEY]: true,
+    });
     // Entity SEO's full replace names it too.
     const seo = run(loaded(STAGED, PAGE_SEO), { type: 'set', name: 'slug', value: 'x' });
     expect(buildSaveRequest(PAGE_SEO, null, seo, FIELDS).body).toMatchObject({
       draftId: DRAFT.id,
       draftVersion: 3,
+      [STAGED_KEY]: true,
     });
   });
 
-  it('releases on with nothing pending (draft: null) sends the live version only', () => {
+  it('releases on with nothing pending (draft: null) sends the live version and the release-mode marker', () => {
     const state = run(loaded({ ...ROW, draft: null }), { type: 'set', name: 'slug', value: 'x' });
     expect(state.draft).toBeNull();
     const body = buildSaveRequest(SERVICES, 'r1', state, FIELDS).body;
     expect(body['version']).toBe(4);
     expect(body).not.toHaveProperty('draftId');
+    // The marker: with releases switched off since, the live path refuses this save (review).
+    expect(body[STAGED_KEY]).toBe(true);
+    // A singleton's save says so too.
+    const single = run(loaded({ ...ROW, draft: null }, SEO), {
+      type: 'set',
+      name: 'slug',
+      value: 'x',
+    });
+    expect(buildSaveRequest(SEO, null, single, FIELDS).body[STAGED_KEY]).toBe(true);
+  });
+
+  it('releases switched off under the form: held with words, until a reload reads it live', () => {
+    const refused = run(
+      loaded(STAGED),
+      { type: 'set', name: 'slug', value: 'typed' },
+      { type: 'save-start' },
+      { type: 'releases-off' },
+    );
+    expect(refused).toMatchObject({
+      held: true,
+      releasesOff: true,
+      status: 'error',
+      message: RELEASES_OFF_WORDS,
+      conflict: false,
+    });
+    // The person's values stay on screen; autosave stops.
+    expect(refused.values['slug']).toBe('typed');
+    expect(autosaveDecision(refused, false, false)).toBe('no');
+    expect(
+      autosaveDecision(run(refused, { type: 'set', name: 'slug', value: 'more' }), false, false),
+    ).toBe('no');
+    // Reload: the live answer (no `draft` key) puts the form in live mode.
+    const reloaded = run(refused, { type: 'loaded', row: ROW, fields: FIELDS, versionFallback: 1 });
+    expect(reloaded).toMatchObject({ releasesOff: false, held: false, draft: undefined });
+    expect(buildSaveRequest(SERVICES, 'r1', reloaded, FIELDS).body).not.toHaveProperty(STAGED_KEY);
+    expect(RELEASES_OFF_WORDS).not.toMatch(/[–—]/);
   });
 
   it('a pending create (no live version) sends version 0 and the change', () => {
