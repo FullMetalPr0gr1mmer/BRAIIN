@@ -138,11 +138,29 @@ describe('the publish dialog', () => {
   });
 
   it('every id is the dialog’s own, so two dialogs on one page never share one', async () => {
-    const html = await dialog('admin');
+    // With releases on, /admin/kit draws the layout's dialog and the kit card's, both always
+    // in the DOM (the Modal keeps its body while closed): one page, two dialogs.
+    const props = {
+      open: true,
+      mode: 'publish' as const,
+      role: 'admin' as const,
+      api: sampleReleaseApi('admin'),
+      summary: await summaryFor('admin'),
+      onClose: () => undefined,
+      onChanged: () => undefined,
+    };
+    const html = renderToStaticMarkup(
+      createElement(
+        'div',
+        null,
+        createElement(PublishDialog, { ...props, key: 'layout' }),
+        createElement(PublishDialog, { ...props, key: 'kit' }),
+      ),
+    );
     const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]!);
-    expect(ids.length).toBeGreaterThan(5);
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.filter((id) => id.startsWith('pub-'))).toEqual([]);
+    expect(ids.length).toBeGreaterThan(10);
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+    // Every label and description points at an element that is there.
     for (const ref of html.matchAll(/\s(?:for|aria-labelledby|aria-describedby)="([^"]+)"/g)) {
       for (const id of ref[1]!.split(' ')) expect(ids, id).toContain(id);
     }
