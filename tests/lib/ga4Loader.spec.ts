@@ -19,8 +19,9 @@ import { GA4_CSP_SOURCES } from '@/lib/http/securityHeaders';
 //     consent version, cookie by cookie;
 //   - on consent: one gtag.js request, consent mode (analytics granted, every ad signal
 //     denied), the privacy settings, page addresses without their query;
-//   - on withdrawal: consent mode denied, Google's off switch, no second request, the _ga
-//     cookies cleared on the host and its parents; a page loaded without consent clears them;
+//   - on withdrawal: Google's off switch, read from the cookie on every ask (so a no given in
+//     another window stops the next hit at once); consent mode denied, no second request, the
+//     _ga cookies cleared on the host and its parents; a page loaded without consent clears them;
 //   - the Report-Only cycle: a refused Google host is reported (the directive and the origin,
 //     never the URL), at most five a page.
 
@@ -403,14 +404,46 @@ describe('on withdrawal', () => {
     expect(page.appended).toHaveLength(1);
   });
 
-  it('a choice changed in another tab is followed when this tab is shown again', () => {
+  it('Google’s off switch reads the cookie each time gtag.js asks, with no event reaching this page', () => {
+    // A no given in another window fires nothing here, yet the very next hit must not go:
+    // the notice says nothing more is sent from then on.
+    const page = load({ cookies: { [CONSENT_COOKIE]: consentValue(choice(true)) } });
+    const layer = page.dataLayer()!.length;
+    expect(page.off()).toBe(false);
+    for (const [state, off] of [
+      [choice(false), true],
+      [choice(true), false],
+      [null, true],
+      [choice(true), false],
+      [choice(true, CONSENT_VERSION + 1), true],
+    ] as const) {
+      page.setConsent(state);
+      expect(page.off(), JSON.stringify(state)).toBe(off);
+    }
+    // Nothing was dispatched, so the page itself did nothing: only the switch moved.
+    expect(page.dataLayer()!.length).toBe(layer);
+    expect(page.appended).toHaveLength(1);
+  });
+
+  it('a no given in another window before load means gtag.js is never asked for', () => {
+    const page = load({ loading: true, cookies: { [CONSENT_COOKIE]: consentValue(choice(true)) } });
+    page.setConsent(choice(false));
+    page.loaded();
+    expect(page.appended).toEqual([]);
+  });
+
+  it('a choice changed in another tab stops the next hit at once, and is followed in full when this tab is shown again', () => {
     const page = load({ cookies: { [CONSENT_COOKIE]: consentValue(choice(true)) } });
     for (const [name, value] of Object.entries(GA_COOKIES)) page.jar.set(name, value);
+    const layer = page.dataLayer()!.length;
     page.show(false);
-    // The other tab says no: nothing fires here until this tab is looked at again.
+    // The other tab says no: nothing fires here, but Google's off switch already reads it.
     page.setConsent(choice(false));
+    expect(page.off()).toBe(true);
+    // Consent mode and the cookies wait until this tab is looked at again.
     page.show(false);
-    expect(page.off()).toBe(false);
+    expect(page.dataLayer()!.length).toBe(layer);
+    expect(page.jar.has('_ga')).toBe(true);
     page.show(true);
     expect(page.off()).toBe(true);
     expect(page.dataLayer()!.at(-1)).toEqual([
@@ -424,8 +457,10 @@ describe('on withdrawal', () => {
       },
     ]);
     expect([...page.jar.keys()]).toEqual([CONSENT_COOKIE]);
-    // And a yes given there resumes here the same way, with no second request.
+    // And a yes given there resumes here when this page hears of it, with no second request
+    // (until then the switch stays off: this page's consent mode still says denied).
     page.setConsent(choice(true));
+    expect(page.off()).toBe(true);
     page.show(true);
     expect(page.off()).toBe(false);
     expect(page.appended).toHaveLength(1);
@@ -433,11 +468,25 @@ describe('on withdrawal', () => {
 
   it('a page restored from the back-forward cache follows a choice changed elsewhere', () => {
     const page = load({ cookies: { [CONSENT_COOKIE]: consentValue(choice(true)) } });
+    for (const [name, value] of Object.entries(GA_COOKIES)) page.jar.set(name, value);
+    const layer = page.dataLayer()!.length;
     page.setConsent(null);
-    page.dispatchWindow('pageshow', { persisted: false });
-    expect(page.off()).toBe(false);
-    page.dispatchWindow('pageshow', { persisted: true });
     expect(page.off()).toBe(true);
+    page.dispatchWindow('pageshow', { persisted: false });
+    expect(page.dataLayer()!.length).toBe(layer);
+    expect(page.jar.has('_ga')).toBe(true);
+    page.dispatchWindow('pageshow', { persisted: true });
+    expect(page.dataLayer()!.at(-1)).toEqual([
+      'consent',
+      'update',
+      {
+        analytics_storage: 'denied',
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+      },
+    ]);
+    expect(page.jar.has('_ga')).toBe(false);
   });
 });
 

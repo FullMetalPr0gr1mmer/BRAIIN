@@ -19,11 +19,13 @@
  * consent cookie's own lifetime), and page addresses sent without their query or fragment;
  * gtag.js itself is asked for only once the page has loaded (never while it paints).
  *
- * ON WITHDRAWAL (the banner's `consent-updated` on this page; a choice changed in another tab,
- * followed as soon as this page is looked at again or restored from the back-forward cache):
- * consent mode denied, Google's own off switch (`ga-disable-<id>`), nothing more loaded, and
- * the `_ga` cookies cleared as far as a page can (this host and its parent domains). A page
- * loaded without consent clears them too.
+ * ON WITHDRAWAL: Google's own off switch (`ga-disable-<id>`, which gtag.js checks before each
+ * hit) reads the consent cookie every time it is asked, so a no given anywhere, in this page or
+ * in another window that fires nothing here, stops the very next hit. Then, when this page
+ * hears of it (the banner's `consent-updated` on this page; a choice changed elsewhere, as soon
+ * as this page is looked at again or restored from the back-forward cache): consent mode
+ * denied, nothing more loaded, and the `_ga` cookies cleared as far as a page can (this host
+ * and its parent domains). A page loaded without consent clears them too.
  *
  * THE REPORT-ONLY CYCLE (U15's as-built): a request gtag.js makes to a host the CSP does not
  * list is refused by the browser, and this reports the directive and the host (never the URL,
@@ -157,6 +159,22 @@
   let started = false;
   /** gtag.js has been asked for (once a page, never again). */
   let requested = false;
+  /** This page heard a no (until it hears a yes again): consent mode denied, cookies cleared. */
+  let stopped = false;
+
+  /**
+   * Google's off switch, read from the cookie each time gtag.js asks (before every hit), never
+   * a stored flag: a no given in another window fires nothing in this one, yet must stop what
+   * this page sends from that moment ("from then on nothing more is sent to Google"). A
+   * getter only: no code of ours, nor gtag.js, ever needs to write it.
+   */
+  Object.defineProperty(window, OFF, {
+    configurable: true,
+    enumerable: true,
+    get: function () {
+      return stopped || !granted();
+    },
+  });
 
   function request() {
     if (requested || window[OFF] === true) return;
@@ -181,7 +199,7 @@
 
   function start() {
     started = true;
-    window[OFF] = false;
+    stopped = false;
     window.dataLayer = window.dataLayer || [];
     window.gtag = gtag;
     gtag('consent', 'default', {
@@ -207,7 +225,7 @@
   }
 
   function stop() {
-    window[OFF] = true;
+    stopped = true;
     if (started) {
       gtag('consent', 'update', {
         analytics_storage: 'denied',
@@ -225,8 +243,8 @@
       stop();
     } else if (!started) {
       start();
-    } else if (window[OFF] === true) {
-      window[OFF] = false;
+    } else if (stopped) {
+      stopped = false;
       gtag('consent', 'update', { analytics_storage: 'granted' });
       // A no that came before `load` left gtag.js unrequested: a yes again asks for it.
       requestAfterLoad();
@@ -235,8 +253,9 @@
 
   sync();
   document.addEventListener('consent-updated', sync);
-  // A cookie changed in another tab fires nothing here: re-read it whenever this page is shown
-  // again (switching back to its tab, or the back-forward cache restoring it).
+  // A cookie changed in another tab fires nothing here (the off switch above already reads
+  // it): follow it whenever this page is shown again (switching back to its tab, or the
+  // back-forward cache restoring it), to deny consent mode and clear the cookies.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') sync();
   });
