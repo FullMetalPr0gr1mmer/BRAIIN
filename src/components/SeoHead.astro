@@ -6,6 +6,7 @@ import type { Locale } from '@schemas/primitives';
 import type { JsonLdNode } from '@/lib/seo/jsonld';
 import { hreflangAlternates, localizedPath } from '@/lib/i18n';
 import { getIdentity, getSiteIcons, brandName } from '@/lib/identity';
+import { getSearchConsoleToken } from '@/lib/data/siteVerification';
 import { headIcons } from '@/lib/seo/siteIcons';
 import { heroFontPreload, type HeroFace } from '@/lib/seo/fonts';
 import { resolveOgImage, type OgImageCandidates } from '@/lib/seo/ogImage';
@@ -53,6 +54,15 @@ const {
 } = Astro.props;
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
+// The Search Console verification code (Admin v2 U11), read on an indexable home page only:
+// Google checks the HTML tag method there, a noindex page asks to be left out, and no other
+// route pays the read. It starts before this head awaits anything (the identity is already
+// read by then: the page's loadHead awaited the same memo), so it overlaps the reads the rest
+// of the layout starts, such as the header's and footer's navigation, which Astro renders
+// alongside. Keep it ahead of every await here. It is null (no tag) unless an Admin or SEO
+// set one (src/lib/data/siteVerification.ts), so with none the head is the one it was.
+const claimsSite = logicalPath === '/' && !robots.includes('noindex');
+const verification = claimsSite ? getSearchConsoleToken() : Promise.resolve(null);
 // og:site_name is the brand from the public identity — shared with the header and footer
 // through the per-request memo, so this costs no extra query.
 const siteName = brandName(await getIdentity(Astro.locals), locale);
@@ -77,6 +87,7 @@ const ogLocale = locale === 'ar' ? 'ar_SA' : 'en_US';
 // which is a contradiction search engines resolve unpredictably. /search and the 404s
 // are the noindex routes here.
 const isIndexable = !robots.includes('noindex');
+const searchConsoleToken = await verification;
 
 // Descriptions come from prose fields, where AR is allowed to lag EN (see
 // LocalizedProseSchema). pickLocale therefore falls back to English — correct for body
@@ -102,6 +113,7 @@ const hasDescription = description.trim().length > 0;
 <title>{title}</title>
 {hasDescription ? <meta name="description" content={description} /> : null}
 <meta name="robots" content={robots} />
+{searchConsoleToken ? <meta name="google-site-verification" content={searchConsoleToken} /> : null}
 {isIndexable ? <link rel="canonical" href={canonical} /> : null}
 {
   isIndexable

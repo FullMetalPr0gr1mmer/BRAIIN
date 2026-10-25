@@ -58,7 +58,19 @@
 - **Integrations**:
   - no secrets in staff-readable rows;
   - no API keys or outbound webhooks;
-  - ad pixels wait for marketing consent (L6).
+  - ad pixels wait for marketing consent (L6);
+  - since U11 the app writes typed public identifiers only (a GA4 measurement id, the Search
+    Console verification code, a Calendly link), each CHECKed against its shape: no markup,
+    quote or foreign host passes, but a shape cannot tell a pasted key from a code, so the
+    Search Console field says its code is published on the home page (anon reads that one
+    column). Residual: the legacy jsonb columns (`ga4`, `search_console`, `calendly`,
+    `recaptcha`) stay readable and writable by Admin and SEO tokens through the API until the
+    contract step, a small migration of its own right after U11's deploy (not tied to U15 or
+    O-18), revokes authenticated INSERT and UPDATE, then SELECT, on them or drops them; the
+    captcha tile is read-only "Not set up" until a provider is chosen (O-19, E8 adds it); GA4 and
+    Calendly are saved, not used yet ("Saved", never "Set up" or "Connected": U15 loads GA4
+    behind consent, no page shows a booking button); the verification meta is on the home
+    pages only (`/`, `/ar`), where Google reads it ([U11](as-built/U11.md)).
 - **CRM**:
   - contact details behind an audited reveal; no budget in lists;
   - a lead's score shows as a number until the reveal: its reasons come with the contact details, through the audited reveal, because three of them (a budget given, a budget over 200k, a timeline given) name the budget band and the timeline (C4a, D7). The number itself is readable by every lead worker (all of whom hold `leads.pii`) and, with the scoring points, can imply the band: with the default points any score above 65 includes a budget over 200k;
@@ -284,8 +296,13 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     SELECT) requires `app.role_views_audit(app.live_role())`, so a demoted, deactivated or
     locked Admin or Developer token reads no entry at PostgREST; the names the log shows come
     through `public.audit_people`, which answers nobody for such a token either.
+  - *Closed by U11 (0105, the integrations migration).* `site_integrations`:
+    `site_integrations_live` (RESTRICTIVE, FOR ALL) requires
+    `app.role_manages_integrations(app.live_role())`, so a demoted, deactivated or locked
+    Admin or SEO token reads and writes nothing of it at PostgREST; the staff read is also
+    narrowed from every CMS role to Admin + SEO (§5), which only the Worker enforced before.
   - *Left after them.* The issued token's old role at PostgREST, until it expires, on the
-    tables with no live check: `site_settings`, `site_integrations`, `ai_config`,
+    tables with no live check: `site_settings`, `ai_config`,
     `media_assets`, `system_logs` and the content tables (the staged ones close when R5's
     guard switches on at R14). The proposed follow-up: a catalog-driven pgTAP asserting a
     RESTRICTIVE live companion on every policy that admits an `authenticated` write, and the

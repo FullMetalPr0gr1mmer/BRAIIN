@@ -1,0 +1,85 @@
+/* Screen stylesheet: Integrations, /admin/integrations (Admin v2 U11). Linked only through
+   AdminLayout's `styles` prop (styles={['integrations.css']}), after admin.css. The grid,
+   cards, badges, notes, drawer and form are the kit's; here the tile's own layout, ported
+   from the prototype's `.ops-int` (screens_ops.js: a column with a 12px gap, a 44px icon
+   tile) and its drawer's footer. It uses admin.css's tokens and declares none, and holds no
+   colour literal (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+/* The tiles: the kit's three-column grid, as a list. */
+.int-grid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One tool: icon and status, name and line, the saved value, the action. */
+.int-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.int-tile__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.int-tile__ico {
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: 12px;
+}
+
+.int-tile__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.int-tile__desc {
+  margin: 4px 0 0;
+  color: var(--ad-dim);
+  font-size: 13px;
+}
+
+/* A saved id, code or link: one long unbroken string, so it wraps anywhere. */
+.int-tile__value {
+  margin: 0;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.int-tile__value code {
+  font-family: var(--ad-mono);
+}
+
+/* The action sits under the text, at its own width, like the prototype's button. */
+.int-tile__act {
+  align-self: flex-start;
+  margin-block-start: auto;
+}
+
+/* The drawer: the tool's line above its form; Remove and its refusal in the footer. */
+.int-drawer {
+  display: grid;
+  gap: 14px;
+}
+
+.int-drawer__desc {
+  margin: 0;
+  color: var(--ad-dim);
+  font-size: 13.5px;
+}
+
+.int-drawer__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.int-drawer__foot .msg {
+  margin: 0;
+}

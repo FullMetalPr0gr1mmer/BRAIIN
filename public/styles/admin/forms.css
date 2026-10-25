@@ -1,0 +1,70 @@
+/* Screen stylesheet: Forms, /admin/forms (Admin v2 U11). Linked only through AdminLayout's
+   `styles` prop (styles={['forms.css']}), after admin.css. The tabs, cards, rows, badges and
+   notes are the kit's; here the line under the tabs, the side column, the protection list
+   and the text card's spacing. It uses admin.css's tokens and declares none, and holds no
+   colour literal (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+/* Where the form is, under the tabs. */
+.frm-where {
+  margin: 0 0 14px;
+  color: var(--ad-dim);
+  font-size: 13px;
+}
+
+/* The fields: one row each, the label (and its rule) beside Required or Optional. */
+.frm-fields {
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+/* The protection and text cards, stacked beside the fields on a wide screen. */
+.frm-side {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.frm-side > .card + .card {
+  margin-top: 0;
+}
+
+.frm-facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.frm-facts li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.frm-facts svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ad-primary);
+}
+
+.frm-version {
+  font-family: var(--ad-mono);
+}
+
+.frm-text {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.frm-open {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 14px 0 0;
+}

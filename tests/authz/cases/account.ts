@@ -52,6 +52,24 @@ export const cases: readonly Case[] = [
     allow: EVERY_ROLE,
   },
   {
+    // The bell's settings (Admin v2 U11): every member's own switches. A kind the role's bell
+    // never shows is a 422 inside, never a 403 (tests/lib/notificationSettings.spec.ts); the
+    // maintenance kind is every role's.
+    name: 'my notification settings read',
+    load: () => import('@/pages/api/admin/me/notification-settings'),
+    method: 'GET',
+    url: '/api/admin/me/notification-settings',
+    allow: EVERY_ROLE,
+  },
+  {
+    name: 'my notification settings save',
+    load: () => import('@/pages/api/admin/me/notification-settings'),
+    method: 'PATCH',
+    url: '/api/admin/me/notification-settings',
+    body: { version: 1, maintenance: false },
+    allow: EVERY_ROLE,
+  },
+  {
     name: 'my preferences save',
     load: () => import('@/pages/api/admin/me/preferences'),
     method: 'PUT',

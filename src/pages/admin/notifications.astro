@@ -8,6 +8,7 @@ import { mayPostPersonalForm, notificationsFormPost } from '@/lib/admin/personal
 import type { ShellPreload } from '@/lib/admin/shell';
 import { getMaintenanceState } from '@/lib/http/maintenance';
 import { CSRF_FIELD_NAME } from '@/lib/http/csrf';
+import Icon from '@/components/admin/ui/Icon.astro';
 
 export const prerender = false;
 
@@ -16,7 +17,7 @@ export const prerender = false;
 // loader as the drawer and the unread count, so the three never disagree; "Mark all as
 // read" is a form that posts here (the middleware has checked the origin and the
 // double-submit token) and redirects back. What the post does is notificationsFormPost()
-// (src/lib/admin/personalForms.ts).
+// (src/lib/admin/personalForms.ts). Its head links to the bell's settings (Admin v2 U11).
 
 const session = Astro.locals.session;
 const sb = Astro.locals.supabase;
@@ -69,6 +70,10 @@ const done = Astro.url.searchParams.get('done') === 'seen';
   styles={['personal.css']}
   preload={preload}
 >
+  <a slot="actions" class="btn" href="/admin/settings/notifications">
+    <Icon name="settings" size={16} />
+    Notification settings
+  </a>
   <div class="card ntf-page">
     {
       failedToMark && (

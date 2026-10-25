@@ -59,8 +59,10 @@ const ADMIN_EDITOR_ISLAND_NAMES = [
   'AdminCollection',
   'AdminCrmSettings',
   'AdminGeneral',
+  'AdminIntegrations',
   'AdminMaintenance',
   'AdminMediaLibrary',
+  'AdminNotificationSettings',
   'AdminResourceForm',
   'AdminSeo',
   'AdminSingletonForm',
@@ -70,8 +72,10 @@ const ADMIN_EDITOR_SCREEN_DIRS = [
   'collection',
   'crmSettings',
   'general',
+  'integrations',
   'maintenance',
   'media',
+  'notificationSettings',
   'seo',
 ];
 /** @param {readonly string[]} names */
