@@ -1037,6 +1037,37 @@ describe('releases on: reorder judges the whole pending change', () => {
 // Hotfix H12, the same rule for any edit: the apply runs as the publisher, and the archive
 // gates refuse anyone but an Admin an update that leaves a row archived, so an edit of a row
 // that stays archived (a title, a number) is an Admin's to stage, as it is to publish.
+describe('releases on: an item scheduled with no time, edited in release mode (R12 review)', () => {
+  // Switching releases on converts only scheduled rows that have a time (R11); one marked
+  // Scheduled with none stays so. Its editor draws the status as "Visible on the site", off.
+  it('a save from its editor is staged, its status the switch’s (draft), not refused', async () => {
+    db.tables['services'] = [service({ status: 'scheduled', scheduled_for: null })];
+    const fields = uiFor('services').fields;
+    const target: SaveTarget = { kind: 'resource', slug: 'services' };
+    const read = await call(services.GET, 'GET', { id: S1, role: 'content_creator' });
+    let state = entitySaveReducer(initialSaveState(fields, false), {
+      type: 'loaded',
+      row: read.data,
+      fields,
+      versionFallback: versionFallback(target),
+    });
+    state = entitySaveReducer(state, {
+      type: 'set',
+      name: 'shortTitle',
+      value: { en: 'Logos', ar: 'شعارات' },
+    });
+    const request = buildSaveRequest(target, S1, state, fields);
+    const res = await call(services.PATCH, request.method, {
+      id: S1,
+      body: request.body,
+      role: 'content_creator',
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(drafts()[0]!['payload']).toMatchObject({ status: 'draft' });
+    expect(liveWrites()).toEqual([]);
+  });
+});
+
 describe('releases on: PATCH of a row that is archived live', () => {
   const title = (en: string) => ({ title: { en, ar: 'شعار' } });
 

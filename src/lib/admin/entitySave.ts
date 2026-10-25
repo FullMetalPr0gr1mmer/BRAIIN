@@ -265,6 +265,12 @@ function draftOf(row: Readonly<Row>): Pick<EntitySaveState, 'draft' | 'pendingRe
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
+/** The content lifecycle's status select (as VisibilityField's isLifecycleStatus reads it). */
+const isStatusSelect = (field: FieldDef) =>
+  field.name === 'status' &&
+  field.kind === 'select' &&
+  (field.options ?? []).some((option) => option.value === 'published');
+
 export function entitySaveReducer(
   state: EntitySaveState,
   action: EntitySaveAction,
@@ -515,6 +521,14 @@ export function buildSaveRequest(
   fields: readonly FieldDef[],
 ): { url: string; method: 'POST' | 'PATCH' | 'PUT'; body: Row } {
   const body = formToPayload(state.values, fields);
+  // R12: in release mode the lifecycle status is the "Visible on the site" switch
+  // (VisibilityField), which shows a stored `scheduled` as off, and an item is never scheduled
+  // on its own (a release is: "Schedule the release instead", R3a). A `scheduled` the form
+  // still holds is one with no time, which switching releases on leaves as it is (R11), so it
+  // is sent as what the switch shows, `draft`, not as a status every staged save refuses.
+  if (state.draft !== undefined && body['status'] === 'scheduled' && fields.some(isStatusSelect)) {
+    body['status'] = 'draft';
+  }
   // R12: a save on a pending change names it, at the version the form holds (R3a), and every
   // save in draft mode says it was made there (STAGED_KEY), nothing pending yet included, so
   // the live path refuses it once releases are off. Only in draft mode: with releases off the

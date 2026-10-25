@@ -418,6 +418,42 @@ describe('draft mode (Admin v2 R12)', () => {
     expect(buildSaveRequest(SEO, null, single, FIELDS).body[STAGED_KEY]).toBe(true);
   });
 
+  it('a stored scheduled status with no time is sent as the switch shows it (off: draft)', () => {
+    const lifecycle: FieldDef[] = [
+      ...FIELDS,
+      {
+        name: 'status',
+        label: 'Status',
+        kind: 'select',
+        options: ['draft', 'scheduled', 'published', 'archived'].map((value) => ({
+          value,
+          label: value,
+        })),
+      },
+    ];
+    const untimed = { ...ROW, scheduled_for: null, status: 'scheduled' };
+    const load = (row: Record<string, unknown>) =>
+      run(
+        initialSaveState(lifecycle, false),
+        { type: 'loaded', row, fields: lifecycle, versionFallback: 1 },
+        { type: 'set', name: 'slug', value: 'logos' },
+      );
+    // Release mode: the switch reads off, so the save says draft, never a refused `scheduled`.
+    const staged = buildSaveRequest(SERVICES, 'r1', load({ ...untimed, draft: null }), lifecycle);
+    expect(staged.body['status']).toBe('draft');
+    // A status the switch set goes as it is.
+    const on = run(load({ ...untimed, draft: null }), {
+      type: 'set',
+      name: 'status',
+      value: 'published',
+    });
+    expect(buildSaveRequest(SERVICES, 'r1', on, lifecycle).body['status']).toBe('published');
+    // Live mode (releases off) keeps the select's value, request for request.
+    expect(buildSaveRequest(SERVICES, 'r1', load(untimed), lifecycle).body['status']).toBe(
+      'scheduled',
+    );
+  });
+
   it('releases switched off under the form: held with words, until a reload reads it live', () => {
     const refused = run(
       loaded(STAGED),
