@@ -382,7 +382,10 @@ test.describe('as admin', () => {
     );
     await ask.getByRole('button', { name: 'Delete', exact: true }).click();
     const goneRes = await gone;
-    expect(goneRes.status(), await goneRes.text()).toBe(200);
+    // The editor leaves for the list as soon as the DELETE answers, so the browser may have
+    // dropped the body with the page: the status is the check, the body only its message.
+    const goneBody = await goneRes.text().catch(() => '(the body left with the page)');
+    expect(goneRes.status(), goneBody).toBe(200);
     await page.waitForURL((url) => url.pathname === '/admin/services');
     await expect(page.locator('#admin-toasts')).toContainText('Service deleted');
     const { data: left } = await service()
