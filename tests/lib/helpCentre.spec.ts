@@ -1754,7 +1754,9 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
 
   it('pages below a screen share its guide; the dashboard’s covers only itself', () => {
     expect(pageGuideFor('/admin/services/1234', 'content_creator')).toBe('saving-and-publishing');
-    expect(pageGuideFor('/admin/pages/new', 'admin')).toBe('saving-and-publishing');
+    // Admin v2 E1: Pages and the page editor below it open the page editor's own guide.
+    expect(pageGuideFor('/admin/pages/new', 'admin')).toBe('editing-pages');
+    expect(pageGuideFor('/admin/sections/1234', 'admin')).toBe('saving-and-publishing');
     expect(pageGuideFor('/admin/analytics/search', 'seo')).toBe('website-stats');
     expect(pageGuideFor('/admin/redirects/9', 'seo')).toBe('seo-and-redirects');
     expect(pageGuideFor('/admin', 'developer')).toBe('your-dashboard');
@@ -1774,7 +1776,8 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
   it('SEO opens Pages and Posts without the content guide, which is for the writers', () => {
     expect(pageGuideFor('/admin/pages', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/blog/1', 'seo')).toBeNull();
-    expect(pageGuideFor('/admin/pages', 'content_creator')).toBe('saving-and-publishing');
+    expect(pageGuideFor('/admin/pages', 'content_creator')).toBe('editing-pages');
+    expect(pageGuideFor('/admin/pages/1234', 'content_creator')).toBe('editing-pages');
   });
 });
 

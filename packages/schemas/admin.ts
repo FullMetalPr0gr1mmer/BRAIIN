@@ -34,6 +34,7 @@ import {
 } from './seoRules';
 import { DisplayNameValueSchema, PASSWORD_MAX_BYTES, PASSWORD_MIN, utf8Bytes } from './adminPrefs';
 import { SectionTypeSchema, sectionContentIssues, type SectionType } from './sections';
+import { SECTION_LABEL_MAX } from './sectionTypes';
 import {
   MEDIA_META_LIMITS,
   MediaAltSchema,
@@ -414,6 +415,24 @@ const SectionPayloadSchema = z
   .record(z.string(), z.unknown())
   .refine((v) => JSON.stringify(v).length <= 65_536, { message: 'section payload exceeds 64 KB' });
 
+/** C0 and C1 control characters, as 0112's CHECK on `page_sections.label` names them. */
+const LABEL_CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+
+/**
+ * A section's name in the admin (Admin v2 E1, `page_sections.label`): trimmed, at most
+ * SECTION_LABEL_MAX characters, no control character, the CHECK's rules; blank is null (the
+ * editor then shows the type's own name). Only the page editor shows it.
+ */
+export const SectionLabelSchema = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
+  z
+    .string()
+    .trim()
+    .max(SECTION_LABEL_MAX)
+    .refine((label) => !LABEL_CONTROL.test(label), 'no line breaks or control characters')
+    .nullable(),
+);
+
 // `type` is the SECTION_TYPES enum, not a free identifier: an unknown type used to save
 // fine and then be skipped by the renderer without a word — the editor saw "saved", the
 // visitor saw nothing. `content` is validated against its type's schema on write (the
@@ -428,6 +447,8 @@ const SectionWriteBase = z.object({
   sortOrder: SortOrderSchema,
   /** Design-delivery placeholder (0016). The 0025 production guard refuses to show one. */
   isPlaceholder: z.boolean().default(false),
+  /** Admin v2 E1: the section's name in the page editor (0112). Optional: no key, no write. */
+  label: SectionLabelSchema.optional(),
 });
 
 function checkSectionContent(
