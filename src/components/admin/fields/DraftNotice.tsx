@@ -100,6 +100,34 @@ export function CompareTable({ rows }: { rows: readonly CompareRow[] }) {
   );
 }
 
+/** What settling a conflict sends: the resolve endpoint's POST (adminFetch in the page). */
+export type ResolvePost = (
+  url: string,
+  options: { method: 'POST'; body: unknown },
+) => Promise<unknown>;
+
+/**
+ * Settle a conflict, Keep my version or Use the live version (`POST /api/admin/drafts/[id]/
+ * resolve`), then read the record again through the editor's own GET (`reloadTheirs`). Never
+ * the resolve's answer: that is the live row with the change laid over it, read over the
+ * registry's columns only, so a case study's services and media (embeds only the item GET
+ * reads) are missing from it. Adopted as the form, it showed both empty and the next autosave
+ * staged a change that removes them (R12 pre-merge review).
+ */
+export async function settleConflict(
+  save: Pick<EntitySave, 'reloadTheirs'>,
+  draft: Pick<EditorDraft, 'id' | 'version' | 'conflict'>,
+  choice: 'keepMine' | 'useLive',
+  post: ResolvePost = adminFetch,
+): Promise<void> {
+  await post(`/api/admin/drafts/${draft.id}/resolve`, {
+    method: 'POST',
+    body: { version: draft.version, [choice]: [...draft.conflict] },
+  });
+  announcePending();
+  await save.reloadTheirs();
+}
+
 /** A column in the editor's words: the field that writes it, else the column itself. */
 function labelOfColumn(fields: readonly FieldDef[], column: string): string {
   return fields.find((f) => columnOf(f) === column)?.label ?? column.replace(/_/g, ' ');
@@ -161,14 +189,8 @@ export default function DraftNotice({ save, fields, noun, backHref }: DraftNotic
     setBusy(true);
     setError('');
     try {
-      const row = await adminFetch<Record<string, unknown>>(
-        `/api/admin/drafts/${draft.id}/resolve`,
-        { method: 'POST', body: { version: draft.version, [choice]: [...conflictColumns] } },
-      );
-      announcePending();
+      await settleConflict(save, draft, choice);
       setCompare(null);
-      if ('draft' in row && row['draft'] === null && 'resolved' in row) await save.reloadTheirs();
-      else save.adoptRow?.(row);
     } catch (err) {
       setError(describeError(err));
     } finally {

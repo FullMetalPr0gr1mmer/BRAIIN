@@ -85,8 +85,6 @@ export interface EntitySave {
   releasesOff?: boolean;
   /** Admin v2 R12: save now if this is an unsaved pending change (blur, tab switch, ⌘S). */
   flush?(): void;
-  /** Admin v2 R12: re-seed the form from a server row (after a resolve or a discard). */
-  adoptRow?(row: Row): void;
 }
 
 export interface UseEntitySaveOptions {
@@ -324,19 +322,6 @@ export function useEntitySave(
     return () => window.removeEventListener('beforeunload', guard);
   }, [dirty]);
 
-  const adoptRow = useCallback(
-    (row: Row) => {
-      dispatch({
-        type: 'loaded',
-        row,
-        fields,
-        versionFallback: versionFallback(targetRef.current),
-      });
-      onRow.current?.(row);
-    },
-    [fields],
-  );
-
   return {
     isNew,
     values: state.values,
@@ -361,7 +346,6 @@ export function useEntitySave(
     gone: state.gone,
     releasesOff: state.releasesOff,
     flush,
-    adoptRow,
   };
 }
 

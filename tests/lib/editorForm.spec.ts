@@ -339,7 +339,6 @@ describe('EditorForm in release mode (Admin v2 R12)', () => {
       pendingRemoval: false,
       gone: null,
       flush: () => undefined,
-      adoptRow: () => undefined,
       values: { slug: 'logo', title: { en: 'Logo', ar: 'الشعار' }, status: 'published' },
       ...patch,
     });
