@@ -38,19 +38,22 @@ insert into public.profiles (id, tenant_id, role, is_active, locked_until, displ
 
 -- Distinct arrival times, oldest first: b1, b2, b3, b4 (T1), b5 (T2). b2's company ends in
 -- ة and its message's first word in ه, so the fold is tested both ways.
-insert into public.leads (id, tenant_id, name, company, email_enc, message, status, score, email_hmac, created_at) values
+insert into public.leads (id, tenant_id, name, company, email_enc, message, is_spam, score, email_hmac, created_at) values
   ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-000000000001', 'Sara', 'Acme', 'x',
-   'We need a logo, 50% done', 'new', 25, repeat('a', 64), now() - interval '4 hours'),
+   'We need a logo, 50% done', false, 25, repeat('a', 64), now() - interval '4 hours'),
   ('00000000-0000-0000-0000-0000000000b2', '00000000-0000-0000-0000-000000000001', 'أحمد', 'شركة', 'x',
-   'هويه بصرية', 'new', 10, null, now() - interval '3 hours'),
+   'هويه بصرية', false, 10, null, now() - interval '3 hours'),
   ('00000000-0000-0000-0000-0000000000b3', '00000000-0000-0000-0000-000000000001', 'Omar', null, 'x',
-   'cheap watches', 'spam', 0, null, now() - interval '2 hours'),
+   'cheap watches', true, 0, null, now() - interval '2 hours'),
   ('00000000-0000-0000-0000-0000000000b4', '00000000-0000-0000-0000-000000000001', 'Lina', 'Studio', 'x',
-   'A booth for the expo', 'new', 50, null, now() - interval '1 hour'),
+   'A booth for the expo', false, 50, null, now() - interval '1 hour'),
   ('00000000-0000-0000-0000-0000000000b5', '00000000-0000-0000-0000-0000000000ff', 'Sara', 'Acme', 'x',
-   'Other tenant', 'new', 5, repeat('a', 64), now());
--- Lina is answered now, an hour after she wrote: her stage leaves New.
-update public.leads set status = 'in_progress' where id = '00000000-0000-0000-0000-0000000000b4';
+   'Other tenant', false, 5, repeat('a', 64), now());
+-- Lina is answered now, an hour after she wrote: her stage leaves New for Contacted.
+update public.leads
+   set stage_id = (select id from public.lead_stages
+                    where tenant_id = '00000000-0000-0000-0000-000000000001' and key = 'contacted')
+ where id = '00000000-0000-0000-0000-0000000000b4';
 
 create function _as(p_sub text, p_role text, p_tid text) returns void language sql as $$
   select set_config(

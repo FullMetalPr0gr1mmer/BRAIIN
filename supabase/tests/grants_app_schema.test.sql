@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(69);
+select plan(72);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -380,6 +380,32 @@ select ok(has_function_privilege('authenticated', 'app.faq_text_ok(jsonb, int)',
           and has_function_privilege('service_role', 'app.faq_text_ok(jsonb, int)', 'execute')
           and not has_function_privilege('anon', 'app.faq_text_ok(jsonb, int)', 'execute'),
   'app.faq_text_ok is executable by the writers (authenticated, service_role), never anon');
+
+-- ---- 16. The leads contract (C14b): the restated lead routines, the legacy helpers gone ----
+-- The BEFORE and AFTER phases on leads are definers that no API role may call; the two
+-- service-role doors C14b restated keep their grants (SECURITY INVOKER: RLS and the grants
+-- decide what they reach); the backfill and the sync's helper, which read the dropped
+-- status, are gone, so no grant can ever reach them again.
+select ok(not has_function_privilege('anon', 'app.tg_lead_pipeline()', 'execute')
+          and not has_function_privilege('authenticated', 'app.tg_lead_pipeline()', 'execute')
+          and not has_function_privilege('service_role', 'app.tg_lead_pipeline()', 'execute')
+          and not has_function_privilege('anon', 'app.tg_lead_timeline()', 'execute')
+          and not has_function_privilege('authenticated', 'app.tg_lead_timeline()', 'execute')
+          and not has_function_privilege('service_role', 'app.tg_lead_timeline()', 'execute'),
+  'the lead triggers'' functions are executable by no API role (restated by C14b)');
+select ok(has_function_privilege('service_role', 'public.crm_delete_lead_note(uuid, uuid, uuid, uuid)', 'execute')
+          and not has_function_privilege('authenticated', 'public.crm_delete_lead_note(uuid, uuid, uuid, uuid)', 'execute')
+          and not has_function_privilege('anon', 'public.crm_delete_lead_note(uuid, uuid, uuid, uuid)', 'execute')
+          and has_function_privilege('service_role', 'public.crm_index_lead(uuid, uuid, text, text, text[], text)', 'execute')
+          and not has_function_privilege('authenticated', 'public.crm_index_lead(uuid, uuid, text, text, text[], text)', 'execute')
+          and not has_function_privilege('anon', 'public.crm_index_lead(uuid, uuid, text, text, text[], text)', 'execute')
+          and not (select bool_or(prosecdef) from pg_proc
+                    where oid in ('public.crm_delete_lead_note(uuid, uuid, uuid, uuid)'::regprocedure,
+                                  'public.crm_index_lead(uuid, uuid, text, text, text[], text)'::regprocedure)),
+  'the note door and the index door: the service role''s alone, SECURITY INVOKER (restated by C14b)');
+select ok(to_regprocedure('app.backfill_lead_pipeline()') is null
+          and to_regprocedure('app.lead_stage_for_status(uuid, text, uuid)') is null,
+  'the legacy backfill and the sync''s helper are dropped (C14b)');
 
 select * from finish();
 rollback;
