@@ -18,14 +18,16 @@
 --   • moving and cancelling, version-checked, per role; app.publish_scheduled() acting only for
 --     a tenant with releases off;
 --   • app.enable_releases (the legacy schedule converted, the fallback scheduler, the baseline,
---     the flag, the audit row) and app.disable_releases (refused over pending work, the discard
---     putting legacy schedules back, the flag gone).
+--     the flag, the audit row, the legacy tables write-locked, refused over work left from an
+--     earlier time, 60 changes a release) and app.disable_releases (refused over pending work,
+--     the discard putting legacy schedules back, nothing pending needing no discard, the flag
+--     gone); a release of another kind never fired.
 -- Releases are switched on for the test tenants inside this rolled-back transaction only.
 --
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(104);
+select plan(109);
 
 -- ── 0. The catalog ──────────────────────────────────────────────────────────────────────
 select ok(
@@ -379,6 +381,16 @@ select is(
 reset role;
 select is((select title ->> 'en' from public.services where id = '10700000-0000-0000-0001-000000000004'),
   'Four', 'and changes nothing live');
+-- Only a publish or a legacy schedule is fired. No other kind can be scheduled (section 2), so
+-- the migration role makes one, due, then puts it back.
+update public.content_releases set kind = 'rollback', scheduled_for = now() - interval '1 minute'
+ where id = _rel('early');
+set local role service_role;
+select is(_fails($$ select _fire('10700000-0000-0000-0000-0000000000a1', 'admin', _rel('early')) $$),
+  '22023', 'a due release of another kind (a rollback) is never fired');
+reset role;
+update public.content_releases set kind = 'publish', scheduled_for = now() + interval '1 hour'
+ where id = _rel('early');
 
 -- ── 4. A fire fails closed, and the failure is recorded ────────────────────────────────
 -- Scheduled by an Admin, who is a Content Creator by the time it is due: an archive is an
@@ -715,6 +727,37 @@ select is(
   'scheduled t', 'a row scheduled with no time is never published: not by the legacy path, nor by a switch');
 select is(_fails($$ select app.disable_releases('10700000-0000-0000-0000-00000000000c', '10700000-0000-0000-0000-0000000000ca') $$),
   '55000', 'switching off twice is refused');
+
+-- ── 8. The switches' other refusals and bounds (tenant B) ──────────────────────────────
+-- Tenant B still holds the pending change staged in section 1, while its releases were off.
+select is(
+  (select format('%s %s', c ->> 'state', c ->> 'message' ~ 'pending changes or scheduled releases remain')
+     from (select _catch($$ select app.enable_releases('10700000-0000-0000-0000-00000000000b', '10700000-0000-0000-0000-0000000000b1', '10700000-0000-0000-0000-0000000000b1') $$) as c) s),
+  '55000 t', 'switching on is refused while a pending change remains from an earlier time');
+delete from public.content_drafts where tenant_id = '10700000-0000-0000-0000-00000000000b';
+insert into app.release_tenants (tenant_id) values ('10700000-0000-0000-0000-00000000000b');
+insert into _out (name, result) select 'disable-b', app.disable_releases('10700000-0000-0000-0000-00000000000b', '10700000-0000-0000-0000-0000000000b1');
+select is(
+  (select format('%s %s %s %s %s', result ->> 'discarded', result ->> 'cancelled',
+                 result ->> 'restored_schedules', result ->> 'not_restored', app.releases_enabled('10700000-0000-0000-0000-00000000000b'))
+     from _out where name = 'disable-b'),
+  '0 0 0 0 f', 'switching off with nothing pending needs no discard, and only the flag goes');
+-- At most 60 changes a release: 61 rows due at one time, with no editor (the fallback's).
+insert into public.services (id, tenant_id, slug, title, status, scheduled_for)
+select ('10700000-0000-0000-0005-' || lpad(to_hex(n), 12, '0'))::uuid, '10700000-0000-0000-0000-00000000000b', 'r11-b-' || n,
+       jsonb_build_object('en', 'B ' || n, 'ar', 'ب ' || n), 'scheduled', now() + interval '2 hours'
+  from generate_series(1, 61) as n;
+insert into _out (name, result) select 'enable-b', app.enable_releases('10700000-0000-0000-0000-00000000000b', '10700000-0000-0000-0000-0000000000b1', '10700000-0000-0000-0000-0000000000b1');
+select is(
+  (select format('%s %s %s', result ->> 'converted', result ->> 'legacy_releases', result ->> 'fallback_scheduled')
+     from _out where name = 'enable-b'),
+  '61 2 61', 'sixty-one rows for one time and one scheduler make two legacy releases');
+select is(
+  (select string_agg(format('%s:%s:%s', r.item_count, r.scheduled_by, r.scheduled_for = now() + interval '2 hours'),
+                     ' ' order by r.item_count desc)
+     from public.content_releases r where r.tenant_id = '10700000-0000-0000-0000-00000000000b' and r.kind = 'legacy_schedule'),
+  '60:10700000-0000-0000-0000-0000000000b1:t 1:10700000-0000-0000-0000-0000000000b1:t',
+  'sixty changes in one, one in the other, both at that time and by the fallback scheduler');
 
 select * from finish();
 rollback;
