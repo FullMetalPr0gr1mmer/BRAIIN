@@ -1562,12 +1562,13 @@ select app.disable_releases('<tenant id>', '<operator profile id>', p_discard_pe
 - **Off** (`app.disable_releases`): refused (`55P03`) while a release is publishing and
   (`55000`) when off already. Every draft write in flight lands first; then, if any change is
   pending or any release scheduled, it is refused (`55000`, with the counts) unless the discard
-  is named. With the discard, a `legacy_schedule` release's rows go back to their own schedule
-  (scheduled at the release's time, so `app.publish_scheduled()` publishes them as before; any
-  that could not be put back is counted in `not_restored`), every scheduled release is
-  cancelled, and every pending change is thrown away. Then the flag goes, with a
-  `releases.disable` audit row. Versions, history and the ledger stay; switching on again
-  writes a new baseline.
+  is named. The flag goes first, so nothing after it is recorded in the release ledger as an
+  out-of-band change (the capture records one only while releases are on). Then, with the discard,
+  a `legacy_schedule` release's rows go back to their own schedule (scheduled at the release's
+  time, so `app.publish_scheduled()` publishes them as before; any that could not be put back is
+  counted in `not_restored`), every scheduled release is cancelled, and every pending change is
+  thrown away; last, a `releases.disable` audit row. Versions, history and the ledger stay;
+  switching on again writes a new baseline.
 - **Scheduled releases go live from the minute cron**, one a minute, as the person who scheduled
   them (their live profile and their database rights decide again). One that cannot (the
   person was switched off, demoted or locked, the live site changed under a change, the database
