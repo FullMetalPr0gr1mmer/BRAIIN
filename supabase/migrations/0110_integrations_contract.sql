@@ -60,25 +60,32 @@ set local lock_timeout = '5s';
 
 -- ═══ 1. Nothing written into the boxes, and no grant changed, since 0105 ═══════════════════
 -- The table is locked first, in the mode the drop takes anyway (ACCESS EXCLUSIVE), so no write
--- can land between the count and the drop. The lock_timeout above bounds the wait for it, and
--- it ends with this file's transaction; until then readers of the table queue behind it (the
--- home pages' verification read, which never fails the page, and the Integrations screen).
-lock table public.site_integrations in access exclusive mode;
-
+-- can land between the count and the drop. The lock is taken inside the DO block, not as a
+-- top-level LOCK TABLE: the Supabase CLI sends a migration as one extended-protocol pipeline
+-- with no BEGIN, which PostgreSQL does not count as a transaction block, so a top-level LOCK
+-- TABLE raises 25P01 there (review). A lock taken in plpgsql is held until the batch's
+-- transaction ends, all the way to the drop. The block sets the 5 s bound itself as well, so
+-- it holds however the top-level SET LOCAL above fared. Until the end readers of the table
+-- queue behind it (the home pages' verification read, which never fails the page, and the
+-- Integrations screen).
+--
 -- A count, never a value. The columns are NOT NULL with '{}' as their default (0009), so any
 -- other value (an object with keys, an array, a string, JSON null) is something someone wrote.
 do $$
 declare
   n int;
 begin
+  perform set_config('lock_timeout', '5s', true);
+  lock table public.site_integrations in access exclusive mode;
   select count(*) into n
     from public.site_integrations
    where ga4 <> '{}'::jsonb or search_console <> '{}'::jsonb
       or calendly <> '{}'::jsonb or recaptcha <> '{}'::jsonb;
   if n > 0 then
     raise exception 'U11c: % site_integrations row(s) hold legacy integration JSON, so nothing is dropped', n
-      using hint = 'Read those rows in the dashboard and clear anything secret, set ga4, search_console, '
-                   || 'calendly and recaptcha back to ''{}'', then push again (docs/admin-v2/as-built/U11c.md).';
+      using hint = 'Read those rows in the dashboard. Treat any key or secret found there as exposed (staff '
+                   || 'tokens could read the boxes): rotate it at its provider, then set ga4, search_console, '
+                   || 'calendly and recaptcha back to ''{}'' and push again (docs/admin-v2/as-built/U11c.md).';
   end if;
 end $$;
 

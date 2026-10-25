@@ -281,6 +281,21 @@ describe('the table the contract leaves', () => {
     expect(sql).not.toMatch(/drop column[^;]*\bcascade\b/i);
   });
 
+  it('it takes the lock inside the counting DO block, bounded, where the CLI can apply it', () => {
+    // The Supabase CLI sends a migration as one extended-protocol pipeline with no BEGIN, which
+    // PostgreSQL does not count as a transaction block: a top-level LOCK TABLE raises 25P01
+    // there, so neither `supabase start` (CI) nor `db push` (production) could apply the file.
+    // In plpgsql the lock is not top level, and it holds until the batch's transaction ends.
+    expect(CONTRACT!.sql).toMatch(
+      /do \$\$\s*declare\s*n int;\s*begin\s*perform set_config\('lock_timeout', '5s', true\);\s*lock table public\.site_integrations in access exclusive mode;\s*select count\(\*\) into n/,
+    );
+  });
+
+  it('no migration takes a top-level LOCK TABLE (the CLI pipeline refuses it)', () => {
+    const topLevel = MIGRATIONS.filter((m) => /^lock table\b/im.test(m.sql)).map((m) => m.name);
+    expect(topLevel).toEqual([]);
+  });
+
   it('it refuses, before it restates them, when the grants are no longer the ones it replaces', () => {
     // The restatement is 0105's grants on the kept columns. A migration between 0105 and the
     // contract that changed them (U15's anon GA4 read) would be undone in silence, and the
