@@ -190,9 +190,6 @@ export const MAX_LEAD_VALUE_SAR = 10_000_000;
 
 const LeadVersionSchema = z.number().int().min(1);
 
-/** The legacy status: an export filter still reads it until C14 drops it (C4b removed its panel). */
-const LegacyLeadStatusSchema = z.enum(['new', 'in_progress', 'done', 'spam']);
-
 /** The PATCH fields that move a lead's version, so they need the version the caller read. */
 export const VERSIONED_LEAD_FIELDS = [
   'stageId',
@@ -205,7 +202,10 @@ export const VERSIONED_LEAD_FIELDS = [
 /** What a PATCH that still sends the legacy notes field is told (C4b, decision D4's fix). */
 export const NOTES_ARE_A_THREAD = 'Notes are a thread now. Add a note instead.';
 
-/** What a PATCH that still sends the legacy status is told (C10a: 0097 withdrew the column). */
+/**
+ * What a PATCH or an export link that still sends the legacy status is told (C10a: 0097
+ * withdrew the column's grant; C14a: the export stopped filtering on it; C14b drops it).
+ */
 export const STATUS_IS_A_STAGE = 'A lead moves by its stage now. Choose a stage instead.';
 
 /**
@@ -364,12 +364,17 @@ export const LeadEraseSchema = z.object({ reason: z.enum(['dsar', 'decision']) }
 /**
  * GET /api/admin/leads/export: the list's filters a link may carry. Never `q`: a search
  * term in a URL lands in history and logs (verification D10).
+ *
+ * `status` is refused (C14a), as the PATCH refuses it: the legacy column is the contract's to
+ * drop (C14b), so the export no longer filters on it. A link that still carries it (one saved
+ * from the legacy panel) is told to choose a stage, rather than exporting more than it asked
+ * for. The key stays known so the 422 names it.
  */
 export const LeadExportQuerySchema = z
   .object({
     from: Instant.optional(),
     to: Instant.optional(),
-    status: LegacyLeadStatusSchema.optional(),
+    status: z.unknown().optional(),
     stage: z.string().uuid().optional(),
     spam: z.enum(['true', 'false']).optional(),
     // (C4a) the list's other filters, in a link's string form
@@ -380,7 +385,11 @@ export const LeadExportQuerySchema = z
     starred: z.enum(['true', 'false']).optional(),
     unread: z.enum(['true', 'false']).optional(),
   })
-  .strict();
+  .strict()
+  .refine((query) => query.status === undefined, {
+    message: STATUS_IS_A_STAGE,
+    path: ['status'],
+  });
 export type LeadExportQuery = z.infer<typeof LeadExportQuerySchema>;
 
 // ── CRM settings (Admin v2 C9a) ─────────────────────────────────────────────────────────────

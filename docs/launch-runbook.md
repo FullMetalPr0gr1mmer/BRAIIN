@@ -1680,3 +1680,15 @@ as the migration role in a reviewed step, and change that spec in the same PR; t
 API roles DELETE back: `grant delete on public.site_settings to authenticated;` (and the same
 for `site_profile`), knowing `site_settings_write` then admits an Admin or Developer DELETE
 again.
+
+The leads contract (Admin v2 C14) **will** move the line. It ships as the two PRs §5a asks
+for. C14a, the code, carries no migration: from its merge on, no Worker query names
+`leads.status`, `internal_notes`, `ip_inet`, `timeline_band` or `crm_settings.timezone`, and
+the legacy `GET /api/admin/leads` list and the `?pii=1` alias are gone. Until C14b is applied
+a rollback across C14a's PR is safe (the columns are still there, and the legacy sync and
+notes mirror still run). C14b, the migration alone, drops those columns, and it is applied
+only after C14a has deployed and one release has passed with no legacy writer. **Once C14b is
+applied, never roll back past C14a's merge commit:** an older Worker names a dropped column,
+so its lead detail, export, reveal, notify-lead, index cron and CRM settings fail (42703).
+C14b's PR writes that commit into the "Today the line is" sentence above, with the
+`git merge-base --is-ancestor` check moved to it.
