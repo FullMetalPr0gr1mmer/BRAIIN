@@ -369,7 +369,9 @@ test.describe('as admin', () => {
     await expect(page.getByText('No case study yet')).toBeVisible();
 
     // An Admin deletes it from the editor (main's list row action, kept): asked first, then
-    // back on the overview saying so, and the row is gone.
+    // back on the overview saying so, and the row is gone. Delete sits in the status bar
+    // beside Duplicate, which is the form's: on a fields tab, not on a panel's (Case study).
+    await page.getByRole('tab', { name: 'Content', exact: true }).click();
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
     const ask = page.getByRole('dialog').filter({ hasText: 'This cannot be undone.' });
     await expect(ask).toContainText(`${S.first.title.en} (copy)`);
