@@ -590,7 +590,9 @@ export default function PublishDialog({
                         <p className="pub__meta" id={metaId}>
                           {[row.fieldsText, `${author}, ${when}`].filter(Boolean).join(' · ')}
                         </p>
-                        {mode === 'publish' && !can && (
+                        {/* What waits says who can publish it (P-2): in review too, where
+                            every row waits. */}
+                        {mode !== 'discard' && !can && (
                           <p className="pub__status">{waitingWords(row)}</p>
                         )}
                         {mode === 'discard' && !can && (
