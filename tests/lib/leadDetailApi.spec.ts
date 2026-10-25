@@ -71,9 +71,11 @@ const GATED = {
   phone_enc: 'enc:+966500000000',
   budget_enc: 'enc:gt_200k',
   timeline_text_enc: 'enc:Before Ramadan',
-  timeline_band: null,
+  // Today's schema still holds the legacy columns (C14b drops them): the stand-in answers
+  // them as a row would, and the reveal must neither ask for nor return them.
+  timeline_band: '1_3m',
   internal_notes: 'old note',
-  ip_inet: null,
+  ip_inet: '203.0.113.9',
   // The score's reasons (C4a): stored keys, an unknown one among them.
   score_signals: ['company_named', 'budget_given', 'not_a_signal'],
 };
@@ -217,7 +219,6 @@ describe('POST /[id]/reveal', () => {
       phone: '+966500000000',
       budget: 'gt_200k',
       timeline: 'Before Ramadan',
-      timeline_band: null,
       // C4a (D7): the score's reasons, known keys only, in the scoring's order.
       score_reasons: ['budget_given', 'company_named'],
     });
@@ -232,17 +233,41 @@ describe('POST /[id]/reveal', () => {
   it('reads only the columns it returns: the contact details and the reasons, never the notes', async () => {
     await reveal.POST(ctx(`/api/admin/leads/${LEAD}/reveal`, 'POST'));
     expect(gatedSelects).toHaveLength(1);
+    // No legacy column (C14a): the old band, the notes field and the address are C14b's to
+    // drop, so the reveal works on the schema before and after that migration.
     expect(gatedSelects[0]!.split(',').sort()).toEqual(
-      [
-        'email_enc',
-        'phone_enc',
-        'budget_enc',
-        'timeline_text_enc',
-        'timeline_band',
-        'score_signals',
-      ].sort(),
+      ['email_enc', 'phone_enc', 'budget_enc', 'timeline_text_enc', 'score_signals'].sort(),
     );
   });
+
+  it.each(['admin', 'developer', 'sales'] as const)(
+    'gives %s the same audited reveal, and never a legacy field (C14a)',
+    async (role) => {
+      sessionRole = role;
+      liveProfile = { role, is_active: true, locked_until: null };
+      const res = await reveal.POST(ctx(`/api/admin/leads/${LEAD}/reveal`, 'POST'));
+      const body = (await res.json()) as { data: Record<string, unknown> };
+      expect(res.status).toBe(200);
+      expect(events).toEqual([
+        'svc:profiles',
+        'ops:pii-reveal',
+        'rls:leads',
+        'audit:lead.view_pii',
+        'svc:leads',
+      ]);
+      expect(audits[0]!.detail!['fields']).toEqual([
+        'email',
+        'phone',
+        'budget',
+        'timeline',
+        'score_signals',
+      ]);
+      for (const legacy of ['timeline_band', 'internal_notes', 'ip_inet', 'status']) {
+        expect(body.data, legacy).not.toHaveProperty(legacy);
+      }
+      expect(JSON.stringify(body)).not.toContain('old note');
+    },
+  );
 
   it('returns no reasons for a lead that scored nothing', async () => {
     const saved = GATED.score_signals;
