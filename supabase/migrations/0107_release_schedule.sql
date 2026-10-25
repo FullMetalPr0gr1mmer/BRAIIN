@@ -1270,7 +1270,10 @@ grant execute on function public.unschedule_release(uuid, text, uuid, int) to se
 --   2. Not while a release is publishing: the tenant's release lock, taken without waiting
 --      (55P03). Not twice (55000), and not over pending changes or scheduled releases left from
 --      an earlier time (55000: there can be none; it says so rather than mixing them in).
---   3. The legacy schedule: each row app.publish_scheduled() would have published by itself
+--   3. The legacy schedule, its eight tables locked against writes first (SHARE ROW EXCLUSIVE:
+--      a write in flight lands first, a later one waits and then meets releases on; a write
+--      still running past the lock timeout refuses the switch, 55P03): each row
+--      app.publish_scheduled() would have published by itself
 --      (its tables, held equal by tests/lib/releaseScheduleSql.spec.ts, and its rows: status
 --      scheduled WITH a time) becomes a pending change {status: published}, claimed by a
 --      `legacy_schedule` release at that time (a time passed: the next minute fires it), its
@@ -1346,9 +1349,17 @@ begin
       using errcode = '55000';
   end if;
 
-  -- 3. The legacy schedule, row by row: the rows locked, read, then moved to draft. Exactly
-  -- app.publish_scheduled()'s rows: scheduled, with a time. A row scheduled with no time is
-  -- never published by it, so it is counted and left as it is.
+  -- 3. The legacy schedule. First every write to its tables in flight lands and every later
+  -- one waits for this transaction (a SHARE ROW EXCLUSIVE lock on each, as disable holds
+  -- content_drafts; reads are not blocked): while releases are off R5's guard admits a staff
+  -- write, so without it a row scheduled between the read and the move below would be moved to
+  -- draft with no pending change, or stay scheduled under releases on, where nothing publishes
+  -- it. A write after the switch meets releases on. Then, row by row: the rows locked, read,
+  -- then moved to draft. Exactly app.publish_scheduled()'s rows: scheduled, with a time. A row
+  -- scheduled with no time is never published by it, so it is counted and left as it is.
+  foreach v_t in array c_tables loop
+    execute pg_catalog.format('lock table public.%I in share row exclusive mode', v_t);
+  end loop;
   foreach v_t in array c_tables loop
     select e.* into v_reg from app.release_entities e where e.table_name = v_t;
     if not found or not v_reg.has_status then
@@ -1723,6 +1734,10 @@ begin
   select prosrc into v_src from pg_proc where oid = 'app.enable_releases(uuid, uuid, uuid)'::regprocedure;
   if v_src !~ 'scheduled_for is not null' or v_src ~ 'coalesce\(t\.scheduled_for' then
     raise exception '0107: app.enable_releases must convert only the rows app.publish_scheduled() publishes (scheduled with a time)';
+  end if;
+  -- ...with every write to those tables held off while it reads and moves them.
+  if v_src !~ 'lock table public\.%I in share row exclusive mode' then
+    raise exception '0107: app.enable_releases must hold writes to the legacy tables off while it converts them';
   end if;
   select prosrc into v_src from pg_proc where oid = 'public.fail_scheduled_release(uuid, uuid, text, uuid[])'::regprocedure;
   if v_src !~ 'v_status <> ''scheduled'' or v_at > pg_catalog\.now\(\)' then

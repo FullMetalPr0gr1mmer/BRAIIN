@@ -25,7 +25,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8 (Admin v2 lanes, Releases), §9.
 
 begin;
-select plan(103);
+select plan(104);
 
 -- ── 0. The catalog ──────────────────────────────────────────────────────────────────────
 select ok(
@@ -612,6 +612,15 @@ select lives_ok(
   $$ insert into _out (name, result) select 'enable', app.enable_releases('10700000-0000-0000-0000-00000000000c',
        '10700000-0000-0000-0000-0000000000ca', '10700000-0000-0000-0000-0000000000ca') $$,
   'the owner switches releases on for tenant C');
+-- A staff write meanwhile (R5's guard admits one while releases are off) waits for the switch,
+-- then meets releases on: the eight tables stay write-locked until the transaction ends.
+select is(
+  (select count(distinct l.relation)::int from pg_catalog.pg_locks l
+    where l.locktype = 'relation' and l.mode = 'ShareRowExclusiveLock' and l.granted
+      and l.relation = any (array['public.disciplines', 'public.services', 'public.blog_posts',
+                                  'public.portfolio', 'public.pages', 'public.testimonials',
+                                  'public.service_cases', 'public.faq_items']::regclass[])),
+  8, 'switching on holds every write to app.publish_scheduled()''s eight tables off until it commits');
 select is(
   (select format('%s %s %s %s %s', result ->> 'converted', result ->> 'legacy_releases',
                  result ->> 'fallback_scheduled', result ->> 'left_scheduled', result -> 'baseline' ->> 'number')

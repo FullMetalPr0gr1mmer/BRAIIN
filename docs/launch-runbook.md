@@ -1546,7 +1546,10 @@ select app.disable_releases('<tenant id>', '<operator profile id>', p_discard_pe
 
 - **On** (`app.enable_releases`): refused (`55P03`) while a release is publishing, and (`55000`)
   when releases are on already or pending changes or scheduled releases remain from an earlier
-  time. Every row that `app.publish_scheduled()` would have published by itself (`scheduled`,
+  time. Every write to `app.publish_scheduled()`'s eight tables in flight lands first and every
+  later one waits for the switch, then meets releases on; a write still running after five
+  seconds refuses it (`55P03`: try again). Every row that `app.publish_scheduled()` would have
+  published by itself (`scheduled`,
   with a time) becomes a pending change ("published") claimed by a `legacy_schedule` release at
   that time (a time passed: the next minute publishes it), its live status moved to draft;
   releases group the rows by time and scheduler, at most 60 each. Each goes live as the row's
