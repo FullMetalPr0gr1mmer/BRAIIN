@@ -93,7 +93,8 @@ const PAGE = '0e0e0e0e-0000-4000-8000-0000000000c1';
 const due = (over: Record<string, unknown> = {}) => ({
   tenant_id: T,
   release_id: REL,
-  scheduled_for: '2026-10-23T10:00:00+00:00',
+  // Due a minute ago: on time (the overdue line has its own tests).
+  scheduled_for: new Date(Date.now() - 60_000).toISOString(),
   scheduled_by: USER,
   kind: 'publish',
   scheduler: { role: 'content_creator', tenant_id: T, live: true },
@@ -216,6 +217,24 @@ describe('a due release goes live as its scheduler', () => {
     expect(state.reads).toEqual(['pages']);
   });
 
+  it('one that went live past the dashboard’s overdue mark is a warning saying by how much (§4.6)', async () => {
+    const at = '2026-10-23T10:00:00+00:00';
+    for (const [now, level, message, lateMinutes] of [
+      ['2026-10-23T10:12:30+00:00', 'warn', 'a scheduled release went live 12 minutes late', 12],
+      ['2026-10-23T10:05:00+00:00', 'info', 'a scheduled release went live', undefined],
+    ] as const) {
+      state.calls = [];
+      state.logs = [];
+      state.answers['claim_scheduled_releases'] = ok([due({ scheduled_for: at })]);
+      state.answers['apply_release'] = live();
+      const run = await fireDueRelease({ now: () => Date.parse(now) });
+      expect(run.outcome).toBe('published');
+      const line = state.logs.find((l) => String(l['message']).startsWith('a scheduled release'));
+      expect(line, now).toMatchObject({ level, source: 'cron:releases', message });
+      expect((line?.['detail'] as Record<string, unknown>)['lateMinutes'], now).toBe(lateMinutes);
+    }
+  });
+
   it('a release a second run already published, or one moved later, is left alone (skipped)', async () => {
     state.answers['claim_scheduled_releases'] = ok([due()]);
     state.answers['apply_release'] = ok({
@@ -334,6 +353,25 @@ describe('a fire fails closed', () => {
     expect(run).toEqual({ outcome: 'failed', releaseId: REL, failure: 'error' });
     expect(calls('apply_release')).toEqual([]);
     expect(calls('fail_scheduled_release')[0]!.args).toMatchObject({ p_code: 'error' });
+  });
+
+  it('a release that changed before it could be failed (a person moved it since the claim) is left, and the line says so', async () => {
+    state.answers['claim_scheduled_releases'] = ok([
+      due({ scheduler: { role: 'admin', tenant_id: T, live: false } }),
+    ]);
+    state.answers['fail_scheduled_release'] = ok({ failed: false, status: 'scheduled' });
+    const { fire, purges } = await runReleaseMinute();
+    expect(fire).toEqual({ outcome: 'skipped', releaseId: REL });
+    expect(calls('fail_scheduled_release')).toHaveLength(1);
+    expect(state.logs).toEqual([
+      expect.objectContaining({
+        level: 'info',
+        source: 'cron:releases',
+        message: expect.stringContaining('it was left as it is'),
+        detail: { releaseId: REL, failure: 'scheduler' },
+      }),
+    ]);
+    expect(purges).not.toBeNull();
   });
 
   it('a failure the release could not be told is logged so, and tried again', async () => {
