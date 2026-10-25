@@ -407,7 +407,7 @@ describe('the overview and a discipline’s page (model.ts)', () => {
   });
 });
 
-describe('the lead counts per service (0106, GET /api/admin/leads/interest-counts)', () => {
+describe('the lead counts per service (0111, GET /api/admin/leads/interest-counts)', () => {
   it('keeps slugs and whole numbers only', () => {
     expect(
       cleanInterestCounts({ logo: 3, 'brand-guidelines': 0, Bad: 1, 'x y': 2, neg: -1, f: 1.5 }),

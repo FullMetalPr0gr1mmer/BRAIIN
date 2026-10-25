@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 // How many inquiries named each service (Admin v2 U5): the discipline page's "N leads" badges
 // and its "Leads by service" chart, and the count beside a service's Leads tab. One read of
-// public.lead_interest_counts (0106), which runs as the caller (SECURITY INVOKER): leads' RLS,
+// public.lead_interest_counts (0111), which runs as the caller (SECURITY INVOKER): leads' RLS,
 // the RESTRICTIVE live check and the column grant decide what it counts, for the caller's
 // own tenant only. Counts only: no lead's id, name or words ever leave the database here.
 //

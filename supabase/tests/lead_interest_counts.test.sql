@@ -1,4 +1,4 @@
--- pgTAP: the Services area's lead counts and its guide (0106, Admin v2 U5 + U6).
+-- pgTAP: the Services area's lead counts and its guide (0111, Admin v2 U5 + U6).
 -- Run with `supabase test db`.
 --
 -- public.lead_interest_counts(p_tenant) runs as the caller (SECURITY INVOKER), so leads' RLS,

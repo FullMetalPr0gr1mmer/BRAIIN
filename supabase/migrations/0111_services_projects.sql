@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
--- 0106 — The Services area and the Projects area on the kit (Admin v2 U5 + U6, one folded PR).
+-- 0111 — The Services area and the Projects area on the kit (Admin v2 U5 + U6, one folded PR).
 -- Forward-only and EXPAND only. The number is a placeholder: it is assigned at merge
 -- (scripts/renumber-migration.mjs). Depends on 0002 (public.leads), 0033 (the staff column
 -- grant on leads: tenant_id, service_of_interest), 0034 (is_spam, its grant, the RESTRICTIVE
@@ -59,7 +59,7 @@ create or replace function public.lead_interest_counts(p_tenant uuid)
 $$;
 
 comment on function public.lead_interest_counts(uuid) is
-  'Admin v2 U5 (0106): how many of the tenant''s non-spam leads name each service, keyed by '
+  'Admin v2 U5: how many of the tenant''s non-spam leads name each service, keyed by '
   'the service slug. Counts only. INVOKER: leads'' RLS, the live check and the column grant '
   'decide; {} for another tenant or a role that reads no lead.';
 
@@ -176,38 +176,38 @@ declare
 begin
   -- ---- 1. the counts: an invoker, stable, search path empty, jsonb ---------------------------
   if v_fn is null then
-    raise exception '0106: public.lead_interest_counts(uuid) is missing';
+    raise exception 'U5+U6: public.lead_interest_counts(uuid) is missing';
   end if;
   if exists (select 1 from pg_proc where oid = v_fn and (prosecdef or provolatile <> 's')) then
-    raise exception '0106: public.lead_interest_counts must be SECURITY INVOKER and STABLE';
+    raise exception 'U5+U6: public.lead_interest_counts must be SECURITY INVOKER and STABLE';
   end if;
   if not exists (select 1 from pg_proc
                   where oid = v_fn
                     and (proconfig @> array['search_path=""'] or proconfig @> array['search_path='])) then
-    raise exception '0106: public.lead_interest_counts must set search_path = ''''';
+    raise exception 'U5+U6: public.lead_interest_counts must set search_path = ''''';
   end if;
   if (select prorettype from pg_proc where oid = v_fn) <> 'jsonb'::regtype then
-    raise exception '0106: public.lead_interest_counts must return jsonb';
+    raise exception 'U5+U6: public.lead_interest_counts must return jsonb';
   end if;
 
   -- ---- its callers: authenticated alone. No ACL entry for PUBLIC (grantee 0), and neither
   -- anon nor the service role holds EXECUTE through any path.
   if not has_function_privilege('authenticated', v_fn, 'execute') then
-    raise exception '0106: authenticated must execute public.lead_interest_counts';
+    raise exception 'U5+U6: authenticated must execute public.lead_interest_counts';
   end if;
   foreach p in array array['anon', 'service_role'] loop
     if has_function_privilege(p, v_fn, 'execute') then
-      raise exception '0106: % may execute public.lead_interest_counts', p;
+      raise exception 'U5+U6: % may execute public.lead_interest_counts', p;
     end if;
   end loop;
   if exists (select 1 from pg_proc pr, aclexplode(coalesce(pr.proacl, acldefault('f', pr.proowner))) a
               where pr.oid = v_fn and a.grantee = 0) then
-    raise exception '0106: PUBLIC may execute public.lead_interest_counts';
+    raise exception 'U5+U6: PUBLIC may execute public.lead_interest_counts';
   end if;
   if exists (select 1 from pg_proc pr, aclexplode(pr.proacl) a
               where pr.oid = v_fn and a.grantee <> pr.proowner
                 and a.grantee <> 'authenticated'::regrole::oid) then
-    raise exception '0106: public.lead_interest_counts is granted to a role other than authenticated';
+    raise exception 'U5+U6: public.lead_interest_counts is granted to a role other than authenticated';
   end if;
 
   -- ---- what it reads stays readable by the staff token through the column grant, and no
@@ -215,10 +215,10 @@ begin
   if not (has_column_privilege('authenticated', 'public.leads', 'tenant_id', 'select')
           and has_column_privilege('authenticated', 'public.leads', 'service_of_interest', 'select')
           and has_column_privilege('authenticated', 'public.leads', 'is_spam', 'select')) then
-    raise exception '0106: authenticated must read leads.tenant_id, service_of_interest and is_spam';
+    raise exception 'U5+U6: authenticated must read leads.tenant_id, service_of_interest and is_spam';
   end if;
   if has_table_privilege('authenticated', 'public.leads', 'select') then
-    raise exception '0106: authenticated must read leads through the column grant, never table-wide';
+    raise exception 'U5+U6: authenticated must read leads through the column grant, never table-wide';
   end if;
 
   -- ---- 2. the guide: in the catalog at revision 1 (new), its place, caps and screens -------
@@ -227,10 +227,10 @@ begin
                     and title = 'Services and projects'
                     and caps = array['services.write', 'portfolio.write', 'seo.entityMeta']
                     and screens = array['/admin/services', '/admin/disciplines', '/admin/portfolio']) then
-    raise exception '0106: the catalog must hold services-and-projects at revision 1, place 42';
+    raise exception 'U5+U6: the catalog must hold services-and-projects at revision 1, place 42';
   end if;
   if (select count(*) from app.help_guide_catalog where sort_order = 42) <> 1 then
-    raise exception '0106: place 42 must hold one guide';
+    raise exception 'U5+U6: place 42 must hold one guide';
   end if;
   select string_agg(t.id::text, ', ') into v_bad
     from public.tenants t
@@ -238,7 +238,7 @@ begin
                       where h.tenant_id = t.id and h.slug = 'services-and-projects'
                         and h.sort_order = 42 and h.title = 'Services and projects');
   if v_bad is not null then
-    raise exception '0106: tenants without the services-and-projects guide: %', v_bad;
+    raise exception 'U5+U6: tenants without the services-and-projects guide: %', v_bad;
   end if;
 
   -- ---- 3. no API role gained anything on the help machinery -------------------------------
@@ -250,6 +250,6 @@ begin
      or has_function_privilege('service_role', 'app.seed_help_articles(uuid)', 'execute')
      or has_table_privilege('authenticated', 'app.help_guide_catalog', 'select')
      or has_table_privilege('anon', 'app.help_guide_catalog', 'select') then
-    raise exception '0106: an API role may read the help set, the catalog or seed guides';
+    raise exception 'U5+U6: an API role may read the help set, the catalog or seed guides';
   end if;
 end $$;
