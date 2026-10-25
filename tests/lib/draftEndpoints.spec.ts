@@ -760,12 +760,65 @@ describe('comparing a change with the live site (R12)', () => {
     expect(auditRowsOf(db)).toEqual([]);
   });
 
-  it('a long text is clipped as a version shows it; a consent record says only "changed"', async () => {
+  it('a long text is clipped as a version shows it', async () => {
     const long = 'x'.repeat(400);
     db.tables['services'] = [service({ blurb: { en: long } })];
     drafts()[0] = serviceEdit({ base: { title: TITLE, blurb: { en: 'old' } } });
     const blurb = ((await look()).data['columns'] as Row[]).find((c) => c['column'] === 'blurb')!;
     expect((blurb['live'] as Row)['en']).toHaveLength(301);
+  });
+
+  it('a quote’s consent record says only "changed": neither live’s value nor the change’s leaves', async () => {
+    const quote = '88888888-8888-4888-8888-000000000001';
+    db.tables['testimonials'] = [
+      {
+        id: quote,
+        tenant_id: T,
+        slug: 'amal',
+        quote: { en: 'They listened.', ar: 'أصغوا.' },
+        author_name: 'Amal',
+        author_role: null,
+        client_id: null,
+        portfolio_id: null,
+        avatar_media_id: null,
+        placements: [],
+        consent_obtained_at: '2026-10-02T09:00:00.000Z',
+        consent_reference: 'REF-LIVE-NOW',
+        is_placeholder: false,
+        status: 'published',
+        sort_order: 1,
+        scheduled_for: null,
+        version: 4,
+      },
+    ];
+    // Live's consent record moved since the change began: both columns conflict.
+    drafts()[0] = draftRow({
+      id: id(2),
+      entity_type: 'testimonial',
+      entity_id: quote,
+      payload: {
+        consentReference: 'REF-MINE-SECRET',
+        consentObtainedAt: '2026-10-20T09:00:00.000Z',
+      },
+      base: {
+        consent_reference: 'REF-AT-START',
+        consent_obtained_at: '2026-09-01T09:00:00.000Z',
+      },
+      base_version: 3,
+      fields: ['consent_obtained_at', 'consent_reference'],
+    });
+    const res = await look('content_creator', id(2));
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const columns = res.data['columns'] as Row[];
+    expect(columns.map(({ column, kind }) => ({ column, kind }))).toEqual([
+      { column: 'consent_obtained_at', kind: 'changed' },
+      { column: 'consent_reference', kind: 'changed' },
+    ]);
+    for (const row of columns) {
+      expect(row).not.toHaveProperty('live');
+      expect(row).not.toHaveProperty('yours');
+    }
+    expect(JSON.stringify(res.body)).not.toMatch(/REF-|2026-10-02|2026-10-20|2026-09-01/);
   });
 
   it('the row gone under the change: removed, nothing to compare', async () => {
