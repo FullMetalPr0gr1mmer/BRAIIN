@@ -86,6 +86,19 @@ const ALLOWLIST = [
       '(dist/server) and serves no responses to anyone, shared or not (EXC-011).',
     expires: '2026-11-30',
   },
+  {
+    id: 'GHSA-mrhx-c7xc-m3w5',
+    pkg: 'zod',
+    reason:
+      'Memory exhaustion validating an oversized array, affected range <4.6.6: every 3.x ' +
+      'release, and no 3.x fix exists. Astro`s own zod 4 is overridden to the fixed 4.6.7; ' +
+      'this entry covers the site`s direct zod@3.25.x (packages/schemas), whose move to zod 4 ' +
+      'is a migration of every schema (EXC-013). Mitigated at the edge of the attack: every ' +
+      'public write is capped at 128 KB by the middleware before any handler parses it ' +
+      '(PUBLIC_API_BODY_LIMIT, H14), so no unauthenticated array reaches zod at a size that ' +
+      'can exhaust an isolate; admin writes need a staff session and the CSRF token.',
+    expires: '2026-12-31',
+  },
 ];
 
 function runAudit() {
