@@ -162,7 +162,11 @@ for (const [locale, paths] of Object.entries(PAGES)) {
       const html = await res!.text();
       expect(html.split(LOADER), 'exactly one loader tag').toHaveLength(2);
       const policy = res!.headers()['content-security-policy'] ?? '';
-      expect(policy).toMatch(/script-src [^;]*https:\/\/www\.googletagmanager\.com/);
+      // gtag's own path, never the whole host (it also serves gtm.js, any container's code).
+      expect(policy).toMatch(
+        /script-src [^;]*https:\/\/www\.googletagmanager\.com\/gtag\/(?:[\s;]|$)/,
+      );
+      expect(policy).not.toMatch(/script-src [^;]*https:\/\/www\.googletagmanager\.com(?:[\s;]|$)/);
       expect(policy).toMatch(/connect-src [^;]*https:\/\/\*\.google-analytics\.com/);
       expect(policy).not.toContain("'unsafe-inline'");
 
@@ -251,6 +255,32 @@ for (const [locale, paths] of Object.entries(PAGES)) {
     }
   });
 }
+
+test('the policy refuses a GTM container from the host it lists gtag.js on', async ({
+  browser,
+}) => {
+  // gtm.js?id=GTM-<any> runs whatever its container says: the reason script-src names
+  // /gtag/ only. No consent here, so the loader requests nothing and reports nothing.
+  const { context, page, google } = await visitor(browser);
+  try {
+    const res = await page.goto(PAGES.en.next, { waitUntil: 'networkidle' });
+    expect((await res!.text()).split(LOADER)).toHaveLength(2);
+    await page.evaluate(() => {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.googletagmanager.com/gtm.js?id=GTM-U15E2E1';
+      document.head.appendChild(tag);
+    });
+    await expect
+      .poll(async () => (await violations(page)).filter((v) => v.includes('/gtm.js')).length)
+      .toBe(1);
+    expect(
+      google.filter((u) => u.includes('/gtm.js')),
+      'gtm.js never requested',
+    ).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
 
 test('a visitor who already said yes loads gtag at once, and only gtag from Google first', async ({
   browser,

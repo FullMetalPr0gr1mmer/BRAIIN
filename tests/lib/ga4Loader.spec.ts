@@ -22,8 +22,8 @@ import { GA4_CSP_SOURCES } from '@/lib/http/securityHeaders';
 //   - on withdrawal: Google's off switch, read from the cookie on every ask (so a no given in
 //     another window stops the next hit at once); consent mode denied, no second request, the
 //     _ga cookies cleared on the host and its parents; a page loaded without consent clears them;
-//   - the Report-Only cycle: a refused Google host is reported (the directive and the origin,
-//     never the URL), at most five a page.
+//   - the Report-Only cycle: a refused Google address is reported (the directive, the origin
+//     and the path, never the query), at most five a page.
 
 const SOURCE = readFileSync('public/scripts/ga4.js', 'utf8');
 const ID = 'G-TEST1234';
@@ -265,7 +265,8 @@ describe('after analytics consent', () => {
   it('requests gtag.js once, from the host the CSP lists, with consent mode and the privacy settings', () => {
     const page = load({ cookies: { [CONSENT_COOKIE]: consentValue(choice(true)) } });
     expect(page.appended).toEqual([{ src: GTAG, async: true }]);
-    expect(GA4_CSP_SOURCES.script).toContain(new URL(GTAG).origin);
+    // The script-src source is a path (ending in "/", so it matches by prefix).
+    expect(GA4_CSP_SOURCES.script.some((source) => GTAG.startsWith(source))).toBe(true);
     const layer = page.dataLayer()!;
     expect(layer[0]).toEqual([
       'consent',
@@ -490,13 +491,13 @@ describe('on withdrawal', () => {
   });
 });
 
-describe('the Report-Only cycle: a refused Google host is reported, never the URL', () => {
+describe('the Report-Only cycle: a refused Google address is reported, never its query', () => {
   const violation = (blockedURI: string, effectiveDirective = 'connect-src') => ({
     blockedURI,
     effectiveDirective,
   });
 
-  it('reports the directive and the origin of a Google host, once each, at most five', () => {
+  it('reports the directive and a Google address without its query, once each, at most five', () => {
     const page = load({ cookies: { [CONSENT_COOKIE]: consentValue(choice(true)) } });
     page.dispatch(
       'securitypolicyviolation',
@@ -514,7 +515,7 @@ describe('the Report-Only cycle: a refused Google host is reported, never the UR
         body: {
           level: 'warn',
           message:
-            'GA4: the CSP refused connect-src https://region9.google-analytics.com (not listed)',
+            'GA4: the CSP refused connect-src https://region9.google-analytics.com/g/collect (not listed)',
           source: 'ga4-csp',
           path: '/services/logo',
         },
@@ -532,6 +533,17 @@ describe('the Report-Only cycle: a refused Google host is reported, never the UR
       page.dispatch('securitypolicyviolation', violation(`https://${host}/p?x=1`, 'img-src'));
     }
     expect(page.beacons).toHaveLength(5);
+  });
+
+  it('names the path a listed host was refused on (script-src lists one path of it)', () => {
+    const page = load({ cookies: { [CONSENT_COOKIE]: consentValue(choice(true)) } });
+    page.dispatch(
+      'securitypolicyviolation',
+      violation('https://www.googletagmanager.com/gtm.js?id=GTM-ABC1234#x', 'script-src-elem'),
+    );
+    expect(page.beacons.map((b) => (b.body as { message: string }).message)).toEqual([
+      'GA4: the CSP refused script-src-elem https://www.googletagmanager.com/gtm.js (not listed)',
+    ]);
   });
 
   it('listens only once Google has been asked for (after consent)', () => {

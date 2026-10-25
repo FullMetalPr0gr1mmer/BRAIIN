@@ -311,7 +311,10 @@ has loaded, then `g/collect` hits; GA4's Realtime report shows the visit. "Cooki
 "Reject non-essential": no further hits, and the `_ga` cookies are gone. Search
 (`/search?q=…`) never carries the loader. Over the first release cycle:
 `select created_at, message from system_logs where source = 'ga4-csp' order by id desc limit 20;`
-must stay empty; a row names a Google host the CSP refused, for a reviewed PR (CLAUDE.md §3).
+must stay empty; a row names a Google address (host and path, never the query) the CSP
+refused, for a reviewed PR (CLAUDE.md §3). A row naming `www.googletagmanager.com` with a path
+outside `/gtag/` (`gtm.js`, `debug/…`) is expected to stay refused: script-src lists only
+gtag's path on purpose.
 
 **Rollback.** Remove the id on `/admin/integrations` (immediate: the next page view loads
 nothing and lists no Google host); or a PR that takes `GA4_NOTICE_READY` out of `vars`.

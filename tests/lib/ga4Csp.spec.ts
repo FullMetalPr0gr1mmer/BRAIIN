@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   GA4_CSP_SOURCES,
@@ -33,10 +34,29 @@ const TODAY =
   "form-action 'self'; frame-ancestors 'self'; manifest-src 'self'; worker-src 'self' blob:; " +
   'upgrade-insecure-requests';
 
+/**
+ * Whether a CSP host-source allows a URL (CSP3 "does url match expression", the parts a GA4
+ * source uses): the scheme, the host (`*.` a subdomain wildcard), then the path: none matches
+ * every path, one ending in "/" matches by prefix, any other exactly. The query never counts.
+ */
+function cspAllows(source: string, href: string): boolean {
+  const m = /^(https:)\/\/([^/]+)(\/.*)?$/.exec(source);
+  if (!m) return false;
+  const [, scheme, host = '', path] = m;
+  const url = new URL(href);
+  if (url.protocol !== scheme) return false;
+  const hostMatches = host.startsWith('*.')
+    ? url.hostname.endsWith(host.slice(1))
+    : url.hostname === host;
+  if (!hostMatches) return false;
+  if (path === undefined) return true;
+  return path.endsWith('/') ? url.pathname.startsWith(path) : url.pathname === path;
+}
+
 describe('GA4_CSP_SOURCES', () => {
-  it('are the hosts gtag.js needs without the Ads features, and nothing wider', () => {
+  it('are the sources gtag.js needs without the Ads features, and nothing wider', () => {
     expect(GA4_CSP_SOURCES).toEqual({
-      script: ['https://www.googletagmanager.com'],
+      script: ['https://www.googletagmanager.com/gtag/'],
       connect: [
         'https://www.googletagmanager.com',
         'https://*.google-analytics.com',
@@ -44,13 +64,51 @@ describe('GA4_CSP_SOURCES', () => {
       ],
       img: ['https://www.googletagmanager.com', 'https://*.google-analytics.com'],
     });
+    // connect-src and img-src are hosts; script-src is the one path (below).
+    for (const source of [...GA4_CSP_SOURCES.connect, ...GA4_CSP_SOURCES.img]) {
+      expect(source, source).toMatch(/^https:\/\/(\*\.)?[a-z0-9.-]+\.com$/);
+    }
     const all = [...GA4_CSP_SOURCES.script, ...GA4_CSP_SOURCES.connect, ...GA4_CSP_SOURCES.img];
     for (const source of all) {
-      expect(source, source).toMatch(/^https:\/\/(\*\.)?[a-z0-9.-]+\.com$/);
       // Never the Ads hosts, never all of google.com, never a keyword.
       expect(source).not.toMatch(/doubleclick|googlesyndication|^https:\/\/\*\.google\.com$|'/);
     }
     expect(Object.isFrozen(GA4_CSP_SOURCES) && Object.isFrozen(GA4_CSP_SOURCES.connect)).toBe(true);
+  });
+
+  it('script-src allows gtag.js and its destination scripts, never gtm.js (any container runs code)', () => {
+    const allows = (href: string) => GA4_CSP_SOURCES.script.some((s) => cspAllows(s, href));
+    // The loader's own request (public/scripts/ga4.js) and what gtag.js loads after it.
+    const loader = readFileSync('public/scripts/ga4.js', 'utf8');
+    const gtag = /const GTAG = '([^']+)';/.exec(loader)?.[1];
+    expect(gtag).toBe('https://www.googletagmanager.com/gtag/js?id=');
+    expect(allows(`${gtag}G-TEST1234`)).toBe(true);
+    expect(
+      allows('https://www.googletagmanager.com/gtag/destination?id=G-TEST1234&l=dataLayer'),
+    ).toBe(true);
+    // The same host's other scripts: a GTM container (attacker-configurable), Tag Assistant's
+    // debug bootstrap, and paths that only begin like gtag's; another host or scheme.
+    for (const href of [
+      'https://www.googletagmanager.com/gtm.js?id=GTM-ABC1234',
+      'https://www.googletagmanager.com/gtm.js?id=GTM-ABC1234&gtag=/gtag/js',
+      'https://www.googletagmanager.com/debug/bootstrap?id=G-TEST1234',
+      'https://www.googletagmanager.com/gtag',
+      'https://www.googletagmanager.com/gtagx/js',
+      'https://evil.googletagmanager.com/gtag/js?id=G-TEST1234',
+      'http://www.googletagmanager.com/gtag/js?id=G-TEST1234',
+    ]) {
+      expect(allows(href), href).toBe(false);
+    }
+    // The matcher itself, on the forms the other two directives use.
+    expect(
+      cspAllows(
+        'https://*.google-analytics.com',
+        'https://region1.google-analytics.com/g/collect?v=2',
+      ),
+    ).toBe(true);
+    expect(
+      cspAllows('https://www.googletagmanager.com', 'https://www.googletagmanager.com/gtm.js'),
+    ).toBe(true);
   });
 });
 
@@ -91,7 +149,7 @@ describe('buildCsp with and without GA4', () => {
       "'self'",
       `'nonce-${NONCE}'`,
       "'sha256-abc='",
-      'https://www.googletagmanager.com',
+      'https://www.googletagmanager.com/gtag/',
     ]);
   });
 });

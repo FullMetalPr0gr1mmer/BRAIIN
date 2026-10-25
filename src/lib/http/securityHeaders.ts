@@ -44,13 +44,23 @@ export const CSP_REPORT_ONLY = false;
  * Ads features off (consent mode denies ad storage, Google signals and ad personalisation off),
  * so the Ads hosts (`*.g.doubleclick.net`, `pagead2.googlesyndication.com`, `frame-src`) are not
  * here, and Google's `https://*.google.com` for connect-src is narrowed to the GA4 collection
- * hosts under it (`*.analytics.google.com`). A request gtag.js makes to a host not listed is
- * refused by the browser, and the loader reports which host and directive (never the URL) to
- * the first-party error log: that is the Report-Only cycle (U15's as-built), with nothing ever
- * loosened to find out. A host joins only in a reviewed PR (CLAUDE.md §7, the CSP line).
+ * hosts under it (`*.analytics.google.com`). script-src names a PATH, not the host: the host
+ * also serves `gtm.js?id=GTM-<any container>`, which anyone can configure to run code (a known
+ * CSP bypass), while gtag.js and the destination scripts it loads all live under `/gtag/` (a
+ * source path ending in "/" matches by prefix, and the query never counts). A request gtag.js
+ * makes outside the list is refused by the browser, and the loader reports the directive and
+ * the address without its query to the first-party error log: that is the Report-Only cycle
+ * (U15's as-built), with nothing ever loosened to find out. A source joins only in a reviewed
+ * PR (CLAUDE.md §7, the CSP line).
+ *
+ * Residual (recorded for the owner's sign-off with the notice, U15's as-built): connect-src
+ * and img-src accept a hit for ANY GA property, so script injected into a GA4 page could send
+ * what it reads to someone else's property. It needs an injection foothold first, a public
+ * page carries no nonced element such a script could borrow, and the switch is off in
+ * production.
  */
 export const GA4_CSP_SOURCES = Object.freeze({
-  script: Object.freeze(['https://www.googletagmanager.com']),
+  script: Object.freeze(['https://www.googletagmanager.com/gtag/']),
   connect: Object.freeze([
     'https://www.googletagmanager.com',
     'https://*.google-analytics.com',

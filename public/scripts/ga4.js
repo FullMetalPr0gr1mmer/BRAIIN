@@ -27,9 +27,10 @@
  * denied, nothing more loaded, and the `_ga` cookies cleared as far as a page can (this host
  * and its parent domains). A page loaded without consent clears them too.
  *
- * THE REPORT-ONLY CYCLE (U15's as-built): a request gtag.js makes to a host the CSP does not
- * list is refused by the browser, and this reports the directive and the host (never the URL,
- * whose query carries the visitor's id) to the first-party error log, at most five a page.
+ * THE REPORT-ONLY CYCLE (U15's as-built): a request gtag.js makes outside what the CSP lists
+ * (a host, or a path outside the one script path) is refused by the browser, and this reports
+ * the directive and the address without its query or fragment (the query carries the
+ * visitor's id) to the first-party error log, at most five a page.
  */
 (function () {
   'use strict';
@@ -127,15 +128,17 @@
   function watchCsp() {
     const seen = new Set();
     document.addEventListener('securitypolicyviolation', (event) => {
-      let origin;
+      let where;
       try {
         const url = new URL(event.blockedURI);
         if (!GOOGLE.test(url.hostname)) return;
-        origin = url.origin;
+        // The path too (script-src lists one path of a host, so the host alone would not say
+        // what was refused), never the query or fragment.
+        where = url.origin + url.pathname;
       } catch {
         return;
       }
-      const key = event.effectiveDirective + ' ' + origin;
+      const key = event.effectiveDirective + ' ' + where;
       if (seen.has(key) || seen.size >= 5) return;
       seen.add(key);
       try {
@@ -144,7 +147,7 @@
           JSON.stringify({
             level: 'warn',
             message:
-              'GA4: the CSP refused ' + event.effectiveDirective + ' ' + origin + ' (not listed)',
+              'GA4: the CSP refused ' + event.effectiveDirective + ' ' + where + ' (not listed)',
             source: 'ga4-csp',
             path: location.pathname,
           }),
