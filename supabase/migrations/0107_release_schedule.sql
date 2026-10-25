@@ -1006,8 +1006,10 @@ grant execute on function public.claim_scheduled_releases(int) to service_role;
 -- moved under a change), `refused` (the database refused a change as that person),
 -- `releases-off` (switched off since), `error` (anything else). The failure is the code and,
 -- for a change at fault, the drafts' ids: never a message or a value. Under the tenant's
--- release lock; only a release still scheduled is failed (one that went live, failed or was
--- cancelled meanwhile is left as it is). Its drafts are released: pending changes again.
+-- release lock; only a release still scheduled AND due is failed: one that went live, failed or
+-- was cancelled meanwhile, or that a person moved to a later time since the cron claimed it
+-- (reschedule_release takes the same lock), is left as it is, as a fire leaves it. Its drafts
+-- are released: pending changes again.
 create or replace function public.fail_scheduled_release(p_tenant uuid, p_release uuid,
                                                          p_code text, p_draft_ids uuid[] default null)
   returns jsonb
@@ -1015,6 +1017,7 @@ create or replace function public.fail_scheduled_release(p_tenant uuid, p_releas
 as $$
 declare
   v_status text;
+  v_at timestamptz;
   v_released int;
 begin
   if current_user::text <> 'service_role' then
@@ -1028,14 +1031,14 @@ begin
       using errcode = '22023';
   end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('release:' || p_tenant::text, 0));
-  select r.status into v_status
+  select r.status, r.scheduled_for into v_status, v_at
     from public.content_releases r
    where r.tenant_id = p_tenant and r.id = p_release
      for update;
   if not found then
     raise exception 'fail_scheduled_release: no such release on this site' using errcode = 'P0002';
   end if;
-  if v_status <> 'scheduled' then
+  if v_status <> 'scheduled' or v_at > pg_catalog.now() then
     return pg_catalog.jsonb_build_object('failed', false, 'status', v_status);
   end if;
   update public.content_drafts as d set release_id = null
@@ -1224,14 +1227,15 @@ grant execute on function public.unschedule_release(uuid, text, uuid, int) to se
 --      (55P03). Not twice (55000), and not over pending changes or scheduled releases left from
 --      an earlier time (55000: there can be none; it says so rather than mixing them in).
 --   3. The legacy schedule: each row app.publish_scheduled() would have published by itself
---      (its tables, held equal by tests/lib/releaseScheduleSql.spec.ts) and that is scheduled
---      becomes a pending change {status: published}, claimed by a `legacy_schedule` release at
---      its time (now when it has none, or a time passed: the next minute fires it), its live
---      status moved from scheduled to draft. Releases group the rows by time and scheduler, at
---      most 60 changes each. The scheduler is the row's last editor when that person may still
---      publish it (live, of this site, among its author roles), else the fallback. Rows of the
---      registry's other status tables that are scheduled were never published by the legacy
---      path either; they are counted (`left_scheduled`) and left as they are.
+--      (its tables, held equal by tests/lib/releaseScheduleSql.spec.ts, and its rows: status
+--      scheduled WITH a time) becomes a pending change {status: published}, claimed by a
+--      `legacy_schedule` release at that time (a time passed: the next minute fires it), its
+--      live status moved from scheduled to draft. Releases group the rows by time and
+--      scheduler, at most 60 changes each. The scheduler is the row's last editor when that
+--      person may still publish it (live, of this site, among its author roles), else the
+--      fallback. What the legacy path never publishes by itself is left as it is and counted
+--      (`left_scheduled`): a row of those tables scheduled with no time, and a scheduled row of
+--      the registry's other status tables (team members, statistics, certifications).
 --   4. The baseline: version N (1 the first time), "Releases switched on", nothing purged.
 --   5. The flag, then the audit row (`releases.enable`, the operator), all in one transaction.
 create or replace function app.enable_releases(p_tenant uuid, p_operator uuid, p_fallback_scheduler uuid)
@@ -1298,7 +1302,9 @@ begin
       using errcode = '55000';
   end if;
 
-  -- 3. The legacy schedule, row by row: the rows locked, read, then moved to draft.
+  -- 3. The legacy schedule, row by row: the rows locked, read, then moved to draft. Exactly
+  -- app.publish_scheduled()'s rows: scheduled, with a time. A row scheduled with no time is
+  -- never published by it, so it is counted and left as it is.
   foreach v_t in array c_tables loop
     select e.* into v_reg from app.release_entities e where e.table_name = v_t;
     if not found or not v_reg.has_status then
@@ -1309,15 +1315,21 @@ begin
       'select 1 from public.%I as t where t.tenant_id = $1 and t.status = ''scheduled'' for update', v_t)
       using p_tenant;
     execute pg_catalog.format(
+      'select count(*)::int from public.%I as t '
+      'where t.tenant_id = $1 and t.status = ''scheduled'' and t.scheduled_for is null', v_t)
+      into v_n using p_tenant;
+    v_left := v_left + v_n;
+    execute pg_catalog.format(
       'select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('
-      '''entity_id'', t.id, ''at'', coalesce(t.scheduled_for, pg_catalog.now()), '
+      '''entity_id'', t.id, ''at'', t.scheduled_for, '
       '''updated_by'', t.updated_by, ''row'', pg_catalog.to_jsonb(t)) order by t.id), ''[]''::jsonb) '
-      'from public.%I as t where t.tenant_id = $1 and t.status = ''scheduled''', v_t)
+      'from public.%I as t where t.tenant_id = $1 and t.status = ''scheduled'' and t.scheduled_for is not null', v_t)
       into v_found using p_tenant;
     continue when pg_catalog.jsonb_array_length(v_found) = 0;
     execute pg_catalog.format(
       'with u as (update public.%I as t set status = ''draft'' '
-      'where t.tenant_id = $1 and t.status = ''scheduled'' returning t.id, t.version) '
+      'where t.tenant_id = $1 and t.status = ''scheduled'' and t.scheduled_for is not null '
+      'returning t.id, t.version) '
       'select coalesce(pg_catalog.jsonb_object_agg(u.id, u.version), ''{}''::jsonb) from u', v_t)
       into v_versions using p_tenant;
     select v_rows || coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
@@ -1661,6 +1673,16 @@ begin
   if v_src !~ 'array\[''disciplines'', ''services'', ''blog_posts'', ''portfolio'', ''pages'',\s+''testimonials'', ''service_cases'', ''faq_items''\]'
      or v_src !~ 'not app\.releases_enabled\(tenant_id\)' then
     raise exception '0107: app.publish_scheduled() is not the one app.enable_releases converts for (0098, skipping tenants with releases on)';
+  end if;
+  -- ...and its rows: scheduled WITH a time (a timeless one is never published by it, so the
+  -- switch leaves it); a failure leaves a release a person moved since it was claimed.
+  select prosrc into v_src from pg_proc where oid = 'app.enable_releases(uuid, uuid, uuid)'::regprocedure;
+  if v_src !~ 'scheduled_for is not null' or v_src ~ 'coalesce\(t\.scheduled_for' then
+    raise exception '0107: app.enable_releases must convert only the rows app.publish_scheduled() publishes (scheduled with a time)';
+  end if;
+  select prosrc into v_src from pg_proc where oid = 'public.fail_scheduled_release(uuid, uuid, text, uuid[])'::regprocedure;
+  if v_src !~ 'v_status <> ''scheduled'' or v_at > pg_catalog\.now\(\)' then
+    raise exception '0107: fail_scheduled_release must leave a release that is no longer due';
   end if;
 
   -- ---- Nothing was switched on and nothing scheduled.
