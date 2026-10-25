@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAINTENANCE_DEFAULTS } from '@schemas/maintenance';
 import { MAINTENANCE_KV_KEY } from '@/lib/http/maintenance';
 import { GA4_CSP_SOURCES } from '@/lib/http/securityHeaders';
-import { clearVisibilityMemo } from '@/lib/http/visibility';
+import {
+  HIDDEN_CACHE_CONTROL,
+  VISIBILITY_KV_KEY,
+  clearVisibilityMemo,
+} from '@/lib/http/visibility';
+import { mintAccessCookie, pageAccessCookieName } from '@/lib/visibility/access';
 import { __kv } from '../stubs/cloudflare-workers';
 
 // The middleware's GA4 step (Admin v2 U15): with the switch off, nothing is read and every
@@ -44,14 +49,23 @@ const run = onRequest as unknown as Handler;
 
 const HTML = { 'content-type': 'text/html; charset=utf-8' };
 
-function context(path: string, routePattern: string | undefined, method = 'GET') {
+function context(
+  path: string,
+  routePattern: string | undefined,
+  method = 'GET',
+  cookie?: { name: string; value: string },
+) {
   const url = new URL(`https://www.example.test${path}`);
   return {
     request: new Request(url, { method }),
     url,
     routePattern,
     locals: {} as Record<string, unknown>,
-    cookies: { get: () => undefined, set: () => undefined, delete: () => undefined },
+    cookies: {
+      get: (name: string) => (cookie && cookie.name === name ? { value: cookie.value } : undefined),
+      set: () => undefined,
+      delete: () => undefined,
+    },
     redirect: (to: string, status = 302) =>
       new Response(null, { status, headers: { Location: to } }),
   };
@@ -66,8 +80,9 @@ async function visit(
   route: string | undefined,
   method = 'GET',
   headers: Record<string, string> = HTML,
+  cookie?: { name: string; value: string },
 ) {
-  const ctx = context(path, route, method);
+  const ctx = context(path, route, method, cookie);
   const seen: { ga4: unknown; readsBefore: number }[] = [];
   const next: Next = async () => {
     seen.push({ ga4: ctx.locals['ga4'], readsBefore: read.calls });
@@ -192,6 +207,36 @@ describe('the switch on', () => {
     expect(ctx.locals['ga4']).toBeUndefined();
     expect(google(res)).toBe(false);
     expect(read.calls).toBe(0);
+  });
+
+  it('never for a page unlocked by its password (a private answer)', async () => {
+    // The page-visibility snapshot a password save writes (U14b; as middlewareVisibility.spec),
+    // and the page's own valid access cookie: the page renders, privately, and loads no GA4.
+    const tenant = '11111111-1111-4111-8111-111111111111';
+    const pageId = '3f1b2c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
+    __kv.set(
+      VISIBILITY_KV_KEY,
+      JSON.stringify({
+        v: 1,
+        builtAt: null,
+        pages: { about: { mode: 'password', id: pageId, pv: 3 } },
+        templates: {},
+        tenant,
+      }),
+    );
+    clearVisibilityMemo();
+    const value = await mintAccessCookie('test-dummy-lead-pii-enc-key', { pageId, pv: 3 });
+    const { res, ctx, seen } = await visit('/about', '/about', 'GET', HTML, {
+      name: pageAccessCookieName(pageId),
+      value,
+    });
+    expect(res.status).toBe(200);
+    expect(seen).toHaveLength(1);
+    expect(res.headers.get('cache-control')).toBe(HIDDEN_CACHE_CONTROL);
+    expect(read.calls).toBe(0);
+    expect(ctx.locals['ga4']).toBeUndefined();
+    expect(seen[0]?.ga4).toBeUndefined();
+    expect(google(res)).toBe(false);
   });
 
   it('nor for the maintenance page itself, which answers before the render', async () => {
