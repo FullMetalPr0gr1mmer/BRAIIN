@@ -127,7 +127,7 @@
   - no ribbon on public pages a signed-in person sees past maintenance (D13): the admin's top bar says it is on;
   - the reconcile after "Back on" runs every 10 minutes in G2's schedule (the plan's §5.7 default), not hourly as U9's brief said: one fewer cron trigger, and the row follows the edge sooner;
   - every admin clock follows the studio's zone (D3), and so do the busiest hours (G1) and the uptime strip's days (G2), whose guides U9 re-words; page visibility's hide-from and show-on days stay Riyadh days (U14a stores their midnights at +03:00 and the edge compares instants), which its guide says, so a zone change never moves a window someone already set (moving them is a follow-up with its own guide edit);
-  - C9a (0091) wrote, before this PR, that the zone moves to `site_profile.timezone` (B7.5): it is `site_settings.timezone` (the first bullet); C9a's screen reads `crm_settings.timezone` but never shows or writes it.
+  - C9a (0091) wrote, before this PR, that the zone moves to `site_profile.timezone` (B7.5): it is `site_settings.timezone` (the first bullet); C9a's screen read `crm_settings.timezone` but never showed or wrote it; since C14a no code reads it, and C14b dropped the column.
 - **Copy corrected** where untrue:
   - maintenance "…after you publish";
   - page visibility "Takes effect when you publish" / "Hidden from the site after you publish" → "Applies to the live site within a few minutes" until releases switch on (U14a, D7);
