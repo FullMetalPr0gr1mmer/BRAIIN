@@ -2,6 +2,7 @@
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminServiceEditor from '@/components/admin/islands/AdminServiceEditor';
 import Note from '@/components/admin/ui/Note.astro';
+import { readHeadRow } from '@/lib/admin/editorHead';
 import { firstTab, visibleTabs } from '@/lib/admin/editorTabs';
 import { loadSeoPanelSetup, type SeoPanelSetup } from '@/lib/admin/seo/list';
 import {
@@ -25,9 +26,10 @@ export const prerender = false;
 //   - the SEO tab for seo.entityMeta holders (read-only at `view`), its setup read here;
 //   - the Leads tab for leads.manage holders: the newest leads naming the service and their
 //     count, read here through the caller's own client (counts and safe columns only).
-// The head names the service as stored (the caller's read). A row this read cannot see (a
-// pending create with releases on, or another tenant's) gets a plain title: the island loads
-// through the API, which answers for it.
+// The head names the service as stored (the caller's read, and only for a role the services
+// API admits: editorHead.ts). A row this read cannot see (a pending create with releases on,
+// or another tenant's) or may not name gets a plain title: the island loads through the API,
+// which answers for it.
 const ui = uiFor('services');
 const id = Astro.params.id ?? null;
 const session = Astro.locals.session;
@@ -44,13 +46,10 @@ let leadsFailed = false;
 let leadCount: number | null = null;
 
 if (valid && session && sb) {
-  const { data } = await sb
-    .from('services')
-    .select('slug,title')
-    .eq('tenant_id', session.tenantId)
-    .eq('id', id)
-    .maybeSingle();
-  const row = (data ?? null) as { slug?: unknown; title?: { en?: unknown } } | null;
+  const row = (await readHeadRow(sb, session, 'services', 'slug,title', id)) as {
+    slug?: unknown;
+    title?: { en?: unknown };
+  } | null;
   if (row) {
     slug = typeof row.slug === 'string' ? row.slug : null;
     if (typeof row.title?.en === 'string' && row.title.en.trim()) title = row.title.en.trim();

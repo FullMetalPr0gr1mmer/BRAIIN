@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -10,6 +11,10 @@ import {
 import { ServiceCaseWriteSchema, ServiceUpdateSchema, ServiceWriteSchema } from '@schemas/admin';
 import { ROLES, type AuthContext } from '@/lib/auth/types';
 import { barBucket } from '@/lib/admin/charts';
+import { canReadResource } from '@/lib/admin/editorAccess';
+import { readHeadList, readHeadRow } from '@/lib/admin/editorHead';
+import { RESOURCES } from '@/lib/admin/resources';
+import { assertAnyCap } from '@/lib/authz/matrix';
 import { validateTabs, visibleTabs } from '@/lib/admin/editorTabs';
 import {
   SERVICE_LEAD_COLUMNS,
@@ -506,6 +511,111 @@ describe('the Leads tab’s one read (loadServiceLeads)', () => {
       'internal_notes',
     ]) {
       expect(SERVICE_LEAD_COLUMNS.split(',')).not.toContain(gated);
+    }
+  });
+});
+
+describe('a page’s head names a stored row only for a role the API admits (editorHead.ts)', () => {
+  // RLS lets every CMS staff role read a draft service, discipline or project (app.is_staff()),
+  // while their APIs admit Admin, Content Creator and SEO only: the head must not say more
+  // than the island, which loads through the API, is allowed to show.
+  const kernelAdmits = (slug: string, role: AuthContext['role']): boolean => {
+    const config = RESOURCES[slug]!;
+    try {
+      assertAnyCap(
+        { ...auth(role), isActive: true } as AuthContext,
+        config.readCaps ?? [config.writeCap],
+        config.readAccess ?? ['full', 'view', 'meta'],
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  it('canReadResource is the resource kernel’s read gate, for every resource and role', () => {
+    for (const slug of Object.keys(RESOURCES)) {
+      for (const role of ROLES) {
+        expect(canReadResource(slug, role), `${slug} × ${role}`).toBe(kernelAdmits(slug, role));
+      }
+    }
+    expect(canReadResource('no-such-resource', 'admin')).toBe(false);
+    for (const slug of ['services', 'disciplines', 'portfolio']) {
+      const admitted = ROLES.filter((role) => canReadResource(slug, role));
+      expect(admitted, slug).toEqual(['admin', 'content_creator', 'seo']);
+    }
+  });
+
+  function headDb(rows: Record<string, unknown>[]) {
+    const seen: { table: string; select: string; eq: [string, unknown][]; order: string[] }[] = [];
+    const sb = {
+      from: (table: string) => {
+        const q = { table, select: '', eq: [] as [string, unknown][], order: [] as string[] };
+        seen.push(q);
+        const api = {
+          select: (cols: string) => ((q.select = cols), api),
+          eq: (col: string, value: unknown) => (q.eq.push([col, value]), api),
+          order: (col: string) => (q.order.push(col), api),
+          maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
+          then: (resolve: (v: unknown) => unknown) =>
+            Promise.resolve(resolve({ data: rows, error: null })),
+        };
+        return api;
+      },
+    } as unknown as SupabaseClient;
+    return { sb, seen };
+  }
+
+  it('reads the row, tenant-scoped, for a role the API admits', async () => {
+    const { sb, seen } = headDb([{ title: { en: 'Logo Design' } }]);
+    expect(await readHeadRow(sb, auth('seo'), 'services', 'slug,title', T)).toEqual({
+      title: { en: 'Logo Design' },
+    });
+    expect(seen).toEqual([
+      {
+        table: 'services',
+        select: 'slug,title',
+        eq: [
+          ['tenant_id', T],
+          ['id', T],
+        ],
+        order: [],
+      },
+    ]);
+    const list = headDb([{ id: 'd1' }, { id: 'd2' }]);
+    expect(await readHeadList(list.sb, auth('content_creator'), 'disciplines', 'id')).toHaveLength(
+      2,
+    );
+    expect(list.seen[0]).toMatchObject({
+      table: 'disciplines',
+      eq: [['tenant_id', T]],
+      order: ['sort_order', 'id'],
+    });
+  });
+
+  it('reads nothing, and names nothing, for a role the API refuses (Developer, Sales)', async () => {
+    for (const role of ['developer', 'sales'] as const) {
+      for (const slug of ['services', 'portfolio']) {
+        const { sb, seen } = headDb([{ title: { en: 'A draft' } }]);
+        expect(await readHeadRow(sb, auth(role), slug, 'title', T), `${slug} × ${role}`).toBe(null);
+        expect(seen, `${slug} × ${role}`).toEqual([]);
+      }
+      const { sb, seen } = headDb([{ id: 'd1' }]);
+      expect(await readHeadList(sb, auth(role), 'disciplines', 'id')).toEqual([]);
+      expect(seen).toEqual([]);
+    }
+  });
+
+  it('the three pages read their heads through it, never a table of their own', () => {
+    for (const [page, table] of [
+      ['src/pages/admin/services/[id].astro', 'services'],
+      ['src/pages/admin/portfolio/[id].astro', 'portfolio'],
+      ['src/pages/admin/disciplines/[id].astro', 'disciplines'],
+    ] as const) {
+      const source = readFileSync(page, 'utf8');
+      expect(source, page).toMatch(/from '@\/lib\/admin\/editorHead'/);
+      expect(source, page).toMatch(new RegExp(`readHead(?:Row|List)\\([^)]*'${table}'`));
+      expect(source, page).not.toMatch(/\.from\(/);
     }
   });
 });

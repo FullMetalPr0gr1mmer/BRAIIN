@@ -3,6 +3,7 @@ import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminProjectEditor from '@/components/admin/islands/AdminProjectEditor';
 import Note from '@/components/admin/ui/Note.astro';
 import { PROJECT_TABS } from '@/components/admin/screens/projects/view';
+import { readHeadRow } from '@/lib/admin/editorHead';
 import { firstTab, visibleTabs } from '@/lib/admin/editorTabs';
 import { loadSeoPanelSetup, type SeoPanelSetup } from '@/lib/admin/seo/list';
 import { isUuid, servicesAreaAccess } from '@/lib/admin/servicesArea';
@@ -16,9 +17,10 @@ export const prerender = false;
 // the API refuses whatever this shows): read-only for a role that reads projects without
 // portfolio.write (SEO: it opens on the SEO tab), or for one that may not archive when the
 // project is archived; the SEO tab for seo.entityMeta holders (read-only at `view`), its setup
-// read here. The head names the project as stored (the caller's read); a row this read cannot
-// see (a pending create with releases on) gets a plain title, and the island loads through the
-// API, which answers for it.
+// read here. The head names the project as stored (the caller's read, and only for a role the
+// portfolio API admits: editorHead.ts); a row this read cannot see (a pending create with
+// releases on) or may not name gets a plain title, and the island loads through the API, which
+// answers for it.
 const id = Astro.params.id ?? null;
 const session = Astro.locals.session;
 const sb = Astro.locals.supabase;
@@ -30,12 +32,7 @@ let title = 'Project';
 let setup: SeoPanelSetup | null = null;
 if (valid && session && sb) {
   const [head] = await Promise.all([
-    sb
-      .from('portfolio')
-      .select('title')
-      .eq('tenant_id', session.tenantId)
-      .eq('id', id)
-      .maybeSingle(),
+    readHeadRow(sb, session, 'portfolio', 'title', id),
     access.seo === 'none'
       ? Promise.resolve()
       : loadSeoPanelSetup(sb, session, 'portfolio', id)
@@ -51,7 +48,7 @@ if (valid && session && sb) {
             });
           }),
   ]);
-  const en = (head.data as { title?: { en?: unknown } } | null)?.title?.en;
+  const en = (head as { title?: { en?: unknown } } | null)?.title?.en;
   if (typeof en === 'string' && en.trim()) title = en.trim();
 }
 
