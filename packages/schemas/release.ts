@@ -111,10 +111,23 @@ export const DraftRefSchema = z
   .strict();
 export type DraftRef = z.infer<typeof DraftRefSchema>;
 
+// ---- Scheduling (Admin v2 R11) ---------------------------------------------------------------
+
+/** A scheduled release goes live at least this many minutes ahead (releases.md §4.7). */
+export const RELEASE_SCHEDULE_MIN_MINUTES = 2;
+/** ...and at most this many days ahead. The database refuses outside 1 minute to 366 days. */
+export const RELEASE_SCHEDULE_MAX_DAYS = 366;
+
 /**
- * `POST /api/admin/releases` (publish now, R6) and its dry run. Strict: a field the
- * endpoint does not handle yet is refused, never ignored, so `scheduleAt` is a 400 until
- * scheduled releases (R11) add it here and handle it.
+ * When a release goes live: an ISO 8601 time WITH its offset (the dialog sends the studio's
+ * time, Riyadh by default, as an instant), never a local time a server would have to guess the
+ * zone of. Whether it is far enough ahead is the endpoint's to judge (it depends on now).
+ */
+export const ScheduleAtSchema = z.string().datetime({ offset: true });
+
+/**
+ * `POST /api/admin/releases` (publish now, R6; or, with `scheduleAt`, schedule it, R11) and
+ * its dry run. Strict: a field the endpoint does not handle is refused, never ignored.
  */
 export const PublishRequestSchema = z
   .object({
@@ -127,9 +140,38 @@ export const PublishRequestSchema = z
       }),
     note: ReleaseNoteSchema.optional(),
     kind: z.enum(['publish', 'rollback']).default('publish'),
+    scheduleAt: ScheduleAtSchema.optional(),
   })
   .strict();
 export type PublishRequest = z.infer<typeof PublishRequestSchema>;
+
+/** `PATCH /api/admin/releases/[id]`: move a scheduled release, at the version read. */
+export const RescheduleRequestSchema = z
+  .object({ version: z.number().int().min(1), scheduleAt: ScheduleAtSchema })
+  .strict();
+export type RescheduleRequest = z.infer<typeof RescheduleRequestSchema>;
+
+/**
+ * Why a scheduled release could not go live: a closed list, the words are the screens'
+ * (`fail_scheduled_release`'s CHECK holds the same list, tests/lib/releaseScheduleSql.spec.ts).
+ */
+export const RELEASE_FAILURE_CODES = [
+  // The person who scheduled it can no longer publish: inactive, locked, another role, gone.
+  'scheduler',
+  // Their role no longer publishes one of its changes.
+  'forbidden',
+  // A change is not as the release holds it.
+  'changed',
+  // The live site moved under one of its changes.
+  'conflict',
+  // The database refused a change as that person.
+  'refused',
+  // Releases were switched off since.
+  'releases-off',
+  // Anything else.
+  'error',
+] as const;
+export type ReleaseFailureCode = (typeof RELEASE_FAILURE_CODES)[number];
 
 /** UTF-8 bytes of a JSON value as sent: the Worker's early check against the DB's cap. */
 export function jsonBytes(value: unknown): number {
@@ -338,7 +380,7 @@ export const ApplyItemsSchema = z
     message: 'a change is listed twice',
   });
 
-/** `public.apply_release`'s arguments as R6 sends them (schedule and fire arrive with R11). */
+/** `public.apply_release`'s arguments to publish or dry-run (R6); a schedule and a fire have their own (R11). */
 export const ApplyRequestSchema = z
   .object({
     p_actor: Uuid,
@@ -355,6 +397,49 @@ export const ApplyRequestSchema = z
     path: ['p_restores_release_id'],
   });
 export type ApplyRequest = z.infer<typeof ApplyRequestSchema>;
+
+/** `apply_release` in `schedule` mode (R11): a publish's arguments and the time it goes live. */
+export const ScheduleApplyRequestSchema = z
+  .object({
+    p_actor: Uuid,
+    p_role: z.enum(PUBLISHER_ROLES),
+    p_mode: z.literal('schedule'),
+    p_items: ApplyItemsSchema,
+    p_note: ReleaseNoteSchema.nullable().optional(),
+    p_kind: z.literal('publish').default('publish'),
+    p_scheduled_for: ScheduleAtSchema,
+  })
+  .strict();
+export type ScheduleApplyRequest = z.infer<typeof ScheduleApplyRequestSchema>;
+
+/** `apply_release` in `fire` mode (R11): the release and its scheduler, nothing else. */
+export const FireApplyRequestSchema = z
+  .object({
+    p_actor: Uuid,
+    p_role: z.enum(PUBLISHER_ROLES),
+    p_mode: z.literal('fire'),
+    p_items: z.null(),
+    p_release_id: Uuid,
+  })
+  .strict();
+export type FireApplyRequest = z.infer<typeof FireApplyRequestSchema>;
+
+/** What a schedule answers: the release, when, and the version a move or a cancel names. */
+export const ScheduleAnswerSchema = z.object({
+  mode: z.literal('schedule'),
+  release_id: Uuid,
+  scheduled_for: z.string().min(1),
+  version: z.number().int().min(1),
+  item_count: z.number().int().min(1).max(RELEASE_MAX_ITEMS),
+});
+
+/** What a fire answers when it did nothing: the release went live, moved or was cancelled. */
+export const FireSkippedSchema = z.object({
+  mode: z.literal('fire'),
+  release_id: Uuid,
+  skipped: z.literal(true),
+  status: z.string().nullable(),
+});
 
 /** A team-member change in a publish's answer: applied, but no images kept (owner item O-12). */
 export const TeamMemberApplyItemSchema = z
@@ -690,6 +775,9 @@ export const RELEASE_ISSUE_CODES = [
   'link',
   // It points at a pending new item that is not in the selection.
   'requires',
+  // It points at a pending new item a scheduled release holds (R11): it cannot be added, so
+  // this waits until that release goes live, or is unscheduled.
+  'requires-scheduled',
   // It points at something this release removes.
   'parent-removed',
   // Entity SEO: the page it describes is not the one it was made for, or does not exist.
@@ -771,6 +859,29 @@ export const PublishResultSchema = z
   })
   .strict();
 export type PublishResult = z.infer<typeof PublishResultSchema>;
+
+/**
+ * What a schedule answers (R11): the scheduled release (its `version` is what a move or a
+ * cancel names), the changes it holds and the check's warnings. Nothing is live yet.
+ */
+export const ScheduleResultSchema = z
+  .object({
+    release: z
+      .object({
+        id: Uuid,
+        scheduledFor: z.string().min(1),
+        version: z.number().int().min(1),
+      })
+      .strict(),
+    items: z.array(
+      z.object({ entityType: z.string(), entityId: Uuid, op: DraftOpSchema }).strict(),
+    ),
+    warnings: z.array(
+      z.object({ draftId: Uuid, code: z.enum(RELEASE_WARNING_CODES), message: z.string() }),
+    ),
+  })
+  .strict();
+export type ScheduleResult = z.infer<typeof ScheduleResultSchema>;
 
 // ---- Versions, history and restore (Admin v2 R10) -------------------------------------------
 // `GET /api/admin/releases` (the versions), `GET /api/admin/releases/[id]` (one version's

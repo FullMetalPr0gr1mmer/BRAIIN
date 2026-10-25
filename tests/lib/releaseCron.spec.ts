@@ -22,6 +22,8 @@ vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
     rpc: async (fn: string, args: Record<string, unknown>) => {
       state.calls.push({ fn, args });
+      // The minute's fire step (R11) finds nothing due here: tests/lib/releaseFire.spec.ts has it.
+      if (fn === 'claim_scheduled_releases') return { data: [], error: null };
       if (fn === 'claim_release_purges') return state.claim();
       if (fn === 'record_release_purge') return state.record();
       if (fn === 'cache_purge_take') return state.take();
@@ -58,7 +60,7 @@ vi.mock('@/lib/admin/visibilitySync', () => ({
   },
 }));
 
-const { runReleasePurges, cronTags, RELEASE_JOBS, RELEASE_CLAIM_LIMIT } =
+const { runReleasePurges, cronTags, RELEASE_JOBS, RELEASE_CLAIM_LIMIT, RELEASE_PURGE_BUDGET } =
   await import('@/lib/cron/releases');
 const { purgeRetryAt, RELEASE_PURGE_MAX_ATTEMPTS } = await import('@/lib/release/afterEffects');
 const { resetPurgeBreaker, COLLAPSE_TAG } = await import('@/lib/http/purge');
@@ -281,7 +283,8 @@ describe('the Free plan’s 50 subrequests', () => {
     const used =
       state.calls.length + fetched.length + state.snapshotRequests + 2 * state.logs.length;
     expect(fetched).toHaveLength(2);
-    expect(used).toBeLessThanOrEqual(RELEASE_JOBS[0]!.budget);
+    expect(used).toBeLessThanOrEqual(RELEASE_PURGE_BUDGET);
+    expect(RELEASE_PURGE_BUDGET).toBeLessThanOrEqual(RELEASE_JOBS[0]!.budget);
     expect(RELEASE_JOBS[0]!.budget).toBeLessThanOrEqual(50);
   });
 });

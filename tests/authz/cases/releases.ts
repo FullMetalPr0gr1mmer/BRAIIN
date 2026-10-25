@@ -337,6 +337,73 @@ const versions: readonly Case[] = [
   },
 ];
 
+// R11: scheduling, moving and cancelling. A schedule is a publish with a time: the same per-change
+// gate. A move or a cancel admits every publisher, then each change the release holds must be the
+// person's to publish (its claimed drafts; the stub's one row is the release, scheduled at version
+// 1, and the claimed service change at once). Releases off: every CMS role through the gate, 409.
+const AN_HOUR_AHEAD = new Date(Date.now() + 60 * 60_000).toISOString();
+const SCHEDULED_ROW = { ...SERVICE_DRAFT, status: 'scheduled', release_id: UUID, version: 1 };
+
+const scheduling: readonly Case[] = [
+  {
+    name: 'release schedule: a service change',
+    load: () => import('@/pages/api/admin/releases/index'),
+    method: 'POST',
+    url: '/api/admin/releases',
+    body: { items: [{ draftId: UUID, draftVersion: 1 }], scheduleAt: AN_HOUR_AHEAD },
+    allow: ['admin', 'content_creator'],
+    row: SERVICE_DRAFT,
+    releases: true,
+    rpcs: {
+      apply_release: {
+        mode: 'schedule',
+        release_id: UUID,
+        scheduled_for: AN_HOUR_AHEAD,
+        version: 1,
+        item_count: 1,
+      },
+    },
+  },
+  {
+    name: 'release reschedule: a release of a service change',
+    load: () => import('@/pages/api/admin/releases/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/releases/${UUID}`,
+    body: { version: 1, scheduleAt: AN_HOUR_AHEAD },
+    allow: ['admin', 'content_creator'],
+    row: SCHEDULED_ROW,
+    releases: true,
+    rpcs: { reschedule_release: { release_id: UUID, scheduled_for: AN_HOUR_AHEAD, version: 2 } },
+  },
+  {
+    name: 'release unschedule: a release of a service change',
+    load: () => import('@/pages/api/admin/releases/[id]'),
+    method: 'DELETE',
+    url: `/api/admin/releases/${UUID}?version=1`,
+    allow: ['admin', 'content_creator'],
+    row: SCHEDULED_ROW,
+    releases: true,
+    rpcs: { unschedule_release: { release_id: UUID, status: 'cancelled', released: 1 } },
+  },
+  {
+    name: 'release reschedule (releases off)',
+    load: () => import('@/pages/api/admin/releases/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/releases/${UUID}`,
+    body: { version: 1, scheduleAt: AN_HOUR_AHEAD },
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    row: SCHEDULED_ROW,
+  },
+  {
+    name: 'release unschedule (releases off)',
+    load: () => import('@/pages/api/admin/releases/[id]'),
+    method: 'DELETE',
+    url: `/api/admin/releases/${UUID}?version=1`,
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    row: SCHEDULED_ROW,
+  },
+];
+
 export const cases: readonly Case[] = [
   {
     name: 'services create (releases on)',
@@ -527,4 +594,5 @@ export const cases: readonly Case[] = [
   ...publishItems,
   ...publishOff,
   ...versions,
+  ...scheduling,
 ];
