@@ -588,17 +588,45 @@ describe('the removed routes stay removed', () => {
     }
   });
 
-  it('no code asks a lead route for ?pii=1, or for the legacy list', () => {
+  it('no code asks a lead route for ?pii=1, an .astro template included', () => {
+    const PII = /\/api\/admin\/leads\/[^'"`\s]*[?&]pii=/;
     const found: string[] = [];
     for (const file of FILES) {
-      if (!file.ast || !file.path.startsWith('src/')) continue;
+      if (!file.path.startsWith('src/')) continue;
+      const template = (file as ScannedFile & { template?: string }).template;
+      if (template && PII.test(template)) found.push(`${file.path} (template)`);
+      if (!file.ast) continue;
       for (const node of nodesOf(file.ast)) {
         if (!ts.isStringLiteralLike(node) && !ts.isTemplateExpression(node)) continue;
         const text = node.getText(file.ast);
-        if (/\/api\/admin\/leads\/[^'"`\s]*[?&]pii=/.test(text)) found.push(`${file.path} ${text}`);
+        if (PII.test(text)) found.push(`${file.path} ${text}`);
       }
     }
     expect(found).toEqual([]);
+  });
+
+  it('every request to the bare list address is a POST (adding a lead), never the old GET', () => {
+    const calls: string[] = [];
+    for (const file of FILES) {
+      if (!file.ast || !file.path.startsWith('src/')) continue;
+      for (const node of nodesOf(file.ast)) {
+        if (!ts.isStringLiteralLike(node) || node.text.split('?')[0] !== '/api/admin/leads')
+          continue;
+        const call = node.parent;
+        const options = ts.isCallExpression(call) ? call.arguments[1] : undefined;
+        const method =
+          options && ts.isObjectLiteralExpression(options)
+            ? options.properties.find(
+                (p): p is ts.PropertyAssignment =>
+                  ts.isPropertyAssignment(p) && p.name.getText(file.ast!) === 'method',
+              )?.initializer
+            : undefined;
+        calls.push(
+          `${file.path} ${method && ts.isStringLiteralLike(method) ? method.text : 'GET'}`,
+        );
+      }
+    }
+    expect(calls).toEqual(['src/components/admin/screens/leads/AddLeadDrawer.tsx POST']);
   });
 
   it('the CRM reveal is the one reveal: revealLead has one caller, asking for the reasons only', () => {
