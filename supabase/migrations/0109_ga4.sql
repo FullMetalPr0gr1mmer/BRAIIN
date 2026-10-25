@@ -48,7 +48,7 @@ grant select (tenant_id, search_console_token, ga4_measurement_id)
   on public.site_integrations to anon;
 
 comment on column public.site_integrations.ga4_measurement_id is
-  'GA4 measurement id (G-…): public by nature, so anon reads it (0109). The site loads GA4 only behind analytics consent and the GA4_NOTICE_READY switch (Admin v2 U15).';
+  'GA4 measurement id (G-…): public by nature, so anon reads it (Admin v2 U15). The site loads GA4 only behind analytics consent and the GA4_NOTICE_READY switch.';
 
 -- ═══ Postconditions ═══════════════════════════════════════════════════════════════════════
 do $$
