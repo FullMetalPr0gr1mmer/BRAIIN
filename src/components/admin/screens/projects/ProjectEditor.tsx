@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Icon from '@/components/admin/kit/Icon';
 import Note from '@/components/admin/kit/Note';
 import StatusBadge from '@/components/admin/kit/StatusBadge';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import SeoPanel from '@/components/admin/screens/seo/SeoPanel';
 import type { SeoPanelSetup } from '@/components/admin/screens/seo/types';
-import { adminFetch } from '@/lib/admin/client';
+import { adminFetch, describeError } from '@/lib/admin/client';
+import { deleteFromEditor } from '@/lib/admin/editorDelete';
 import { visibleTabs, type SeoAccess } from '@/lib/admin/editorTabs';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { uiFor, type FieldDef } from '@/lib/admin/uiSchema';
 import { useEntitySave, type EntitySave } from '@/lib/admin/useEntitySave';
 import { MEDIA_VIEW_FIELDS, remapMediaErrors, setView, splitMedia } from './media';
+import { projectName } from './model';
 import { publishRequirements, requirementsSummary } from './publish';
 import TestimonialsCard from './TestimonialsCard';
 import { PROJECT_FIELDS, PROJECT_GROUPS, PROJECT_TABS } from './view';
@@ -28,7 +31,8 @@ import { PROJECT_FIELDS, PROJECT_GROUPS, PROJECT_TABS } from './view';
 //
 // Decided on the server page from ROLE_CAPS and passed in (UX only; every route checks again):
 //   write      portfolio.write: an editable form, the testimonial card; SEO reads the rest;
-//   archive    content.archiveDelete: "Archived" offered, an archived project editable;
+//   archive    content.archiveDelete: "Archived" offered, an archived project editable, and
+//              Delete (editorDelete.ts; main's list row action, kept);
 //   seoAccess  the SEO tab's (full, view, none) and its setup, read on the server.
 // The Publishing tab lists what a publish needs (publish.ts), the poster's alt text read from
 // the library; the server stays the gate.
@@ -130,6 +134,29 @@ export default function ProjectEditor({
   }, [posterId]);
   const requirements = publishRequirements(viewSave.values, poster);
 
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  async function remove() {
+    if (id === null) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const left = await deleteFromEditor({
+        slug: ui.slug,
+        id,
+        singular: 'Project',
+        name: projectName({ ...save.saved, id }),
+        back: '/admin/portfolio',
+        done: 'project-deleted',
+        go: save.leave,
+      });
+      if (!left) setDeleting(false);
+    } catch (err) {
+      setDeleteError(`It was not deleted. ${describeError(err)}`);
+      setDeleting(false);
+    }
+  }
+
   const seoPanel = !hasSeo ? undefined : seo ? (
     <SeoPanel
       target={seo.target}
@@ -211,6 +238,23 @@ export default function ProjectEditor({
           {save.saved['isPlaceholder'] === true && (
             <span className="badge" data-tone="gray">
               Sample
+            </span>
+          )}
+          {archive && (
+            <button
+              type="button"
+              className="btn"
+              data-variant="danger"
+              disabled={deleting}
+              onClick={() => void remove()}
+            >
+              <Icon name="trash" size={14} />
+              Delete
+            </button>
+          )}
+          {deleteError && (
+            <span className="msg" data-kind="error" role="alert">
+              {deleteError}
             </span>
           )}
         </div>

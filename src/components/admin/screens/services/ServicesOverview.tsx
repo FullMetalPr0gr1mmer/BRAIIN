@@ -7,6 +7,7 @@ import StatusBadge from '@/components/admin/kit/StatusBadge';
 import { useSortable } from '@/components/admin/kit/useSortable';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
+import { showFlash } from '@/lib/admin/flash';
 import { toast } from '@/lib/admin/toast';
 import DisciplineDrawer from './DisciplineDrawer';
 import {
@@ -86,6 +87,9 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A service deleted in its editor comes back here saying so (editorDelete.ts).
+  useEffect(() => showFlash(), []);
 
   function openDrawer(id: string | null) {
     opened.current += 1;

@@ -267,7 +267,8 @@ test.describe('as content_creator', () => {
         res.request().method() === 'PATCH',
     );
     await page.getByRole('button', { name: 'Save case study', exact: true }).click();
-    expect((await saved).status()).toBe(200);
+    const savedRes = await saved;
+    expect(savedRes.status(), await savedRes.text()).toBe(200);
     const { data, error } = await service()
       .from('service_cases')
       .select('title,is_placeholder')
@@ -283,6 +284,7 @@ test.describe('as content_creator', () => {
     await page.getByRole('link', { name: 'Add service' }).click();
     const modal = page.getByRole('dialog', { name: 'Add a service' });
     await expect(modal).toBeVisible();
+    await expectCleanAtWidths(page, 'the Add service modal');
     await modal.locator('#f-title-en').fill(`Added ${MARK}`);
     await modal.locator('#f-title-ar').fill(`مضاف ${MARK}`);
     await expect(modal.locator('#f-slug')).toHaveValue(`added-${MARK}`);
@@ -311,7 +313,7 @@ test.describe('as admin', () => {
 
   test('the Leads tab and the leads by service, counts only', async ({ page }) => {
     const counts = await page.request.get('/api/admin/leads/interest-counts');
-    expect(counts.status()).toBe(200);
+    expect(counts.status(), await counts.text()).toBe(200);
     const body = (await counts.json()) as { data: { counts: Record<string, number> } };
     for (const [slug, n] of Object.entries(body.data.counts)) {
       expect(slug).toMatch(/^[a-z0-9-]+$/);
@@ -365,6 +367,28 @@ test.describe('as admin', () => {
     // The case study is not copied: the copy has none.
     await page.getByRole('tab', { name: 'Case study', exact: true }).click();
     await expect(page.getByText('No case study yet')).toBeVisible();
+
+    // An Admin deletes it from the editor (main's list row action, kept): asked first, then
+    // back on the overview saying so, and the row is gone.
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    const ask = page.getByRole('dialog').filter({ hasText: 'This cannot be undone.' });
+    await expect(ask).toContainText(`${S.first.title.en} (copy)`);
+    const gone = page.waitForResponse(
+      (res) =>
+        new URL(res.url()).pathname.startsWith('/api/admin/services/') &&
+        res.request().method() === 'DELETE',
+    );
+    await ask.getByRole('button', { name: 'Delete', exact: true }).click();
+    const goneRes = await gone;
+    expect(goneRes.status(), await goneRes.text()).toBe(200);
+    await page.waitForURL((url) => url.pathname === '/admin/services');
+    await expect(page.locator('#admin-toasts')).toContainText('Service deleted');
+    const { data: left } = await service()
+      .from('services')
+      .select('id')
+      .eq('slug', `${S.first.slug}-copy`)
+      .maybeSingle();
+    expect(left).toBeNull();
   });
 });
 

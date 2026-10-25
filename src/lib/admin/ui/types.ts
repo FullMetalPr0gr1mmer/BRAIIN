@@ -42,7 +42,7 @@ export type FieldKind =
   | 'slugRelation' // an ordered multi-pick of another resource, stored by slug
   // Admin v2 U6: an ordered list of pictures (each an item `{kind, mediaId, …}`, as a
   // repeater item), drawn as a square grid: added with the picker, moved by the Sortable
-  // handle or Move left / Move right, removed with a button. Keys an item holds that the grid
+  // handle or Move up / Move down, removed with a button. Keys an item holds that the grid
   // does not draw (a caption, a layout) are kept as they are.
   | 'gallery';
 

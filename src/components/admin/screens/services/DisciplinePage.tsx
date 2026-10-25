@@ -66,6 +66,9 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
   const [drawer, setDrawer] = useState(0);
   const [adding, setAdding] = useState(false);
   const [addKey, setAddKey] = useState(0);
+  const [addOrder, setAddOrder] = useState(0);
+  const shown = useRef<Row[] | null>(null);
+  shown.current = services;
 
   const load = useCallback(async () => {
     try {
@@ -107,7 +110,7 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('edit') === '1') setDrawer((n) => n + 1);
-    if (write && params.get('add') === '1') openAdd();
+    if (write && params.get('add') === '1') void openAdd();
     if (params.has('edit') || params.has('add')) {
       window.history.replaceState(window.history.state, '', window.location.pathname);
     }
@@ -119,14 +122,29 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
         setDrawer((n) => n + 1);
       } else if (write && target?.closest('[data-service-add]')) {
         event.preventDefault();
-        openAdd();
+        void openAdd();
       }
     };
     document.addEventListener('click', onClick);
     return () => document.removeEventListener('click', onClick);
   }, [write]);
 
-  function openAdd() {
+  async function openAdd() {
+    // Where the new service goes is numbered against EVERY service (nextServiceOrder: in an
+    // empty discipline, after all of them), but this page reads its own discipline's only;
+    // so every service is read when asked, before the modal takes its starting values, and
+    // this discipline's own are taken from that same read. A failed read falls back to the
+    // rows on the page (a ref: the head's click handler is set up once, at mount).
+    let own: readonly Row[] = shown.current ?? [];
+    let all = own;
+    try {
+      const list = await adminFetch<ListResponse>(`/api/admin/services?limit=${LIST_LIMIT}`);
+      all = list.rows ?? [];
+      own = all.filter((row) => row['discipline_id'] === id);
+    } catch {
+      // the fallback above
+    }
+    setAddOrder(nextServiceOrder(own, all));
     setAddKey((n) => n + 1);
     setAdding(true);
   }
@@ -320,7 +338,7 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
           onClose={() => setAdding(false)}
           disciplineId={id}
           disciplineName={nameOf(discipline, 'name')}
-          sortOrder={nextServiceOrder(rows, rows)}
+          sortOrder={addOrder}
         />
       )}
     </div>

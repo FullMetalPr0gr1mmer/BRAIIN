@@ -619,3 +619,21 @@ describe('a page’s head names a stored row only for a role the API admits (edi
     }
   });
 });
+
+describe('Add service on a discipline’s page (U5 review)', () => {
+  // The page reads its own discipline's services only; a new one is numbered against every
+  // service (nextServiceOrder's `all`: in an empty discipline, after all of them), read when
+  // Add is pressed. The head's click handler is set up once, so its own rows come from that
+  // same read (a ref on failure), never the closure's first, empty `services`.
+  const source = readFileSync('src/components/admin/screens/services/DisciplinePage.tsx', 'utf8');
+
+  it('reads every service when asked and numbers against them', () => {
+    expect(source).toMatch(
+      /async function openAdd\(\)[\s\S]*?\/api\/admin\/services\?limit=\$\{LIST_LIMIT\}`\)/,
+    );
+    expect(source).toMatch(/own = all\.filter\(\(row\) => row\['discipline_id'\] === id\);/);
+    expect(source).toMatch(/setAddOrder\(nextServiceOrder\(own, all\)\);/);
+    expect(source).toMatch(/sortOrder=\{addOrder\}/);
+    expect(source).not.toMatch(/nextServiceOrder\(rows, rows\)/);
+  });
+});

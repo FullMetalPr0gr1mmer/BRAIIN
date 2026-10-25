@@ -8,12 +8,13 @@ import SeoPanel from '@/components/admin/screens/seo/SeoPanel';
 import type { SeoPanelSetup } from '@/components/admin/screens/seo/types';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
+import { deleteFromEditor } from '@/lib/admin/editorDelete';
 import { visibleTabs, type SeoAccess } from '@/lib/admin/editorTabs';
 import { formToPayload } from '@/lib/admin/formPayload';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { uiFor, type EditorPanel, type FieldDef } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
-import { duplicatePayload, leadsCount, type Row } from './model';
+import { duplicatePayload, leadsCount, nameOf, type Row } from './model';
 import ServiceCasePanel from './ServiceCasePanel';
 import ServiceLeadsPanel, { type ServiceLeadRow } from './ServiceLeadsPanel';
 
@@ -24,8 +25,9 @@ import ServiceLeadsPanel, { type ServiceLeadRow } from './ServiceLeadsPanel';
 // on the server page from ROLE_CAPS and passed in (UX only; every route checks again):
 //   write      services.write: an editable form, Duplicate and the case study's form; without
 //              it (SEO) the content is read-only and the SEO tab is where it works;
-//   archive    content.archiveDelete: "Archived" offered, and an archived service editable;
-//              anyone else reads an archived service, since the archive gate refuses their save;
+//   archive    content.archiveDelete: "Archived" offered, an archived service editable, and
+//              Delete (editorDelete.ts; main's list row action, kept); anyone else reads an
+//              archived service, since the archive gate refuses their save;
 //   seoAccess  the SEO tab's (full, view, none) and its setup, read on the server;
 //   leads      leads.manage: the Leads tab (its rows read on the server) and the "N leads".
 // Duplicate posts a draft copy of the service AS SAVED (its slug suffixed, "(copy)" after the
@@ -91,6 +93,8 @@ export default function ServiceEditor({
   });
   const [copying, setCopying] = useState(false);
   const [copyError, setCopyError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const stored = save.saved['status'];
   const archivedLock = id !== null && !archive && stored === 'archived';
@@ -127,6 +131,27 @@ export default function ServiceEditor({
     } catch (err) {
       setCopyError(`It was not copied. ${describeError(err)}`);
       setCopying(false);
+    }
+  }
+
+  async function remove() {
+    if (id === null) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const left = await deleteFromEditor({
+        slug: ui.slug,
+        id,
+        singular: 'Service',
+        name: nameOf({ ...save.saved, id }),
+        back: '/admin/services',
+        done: 'service-deleted',
+        go: save.leave,
+      });
+      if (!left) setDeleting(false);
+    } catch (err) {
+      setDeleteError(`It was not deleted. ${describeError(err)}`);
+      setDeleting(false);
     }
   }
 
@@ -204,6 +229,23 @@ export default function ServiceEditor({
             {copyError && (
               <span className="msg" data-kind="error" role="alert">
                 {copyError}
+              </span>
+            )}
+            {archive && (
+              <button
+                type="button"
+                className="btn"
+                data-variant="danger"
+                disabled={deleting}
+                onClick={() => void remove()}
+              >
+                <Icon name="trash" size={14} />
+                Delete
+              </button>
+            )}
+            {deleteError && (
+              <span className="msg" data-kind="error" role="alert">
+                {deleteError}
               </span>
             )}
           </div>

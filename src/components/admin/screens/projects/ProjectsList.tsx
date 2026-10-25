@@ -5,6 +5,7 @@ import Icon from '@/components/admin/kit/Icon';
 import StatusBadge from '@/components/admin/kit/StatusBadge';
 import { isArchiveRefusal, MOVE_ARCHIVED, swapTarget } from '../resources/reorder';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
+import { showFlash } from '@/lib/admin/flash';
 import { PAGE_SIZE } from '@/lib/admin/pager';
 import AddProjectModal from './AddProjectModal';
 import { filterProjects, projectChips, projectName, serviceNames, textIn, type Row } from './model';
@@ -70,6 +71,9 @@ export default function ProjectsList({ write, archive, sectors }: ProjectsListPr
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A project deleted in its editor comes back here saying so (editorDelete.ts).
+  useEffect(() => showFlash(), []);
 
   // The services' names, for the pills: read once (a project's own ids come with its row).
   useEffect(() => {
