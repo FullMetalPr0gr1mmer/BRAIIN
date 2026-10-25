@@ -68,7 +68,7 @@ test.beforeAll(async () => {
       title: TITLE,
       project_type: TYPE,
       status: 'draft',
-      sort_order: 99950,
+      sort_order: 9950,
     })
     .select('id')
     .single();

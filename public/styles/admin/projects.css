@@ -3,8 +3,12 @@
    .tbl with a thumb, its .pill-row, its fgroup sections. Tokens only (admin.css :root). The
    gallery grid is the field kit's (admin.css .gal), shared by any editor that draws one. */
 
+/* minmax(0, 1fr), not the default auto column: an auto track grows to its items' min-content,
+   which here is the whole table, so the table's own scroller (.table-wrap) never narrowed and
+   the page scrolled sideways at 320px (U6 e2e). */
 .prj {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { SORT_ORDER_MAX as SCHEMA_SORT_ORDER_MAX } from '@schemas/admin';
 import { describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -38,6 +39,7 @@ import {
   hideDisciplineQuestion,
   leadsCount,
   nextServiceOrder,
+  SORT_ORDER_MAX,
   placeLabel,
   rangeOrderChanges,
   renumberable,
@@ -345,6 +347,10 @@ describe('the overview and a discipline’s page (model.ts)', () => {
     const own = [row('a', { sort_order: 10 }), row('b', { sort_order: 30 })];
     expect(nextServiceOrder(own, [...own, row('c', { sort_order: 90 })])).toBe(31);
     expect(nextServiceOrder([], [row('c', { sort_order: 90 })])).toBe(100);
+    // Never past what a write accepts: the Add modal sends it in a field no one sees.
+    expect(nextServiceOrder([row('d', { sort_order: 10_000 })], [])).toBe(SORT_ORDER_MAX);
+    expect(nextServiceOrder([], [row('e', { sort_order: 9_995 })])).toBe(SORT_ORDER_MAX);
+    expect(SORT_ORDER_MAX).toBe(SCHEMA_SORT_ORDER_MAX);
   });
 
   it('a duplicate is a draft with a slug of its own and “(copy)”, right after the original', () => {

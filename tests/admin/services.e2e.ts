@@ -43,19 +43,19 @@ const S = {
     slug: `e2e-s1-${MARK}`,
     title: { en: `First ${MARK}`, ar: `الأول ${MARK}` },
     status: 'draft',
-    sort_order: 99910,
+    sort_order: 9910,
   },
   shelved: {
     slug: `e2e-s3-${MARK}`,
     title: { en: `Shelved ${MARK}`, ar: `مؤرشف ${MARK}` },
     status: 'archived',
-    sort_order: 99920,
+    sort_order: 9920,
   },
   second: {
     slug: `e2e-s2-${MARK}`,
     title: { en: `Second ${MARK}`, ar: `الثاني ${MARK}` },
     status: 'draft',
-    sort_order: 99930,
+    sort_order: 9930,
   },
 } as const;
 type Kind = keyof typeof S;
@@ -80,7 +80,7 @@ test.beforeAll(async () => {
       slug: `e2e-d-${MARK}`,
       name: NAME,
       status: 'draft',
-      sort_order: 99990,
+      sort_order: 9990,
     })
     .select('id')
     .single();

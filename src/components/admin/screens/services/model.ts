@@ -131,6 +131,10 @@ export interface OrderChange {
 /** The step between two disciplines' numbers after a move. */
 export const ORDER_STEP = 10;
 
+/** The largest order a write accepts: SORT_ORDER_MAX in @schemas/admin, restated (see the
+ * header; servicesArea.spec holds the two equal). */
+export const SORT_ORDER_MAX = 10_000;
+
 /**
  * The updates that give `order` as numbers in tens from 10, keeping only the rows whose
  * number changes (U7's orderChanges: each update is one subrequest, P-15). For the
@@ -179,11 +183,16 @@ export function rangeOrderChanges(
   return changes;
 }
 
-/** Where a new service of a discipline goes: after its last one, else after every service. */
+/**
+ * Where a new service of a discipline goes: after its last one, else after every service;
+ * never past the largest order a write accepts (SORT_ORDER_MAX), since the Add modal sends it
+ * in a field the person cannot see, so a refusal there could not be put right (U5 review).
+ */
 export function nextServiceOrder(inDiscipline: readonly Row[], all: readonly Row[]): number {
   const max = (rows: readonly Row[]) =>
     rows.reduce((m, row) => Math.max(m, Number(row['sort_order'] ?? 0)), 0);
-  return inDiscipline.length > 0 ? max(inDiscipline) + 1 : max(all) + ORDER_STEP;
+  const next = inDiscipline.length > 0 ? max(inDiscipline) + 1 : max(all) + ORDER_STEP;
+  return Math.min(next, SORT_ORDER_MAX);
 }
 
 /**

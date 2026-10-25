@@ -92,7 +92,10 @@ function updatable<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
   return schema.partial().extend({ version: VersionSchema });
 }
 
-const SortOrderSchema = z.number().int().min(-10_000).max(10_000).default(0);
+/** The largest order a write may carry (a list's code numbers within it, e.g. nextServiceOrder). */
+export const SORT_ORDER_MAX = 10_000;
+
+const SortOrderSchema = z.number().int().min(-SORT_ORDER_MAX).max(SORT_ORDER_MAX).default(0);
 
 /** Short free text that ends up in HTML attributes or headings. */
 const ShortTextSchema = z.string().trim().min(1).max(200);
