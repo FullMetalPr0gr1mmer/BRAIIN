@@ -78,7 +78,7 @@
   - held off in production by a code switch (`GA4_NOTICE_READY`) until the owner signs off the
     privacy notice, the cookie policy and the banner that name Google (today's notice says the
     analytics are first-party), so a saved id says "Not loading yet" and why, not "Set up";
-  - never on search (what a visitor typed is in its address) or the 404 pages;
+  - never on search (what a visitor typed is in its address) or the 404 routes;
   - the GA tab through the Data API is deferred until the switch-on and O-18 (a service
     account and the property id): it would have nothing to show before.
 - **CRM**:
