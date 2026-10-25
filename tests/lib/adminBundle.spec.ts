@@ -611,7 +611,7 @@ describe('the savebar has its own group (Admin v2 R12)', () => {
       .flatMap(walk)
       .filter((path) => ['admin-ui', 'admin-fields'].includes(claim(path) ?? ''))
       .filter((path) =>
-        /^import\s+(?!type)[^;]*?from\s*['"][^'"]*(screens\/release\/|islands\/AdminSavebar)/m.test(
+        /^import\s+(?!type\b)[^;]*?from\s*['"][^'"]*(screens\/release\/|islands\/AdminSavebar)/m.test(
           readFileSync(join(process.cwd(), path), 'utf8'),
         ),
       );
