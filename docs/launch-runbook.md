@@ -1516,10 +1516,10 @@ need lifting, drop `site_profile_live_insert`, `site_profile_live_update`,
 `site_settings_live_insert` and `site_settings_live_update` (the permissive policies of 0001 and
 0019 still gate by role).
 
-### 6o. Releases: scheduled releases and the two switches (migration 0107, Admin v2 R11)
+### 6o. Releases: scheduled releases and the two switches (migration 0112, Admin v2 R11)
 
 The number is a placeholder until R11 merges (assigned at merge); renumber the references here
-with the file. **Apply before the merge** (expand only): 0107 adds `content_releases.fire_lease_until`
+with the file. **Apply before the merge** (expand only): 0112 adds `content_releases.fire_lease_until`
 and an index, restates `public.apply_release` with the `schedule` and `fire` modes, and adds the
 fire claim, the failure, the move and the cancel (service role only) and the two switches below
 (no API role). Nothing calls a new path while releases are off: the minute cron's new claim
@@ -1744,7 +1744,7 @@ API roles DELETE back: `grant delete on public.site_settings to authenticated;` 
 for `site_profile`), knowing `site_settings_write` then admits an Admin or Developer DELETE
 again.
 
-0107 (Admin v2 R11) does not move the line either: it is expand only (a nullable column and an
+0112 (Admin v2 R11) does not move the line either: it is expand only (a nullable column and an
 index on `content_releases`, `apply_release` restated with two more modes whose publish and dry
 run are 0104's, four new service-role functions and two owner-only ones), and it revokes nothing.
 A Worker rollback across R11's PR is safe: the older minute cron never calls
