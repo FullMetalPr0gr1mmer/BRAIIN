@@ -442,6 +442,30 @@ const EXACT: Readonly<Record<string, Label>> = {
     noun: versionNoun,
   },
 
+  // Scheduling a release (Admin v2 R11), each written by the database in the same transaction
+  // as the change it records, naming the person: a release scheduled, moved to another time,
+  // or cancelled (its changes back to pending). A scheduled release that goes live writes
+  // `release.publish`, naming its scheduler.
+  'release.schedule': { kind: 'publishing', verb: 'Scheduled', noun: 'a release' },
+  'release.reschedule': {
+    kind: 'publishing',
+    verb: 'Changed the time of',
+    noun: 'a scheduled release',
+  },
+  'release.unschedule': { kind: 'publishing', verb: 'Unscheduled', noun: 'a release' },
+  // The runbook's two switches (Admin v2 R11, launch runbook), run by the owner and naming the
+  // operator.
+  'releases.enable': {
+    kind: 'settings',
+    verb: 'Switched on publishing in releases',
+    noun: null,
+  },
+  'releases.disable': {
+    kind: 'settings',
+    verb: 'Switched off publishing in releases',
+    noun: null,
+  },
+
   // Job applications (Admin only). No chip covers them: they show under All.
   'application.view': { kind: 'other', verb: 'Opened', noun: 'a job application' },
   'application.view_pii': {

@@ -7,10 +7,16 @@ import {
   ApplyRequestSchema,
   ApplyResultSchema,
   DryRunReportSchema,
+  ScheduleAnswerSchema,
+  ScheduleApplyRequestSchema,
   type ApplyRequest,
+  type FireApplyRequest,
   type PublishResult,
   type ReleaseCheck,
+  type ReleaseFailureCode,
   type ReleaseIssue,
+  type ScheduleApplyRequest,
+  type ScheduleResult,
 } from '@schemas/release';
 import type { AuthContext } from '@/lib/auth/types';
 import { writeSystemLog } from '@/lib/data/systemLog';
@@ -40,7 +46,7 @@ export const APPLY_TIMEOUT_MS = 25_000;
 /** SQLSTATEs that mean "try again", never "refused" (R4 review 6). */
 const BUSY = new Set(['55P03', '40P01', '40001', '57014']);
 
-interface DbError {
+export interface DbError {
   code?: string;
   message?: string;
   details?: string | null;
@@ -56,14 +62,19 @@ function parseDetail(details: unknown): unknown {
 }
 
 /** The apply's answer, or none: `unanswered` when the call ended without a response. */
-interface ApplyAnswer {
+export interface ApplyAnswer {
   data: unknown;
   error: DbError | null;
   unanswered?: true;
 }
 
-/** The RPC call, bounded by the Worker's own timeout. */
-async function callApply(args: ApplyRequest): Promise<ApplyAnswer> {
+/**
+ * The RPC call, bounded by the Worker's own timeout. Every mode goes through it: a publish and
+ * its dry run (R6), a schedule (R11) and the minute cron's fire of a scheduled release (R11).
+ */
+export async function callApply(
+  args: ApplyRequest | ScheduleApplyRequest | FireApplyRequest,
+): Promise<ApplyAnswer> {
   const signal = AbortSignal.timeout(APPLY_TIMEOUT_MS);
   type Answer = { data: unknown; error: DbError | null; status?: number };
   const call = serviceClient().rpc('apply_release', args) as unknown as PromiseLike<Answer> & {
@@ -333,6 +344,90 @@ export async function publish(
     purge: effects.purge,
     ...(effects.kvSynced === undefined ? {} : { kvSynced: effects.kvSynced }),
   };
+}
+
+/**
+ * Schedules a clean selection (R11, releases.md §4.7): `apply_release` in `schedule` mode checks
+ * the person and the drafts as a publish does, runs the changes as a dry run as that person,
+ * and stores them on a scheduled release with their drafts claimed, its audit row written in
+ * the same transaction. Its refusals are a publish's (the same mapping). No after-effect: nothing
+ * is live until the minute cron fires it.
+ */
+export async function schedule(
+  auth: AuthContext,
+  items: readonly CheckedItem[],
+  note: string | undefined,
+  scheduleAt: string,
+): Promise<ScheduleResult> {
+  const answer = await callApply(
+    ScheduleApplyRequestSchema.parse({
+      p_actor: auth.userId,
+      p_role: auth.role,
+      p_mode: 'schedule',
+      p_items: items.map((i) => i.apply),
+      p_note: note && note.length > 0 ? note : null,
+      p_scheduled_for: scheduleAt,
+    }),
+  );
+  // No answer: the schedule may or may not have landed; the person looks again ("busy").
+  if (answer.error) throw refusalOf(answer.error, items);
+  const parsed = ScheduleAnswerSchema.safeParse(answer.data);
+  if (!parsed.success) throw new Error('apply_release (schedule) answered in the wrong shape');
+  return {
+    release: {
+      id: parsed.data.release_id,
+      scheduledFor: parsed.data.scheduled_for,
+      version: parsed.data.version,
+    },
+    items: items.map((i) => ({
+      entityType: i.draft.entity_type,
+      entityId: i.draft.entity_id,
+      op: i.draft.op,
+    })),
+    warnings: items.flatMap((i) =>
+      i.report.warnings.map((w) => ({ draftId: i.draft.id, code: w.code, message: w.message })),
+    ),
+  };
+}
+
+/**
+ * Why a fire of a scheduled release did not go live, from the apply's refusal (the minute cron,
+ * R11): a code for the release's failure (`fail_scheduled_release`), with the drafts at fault
+ * where the database named them, or `busy` (a lock wait, a deadlock, no answer: tried again
+ * after the claim's lease). Never the database's message.
+ */
+export function failureOf(
+  error: DbError,
+): { code: ReleaseFailureCode; draftIds?: string[] } | 'busy' {
+  const code = error.code ?? '';
+  if (BUSY.has(code)) return 'busy';
+  if (code === 'BR403') return { code: 'scheduler' };
+  if (code === '55000') return { code: 'releases-off' };
+  const detail = parseDetail(error.details);
+  if (code === 'BR409') {
+    const parsed = ApplyConflictDetailSchema.safeParse(detail);
+    if (parsed.success && parsed.data.code === 'pending-changed') {
+      return { code: 'changed', draftIds: parsed.data.draftIds.slice(0, 60) };
+    }
+    if (parsed.success && parsed.data.code === 'conflict') {
+      return { code: 'conflict', draftIds: parsed.data.items.map((i) => i.draftId).slice(0, 60) };
+    }
+    return { code: 'conflict' };
+  }
+  if (code === 'BR422') {
+    const parsed = ApplyRefusedDetailSchema.safeParse(detail);
+    if (parsed.success && parsed.data.code === 'refused') {
+      const ids = parsed.data.items
+        .map((i) => i.draftId)
+        .filter((id): id is string => typeof id === 'string');
+      return ids.length > 0 ? { code: 'refused', draftIds: ids.slice(0, 60) } : { code: 'refused' };
+    }
+    if (parsed.success && parsed.data.code === 'base-missing') {
+      return { code: 'changed', draftIds: [parsed.data.draftId] };
+    }
+    return { code: 'refused' };
+  }
+  return { code: 'error' };
 }
 
 /**

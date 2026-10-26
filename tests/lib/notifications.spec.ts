@@ -8,6 +8,8 @@ import type { MaintenanceState } from '@/lib/http/maintenance';
 import { NOTIFICATION_SOURCES, loadNotifications } from '@/lib/admin/notifications';
 import { MAX_ITEMS, WINDOW_DAYS } from '@/lib/admin/notifications/types';
 import { studioDay as riyadhDay } from '@/lib/admin/notifications/scheduled';
+import { publishableAreas } from '@/lib/release/caps';
+import { RELEASE_FAILURE_COPY } from '@/lib/release/failureCopy';
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 
@@ -130,7 +132,12 @@ describe('the bell: who gets what', () => {
         can(role, 'services.write') === 'full' || can(role, 'blog.write') === 'full',
       );
       expect(NOTIFICATION_SOURCES.maintenance.visible(role), role).toBe(true);
+      // Admin v2 R11: the roles that publish some area (P-2), never Sales.
+      expect(NOTIFICATION_SOURCES.releases.visible(role), role).toBe(
+        publishableAreas(role).length > 0,
+      );
     }
+    expect(NOTIFICATION_SOURCES.releases.visible('sales')).toBe(false);
   });
 
   it('Content Creator and SEO: no lead or application item, and those tables are never asked', async () => {
@@ -732,5 +739,89 @@ describe('the bell: site health (G2)', () => {
       now: NOW,
     });
     expect(feed.items.filter((item) => item.kind === 'health')).toEqual([]);
+  });
+});
+
+describe('the bell: a scheduled release that could not go live (Admin v2 R11)', () => {
+  const FAILED = {
+    id: 'r-1',
+    scheduled_for: '2026-10-10T07:00:00.000Z',
+    areas: ['services'],
+    failure_code: 'conflict',
+    updated_at: ago(3),
+  };
+
+  it('one read of the tenant’s failed releases in the window, for the roles that publish one of its areas', async () => {
+    const shown: Record<string, boolean> = {};
+    for (const role of ROLES) {
+      const { sb, queries } = fakeDb({ ...FULL, content_releases: { rows: [FAILED] } });
+      const feed = await loadNotifications(sb, auth(role), {
+        maintenance: noMaintenance,
+        now: NOW,
+      });
+      shown[role] = feed.items.some((item) => item.kind === 'releases');
+      const reads = queries.filter((q) => q.table === 'content_releases');
+      // Sales: not even asked.
+      expect(reads.length, role).toBe(NOTIFICATION_SOURCES.releases.visible(role) ? 1 : 0);
+      if (reads[0]) {
+        expect(reads[0].select).toBe(
+          'id,scheduled_for,areas,failure_code:failure->>code,updated_at',
+        );
+        expect(reads[0].filters).toEqual(
+          expect.arrayContaining([
+            ['eq', 'tenant_id', TENANT],
+            ['eq', 'status', 'failed'],
+            ['gte', 'updated_at', new Date(NOW.getTime() - WINDOW_DAYS * 86_400_000).toISOString()],
+          ]),
+        );
+      }
+    }
+    // A services release: Admin and Content Creator publish services; SEO, Developer and Sales do not.
+    expect(shown).toEqual({
+      admin: true,
+      content_creator: true,
+      seo: false,
+      developer: false,
+      sales: false,
+    });
+  });
+
+  it('says when it was due and why it failed, by its code, never a message; new from when it failed', async () => {
+    const { sb } = fakeDb({ ...FULL, content_releases: { rows: [FAILED] } });
+    const feed = await loadNotifications(sb, auth('content_creator'), {
+      maintenance: noMaintenance,
+      now: NOW,
+    });
+    expect(feed.items.find((item) => item.kind === 'releases')).toMatchObject({
+      id: 'releases:failed:r-1',
+      icon: 'warn',
+      text: expect.stringContaining('could not go live'),
+      detail: expect.stringContaining(RELEASE_FAILURE_COPY.conflict),
+      at: FAILED.updated_at,
+      href: null,
+      unread: true,
+    });
+  });
+
+  it('an SEO release reaches Admin and SEO only', async () => {
+    for (const [role, seen] of [
+      ['admin', true],
+      ['seo', true],
+      ['content_creator', false],
+      ['developer', false],
+    ] as const) {
+      const { sb } = fakeDb({
+        ...FULL,
+        content_releases: { rows: [{ ...FAILED, areas: ['seo'] }] },
+      });
+      const feed = await loadNotifications(sb, auth(role), {
+        maintenance: noMaintenance,
+        now: NOW,
+      });
+      expect(
+        feed.items.some((item) => item.kind === 'releases'),
+        role,
+      ).toBe(seen);
+    }
   });
 });

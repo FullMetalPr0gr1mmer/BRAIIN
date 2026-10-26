@@ -1516,6 +1516,69 @@ need lifting, drop `site_profile_live_insert`, `site_profile_live_update`,
 `site_settings_live_insert` and `site_settings_live_update` (the permissive policies of 0001 and
 0019 still gate by role).
 
+### 6o. Releases: scheduled releases and the two switches (migration 0112, Admin v2 R11)
+
+The number is a placeholder until R11 merges (assigned at merge); renumber the references here
+with the file. **Apply before the merge** (expand only): 0112 adds `content_releases.fire_lease_until`
+and an index, restates `public.apply_release` with the `schedule` and `fire` modes, and adds the
+fire claim, the failure, the move and the cancel (service role only) and the two switches below
+(no API role). Nothing calls a new path while releases are off: the minute cron's new claim
+finds nothing. Read back with the R11 read-back query. **Deploy order:** the migration first,
+then the Worker: from its first minute the cron calls `claim_scheduled_releases`, and without the
+function each minute logs an error under `cron:releases` (the purge retries still run).
+
+Switching releases on and off is **R14's** (the freeze, the order and the checks are written
+there, owner item O-5). This section only says what the two functions do and how to call them.
+Run each in the Supabase SQL editor or `psql` **as the owner (`postgres`), on a direct session**:
+no API role holds EXECUTE, and each refuses a switched role or a request's role claim.
+
+```sql
+-- On: the operator and the fallback scheduler are active Admins of the site (they may be the
+-- same person). Answers {baseline: {id, number}, converted, legacy_releases,
+-- fallback_scheduled, left_scheduled}.
+select app.enable_releases('<tenant id>', '<operator profile id>', '<fallback admin profile id>');
+
+-- Off, with nothing pending: answers {discarded: 0, cancelled: 0, ...}.
+select app.disable_releases('<tenant id>', '<operator profile id>');
+-- Off, throwing away every pending change and cancelling every scheduled release:
+select app.disable_releases('<tenant id>', '<operator profile id>', p_discard_pending => true);
+```
+
+- **On** (`app.enable_releases`): refused (`55P03`) while a release is publishing, and (`55000`)
+  when releases are on already or pending changes or scheduled releases remain from an earlier
+  time. Every write to `app.publish_scheduled()`'s eight tables in flight lands first and every
+  later one waits for the switch, then meets releases on; a write still running after five
+  seconds refuses it (`55P03`: try again). Every row that `app.publish_scheduled()` would have
+  published by itself (`scheduled`,
+  with a time) becomes a pending change ("published") claimed by a `legacy_schedule` release at
+  that time (a time passed: the next minute publishes it), its live status moved to draft;
+  releases group the rows by time and scheduler, at most 60 each. Each goes live as the row's
+  last editor while that person may still publish it, else as the fallback scheduler
+  (`fallback_scheduled` counts them). What the legacy path never published by itself is counted
+  (`left_scheduled`) and left as it is: a row scheduled with no time, and scheduled team
+  members, statistics and certifications. Then the baseline version ("Releases switched on",
+  version 1 the first time), the flag, and a `releases.enable` audit row naming the operator, all
+  in one transaction.
+- **Off** (`app.disable_releases`): refused (`55P03`) while a release is publishing and
+  (`55000`) when off already. Every draft write in flight lands first; then, if any change is
+  pending or any release scheduled, it is refused (`55000`, with the counts) unless the discard
+  is named. The flag goes first, so nothing after it is recorded in the release ledger as an
+  out-of-band change (the capture records one only while releases are on). Then, with the discard,
+  a `legacy_schedule` release's rows go back to their own schedule (scheduled at the release's
+  time, so `app.publish_scheduled()` publishes them as before; any that could not be put back is
+  counted in `not_restored`), every scheduled release is cancelled, and every pending change is
+  thrown away; last, a `releases.disable` audit row. Versions, history and the ledger stay;
+  switching on again writes a new baseline.
+- **Scheduled releases go live from the minute cron**, one a minute, as the person who scheduled
+  them (their live profile and their database rights decide again). One that cannot (the
+  person was switched off, demoted or locked, the live site changed under a change, the database
+  refused one) is marked failed with a reason code, its changes become pending again, and it
+  shows on the dashboard ("Release that could not go live") and in the bell of the roles that
+  publish it. Nothing is retried by itself: the changes are published or scheduled again by a
+  person. A release someone moved to a later time while the cron was failing it is left as it
+  is. One that goes live more than five minutes late (a cron outage) is a warning under
+  `cron:releases` saying by how much.
+
 ## 7. Cloudflare WAF (CLAUDE.md §3)
 
 Not code; nothing enforces these until they are created.
@@ -1680,6 +1743,14 @@ as the migration role in a reviewed step, and change that spec in the same PR; t
 API roles DELETE back: `grant delete on public.site_settings to authenticated;` (and the same
 for `site_profile`), knowing `site_settings_write` then admits an Admin or Developer DELETE
 again.
+
+0112 (Admin v2 R11) does not move the line either: it is expand only (a nullable column and an
+index on `content_releases`, `apply_release` restated with two more modes whose publish and dry
+run are 0104's, four new service-role functions and two owner-only ones), and it revokes nothing.
+A Worker rollback across R11's PR is safe: the older minute cron never calls
+`claim_scheduled_releases` (a release scheduled meanwhile waits, its drafts claimed, until the
+newer Worker is back), and the older publish route refuses `scheduleAt`
+(400). With releases off, as until R14, nothing can be scheduled at all.
 
 The leads contract (Admin v2 C14) **will** move the line. It ships as the two PRs §5a asks
 for. C14a, the code, carries no migration: from its merge on, no Worker query names

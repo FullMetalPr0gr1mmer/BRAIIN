@@ -573,7 +573,9 @@ async function pendingCreates(
   sb: SupabaseClient,
   auth: AuthContext,
   ids: readonly string[],
-): Promise<Map<string, { id: string; version: number; table: string; label: unknown }>> {
+): Promise<
+  Map<string, { id: string; version: number; table: string; label: unknown; claimed: boolean }>
+> {
   if (ids.length === 0) return new Map();
   const { data, error } = await sb
     .from('content_drafts')
@@ -582,7 +584,10 @@ async function pendingCreates(
     .eq('op', 'create')
     .in('entity_id', [...new Set(ids)]);
   if (error) throw new Error(`load drafts: ${error.message}`);
-  const out = new Map<string, { id: string; version: number; table: string; label: unknown }>();
+  const out = new Map<
+    string,
+    { id: string; version: number; table: string; label: unknown; claimed: boolean }
+  >();
   for (const row of (data ?? []) as Row[]) {
     const entry = (RELEASE_REGISTRY as Readonly<Record<string, RegistryEntry | undefined>>)[
       String(row['entity_type'])
@@ -594,6 +599,8 @@ async function pendingCreates(
       version: Number(row['version']),
       table,
       label: row['label'],
+      // Claimed by a scheduled release (R11): it cannot be added to this one.
+      claimed: row['release_id'] !== null && row['release_id'] !== undefined,
     });
   }
   return out;
@@ -685,6 +692,18 @@ export async function checkSelection(
     // A selected new item that is not in the state the release leaves could not be read: its
     // own error stops the publish, and this change needs nothing more said.
     if (create && create.table === spec.table && selected.has(create.id)) continue;
+    if (create && create.table === spec.table && create.claimed) {
+      // R6's departure 9, worded by R11: a scheduled release holds the new item, so it cannot be
+      // ticked here; this change waits for that release, or its unscheduling.
+      item.report.errors.push(
+        issue(
+          'requires-scheduled',
+          `This needs “${labelText(create.label, 'a new item')}”, which goes live with a scheduled release. Publish this after it does, or unschedule that release first.`,
+          spec.field,
+        ),
+      );
+      continue;
+    }
     if (create && create.table === spec.table) {
       if (!item.report.requires.some((r) => r.draftId === create.id)) {
         item.report.requires.push({ draftId: create.id, draftVersion: create.version });

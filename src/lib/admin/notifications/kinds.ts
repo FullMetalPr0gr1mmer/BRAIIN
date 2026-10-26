@@ -26,4 +26,9 @@ export const NOTIFICATION_KIND_LABELS: Readonly<Record<NotificationKind, Notific
     label: 'Site health',
     hint: 'When the site is down, or its domain or certificate is about to expire.',
   },
+  // Admin v2 R11: for every role that publishes some area.
+  releases: {
+    label: 'Scheduled releases',
+    hint: 'When a scheduled release could not go live.',
+  },
 };
