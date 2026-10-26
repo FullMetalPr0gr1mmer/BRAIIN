@@ -170,13 +170,17 @@ describe('the switch on', () => {
   });
 
   it('an answer that is not HTML never lists Google, though the route read', async () => {
-    const { res } = await visit('/join', '/join', 'GET', { 'content-type': 'application/json' });
+    const { res } = await visit('/services', '/services', 'GET', {
+      'content-type': 'application/json',
+    });
     expect(read.calls).toBe(1);
     expect(google(res)).toBe(false);
   });
 
-  it('never reads for the admin, the API, search, an endpoint or a write', async () => {
+  it('never reads for the admin, the API, search, Join, an endpoint or a write', async () => {
     for (const [path, route, method] of [
+      ['/join', '/join', 'GET'],
+      ['/ar/join', '/ar/join', 'GET'],
       ['/admin', '/admin', 'GET'],
       ['/admin/integrations', '/admin/integrations', 'GET'],
       ['/api/contact', '/api/contact', 'POST'],

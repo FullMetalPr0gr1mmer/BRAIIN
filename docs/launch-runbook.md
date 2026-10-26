@@ -286,9 +286,10 @@ sends visit data to Google outside the Kingdom, so the order is fixed:
 1. **The property (O-18).** In Google Analytics, a GA4 property with one web stream for the
    site's origin; note its measurement id (`G-…`). In the property's admin: **Data retention =
    2 months**; **Google signals off**; **ads personalisation off** in every region; the account's
-   data-sharing settings off; enhanced measurement with page views on (form interactions and
-   site search may be turned off: the site strips query strings anyway). The notice drafts state
-   these settings, so keep them.
+   data-sharing settings off; enhanced measurement with page views on, **form interactions
+   OFF** (required: GA4 runs on the pages that carry the lead form, and the notice says nothing
+   typed into a form is sent) and site search off (the site strips query strings anyway). Join
+   never loads GA4. The notice drafts state these settings, so keep them.
 2. **The notice sign-off.** The owner (with legal review of the cross-border transfer) approves
    the EN and AR texts in `docs/admin-v2/as-built/U15.md` ("The notice drafts").
 3. **The switch-on PR**, one reviewed PR carrying all of it (`tests/lib/ga4Switch.spec.ts`

@@ -30,15 +30,19 @@ export const GA4_LOADER_SRC = '/scripts/ga4.js';
  * English first and each Arabic twin under /ar. Every public page but these:
  *   - /search: its address and its box carry what a visitor typed, which Google is not sent
  *     (the first-party search log keeps the counts);
+ *   - /join: the application form, an applicant's contact details and CV (Admin only in both
+ *     server layers, CLAUDE.md §3): Google's script never runs beside it;
  *   - the 404 pages and the /ar catch-all: nothing to measure.
- * tests/lib/ga4Routes.spec.ts holds this list to the files in src/pages: a new page needs a
- * decision either way.
+ * The lead form is not a reason on its own: it is on Home, Services, every service page and
+ * Contact, so GA4 runs beside it with the property's form interactions OFF (launch runbook
+ * §2e) and nothing typed is ever sent (U15's as-built, a residual the owner signs off with the
+ * notice). tests/lib/ga4Routes.spec.ts holds this list to the files in src/pages: a new page
+ * needs a decision either way, and a page that renders the application form is never listed.
  */
 const EN_ROUTES = [
   '/',
   '/about',
   '/contact',
-  '/join',
   '/services',
   '/services/[slug]',
   '/portfolio',
@@ -59,6 +63,8 @@ export const GA4_ROUTES: ReadonlySet<string> = new Set([...EN_ROUTES, ...EN_ROUT
 export const NOT_GA4_ROUTES: Readonly<Record<string, string>> = {
   '/search': 'what a visitor typed is in its address',
   '/ar/search': 'what a visitor typed is in its address',
+  '/join': "the application form: an applicant's contact details and CV (Admin-only PII)",
+  '/ar/join': "the application form: an applicant's contact details and CV (Admin-only PII)",
   '/404': 'nothing to measure',
   '/ar/404': 'nothing to measure',
   '/ar/[...path]': 'the Arabic catch-all, which answers the Arabic 404 page',

@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -70,6 +70,28 @@ describe('the routes that load GA4', () => {
     }
   });
 
+  it('leave out every page that renders the application form (applicant PII, Admin only)', () => {
+    // By the page file, not by name: a route whose page renders JoinPage (the form's page)
+    // must be named as never loading GA4, wherever it moves.
+    const root = join(process.cwd(), 'src', 'pages');
+    const withForm = pageRoutes().filter((route) => {
+      const file = route === '/' ? 'index' : route.slice(1);
+      for (const candidate of [`${file}.astro`, `${file}/index.astro`]) {
+        try {
+          return readFileSync(join(root, candidate), 'utf8').includes('JoinPage.astro');
+        } catch {
+          /* the other form of the file name */
+        }
+      }
+      return false;
+    });
+    expect(withForm).toEqual(['/ar/join', '/join']);
+    for (const route of withForm) {
+      expect(GA4_ROUTES.has(route), route).toBe(false);
+      expect(NOT_GA4_ROUTES[route], route).toMatch(/application form/);
+    }
+  });
+
   it('the loader is a file of our own, under the static scripts', () => {
     expect(GA4_LOADER_SRC).toBe('/scripts/ga4.js');
   });
@@ -109,6 +131,8 @@ describe('ga4Reads', () => {
         '',
         '/search',
         '/404',
+        '/join',
+        '/ar/join',
         '/admin',
         '/admin/preview/[...path]',
         '/api/contact',
