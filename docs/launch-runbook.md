@@ -1612,24 +1612,24 @@ CI, and the guard accepts a production ahead of the checkout). Never roll back p
 PR of the newest contraction production has applied; past that line, fix forward through a
 PR (§5b). Today the line is #109 (Admin v2 C14a, the leads contract's code, merged as
 `5c02776`) once `0112_crm_leads_contract.sql` (C14b) is applied: it drops the lead columns
-`status`, `internal_notes`, `ip_inet` and `timeline_band`, and `crm_settings.timezone`, which a
-Worker older than #109 names (the legacy lead list and `?pii=1`, the export's `status`, notify-lead's
-and the daily index cron's `timeline_band`, the CRM settings' `timezone`), so the lead detail,
-the export, the reveal, notify-lead, the index cron and CRM settings fail (42703, the column
-does not exist); every public page and the contact form keep working (the form's insert names
-none of them). Behind it is #106 (Admin v2 U11, merged as `1083159`), the line since
-`0110_integrations_contract.sql` (U11c): it drops `site_integrations`' four legacy jsonb
-columns (`ga4`, `search_console`, `calendly`, `recaptcha`), which a Worker older than #106
-selects and writes on the Integrations screen and its route, so that screen fails to load and
-save (42703); no public page read the table before #106. Behind both is #43 (merged as
+`status`, `internal_notes`, `ip_inet` and `timeline_band`, and `crm_settings.timezone`, which
+a Worker older than #109 names (the legacy lead list and `?pii=1`, the export's `status`,
+notify-lead's and the daily index cron's `timeline_band`, the CRM settings' `timezone`), so
+the lead detail, the export, the reveal, notify-lead, the index cron and CRM settings fail
+(42703, the column does not exist); every public page and the contact form keep working (the
+form's insert names none of them). Behind it is #106 (Admin v2 U11, merged as `1083159`), the
+line since `0110_integrations_contract.sql` (U11c): it drops `site_integrations`' four legacy
+jsonb columns (`ga4`, `search_console`, `calendly`, `recaptcha`), which a Worker older than
+#106 selects and writes on the Integrations screen and its route, so that screen fails to load
+and save (42703); no public page read the table before #106. Behind both is #43 (merged as
 `cc8c6c4`), the line since `0033`: a Worker older than #43 also reads lead columns `0033`
 revoked from staff tokens, so the PII reveal, every lead update and the PII export fail
 (42501). Before a rollback, check that the target contains the line: CI's deploys carry their
 commit in the version message (`ci <sha> run <id>`), so
 `git merge-base --is-ancestor 5c02776 <sha>` must succeed (`1083159` and `cc8c6c4` are its
-ancestors, so the one check covers every line). Versions deployed before this pipeline (#41, merged after #43) carry no commit; every
-one of them is older than #109, so none is a rollback target. A new contraction moves the
-line: its migration PR updates this paragraph.
+ancestors, so the one check covers every line). Versions deployed before this pipeline (#41,
+merged after #43) carry no commit; every one of them is older than #109, so none is a
+rollback target. A new contraction moves the line: its migration PR updates this paragraph.
 
 0037 (#51) does not move the line. It revoked staff write privileges on the eight tables
 staff only read (the telemetry tables, the pageview rollup, the search, consent and
