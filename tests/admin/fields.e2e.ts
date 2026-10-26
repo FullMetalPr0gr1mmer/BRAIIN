@@ -213,7 +213,13 @@ test.describe('as admin, a number the browser cannot read (review M2)', () => {
     // Its own service: nothing here may save, and if it did it would race no other test.
     const id = await serviceId(page, 'brand-guidelines');
     await openEditor(page, id);
+    // The service editor is tabbed since U5: the order is on the Publishing tab.
+    await page
+      .getByRole('tablist', { name: 'Service editor' })
+      .getByRole('tab', { name: 'Publishing', exact: true })
+      .click();
     const sort = page.locator('#f-sortOrder');
+    await expect(sort).toBeVisible();
     const before = await sort.inputValue();
     // The row's version, as the actions bar shows it: it must not move, since nothing saves.
     const versionOf = (text: string | null) => /Version \d+/.exec(text ?? '')?.[0] ?? null;

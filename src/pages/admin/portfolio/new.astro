@@ -1,13 +1,34 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
+import AdminProjectEditor from '@/components/admin/islands/AdminProjectEditor';
+import { PROJECT_TABS } from '@/components/admin/screens/projects/view';
+import { firstTab, visibleTabs } from '@/lib/admin/editorTabs';
+import { servicesAreaAccess } from '@/lib/admin/servicesArea';
 
 export const prerender = false;
 
-const ui = uiFor('portfolio');
+// A new project (Admin v2 U6), in the editor's tabs: the full form, the no-JS path behind the
+// list's "Add project" (which opens its own short modal) and the dashboard's quick action. It
+// starts empty, as a draft: never a copy of another project (AV-15). Its SEO and its quotes
+// belong to a project that exists, so those say to save it first. A role without
+// portfolio.write sees it read-only (the API refuses a create anyway).
+const access = servicesAreaAccess(Astro.locals.session?.role);
+const initialTab = firstTab(
+  visibleTabs(PROJECT_TABS, { seoAccess: access.seo }),
+  Astro.url.searchParams.get('tab'),
+  { readOnly: !access.portfolio, seoAccess: access.seo },
+);
 ---
 
-<AdminLayout title={`New ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="portfolio" id={null} />
+<AdminLayout title="New project" subtitle="Projects" styles={['projects.css']}>
+  <AdminProjectEditor
+    client:load
+    id={null}
+    write={access.portfolio}
+    archive={access.archive}
+    seoAccess={access.seo}
+    initialTab={initialTab}
+    seo={null}
+    defaults={{ status: 'draft' }}
+  />
 </AdminLayout>

@@ -2,6 +2,7 @@ import { ServiceUpdateSchema, ServiceWriteSchema } from '@schemas/admin';
 import { ValidationError } from '../errors';
 import type { ConstraintFields } from '../crud';
 import type { ResourceConfig } from '../resource';
+import { POSTER_EMBED, withPosterThumb } from './media';
 import {
   POSTER_LINK,
   PREVIEW_PATH_COLUMNS,
@@ -23,6 +24,8 @@ import {
 const SERVICE_CONSTRAINTS: ConstraintFields = {
   services_tenant_id_slug_key: { field: 'slug', message: 'another service already uses this slug' },
   services_intro_check: { field: 'intro', message: 'the intro needs English and Arabic' },
+  // The column holds 6; the admin schema stops at 4 (U5), so this fires only for a write that
+  // skipped the schema.
   services_value_points_check: { field: 'valuePoints', message: 'at most 6 value cards' },
   services_deliverables_check: { field: 'deliverables', message: 'at most 12 lines' },
   services_preview_video_path_check: {
@@ -61,7 +64,11 @@ export const serviceResource: ResourceConfig = {
   writeCap: 'services.write',
   // SEO can list/read a service to author its meta, but not write the row itself.
   readCaps: ['services.write', 'seo.entityMeta'],
-  listColumns: 'id,slug,title,status,is_teaser,sort_order,discipline_id,version,updated_at',
+  // A discipline's page (Admin v2 U5) lists its services with the tagline and the poster as
+  // a thumbnail (embedded: one read for the list).
+  listColumns:
+    'id,slug,title,status,is_teaser,sort_order,discipline_id,version,updated_at,blurb,' +
+    `poster_media_id,${POSTER_EMBED}`,
   columns:
     'id,slug,title,short_title,blurb,body,body_html,hero_video_uid,category,status,is_teaser,' +
     'sort_order,version,published_at,scheduled_for,created_at,updated_at,discipline_id,intro,' +
@@ -86,7 +93,7 @@ export const serviceResource: ResourceConfig = {
     clip: PREVIEW_PATH_COLUMNS,
   }),
   statusOf: (input) => statusOf(input as Input),
-  fromRow: withPreviewField,
+  fromRow: (row) => withPosterThumb(withPreviewField(row)),
   assertWritable: async (_merged, ctx) => {
     await assertLinkInTenant(ctx, {
       column: 'discipline_id',

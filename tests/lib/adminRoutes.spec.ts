@@ -420,9 +420,10 @@ describe('the locked APIs the refusals e2e asks directly', () => {
       expect(existsSync(`${api}.ts`) || existsSync(`${api}/index.ts`), api).toBe(true);
       const resource = RESOURCE_BY_SEGMENT[entry.api.replace(/^\/api\/admin\//, '')];
       expect(resource, entry.api).toBeDefined();
-      expect(resource!.config.readCaps ?? [resource!.config.writeCap], entry.api).toEqual([
-        entry.cap,
-      ]);
+      expect(resource!.config.readCaps ?? [resource!.config.writeCap], entry.api).toEqual(
+        entry.anyOf ? [...entry.anyOf] : [entry.cap],
+      );
+      if (entry.anyOf) expect(entry.anyOf, entry.api).toContain(entry.cap);
       const refused = refusedRoles(entry);
       expect(refused.length, entry.api).toBeGreaterThan(0);
       expect(refused, entry.api).not.toContain('admin');

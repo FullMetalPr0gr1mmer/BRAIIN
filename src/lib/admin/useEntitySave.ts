@@ -85,6 +85,12 @@ export interface EntitySave {
   releasesOff?: boolean;
   /** Admin v2 R12: save now if this is an unsaved pending change (blur, tab switch, ⌘S). */
   flush?(): void;
+  /**
+   * Admin v2 U5/U6: go to `href` without the unsaved-changes question, after an action that
+   * made the form moot (the record was deleted: editorDelete.ts). Optional, so a screen's
+   * fake save need not carry it.
+   */
+  leave?(href: string): void;
 }
 
 export interface UseEntitySaveOptions {
@@ -383,6 +389,10 @@ export function useEntitySave(
     gone: state.gone,
     releasesOff: state.releasesOff,
     flush,
+    leave: useCallback((href: string) => {
+      leaving.current = true;
+      window.location.assign(href);
+    }, []),
   };
 }
 

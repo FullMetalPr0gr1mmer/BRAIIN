@@ -53,15 +53,20 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     ],
     screens: [
       '/admin/sections',
-      '/admin/services',
-      '/admin/disciplines',
       '/admin/service-cases',
-      '/admin/portfolio',
       '/admin/sectors',
       '/admin/blog',
       '/admin/categories',
       '/admin/navigation',
     ],
+  },
+  // Admin v2 U5 + U6: the Services overview, a discipline's page and the Projects list open
+  // their own guide (put by the services-and-projects migration, revision 0). SEO reads it too:
+  // it opens these screens for their SEO.
+  {
+    slug: 'services-and-projects',
+    caps: ['services.write', 'portfolio.write', 'seo.entityMeta'],
+    screens: ['/admin/services', '/admin/disciplines', '/admin/portfolio'],
   },
   // Admin v2 E1: the page editor opens its own guide (put by the page editor's migration,
   // revision 0). For the roles that edit pages: SEO opens Pages for SEO only, which the SEO

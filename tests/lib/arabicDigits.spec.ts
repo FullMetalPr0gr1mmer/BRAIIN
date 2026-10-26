@@ -195,6 +195,13 @@ const ALLOWED: Record<string, string> = {
     'reads a searched term as a phone number (digits of either script) for the blind-index lookup',
   'src/lib/admin/palette.ts':
     'NFKD folds the command palette’s query and labels for matching; nothing is stored or shown',
+  // Admin v2 U6: the Projects list's search, as the palette's: both sides folded to compare.
+  'src/components/admin/screens/projects/model.ts':
+    'NFKD folds the Projects list’s search and the names it is compared with; nothing is stored or shown',
+  // Admin v2 U5: Add service and Add project suggest an address from the English name (é to
+  // e). The suggestion is a slug the person may change, never the name, which is stored as typed.
+  'src/components/admin/screens/services/model.ts':
+    'NFKD drops accents from an English name to suggest an address (a slug); the name is stored as typed',
   // Not a fold: a test that refuses a team note holding a phone number in any digit set
   // (Admin v2 U1, D5); a note is stored exactly as typed, or not at all.
   'packages/schemas/dashboard.ts':
@@ -296,10 +303,14 @@ function detect(file: ScannedFile): Finding[] {
   return out;
 }
 
+// The scan parses every source file, so it is made once for both tests that read it.
+let scanned: Finding[] | null = null;
 const findings = (): Finding[] =>
-  [...scanTree('src'), ...scanTree('packages')].flatMap((file) => detect(file));
+  (scanned ??= [...scanTree('src'), ...scanTree('packages')].flatMap((file) => detect(file)));
 
-describe('no code path folds Arabic digits (source scan)', () => {
+// It takes about 3 s alone (more with every admin screen U5 and U6 add), so a full parallel
+// run can pass the 5 s default: the scan's tests get the time a whole-tree parse needs.
+describe('no code path folds Arabic digits (source scan)', { timeout: 30_000 }, () => {
   it('refuses every fold outside the allow-list', () => {
     const outside = findings().filter((f) => !(f.path in ALLOWED));
     expect(outside, JSON.stringify(outside, null, 2)).toEqual([]);

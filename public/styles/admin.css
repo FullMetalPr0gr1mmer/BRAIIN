@@ -3207,6 +3207,69 @@ img.ProseMirror-separator {
   gap: 8px;
 }
 
+/* Gallery (GalleryField, Admin v2 U6, the prototype's square .mi grid): square tiles that
+   wrap, each its picture, its number and the Sortable handle, Move and Remove under it. */
+.gal__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gal__i {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-surface-2);
+}
+
+.gal__pv {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--ad-r-xs);
+  background: var(--ad-bg);
+  color: var(--ad-dim2);
+}
+
+.gal__pv img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.gal__n {
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline-start: 10px;
+  min-inline-size: 22px;
+  padding: 1px 6px;
+  border-radius: var(--ad-r-pill);
+  background: var(--ad-midnight);
+  color: var(--ad-on-dark);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.gal__acts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.gal__acts > .li__move {
+  margin-inline-start: auto;
+}
+
 /* ---- Component kit (Admin v2 F4b, docs/admin-v2/ui.md §2.4, §2.5, AV-07) ----
    The prototype's widgets, ported for the server primitives (src/components/admin/ui/)
    and the React kit (src/components/admin/kit/) alike: both render these classes, so a
