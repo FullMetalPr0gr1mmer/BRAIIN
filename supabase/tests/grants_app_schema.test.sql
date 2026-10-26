@@ -137,7 +137,7 @@ select ok(not has_table_privilege('anon', 'public.profiles', 'select'),
   'anon CANNOT select public.profiles');
 -- site_integrations (Admin v2 U11): no table privilege; of its columns anon reads only the
 -- Search Console code the home page's <head> carries anyway, the GA4 id a page that loads GA4
--- carries (U15, 0109), and the tenant its row is in.
+-- carries (U15, 0112), and the tenant its row is in.
 select ok(not has_table_privilege('anon', 'public.site_integrations', 'select')
           and has_column_privilege('anon', 'public.site_integrations', 'search_console_token', 'select')
           and has_column_privilege('anon', 'public.site_integrations', 'ga4_measurement_id', 'select')

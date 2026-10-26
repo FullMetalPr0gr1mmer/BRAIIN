@@ -292,7 +292,7 @@ const CASES: Record<string, () => Promise<void>> = {
     clean(report);
   },
   'ga4.getGa4MeasurementId': async () => {
-    // Admin v2 U15: anon's GA4 column of the row (0109). A preview never loads GA4 (the
+    // Admin v2 U15: anon's GA4 column of the row (0112). A preview never loads GA4 (the
     // middleware's preview branch returns before the read), but the loader reads through the
     // overlay like every other.
     const { value, report } = await inPreview(() => ga4.getGa4MeasurementId());

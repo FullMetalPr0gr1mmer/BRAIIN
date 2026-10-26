@@ -1,5 +1,5 @@
 -- pgTAP: integrations, typed (Admin v2 U11, migration 0105_integrations.sql, its contract
--- U11c, 0110_integrations_contract.sql, and U15's anon read of the GA4 id, 0109_ga4.sql;
+-- U11c, 0110_integrations_contract.sql, and U15's anon read of the GA4 id, 0112_ga4.sql;
 -- CLAUDE.md §5 "Integrations"). Run with `supabase test db`.
 --
 --   • the catalog: RLS forced, the exact policy set, the helper answers settings.integrations
@@ -12,7 +12,7 @@
 --     a statement naming a legacy box is refused, 42703: there is nothing left to write);
 --   • Content Creator, Developer and Sales read nothing and change nothing (RLS: since U11
 --     the staff read is Admin + SEO, not every CMS role);
---   • anon reads the launch tenant's Search Console code and GA4 id (0109) and nothing else of
+--   • anon reads the launch tenant's Search Console code and GA4 id (0112) and nothing else of
 --     the row (42501 on any other column), never another tenant's row, and writes nothing;
 --   • another tenant's Admin reads and writes none of this tenant's row;
 --   • stale tokens (a demoted SEO, a deactivated Admin, a locked SEO) read and write nothing,
@@ -117,7 +117,7 @@ select is(
     where a.attrelid = 'public.site_integrations'::regclass and a.attnum > 0 and not a.attisdropped
       and has_column_privilege('anon', a.attrelid, a.attnum, 'select')),
   'ga4_measurement_id,search_console_token,tenant_id',
-  'anon may read the Search Console code, the GA4 id (0109) and the tenant, no other column');
+  'anon may read the Search Console code, the GA4 id (0112) and the tenant, no other column');
 select is(
   (select string_agg(a.attname::text, ',' order by a.attname::text collate "C")
      from pg_attribute a
@@ -215,7 +215,7 @@ select is((select search_console_token from public.site_integrations),
 select is((select count(*)::int from public.site_integrations), 1,
   'anon reads one row: never another tenant''s');
 select is((select ga4_measurement_id from public.site_integrations), 'G-ABC123XYZ',
-  'anon reads the launch tenant''s GA4 id (0109: the page that loads GA4 carries it)');
+  'anon reads the launch tenant''s GA4 id (0112: the page that loads GA4 carries it)');
 select is(_state($$ select calendly_url from public.site_integrations $$),
   '42501', 'anon cannot read the Calendly link');
 select is(_state($$ select version, updated_at from public.site_integrations $$),
