@@ -114,6 +114,13 @@ describe('the publish dialog', () => {
     expect(review).toContain('Unpublished changes');
     expect(review).not.toContain('type="checkbox"');
     expect(review).not.toContain('Publish ');
+    // Every row waits in review, and each says who can publish it (P-2), as in publish mode.
+    const rows = review.split('<li class="pub__row"').slice(1);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row).toMatch(/class="pub__status">(Needs |Scheduled: |No role can publish)/);
+    }
+    expect(review).toContain('Needs an Admin<');
     const discard = await dialog('seo', 'discard');
     expect(discard).toContain('Discard changes');
     // SEO may throw away the SEO change only.

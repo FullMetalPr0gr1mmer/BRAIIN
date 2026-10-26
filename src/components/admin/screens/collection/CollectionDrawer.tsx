@@ -5,12 +5,18 @@ import Note from '@/components/admin/kit/Note';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import FieldShell, { describedBy } from '@/components/admin/fields/FieldShell';
 import { adminFetch, describeError } from '@/lib/admin/client';
-import { announcePending } from '@/lib/admin/releaseEvents';
+import { announcePending, STAGED_DELETE } from '@/lib/admin/releaseEvents';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { uiFor, type FieldDef } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
-import { deleteQuestion, textOf, type CollectionDef } from './collections';
+import {
+  deleteOutcome,
+  deleteQuestion,
+  textOf,
+  type CollectionDef,
+  type DeleteOutcome,
+} from './collections';
 import { drawerFields, SAMPLE_LOCKED, type CollectionPermissions } from './fields';
 
 // The drawer that adds or edits one item of a collection (Admin v2 U7): the kit Drawer
@@ -39,8 +45,11 @@ export interface CollectionDrawerProps {
   onClose: () => void;
   onCreated: (row: Row) => void;
   onSaved: () => void;
-  /** Admin v2 R12: `staged` when the removal is a pending change (releases on). */
-  onDeleted: (staged?: boolean) => void;
+  /**
+   * What the Delete did (Admin v2 R12): a live delete, a removal staged for the next publish,
+   * or a pending new item thrown away (releases on).
+   */
+  onDeleted: (outcome: DeleteOutcome) => void;
 }
 
 export default function CollectionDrawer({
@@ -117,13 +126,17 @@ export default function CollectionDrawer({
     setBusy(true);
     setDeleteError('');
     try {
-      const result = await adminFetch<Record<string, unknown>>(`/api/admin/${def.slug}/${id}`, {
-        method: 'DELETE',
-      });
-      // R12: with releases on the answer names the pending removal (or the new item thrown away).
-      const staged = 'draft' in result;
-      if (staged) announcePending();
-      onDeleted(staged);
+      // R12: an item read through the release says so, so a switch-off since is refused.
+      const marker = save.mode === 'draft' ? STAGED_DELETE : '';
+      const result = await adminFetch<Record<string, unknown>>(
+        `/api/admin/${def.slug}/${id}${marker}`,
+        { method: 'DELETE' },
+      );
+      // R12: with releases on the answer names the pending removal, or a pending new item
+      // thrown away (never on the site, nothing staged).
+      const outcome = deleteOutcome(result);
+      if (outcome !== 'deleted') announcePending();
+      onDeleted(outcome);
       setOpen(false);
     } catch (err) {
       setDeleteError(describeError(err));

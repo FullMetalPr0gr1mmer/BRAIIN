@@ -220,3 +220,22 @@ export function collectionOf(slug: string): CollectionDef {
 export function deleteQuestion(def: CollectionDef, name: string): string {
   return `Delete the ${def.noun} “⁨${name}⁩”? This cannot be undone.`;
 }
+
+/**
+ * What a drawer's Delete did, read from the server's answer (Admin v2 R12): a live delete
+ * (releases off: no `draft` key), a removal staged for the next publish (`pendingRemoval`), or
+ * a pending new item thrown away (`draft: null`, nothing staged: it was never on the site).
+ */
+export type DeleteOutcome = 'deleted' | 'removal' | 'discarded';
+
+export function deleteOutcome(result: Readonly<Row>): DeleteOutcome {
+  if (!('draft' in result)) return 'deleted';
+  return result['pendingRemoval'] === true ? 'removal' : 'discarded';
+}
+
+/** The toast for each outcome. */
+export const DELETE_WORDS: Readonly<Record<DeleteOutcome, string>> = {
+  deleted: 'Deleted.',
+  removal: 'Removal saved. It comes off the site when it is published.',
+  discarded: 'Thrown away. It was never on the site.',
+};

@@ -63,14 +63,15 @@
     Console verification code, a Calendly link), each CHECKed against its shape: no markup,
     quote or foreign host passes, but a shape cannot tell a pasted key from a code, so the
     Search Console field says its code is published on the home page (anon reads that one
-    column). Residual: the legacy jsonb columns (`ga4`, `search_console`, `calendly`,
-    `recaptcha`) stay readable and writable by Admin and SEO tokens through the API until the
-    contract step, a small migration of its own right after U11's deploy (not tied to U15 or
-    O-18), revokes authenticated INSERT and UPDATE, then SELECT, on them or drops them; the
-    captcha tile is read-only "Not set up" until a provider is chosen (O-19, E8 adds it); GA4 and
-    Calendly are saved, not used yet ("Saved", never "Set up" or "Connected": U15 loads GA4
-    behind consent, no page shows a booking button); the verification meta is on the home
-    pages only (`/`, `/ar`), where Google reads it ([U11](as-built/U11.md)).
+    column). The residual U11 left is closed: the legacy jsonb columns (`ga4`,
+    `search_console`, `calendly`, `recaptcha`), which an Admin or SEO token could fill with
+    anything through the API and read back, are dropped by U11c's contract,
+    `0110_integrations_contract.sql`, applied after U11's deploy, which refuses the push while
+    any row still holds JSON in them ([U11c](as-built/U11c.md)); the captcha tile is read-only
+    "Not set up" until a provider is chosen (O-19, E8 adds it); GA4 and Calendly are saved,
+    not used yet ("Saved", never "Set up" or "Connected": U15 loads GA4 behind consent, no
+    page shows a booking button); the verification meta is on the home pages only (`/`,
+    `/ar`), where Google reads it ([U11](as-built/U11.md)).
 - **CRM**:
   - contact details behind an audited reveal; no budget in lists;
   - a lead's score shows as a number until the reveal: its reasons come with the contact details, through the audited reveal, because three of them (a budget given, a budget over 200k, a timeline given) name the budget band and the timeline (C4a, D7). The number itself is readable by every lead worker (all of whom hold `leads.pii`) and, with the scoring points, can imply the band: with the default points any score above 65 includes a budget over 200k;

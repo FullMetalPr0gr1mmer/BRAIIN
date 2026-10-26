@@ -10,7 +10,7 @@ import { PAGE_SIZE } from '@/lib/admin/pager';
 import { pageTimeZone, useClock } from '@/components/admin/kit/clock';
 import { clockFor, type Clock } from '@/lib/admin/relTime';
 import { toast } from '@/lib/admin/toast';
-import { announcePending } from '@/lib/admin/releaseEvents';
+import { announcePending, STAGED_DELETE } from '@/lib/admin/releaseEvents';
 import {
   columnOf,
   uiFor,
@@ -157,7 +157,7 @@ export default function ResourceTable({
         kvSynced?: boolean;
         pendingRemoval?: boolean;
         draft?: unknown;
-      }>(`/api/admin/${ui.slug}/${row.id}`, {
+      }>(`/api/admin/${ui.slug}/${row.id}${staged ? STAGED_DELETE : ''}`, {
         method: 'DELETE',
       });
       if ('draft' in result) {

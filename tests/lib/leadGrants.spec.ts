@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 import {
   GATED_LEAD_COLUMNS,
   LEAD_WRITE_COLUMNS,
+  LEGACY_LEAD_COLUMNS,
   SAFE_LEAD_COLUMNS,
   SENSITIVE_LEAD_COLUMNS,
 } from '@/lib/admin/leadFields';
@@ -38,6 +39,11 @@ describe('the leads SELECT grant (0033)', () => {
     const forbidden = [
       ...GATED_LEAD_COLUMNS.split(','),
       ...SENSITIVE_LEAD_COLUMNS,
+      // The legacy gated columns, while today's schema holds them (C14b drops them; since
+      // C14a no query names them): never granted to staff either.
+      'internal_notes',
+      'ip_inet',
+      'timeline_band',
       'retention_delete_after',
       // What the CRM keeps from staff tokens: the saved spam horizon (0034), the blind
       // indexes, the score's reasons (two derive from budget and timeline) and the index
@@ -87,7 +93,9 @@ describe('the leads UPDATE grant (0030, 0041, 0097)', () => {
     for (const column of written) expect(granted, column).toContain(column);
     expect([...granted].sort()).toEqual([...written].sort());
     for (const column of [
-      ...GATED_LEAD_COLUMNS.split(',').filter((c) => c !== 'internal_notes'),
+      ...GATED_LEAD_COLUMNS.split(','),
+      // The legacy pair 0097 revoked, and the other legacy columns (C14a, C14b).
+      ...LEGACY_LEAD_COLUMNS,
       'retention_delete_after',
       'retention_before_spam',
       'read_by',
@@ -129,7 +137,7 @@ describe('gated lead columns have a short, named list of readers', () => {
       .sort();
     expect(users).toEqual([
       'src/lib/admin/leadFields.ts',
-      // The one reveal path, for the legacy ?pii=1 and the CRM's POST /reveal (C2b).
+      // The one reveal path, the CRM's POST /reveal (C2b; the legacy ?pii=1 alias went in C14a).
       'src/lib/crm/reveal.ts',
       'src/pages/api/admin/leads/export.ts',
     ]);

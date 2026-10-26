@@ -6,7 +6,7 @@ import { adminFetch, describeError } from '@/lib/admin/client';
 import { toast } from '@/lib/admin/toast';
 import { announcePending } from '@/lib/admin/releaseEvents';
 import { uiFor } from '@/lib/admin/uiSchema';
-import { collectionOf, type CollectionDef } from './collections';
+import { collectionOf, DELETE_WORDS, type CollectionDef } from './collections';
 import { copyPayload } from './copy';
 import CollectionDrawer from './CollectionDrawer';
 import CollectionList from './CollectionList';
@@ -267,11 +267,8 @@ export default function CollectionScreen({ collection, open, permissions }: Coll
             toast('Saved.', 'ok');
             void load();
           }}
-          onDeleted={(staged) => {
-            toast(
-              staged ? 'Removal saved. It comes off the site when it is published.' : 'Deleted.',
-              'ok',
-            );
+          onDeleted={(outcome) => {
+            toast(DELETE_WORDS[outcome], 'ok');
             void load();
           }}
         />

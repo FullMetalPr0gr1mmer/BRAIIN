@@ -7,8 +7,11 @@ import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
 import { json, type AdminRouteContext } from '@/lib/admin/route';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { serviceClient } from '@/lib/supabase/server';
+import { RELEASE_ENTITY_META } from './areas';
 import { canPublish, requiredCaps, type ReleaseItemRef } from './caps';
 import { RELEASES_OFF_DETAIL, scheduleTimeRefusal } from './endpoints';
+import { liveDb } from './overlayDb';
+import { registryEntry, type RegistryEntry } from './registry';
 import { ReleaseRefusal } from './validate';
 
 // Moving and cancelling a scheduled release (Admin v2 R11; docs/admin-v2/releases.md §4.7,
@@ -22,7 +25,10 @@ import { ReleaseRefusal } from './validate';
 // (its claimed drafts, by stored metadata only); scheduled (else 409 `not-scheduled`) and at the
 // version the person saw (else 409 `conflict` with the current one); every change is the
 // person's to publish (`requiredCaps` from ROLE_CAPS, P-2: an Admin always may; else 403 naming
-// who could publish all of it); a move's time at least two minutes ahead (422); the person
+// who could publish all of it), judged as a publish judges it: an edit that sets no status of
+// its own is read against the live row's status (`liveStatuses`), because one that keeps an
+// archived row archived is an Admin's (hotfix H12); a move's time at least two minutes ahead
+// (422); the person
 // re-read live (`liveRecheck`). Then `public.reschedule_release` / `public.unschedule_release`
 // (0107, the service role) check the person and their role again in the database, under the
 // tenant's release lock, and write the audit row in the same transaction. A moved release goes
@@ -39,9 +45,11 @@ const BUSY = new Set(['55P03', '40P01', '40001', '57014']);
 const ClaimedDraftSchema = z.object({
   id: Uuid,
   entity_type: ReleaseEntityTypeSchema,
+  entity_id: Uuid,
   op: DraftOpSchema,
   status: z.string().nullable().optional(),
 });
+type ClaimedDraft = z.infer<typeof ClaimedDraftSchema>;
 
 interface Scheduled {
   id: string;
@@ -55,6 +63,47 @@ export const MOVE_COPY = {
   conflict: 'This release changed since you opened it. Look again, then try once more.',
   busy: 'The site is busy publishing. Try again in a moment.',
 } as const;
+
+/**
+ * The live status of each row a held change edits without setting a status of its own, keyed
+ * `<entity type>:<id>`: the only changes whose capabilities live decides (`keepsArchived`,
+ * hotfix H12: one that leaves an archived row archived is an Admin's, as a publish judges it
+ * from `readLive`). Read as a publish reads live, under the person's RLS and in their tenant,
+ * every table in one request (public.release_read_rows), the key and the status only; nothing
+ * is read when no change needs it.
+ */
+async function liveStatuses(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  held: readonly ClaimedDraft[],
+): Promise<Map<string, string>> {
+  const byTable = new Map<string, { entry: RegistryEntry; ids: Set<string> }>();
+  for (const draft of held) {
+    if (draft.op !== 'update' || typeof draft.status === 'string') continue;
+    if (!RELEASE_ENTITY_META[draft.entity_type].hasStatus) continue;
+    const entry = registryEntry(draft.entity_type);
+    const group = byTable.get(entry.table) ?? { entry, ids: new Set<string>() };
+    group.ids.add(draft.entity_id);
+    byTable.set(entry.table, group);
+  }
+  const groups = [...byTable.values()];
+  const out = new Map<string, string>();
+  if (groups.length === 0) return out;
+  const answers = await liveDb(sb, auth).listMany(
+    groups.map(({ entry, ids }) => ({
+      table: entry.table,
+      query: { columns: `${entry.key},status`, in: { [entry.key]: [...ids] } },
+    })),
+  );
+  groups.forEach(({ entry }, index) => {
+    for (const row of answers[index] ?? []) {
+      const status = row['status'];
+      if (typeof status === 'string')
+        out.set(`${entry.entityType}:${String(row[entry.key])}`, status);
+    }
+  });
+  return out;
+}
 
 /** The scheduled release named by the path, read as the person, with what it holds. */
 async function readScheduled(
@@ -75,7 +124,7 @@ async function readScheduled(
       .maybeSingle(),
     sb
       .from('content_drafts')
-      .select('id,entity_type,op,status:payload->>status')
+      .select('id,entity_type,entity_id,op,status:payload->>status')
       .eq('tenant_id', auth.tenantId)
       .eq('release_id', id.data)
       .limit(61),
@@ -93,6 +142,7 @@ async function readScheduled(
     });
   }
   const held = z.array(ClaimedDraftSchema).parse(drafts.data ?? []);
+  const live = await liveStatuses(sb, auth, held);
   return {
     id: id.data,
     version: Number(row['version']),
@@ -100,6 +150,7 @@ async function readScheduled(
       entityType: d.entity_type,
       op: d.op,
       patch: typeof d.status === 'string' ? { status: d.status } : null,
+      liveStatus: live.get(`${d.entity_type}:${d.entity_id}`) ?? null,
     })),
     draftIds: held.map((d) => d.id),
   };

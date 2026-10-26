@@ -119,6 +119,14 @@ describe('the service-role functions', () => {
       expect(fn, name).toMatch(/p_role <> all \(e\.author_roles\)/);
       expect(fn, name).toMatch(/p_role <> all \(e\.delete_roles\)/);
       expect(fn, name).toContain('insert into public.audit_log');
+      // And for an edit that sets no status to a row archived live (hotfix H12, the Worker's
+      // `keepsArchived`): the live row's status, read under the lock, before anything is written.
+      expect(fn, name).toMatch(
+        /pg_catalog\.jsonb_typeof\(x\.value -> 'patch' -> 'status'\) is distinct from 'string'/,
+      );
+      const kept = fn.indexOf("if v_live = 'archived' then");
+      expect(kept, name).toBeGreaterThan(fn.indexOf('pg_advisory_xact_lock'));
+      expect(kept, name).toBeLessThan(fn.indexOf('update public.'));
     }
   });
 
@@ -210,6 +218,18 @@ describe('the two switches', () => {
     expect(fn.match(/t\.status = ''scheduled'' and t\.scheduled_for is not null/g)).toHaveLength(2);
     expect(fn).toMatch(/t\.status = ''scheduled'' and t\.scheduled_for is null/);
     expect(fn).not.toMatch(/coalesce\(t\.scheduled_for/);
+  });
+
+  it('enable holds every write to those tables off before it reads one (a staff write meets releases on after)', () => {
+    const fn = bodyOf(SQL, 'app.enable_releases');
+    const lock = fn.indexOf(
+      "execute pg_catalog.format('lock table public.%I in share row exclusive mode', v_t);",
+    );
+    expect(lock).toBeGreaterThan(0);
+    // Every table locked in one loop over c_tables, before the first read of the schedule.
+    expect(fn.slice(0, lock)).toMatch(/foreach v_t in array c_tables loop\s*$/);
+    expect(lock).toBeLessThan(fn.indexOf("t.status = ''scheduled'' for update"));
+    expect(lock).toBeGreaterThan(fn.indexOf('pg_try_advisory_xact_lock'));
   });
 
   it('disable needs the discard named when anything is pending, and holds the draft writes while it counts', () => {

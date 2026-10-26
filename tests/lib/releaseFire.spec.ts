@@ -10,6 +10,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   calls: [] as { fn: string; args: Record<string, unknown> }[],
   reads: [] as string[],
+  /** The equality filters of each read, in order: `<table> <column>=<value>`. */
+  filters: [] as string[][],
   answers: {} as Record<string, () => { data: unknown; error: unknown }>,
   logs: [] as Record<string, unknown>[],
   snapshotRequests: 0,
@@ -36,9 +38,12 @@ vi.mock('@/lib/supabase/server', () => ({
     // The slugs of the release's pages, read as the system (systemSlugs): one read a table.
     from: (table: string) => {
       const b: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'in']) b[m] = () => b;
+      const eqs: string[] = [];
+      for (const m of ['select', 'in']) b[m] = () => b;
+      b['eq'] = (column: string, value: unknown) => (eqs.push(`${column}=${String(value)}`), b);
       b['then'] = (ok: (v: unknown) => unknown) => {
         state.reads.push(table);
+        state.filters.push(eqs);
         return Promise.resolve({ data: [], error: null }).then(ok);
       };
       return b;
@@ -140,6 +145,7 @@ function zone(...answers: Response[]) {
 beforeEach(() => {
   state.calls = [];
   state.reads = [];
+  state.filters = [];
   state.logs = [];
   state.snapshotRequests = 0;
   state.snapshotsFail = false;
@@ -215,6 +221,8 @@ describe('a due release goes live as its scheduler', () => {
     ]);
     await fireDueRelease();
     expect(state.reads).toEqual(['pages']);
+    // The service client reads past RLS: the tenant filter is the only fence.
+    expect(state.filters).toEqual([[`tenant_id=${T}`]]);
   });
 
   it('one that went live past the dashboard’s overdue mark is a warning saying by how much (§4.6)', async () => {

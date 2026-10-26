@@ -10,16 +10,27 @@ import { describe, it, expect, vi } from 'vitest';
 
 const inserted: Record<string, unknown>[] = [];
 // The recipients the profiles read answers, and the roles it was asked for (C10a).
-const { people, askedRoles } = vi.hoisted(() => ({
+// The lead read's columns, and which schema the stand-in plays: today's, or C14b's, where the
+// legacy columns are gone and naming one is PostgREST's 42703 (Admin v2 C14a).
+const { people, askedRoles, leadRead } = vi.hoisted(() => ({
   people: { rows: [{ id: 'u1', role: 'admin' }] as { id: string; role: string }[] },
   askedRoles: [] as unknown[],
+  leadRead: { selects: [] as string[], schema: 'today' as 'today' | 'c14b' },
 }));
+const DROPPED = ['status', 'internal_notes', 'ip_inet', 'timeline_band'];
 
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => {
     const builder: Record<string, unknown> = {};
     const chain = () => builder;
-    for (const m of ['select', 'eq', 'order', 'limit']) builder[m] = chain;
+    let table = '';
+    let columns: string[] = [];
+    for (const m of ['eq', 'order', 'limit']) builder[m] = chain;
+    builder['select'] = (list: string) => {
+      columns = list.split(',');
+      if (table === 'leads') leadRead.selects.push(list);
+      return builder;
+    };
     builder['in'] = (column: string, values: unknown) => {
       if (column === 'role') askedRoles.push(values);
       return builder;
@@ -28,26 +39,39 @@ vi.mock('@/lib/supabase/server', () => ({
       inserted.push(row);
       return Promise.resolve({ data: null, error: null });
     };
-    builder['maybeSingle'] = async () => ({
-      data: {
-        id: 'lead-1',
-        tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-        name: 'A Person',
-        message: 'hello',
-        service_of_interest: null,
-        discipline_of_interest: 'branding',
-        locale: 'en',
-        email_enc: '',
-        phone_enc: '',
-        budget_enc: '',
-        timeline_band: '3-6m',
-        created_at: '2026-07-27T00:00:00Z',
-      },
-      error: null,
-    });
+    builder['maybeSingle'] = async () => {
+      const gone = columns.filter((c) => DROPPED.includes(c));
+      if (table === 'leads' && leadRead.schema === 'c14b' && gone.length > 0) {
+        return { data: null, error: { code: '42703', message: `${gone[0]} does not exist` } };
+      }
+      return {
+        data: {
+          id: 'lead-1',
+          tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          name: 'A Person',
+          message: 'hello',
+          service_of_interest: null,
+          discipline_of_interest: 'branding',
+          locale: 'en',
+          email_enc: '',
+          phone_enc: '',
+          budget_enc: '',
+          timeline_text_enc: '',
+          // Today's schema still holds the legacy band (C14b drops it): never read or sent.
+          timeline_band: '3-6m',
+          created_at: '2026-07-27T00:00:00Z',
+        },
+        error: null,
+      };
+    };
     builder['then'] = (resolve: (v: unknown) => unknown) =>
       Promise.resolve(resolve({ data: people.rows, error: null }));
-    return { from: () => builder };
+    return {
+      from: (name: string) => {
+        table = name;
+        return builder;
+      },
+    };
   },
 }));
 
@@ -376,6 +400,29 @@ describe('notify-lead payload hygiene', () => {
     expect(serialized).not.toContain('3-6m');
     expect(row).toMatchObject({ channel: 'inbox', status: 'queued' });
   });
+
+  // Admin v2 C14a: the hook names no legacy column, so it reads the lead on today's schema and
+  // on C14b's (where naming one would 404 every notification), and the timeline it hands a
+  // recipient is the encrypted field alone, never the plaintext band.
+  it.each(['today', 'c14b'] as const)(
+    'reads the lead without a legacy column, on %s schema',
+    async (schema) => {
+      leadRead.schema = schema;
+      leadRead.selects.length = 0;
+      inserted.length = 0;
+      try {
+        expect((await signedCall()).status).toBe(200);
+        expect(leadRead.selects).toHaveLength(1);
+        for (const column of DROPPED) {
+          expect(leadRead.selects[0]!.split(','), column).not.toContain(column);
+        }
+        expect(leadRead.selects[0]!.split(',')).toContain('timeline_text_enc');
+        expect(inserted.find((r) => 'channel' in r)).toBeDefined();
+      } finally {
+        leadRead.schema = 'today';
+      }
+    },
+  );
 
   it('notifies every role that works leads, Sales included (C10a, from ROLE_CAPS)', async () => {
     askedRoles.length = 0;

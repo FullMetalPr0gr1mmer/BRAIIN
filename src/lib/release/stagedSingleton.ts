@@ -98,7 +98,8 @@ export function parseDraftSave<T extends Row>(
   raw: unknown,
 ): { payload: T & { version: number }; ref: { draftId: string; draftVersion: number } | null } {
   const body = z.record(z.string(), z.unknown()).parse(raw);
-  const { draftId, draftVersion, ...rest } = body;
+  // `staged`: the editor's "made in release mode" marker (releasesOff.ts), never payload.
+  const { draftId, draftVersion, staged: _staged, ...rest } = body;
   const ref = DraftRefFieldsSchema.parse({ draftId, draftVersion });
   const named = ref.draftId !== undefined && ref.draftVersion !== undefined;
   const payload = schema.parse(

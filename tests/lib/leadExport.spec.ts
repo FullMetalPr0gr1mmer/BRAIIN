@@ -140,6 +140,7 @@ const ROW = {
   id: LEAD,
   lead_number: 7,
   created_at: '2026-10-01T10:00:00.123456+00:00',
+  // Today's schema still holds the legacy columns: the stand-in answers them whatever is asked.
   status: 'in_progress',
   stage_id: STAGE,
   is_spam: false,
@@ -255,8 +256,23 @@ describe('the lead export (C3): filters', () => {
     };
     expect(await spamFilter('')).toEqual([false]);
     expect(await spamFilter('?spam=true')).toEqual([true]);
-    // A legacy link filtered on the spam status asks for spam too.
-    expect(await spamFilter('?status=spam')).toEqual([true]);
+  });
+
+  // Admin v2 C14a: the legacy status is the contract's to drop (C14b), so the export no longer
+  // filters on it. A link that still carries it is refused, naming the field and saying what to
+  // do, before a slot, an audit row or a lead is touched; never an export of more than it asked.
+  it('refuses a legacy ?status= link with a 422 naming it, before anything is spent', async () => {
+    for (const query of ['?status=spam', '?status=new', `?stage=${STAGE}&status=done`]) {
+      claims.length = 0;
+      audits.length = 0;
+      calls.length = 0;
+      const res = await call(query);
+      expect(res.status, query).toBe(422);
+      expect(JSON.stringify(await res.json()), query).toContain('Choose a stage instead');
+      expect(claims, query).toEqual([]);
+      expect(audits, query).toEqual([]);
+      expect(leadCalls(), query).toEqual([]);
+    }
   });
 
   // C4a: the list's other filters a link may carry.
@@ -371,13 +387,22 @@ describe('the lead export (C3): columns', () => {
     const res = await call();
     const select = leadCalls().find((c) => c.method === 'select')!;
     const columns = String(select.args[0]).split(',');
-    expect(columns).not.toContain('internal_notes');
-    expect(columns).not.toContain('ip_inet');
+    // No legacy column (C14a): the old status, the notes field, the address and the old band
+    // are C14b's to drop, so the read works on the schema before and after that migration.
+    for (const legacy of ['status', 'internal_notes', 'ip_inet', 'timeline_band']) {
+      expect(columns, legacy).not.toContain(legacy);
+    }
     expect(columns).toEqual(expect.arrayContaining(['stage_id', 'assigned_to', 'tags', 'score']));
-    const [header, first] = (await res.text()).trim().split(/\r?\n/);
+    const text = await res.text();
+    const [header, first] = text.trim().split(/\r?\n/);
     const head = cells(header!);
     const row = cells(first!);
-    expect(head).not.toContain('internal_notes');
+    for (const legacy of ['status', 'internal_notes', 'ip_inet', 'timeline_band']) {
+      expect(head, legacy).not.toContain(legacy);
+    }
+    // Even from a row that still carries them (today's schema; the stand-in answers them).
+    expect(text).not.toContain('in_progress');
+    expect(text).not.toContain('never exported');
     expect(row[head.indexOf('notes_count')]).toBe('3');
     expect(row[head.indexOf('stage')]).toBe('Proposal sent');
     expect(row[head.indexOf('assignee')]).toBe('Amal');

@@ -32,7 +32,11 @@ import type { FieldDef } from './uiSchema';
 //     under the form (`draft-published`, `draft-discarded`: the values stay, the form is on
 //     live again, "Save again" makes a new change), a schedule holds it (`scheduled`);
 //   - autosave waits for the person after any of those (`held`), and for the next edit after
-//     a refused automatic save (`autoBlocked`).
+//     a refused automatic save (`autoBlocked`);
+//   - every save also says it was made in release mode (`staged: true`, even with nothing
+//     pending yet), so a form left open across a switch-off is refused (409 `releases-off`)
+//     instead of writing live what it holds (src/lib/release/releasesOff.ts): it then holds,
+//     and offers Reload (`releasesOff`).
 // With releases off no answer carries `draft`, so `draft` stays undefined and every rule above
 // is the live mode's, request for request (tests/lib/entitySave.spec.ts).
 
@@ -111,6 +115,8 @@ export interface EntitySaveState {
   autoBlocked: boolean;
   /** The change was published or thrown away under the form; "Save again" makes a new one. */
   gone: DraftGone | null;
+  /** Releases were switched off under the form (409 `releases-off`): it waits for a reload. */
+  releasesOff: boolean;
 }
 
 export type EntitySaveAction =
@@ -156,6 +162,14 @@ export type EntitySaveAction =
     }
   /** Admin v2 R12: a scheduled release holds the change: nothing can be saved over it. */
   | { type: 'scheduled' }
+  /** Admin v2 R12: releases were switched off under the form; nothing was written. */
+  | { type: 'releases-off' }
+  /**
+   * Admin v2 R12: the record read again after its pending change was settled elsewhere (the
+   * publish dialog moved its version): the server's row, with what was typed since the last
+   * save kept over it, so the next save names the change at its new version.
+   */
+  | { type: 'rebased'; row: Row; fields: readonly FieldDef[]; versionFallback: number }
   | { type: 'reset' }
   /**
    * Admin v2 U9: the row moved by ONE write this screen made itself on another column (the
@@ -211,6 +225,7 @@ export function initialSaveState(
     held: false,
     autoBlocked: false,
     gone: null,
+    releasesOff: false,
   };
 }
 
@@ -256,6 +271,12 @@ function draftOf(row: Readonly<Row>): Pick<EntitySaveState, 'draft' | 'pendingRe
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
+/** The content lifecycle's status select (as VisibilityField's isLifecycleStatus reads it). */
+const isStatusSelect = (field: FieldDef) =>
+  field.name === 'status' &&
+  field.kind === 'select' &&
+  (field.options ?? []).some((option) => option.value === 'published');
+
 export function entitySaveReducer(
   state: EntitySaveState,
   action: EntitySaveAction,
@@ -278,6 +299,7 @@ export function entitySaveReducer(
         held: false,
         autoBlocked: false,
         gone: null,
+        releasesOff: false,
       };
     }
     case 'load-failed':
@@ -303,6 +325,7 @@ export function entitySaveReducer(
         sent: state.values,
         held: false,
         gone: null,
+        releasesOff: false,
       };
     case 'saved': {
       const fromServer = rowToForm(action.row, action.fields);
@@ -399,6 +422,49 @@ export function entitySaveReducer(
         sent: null,
         held: true,
       };
+    case 'rebased': {
+      // Only between saves: the hook waits for a save on its way before it reads again.
+      if (state.phase !== 'ready') return state;
+      const fromServer = rowToForm(action.row, action.fields);
+      const values = { ...fromServer };
+      let typedSince = false;
+      for (const key of Object.keys(state.values)) {
+        if (!same(state.values[key], state.initial[key])) {
+          values[key] = state.values[key];
+          typedSince = true;
+        }
+      }
+      return {
+        ...state,
+        values,
+        initial: fromServer,
+        version: Number(action.row['version'] ?? action.versionFallback),
+        status: typedSince ? 'dirty' : 'idle',
+        errors: NO_ERRORS,
+        conflict: false,
+        message: null,
+        ...draftOf(action.row),
+        sent: null,
+        held: false,
+        autoBlocked: false,
+        gone: null,
+        releasesOff: false,
+      };
+    }
+    case 'releases-off':
+      // The values stay on screen; nothing was written. Autosave stops until a reload, which
+      // reads the record live (no `draft` key) and leaves release mode.
+      return {
+        ...state,
+        phase: 'ready',
+        status: 'error',
+        errors: NO_ERRORS,
+        message: RELEASES_OFF_WORDS,
+        conflict: false,
+        sent: null,
+        held: true,
+        releasesOff: true,
+      };
     case 'version':
       return Number.isInteger(action.version) && action.version === state.version + 1
         ? { ...state, version: action.version }
@@ -419,6 +485,17 @@ export function entitySaveReducer(
 /** What a change a scheduled release holds says (R12). */
 export const SCHEDULED_WORDS =
   'This change is scheduled to go live, so it cannot be edited now. Unschedule it to change it.';
+
+/** What a form left open across the switch-off says (R12): nothing was saved; reload. */
+export const RELEASES_OFF_WORDS =
+  'Publishing was switched off while you were editing, so this was not saved. Reload to edit the live site.';
+
+/**
+ * The body key that says a save was made in release mode (R12): the server's STAGED_MARKER
+ * (src/lib/release/releasesOff.ts), held equal by tests/lib/entitySave.spec.ts. The staged path
+ * ignores it; with releases off the live path refuses the save.
+ */
+export const STAGED_KEY = 'staged';
 
 /** The words for a pending change gone under the form (R12). */
 export const DRAFT_GONE_WORDS: Readonly<Record<DraftGone, string>> = {
@@ -479,9 +556,25 @@ export function buildSaveRequest(
   fields: readonly FieldDef[],
 ): { url: string; method: 'POST' | 'PATCH' | 'PUT'; body: Row } {
   const body = formToPayload(state.values, fields);
-  // R12: a save on a pending change names it, at the version the form holds (R3a). Only in
-  // draft mode: with releases off the request is exactly what it always was.
-  const ref = state.draft ? { draftId: state.draft.id, draftVersion: state.draft.version } : {};
+  // R12: in release mode the lifecycle status is the "Visible on the site" switch
+  // (VisibilityField), which shows a stored `scheduled` as off, and an item is never scheduled
+  // on its own (a release is: "Schedule the release instead", R3a). A `scheduled` the form
+  // still holds is one with no time, which switching releases on leaves as it is (R11), so it
+  // is sent as what the switch shows, `draft`, not as a status every staged save refuses.
+  if (state.draft !== undefined && body['status'] === 'scheduled' && fields.some(isStatusSelect)) {
+    body['status'] = 'draft';
+  }
+  // R12: a save on a pending change names it, at the version the form holds (R3a), and every
+  // save in draft mode says it was made there (STAGED_KEY), nothing pending yet included, so
+  // the live path refuses it once releases are off. Only in draft mode: with releases off the
+  // request is exactly what it always was.
+  const ref =
+    state.draft === undefined
+      ? {}
+      : {
+          [STAGED_KEY]: true,
+          ...(state.draft ? { draftId: state.draft.id, draftVersion: state.draft.version } : {}),
+        };
   if (target.kind === 'entitySeo') {
     // A full replace: every field the form holds, the target, and the version it loaded.
     return {

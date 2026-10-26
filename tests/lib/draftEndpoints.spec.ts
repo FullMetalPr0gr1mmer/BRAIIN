@@ -11,6 +11,16 @@ import {
 } from '@/lib/release/draftEndpoints';
 import { PendingItemSchema, RELEASE_ENTITY_TYPES, type ReleaseEntityType } from '@schemas/release';
 import { resetIds, T, type Db, type Row } from '../fixtures/stagedDb';
+import { itemRoutes } from '@/lib/admin/resource';
+import { serviceResource } from '@/lib/admin/resources';
+import { uiFor } from '@/lib/admin/uiSchema';
+import {
+  buildSaveRequest,
+  entitySaveReducer,
+  initialSaveState,
+  type SaveTarget,
+} from '@/lib/admin/entitySave';
+import { announceSettled, onSettled } from '@/lib/admin/releaseEvents';
 import {
   ADMIN,
   auditRowsOf,
@@ -731,6 +741,81 @@ describe('settling a conflict', () => {
   });
 });
 
+// ── An editor open while the publish dialog settles its change (R12 pre-merge review) ────────
+
+describe('an editor open on a change the publish dialog settles', () => {
+  beforeEach(() => {
+    db.tables['content_drafts'] = [serviceEdit()];
+  });
+  const item = itemRoutes(serviceResource);
+  const fields = uiFor('services').fields;
+  const target: SaveTarget = { kind: 'resource', slug: 'services' };
+  const opts = (body?: unknown) => ({
+    role: 'content_creator' as Role,
+    params: { id: S1 },
+    ...(body === undefined ? {} : { body }),
+  });
+  const get = () => callRoute(db, item.GET, 'GET', `/api/admin/services/${S1}`, opts());
+  const save = (body: unknown) =>
+    callRoute(db, item.PATCH, 'PATCH', `/api/admin/services/${S1}`, opts(body));
+  const SHORT = { en: 'Logos', ar: 'شعارات' };
+
+  it('the dialog tells the page, the editor reads the change again over what was typed, and its next save lands', async () => {
+    let state = entitySaveReducer(initialSaveState(fields, false), {
+      type: 'loaded',
+      row: (await get()).data,
+      fields,
+      versionFallback: 1,
+    });
+    expect(state.draft).toMatchObject({ id: id(1), version: 1, conflict: ['title'] });
+    // Typed, not saved yet (the blur has not happened).
+    state = entitySaveReducer(state, { type: 'set', name: 'shortTitle', value: SHORT });
+
+    // The publish dialog on the same page: Keep my version.
+    const settled = await callRoute(
+      db,
+      await resolve(),
+      'POST',
+      `/api/admin/drafts/${id(1)}/resolve`,
+      { body: { version: 1, keepMine: ['title'] }, role: 'content_creator', params: { id: id(1) } },
+    );
+    expect(settled.status, JSON.stringify(settled.body)).toBe(200);
+
+    // Left as it was, the editor's next save names the old version: "Someone else saved".
+    const stale = await save(buildSaveRequest(target, S1, state, fields).body);
+    expect([stale.status, stale.body['error']]).toEqual([409, 'draft-conflict']);
+
+    // The dialog's word reaches whoever listens for that change, and only for it.
+    vi.stubGlobal('window', new EventTarget());
+    try {
+      const heard: string[] = [];
+      const off = onSettled((draftId) => heard.push(draftId));
+      announceSettled(id(1));
+      off();
+      announceSettled(id(2));
+      expect(heard).toEqual([id(1)]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    // The editor reads the change again; what was typed since its last save stays.
+    state = entitySaveReducer(state, {
+      type: 'rebased',
+      row: (await get()).data,
+      fields,
+      versionFallback: 1,
+    });
+    expect(state.draft).toMatchObject({ id: id(1), version: 2, conflict: [] });
+    expect(state.values['shortTitle']).toEqual(SHORT);
+    expect(state).toMatchObject({ status: 'dirty', conflict: false, held: false });
+
+    const fresh = await save(buildSaveRequest(target, S1, state, fields).body);
+    expect(fresh.status, JSON.stringify(fresh.body)).toBe(200);
+    expect(drafts()[0]).toMatchObject({ version: 3 });
+    expect(drafts()[0]!['payload']).toMatchObject({ title: MINE, shortTitle: SHORT });
+  });
+});
+
 // ── GET /api/admin/drafts/[id]/compare (R12) ──────────────────────────────────────────────
 
 describe('comparing a change with the live site (R12)', () => {
@@ -760,12 +845,65 @@ describe('comparing a change with the live site (R12)', () => {
     expect(auditRowsOf(db)).toEqual([]);
   });
 
-  it('a long text is clipped as a version shows it; a consent record says only "changed"', async () => {
+  it('a long text is clipped as a version shows it', async () => {
     const long = 'x'.repeat(400);
     db.tables['services'] = [service({ blurb: { en: long } })];
     drafts()[0] = serviceEdit({ base: { title: TITLE, blurb: { en: 'old' } } });
     const blurb = ((await look()).data['columns'] as Row[]).find((c) => c['column'] === 'blurb')!;
     expect((blurb['live'] as Row)['en']).toHaveLength(301);
+  });
+
+  it('a quote’s consent record says only "changed": neither live’s value nor the change’s leaves', async () => {
+    const quote = '88888888-8888-4888-8888-000000000001';
+    db.tables['testimonials'] = [
+      {
+        id: quote,
+        tenant_id: T,
+        slug: 'amal',
+        quote: { en: 'They listened.', ar: 'أصغوا.' },
+        author_name: 'Amal',
+        author_role: null,
+        client_id: null,
+        portfolio_id: null,
+        avatar_media_id: null,
+        placements: [],
+        consent_obtained_at: '2026-10-02T09:00:00.000Z',
+        consent_reference: 'REF-LIVE-NOW',
+        is_placeholder: false,
+        status: 'published',
+        sort_order: 1,
+        scheduled_for: null,
+        version: 4,
+      },
+    ];
+    // Live's consent record moved since the change began: both columns conflict.
+    drafts()[0] = draftRow({
+      id: id(2),
+      entity_type: 'testimonial',
+      entity_id: quote,
+      payload: {
+        consentReference: 'REF-MINE-SECRET',
+        consentObtainedAt: '2026-10-20T09:00:00.000Z',
+      },
+      base: {
+        consent_reference: 'REF-AT-START',
+        consent_obtained_at: '2026-09-01T09:00:00.000Z',
+      },
+      base_version: 3,
+      fields: ['consent_obtained_at', 'consent_reference'],
+    });
+    const res = await look('content_creator', id(2));
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const columns = res.data['columns'] as Row[];
+    expect(columns.map(({ column, kind }) => ({ column, kind }))).toEqual([
+      { column: 'consent_obtained_at', kind: 'changed' },
+      { column: 'consent_reference', kind: 'changed' },
+    ]);
+    for (const row of columns) {
+      expect(row).not.toHaveProperty('live');
+      expect(row).not.toHaveProperty('yours');
+    }
+    expect(JSON.stringify(res.body)).not.toMatch(/REF-|2026-10-02|2026-10-20|2026-09-01/);
   });
 
   it('the row gone under the change: removed, nothing to compare', async () => {

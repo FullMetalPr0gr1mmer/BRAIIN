@@ -14,6 +14,7 @@ import {
   stagedSingletonRead,
   stagedSingletonUpdate,
 } from '@/lib/release/stagedSingleton';
+import { refuseStagedBody } from '@/lib/release/releasesOff';
 
 /**
  * 42501 from a singleton write means the DATABASE refused it after assertCap() allowed
@@ -183,6 +184,8 @@ export function singletonRoutes(config: SingletonConfig): { GET: APIRoute; PATCH
       if (entry && (await ctx.releasesEnabled())) {
         return stagedSingletonUpdate(config, entry, ctx, ctx.input);
       }
+      // Releases off: a save made in release mode is refused, never written live (R12).
+      if (entry) refuseStagedBody(ctx.input, config.entity);
       const { auth, sb, audit } = ctx;
       const payload = config.schema.parse(ctx.input) as ResourcePayload & { version: number };
       const values = config.toRow(payload);

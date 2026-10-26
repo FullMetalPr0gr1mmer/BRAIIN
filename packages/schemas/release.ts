@@ -631,7 +631,9 @@ export const DraftConflictDetailSchema = z
 /**
  * Why a staged save was refused with 409 (releases.md §3, §4.5): the pending change moved on
  * (`draft-conflict`), was published or thrown away since the form read it, is claimed by a
- * scheduled release, or (a bulk discard, R3b) several moved at once.
+ * scheduled release, or (a bulk discard, R3b) several moved at once. `releases-off` (R12): a
+ * save or delete made in release mode reached the live path after releases were switched off
+ * (src/lib/release/releasesOff.ts).
  */
 export const DRAFT_CONFLICT_CODES = [
   'draft-conflict',
@@ -639,6 +641,7 @@ export const DRAFT_CONFLICT_CODES = [
   'draft-discarded',
   'scheduled',
   'pending-changed',
+  'releases-off',
 ] as const;
 export type DraftConflictCode = (typeof DRAFT_CONFLICT_CODES)[number];
 

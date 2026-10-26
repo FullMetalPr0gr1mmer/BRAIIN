@@ -4,6 +4,7 @@ import { defineAdminRoute } from '@/lib/admin/route';
 import { OptimisticLockError } from '@/lib/admin/errors';
 import { ENTITY_SEO, entitySeoWriteError, normalizeCanonical } from '@/lib/admin/entitySeo';
 import { stagedEntitySeoRead, stagedEntitySeoWrite } from '@/lib/release/stagedEntitySeo';
+import { refuseStagedBody } from '@/lib/release/releasesOff';
 
 // Per-entity SEO metadata (`seo.entityMeta` — Admin + SEO write, Content Creator view).
 //
@@ -63,6 +64,8 @@ export const PUT = defineAdminRoute({
   input: z.unknown(),
   handler: async (ctx) => {
     if (await ctx.releasesEnabled()) return stagedEntitySeoWrite(ctx, ctx.input);
+    // Releases off: a save made in release mode is refused, never written live (R12).
+    refuseStagedBody(ctx.input, ENTITY_SEO.entity);
     const { auth, sb, audit } = ctx;
     const input = WriteSchema.parse(ctx.input);
     ENTITY_SEO.assertBilingual(input);

@@ -1546,7 +1546,10 @@ select app.disable_releases('<tenant id>', '<operator profile id>', p_discard_pe
 
 - **On** (`app.enable_releases`): refused (`55P03`) while a release is publishing, and (`55000`)
   when releases are on already or pending changes or scheduled releases remain from an earlier
-  time. Every row that `app.publish_scheduled()` would have published by itself (`scheduled`,
+  time. Every write to `app.publish_scheduled()`'s eight tables in flight lands first and every
+  later one waits for the switch, then meets releases on; a write still running after five
+  seconds refuses it (`55P03`: try again). Every row that `app.publish_scheduled()` would have
+  published by itself (`scheduled`,
   with a time) becomes a pending change ("published") claimed by a `legacy_schedule` release at
   that time (a time passed: the next minute publishes it), its live status moved to draft;
   releases group the rows by time and scheduler, at most 60 each. Each goes live as the row's
@@ -1559,12 +1562,13 @@ select app.disable_releases('<tenant id>', '<operator profile id>', p_discard_pe
 - **Off** (`app.disable_releases`): refused (`55P03`) while a release is publishing and
   (`55000`) when off already. Every draft write in flight lands first; then, if any change is
   pending or any release scheduled, it is refused (`55000`, with the counts) unless the discard
-  is named. With the discard, a `legacy_schedule` release's rows go back to their own schedule
-  (scheduled at the release's time, so `app.publish_scheduled()` publishes them as before; any
-  that could not be put back is counted in `not_restored`), every scheduled release is
-  cancelled, and every pending change is thrown away. Then the flag goes, with a
-  `releases.disable` audit row. Versions, history and the ledger stay; switching on again
-  writes a new baseline.
+  is named. The flag goes first, so nothing after it is recorded in the release ledger as an
+  out-of-band change (the capture records one only while releases are on). Then, with the discard,
+  a `legacy_schedule` release's rows go back to their own schedule (scheduled at the release's
+  time, so `app.publish_scheduled()` publishes them as before; any that could not be put back is
+  counted in `not_restored`), every scheduled release is cancelled, and every pending change is
+  thrown away; last, a `releases.disable` audit row. Versions, history and the ledger stay;
+  switching on again writes a new baseline.
 - **Scheduled releases go live from the minute cron**, one a minute, as the person who scheduled
   them (their live profile and their database rights decide again). One that cannot (the
   person was switched off, demoted or locked, the live site changed under a change, the database
@@ -1669,14 +1673,20 @@ meets columns it ignores) but **not across a contraction** (§5a): the older Wor
 what the contraction took away, and nothing automated stops it (`wrangler rollback` bypasses
 CI, and the guard accepts a production ahead of the checkout). Never roll back past the code
 PR of the newest contraction production has applied; past that line, fix forward through a
-PR (§5b). Today the line is #43 (merged as `cc8c6c4`) once `0033` is applied: a Worker older
-than #43 reads lead columns `0033` revoked from staff tokens, so the PII reveal, every lead
-update and the PII export fail (42501); the lead list and the plain lead view keep working.
-Before a rollback, check that the target contains the line: CI's deploys carry their commit
-in the version message (`ci <sha> run <id>`), so `git merge-base --is-ancestor cc8c6c4 <sha>`
-must succeed; versions deployed before this pipeline carry no commit, so place them by deploy
-time against `cc8c6c4`'s deploy. A new contraction moves the line: its migration PR updates
-this paragraph.
+PR (§5b). Today the line is #106 (Admin v2 U11, merged as `1083159`) once
+`0110_integrations_contract.sql` (U11c) is applied: it drops `site_integrations`' four legacy
+jsonb columns (`ga4`, `search_console`, `calendly`, `recaptcha`), which a Worker older than
+#106 selects and writes on the Integrations screen and its route, so that screen fails to load
+and save (42703, the column does not exist); the rest of the admin and every public page keep
+working (no public page read the table before #106). Behind it is #43 (merged as `cc8c6c4`),
+the line since `0033`: a Worker older than #43 also reads lead columns `0033` revoked from
+staff tokens, so the PII reveal, every lead update and the PII export fail (42501); the lead
+list and the plain lead view keep working. Before a rollback, check that the target contains
+the line: CI's deploys carry their commit in the version message (`ci <sha> run <id>`), so
+`git merge-base --is-ancestor 1083159 <sha>` must succeed (`cc8c6c4` is its ancestor, so the
+one check covers both lines). Versions deployed before this pipeline (#41, merged after #43)
+carry no commit; every one of them is older than #106, so none is a rollback target. A new
+contraction moves the line: its migration PR updates this paragraph.
 
 0037 (#51) does not move the line. It revoked staff write privileges on the eight tables
 staff only read (the telemetry tables, the pageview rollup, the search, consent and
@@ -1741,3 +1751,15 @@ A Worker rollback across R11's PR is safe: the older minute cron never calls
 `claim_scheduled_releases` (a release scheduled meanwhile waits, its drafts claimed, until the
 newer Worker is back), and the older publish route refuses `scheduleAt`
 (400). With releases off, as until R14, nothing can be scheduled at all.
+
+The leads contract (Admin v2 C14) **will** move the line. It ships as the two PRs §5a asks
+for. C14a, the code, carries no migration: from its merge on, no Worker query names
+`leads.status`, `internal_notes`, `ip_inet`, `timeline_band` or `crm_settings.timezone`, and
+the legacy `GET /api/admin/leads` list and the `?pii=1` alias are gone. Until C14b is applied
+a rollback across C14a's PR is safe (the columns are still there, and the legacy sync and
+notes mirror still run). C14b, the migration alone, drops those columns, and it is applied
+only after C14a has deployed and one release has passed with no legacy writer. **Once C14b is
+applied, never roll back past C14a's merge commit:** an older Worker names a dropped column,
+so its lead detail, export, reveal, notify-lead, index cron and CRM settings fail (42703).
+C14b's PR writes that commit into the "Today the line is" sentence above, with the
+`git merge-base --is-ancestor` check moved to it.

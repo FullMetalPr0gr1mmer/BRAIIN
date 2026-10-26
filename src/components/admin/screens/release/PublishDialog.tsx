@@ -5,6 +5,7 @@ import { useClock } from '@/components/admin/kit/clock';
 import type { Role } from '@/lib/auth/types';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { toast } from '@/lib/admin/toast';
+import { announceSettled } from '@/lib/admin/releaseEvents';
 import {
   RELEASE_NOTE_MAX,
   type CompareResult,
@@ -361,6 +362,8 @@ export default function PublishDialog({
     setNotice('');
     try {
       await api.resolve(draftId, { version, [choice]: [...columns] });
+      // An editor open on this change reads it again (its version moved), keeping its edits.
+      announceSettled(draftId);
       setCompares((current) => {
         const next = new Map(current);
         next.delete(draftId);
@@ -590,7 +593,9 @@ export default function PublishDialog({
                         <p className="pub__meta" id={metaId}>
                           {[row.fieldsText, `${author}, ${when}`].filter(Boolean).join(' · ')}
                         </p>
-                        {mode === 'publish' && !can && (
+                        {/* What waits says who can publish it (P-2): in review too, where
+                            every row waits. */}
+                        {mode !== 'discard' && !can && (
                           <p className="pub__status">{waitingWords(row)}</p>
                         )}
                         {mode === 'discard' && !can && (

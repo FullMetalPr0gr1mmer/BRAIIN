@@ -906,23 +906,8 @@ export const MediaMetaOnlySchema = z.object({
 });
 
 // ── Leads ───────────────────────────────────────────────────────────────────────
-
-export const LeadStatusSchema = z.enum(['new', 'in_progress', 'done', 'spam']);
-
-export const LeadUpdateSchema = z.object({
-  status: LeadStatusSchema.optional(),
-  internalNotes: z.string().max(5000).nullish(),
-});
-
-export const LeadListQuerySchema = ListQuerySchema.extend({
-  status: LeadStatusSchema.optional(),
-});
-
-export const ExportQuerySchema = z.object({
-  from: z.string().datetime({ offset: true }).optional(),
-  to: z.string().datetime({ offset: true }).optional(),
-  status: LeadStatusSchema.optional(),
-});
+// The CRM's lead schemas are in ./crm.ts. The legacy panel's (its status, its notes field, its
+// list query and its export query) went with the panel's last routes in Admin v2 C14a.
 
 // ── Settings · integrations · theme · users ─────────────────────────────────────
 

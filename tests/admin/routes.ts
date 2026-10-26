@@ -116,9 +116,10 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/users', api: '/api/admin/users', cap: 'users.manage' },
   { href: '/admin/applications', api: '/api/admin/applications', cap: 'applications.manage' },
   // Admin v2 C4b: the leads screens render their first view on the server, so they refuse
-  // themselves (a 403 and Refused.astro). The board's twin is the stages read (a GET with the
-  // same capability); its own data route is a POST.
-  { href: '/admin/leads', api: '/api/admin/leads', cap: 'leads.manage', render: 'server' },
+  // themselves (a 403 and Refused.astro). Their data routes are POSTs, so each twin is the
+  // stages read (a GET with the same capability): the list's was the legacy GET
+  // /api/admin/leads until C14a removed it.
+  { href: '/admin/leads', api: '/api/admin/crm/stages', cap: 'leads.manage', render: 'server' },
   {
     href: '/admin/leads/board',
     api: '/api/admin/crm/stages',
