@@ -4,7 +4,7 @@ import Modal from '@/components/admin/kit/Modal';
 
 // "Rename section" (Admin v2 E1, ui.md: "a small dialog, never a prompt"): the section's name
 // in this column, at most SECTION_LABEL_MAX characters. Empty puts back its kind's own name.
-// The server holds the rule (packages/schemas/admin.ts SectionLabelSchema, 0112's CHECK): a
+// The server holds the rule (packages/schemas/admin.ts SectionLabelSchema, 0113's CHECK): a
 // refusal is said under the box.
 
 export interface RenameModalProps {

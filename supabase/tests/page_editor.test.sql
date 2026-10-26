@@ -1,4 +1,4 @@
--- pgTAP: the page editor's migration (Admin v2 E1, 0112). Run with `supabase test db`.
+-- pgTAP: the page editor's migration (Admin v2 E1, 0113). Run with `supabase test db`.
 --
 --   • page_sections.label: a nullable text column with no default, held by its CHECK to 1 to
 --     60 characters, trimmed, with no control character (a newline included); null clears it.

@@ -420,7 +420,7 @@ const SectionPayloadSchema = z
   .record(z.string(), z.unknown())
   .refine((v) => JSON.stringify(v).length <= 65_536, { message: 'section payload exceeds 64 KB' });
 
-/** C0 and C1 control characters, as 0112's CHECK on `page_sections.label` names them. */
+/** C0 and C1 control characters, as 0113's CHECK on `page_sections.label` names them. */
 const LABEL_CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 
 /**
@@ -452,7 +452,7 @@ const SectionWriteBase = z.object({
   sortOrder: SortOrderSchema,
   /** Design-delivery placeholder (0016). The 0025 production guard refuses to show one. */
   isPlaceholder: z.boolean().default(false),
-  /** Admin v2 E1: the section's name in the page editor (0112). Optional: no key, no write. */
+  /** Admin v2 E1: the section's name in the page editor (0113). Optional: no key, no write. */
   label: SectionLabelSchema.optional(),
 });
 

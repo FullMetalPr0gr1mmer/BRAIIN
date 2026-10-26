@@ -370,7 +370,7 @@ export const RELEASE_REGISTRY: Readonly<Record<ReleaseEntityType, RegistryEntry>
   }),
   page_section: fromResource('page_section', sectionResource, {
     restoreOnlyColumns: ['style'],
-    // Admin v2 E1: the name the page editor gave it (0112's `label`), else its type.
+    // Admin v2 E1: the name the page editor gave it (0113's `label`), else its type.
     label: (row) => ({
       en:
         typeof row['label'] === 'string' && row['label'].trim() !== ''
