@@ -138,11 +138,14 @@ describe.each(APPLY_FILES)('%s', (file) => {
       expect(head).not.toMatch(/security definer/);
     });
 
-    it('takes the full signature now (schedule and fire arrive with R11)', () => {
+    it('takes the full signature; before R11 it refuses schedule and fire, from R11 it runs them', () => {
       expect(TEXT).toContain(
         'public.apply_release(uuid, text, text, jsonb, text, text, uuid, uuid, timestamptz)',
       );
-      expect(fn).toMatch(/if p_mode in \('schedule', 'fire'\) then\s+raise exception[^;]*R11/);
+      const refuses = /if p_mode in \('schedule', 'fire'\) then\s+raise exception[^;]*R11/.test(fn);
+      const runs = fn.includes("p_mode not in ('publish', 'dry_run', 'schedule', 'fire')");
+      expect(refuses !== runs, file).toBe(true);
+      if (runs) expect(file >= '0105', file).toBe(true);
     });
 
     it('refuses every caller but the service role, before anything else', () => {
@@ -322,6 +325,55 @@ describe('the apply the database runs (the last statement of it)', () => {
     const kept = fn.indexOf('if v_pub is not null then');
     expect(kept).toBeGreaterThan(0);
     expect(fn.indexOf("'published_at', pg_catalog.now()")).toBeGreaterThan(kept);
+  });
+
+  it('a fire applies only the drafts its release claimed, re-read with the switch under the lock (R11)', () => {
+    expect(fn).toMatch(
+      /case when p_mode = 'fire' then d\.release_id is not distinct from p_release_id\s+else d\.release_id is null end/,
+    );
+    const lock = fn.indexOf(
+      "pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('release:' || v_tenant::text, 0))",
+    );
+    expect(lock).toBeGreaterThan(0);
+    const after = fn.slice(lock);
+    // The switch read again, and the fire's release locked and re-checked, after the lock.
+    expect(after.indexOf('if not app.releases_enabled(v_tenant) then')).toBeGreaterThan(0);
+    expect(after).toMatch(
+      /where r\.tenant_id = v_tenant and r\.id = p_release_id\s+for update;\s+if not found or v_rel\.status <> 'scheduled' or v_rel\.scheduled_for > pg_catalog\.now\(\) then/,
+    );
+    // A fire goes live as the person who scheduled it, never another.
+    expect(fn).toMatch(/if v_rel\.scheduled_by is distinct from p_actor then/);
+    // Its changes are the release's own, not the caller's.
+    expect(fn).toMatch(/v_items := v_rel\.payload;/);
+  });
+
+  it('a fire publishes as a publish does: fail fast, conflicts refused, its audit row as the scheduler (R11)', () => {
+    expect(fn).toMatch(/if p_mode in \('publish', 'fire'\) then\s+v_batches := /);
+    expect(fn).toMatch(
+      /if p_mode in \('publish', 'fire'\) and pg_catalog\.jsonb_array_length\(v_conflicts\) > 0 then/,
+    );
+    expect(fn).toMatch(
+      /if p_mode in \('publish', 'fire'\) then\s+v_current := null;\s+insert into public\.audit_log/,
+    );
+  });
+
+  it('a schedule runs as a dry run, then is stored, claimed and audited as the service role (R11)', () => {
+    expect(fn).toMatch(
+      /if p_mode in \('dry_run', 'schedule'\) then\s+raise exception 'apply_release: dry run, undone' using errcode = 'BRDRY';/,
+    );
+    const back = fn.lastIndexOf("execute 'set local role service_role';");
+    const store = fn.indexOf("values (v_release, v_tenant, 'publish', 'scheduled'");
+    expect(store).toBeGreaterThan(back);
+    expect(
+      fn.indexOf('update public.content_drafts as d set release_id = v_release'),
+    ).toBeGreaterThan(store);
+    expect(fn.indexOf("'release.schedule'")).toBeGreaterThan(store);
+    // Its refusals before anything is stored: a conflict, then a refused change.
+    const conflict = fn.indexOf(
+      "if pg_catalog.jsonb_array_length(v_conflicts) > 0 then\n      raise exception 'apply_release: the live site changed under a pending change' using errcode = 'BR409'",
+    );
+    expect(conflict).toBeGreaterThan(back);
+    expect(conflict).toBeLessThan(store);
   });
 });
 

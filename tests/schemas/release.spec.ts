@@ -95,11 +95,22 @@ describe('PublishRequestSchema', () => {
     }
   });
 
-  it('is strict: scheduling (R11) and unknown fields are refused, not ignored', () => {
+  it('takes a time to schedule it (R11), with its offset; unknown fields are refused', () => {
+    expect(
+      PublishRequestSchema.parse({ items: refs(1), scheduleAt: '2026-10-10T10:00:00+03:00' })
+        .scheduleAt,
+    ).toBe('2026-10-10T10:00:00+03:00');
     expect(
       PublishRequestSchema.safeParse({ items: refs(1), scheduleAt: '2026-10-10T10:00:00Z' })
         .success,
+    ).toBe(true);
+    // A local time names no zone: refused rather than guessed.
+    expect(
+      PublishRequestSchema.safeParse({ items: refs(1), scheduleAt: '2026-10-10T10:00:00' }).success,
     ).toBe(false);
+    expect(PublishRequestSchema.safeParse({ items: refs(1), scheduleAt: 'tomorrow' }).success).toBe(
+      false,
+    );
     expect(
       PublishRequestSchema.safeParse({
         items: [{ draftId: uuid(1), draftVersion: 1, entityType: 'service' }],
@@ -398,7 +409,7 @@ describe('ApplyRequestSchema', () => {
     expect([...PUBLISHER_ROLES].sort()).toEqual(['admin', 'content_creator', 'developer', 'seo']);
   });
 
-  it('publish and dry run only (schedule and fire arrive with R11)', () => {
+  it('publish and dry run only (a schedule and a fire have their own shapes, R11)', () => {
     expect(ApplyRequestSchema.safeParse(request({ p_mode: 'dry_run' })).success).toBe(true);
     for (const p_mode of ['schedule', 'fire']) {
       expect(ApplyRequestSchema.safeParse(request({ p_mode })).success).toBe(false);

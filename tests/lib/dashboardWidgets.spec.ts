@@ -420,9 +420,11 @@ const MIDDLEWARE = 3;
  * realtime_summary (docs/admin-v2/as-built/G1.md). U17 added one, for users.manage only:
  * the health widget's two factor row reads the directory (staff_accounts). U9 added one: the
  * studio's time zone (public.studio_time_zone), which the page and the layout both ask for
- * and studioTimeZone reads once per request (docs/admin-v2/as-built/U9.md).
+ * and studioTimeZone reads once per request (docs/admin-v2/as-built/U9.md). R11 added one, in
+ * the shell for every role that publishes: the bell's failed scheduled releases
+ * (content_releases, docs/admin-v2/as-built/R11.md).
  */
-const MEASURED = { loadDashboard: 28, total: 40 };
+const MEASURED = { loadDashboard: 28, total: 41 };
 
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
   // A real request has one clock: the dashboard's "Going live today" and the bell both ask
@@ -533,6 +535,6 @@ describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () 
     ).join(' ')}] + middleware ${MIDDLEWARE}`;
     expect(page, reads).toBeLessThanOrEqual(MEASURED.loadDashboard);
     expect(zone + own + page + shell + MIDDLEWARE, reads).toBeLessThanOrEqual(MEASURED.total);
-    expect(MEASURED.total).toBeLessThanOrEqual(40);
+    expect(MEASURED.total).toBeLessThanOrEqual(41);
   });
 });

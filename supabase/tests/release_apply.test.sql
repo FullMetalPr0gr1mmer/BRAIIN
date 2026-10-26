@@ -250,9 +250,9 @@ select is(_fails($$ select _pub('51000000-0000-0000-0000-0000000000a1', 'admin',
 
 set local role service_role;
 select is(_fails($$ select _pub('51000000-0000-0000-0000-0000000000a1', 'admin', array['s1-title'], 'schedule') $$),
-  '22023', 'mode schedule arrives with R11');
+  '22023', 'mode schedule needs its time, and takes it as a schedule only (R11)');
 select is(_fails($$ select _pub('51000000-0000-0000-0000-0000000000a1', 'admin', array['s1-title'], 'fire') $$),
-  '22023', 'mode fire arrives with R11');
+  '22023', 'mode fire names its scheduled release and takes no changes (R11)');
 select is(_fails($$ select public.apply_release('51000000-0000-0000-0000-0000000000a1', 'admin', 'publish',
                      (select jsonb_agg(item) from _r4, generate_series(1, 61))) $$),
   '22023', '61 changes are refused (RELEASE_MAX_ITEMS, P-15)');

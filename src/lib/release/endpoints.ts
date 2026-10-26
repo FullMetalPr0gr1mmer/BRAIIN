@@ -1,9 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { RELEASE_MAX_ITEMS, type PublishRequest } from '@schemas/release';
+import {
+  RELEASE_MAX_ITEMS,
+  RELEASE_SCHEDULE_MAX_DAYS,
+  RELEASE_SCHEDULE_MIN_MINUTES,
+  type PublishRequest,
+} from '@schemas/release';
 import type { AuthContext } from '@/lib/auth/types';
 import { json, type AdminRouteContext } from '@/lib/admin/route';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
-import { checkOf, dryRun, publish } from './apply';
+import { checkOf, dryRun, publish, schedule } from './apply';
 import { untouchedRestore, type StoredDraft } from './drafts';
 import {
   assertMayPublish,
@@ -29,10 +34,34 @@ import {
 // that version's restore (a part of it would leave the site between two versions). The release
 // then names that version (`restores_release_id`) with the default note "Restored vN".
 // Anything else is 422 on `kind`; the same changes can still be published as a plain release.
+//
+// A schedule (R11, `scheduleAt`, releases.md §4.7) is the same request with a time: at least two
+// minutes ahead, at most 366 days (else 422 on `scheduleAt`), never a rollback (422 on `kind`: a
+// restored version goes live when it is published). It runs every step of a publish, then
+// `apply_release` in `schedule` mode, which dry-runs the changes as the person and stores them on
+// a scheduled release with their drafts claimed. Validate takes the time too, and checks it.
 
 type Ctx = AdminRouteContext<PublishRequest>;
 
 export const RELEASES_OFF_DETAIL = 'Publishing is switched off: every save goes live at once.';
+
+export const SCHEDULE_COPY = {
+  tooSoon: `Choose a time at least ${RELEASE_SCHEDULE_MIN_MINUTES} minutes from now.`,
+  tooLate: 'Choose a time within the next year.',
+  rollback: 'A restored version goes live when you publish it. It can’t be scheduled.',
+} as const;
+
+/** The 422 for a time outside the bounds, or null when it is fine (`now` in ms). */
+export function scheduleTimeRefusal(scheduleAt: string, now: number): ReleaseRefusal | null {
+  const at = Date.parse(scheduleAt);
+  const refuse = (detail: string) =>
+    new ReleaseRefusal(422, { ok: false, error: 'validation', field: 'scheduleAt', detail });
+  if (!Number.isFinite(at) || at < now + RELEASE_SCHEDULE_MIN_MINUTES * 60_000) {
+    return refuse(SCHEDULE_COPY.tooSoon);
+  }
+  if (at > now + RELEASE_SCHEDULE_MAX_DAYS * 86_400_000) return refuse(SCHEDULE_COPY.tooLate);
+  return null;
+}
 
 /** A refusal as its response (a busy database adds Retry-After). */
 function answer(refusal: ReleaseRefusal): Response {
@@ -46,6 +75,18 @@ export async function handleRelease(ctx: Ctx, mode: 'validate' | 'publish'): Pro
   try {
     if (!(await ctx.releasesEnabled())) {
       return json({ ok: false, error: 'releases-off', detail: RELEASES_OFF_DETAIL }, 409);
+    }
+    if (input.scheduleAt !== undefined) {
+      if (input.kind === 'rollback') {
+        throw new ReleaseRefusal(422, {
+          ok: false,
+          error: 'validation',
+          field: 'kind',
+          detail: SCHEDULE_COPY.rollback,
+        });
+      }
+      const late = scheduleTimeRefusal(input.scheduleAt, Date.now());
+      if (late) throw late;
     }
     const drafts = await loadSelection(sb, auth, input.items);
     const rollback = input.kind === 'rollback' ? await rollbackOf(sb, auth, drafts) : null;
@@ -63,6 +104,9 @@ export async function handleRelease(ctx: Ctx, mode: 'validate' | 'publish'): Pro
     }
     const note = input.note || (rollback ? `Restored v${rollback.number}` : undefined);
     if (mode === 'validate') return await dryRun(auth, checked.items, note, rollback?.id);
+    if (input.scheduleAt !== undefined) {
+      return await schedule(auth, checked.items, note, input.scheduleAt);
+    }
     return await publish(sb, auth, checked.items, note, rollback?.id);
   } catch (err) {
     if (err instanceof ReleaseRefusal) return answer(err);

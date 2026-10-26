@@ -32,10 +32,13 @@ type Ctx = AdminRouteContext<unknown>;
 
 const Uuid = z.string().uuid();
 
-/** The release columns a version shows (never the frozen payload or a failure's message). */
+/**
+ * The release columns a version shows (never the frozen payload or a failure's message). Its
+ * `version` is what moving or cancelling a scheduled release names (R11).
+ */
 const RELEASE_COLUMNS =
   'id,number,kind,status,note,scheduled_for,scheduled_by,published_at,published_by,' +
-  'restores_release_id,item_count,areas,purge_status,failure_code:failure->>code';
+  'restores_release_id,item_count,areas,purge_status,failure_code:failure->>code,version';
 
 /** A person, named when the staff directory knows them. */
 export interface Person {
@@ -81,6 +84,8 @@ export interface VersionSummary {
   failure: string | null;
   /** The version the site shows now (the highest published number). */
   live: boolean;
+  /** The row's own version: what a move or a cancel of a scheduled release names (R11). */
+  version: number;
 }
 
 function summary(
@@ -109,6 +114,7 @@ function summary(
     purge: String(row['purge_status'] ?? 'pending'),
     failure: typeof row['failure_code'] === 'string' ? row['failure_code'] : null,
     live: number !== null && number === liveNumber,
+    version: typeof row['version'] === 'number' ? row['version'] : 1,
   };
 }
 

@@ -22,7 +22,10 @@ const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const PATH = '/admin/settings/notifications';
 const ENDPOINT = '/api/admin/me/notification-settings';
 
-/** The switches each role is offered, in the bell's order (each source's `visible`). */
+/**
+ * The switches each role is offered, in the bell's order (each source's `visible`). Admin v2
+ * R11's "Scheduled releases" is every publishing role's (not Sales's).
+ */
 const SWITCHES: Record<Role, string[]> = {
   admin: [
     'New inquiries',
@@ -30,10 +33,11 @@ const SWITCHES: Record<Role, string[]> = {
     'Going live today',
     'Maintenance mode',
     'Site health',
+    'Scheduled releases',
   ],
-  content_creator: ['Going live today', 'Maintenance mode'],
-  seo: ['Maintenance mode'],
-  developer: ['New inquiries', 'Maintenance mode', 'Site health'],
+  content_creator: ['Going live today', 'Maintenance mode', 'Scheduled releases'],
+  seo: ['Maintenance mode', 'Scheduled releases'],
+  developer: ['New inquiries', 'Maintenance mode', 'Site health', 'Scheduled releases'],
   sales: ['New inquiries', 'Maintenance mode'],
 };
 
