@@ -20,6 +20,9 @@ export const NOTIFICATION_KINDS = [
   'maintenance',
   // Site health (Admin v2 G2): siteHealth.view roles only.
   'health',
+  // A scheduled release that could not go live (Admin v2 R11): the roles that publish one of
+  // its areas.
+  'releases',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

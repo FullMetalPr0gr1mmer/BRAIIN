@@ -22,12 +22,15 @@ import { NOTIFICATION_SOURCES } from '@/lib/admin/notifications';
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 
-/** The kinds each role's bell shows, hand-written from §5 (each source's `visible`). */
+/**
+ * The kinds each role's bell shows, hand-written from §5 (each source's `visible`). Admin v2
+ * R11's failed scheduled releases reach every role that publishes some area (not Sales).
+ */
 const VISIBLE: Record<Role, NotificationKind[]> = {
-  admin: ['leads', 'applications', 'scheduled', 'maintenance', 'health'],
-  content_creator: ['scheduled', 'maintenance'],
-  seo: ['maintenance'],
-  developer: ['leads', 'maintenance', 'health'],
+  admin: ['leads', 'applications', 'scheduled', 'maintenance', 'health', 'releases'],
+  content_creator: ['scheduled', 'maintenance', 'releases'],
+  seo: ['maintenance', 'releases'],
+  developer: ['leads', 'maintenance', 'health', 'releases'],
   sales: ['leads', 'maintenance'],
 };
 
@@ -61,6 +64,7 @@ describe('the stored mutes as switches', () => {
     expect(settingsOf(prefs(['maintenance', 'leads']), 'seo')).toEqual({
       version: 4,
       maintenance: false,
+      releases: true,
     });
     expect(settingsOf(prefs(['scheduled']), 'admin')).toEqual({
       version: 4,
@@ -69,6 +73,7 @@ describe('the stored mutes as switches', () => {
       scheduled: false,
       maintenance: true,
       health: true,
+      releases: true,
     });
   });
 
@@ -230,7 +235,7 @@ describe('GET and PATCH /api/admin/me/notification-settings', () => {
     ]);
     const res = await call('PATCH', 'seo', sb, { version: 4, maintenance: false });
     expect(res.status).toBe(200);
-    expect(res.json.data).toEqual({ version: 5, maintenance: false });
+    expect(res.json.data).toEqual({ version: 5, maintenance: false, releases: true });
     expect(calls[1]).toMatchObject({
       op: 'update',
       payload: { notifications: { muted: ['leads', 'maintenance'] } },
