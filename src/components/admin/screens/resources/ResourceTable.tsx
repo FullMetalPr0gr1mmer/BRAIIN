@@ -6,6 +6,7 @@ import PendingBadge, { pendingKindOf } from '@/components/admin/kit/PendingBadge
 import StatusBadge from '@/components/admin/kit/StatusBadge';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
+import { deleteMessage } from '@/lib/admin/editorDelete';
 import { PAGE_SIZE } from '@/lib/admin/pager';
 import { pageTimeZone, useClock } from '@/components/admin/kit/clock';
 import { clockFor, type Clock } from '@/lib/admin/relTime';
@@ -399,15 +400,8 @@ export function labelled(value: unknown, labels: ReadonlyMap<string, string> | n
   return labels && typeof value === 'string' ? (labels.get(value) ?? value) : value;
 }
 
-/**
- * The delete confirmation names the row: its trigger is an icon tied to the row only by
- * hover and its accessible name, so the dialog is where a press on the wrong row is
- * caught. The name is a bidi isolate (FSI…PDI), so an Arabic name cannot reorder the
- * English sentence around it.
- */
-export function deleteMessage(singular: string, name: string): string {
-  return `Delete the ${singular.toLowerCase()} “\u2068${name}\u2069”? This cannot be undone.`;
-}
+// The delete confirmation's words live in lib/admin/editorDelete.ts (the editors use them too).
+export { deleteMessage };
 
 /**
  * Admin v2 R12: with releases on, Delete stages a removal that goes live with a release (and
