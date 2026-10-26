@@ -1,0 +1,137 @@
+/* The Projects area (Admin v2 U6, AV-15): the list's thumbnail and pills, Manage tags, the
+   editor's status line, its testimonial card and its publish requirements. The prototype's
+   .tbl with a thumb, its .pill-row, its fgroup sections. Tokens only (admin.css :root). The
+   gallery grid is the field kit's (admin.css .gal), shared by any editor that draws one. */
+
+/* minmax(0, 1fr), not the default auto column: an auto track grows to its items' min-content,
+   which here is the whole table, so the table's own scroller (.table-wrap) never narrowed and
+   the page scrolled sideways at 320px (U6 e2e). */
+.prj {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.prj__thumb {
+  display: grid;
+  place-items: center;
+  inline-size: 64px;
+  block-size: 48px;
+  overflow: hidden;
+  border-radius: var(--ad-r-xs);
+  background: var(--ad-bg);
+  color: var(--ad-dim2);
+}
+
+.prj__thumb img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.prj__pills,
+.prj__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.prj__pills > .badge {
+  overflow-wrap: anywhere;
+}
+
+/* Manage tags: a section per kind, its heading and its action on one line. */
+.prj-tags {
+  display: grid;
+  gap: 18px;
+}
+
+.prj-tags__group {
+  display: grid;
+  gap: 8px;
+}
+
+.prj-tags__h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.prj-tags__h h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* A sector edited in place: its form, then the way back. */
+.prj-tags__form {
+  display: grid;
+  gap: 10px;
+}
+
+/* A sector's names: the English, then the Arabic beside it. */
+.prj-tags__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-inline-size: 0;
+}
+
+.prj-tags__ar {
+  color: var(--ad-dim);
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+/* The status line above the fields: the status and the badges. */
+.prj-ed__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The testimonial card and the publish requirements, after their tab's fields. */
+.prj-quotes,
+.prj-reqs {
+  margin-top: 14px;
+}
+
+.prj-quotes__list {
+  margin-top: 10px;
+}
+
+.prj-quotes__add {
+  justify-self: start;
+  margin-top: 10px;
+}
+
+.prj-reqs__list {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prj-reqs__list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--ad-ink);
+}
+
+.prj-reqs__mark {
+  flex: none;
+  inline-size: 1.25em;
+  color: var(--ad-warn-text);
+  font-weight: 700;
+  text-align: center;
+}
+
+.prj-reqs__list li[data-met] .prj-reqs__mark {
+  color: var(--ad-ok-text);
+}

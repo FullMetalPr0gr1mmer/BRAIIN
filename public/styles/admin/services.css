@@ -1,0 +1,181 @@
+/* The Services area (Admin v2 U5, AV-14): the overview's discipline rows, a discipline's page
+   (its services, the card on the site, the leads by service), the service editor's status line
+   and its Case study and Leads tabs. The prototype's .li rows with a thumb, the pill row, the
+   g-2-1 grid, its card preview. Tokens only (admin.css :root); no colour of its own. */
+
+.svc {
+  display: grid;
+  gap: 14px;
+}
+
+.svc__count {
+  margin: 0;
+}
+
+/* A row: the handle, a 64 by 48 thumbnail, the names, the pills, the badges, the actions. */
+.svc__row {
+  flex-wrap: wrap;
+}
+
+.svc__thumb {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 64px;
+  block-size: 48px;
+  overflow: hidden;
+  border-radius: var(--ad-r-xs);
+  background: var(--ad-bg);
+  color: var(--ad-dim2);
+}
+
+.svc__thumb img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.svc__n {
+  flex: none;
+  min-inline-size: 22px;
+  color: var(--ad-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.svc__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-inline-size: 0;
+}
+
+.svc__ar {
+  color: var(--ad-dim);
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+/* The first four services as pills: they wrap, and give way to the names on a phone. */
+.svc__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-inline-size: 40%;
+  min-inline-size: 0;
+}
+
+.svc__pills > .badge {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 40rem) {
+  .svc__pills {
+    max-inline-size: 100%;
+    flex-basis: 100%;
+  }
+}
+
+.svc__unfiled .list {
+  margin-top: 10px;
+}
+
+.svc__foot {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+/* A discipline's page: its services beside the card and the chart (g-2-1). */
+.svc-d__side {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.svc-d__main .list {
+  margin-top: 12px;
+}
+
+.svc-d__card,
+.svc-case__card {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.svc-d__card figcaption,
+.svc-case__card figcaption {
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.svc-d__poster,
+.svc-case__poster {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-bg);
+  color: var(--ad-dim2);
+}
+
+.svc-d__poster {
+  aspect-ratio: 3 / 4;
+  max-inline-size: 16rem;
+}
+
+.svc-case__poster {
+  aspect-ratio: 16 / 10;
+}
+
+.svc-d__poster img,
+.svc-case__poster img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+/* The service editor's status line, above the fields: the status, the leads, Duplicate. */
+.svc-ed__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The Case study tab: its own form, and the preview card after its fields. */
+.svc-case {
+  display: grid;
+  gap: 14px;
+}
+
+.svc-case__pv {
+  margin-top: 14px;
+}
+
+.svc-case__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+.svc-case__facts dt {
+  color: var(--ad-dim);
+}
+
+.svc-case__facts dd {
+  margin: 0;
+  min-inline-size: 0;
+}
+
+/* The Leads tab's table scrolls inside its own box on a phone (.table-wrap). */
+.svc-leads .table-wrap {
+  margin-top: 10px;
+}

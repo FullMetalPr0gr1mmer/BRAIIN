@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
-import ErrorSummary from '@/components/admin/kit/ErrorSummary';
+import ErrorSummary, { type FieldError } from '@/components/admin/kit/ErrorSummary';
 import Note from '@/components/admin/kit/Note';
 import SaveStatus from '@/components/admin/kit/SaveStatus';
 import { TabStrip, tabIds, writeTabParam } from '@/components/admin/kit/Tabs';
@@ -8,7 +8,13 @@ import { tabOfElement, tabsWithErrors } from '@/lib/admin/editorTabs';
 import { badInputErrors, type MappedErrors } from '@/lib/admin/fieldErrors';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
 import { useSaveShortcut } from '@/lib/admin/useEntitySave';
-import type { EditorTabDef, FieldDef, FieldGroup } from '@/lib/admin/uiSchema';
+import type {
+  EditorLanguage,
+  EditorPanel,
+  EditorTabDef,
+  FieldDef,
+  FieldGroup,
+} from '@/lib/admin/uiSchema';
 import { Field, FieldsReadOnly } from '../FormField';
 import { useRevealListener } from './reveal';
 import {
@@ -80,8 +86,17 @@ export interface EditorFormProps {
   tabs?: readonly EditorTabDef[] | undefined;
   /** The tab list's name ("Post editor"). */
   tabsLabel?: string | undefined;
-  /** What each panel tab shows (`panel: 'seo'`: the shared SEO editor, or a note). */
-  panels?: Partial<Record<'seo', ReactNode>> | undefined;
+  /**
+   * What each panel tab shows (`panel: 'seo'`: the shared SEO editor, or a note; U5: a
+   * service's `case` study and its `leads`).
+   */
+  panels?: Partial<Record<EditorPanel, ReactNode>> | undefined;
+  /**
+   * Admin v2 U5/U6: what a FIELD tab shows after its fields, by tab id, inside the form (a
+   * project's testimonial card, the publish requirements): no form of its own, and nothing it
+   * holds is sent with the save. Without it a tab is its fields, as before.
+   */
+  tabExtras?: Readonly<Partial<Record<string, ReactNode>>> | undefined;
   /** The tab to open on: the server's reading of `?tab=` (editorTabs.ts firstTab). */
   initialTab?: string | null | undefined;
   /** Admin v2 U8b: the record can be read, not saved, by this role. */
@@ -91,10 +106,38 @@ export interface EditorFormProps {
   /** The record's public address ("Open on site"), or null; given the saved values. */
   publicHref?: ((values: Readonly<Record<string, unknown>>) => string | null) | undefined;
   /**
+   * Admin v2 U5/U6: the language the form opens in, over the browser's remembered choice (an
+   * Add modal that asks for a name in both languages opens in Both). Unset, as before: English
+   * first, then the remembered choice.
+   */
+  initialLanguage?: EditorLanguage | undefined;
+  /**
+   * Admin v2 U5: the prefix of the fields' element ids (`<prefix>-<name>`), `f` by default. A
+   * second form on the same page (a service's case study, beside the service's own form,
+   * which stays mounted while hidden) takes another, so no id repeats: a label would
+   * otherwise name the hidden form's input, and an error link would land there. The save's
+   * errors (keyed `f-…` by fieldErrors.ts) are moved onto it. Not for a tabbed form: the
+   * tabs find a field by the `f-` ids (editorTabs.ts).
+   */
+  idPrefix?: string | undefined;
+  /**
    * Admin v2 U11: the fields' card's header (the prototype's `.card__h`: a title, an h2 under
    * the page's h1, and a line under it), for a form with no tabs that is one named card.
    */
   heading?: { title: string; sub?: string | undefined } | undefined;
+}
+
+/** The save's errors (fieldErrors.ts keys them `f-…`) under another id prefix. */
+export function withIdPrefix(
+  errors: { byId: Readonly<Record<string, string>>; summary: readonly FieldError[] },
+  prefix: string,
+): { byId: Readonly<Record<string, string>>; summary: readonly FieldError[] } {
+  if (prefix === 'f') return errors;
+  const move = (id: string) => (id === 'f' || id.startsWith('f-') ? `${prefix}${id.slice(1)}` : id);
+  return {
+    byId: Object.fromEntries(Object.entries(errors.byId).map(([id, msg]) => [move(id), msg])),
+    summary: errors.summary.map((item) => (item.id ? { ...item, id: move(item.id) } : item)),
+  };
 }
 
 const LANGUAGE_KINDS = new Set(['bilingual', 'prose', 'richtext']);
@@ -188,10 +231,13 @@ export default function EditorForm({
   tabs,
   tabsLabel = 'Editor sections',
   panels,
+  tabExtras,
   initialTab,
   readOnly = false,
   readOnlyNote,
   publicHref,
+  initialLanguage,
+  idPrefix = 'f',
   heading,
 }: EditorFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -274,7 +320,9 @@ export default function EditorForm({
   if (save.busy && save.status !== 'saving') return <p className="admin-sub">Loading…</p>;
 
   const bilingual = hasBilingual(fields);
-  const errors = local ?? save.errors;
+  // A browser-unreadable box's error is keyed by its own (already prefixed) id; the server's
+  // are `f-…` and move onto the prefix.
+  const errors = local ?? withIdPrefix(save.errors, idPrefix);
   const renderField = (field: FieldDef) => (
     <Field
       key={field.name}
@@ -284,6 +332,7 @@ export default function EditorForm({
       onChange={save.set}
       errors={errors.byId}
       canAdvanced={canAdvanced}
+      {...(idPrefix === 'f' ? {} : { idPrefix })}
     />
   );
   const onSubmit = (event: FormEvent) => {
@@ -341,6 +390,7 @@ export default function EditorForm({
               fields.filter((f) => own.has(f.name)),
               inTab(own),
             )}
+            {tabExtras?.[t.id]}
           </div>
         );
       })
@@ -459,7 +509,7 @@ export default function EditorForm({
   );
 
   return (
-    <EditorLanguageProvider>
+    <EditorLanguageProvider initial={initialLanguage}>
       <ArabicGapsProvider>{content}</ArabicGapsProvider>
     </EditorLanguageProvider>
   );

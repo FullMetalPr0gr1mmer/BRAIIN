@@ -251,6 +251,31 @@ describe('the checks', () => {
     ).toContain('AdminLeadsList.I1.js import admin-leads-lazy.Z1.js statically');
   });
 
+  it('keep the Services and Projects group on their five islands (Admin v2 U5 + U6)', () => {
+    const CONTENT = {
+      ...GOOD,
+      'admin-fields.F1.js': 'import"./admin-ui.U1.js";export const f=1;',
+      'admin-content.N1.js': 'import"./admin-ui.U1.js";import"./admin-fields.F1.js";',
+      'AdminServices.I1.js': 'import"./admin-content.N1.js";',
+      'AdminDiscipline.I2.js': 'import"./admin-content.N1.js";',
+      'AdminServiceEditor.I3.js': 'import"./admin-content.N1.js";',
+      'AdminProjects.I4.js': 'import"./admin-content.N1.js";',
+      'AdminProjectEditor.I5.js': 'import"./admin-content.N1.js";',
+    };
+    expect(check(build(CONTENT)).problems).toEqual([]);
+    const problems = (files: Record<string, string>) =>
+      (check(build({ ...CONTENT, ...files })).problems as string[]).join('\n');
+    // Another island, or admin-ui (every screen), loading the two areas' code.
+    expect(problems({ 'AdminMediaLibrary.M1.js': 'import"./admin-content.N1.js";' })).toContain(
+      'AdminMediaLibrary.M1.js imports admin-content.N1.js statically',
+    );
+    expect(
+      problems({
+        'admin-ui.U1.js': 'import"./admin-content.N1.js";const L=()=>import(`./admin-rich.X1.js`);',
+      }),
+    ).toContain('admin-ui imports admin-content.N1.js statically');
+  });
+
   it('accept a lazily loaded kit module in admin-kit, and catch it under its own name', () => {
     // An enhancer AdminLayout's script lazy-loads, importing the shared admin code. In the
     // admin-kit chunk (astro.config.mjs) it is admin JavaScript and no island; named after
@@ -545,6 +570,94 @@ describe('the leads screens have their own groups (Admin v2 C4b)', () => {
       .filter((path) => claim(path) === 'admin-ui')
       .filter((path) =>
         /from\s*['"][^'"]*(screens\/leads\/|islands\/AdminLead)/.test(
+          readFileSync(join(process.cwd(), path), 'utf8'),
+        ),
+      );
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('the Services and Projects areas have their own group (Admin v2 U5 + U6)', () => {
+  interface Group {
+    name: string;
+    test: RegExp | ((id: string) => boolean);
+    priority: number;
+  }
+  let groups: Group[] = [];
+  beforeAll(async () => {
+    const config = (await import('../../astro.config.mjs')).default as {
+      vite: { build: { rollupOptions: { output: { codeSplitting: { groups: Group[] } } } } };
+    };
+    groups = [...config.vite.build.rollupOptions.output.codeSplitting.groups].sort(
+      (a, b) => b.priority - a.priority,
+    );
+  });
+  const claim = (path: string) => {
+    const id = join(process.cwd(), path);
+    return groups.find((g) => (typeof g.test === 'function' ? g.test(id) : g.test.test(id)))?.name;
+  };
+  const priority = (name: string) => groups.find((g) => g.name === name)!.priority;
+
+  it('claims the five islands and their screens’ code for admin-content', () => {
+    for (const path of [
+      'src/components/admin/islands/AdminServices.tsx',
+      'src/components/admin/islands/AdminDiscipline.tsx',
+      'src/components/admin/islands/AdminServiceEditor.tsx',
+      'src/components/admin/islands/AdminProjects.tsx',
+      'src/components/admin/islands/AdminProjectEditor.tsx',
+      'src/components/admin/screens/services/ServicesOverview.tsx',
+      'src/components/admin/screens/services/model.ts',
+      'src/components/admin/screens/projects/ProjectEditor.tsx',
+      'src/components/admin/screens/projects/media.ts',
+      'src/components/admin/screens/projects/NotWrittenYet.tsx',
+    ]) {
+      expect(claim(path), path).toBe('admin-content');
+    }
+    // What every editor uses stays the field kit's: the gallery field, the SEO panel.
+    expect(claim('src/components/admin/fields/GalleryField.tsx')).toBe('admin-fields');
+    expect(claim('src/components/admin/screens/seo/SeoPanel.tsx')).toBe('admin-fields');
+  });
+
+  it('sits below the field kit and above the shared screens group', () => {
+    expect(priority('admin-content')).toBeLessThan(priority('admin-fields'));
+    expect(priority('admin-content')).toBeGreaterThan(priority('admin-screens'));
+  });
+
+  it('reaches no other screen family: never the collection screen, the leads or the shared screens', () => {
+    const dirs = ['src/components/admin/screens/services', 'src/components/admin/screens/projects'];
+    const offenders: string[] = [];
+    for (const dir of dirs) {
+      for (const name of readdirSync(join(process.cwd(), dir))) {
+        const source = readFileSync(join(process.cwd(), dir, name), 'utf8');
+        for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
+          const spec = m[1] as string;
+          if (
+            /screens\/(collection|leads|media|seo\/(?!SeoPanel|types))|\.\.\/(collection|leads|media)\//.test(
+              spec,
+            )
+          )
+            offenders.push(`${dir}/${name} → ${spec}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('no module admin-ui claims imports the two areas', () => {
+    const roots = ['src/components/admin', 'src/lib/admin'];
+    const walk = (d: string): string[] =>
+      readdirSync(join(process.cwd(), d), { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? walk(`${d}/${e.name}`)
+          : /\.(ts|tsx)$/.test(e.name)
+            ? [`${d}/${e.name}`]
+            : [],
+      );
+    const offenders = roots
+      .flatMap(walk)
+      .filter((path) => claim(path) === 'admin-ui')
+      .filter((path) =>
+        /from\s*['"][^'"]*(screens\/(services|projects)\/|islands\/Admin(Services|Discipline|ServiceEditor|Projects|ProjectEditor)\b)/.test(
           readFileSync(join(process.cwd(), path), 'utf8'),
         ),
       );

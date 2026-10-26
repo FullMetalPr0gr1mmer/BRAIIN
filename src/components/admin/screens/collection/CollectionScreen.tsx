@@ -44,6 +44,12 @@ export interface CollectionScreenProps {
   /** 'new', an item's id, or null: the drawer that opens with the page. */
   open: string | null;
   permissions: CollectionPermissions;
+  /**
+   * Admin v2 U6: the starting values of the "new" drawer that opens WITH the page (a
+   * project's "Add a quote" opens /admin/testimonials/new with the project chosen). Only that
+   * first drawer: an Add pressed later starts empty, as before.
+   */
+  presets?: Readonly<Record<string, unknown>> | undefined;
 }
 
 /** The most items one read lists (the list endpoint's cap). */
@@ -51,7 +57,12 @@ const LIST_LIMIT = 100;
 
 type DrawerState = { id: string | null; key: number } | null;
 
-export default function CollectionScreen({ collection, open, permissions }: CollectionScreenProps) {
+export default function CollectionScreen({
+  collection,
+  open,
+  permissions,
+  presets,
+}: CollectionScreenProps) {
   const def: CollectionDef = collectionOf(collection);
   const ui = uiFor(def.slug);
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -252,7 +263,10 @@ export default function CollectionScreen({ collection, open, permissions }: Coll
           id={drawer.id}
           listed={listed}
           permissions={permissions}
-          defaults={{ sortOrder: (lastOrder ?? 0) + ORDER_STEP }}
+          defaults={{
+            sortOrder: (lastOrder ?? 0) + ORDER_STEP,
+            ...(drawer.id === null && drawer.key === 0 ? (presets ?? {}) : {}),
+          }}
           onClose={() => setDrawer(null)}
           onCreated={(row) => {
             toast('Saved.', 'ok');
