@@ -53,6 +53,8 @@ describe('the page editor’s first paint, per role', () => {
   it('Admin: the bar with Visibility, SEO, History and Open page in both languages', () => {
     const html = editor('admin');
     expect(html).toContain('role="group" aria-label="This page"');
+    // Back to the list (ui.md's bar starts with Back).
+    expect(html).toMatch(/href="\/admin\/pages"><svg[^>]*>.*?<\/svg>All pages<\/a>/);
     expect(html).toContain('href="/admin/visibility"');
     expect(html).toContain('>SEO</button>');
     expect(html).toContain('href="/about" target="_blank" rel="noopener"');

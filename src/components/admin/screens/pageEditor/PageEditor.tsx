@@ -45,7 +45,7 @@ import type { PageEditorPage, PageEditorSetup } from './types';
 // drawer's setup (src/lib/admin/pages/editor.ts); everything else is read here, through the
 // resource routes, which lay pending changes over live while releases are on.
 //
-//   the bar        the page's status, its visibility when it is not public, English /
+//   the bar        back to Pages, the page's status, its visibility when it is not public, English /
 //                  العربية / Both for every field and "Arabic missing: N" with Next gap (the
 //                  language is the screen's: both panels' forms read it), Visibility (the
 //                  setting's own screen, maintenance.manage), SEO (the shared SeoPanel in a
@@ -378,6 +378,10 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
   return (
     <div className="pe">
       <div className="pe__bar" role="group" aria-label="This page">
+        <a className="btn" data-size="sm" data-variant="ghost" href="/admin/pages">
+          <Icon name="back" size={15} />
+          All pages
+        </a>
         <div className="pe__badges">
           <StatusBadge status={page.status} />
           {page.visibility !== 'public' && (
