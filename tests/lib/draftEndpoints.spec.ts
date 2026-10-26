@@ -243,10 +243,11 @@ describe('the pending summary', () => {
   it('names where each change is edited and its fields in the editor’s words (R12)', async () => {
     const res = await read('admin');
     const [edit, archive, profile, seo] = res.data['items'] as Row[];
-    // The service's own editor, the identity's General screen, the SEO screen.
+    // The service's own editor, the identity's General screen, the SEO screen. The tagline's
+    // label is the service editor's since U5 (`ui/services.ts`), the prototype's word.
     expect(edit).toMatchObject({
       href: `/admin/services/${S1}`,
-      fieldLabels: ['Service name', 'Tagline'],
+      fieldLabels: ['Service name', 'Hero tagline'],
     });
     expect(archive).toMatchObject({ fieldLabels: ['Status'], status: 'archived', visible: null });
     expect(edit).toMatchObject({ status: null, visible: null });
