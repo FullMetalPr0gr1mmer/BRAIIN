@@ -1,4 +1,5 @@
 import { SECTION_TYPES } from '@schemas/sectionTypes';
+import { readDraft, STAGED_KEY } from '@/lib/admin/entitySave';
 import type { SectionContentState } from '@/lib/admin/formPayload';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import { PLACEHOLDER_FIELD } from '@/lib/admin/ui/fields';
@@ -148,32 +149,53 @@ export function neighbourAfterRemoval(rows: readonly SectionRow[], id: string): 
 
 /**
  * How the open section's form follows a write the sections column made to the SAME row (its
- * eye, a rename, a move): each write moves the row's version, and a form still holding the
- * old one would answer its next save with "Someone else saved changes".
- *   adopt-row      the form has nothing unsaved and the write answered the whole row: take it;
- *   adopt-version  live mode, the write answered no whole row or the form has unsaved edits:
- *                  take the new version only, and only when it is the very next one
- *                  (useEntitySave's adoptVersion), so a colleague's save in between still
- *                  stops the form with the 409 that protects it;
- *   reload         releases on and nothing unsaved, but no whole row: read the row again
- *                  (its pending change moved too);
- *   none           releases on with unsaved edits: the form keeps them, and its next save
- *                  says the change moved under it ("Reload their version").
+ * eye, a rename, a move). None of those columns is a field of the form, but each write moves
+ * the row's version (releases off) or its pending change's (releases on), and a form still
+ * holding the old one would answer its own next save with a conflict:
+ *   adopt-version  releases off: take the new version only, and only when it is the very
+ *                  next one (useEntitySave's adoptVersion), so a colleague's save in between
+ *                  still stops the form with the 409 that protects it;
+ *   rebase         releases on, and the column wrote on the pending change the form holds (the
+ *                  same one, or none on both sides): read the row again and keep what was typed
+ *                  since the last save over it, once a save on its way has landed (R12's
+ *                  `rebased` step);
+ *   none           releases on, but the form holds another state of the change (someone's save
+ *                  in between): it keeps its edits, and its next save says the change moved
+ *                  under it ("Reload their version").
  */
-export type FormSync = 'adopt-row' | 'adopt-version' | 'reload' | 'none';
+export type FormSync = 'adopt-version' | 'rebase' | 'none';
 
 export function formSyncAfterWrite(state: {
   mode: 'live' | 'draft';
-  /** Unsaved edits, or a save on its way. */
-  dirty: boolean;
-  /** The write answered the whole row (a PATCH does; a reorder answers a count). */
-  fullRow: boolean;
+  /** The pending change the form holds, as `id:version`, or '' for none. */
+  formDraft: string;
+  /** The pending change the column's write named, the same way. */
+  wroteOn: string;
 }): FormSync {
-  if (!state.dirty) {
-    if (state.fullRow) return 'adopt-row';
-    return state.mode === 'live' ? 'adopt-version' : 'reload';
-  }
-  return state.mode === 'live' ? 'adopt-version' : 'none';
+  if (state.mode === 'live') return 'adopt-version';
+  return state.formDraft === state.wroteOn ? 'rebase' : 'none';
+}
+
+/** A pending change as formSyncAfterWrite compares it: `id:version`, or '' for none. */
+export function draftStamp(draft: { id: string; version: number } | null | undefined): string {
+  return draft ? `${draft.id}:${draft.version}` : '';
+}
+
+/**
+ * What a write from the column sends beside its values. Releases off (the row was read with no
+ * `draft` key): nothing, the request main sends. Releases on: the row's pending change, or with
+ * none yet R12's marker ("made in release mode"), so a write sent after a switch-off is refused
+ * (409 `releases-off`), never written live.
+ */
+export function columnWriteRef(row: SectionRow): Row {
+  if (!('draft' in row)) return {};
+  const draft = readDraft(row as unknown as Row);
+  return draft ? { draftId: draft.id, draftVersion: draft.version } : { [STAGED_KEY]: true };
+}
+
+/** The pending change a write from the column names, as formSyncAfterWrite compares it. */
+export function columnWroteOn(row: SectionRow): string {
+  return draftStamp(readDraft(row as unknown as Row));
 }
 
 /** Whether a list answer, or a row in it, came through the release (releases on). */

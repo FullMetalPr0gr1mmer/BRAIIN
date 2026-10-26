@@ -15,6 +15,9 @@ import {
   SECTION_CONTENT_FIELD,
   SECTION_TYPE_FIELD,
   builtInFor,
+  columnWriteRef,
+  columnWroteOn,
+  draftStamp,
   formSyncAfterWrite,
   inOrder,
   isFirstOfType,
@@ -238,21 +241,56 @@ describe('the sections column', () => {
 });
 
 describe('the open form follows a write the column made to the same section', () => {
-  it('takes the whole row when it has nothing unsaved', () => {
-    expect(formSyncAfterWrite({ mode: 'live', dirty: false, fullRow: true })).toBe('adopt-row');
-    expect(formSyncAfterWrite({ mode: 'draft', dirty: false, fullRow: true })).toBe('adopt-row');
+  it('releases off: takes only the next version, so a colleague’s save between still stops it', () => {
+    expect(formSyncAfterWrite({ mode: 'live', formDraft: '', wroteOn: '' })).toBe('adopt-version');
   });
 
-  it('live: takes only the next version, so a colleague’s save between still stops it', () => {
-    expect(formSyncAfterWrite({ mode: 'live', dirty: true, fullRow: true })).toBe('adopt-version');
-    expect(formSyncAfterWrite({ mode: 'live', dirty: false, fullRow: false })).toBe(
-      'adopt-version',
+  it('releases on: reads the row again over what was typed, when the write named the form’s change', () => {
+    expect(formSyncAfterWrite({ mode: 'draft', formDraft: 'd1:3', wroteOn: 'd1:3' })).toBe(
+      'rebase',
     );
+    // Nothing pending on either side: the write made the change the form now reads.
+    expect(formSyncAfterWrite({ mode: 'draft', formDraft: '', wroteOn: '' })).toBe('rebase');
   });
 
-  it('releases on: reads the row again, or keeps unsaved edits for their own conflict', () => {
-    expect(formSyncAfterWrite({ mode: 'draft', dirty: false, fullRow: false })).toBe('reload');
-    expect(formSyncAfterWrite({ mode: 'draft', dirty: true, fullRow: true })).toBe('none');
+  it('releases on: another state of the change in between leaves the form to its conflict', () => {
+    expect(formSyncAfterWrite({ mode: 'draft', formDraft: 'd1:3', wroteOn: 'd1:4' })).toBe('none');
+    expect(formSyncAfterWrite({ mode: 'draft', formDraft: '', wroteOn: 'd1:1' })).toBe('none');
+    expect(formSyncAfterWrite({ mode: 'draft', formDraft: 'd1:1', wroteOn: '' })).toBe('none');
+  });
+
+  it('a pending change is compared by its id and its version', () => {
+    expect(draftStamp(null)).toBe('');
+    expect(draftStamp(undefined)).toBe('');
+    expect(draftStamp({ id: 'd1', version: 2 })).toBe('d1:2');
+  });
+});
+
+describe('what a write from the column sends beside its values', () => {
+  const base: SectionRow = {
+    id: 's1',
+    type: 'cta',
+    label: null,
+    visible: true,
+    sortOrder: 10,
+    version: 3,
+    placeholder: false,
+  };
+
+  it('releases off (no draft key on the row): nothing, the request main sends', () => {
+    expect(columnWriteRef(base)).toEqual({});
+    expect(columnWroteOn(base)).toBe('');
+  });
+
+  it('releases on with nothing pending: R12’s marker, so a write after a switch-off is refused', () => {
+    expect(columnWriteRef({ ...base, draft: null })).toEqual({ staged: true });
+    expect(columnWroteOn({ ...base, draft: null })).toBe('');
+  });
+
+  it('releases on with a pending change: names it, id and version', () => {
+    const draft = { id: 'd1', version: 4, op: 'update', fields: ['label'] };
+    expect(columnWriteRef({ ...base, draft })).toEqual({ draftId: 'd1', draftVersion: 4 });
+    expect(columnWroteOn({ ...base, draft })).toBe('d1:4');
   });
 });
 

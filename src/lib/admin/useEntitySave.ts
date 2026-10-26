@@ -91,6 +91,13 @@ export interface EntitySave {
    * fake save need not carry it.
    */
   leave?(href: string): void;
+  /**
+   * Admin v2 E1: read the record again and keep what was typed since the last save over it
+   * (the `rebased` step a change settled in the publish dialog takes), after a save on its way
+   * has landed. The page editor's sections column wrote the same row in draft mode, so the
+   * pending change moved under the form. Optional, as R12's members are.
+   */
+  rebase?(): void;
 }
 
 export interface UseEntitySaveOptions {
@@ -393,6 +400,10 @@ export function useEntitySave(
       leaving.current = true;
       window.location.assign(href);
     }, []),
+    rebase: useCallback(() => {
+      if (inFlight.current || latest.current.phase !== 'ready') rebaseNext.current = true;
+      else void rebase();
+    }, [rebase]),
   };
 }
 

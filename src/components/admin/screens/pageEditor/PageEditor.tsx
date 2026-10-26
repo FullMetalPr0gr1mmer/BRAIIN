@@ -12,7 +12,7 @@ import SeoDrawer from '@/components/admin/screens/seo/SeoDrawer';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { readDraft } from '@/lib/admin/entitySave';
-import { announcePending, openPublishDialog } from '@/lib/admin/releaseEvents';
+import { announcePending, openPublishDialog, STAGED_DELETE } from '@/lib/admin/releaseEvents';
 import { toast } from '@/lib/admin/toast';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
 import { MODE_COPY } from '@/lib/admin/visibilityCopy';
@@ -21,6 +21,9 @@ import AddSectionModal from './AddSectionModal';
 import HistoryDrawer, { type HistoryTarget } from './HistoryDrawer';
 import { availability, kindOf, sectionName } from './library';
 import {
+  columnWriteRef,
+  columnWroteOn,
+  draftStamp,
   formSyncAfterWrite,
   inOrder,
   isFirstOfType,
@@ -60,6 +63,8 @@ import type { PageEditorPage, PageEditorSetup } from './types';
 // and a switch saves it. A write the column makes to the open section moves its version, so
 // the open form follows it (model.ts formSyncAfterWrite) instead of answering its own next
 // save with a conflict. Every button is the person's convenience: each route checks again.
+// With releases on, a write from the column names the row's pending change (or carries R12's
+// "made in release mode" marker), as the editors' saves do.
 
 type Row = Record<string, unknown>;
 
@@ -77,12 +82,6 @@ const arabicPath = (path: string) => (path === '/' ? '/ar' : `/ar${path}`);
 /** A row's version and its pending change's: a write to it moves one or the other. */
 function stamp(row: SectionRow): string {
   return `${row.version}:${readDraft(row as unknown as Row)?.version ?? ''}`;
-}
-
-/** What a write sends to name a row's pending change (releases on), else nothing. */
-function draftRef(row: SectionRow): Row {
-  const draft = readDraft(row as unknown as Row);
-  return draft ? { draftId: draft.id, draftVersion: draft.version } : {};
 }
 
 export interface PageEditorProps extends PageEditorSetup {
@@ -187,18 +186,20 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     setSelected(next);
   }
 
-  /** After a write the column made to the open section: the form follows it. */
-  function follow(id: string, answer: Row | null, version: number | null) {
+  /**
+   * After a write the column made to the open section: the form follows it. `wrote` is the
+   * pending change the write named (releases on), `version` the row's version it left.
+   */
+  function follow(id: string, wrote: string, version: number | null) {
     const open = form.current;
     if (!open || id !== selectedRef.current) return;
     const action = formSyncAfterWrite({
       mode: open.mode === 'draft' ? 'draft' : 'live',
-      dirty: open.dirty || open.busy,
-      fullRow: answer !== null,
+      formDraft: draftStamp(open.draft),
+      wroteOn: wrote,
     });
-    if (action === 'adopt-row' && answer) open.adoptRow?.(answer);
-    else if (action === 'adopt-version' && version !== null) open.adoptVersion(version);
-    else if (action === 'reload') void open.reloadTheirs();
+    if (action === 'adopt-version' && version !== null) open.adoptVersion(version);
+    else if (action === 'rebase') open.rebase?.();
   }
 
   /** A section's row as a write answered it. */
@@ -214,10 +215,14 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     try {
       const answer = await adminFetch<Row>(`/api/admin/sections/${row.id}`, {
         method: 'PATCH',
-        body: { visible: !row.visible, version: row.version, ...draftRef(row) },
+        body: { visible: !row.visible, version: row.version, ...columnWriteRef(row) },
       });
       take(answer);
-      follow(row.id, answer, typeof answer['version'] === 'number' ? answer['version'] : null);
+      follow(
+        row.id,
+        columnWroteOn(row),
+        typeof answer['version'] === 'number' ? answer['version'] : null,
+      );
       const name = sectionName(row);
       if ('draft' in answer) {
         announcePending();
@@ -262,7 +267,8 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     const listed = await load();
     const open = listed?.find((row) => row.id === selectedRef.current);
     const was = before.find((row) => row.id === selectedRef.current);
-    if (open && was && stamp(open) !== stamp(was)) follow(open.id, null, open.version);
+    if (open && was && stamp(open) !== stamp(was))
+      follow(open.id, columnWroteOn(was), open.version);
     setWorking(false);
   }
 
@@ -299,10 +305,14 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     try {
       const answer = await adminFetch<Row>(`/api/admin/sections/${row.id}`, {
         method: 'PATCH',
-        body: { label, version: row.version, ...draftRef(row) },
+        body: { label, version: row.version, ...columnWriteRef(row) },
       });
       take(answer);
-      follow(row.id, answer, typeof answer['version'] === 'number' ? answer['version'] : null);
+      follow(
+        row.id,
+        columnWroteOn(row),
+        typeof answer['version'] === 'number' ? answer['version'] : null,
+      );
       if ('draft' in answer) announcePending();
       setRenaming(null);
       toast(label ? `Renamed ${label}.` : 'The section shows its own name again.', 'ok');
@@ -326,7 +336,11 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     setError('');
     const next = neighbourAfterRemoval(rows, row.id);
     try {
-      const answer = await adminFetch<Row>(`/api/admin/sections/${row.id}`, { method: 'DELETE' });
+      // Releases on: R12's marker, so a removal sent after a switch-off is refused, not made.
+      const answer = await adminFetch<Row>(
+        `/api/admin/sections/${row.id}${release ? STAGED_DELETE : ''}`,
+        { method: 'DELETE' },
+      );
       if ('staged' in answer || 'draft' in answer) {
         announcePending();
         toast(`The removal of ${name} is saved as an unpublished change.`, 'ok');
