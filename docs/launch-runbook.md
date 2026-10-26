@@ -286,10 +286,16 @@ sends visit data to Google outside the Kingdom, so the order is fixed:
 1. **The property (O-18).** In Google Analytics, a GA4 property with one web stream for the
    site's origin; note its measurement id (`G-…`). In the property's admin: **Data retention =
    2 months**; **Google signals off**; **ads personalisation off** in every region; the account's
-   data-sharing settings off; enhanced measurement with page views on, **form interactions
-   OFF** (required: GA4 runs on the pages that carry the lead form, and the notice says nothing
-   typed into a form is sent) and site search off (the site strips query strings anyway). Join
-   never loads GA4. The notice drafts state these settings, so keep them.
+   data-sharing settings off; enhanced measurement with page views on, but in their advanced
+   settings **page changes based on browser history events OFF** (required: the site is
+   multi-page, so every real navigation is a full load and is counted anyway, while the Our Work
+   and All projects filters write their query into the address with `history.replaceState`,
+   and a history-event page view would send it, against the notice's "without anything after
+   a ?": the loader strips the query only from the address it sets at the page's start); **form
+   interactions OFF** (required: GA4 runs on the pages that carry the lead form, and the notice
+   says nothing typed into a form is sent); and **site search off** (the site strips query
+   strings anyway). Join never loads GA4. The notice drafts state these settings, so keep them
+   (`tests/lib/ga4Switch.spec.ts` holds this list).
 2. **The notice sign-off.** The owner (with legal review of the cross-border transfer) approves
    the EN and AR texts in `docs/admin-v2/as-built/U15.md` ("The notice drafts").
 3. **The switch-on PR**, one reviewed PR carrying all of it (`tests/lib/ga4Switch.spec.ts`
@@ -308,7 +314,9 @@ sends visit data to Google outside the Kingdom, so the order is fixed:
 **What to check on production.** In a private window: before any choice, DevTools → Network
 shows nothing from `googletagmanager.com` or `google-analytics.com`, and the page's
 `Content-Security-Policy` lists those hosts. "Accept analytics": `gtag/js?id=G-…` once the page
-has loaded, then `g/collect` hits; GA4's Realtime report shows the visit. "Cookie settings" →
+has loaded, then `g/collect` hits; GA4's Realtime report shows the visit. On `/portfolio`, pick
+a filter: the address gains `?service=…`, and no new `g/collect` hit follows (history events
+are off). "Cookie settings" →
 "Reject non-essential": no further hits, and the `_ga` cookies are gone. Search
 (`/search?q=…`) never carries the loader. Over the first release cycle:
 `select created_at, message from system_logs where source = 'ga4-csp' order by id desc limit 20;`

@@ -219,6 +219,9 @@
       cookie_flags: 'SameSite=Lax;Secure',
       allow_google_signals: false,
       allow_ad_personalization_signals: false,
+      // Set once, here. A page view enhanced measurement sends on a history change reads the
+      // address afresh, query included (the catalogue filters write theirs into it), so the
+      // property keeps history events OFF (launch runbook §2e).
       page_location: bare(location.href),
     };
     const referrer = bare(document.referrer);

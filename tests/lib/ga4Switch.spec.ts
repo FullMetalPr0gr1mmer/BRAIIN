@@ -239,3 +239,42 @@ describe('the switch-on guard', () => {
     ).toEqual([]);
   });
 });
+
+describe('the property settings the notice drafts rely on (launch runbook §2e step 1, O-18)', () => {
+  // The notice drafts promise what the build alone cannot hold: page addresses "without
+  // anything after a ?", and nothing typed into a form or the search box. The loader sets the
+  // page address once, at start, without its query; but a page view that enhanced measurement
+  // sends on a browser history change reads the address afresh, and the Our Work and All
+  // projects filters write their query into it (history.replaceState, catalogFilter.ts), while
+  // form interactions and site search read what a visitor did. So the property keeps all three
+  // off, and both the runbook's checklist and the owner item must say so.
+  const flat = (text: string) => text.replace(/\s+/g, ' ');
+  const between = (text: string, start: string, end: string) => {
+    const from = text.indexOf(start);
+    const to = from === -1 ? -1 : text.indexOf(end, from + start.length);
+    return from === -1 || to === -1 ? '' : flat(text.slice(from, to));
+  };
+  const REQUIRED_OFF = [
+    /page changes based on browser history events OFF/i,
+    /form interactions OFF/i,
+    /site search off/i,
+  ];
+
+  it('the runbook’s property checklist turns off every setting that would send more', () => {
+    const step = between(
+      read('docs/launch-runbook.md'),
+      '1. **The property (O-18).**',
+      '2. **The notice sign-off.**',
+    );
+    expect(step).not.toBe('');
+    for (const setting of REQUIRED_OFF) expect(step, String(setting)).toMatch(setting);
+  });
+
+  it('so does the owner item in the as-built, beside the notice that promises it', () => {
+    const asBuilt = read('docs/admin-v2/as-built/U15.md');
+    expect(flat(asBuilt)).toContain('without anything after a “?”');
+    const item = between(asBuilt, '- **O-18, before the switch-on:**', '\n- **');
+    expect(item).not.toBe('');
+    for (const setting of REQUIRED_OFF) expect(item, String(setting)).toMatch(setting);
+  });
+});
