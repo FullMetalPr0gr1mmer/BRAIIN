@@ -5,14 +5,13 @@ import { useClock } from '@/components/admin/kit/clock';
 import type { Role } from '@/lib/auth/types';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { toast } from '@/lib/admin/toast';
-import { announceSettled } from '@/lib/admin/releaseEvents';
 import {
   RELEASE_NOTE_MAX,
   type CompareResult,
   type PublishResult,
   type ReleaseCheck,
 } from '@schemas/release';
-import { refusalOf, type ReleaseApi, type ReleaseRefusal } from './api';
+import { refusalOf, settleChange, type ReleaseApi, type ReleaseRefusal } from './api';
 import { CompareRows } from './CompareRows';
 import {
   AREA_WORDS,
@@ -361,9 +360,9 @@ export default function PublishDialog({
     setWorking(true);
     setNotice('');
     try {
-      await api.resolve(draftId, { version, [choice]: [...columns] });
-      // An editor open on this change reads it again (its version moved), keeping its edits.
-      announceSettled(draftId);
+      // An editor open on this change then reads it again (its version moved), keeping its
+      // edits (settleChange announces it).
+      await settleChange(api, draftId, version, choice, columns);
       setCompares((current) => {
         const next = new Map(current);
         next.delete(draftId);
