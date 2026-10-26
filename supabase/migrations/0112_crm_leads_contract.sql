@@ -1,11 +1,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
--- 0111 — The leads contract (Admin v2 C14b): the legacy lead columns are dropped.
+-- 0112 — The leads contract (Admin v2 C14b): the legacy lead columns are dropped.
 -- Forward-only: a CONTRACTION, the migration alone (migrations.md rule 6, launch runbook
 -- §5a). C14a's code PR (#109), which stopped naming every column this file drops, merged and
 -- deployed first, and one release passed with no legacy writer; this file is applied to
 -- production before its own PR merges (the deploy guard refuses a checkout holding a
--- migration production lacks). Built with the placeholder 0111; its number is assigned at
--- the merge train (scripts/renumber-migration.mjs). Depends on 0033 (the staff column grant,
+-- migration production lacks). Built with the placeholder 0111, renumbered 0112 above U5+U6's
+-- 0111_services_projects; its number is assigned at the merge train (scripts/renumber-migration.mjs). Depends on 0033 (the staff column grant,
 -- app.live_role), 0034 (the pipeline, the notes thread, the legacy sync and mirror), 0035
 -- (crm_settings, crm_index_lead), 0041 (the latest app.tg_lead_pipeline,
 -- app.tg_lead_timeline, crm_delete_lead_note and leads_safe), 0091 (crm_settings' column
