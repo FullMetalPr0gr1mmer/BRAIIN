@@ -99,12 +99,15 @@ export async function loadMediaStats(sb: SupabaseClient, auth: AuthContext): Pro
 
 // ── The screen's first render (/admin/media and /admin/media/[id]) ─────────────────────────
 
-/** The sidebar entry (a link or one of its tabs) whose address is `href`. */
+/**
+ * The sidebar entry (a link or one of its tabs) whose address is `href`, or the tab that holds
+ * it among its own routes (Admin v2 U5: a discipline's page is the Services tab's).
+ */
 function navEntry(href: string): NavTab | null {
   for (const group of ADMIN_NAV) {
     for (const link of group.links) {
       if (link.href === href) return link;
-      const tab = link.tabs?.find((t) => t.href === href);
+      const tab = link.tabs?.find((t) => t.href === href || t.match?.includes(href));
       if (tab) return tab;
     }
   }

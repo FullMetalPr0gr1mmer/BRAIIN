@@ -89,6 +89,7 @@ const RUNTIME_FILE = /^(?:preload-helper|rolldown-runtime)\./;
 const OFF_SCREEN_GROUPS = [
   'admin-fields.',
   'admin-screens.',
+  'admin-content.',
   'admin-dashboard.',
   'admin-leads.',
   'admin-leads-lazy.',
@@ -96,7 +97,14 @@ const OFF_SCREEN_GROUPS = [
 ];
 
 // A screen family's group and the chunks allowed to import it statically (check 6).
-const FAMILY_GROUPS = [{ group: 'admin-leads.', importers: /^(?:AdminLead|admin-leads-lazy\.)/ }];
+const FAMILY_GROUPS = [
+  { group: 'admin-leads.', importers: /^(?:AdminLead|admin-leads-lazy\.)/ },
+  // Admin v2 U5 + U6: the Services and Projects areas' own group, on their five islands only.
+  {
+    group: 'admin-content.',
+    importers: /^Admin(?:Services|Discipline|ServiceEditor|Projects|ProjectEditor)\./,
+  },
+];
 // What a family's group must never import statically: the field kit, and its own lazy part.
 const FAMILY_NEVER = { 'admin-leads.': ['admin-fields.', 'admin-leads-lazy.'] };
 // Groups reached only through import() (check 6).

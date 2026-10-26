@@ -31,6 +31,7 @@ import type { ResourceUi, SingletonUi } from './types';
 export type {
   AccentDef,
   ColumnDef,
+  EditorPanel,
   EditorTabDef,
   EditorLanguage,
   FieldDef,

@@ -73,6 +73,9 @@ export function visibleNav(role: Role): NavGroup[] {
 
 /** Every screen a role reaches from the menu: sidebar links and their tabs, deduplicated. */
 export function reachableHrefs(role: Role): string[] {
+  // A `match` route is not listed: it is a page reached FROM its screen (Admin v2 U5: a
+  // discipline's page, opened from the Services overview), and this list is the palette's
+  // "Go to" (tests/lib/adminPalette.spec.ts).
   const hrefs = visibleNav(role).flatMap((group) =>
     group.links.flatMap((link) => [link.href, ...(link.tabs ?? []).map((tab) => tab.href)]),
   );
@@ -104,9 +107,13 @@ export function currentLink(nav: readonly NavGroup[], path: string): NavLink | n
 
 /** The tab of `link` that holds `path` (the longest match), when the area has tabs. */
 export function currentTab(link: NavLink, path: string): NavTab | null {
-  let best: NavTab | null = null;
+  let best: { tab: NavTab; length: number } | null = null;
   for (const tab of link.tabs ?? []) {
-    if (under(path, tab.href) && (!best || tab.href.length > best.href.length)) best = tab;
+    for (const route of [tab.href, ...(tab.match ?? [])]) {
+      if (under(path, route) && (!best || route.length > best.length)) {
+        best = { tab, length: route.length };
+      }
+    }
   }
-  return best;
+  return best?.tab ?? null;
 }

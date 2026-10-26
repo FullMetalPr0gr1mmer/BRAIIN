@@ -1,7 +1,10 @@
 import { SCHEDULED_FIELD, showreelClip, SORT_FIELD, STATUS_FIELD } from './fields';
 import type { ResourceUi } from './types';
 
-// Disciplines: the list and the form at /admin/disciplines.
+// Disciplines: the form in the Services overview's drawer (Admin v2 U5: /admin/services and a
+// discipline's page, /admin/disciplines/[id], open it) and the no-JS form at
+// /admin/disciplines/new. The labels are the prototype's ("Short line (on the card)",
+// "Description (when the discipline is opened)", "Card video").
 export const disciplinesUi: ResourceUi = {
   slug: 'disciplines',
   title: 'Disciplines',
@@ -26,27 +29,28 @@ export const disciplinesUi: ResourceUi = {
     { name: 'name', label: 'Name', kind: 'bilingual', required: true },
     {
       name: 'short',
-      label: 'Card line',
+      label: 'Short line (on the card)',
       kind: 'bilingual',
       nullable: true,
-      help: 'One line on the discipline card, e.g. “The mark, the system, and everything it touches.”',
+      help: 'At most nine words, for example “The mark, the system, and everything it touches.”',
     },
     {
       name: 'blurb',
-      label: 'Description',
+      label: 'Description (when the discipline is opened)',
       kind: 'bilingual',
       nullable: true,
+      multiline: true,
       help: 'The paragraph at the top of its panel in the Services explorer.',
     },
     { name: 'posterMediaId', label: 'Poster', kind: 'media', help: 'The card image.' },
     showreelClip(
-      'Card clip',
+      'Card video',
       'The window of the showreel the card plays on hover. At most 30 seconds.',
     ),
     SORT_FIELD,
     {
       ...STATUS_FIELD,
-      help: 'Archiving a discipline hides every one of its services from the site. Archiving is Admin-only.',
+      help: 'Published shows it on the site. Hiding or archiving a discipline hides every one of its services too. Only an Admin can archive.',
     },
     SCHEDULED_FIELD,
   ],

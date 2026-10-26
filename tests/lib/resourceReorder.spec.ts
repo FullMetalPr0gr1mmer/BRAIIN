@@ -182,7 +182,27 @@ describe('ResourceTable uses it', () => {
     expect(collection).toContain(
       "can(role, config.deleteCap ?? 'content.archiveDelete') === 'full'",
     );
+    // Admin v2 U5 + U6: the Services overview (the disciplines), a discipline's page (its
+    // services) and the Projects list draw their own lists, told by servicesAreaAccess's
+    // `archive` (content.archiveDelete); /admin/disciplines only redirects to the overview.
+    const area = readFileSync('src/lib/admin/servicesArea.ts', 'utf8');
+    expect(area).toContain("archive: can(role, 'content.archiveDelete') === 'full'");
+    const areaPages: Record<string, { file: string; island: string }> = {
+      services: { file: 'src/pages/admin/services/index.astro', island: 'AdminServices' },
+      disciplines: { file: 'src/pages/admin/services/index.astro', island: 'AdminServices' },
+      portfolio: { file: 'src/pages/admin/portfolio/index.astro', island: 'AdminProjects' },
+    };
+    const disciplinePage = readFileSync('src/pages/admin/disciplines/[id].astro', 'utf8');
+    expect(disciplinePage).toContain('archive={access.archive}');
     for (const page of pages) {
+      const own = areaPages[page];
+      if (own) {
+        const source = readFileSync(own.file, 'utf8');
+        expect(source, page).toContain(`<${own.island}`);
+        expect(source, page).toContain('servicesAreaAccess(Astro.locals.session?.role)');
+        expect(source, page).toContain('archive={access.archive}');
+        continue;
+      }
       const source = readFileSync(`src/pages/admin/${page}/index.astro`, 'utf8');
       if (/<AdminCollection\s/.test(source)) {
         expect(source, page).toContain(`collectionScreen(Astro.locals.session, '${page}')`);
