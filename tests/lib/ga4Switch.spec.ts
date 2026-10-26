@@ -278,3 +278,40 @@ describe('the property settings the notice drafts rely on (launch runbook §2e s
     for (const setting of REQUIRED_OFF) expect(item, String(setting)).toMatch(setting);
   });
 });
+
+describe('the rollback: a removed id stops loading on the next page view only while Tier A is uncached', () => {
+  // The middleware decides the loader and the CSP per render, so removing the id (or the
+  // switch) takes effect on the next page view while nothing caches Tier A. A Tier A response
+  // says `s-maxage=31536000`: once the edge cache is on (O-3, KAN-20), a cached page keeps the
+  // loader and Google's hosts until it is purged, and every Tier A page carries `site:identity`.
+  const uncommented = (text: string) =>
+    text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/.*$/gm, '$1');
+  const sources = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return sources(path);
+      return /\.(ts|tsx|mts|js|mjs|astro)$/.test(entry.name) ? [path] : [];
+    });
+
+  it('the runbook says so, and names the purge a cached site needs', () => {
+    const runbook = read('docs/launch-runbook.md').replace(/\s+/g, ' ');
+    const at = runbook.indexOf('**Rollback.** Remove the id on `/admin/integrations`');
+    expect(at).toBeGreaterThan(0);
+    const rollback = runbook.slice(at, runbook.indexOf('## 3.', at));
+    expect(rollback).toMatch(/while nothing caches Tier A/);
+    expect(rollback).toContain('`site:identity`');
+  });
+
+  it('once a Tier A cache lookup exists, the integrations save purges site:identity', () => {
+    const LOOKUP = /\bcaches\s*\.\s*(default|open)\b/;
+    // The raw text first (cheap), then without its comments (a comment naming one is not one).
+    const lookups = sources('src').filter((path) => {
+      const text = read(path);
+      return LOOKUP.test(text) && LOOKUP.test(uncommented(text));
+    });
+    if (lookups.length === 0) return; // today: nothing caches Tier A (tests/lib/cacheLayer.spec.ts)
+    const save = uncommented(read('src/pages/api/admin/integrations.ts'));
+    expect(save, `${lookups.join(', ')} look Tier A up`).toMatch(/purgeAfterSave/);
+    expect(save).toContain('site:identity');
+  });
+});

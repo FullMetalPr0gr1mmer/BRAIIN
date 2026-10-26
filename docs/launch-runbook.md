@@ -309,7 +309,8 @@ sends visit data to Google outside the Kingdom, so the order is fixed:
    (`consent-banner.e2e.ts`, `layout-shift.e2e.ts`, Lighthouse): the banner's text is a first
    mobile visit's LCP element.
 4. **The id.** After that PR's deploy, an Admin or SEO saves the measurement id on
-   `/admin/integrations`: it takes effect on the next page view (immediate, never staged).
+   `/admin/integrations`: it takes effect on the next page view (immediate, never staged)
+   while nothing caches Tier A, as today (see Rollback).
 
 **What to check on production.** In a private window: before any choice, DevTools → Network
 shows nothing from `googletagmanager.com` or `google-analytics.com`, and the page's
@@ -325,8 +326,15 @@ refused, for a reviewed PR (CLAUDE.md §3). A row naming `www.googletagmanager.c
 outside `/gtag/` (`gtm.js`, `debug/…`) is expected to stay refused: script-src lists only
 gtag's path on purpose.
 
-**Rollback.** Remove the id on `/admin/integrations` (immediate: the next page view loads
-nothing and lists no Google host); or a PR that takes `GA4_NOTICE_READY` out of `vars`.
+**Rollback.** Remove the id on `/admin/integrations`, or a PR that takes `GA4_NOTICE_READY` out
+of `vars`. Either is immediate while nothing caches Tier A, as today: the middleware decides the
+loader and the CSP per render, so the next page view loads nothing and lists no Google host.
+Once the Tier A edge cache is on (O-3, KAN-20), a cached page keeps the loader and Google's
+hosts until it is purged: every Tier A page carries `site:identity`, so the integrations save
+must then purge that tag (R7's seam owes it, `src/pages/api/admin/integrations.ts`;
+`tests/lib/ga4Switch.spec.ts` fails a cache lookup without it), and a switch-off deploy needs
+a `tenant:default` purge. Until the save does, purge `site:identity` by hand after removing the
+id.
 
 ## 3. Create and promote the first admin  ⛔ blocker
 

@@ -14,8 +14,11 @@ import { INTEGRATION_COLUMNS, INTEGRATION_DEFAULTS } from '@/lib/admin/integrati
 // entry and the save is live whatever the release flag says. The audit row names the
 // columns saved, never their values (queued, as every singleton's: the values are public and
 // no personal data is involved). A Search Console code is public in the home page's head as
-// soon as it is saved; nothing caches Tier A today, and the purge seam (R7) owes
-// `site:identity` a purge on this save.
+// soon as it is saved, and the GA4 id decides per render whether a public page loads Google's
+// script and lists its hosts in the CSP (U15); nothing caches Tier A today, and the purge seam
+// (R7) owes `site:identity` a purge on this save, so that a removed id also stops loading on a
+// cached page (launch runbook §2e, Rollback; tests/lib/ga4Switch.spec.ts fails a Tier A cache
+// lookup while this save does not purge).
 
 export const prerender = false;
 
