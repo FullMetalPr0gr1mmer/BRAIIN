@@ -14,7 +14,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §9.
 
 begin;
-select plan(69);
+select plan(70);
 
 -- ---- 1. The schema gate itself -------------------------------------------------------
 select ok(
@@ -142,8 +142,22 @@ select ok(not has_table_privilege('anon', 'public.site_integrations', 'select')
           and has_column_privilege('anon', 'public.site_integrations', 'search_console_token', 'select')
           and has_column_privilege('anon', 'public.site_integrations', 'ga4_measurement_id', 'select')
           and not has_column_privilege('anon', 'public.site_integrations', 'calendly_url', 'select')
-          and not has_column_privilege('anon', 'public.site_integrations', 'recaptcha', 'select'),
+          and not has_column_privilege('anon', 'public.site_integrations', 'version', 'select')
+          and not has_column_privilege('anon', 'public.site_integrations', 'updated_by', 'select'),
   'anon CANNOT select public.site_integrations, only its Search Console code (U11) and GA4 id (U15)');
+-- And staff (U11c, the contract): every column authenticated holds any privilege on is a typed
+-- public identifier, the key, the version or updated_at. The four legacy jsonb boxes, which
+-- took anything an Admin or SEO token wrote, are dropped, so no grant can reach them again.
+select is(
+  (select string_agg(a.attname::text, ',' order by a.attname::text collate "C")
+     from pg_attribute a
+    where a.attrelid = 'public.site_integrations'::regclass and a.attnum > 0 and not a.attisdropped
+      and (has_column_privilege('authenticated', a.attrelid, a.attnum, 'select')
+           or has_column_privilege('authenticated', a.attrelid, a.attnum, 'insert')
+           or has_column_privilege('authenticated', a.attrelid, a.attnum, 'update')
+           or has_column_privilege('authenticated', a.attrelid, a.attnum, 'references'))),
+  'calendly_url,ga4_measurement_id,search_console_token,tenant_id,updated_at,version',
+  'staff reach only the typed integration columns, the key, the version and updated_at: the legacy jsonb is gone (U11c)');
 
 -- ---- 7. UI v2 additions (0016, 0019) --------------------------------------------------
 -- The two new public surfaces are SELECT-only (the insert/update/delete/truncate sweep in

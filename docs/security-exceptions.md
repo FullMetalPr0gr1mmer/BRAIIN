@@ -18,6 +18,7 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-010 | 2026-10-01 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `basic-ftp` GHSA-c475-qrg2-pj4r allowlisted in the dev audit gate — every 5.x is affected and no dependent in the Lighthouse CI chain takes the 6.x fix |
 | EXC-011 | 2026-10-03 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `http-cache-semantics` GHSA-ch52-4w7c-c8xp allowlisted in the prod audit gate — every release is affected (no fix exists); its only importer is Astro's build-time remote-image cache, which this site never uses, and it is absent from the Worker |
 | EXC-012 | 2026-10-14 | Developer (tech@purecoffee.sa) | 2027-01-31 | Open (accepted platform exception; amended 2026-10-14) | pg_net's queue and response tables (`net.http_request_queue`, `net._http_response`) grant **ALL to PUBLIC** on Supabase (SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER and, on PostgreSQL 17, MAINTAIN), and `postgres` cannot revoke them. TRIGGER lets any login role that has a function to call attach code that runs as whoever writes the table. Since 0048 a queued lead notification holds only a timestamp and a signature for one lead (never the secret), nothing is queued while any trigger is on the queue, and `net` must stay out of the exposed API schemas |
+| EXC-013 | 2026-10-25 | Developer (tech@purecoffee.sa) | 2026-12-31 | Open | `zod` GHSA-mrhx-c7xc-m3w5 allowlisted in the prod audit gate — every 3.x release is affected and no 3.x fix exists; Astro's zod 4 is overridden to the fixed 4.6.7, and every public write is now capped at 128 KB before any handler parses it (H14) |
 
 ---
 
@@ -850,3 +851,52 @@ So any role that can open a database session can:
 TRIGGER, TRUNCATE, INSERT, UPDATE or DELETE, no PUBLIC SELECT on the queue), or the platform
 lets the project owner revoke them. Re-review at expiry either way, and whenever a new
 database login role is added.
+
+---
+
+## EXC-013 — `zod` 3 advisory allowlisted in the production audit gate
+
+**Pillar:** 1 (Security) — CLAUDE.md §3 (supply chain, public forms), §11.
+**Opened:** 2026-10-25 · **Owner:** Developer (tech@purecoffee.sa) · **Expiry:** 2026-12-31.
+
+### What changed
+
+`GHSA-mrhx-c7xc-m3w5` (HIGH — validating a very large array exhausts memory) was published
+against `zod`, affected range `< 4.6.6`, fixed in 4.6.6. Two copies are in the production
+tree. Astro's own `zod@4.6.5` is moved to the fixed 4.6.7 by an override. The site's direct
+`zod@3.25.76` (every schema in `packages/schemas`) has no fixed 3.x release: the fix exists
+only in zod 4, and moving every schema to zod 4 is a migration of its own, not a hotfix. The
+direct copy is a documented, expiring `ALLOWLIST` entry in `scripts/audit-gate.mjs`. Without
+it the blocking production gate fails every pull request.
+
+### Why the residual risk is acceptable
+
+- **The attack needs a large body.** zod 3 parses every item of an array even past its
+  `.max()`, so the memory spent grows with the array the request carries. Before this
+  exception the six public JSON endpoints (`/api/contact`, `/api/consent`, `/api/rum`,
+  `/api/analytics`, `/api/clientlog`, `/api/ai/style-finder`) read `request.json()` with no
+  cap of their own, up to the platform's 100 MB request limit.
+- **That body is now capped at 128 KB, before any handler reads it** (H14:
+  `PUBLIC_API_BODY_LIMIT`, enforced in `src/middleware.ts` by the route Astro matched, from
+  the declared length or by counting a streamed body). The largest body any public schema
+  accepts, each free-text character escaped to six bytes, is about 84 KB (the Style-Finder's
+  40 answers), so no real request is refused; `tests/lib/publicBodyLimit.spec.ts` builds each
+  worst case and proves the cap. At 128 KB the worst zod 3 can spend is a few tens of MB, well
+  inside an isolate's 128 MB.
+- **The three public routes with bodies of their own size** keep their own limits: the Join
+  form's multipart (411/413 on its declared length before a byte is read), the signed lead
+  hook (`readCapped`) and the page password (`PRE_AUTH_BODY_LIMIT`).
+- **Admin writes** need a staff session and the CSRF token, and the middleware answers a
+  signed-out write before reading its body.
+
+### Remediation plan (clears this exception)
+
+1. ☐ Move `packages/schemas` (and every `zod` import in `src/`) to zod 4 at 4.6.6 or later,
+   as its own slice: the schema API differences (`.strict()`, error maps, `z.string().email()`,
+   discriminated unions) checked by the existing schema, authz and render suites.
+2. ☐ Or a zod 3 release that fixes the advisory, which clears this with a routine bump.
+
+**Close condition:** `npm run audit` reports 0 unallowlisted high/critical with the
+`GHSA-mrhx-c7xc-m3w5` entry REMOVED from `scripts/audit-gate.mjs`. The 128 KB public body cap
+stays either way (it bounds more than this advisory). If nothing lands by expiry, re-justify —
+never extend silently.

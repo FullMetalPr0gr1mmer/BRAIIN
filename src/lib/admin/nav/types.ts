@@ -13,12 +13,18 @@ export interface NavTab {
   /** Visible when the role holds ANY of these at `access`. */
   caps: readonly Capability[];
   access?: readonly Access[];
+  /**
+   * Other routes that belong to this screen (on a link: to its area), for the same roles:
+   * they light it up (Admin v2 U5: the Services tab holds the discipline pages,
+   * /admin/disciplines/<id>, which the overview opens). They are not menu screens of their
+   * own (`reachableHrefs` leaves them out); the media library's "Used in" links follow a
+   * tab's to its visibility.
+   */
+  match?: readonly string[];
 }
 
 export interface NavLink extends NavTab {
   icon: IconName;
-  /** Other routes that belong to this area and light its link up. */
-  match?: readonly string[];
   /** A head count the shell computes for roles that see the link (src/lib/admin/counters). */
   count?: NavCount;
   /** The area's screens, shown as tabs in its page head when the role sees two or more. */

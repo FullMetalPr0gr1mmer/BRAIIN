@@ -1,16 +1,78 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
+import AdminProjectEditor from '@/components/admin/islands/AdminProjectEditor';
+import Note from '@/components/admin/ui/Note.astro';
+import { PROJECT_TABS } from '@/components/admin/screens/projects/view';
+import { readHeadRow } from '@/lib/admin/editorHead';
+import { firstTab, visibleTabs } from '@/lib/admin/editorTabs';
+import { loadSeoPanelSetup, type SeoPanelSetup } from '@/lib/admin/seo/list';
+import { isUuid, servicesAreaAccess } from '@/lib/admin/servicesArea';
+import { writeSystemLog } from '@/lib/data/systemLog';
 
 export const prerender = false;
 
-// Astro resolves the static `new.astro` before this dynamic route, so /admin/portfolio/new
-// reaches the create form rather than being read as an id.
-const ui = uiFor('portfolio');
+// A project's editor (Admin v2 U6, AV-15): Basics | Case study | Breakdown & gallery | SEO |
+// Publishing, all saved in one save_portfolio() call. Astro resolves the static `new.astro`
+// before this dynamic route. Decided here, from the same ROLE_CAPS the routes enforce (UX only;
+// the API refuses whatever this shows): read-only for a role that reads projects without
+// portfolio.write (SEO: it opens on the SEO tab), or for one that may not archive when the
+// project is archived; the SEO tab for seo.entityMeta holders (read-only at `view`), its setup
+// read here. The head names the project as stored (the caller's read, and only for a role the
+// portfolio API admits: editorHead.ts); a row this read cannot see (a pending create with
+// releases on) or may not name gets a plain title, and the island loads through the API, which
+// answers for it.
 const id = Astro.params.id ?? null;
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const access = servicesAreaAccess(session?.role);
+const valid = isUuid(id);
+if (!valid) Astro.response.status = 404;
+
+let title = 'Project';
+let setup: SeoPanelSetup | null = null;
+if (valid && session && sb) {
+  const [head] = await Promise.all([
+    readHeadRow(sb, session, 'portfolio', 'title', id),
+    access.seo === 'none'
+      ? Promise.resolve()
+      : loadSeoPanelSetup(sb, session, 'portfolio', id)
+          .then((value) => {
+            setup = value;
+          })
+          .catch(async (err) => {
+            await writeSystemLog({
+              level: 'error',
+              source: 'admin:portfolio.seo',
+              message: err instanceof Error ? err.message : 'SEO panel setup read failed',
+              detail: { path: Astro.url.pathname },
+            });
+          }),
+  ]);
+  const en = (head as { title?: { en?: unknown } } | null)?.title?.en;
+  if (typeof en === 'string' && en.trim()) title = en.trim();
+}
+
+const initialTab = firstTab(
+  visibleTabs(PROJECT_TABS, { seoAccess: access.seo }),
+  Astro.url.searchParams.get('tab'),
+  { readOnly: !access.portfolio, seoAccess: access.seo },
+);
 ---
 
-<AdminLayout title={`Edit ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="portfolio" id={id} />
+<AdminLayout title={title} subtitle="Project" styles={['projects.css']}>
+  {
+    valid ? (
+      <AdminProjectEditor
+        client:load
+        id={id}
+        write={access.portfolio}
+        archive={access.archive}
+        seoAccess={access.seo}
+        initialTab={initialTab}
+        seo={setup}
+      />
+    ) : (
+      <Note tone="warn">This address names no project. Open one from the Projects list.</Note>
+    )
+  }
 </AdminLayout>

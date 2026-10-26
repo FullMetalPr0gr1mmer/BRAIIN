@@ -76,10 +76,20 @@ const Seconds = z.number().min(0).max(600);
 const boundedText = (max: number) =>
   z.object({ en: z.string().trim().min(1).max(max), ar: z.string().trim().min(1).max(max) });
 
+// What a stored row may hold (the 0028 CHECKs and the public read schemas below): a page
+// renders every row the database accepts.
 export const MAX_VALUE_POINTS = 6;
 export const MAX_DELIVERABLES = 12;
 export const MAX_CASE_PROBLEMS = 6;
 export const MAX_CASE_RESULTS = 4;
+
+// What the admin writes (Admin v2 U5, the prototype's caps: deviations.md §6.2 cats/services):
+// at most 4 value cards and 5 problems. Tighter than the database on purpose, so a row stored
+// before the change still renders; the seed holds 3 of each, and U5's read-back counts the
+// production rows above these. A save of such a row is refused until a card or a problem is
+// removed.
+export const ADMIN_MAX_VALUE_POINTS = 4;
+export const ADMIN_MAX_CASE_PROBLEMS = 5;
 
 /** A "Value we add" card on a service page — one item of services.value_points (0028). */
 export const ValuePointSchema = z.object({ title: boundedText(120), text: boundedText(400) });

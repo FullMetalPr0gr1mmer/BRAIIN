@@ -8,11 +8,15 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
 /*
  * Move up and Move down past an archived row (Admin v2 hotfix H12), signed in as
  * content_creator, through the real Worker and this job's local Supabase. The archive gates
- * (services: 0001's `services_update` WITH CHECK) let only an Admin write a row that stays
- * archived, so before H12 a Content Creator's move next to an archived row always failed, and
- * the route's one-at-a-time updates could leave half of a move behind.
+ * (portfolio: 0007's RESTRICTIVE `portfolio_archive_admin`) let only an Admin write a row that
+ * stays archived, so before H12 a Content Creator's move next to an archived row always failed,
+ * and the route's one-at-a-time updates could leave half of a move behind.
  *
- *   the screen   on /admin/services, three services of this run's own (a live one, an archived
+ * Since Admin v2 U5 + U6 the screen is the Projects list (/admin/portfolio, AdminProjects),
+ * which moves rows exactly as ResourceTable does (screens/resources/reorder.ts): /admin/services
+ * became the disciplines' overview, and the services are ordered on a discipline's page.
+ *
+ *   the screen   on /admin/portfolio, three projects of this run's own (a live one, an archived
  *                one, a live one): the archived row's buttons are disabled, and the first row's
  *                Move down swaps it with the third, stepping over the archived one. The
  *                request names the two live rows only, the route answers 200, no error is
@@ -65,7 +69,7 @@ function service() {
 test.beforeAll(async () => {
   if (!staffEnv()) return;
   const { data, error } = await service()
-    .from('services')
+    .from('portfolio')
     .insert(Object.values(ROWS).map((row) => ({ tenant_id: TENANT_ID, ...row })))
     .select('id,slug');
   expect(error).toBeNull();
@@ -77,7 +81,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (!staffEnv()) return;
-  await service().from('services').delete().like('slug', `e2e-h12-%-${MARK}`);
+  await service().from('portfolio').delete().like('slug', `e2e-h12-%-${MARK}`);
 });
 
 /** The three rows as stored: number, status and version, by kind. */
@@ -85,7 +89,7 @@ async function stored(): Promise<
   Record<Kind, { sort_order: number; status: string; version: number }>
 > {
   const { data, error } = await service()
-    .from('services')
+    .from('portfolio')
     .select('slug,sort_order,status,version')
     .like('slug', `e2e-h12-%-${MARK}`);
   expect(error).toBeNull();
@@ -97,11 +101,11 @@ async function stored(): Promise<
   return { first: of('first'), shelved: of('shelved'), second: of('second') };
 }
 
-/** The services list, searched down to this run's three rows. */
+/** The projects list, searched down to this run's three rows. */
 async function openList(page: Page) {
-  await page.goto('/admin/services', { waitUntil: 'networkidle' });
+  await page.goto('/admin/portfolio', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
-  await page.getByLabel('Search Services', { exact: true }).fill(MARK);
+  await page.getByLabel('Search projects', { exact: true }).fill(MARK);
   await expect(page.locator('table.data a.data-link')).toHaveText([
     ROWS.first.title.en,
     ROWS.shelved.title.en,
@@ -112,7 +116,7 @@ async function openList(page: Page) {
 const moveButton = (page: Page, kind: Kind, way: 'up' | 'down') =>
   page.getByRole('button', { name: `Move ${ROWS[kind].title.en} ${way}`, exact: true });
 
-test('a Content Creator moves a service past an archived one; the archived row is not written', async ({
+test('a Content Creator moves a project past an archived one; the archived row is not written', async ({
   page,
 }) => {
   await openList(page);
@@ -128,7 +132,7 @@ test('a Content Creator moves a service past an archived one; the archived row i
 
   const answered = page.waitForResponse(
     (r) =>
-      new URL(r.url()).pathname === '/api/admin/services/reorder' &&
+      new URL(r.url()).pathname === '/api/admin/portfolio/reorder' &&
       r.request().method() === 'POST',
   );
   // Row actions are drawn on hover or focus: focus it and press Enter.
@@ -167,13 +171,13 @@ test('a Content Creator moves a service past an archived one; the archived row i
 test('the server refuses a Content Creator move that names the archived row, writing nothing', async ({
   page,
 }) => {
-  await page.goto('/admin/services', { waitUntil: 'networkidle' });
+  await page.goto('/admin/portfolio', { waitUntil: 'networkidle' });
   const token = await page.locator('meta[name="csrf-token"]').getAttribute('content');
   expect(token, 'the admin layout carries a CSRF token').toBeTruthy();
   const before = await stored();
 
   // A live row first: before H12 the route moved it, then the archive gate refused the next.
-  const res = await page.request.post('/api/admin/services/reorder', {
+  const res = await page.request.post('/api/admin/portfolio/reorder', {
     headers: { 'x-csrf-token': token!, origin: new URL(page.url()).origin },
     data: {
       items: [
@@ -195,9 +199,9 @@ test('a move past a row archived since the list loaded: refused, the list re-rea
   page,
 }) => {
   // After the first test the list reads second, shelved, first.
-  await page.goto('/admin/services', { waitUntil: 'networkidle' });
+  await page.goto('/admin/portfolio', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
-  await page.getByLabel('Search Services', { exact: true }).fill(MARK);
+  await page.getByLabel('Search projects', { exact: true }).fill(MARK);
   await expect(page.locator('table.data a.data-link')).toHaveText([
     ROWS.second.title.en,
     ROWS.shelved.title.en,
@@ -207,7 +211,7 @@ test('a move past a row archived since the list loaded: refused, the list re-rea
 
   // Someone else archives the row this move would swap with; the screen does not know.
   const { error } = await service()
-    .from('services')
+    .from('portfolio')
     .update({ status: 'archived' })
     .eq('id', ids.first!);
   expect(error).toBeNull();
@@ -215,7 +219,7 @@ test('a move past a row archived since the list loaded: refused, the list re-rea
 
   const answered = page.waitForResponse(
     (r) =>
-      new URL(r.url()).pathname === '/api/admin/services/reorder' &&
+      new URL(r.url()).pathname === '/api/admin/portfolio/reorder' &&
       r.request().method() === 'POST',
   );
   const down = moveButton(page, 'second', 'down');

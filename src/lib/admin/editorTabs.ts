@@ -1,4 +1,4 @@
-import type { EditorTabDef, FieldDef, ResourceUi } from './uiSchema';
+import type { EditorPanel, EditorTabDef, FieldDef, ResourceUi } from './uiSchema';
 
 // Tabbed editors (Admin v2 U8b): the pure rules EditorForm draws its tabs by, so the tests
 // can hold them without a browser. Browser code, in the field kit's chunk (admin-fields,
@@ -59,12 +59,25 @@ export function tabsWithErrors(
   return out;
 }
 
-/** The tabs a role is offered: a panel tab needs the panel's access (SEO: view or full). */
+/**
+ * The tabs a role is offered: a panel tab needs the panel's access (SEO: view or full); any
+ * other panel (Admin v2 U5: the case study, the leads) only when the screen offers it
+ * (`panels`), having decided on the server that the role may see what it holds.
+ */
 export function visibleTabs(
   tabs: readonly EditorTabDef[],
-  { seoAccess = 'none' }: { seoAccess?: SeoAccess } = {},
+  {
+    seoAccess = 'none',
+    panels = [],
+  }: { seoAccess?: SeoAccess; panels?: readonly EditorPanel[] } = {},
 ): EditorTabDef[] {
-  return tabs.filter((tab) => tab.panel !== 'seo' || seoAccess !== 'none');
+  return tabs.filter((tab) =>
+    tab.panel === undefined
+      ? true
+      : tab.panel === 'seo'
+        ? seoAccess !== 'none'
+        : panels.includes(tab.panel),
+  );
 }
 
 /**
@@ -75,9 +88,13 @@ export function visibleTabs(
 export function firstTab(
   tabs: readonly EditorTabDef[],
   requested: string | null | undefined,
-  { readOnly = false, seoAccess = 'none' }: { readOnly?: boolean; seoAccess?: SeoAccess } = {},
+  {
+    readOnly = false,
+    seoAccess = 'none',
+    panels = [],
+  }: { readOnly?: boolean; seoAccess?: SeoAccess; panels?: readonly EditorPanel[] } = {},
 ): string {
-  const offered = visibleTabs(tabs, { seoAccess });
+  const offered = visibleTabs(tabs, { seoAccess, panels });
   const asked = offered.find((tab) => tab.id === requested);
   if (asked) return asked.id;
   if (readOnly && seoAccess === 'full') {

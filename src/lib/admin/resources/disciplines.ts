@@ -1,5 +1,6 @@
 import { DisciplineUpdateSchema, DisciplineWriteSchema } from '@schemas/admin';
 import type { ResourceConfig } from '../resource';
+import { POSTER_EMBED, withPosterThumb } from './media';
 import {
   POSTER_LINK,
   PREVIEW_PATH_COLUMNS,
@@ -36,7 +37,11 @@ export const disciplineResource: ResourceConfig = {
   // SEO reads services to author their meta, and the service form's Discipline picker
   // loads from here. RLS already admits every staff role (disciplines_read).
   readCaps: ['services.write', 'seo.entityMeta'],
-  listColumns: 'id,slug,name,status,sort_order,version,updated_at',
+  // The Services overview (Admin v2 U5) lists the disciplines with their card line, their
+  // poster as a thumbnail (embedded: one read for the list) and their card clip's window.
+  listColumns:
+    'id,slug,name,short,status,sort_order,version,updated_at,poster_media_id,' +
+    `preview_video_path,preview_start_s,preview_end_s,${POSTER_EMBED}`,
   columns:
     'id,slug,name,short,blurb,poster_media_id,preview_video_path,preview_start_s,preview_end_s,' +
     'status,sort_order,version,published_at,scheduled_for,created_at,updated_at',
@@ -63,14 +68,15 @@ export const disciplineResource: ResourceConfig = {
     },
     // On delete: services still point at it (on delete restrict).
     services_discipline_id_fkey: {
-      message: 'services are still filed under this discipline — move or delete them first',
+      message:
+        'Move its services first: services are still filed under this discipline. Move them to another discipline, or delete them, then try again.',
     },
   },
   toRow: (input) =>
     publishStamp(withPreviewPath(pick(input as Input, DISCIPLINE_KEYS), input as Input)),
   fields: fieldsOf(DISCIPLINE_KEYS, { ...STAMPED, clip: PREVIEW_PATH_COLUMNS }),
   statusOf: (input) => statusOf(input as Input),
-  fromRow: withPreviewField,
+  fromRow: (row) => withPosterThumb(withPreviewField(row)),
   assertWritable: (_merged, ctx) => assertLinkInTenant(ctx, POSTER_LINK),
   assertPublishable: (row) => requireBilingual(row, 'name', 'Discipline name'),
 };

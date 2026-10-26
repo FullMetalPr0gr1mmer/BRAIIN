@@ -1,16 +1,99 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
+import AdminDiscipline from '@/components/admin/islands/AdminDiscipline';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Note from '@/components/admin/ui/Note.astro';
+import { readHeadList } from '@/lib/admin/editorHead';
+import { isUuid, servicesAreaAccess } from '@/lib/admin/servicesArea';
 
 export const prerender = false;
 
-// Astro resolves the static `new.astro` before this dynamic route, so /admin/disciplines/new
-// reaches the create form rather than being read as an id.
-const ui = uiFor('disciplines');
+// A discipline's page (Admin v2 U5, AV-14; the prototype's /services/:cat): its services in the
+// site's order, the card on the site, and the leads by service. Astro resolves the static
+// `new.astro` before this dynamic route. The head says the discipline's number and name as
+// stored (one read of the tenant's disciplines, as the caller: the number is its place among
+// them), with Back, Edit discipline, Open on site (while published) and Add service. What the
+// role may do is decided here from ROLE_CAPS (the buttons only; every route checks again).
+// The read is made only for a role the disciplines API admits (editorHead.ts). A discipline
+// this read cannot see (a pending create with releases on) or may not name gets a plain title:
+// the island reads through the API, which answers for it.
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const access = servicesAreaAccess(session?.role);
 const id = Astro.params.id ?? null;
+const valid = isUuid(id);
+if (!valid) Astro.response.status = 404;
+
+let title = 'Discipline';
+let subtitle: string | undefined;
+let publicHref: string | null = null;
+if (valid && session && sb) {
+  const rows = (await readHeadList(
+    sb,
+    session,
+    'disciplines',
+    'id,slug,name,short,status,sort_order',
+  )) as {
+    id: string;
+    slug?: unknown;
+    name?: { en?: unknown };
+    short?: { en?: unknown } | null;
+    status?: unknown;
+  }[];
+  const index = rows.findIndex((row) => row.id === id);
+  const row = index >= 0 ? rows[index] : undefined;
+  if (row) {
+    const name = typeof row.name?.en === 'string' ? row.name.en.trim() : '';
+    title = `${String(index + 1).padStart(2, '0')} · ${name || 'Untitled'}`;
+    const short = row.short && typeof row.short.en === 'string' ? row.short.en.trim() : '';
+    subtitle = short || undefined;
+    if (row.status === 'published' && typeof row.slug === 'string') {
+      publicHref = `/services#${row.slug}`;
+    }
+  }
+}
 ---
 
-<AdminLayout title={`Edit ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="disciplines" id={id} />
+<AdminLayout title={title} subtitle={subtitle} styles={['services.css']}>
+  <a slot="actions" class="btn" href="/admin/services">
+    <Icon name="back" size={16} />
+    Back
+  </a>
+  {
+    valid && (
+      <a slot="actions" class="btn" href="?edit=1" data-discipline-edit>
+        <Icon name="edit" size={16} />
+        {access.services ? 'Edit discipline' : 'Open discipline'}
+      </a>
+    )
+  }
+  {
+    publicHref && (
+      <a slot="actions" class="btn" href={publicHref} target="_blank" rel="noopener">
+        <Icon name="ext" size={16} />
+        Open on site
+      </a>
+    )
+  }
+  {
+    valid && access.services && (
+      <a slot="actions" class="btn" data-variant="primary" href="?add=1" data-service-add>
+        <Icon name="plus" size={16} />
+        Add service
+      </a>
+    )
+  }
+  {
+    valid ? (
+      <AdminDiscipline
+        client:load
+        id={id}
+        write={access.services}
+        archive={access.archive}
+        leads={access.leads}
+      />
+    ) : (
+      <Note tone="warn">This address names no discipline. Open one from the Services list.</Note>
+    )
+  }
 </AdminLayout>

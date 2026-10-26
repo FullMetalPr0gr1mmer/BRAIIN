@@ -7,6 +7,7 @@ import type { VideoClip } from '@schemas/media';
 import { NotFoundError, OptimisticLockError, ValidationError } from '../errors';
 import { getRow, translateWriteError, type ConstraintFields } from '../crud';
 import type { ResourceConfig } from '../resource';
+import { POSTER_EMBED, posterThumb } from './media';
 import {
   STAMPED,
   bySortOrder,
@@ -72,6 +73,13 @@ export function mediaItemToRow(item: PortfolioMediaItem): Input {
   };
 }
 
+/** An embedded taxonomy row's bilingual name, or null. */
+function nameOf(embedded: unknown): Input | null {
+  if (!embedded || typeof embedded !== 'object' || Array.isArray(embedded)) return null;
+  const name = (embedded as Input)['name'];
+  return name && typeof name === 'object' ? (name as Input) : null;
+}
+
 /** A stored portfolio_media row → the form's item (exported for R10's restore). */
 export function mediaRowToItem(row: Input): Input {
   const item: Input = { role: row['role'], kind: row['kind'] };
@@ -121,8 +129,13 @@ export const portfolioResource: ResourceConfig = {
   entity: 'portfolio',
   writeCap: 'portfolio.write',
   readCaps: ['portfolio.write', 'seo.entityMeta'],
+  // The Projects list (Admin v2 U6) shows each project's poster as a thumbnail, its services
+  // as pills and its sector and client by name: all embedded, so the list is one read. The
+  // client's `visible` (the disclosure permission) rides along for its badge.
   listColumns:
-    'id,slug,title,project_type,year,is_featured,is_placeholder,status,sort_order,version,updated_at',
+    'id,slug,title,project_type,year,is_featured,is_placeholder,status,sort_order,version,' +
+    `updated_at,poster_media_id,sector_id,client_id,${POSTER_EMBED},` +
+    'portfolio_services(service_id,sort_order),sector:sector_id(name),client:client_id(name,visible)',
   // The child sets ride along as embeds so the form loads them with the row; fromRow
   // turns them into `service_ids` / `media` in the order the editor gave.
   columns:
@@ -179,7 +192,14 @@ export const portfolioResource: ResourceConfig = {
     return getRow<Input>(sb, 'portfolio', auth, saved.id, portfolioResource.columns);
   },
   fromRow: (row) => {
-    const { portfolio_services: links, portfolio_media: items, ...rest } = row;
+    const {
+      portfolio_services: links,
+      portfolio_media: items,
+      poster,
+      sector,
+      client,
+      ...rest
+    } = row;
     const out: Input = {
       ...rest,
       preview: clipOfColumns(
@@ -194,6 +214,15 @@ export const portfolioResource: ResourceConfig = {
     }
     if (Array.isArray(items)) {
       out['media'] = [...(items as Input[])].sort(bySortOrder).map(mediaRowToItem);
+    }
+    // The list's embeds (U6): a thumbnail, and the sector's and client's names (null when
+    // unset, or when the caller may not read the row).
+    if ('poster' in row) out['poster_thumb_url'] = posterThumb(poster);
+    if ('sector' in row) out['sector_name'] = nameOf(sector);
+    if ('client' in row) {
+      out['client_name'] = nameOf(client);
+      out['client_visible'] =
+        client && typeof client === 'object' ? (client as Input)['visible'] === true : null;
     }
     return out;
   },

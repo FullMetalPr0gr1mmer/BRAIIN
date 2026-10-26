@@ -63,14 +63,15 @@
     Console verification code, a Calendly link), each CHECKed against its shape: no markup,
     quote or foreign host passes, but a shape cannot tell a pasted key from a code, so the
     Search Console field says its code is published on the home page (anon reads that one
-    column). Residual: the legacy jsonb columns (`ga4`, `search_console`, `calendly`,
-    `recaptcha`) stay readable and writable by Admin and SEO tokens through the API until the
-    contract step, a small migration of its own right after U11's deploy (not tied to U15 or
-    O-18), revokes authenticated INSERT and UPDATE, then SELECT, on them or drops them; the
-    captcha tile is read-only "Not set up" until a provider is chosen (O-19, E8 adds it); GA4 and
-    Calendly are saved, not used yet ("Saved", never "Set up" or "Connected": U15 loads GA4
-    behind consent, no page shows a booking button); the verification meta is on the home
-    pages only (`/`, `/ar`), where Google reads it ([U11](as-built/U11.md)).
+    column). The residual U11 left is closed: the legacy jsonb columns (`ga4`,
+    `search_console`, `calendly`, `recaptcha`), which an Admin or SEO token could fill with
+    anything through the API and read back, are dropped by U11c's contract,
+    `0110_integrations_contract.sql`, applied after U11's deploy, which refuses the push while
+    any row still holds JSON in them ([U11c](as-built/U11c.md)); the captcha tile is read-only
+    "Not set up" until a provider is chosen (O-19, E8 adds it); GA4 and Calendly are saved,
+    not used yet ("Saved", never "Set up" or "Connected": U15 loads GA4 behind consent, no
+    page shows a booking button); the verification meta is on the home pages only (`/`,
+    `/ar`), where Google reads it ([U11](as-built/U11.md)).
 - **Google Analytics 4** (U15, as built: [as-built/U15.md](as-built/U15.md)):
   - loaded only behind analytics consent, by a same-origin loader, with every advertising
     signal denied, Google signals and ad personalisation off, cookies for 180 days instead of
@@ -142,6 +143,15 @@
   - the reconcile after "Back on" runs every 10 minutes in G2's schedule (the plan's §5.7 default), not hourly as U9's brief said: one fewer cron trigger, and the row follows the edge sooner;
   - every admin clock follows the studio's zone (D3), and so do the busiest hours (G1) and the uptime strip's days (G2), whose guides U9 re-words; page visibility's hide-from and show-on days stay Riyadh days (U14a stores their midnights at +03:00 and the edge compares instants), which its guide says, so a zone change never moves a window someone already set (moving them is a follow-up with its own guide edit);
   - C9a (0091) wrote, before this PR, that the zone moves to `site_profile.timezone` (B7.5): it is `site_settings.timezone` (the first bullet); C9a's screen reads `crm_settings.timezone` but never shows or writes it.
+- **Services and projects** (U5 + U6, one folded PR; as built: [as-built/U5-U6.md](as-built/U5-U6.md)):
+  - "Visible on the site" is the row's status (the one lifecycle, §8: published shows it), set in the editor's Publishing tab and by the lists' eye, not a switch of its own (as U7's D7 for the collections);
+  - a service's and a project's address (slug) stays its writers' (Admin, Content Creator), as every content slug is today, not "Admin and SEO, Content Creator read-only" (AV-14): that would split one row across two capabilities, which RLS cannot hold (the §2 Phase 3 amendment: a split inside a row is one layer). A changed address of a live page breaks the old one until a redirect points it there (the field says so); the 301 staged with the release waits for releases;
+  - no "Show Skip to the inquiry overlay" switch (AV-14's optional `show_skip_pill`): the pill shows, as today; it is an expand-only column (and its release fields) when the owner wants it;
+  - a project's keywords stay bilingual lines, each English keyword with its Arabic (the public chips' shape), not two independent chip lists;
+  - the Projects list searches and filters in the browser over one page of 100 (the list endpoint's cap), with no generated search column (AV-15's optional migration);
+  - a discipline's card line and description stay optional, as the schema holds them (AV-14 drew them required);
+  - Duplicate copies a service as saved (a draft, "(copy)" after the English name, its own address) without its case study; archiving is the status's "Archived", offered to an Admin only, not a head button;
+  - the admin writes at most 4 value cards and 5 problems (the prototype's caps); the database and the public read keep 6, so a row stored with more still renders and is refused at its next save until one is removed (the read-back counts them in production).
 - **Copy corrected** where untrue:
   - maintenance "…after you publish";
   - page visibility "Takes effect when you publish" / "Hidden from the site after you publish" → "Applies to the live site within a few minutes" until releases switch on (U14a, D7);

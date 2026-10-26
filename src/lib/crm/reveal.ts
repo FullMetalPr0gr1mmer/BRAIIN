@@ -11,9 +11,9 @@ import { decryptPII } from '@/lib/crypto/pii';
 import { GATED_LEAD_COLUMNS, SAFE_LEAD_COLUMNS } from '@/lib/admin/leadFields';
 import { serviceClient } from '@/lib/supabase/server';
 
-// Revealing one lead's contact details: the single path both the legacy panel
-// (GET /api/admin/leads/[id]?pii=1) and the CRM (POST /api/admin/leads/[id]/reveal) take.
-// The caller has already passed assertCap('leads.pii'). In order, each step before the
+// Revealing one lead's contact details: the single path, the CRM's POST
+// /api/admin/leads/[id]/reveal (the legacy panel's GET …/[id]?pii=1 alias went in Admin v2
+// C14a). The caller has already passed assertCap('leads.pii'). In order, each step before the
 // next, and any failure stops everything after it:
 //
 //   1. live recheck          the profile, now (demotion effective immediately)
@@ -40,25 +40,12 @@ export const DECRYPTED_FIELDS = {
 /**
  * Gated columns that are not encrypted, returned as stored when a caller asks for them.
  * `score_signals` (C4a): the score's reasons, which the CRM's reveal returns (decision D7).
+ * The legacy plain columns (the old band, the notes field, the address) left the list in C14a:
+ * the band lives encrypted in the timeline, the notes are the audited thread, the address was
+ * never written, and C14b drops all three.
  */
-export const PLAIN_GATED_FIELDS = [
-  'timeline_band',
-  'internal_notes',
-  'ip_inet',
-  'score_signals',
-] as const;
+export const PLAIN_GATED_FIELDS = ['score_signals'] as const;
 export type PlainGatedField = (typeof PLAIN_GATED_FIELDS)[number];
-
-/**
- * What the legacy panel's reveal (GET /api/admin/leads/[id]?pii=1) returns besides the
- * decrypted four: its shape before C4a, exactly. It never gained the score's reasons; the
- * panel has no use for them and C14 removes the route.
- */
-export const LEGACY_REVEAL_FIELDS = [
-  'timeline_band',
-  'internal_notes',
-  'ip_inet',
-] as const satisfies readonly PlainGatedField[];
 
 export interface Reveal {
   /** The safe columns, as the caller's own client read them. */

@@ -39,7 +39,12 @@ export type FieldKind =
   // Admin v2 F5b (reserved here so the union is written once)
   | 'accent' // a word range of a sibling bilingual text, highlighted in Klein blue
   | 'link' // {label: {en, ar}, href}: a site link (or https where the schema takes one)
-  | 'slugRelation'; // an ordered multi-pick of another resource, stored by slug
+  | 'slugRelation' // an ordered multi-pick of another resource, stored by slug
+  // Admin v2 U6: an ordered list of pictures (each an item `{kind, mediaId, …}`, as a
+  // repeater item), drawn as a square grid: added with the picker, moved by the Sortable
+  // handle or Move up / Move down, removed with a button. Keys an item holds that the grid
+  // does not draw (a caption, a layout) are kept as they are.
+  | 'gallery';
 
 /** The language an editor shows its bilingual fields in (Admin v2 F5a). */
 export type EditorLanguage = 'en' | 'ar' | 'both';
@@ -192,8 +197,17 @@ export interface EditorTabDef {
   label: string;
   icon?: IconName;
   fields?: readonly string[];
-  panel?: 'seo';
+  panel?: EditorPanel;
 }
+
+/**
+ * What a panel tab mounts (U8b: 'seo', the shared SEO editor; Admin v2 U5: the service's
+ * 'case' study, its own row with its own Save, and its 'leads', a read-only list). Additive
+ * to the frozen tab API: a screen passes each panel's content (EditorForm `panels`), and a
+ * panel other than 'seo' is offered only where the screen says so (editorTabs.ts visibleTabs
+ * `panels`), so a generic editor never shows a tab it has nothing for.
+ */
+export type EditorPanel = 'seo' | 'case' | 'leads';
 
 export interface ResourceUi {
   /** URL segment for both /admin/<slug> and /api/admin/<slug>. */
@@ -210,6 +224,11 @@ export interface ResourceUi {
   syncAction?: SyncActionDef;
   /** Admin v2 U8b: the editor's tabs (EditorTabDef). Without them, one card as before. */
   tabs?: readonly EditorTabDef[];
+  /**
+   * Admin v2 U5: the cards the fields sit in, as SingletonUi's (U9's EditorForm groups). A
+   * group renders inside the tab that holds all its fields (never across two tabs).
+   */
+  groups?: readonly FieldGroup[];
   /** Admin v2 U8b: the entity a `panel: 'seo'` tab edits the SEO of (entity_seo's type). */
   seoEntity?: SeoEntityType;
   /**
