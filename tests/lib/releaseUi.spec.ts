@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Savebar from '@/components/admin/screens/release/Savebar';
 import PublishDialog from '@/components/admin/screens/release/PublishDialog';
 import { buildRows, savebarCounts } from '@/components/admin/screens/release/model';
 import { sampleReleaseApi } from '@/components/admin/screens/release/sampleApi';
+import { settleChange } from '@/components/admin/screens/release/api';
+import { onSettled } from '@/lib/admin/releaseEvents';
 import type { Role } from '@/lib/auth/types';
 
 // The savebar and the publish dialog (Admin v2 R12; releases.md §7), rendered on the server
@@ -187,5 +189,54 @@ describe('Sales sees nothing of releases (C10a, P-2)', () => {
     expect(shell).toContain(
       'const readsReleases = (CMS_ROLES as readonly string[]).includes(auth.role);',
     );
+  });
+});
+
+describe('settling a conflict in the dialog (R12 pre-merge review)', () => {
+  it('tells an editor open on the change once the settle has landed, and never when refused', async () => {
+    vi.stubGlobal('window', new EventTarget());
+    try {
+      const heard: string[] = [];
+      const off = onSettled((draftId) => heard.push(draftId));
+      const asked: unknown[] = [];
+      await settleChange(
+        {
+          resolve: async (draftId, request) => {
+            // Not before the server has the settle: the editor would read the old version.
+            expect(heard).toEqual([]);
+            asked.push([draftId, request]);
+            return {};
+          },
+        },
+        'd1',
+        3,
+        'keepMine',
+        ['title'],
+      );
+      expect(asked).toEqual([['d1', { version: 3, keepMine: ['title'] }]]);
+      expect(heard).toEqual(['d1']);
+      const refused = settleChange(
+        {
+          resolve: async () => {
+            throw new Error('draft-conflict');
+          },
+        },
+        'd2',
+        1,
+        'useLive',
+        ['title'],
+      );
+      await expect(refused).rejects.toThrow('draft-conflict');
+      expect(heard).toEqual(['d1']);
+      off();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('the dialog settles through it, never with a bare resolve that tells no editor', () => {
+    const dialog = readFileSync('src/components/admin/screens/release/PublishDialog.tsx', 'utf8');
+    expect(dialog).toContain('await settleChange(api, draftId, version, choice, columns);');
+    expect(dialog).not.toMatch(/\bapi\.resolve\(/);
   });
 });

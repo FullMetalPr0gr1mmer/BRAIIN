@@ -1,4 +1,5 @@
 import { AdminApiError, adminFetch } from '@/lib/admin/client';
+import { announceSettled } from '@/lib/admin/releaseEvents';
 import type {
   CompareResult,
   PublishResult,
@@ -48,6 +49,23 @@ export interface ReleaseApi {
   ): Promise<unknown>;
   /** GET /api/admin/drafts/[id]/compare. */
   compare(draftId: string): Promise<CompareResult>;
+}
+
+/**
+ * The dialog's Keep my version / Use the live version: settle the conflict, then tell an editor
+ * open on this change that its version moved (R12 pre-merge review), so it reads the change
+ * again, keeping what was typed, instead of meeting "Someone else saved changes" on its next
+ * save. Nothing is announced when the settle is refused (it throws to the dialog).
+ */
+export async function settleChange(
+  api: Pick<ReleaseApi, 'resolve'>,
+  draftId: string,
+  version: number,
+  choice: 'keepMine' | 'useLive',
+  columns: readonly string[],
+): Promise<void> {
+  await api.resolve(draftId, { version, [choice]: [...columns] });
+  announceSettled(draftId);
 }
 
 /** An AdminApiError as the dialog reads it; anything else is a refusal with no status. */
