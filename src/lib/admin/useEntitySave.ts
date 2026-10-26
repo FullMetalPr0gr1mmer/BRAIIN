@@ -59,6 +59,12 @@ export interface EntitySave {
    * only when the form was at the version just before (entitySave.ts).
    */
   adoptVersion(version: number): void;
+  /**
+   * Admin v2 U5/U6: go to `href` without the unsaved-changes question, after an action that
+   * made the form moot (the record was deleted: editorDelete.ts). Optional, so a screen's
+   * fake save need not carry it.
+   */
+  leave?(href: string): void;
 }
 
 export interface UseEntitySaveOptions {
@@ -234,6 +240,10 @@ export function useEntitySave(
     save,
     reloadTheirs,
     adoptVersion: useCallback((version: number) => dispatch({ type: 'version', version }), []),
+    leave: useCallback((href: string) => {
+      leaving.current = true;
+      window.location.assign(href);
+    }, []),
   };
 }
 

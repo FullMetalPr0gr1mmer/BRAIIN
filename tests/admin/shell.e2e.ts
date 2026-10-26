@@ -111,11 +111,13 @@ test.describe("an area's tabs", () => {
   test.describe('as admin', () => {
     test.use({ storageState: authFile('admin') });
 
-    test('Services shows its three screens, the current one marked', async ({ page }) => {
-      await page.goto('/admin/disciplines', { waitUntil: 'networkidle' });
+    // Admin v2 U5: the Services screen IS the disciplines (each opens its own page), so the
+    // area keeps two screens, and /admin/disciplines answers on the overview.
+    test('Services shows its two screens, the current one marked', async ({ page }) => {
+      await page.goto('/admin/service-cases', { waitUntil: 'networkidle' });
       const tabs = page.getByRole('navigation', { name: 'Services sections' });
-      await expect(tabs.getByRole('link')).toHaveText(['Services', 'Disciplines', 'Case studies']);
-      await expect(tabs.getByRole('link', { name: 'Disciplines' })).toHaveAttribute(
+      await expect(tabs.getByRole('link')).toHaveText(['Services', 'Case studies']);
+      await expect(tabs.getByRole('link', { name: 'Case studies' })).toHaveAttribute(
         'aria-current',
         'page',
       );

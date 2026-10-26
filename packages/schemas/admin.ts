@@ -8,15 +8,15 @@ import {
   UuidSchema,
 } from './primitives';
 import {
+  ADMIN_MAX_CASE_PROBLEMS,
+  ADMIN_MAX_VALUE_POINTS,
   BREAKDOWN_KINDS,
   CaseProblemSchema,
   CaseResultSchema,
   DeliverableSchema,
   LocalizedProseSchema,
-  MAX_CASE_PROBLEMS,
   MAX_CASE_RESULTS,
   MAX_DELIVERABLES,
-  MAX_VALUE_POINTS,
   MEDIA_LAYOUTS,
   PORTFOLIO_MEDIA_ROLES,
   ResultCardSchema,
@@ -92,7 +92,10 @@ function updatable<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
   return schema.partial().extend({ version: VersionSchema });
 }
 
-const SortOrderSchema = z.number().int().min(-10_000).max(10_000).default(0);
+/** The largest order a write may carry (a list's code numbers within it, e.g. nextServiceOrder). */
+export const SORT_ORDER_MAX = 10_000;
+
+const SortOrderSchema = z.number().int().min(-SORT_ORDER_MAX).max(SORT_ORDER_MAX).default(0);
 
 /** Short free text that ends up in HTML attributes or headings. */
 const ShortTextSchema = z.string().trim().min(1).max(200);
@@ -229,7 +232,8 @@ export const ServiceWriteSchema = z.object({
   disciplineId: UuidSchema.nullish(),
   /** The "What it is" heading line. */
   intro: boundedBilingual(300).nullish(),
-  valuePoints: z.array(ValuePointSchema).max(MAX_VALUE_POINTS).default([]),
+  /** At most 4 (U5, the prototype's cap): the column holds up to 6, so older rows still render. */
+  valuePoints: z.array(ValuePointSchema).max(ADMIN_MAX_VALUE_POINTS).default([]),
   deliverables: z.array(DeliverableSchema).max(MAX_DELIVERABLES).default([]),
   posterMediaId: UuidSchema.nullish(),
   /** The hero loop: a window of the showreel (EXC-009) → preview_video_path + window. */
@@ -265,7 +269,8 @@ export const ServiceCaseWriteSchema = z.object({
   title: boundedBilingual(200),
   /** "Where they were". */
   context: boundedBilingual(800).nullish(),
-  problems: z.array(CaseProblemSchema).max(MAX_CASE_PROBLEMS).default([]),
+  /** At most 5 (U5, the prototype's cap): the column holds up to 6, so older rows still render. */
+  problems: z.array(CaseProblemSchema).max(ADMIN_MAX_CASE_PROBLEMS).default([]),
   results: z.array(CaseResultSchema).max(MAX_CASE_RESULTS).default([]),
   status: ContentStatusSchema.default('draft'),
   scheduledFor: InstantSchema,

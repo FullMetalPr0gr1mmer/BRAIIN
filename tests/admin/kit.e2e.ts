@@ -412,10 +412,11 @@ test.describe('as admin', () => {
   test.describe('at phone width nothing scrolls sideways (WCAG 1.4.10)', () => {
     // The per-role sweep runs at 1280. A table wider than a phone scrolls inside its
     // .table-wrap; nothing in it may widen the page (the "Actions" heading's visually
-    // hidden text once did, from every list screen). /admin/services is a ResourceTable
-    // list, measured once its rows are in.
+    // hidden text once did, from every list screen). /admin/service-cases is a ResourceTable
+    // list (the Services overview became a list of disciplines in Admin v2 U5), measured once
+    // its rows are in.
     for (const width of [320, 390]) {
-      for (const path of ['/admin/services', '/admin/kit']) {
+      for (const path of ['/admin/service-cases', '/admin/kit']) {
         test(`${path} at ${width}px`, async ({ page }) => {
           await page.setViewportSize({ width, height: 800 });
           await open(page, '', path);

@@ -23,6 +23,7 @@ import LinkField from './fields/LinkField';
 import SlugRelationField from './fields/SlugRelationField';
 import RangeField from './fields/RangeField';
 import ChipsField from './fields/ChipsField';
+import GalleryField from './fields/GalleryField';
 import FieldShell, { describedBy } from './fields/FieldShell';
 import LinkDialog from './fields/LinkDialog';
 import { useFieldLanguage } from './fields/editorLanguage';
@@ -107,6 +108,7 @@ export function Field({
     );
   }
   if (field.kind === 'media') return <MediaField {...common} />;
+  if (field.kind === 'gallery') return <GalleryField {...common} />;
   if (field.kind === 'repeater') return <RepeaterField {...common} renderField={renderField} />;
   if (field.kind === 'object') {
     return (

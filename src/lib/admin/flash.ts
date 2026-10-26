@@ -19,6 +19,11 @@ export const FLASH_MESSAGES = {
   'goal-added': 'Goal added',
   'goal-saved': 'Goal saved',
   'goal-deleted': 'Goal deleted',
+  // An editor's Delete (U5/U6, editorDelete.ts), back on the list; with releases on the
+  // removal is a pending change until the release is published.
+  'service-deleted': 'Service deleted',
+  'project-deleted': 'Project deleted',
+  'removal-pending': 'Will be removed when the release is published',
 } as const;
 
 export type FlashKey = keyof typeof FLASH_MESSAGES;

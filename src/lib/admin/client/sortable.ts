@@ -269,6 +269,18 @@ const MOVES: Record<string, readonly ['move' | 'moveList', -1 | 1]> = {
   next: ['moveList', 1],
 };
 
+/**
+ * A control the person may not use: a disabled button, or one inside a disabled <fieldset>
+ * (EditorForm's read-only mode, Admin v2 U8b). A browser sends no click or key to such a
+ * button, but a pointer press on it still arrives (Chromium dispatches pointer events to
+ * disabled form controls), so without this a read-only editor's handle could still be
+ * dragged (U8's note for U5 and U6).
+ */
+export function isDisabledControl(el: Element): boolean {
+  if (el.closest('fieldset[disabled]')) return true;
+  return (el as HTMLButtonElement).disabled === true || el.getAttribute('aria-disabled') === 'true';
+}
+
 export function createSortable(root: HTMLElement, options: SortableOptions): Sortable {
   const orientation = options.orientation ?? 'vertical';
   const doc = root.ownerDocument;
@@ -397,7 +409,7 @@ export function createSortable(root: HTMLElement, options: SortableOptions): Sor
   function onKeyDown(event: KeyboardEvent) {
     const handle = (event.target as Element | null)?.closest<HTMLElement>('[data-sortable-handle]');
     const item = handle?.closest<HTMLElement>('[data-sortable-id]');
-    if (!handle || !item || !root.contains(item)) return;
+    if (!handle || !item || !root.contains(item) || isDisabledControl(handle)) return;
     const id = item.dataset['sortableId'] ?? '';
     const key = event.key;
 
@@ -449,6 +461,8 @@ export function createSortable(root: HTMLElement, options: SortableOptions): Sor
     const item = button?.closest<HTMLElement>('[data-sortable-id]');
     const move = MOVES[button?.dataset['sortableMove'] ?? ''];
     if (!button || !item || !move || !root.contains(item) || lifted) return;
+    // A Move button inside a disabled fieldset: a click a script sent, never the person's.
+    if (button.closest('fieldset[disabled]')) return;
     event.preventDefault();
     const kind = button.dataset['sortableMove'] ?? '';
     run(
@@ -472,7 +486,7 @@ export function createSortable(root: HTMLElement, options: SortableOptions): Sor
     if (event.button !== 0 || !event.isPrimary || lifted) return;
     const handle = (event.target as Element | null)?.closest<HTMLElement>('[data-sortable-handle]');
     const item = handle?.closest<HTMLElement>('[data-sortable-id]');
-    if (!handle || !item || !root.contains(item)) return;
+    if (!handle || !item || !root.contains(item) || isDisabledControl(handle)) return;
     handle.setPointerCapture(event.pointerId);
     // The rest of the drag is heard on the document, not the root: reordering moves the
     // dragged item's element (React's insertBefore, or appendChild here), and moving an

@@ -187,6 +187,11 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
 export interface LockedApi {
   api: string;
   cap: Capability;
+  /**
+   * Admin v2 U5: an API that admits ANY of these (its resource's read caps), when it is more
+   * than `cap`. Refused then for the roles holding none of them.
+   */
+  anyOf?: readonly Capability[];
 }
 
 export const LOCKED_APIS: readonly LockedApi[] = [
@@ -194,6 +199,14 @@ export const LOCKED_APIS: readonly LockedApi[] = [
   // seo.globalDefaults and the Pages tab's API), so the redirects API keeps its own negative
   // check here: Content Creator and Developer get a 403 from it, not just a hidden tab.
   { api: '/api/admin/redirects', cap: 'redirects.manage' },
+  // Admin v2 U5: the disciplines list became the Services overview (/admin/disciplines
+  // redirects there), so its API keeps its own negative check: the roles that hold neither
+  // services.write nor seo.entityMeta (Developer, Sales) get a 403 from it.
+  {
+    api: '/api/admin/disciplines',
+    cap: 'services.write',
+    anyOf: ['services.write', 'seo.entityMeta'],
+  },
 ];
 
 /** How a locked screen refuses (see LockedScreen). */
@@ -201,9 +214,16 @@ export function renderOf(screen: LockedScreen): 'island' | 'server' {
   return screen.render ?? 'island';
 }
 
-/** The roles a locked screen (or API) must refuse: those with no access at all to its capability. */
-export function refusedRoles(screen: { cap: Capability }): Role[] {
-  return ROLES.filter((role) => ROLE_CAPS[role][screen.cap] === 'none');
+/**
+ * The roles a locked screen (or API) must refuse: those with no access at all to its
+ * capability, or to any of `anyOf` when it names several.
+ */
+export function refusedRoles(screen: {
+  cap: Capability;
+  anyOf?: readonly Capability[] | undefined;
+}): Role[] {
+  const caps = screen.anyOf ?? [screen.cap];
+  return ROLES.filter((role) => caps.every((cap) => ROLE_CAPS[role][cap] === 'none'));
 }
 
 /** Reached from inside other screens, never from the sidebar or an area's tabs. */
@@ -302,6 +322,12 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   { href: '/admin/seo?tab=redirects', label: 'SEO redirects', caps: ['redirects.manage'] },
   { href: '/admin/seo?tab=site', label: 'SEO site wide', caps: ['seo.globalDefaults'] },
   { href: '/admin/redirects', label: 'Redirects', caps: ['redirects.manage'] },
+  // Admin v2 U5: the disciplines are the Services overview, so /admin/disciplines only
+  // redirects there (REDIRECT_PAGES); it is listed so a discipline's page
+  // (/admin/disciplines/[id], reached from the overview) and the no-JS form (/new) are still
+  // swept, for the roles that open them: the writers, and SEO, which reads a discipline's
+  // services to open one for its SEO.
+  { href: '/admin/disciplines', label: 'Disciplines', caps: ['services.write', 'seo.entityMeta'] },
   // The leads list's states (Admin v2 C4b): the spam view (its chip pressed, the empty state,
   // "Not spam" in the bulk bar), and a range with a filter (the KPIs' changes, the sub-line's
   // "in the last 30 days").
@@ -327,6 +353,8 @@ export const REDIRECT_PAGES: Readonly<Record<string, string>> = {
   '/admin/media/new': '/admin/media?upload=1',
   // Admin v2 U10: the redirects list is the SEO screen's Redirects tab.
   '/admin/redirects': '/admin/seo?tab=redirects',
+  // Admin v2 U5: the disciplines are the Services overview.
+  '/admin/disciplines': '/admin/services',
 };
 
 /** Every screen of the menu: sidebar links, then their tabs, each once. */

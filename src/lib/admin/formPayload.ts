@@ -281,7 +281,9 @@ function valueToForm(raw: unknown, field: FieldDef, siblings: Row): unknown {
     case 'multiRelation':
     case 'multiSelect':
       return Array.isArray(raw) ? raw.map(String) : [];
+    // A gallery's items are a repeater's (U6): each shaped by the field's item fields.
     case 'repeater':
+    case 'gallery':
       return Array.isArray(raw)
         ? raw.map((item) => objectToForm(item, field.itemFields ?? []))
         : [];
@@ -713,6 +715,7 @@ function valueToPayload(value: unknown, field: FieldDef, siblings: Row): unknown
         ? [...new Set((value as unknown[]).map(String).filter((v) => v.trim() !== ''))]
         : [];
     case 'repeater':
+    case 'gallery':
       return repeaterToPayload(value, field);
     case 'object':
       return objectToPayload((value ?? {}) as Row, field.itemFields ?? []);
