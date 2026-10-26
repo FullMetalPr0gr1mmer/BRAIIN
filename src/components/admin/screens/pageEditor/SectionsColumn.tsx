@@ -65,6 +65,7 @@ export default function SectionsColumn({
           </span>
           <button type="button" className="pe__pick" onClick={() => onSelect(PAGE_DETAILS)}>
             <span className="pe__name">Page details</span>
+            <span className="visually-hidden">, </span>
             <span className="pe__kind">Title and status</span>
           </button>
         </li>
@@ -95,6 +96,7 @@ export default function SectionsColumn({
                 <span className="pe__name" dir="auto">
                   {name}
                 </span>
+                <span className="visually-hidden">, </span>
                 <span className="pe__kind">
                   {kind}
                   {row.visible ? '' : ' · Hidden'}

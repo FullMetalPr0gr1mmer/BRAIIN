@@ -113,10 +113,12 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
   const [working, setWorking] = useState(false);
   const [drawer, setDrawer] = useState<'seo' | 'history' | null>(null);
   const [adding, setAdding] = useState(false);
-  const [renaming, setRenaming] = useState<{ row: SectionRow; key: number } | null>(null);
+  // The section being renamed; the dialog stays mounted (closing it returns focus), and a
+  // new key on each opening starts its box from that section's name.
+  const [renaming, setRenaming] = useState<SectionRow | null>(null);
+  const [renameKey, setRenameKey] = useState(0);
   const [renameError, setRenameError] = useState('');
   const form = useRef<EntitySave | null>(null);
-  const opened = useRef(0);
 
   const load = useCallback(async (): Promise<SectionRow[] | null> => {
     if (!access.sections) return null;
@@ -291,7 +293,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
 
   async function rename(label: string | null) {
     if (!renaming) return;
-    const row = rows?.find((r) => r.id === renaming.row.id) ?? renaming.row;
+    const row = rows?.find((r) => r.id === renaming.id) ?? renaming;
     setWorking(true);
     setRenameError('');
     try {
@@ -341,9 +343,9 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
   }
 
   function openRename(row: SectionRow) {
-    opened.current += 1;
+    setRenameKey((key) => key + 1);
     setRenameError('');
-    setRenaming({ row, key: opened.current });
+    setRenaming(row);
   }
 
   const historyTarget: HistoryTarget | null = section
@@ -543,13 +545,13 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
           onPick={(type) => void add(type)}
         />
       )}
-      {renaming && (
+      {access.sections && (
         <RenameModal
-          key={renaming.key}
-          open
+          key={renameKey}
+          open={renaming !== null}
           onClose={() => setRenaming(null)}
-          label={renaming.row.label}
-          kindName={kindOf(renaming.row.type)?.name ?? renaming.row.type}
+          label={renaming?.label ?? null}
+          kindName={renaming ? (kindOf(renaming.type)?.name ?? renaming.type) : ''}
           working={working}
           error={renameError}
           onSave={(label) => void rename(label)}
