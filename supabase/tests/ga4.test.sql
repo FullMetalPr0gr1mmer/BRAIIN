@@ -1,5 +1,5 @@
 -- pgTAP: the GA4 measurement id reaches the public pages (Admin v2 U15, migration
--- 0112_ga4.sql: anon's column grant on site_integrations.ga4_measurement_id). Run with
+-- 0113_ga4.sql: anon's column grant on site_integrations.ga4_measurement_id). Run with
 -- `supabase test db`.
 --
 --   • the catalog: anon reads exactly three columns of the row (the tenant, U11's Search

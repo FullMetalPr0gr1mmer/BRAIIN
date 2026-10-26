@@ -90,7 +90,7 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
   // 0098 (Admin v2 U7): never the version, the schedule, the publish date or the actors.
   faq_items: ['id', 'tenant_id', 'question', 'answer', 'status', 'sort_order'],
   // 0105 (Admin v2 U11): the Search Console code the home page's head carries, and the
-  // tenant; 0112 (U15): the GA4 measurement id, which a page that loads GA4 carries; never the
+  // tenant; 0113 (U15): the GA4 measurement id, which a page that loads GA4 carries; never the
   // Calendly link or the legacy jsonb. (A preview never loads GA4: its branch of the middleware
   // returns before the GA4 read, and its layout renders no loader.)
   site_integrations: ['tenant_id', 'search_console_token', 'ga4_measurement_id'],

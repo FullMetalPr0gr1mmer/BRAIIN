@@ -7,7 +7,7 @@ import { z } from 'zod';
 // the two equal, so a shape can never pass one layer and fail the other.
 //
 //   ga4_measurement_id    a GA4 measurement id, G- and 4 to 15 capitals or digits. Anon
-//                         reads it (U15, 0112); the public site loads GA4 with it only
+//                         reads it (U15, 0113); the public site loads GA4 with it only
 //                         behind analytics consent and the GA4_NOTICE_READY switch
 //                         (src/lib/http/ga4.ts), which is off until the notice names Google.
 //   search_console_token  the content of Google's verification meta tag, which SeoHead emits
