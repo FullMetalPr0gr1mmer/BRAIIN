@@ -29,7 +29,7 @@ import type { CronJob } from './jobs';
 // the Workers Free plan's 50 subrequests (P-15; RELEASE_MINUTE_BUDGET below):
 //
 // 1. A scheduled release that is due goes live (R11), one a minute, oldest first.
-//    `public.claim_scheduled_releases` (0107) takes it with SKIP LOCKED and a two-minute lease,
+//    `public.claim_scheduled_releases` (0112) takes it with SKIP LOCKED and a two-minute lease,
 //    so two runs never fire one release at once, and answers its scheduler's profile as it is
 //    now and each change's type, operation and status. The Worker re-checks, against ROLE_CAPS,
 //    that the scheduler is live and still publishes every change (its layer of the two), then
@@ -175,9 +175,9 @@ export async function runReleasePurges(
 
 // ---- A due scheduled release goes live (R11) -------------------------------------------------
 
-/** How long the fire claim holds a release before another run may take it (0107). */
+/** How long the fire claim holds a release before another run may take it (0112). */
 export const RELEASE_FIRE_LEASE_MINUTES = 2;
-/** Scheduled releases one run fires at most (0107's claim allows 1 to 5). */
+/** Scheduled releases one run fires at most (0112's claim allows 1 to 5). */
 export const RELEASE_FIRE_LIMIT = 1;
 
 /** One claimed scheduled release, as `claim_scheduled_releases` answers it. */

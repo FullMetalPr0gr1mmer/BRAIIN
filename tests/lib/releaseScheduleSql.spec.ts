@@ -20,7 +20,7 @@ const FILES = readdirSync(DIR)
   .filter((f) => f.endsWith('.sql'))
   .sort();
 
-/** The migration that adds the schedule functions (0107 until it is renumbered at merge). */
+/** The migration that adds the schedule functions (0112 since the merge train). */
 const R11 = FILES.find((f) => load(f).includes('create or replace function app.enable_releases('));
 const SQL = load(R11 ?? '');
 

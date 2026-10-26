@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
--- 0107: scheduled releases, and switching releases on and off (Admin v2 R11; docs/admin-v2/
+-- 0112: scheduled releases, and switching releases on and off (Admin v2 R11; docs/admin-v2/
 -- releases.md A3-9, A3-14, §4.7, §8 edge cases 8, 9 and 21, §10). A PLACEHOLDER number: the
 -- next free one is assigned at merge (scripts/renumber-migration.mjs).
 --
@@ -1636,13 +1636,13 @@ begin
                   where a.attrelid = 'public.content_releases'::regclass and a.attname = 'fire_lease_until'
                     and a.atttypid = 'timestamptz'::regtype and not a.attnotnull and not a.attisdropped
                     and cardinality(coalesce(a.attacl, '{}'::aclitem[])) = 0) then
-    raise exception '0107: content_releases.fire_lease_until must be a nullable timestamptz with no column grant';
+    raise exception 'R11: content_releases.fire_lease_until must be a nullable timestamptz with no column grant';
   end if;
   if not exists (select 1 from pg_indexes
                   where schemaname = 'public' and tablename = 'content_releases'
                     and indexname = 'content_releases_scheduled_due_idx'
                     and indexdef ~ 'WHERE \(status = ''scheduled''::text\)') then
-    raise exception '0107: content_releases_scheduled_due_idx is missing or not partial on scheduled releases';
+    raise exception 'R11: content_releases_scheduled_due_idx is missing or not partial on scheduled releases';
   end if;
 
   -- ---- content_releases' privileges, as 0038 stated them and unchanged: authenticated
@@ -1660,7 +1660,7 @@ begin
             cross join unnest(v_privs) as pr(priv)) g
    where g.held is distinct from g.wanted;
   if v_bad is not null then
-    raise exception '0107: wrong table privileges on content_releases (role privilege): %', v_bad;
+    raise exception 'R11: wrong table privileges on content_releases (role privilege): %', v_bad;
   end if;
 
   -- ---- Every function: SECURITY INVOKER with an empty search_path and lock waits bounded;
@@ -1670,13 +1670,13 @@ begin
                     where f.oid = p::regprocedure and not f.prosecdef
                       and 'search_path=""' = any (coalesce(f.proconfig, '{}'::text[]))
                       and 'lock_timeout=5s' = any (coalesce(f.proconfig, '{}'::text[]))) then
-      raise exception '0107: % must be SECURITY INVOKER with an empty search_path and lock_timeout 5s', p;
+      raise exception 'R11: % must be SECURITY INVOKER with an empty search_path and lock_timeout 5s', p;
     end if;
   end loop;
   if not exists (select 1 from pg_proc f
                   where f.oid = v_apply::regprocedure
                     and 'statement_timeout=20s' = any (coalesce(f.proconfig, '{}'::text[]))) then
-    raise exception '0107: apply_release lost its statement_timeout setting (PostgREST hoists it, R4)';
+    raise exception 'R11: apply_release lost its statement_timeout setting (PostgREST hoists it, R4)';
   end if;
 
   -- ---- Who may execute them: apply_release and the four cron and route functions the
@@ -1689,7 +1689,7 @@ begin
             cross join unnest(array[v_apply] || v_service_fns || v_owner_fns) as f(fn)) g
    where g.held is distinct from g.wanted;
   if v_bad is not null then
-    raise exception '0107: wrong EXECUTE privileges (role function): %', v_bad;
+    raise exception 'R11: wrong EXECUTE privileges (role function): %', v_bad;
   end if;
 
   -- ---- The apply handles the four modes, re-reads the switch under the lock, fires only the
@@ -1700,7 +1700,7 @@ begin
      or v_src !~ 'd\.release_id is not distinct from p_release_id'
      or v_src !~ 'v_restored \? \(v_it ->> ''draft_id''\)'
      or (select count(*) from regexp_matches(v_src, 'if not app\.releases_enabled\(v_tenant\) then', 'g')) <> 2 then
-    raise exception '0107: apply_release does not read as R11 restated it';
+    raise exception 'R11: apply_release does not read as R11 restated it';
   end if;
 
   -- ---- R4's and R5's catalog rules still hold: of the functions this file adds, none sets a
@@ -1712,7 +1712,7 @@ begin
                      or f.prosrc ~* 'set\s+(local|session)\s+role\M'
                      or f.prosrc ~* 'set\s+role\s+(?!=)'
                      or coalesce(array_to_string(f.proconfig, ','), '') ~* '(^|,)role=')) then
-    raise exception '0107: a function of this file sets a setting, a role or names the release token';
+    raise exception 'R11: a function of this file sets a setting, a role or names the release token';
   end if;
   select string_agg(n.nspname || '.' || f.proname, ', ' order by n.nspname, f.proname) into v_bad
     from pg_proc f join pg_namespace n on n.oid = f.pronamespace
@@ -1720,35 +1720,35 @@ begin
      and not exists (select 1 from pg_depend d
                       where d.classid = 'pg_proc'::regclass and d.objid = f.oid and d.deptype = 'e');
   if v_bad is distinct from 'public.apply_release, public.crm_delete_lead_note' then
-    raise exception '0107: exposed functions calling set_config are %, expected apply_release and crm_delete_lead_note', v_bad;
+    raise exception 'R11: exposed functions calling set_config are %, expected apply_release and crm_delete_lead_note', v_bad;
   end if;
 
   -- ---- The switches' table list is app.publish_scheduled()'s (0098), table for table.
   select prosrc into v_src from pg_proc where oid = 'app.publish_scheduled()'::regprocedure;
   if v_src !~ 'array\[''disciplines'', ''services'', ''blog_posts'', ''portfolio'', ''pages'',\s+''testimonials'', ''service_cases'', ''faq_items''\]'
      or v_src !~ 'not app\.releases_enabled\(tenant_id\)' then
-    raise exception '0107: app.publish_scheduled() is not the one app.enable_releases converts for (0098, skipping tenants with releases on)';
+    raise exception 'R11: app.publish_scheduled() is not the one app.enable_releases converts for (0098, skipping tenants with releases on)';
   end if;
   -- ...and its rows: scheduled WITH a time (a timeless one is never published by it, so the
   -- switch leaves it); a failure leaves a release a person moved since it was claimed.
   select prosrc into v_src from pg_proc where oid = 'app.enable_releases(uuid, uuid, uuid)'::regprocedure;
   if v_src !~ 'scheduled_for is not null' or v_src ~ 'coalesce\(t\.scheduled_for' then
-    raise exception '0107: app.enable_releases must convert only the rows app.publish_scheduled() publishes (scheduled with a time)';
+    raise exception 'R11: app.enable_releases must convert only the rows app.publish_scheduled() publishes (scheduled with a time)';
   end if;
   -- ...with every write to those tables held off while it reads and moves them.
   if v_src !~ 'lock table public\.%I in share row exclusive mode' then
-    raise exception '0107: app.enable_releases must hold writes to the legacy tables off while it converts them';
+    raise exception 'R11: app.enable_releases must hold writes to the legacy tables off while it converts them';
   end if;
   select prosrc into v_src from pg_proc where oid = 'public.fail_scheduled_release(uuid, uuid, text, uuid[])'::regprocedure;
   if v_src !~ 'v_status <> ''scheduled'' or v_at > pg_catalog\.now\(\)' then
-    raise exception '0107: fail_scheduled_release must leave a release that is no longer due';
+    raise exception 'R11: fail_scheduled_release must leave a release that is no longer due';
   end if;
 
   -- ---- Nothing was switched on and nothing scheduled.
   if exists (select 1 from app.release_tenants) then
-    raise exception '0107: app.release_tenants is not empty: releases must stay off until R14';
+    raise exception 'R11: app.release_tenants is not empty: releases must stay off until R14';
   end if;
   if exists (select 1 from public.content_releases r where r.fire_lease_until is not null) then
-    raise exception '0107: a release holds a fire lease after the migration';
+    raise exception 'R11: a release holds a fire lease after the migration';
   end if;
 end $$;

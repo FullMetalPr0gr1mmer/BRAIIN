@@ -1,4 +1,4 @@
--- pgTAP: scheduled releases and the two switches (migration 0107, Admin v2 R11).
+-- pgTAP: scheduled releases and the two switches (migration 0112, Admin v2 R11).
 --
 -- A scheduled release is checked as a publish is, run as a dry run, then stored with its
 -- drafts claimed; the minute cron claims it when due (leased), and apply_release fires it as

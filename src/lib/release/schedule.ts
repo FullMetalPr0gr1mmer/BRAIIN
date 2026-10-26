@@ -30,7 +30,7 @@ import { ReleaseRefusal } from './validate';
 // archived row archived is an Admin's (hotfix H12); a move's time at least two minutes ahead
 // (422); the person
 // re-read live (`liveRecheck`). Then `public.reschedule_release` / `public.unschedule_release`
-// (0107, the service role) check the person and their role again in the database, under the
+// (0112, the service role) check the person and their role again in the database, under the
 // tenant's release lock, and write the audit row in the same transaction. A moved release goes
 // live as the person who moved it; a cancelled one releases its drafts (pending changes again).
 
