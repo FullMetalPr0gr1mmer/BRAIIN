@@ -1674,7 +1674,7 @@ what the contraction took away, and nothing automated stops it (`wrangler rollba
 CI, and the guard accepts a production ahead of the checkout). Never roll back past the code
 PR of the newest contraction production has applied; past that line, fix forward through a
 PR (§5b). Today the line is #109 (Admin v2 C14a, the leads contract's code, merged as
-`5c02776`) once `0112_crm_leads_contract.sql` (C14b) is applied: it drops the lead columns
+`5c02776`) once `0113_crm_leads_contract.sql` (C14b) is applied: it drops the lead columns
 `status`, `internal_notes`, `ip_inet` and `timeline_band`, and `crm_settings.timezone`, which
 a Worker older than #109 names (the legacy lead list and `?pii=1`, the export's `status`,
 notify-lead's and the daily index cron's `timeline_band`, the CRM settings' `timezone`), so
