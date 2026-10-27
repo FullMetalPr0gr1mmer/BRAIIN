@@ -42,6 +42,7 @@ vi.mock('@/lib/auth/context', () => ({
 }));
 
 const { onRequest } = await import('@/middleware');
+const { GA4_ROUTES, NOT_GA4_ROUTES } = await import('@/lib/http/ga4');
 
 type Next = (payload?: unknown) => Promise<Response>;
 type Handler = (context: unknown, next: Next) => Promise<Response>;
@@ -103,12 +104,11 @@ beforeEach(() => {
 
 describe('the switch off (every production build until the notice is signed off)', () => {
   it('reads nothing and lists no Google host, on every page route, an id saved or not', async () => {
-    for (const [path, route] of [
-      ['/', '/'],
-      ['/ar', '/ar'],
-      ['/services/logo', '/services/[slug]'],
-      ['/ar/about', '/ar/about'],
-    ] as const) {
+    // Every public page route, listed or not (ga4Routes.spec holds both lists to src/pages).
+    const routes = [...GA4_ROUTES, ...Object.keys(NOT_GA4_ROUTES)];
+    expect(routes.length).toBeGreaterThan(30);
+    for (const route of routes) {
+      const path = route.replace('[slug]', 'logo').replace('[...path]', 'nowhere');
       const { res, ctx, seen } = await visit(path, route);
       expect(read.calls, path).toBe(0);
       expect(ctx.locals['ga4'], path).toBeUndefined();
