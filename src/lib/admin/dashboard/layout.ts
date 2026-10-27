@@ -52,6 +52,24 @@ export function resolveLayout(stored: unknown, preset: unknown, role: Role): Res
   return { layout, source };
 }
 
+/**
+ * A layout with these widgets taken off it, the hidden list included (R13: the publish card
+ * while releases are off, so neither the board, Add widget nor a save names it).
+ */
+export function withoutWidgets(
+  layout: DashboardLayout,
+  drop: readonly WidgetId[],
+): DashboardLayout {
+  const keep = (ids: readonly WidgetId[]) => ids.filter((id) => !drop.includes(id));
+  return {
+    ...layout,
+    top: keep(layout.top),
+    left: keep(layout.left),
+    right: keep(layout.right),
+    hidden: keep(layout.hidden),
+  };
+}
+
 /** The widgets a layout shows, in board order. */
 export const shownWidgets = (layout: DashboardLayout): WidgetId[] =>
   DASH_COLUMNS.flatMap((column) => layout[column]);

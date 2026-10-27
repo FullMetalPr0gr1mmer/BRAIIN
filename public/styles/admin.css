@@ -4956,6 +4956,45 @@ dialog.drw[data-size='wide'] {
   padding-block-end: 11px;
 }
 
+/* The dashboard's publish card (Admin v2 R13; releases.md §7): stat rows, the live version's
+   line under its number, and its actions. Here, not in dashboard.css: the kit's gallery draws
+   it too. */
+.pubcard__by {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ad-dim);
+  overflow-wrap: anywhere;
+}
+
+.pubcard__line {
+  margin: 10px 0 0;
+}
+
+.pubcard__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* The history drawer (Admin v2 R13): every editor opens it, so its few rules are here. */
+.hist__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.hist__pending {
+  margin-bottom: 16px;
+}
+
+.hist__pending p {
+  margin: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .admin-body *,
   .admin-body *::before,

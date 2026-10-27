@@ -1,6 +1,7 @@
 import { WIDGET_IDS, type DashboardLayout, type WidgetId } from '@schemas/dashboard';
 import type { Role } from '@/lib/auth/types';
 import { CAPABILITIES, ROLE_CAPS, type Access, type Capability } from '@/lib/authz/matrix';
+import { RELEASE_ANY_CAP } from '@/lib/release/caps';
 
 // The dashboard's widget registry (Admin v2 U1, docs/admin-v2/ui.md §4 "Dashboard", AV-09).
 // One entry per widget: what it is called, what it shows, and the capabilities that show it
@@ -91,7 +92,19 @@ export const WIDGETS: Readonly<Record<WidgetId, WidgetDef>> = {
     description: 'People on the site now and the pages they are on',
     anyCaps: ['analytics.read'],
   },
+  // R13 (releases.md §7): for the roles that publish some area (RELEASE_ANY_CAP: every CMS
+  // role, never Sales). Its figures are the browser's to fetch (GET /api/admin/releases/status),
+  // so its loader reads nothing; the dashboard draws it only while releases are on.
+  publish: {
+    id: 'publish',
+    label: 'Publish status',
+    description: 'The live version, unpublished changes and what is scheduled',
+    anyCaps: RELEASE_ANY_CAP,
+  },
 };
+
+/** The widgets drawn only while releases are on for the tenant (R13). */
+export const RELEASE_WIDGETS: readonly WidgetId[] = ['publish'];
 
 type Caps = Readonly<Record<Capability, Access>>;
 
@@ -121,25 +134,25 @@ export const DEFAULT_LAYOUTS: Readonly<Record<Role, DashboardLayout>> = {
   admin: {
     top: ['kpis'],
     left: ['quick', 'views', 'leads'],
-    right: ['attention', 'health', 'activity', 'applications'],
+    right: ['publish', 'attention', 'health', 'activity', 'applications'],
     hidden: ['pages', 'disciplines', 'notes', 'realtime'],
   },
   content_creator: {
     top: ['kpis'],
     left: ['quick', 'views'],
-    right: ['attention', 'pages'],
+    right: ['publish', 'attention', 'pages'],
     hidden: ['notes', 'realtime'],
   },
   seo: {
     top: ['kpis'],
     left: ['quick', 'views'],
-    right: ['attention', 'pages'],
+    right: ['publish', 'attention', 'pages'],
     hidden: ['notes', 'realtime'],
   },
   developer: {
     top: ['kpis'],
     left: ['quick', 'views', 'leads'],
-    right: ['health', 'activity'],
+    right: ['publish', 'health', 'activity'],
     hidden: ['pages', 'disciplines', 'notes', 'realtime'],
   },
   // Sales (C10a): the leads first, then where they came from; the stats it holds as

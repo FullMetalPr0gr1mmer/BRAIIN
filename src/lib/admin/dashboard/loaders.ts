@@ -139,6 +139,8 @@ export interface WidgetDataMap {
   disciplines: { items: BarDatum[]; total: number; capped: boolean };
   notes: TeamNotes;
   realtime: RealtimeView;
+  /** R13: the card fetches its own figures in the browser (GET /api/admin/releases/status). */
+  publish: null;
 }
 
 export type WidgetResult<K extends WidgetId = WidgetId> =
@@ -694,6 +696,10 @@ export function widgetLoaders(
 
     // "Right now" (G1b): one read of the minute rollup, as the stats' Realtime tab.
     realtime: () => loadRealtime(sb, auth),
+
+    // "Publish status" (R13): nothing read here; the card asks the status route itself, so the
+    // dashboard's render pays no release read for it (P-15).
+    publish: async () => null,
   };
 }
 

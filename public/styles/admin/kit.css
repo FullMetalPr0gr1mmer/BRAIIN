@@ -59,3 +59,14 @@
   font-size: 12.5px;
   font-weight: 700;
 }
+
+/* Admin v2 R13: the publish card and the versions list under the Publishing card's bar. */
+.kit__release {
+  margin-top: 18px;
+}
+
+.kit__sub {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+}

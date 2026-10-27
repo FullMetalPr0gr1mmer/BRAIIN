@@ -29,6 +29,10 @@
 //   8. the savebar (Admin v2 R12, admin-release) is the savebar island's and the kit gallery's
 //      alone, and never loads the field kit: AdminLayout draws it on every screen while
 //      releases are on, so each screen's eager graph below counts it as part of the shell.
+//      Admin v2 R13: the dashboard's publish card shares it (drawn only while releases are on),
+//      and Backups & versions' own group (admin-versions) imports its schedule rules from it;
+//      admin-versions is its island's and the kit gallery's alone, and the history drawer
+//      (admin-history) is reached only through import() from the editors.
 //
 // Since C4b (owner item O-15, decided by the approved plan's default on 2026-10-18) check 3,
 // each admin screen's eager graph within ROUTE_BUDGET, is THE admin bundle gate; the
@@ -98,13 +102,22 @@ const OFF_SCREEN_GROUPS = [
   'admin-leads-lazy.',
   'admin-preview.',
   'admin-release.',
+  'admin-versions.',
+  'admin-history.',
 ];
 
 // A screen family's group and the chunks allowed to import it statically (check 6).
 const FAMILY_GROUPS = [
   { group: 'admin-leads.', importers: /^(?:AdminLead|admin-leads-lazy\.)/ },
   // Admin v2 R12: the savebar's island, and the kit's gallery that draws it.
-  { group: 'admin-release.', importers: /^(?:AdminSavebar|AdminKit)\./ },
+  // Admin v2 R13: the dashboard's publish card, and Backups & versions' list, which reuses the
+  // publish dialog's schedule rules (both drawn only while releases are on).
+  {
+    group: 'admin-release.',
+    importers: /^(?:AdminSavebar|AdminPublishCard|AdminKit|admin-versions)\./,
+  },
+  // Admin v2 R13: Backups & versions' list, on its own island and the kit's gallery.
+  { group: 'admin-versions.', importers: /^(?:AdminVersions|AdminKit)\./ },
   // Admin v2 U5 + U6: the Services and Projects areas' own group, on their five islands only.
   {
     group: 'admin-content.',
@@ -115,9 +128,10 @@ const FAMILY_GROUPS = [
 const FAMILY_NEVER = {
   'admin-leads.': ['admin-fields.', 'admin-leads-lazy.'],
   'admin-release.': ['admin-fields.'],
+  'admin-versions.': ['admin-fields.'],
 };
-// Groups reached only through import() (check 6).
-const LAZY_ONLY_GROUPS = ['admin-leads-lazy.'];
+// Groups reached only through import() (check 6). Admin v2 R13: the history drawer.
+const LAZY_ONLY_GROUPS = ['admin-leads-lazy.', 'admin-history.'];
 
 // The preview bridge's script (check 7) and what its eager graph must never hold.
 const PREVIEW_BRIDGE_FILE = /^AdminPreviewBridge\.astro_/;

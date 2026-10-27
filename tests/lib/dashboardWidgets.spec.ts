@@ -101,7 +101,7 @@ function fakeDb(answers: Answers = {}) {
 const EVERYTHING = {
   top: ['kpis'],
   left: ['quick', 'views', 'leads', 'attention', 'health'],
-  right: ['activity', 'applications', 'pages', 'disciplines', 'notes', 'realtime'],
+  right: ['activity', 'applications', 'pages', 'disciplines', 'notes', 'realtime', 'publish'],
   hidden: [],
 };
 
@@ -120,8 +120,11 @@ describe('the registry follows ROLE_CAPS', () => {
 
   it.each([
     ['admin', [...WIDGET_IDS]],
-    ['content_creator', ['kpis', 'quick', 'views', 'attention', 'pages', 'notes', 'realtime']],
-    ['seo', ['kpis', 'quick', 'views', 'attention', 'pages', 'notes', 'realtime']],
+    [
+      'content_creator',
+      ['kpis', 'quick', 'views', 'attention', 'pages', 'notes', 'realtime', 'publish'],
+    ],
+    ['seo', ['kpis', 'quick', 'views', 'attention', 'pages', 'notes', 'realtime', 'publish']],
     [
       'developer',
       [
@@ -135,6 +138,7 @@ describe('the registry follows ROLE_CAPS', () => {
         'disciplines',
         'notes',
         'realtime',
+        'publish',
       ],
     ],
   ] as [Role, WidgetId[]][])('%s', (role, widgets) => {
@@ -424,7 +428,11 @@ const MIDDLEWARE = 3;
  * the shell for every role that publishes: the bell's failed scheduled releases
  * (content_releases, docs/admin-v2/as-built/R11.md). R12 added one, in the shell for the four
  * CMS roles: whether releases are on for the tenant (public.releases_enabled), which decides
- * whether the savebar is drawn (docs/admin-v2/as-built/R12.md); 8 short of 50.
+ * whether the savebar is drawn (docs/admin-v2/as-built/R12.md); 8 short of 50. R13 moved that
+ * read into the page (index.astro asks it beside loadDashboard, to draw the publish card or not)
+ * and hands it to the shell (`preload.releases`), which then does not ask: the total is
+ * unchanged, and the card's own figures are the browser's request, not this render's
+ * (docs/admin-v2/as-built/R13.md).
  */
 const MEASURED = { loadDashboard: 28, total: 42 };
 
@@ -507,14 +515,18 @@ describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () 
       auth('admin'),
       visibleNav('admin'),
       {},
-      { maintenance: null, displayName: 'Amal' },
+      { maintenance: null, displayName: 'Amal', releases: true },
     );
     const shell = calls.length - zone - page;
-    // The page's own read beside loadDashboard (src/pages/admin/index.astro): the greeting's
-    // display name, one `sb.from(` there; the maintenance snapshot is a KV read, not a fetch.
+    // The page's own reads beside loadDashboard (src/pages/admin/index.astro): the greeting's
+    // display name, one `sb.from(` there, and (R13) whether releases are on, one `sb.rpc(`,
+    // which the shell then takes from `preload`; the maintenance snapshot is a KV read.
     const indexPage = readFileSync('src/pages/admin/index.astro', 'utf8');
     const own = indexPage.match(/\bsb\s*\.\s*(from|rpc)\(/g)?.length ?? 0;
-    expect(own).toBe(1);
+    expect(own).toBe(2);
+    expect(indexPage).toContain(
+      'const preload: ShellPreload = { maintenance, displayName, releases };',
+    );
     const byName = (from: number, to: number) =>
       calls
         .slice(from, to)
@@ -528,6 +540,8 @@ describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () 
     // the shell asks neither table again.
     expect(byName(zone + page, calls.length)).not.toContain('services');
     expect(byName(zone + page, calls.length)).not.toContain('blog_posts');
+    // R13: the flag came with the preload, so the shell does not ask for it again.
+    expect(byName(zone + page, calls.length)).not.toContain('releases_enabled');
     // Measured: recorded in docs/admin-v2/as-built/U1.md (the page, its own read, the shell;
     // then the middleware's session check and identity row, 3, must still leave room). The
     // message names every read, so a failure says which one is new instead of only by how much.

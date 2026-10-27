@@ -110,8 +110,17 @@ const ADMIN_LEADS_LAZY =
 // code. Their own group, never in admin-ui (every admin screen loads that, releases on or
 // off): AdminLayout renders the island only while releases are on, so with them off no page
 // downloads it. The kit's gallery (/admin/kit) draws the same pieces over made-up changes.
+// Admin v2 R13: the dashboard's publish card (AdminPublishCard) joins it: drawn only while
+// releases are on, when every screen already loads this chunk for the savebar.
 const ADMIN_RELEASE =
-  /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]AdminSavebar\.tsx$|screens[\\/]release[\\/])/;
+  /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]Admin(Savebar|PublishCard)\.tsx$|screens[\\/]release[\\/])/;
+// Backups & versions (Admin v2 R13): the AdminVersions island and its screen code, a family of
+// its own, drawn by /admin/backups only while releases are on (and by the kit's gallery).
+const ADMIN_VERSIONS =
+  /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]AdminVersions\.tsx$|screens[\\/]versions[\\/])/;
+// The history drawer (Admin v2 R13): every editor's History button loads it through import()
+// on first use, so no editor carries it until someone opens it.
+const ADMIN_HISTORY = /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]history[\\/]/;
 // The Services and Projects areas (Admin v2 U5 + U6): their five islands and their screens'
 // code, a family of their own (as the leads screens are), so the shared admin-screens chunk
 // (the collections, SEO, the media library, General settings) neither carries them nor is
@@ -257,7 +266,9 @@ export default defineConfig({
                     !ADMIN_LEADS.test(id) &&
                     !ADMIN_CONTENT.test(id) &&
                     !ADMIN_PREVIEW.test(id) &&
-                    !ADMIN_RELEASE.test(id)),
+                    !ADMIN_RELEASE.test(id) &&
+                    !ADMIN_VERSIONS.test(id) &&
+                    !ADMIN_HISTORY.test(id)),
                 priority: 20,
               },
               {
@@ -299,6 +310,21 @@ export default defineConfig({
                 name: 'admin-release',
                 test: ADMIN_RELEASE,
                 priority: 14,
+              },
+              {
+                // Backups & versions (R13): below the savebar's group, whose schedule rules it
+                // imports from there; above admin-screens, whose path rule would claim it.
+                name: 'admin-versions',
+                test: ADMIN_VERSIONS,
+                priority: 13.8,
+              },
+              {
+                // The history drawer (R13), reached only through import() from the editors:
+                // below the field kit, so a kit piece both use stays there or in admin-ui;
+                // above admin-screens, whose path rule would claim it.
+                name: 'admin-history',
+                test: ADMIN_HISTORY,
+                priority: 13.7,
               },
               {
                 // The Services and Projects areas (U5 + U6): below the field kit, so what both
