@@ -20,7 +20,8 @@ import { serviceClient } from '@/lib/supabase/server';
 // note is on that lead: the outcome says what happened (ok, not_found, refused or failed),
 // so a 404 never reads as a deletion in the log. Ids and the note's source only, never its
 // words. A note the old notes field's mirror wrote (source 'legacy') is deleted like any
-// other: the field and its mirror are gone (C14b).
+// other and no lead row is written: the field and its mirror are gone, and C14b rewrote every
+// lead row that held the field before dropping it, so the words are not left in a lead.
 
 export const prerender = false;
 

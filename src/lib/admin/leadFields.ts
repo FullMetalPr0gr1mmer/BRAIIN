@@ -34,11 +34,12 @@ import { can } from '@/lib/authz/matrix';
 export const SENSITIVE_LEAD_COLUMNS = ['budget_enc', 'timeline_text_enc'] as const;
 
 /**
- * The legacy lead columns the contract slice drops (C14b): the old status, the old notes field,
- * the never-written address and the old plaintext band. No query names them since C14a (a lead
- * moves by its stage, the notes are the audited thread, the band is in the encrypted
- * timeline). Listed here only so stripSensitive keeps them out of a response while today's
- * schema still holds them, and so the tests know what C14b removes.
+ * The legacy lead columns the contract slice dropped (C14b): the old status, the old notes
+ * field, the never-written address and the old plaintext band. No query names them since C14a
+ * (a lead moves by its stage, the notes are the audited thread, the band is in the encrypted
+ * timeline), and no schema holds them since C14b. Kept so stripSensitive still keeps the names
+ * out of a response and the tests know what C14b removed; deleting the list is a later lead
+ * slice's cleanup.
  */
 export const LEGACY_LEAD_COLUMNS = [
   'status',
