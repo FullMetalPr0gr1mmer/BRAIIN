@@ -219,6 +219,38 @@ describe('the release flag (Admin v2 R12: whether the savebar is drawn)', () => 
     }
   });
 
+  it('R13: a page that read it hands it over, and the shell does not ask again', async () => {
+    for (const releases of [true, false]) {
+      const { sb, calls } = flagClient({ data: !releases });
+      const state = await loadShellState(
+        sb,
+        auth('content_creator'),
+        visibleNav('content_creator'),
+        kv(null),
+        {
+          releases,
+        },
+      );
+      expect(state.releases).toBe(releases);
+      expect(calls.map((c) => c.fn)).not.toContain('releases_enabled');
+    }
+    // A preload with no maintenance still reads the edge's switch (only `releases` was given).
+    const { sb } = flagClient({ data: true });
+    const on = await loadShellState(sb, auth('admin'), visibleNav('admin'), kv('{"active":true}'), {
+      releases: true,
+    });
+    expect(on.maintenance).toBe(true);
+  });
+
+  it('R13: a preload never gives Sales the flag', async () => {
+    const { sb, calls } = flagClient({ data: true });
+    const state = await loadShellState(sb, auth('sales'), visibleNav('sales'), kv(null), {
+      releases: true,
+    });
+    expect(state.releases).toBe(false);
+    expect(calls.map((c) => c.fn)).not.toContain('releases_enabled');
+  });
+
   it('is never read for Sales, who reads nothing a release holds', async () => {
     const { sb, calls } = flagClient({ data: true });
     const state = await loadShellState(sb, auth('sales'), visibleNav('sales'), kv(null));
