@@ -659,4 +659,20 @@ describe('the hook in live mode (F5a, unchanged by R12)', () => {
     }
     expect(renderToStaticMarkup(createElement(Draft))).toBe('<p>none</p>');
   });
+
+  // R12 pre-merge review: the publish dialog's settle (`admin:draft-settled`, checked in
+  // releaseUi.spec) reaches an open editor only through this subscription. Effects do not run
+  // in a server render, so its wiring is read from the source: listening for its own change
+  // only, reading the record again ('rebased', checked above), after a save on its way.
+  it('listens for a settle of its own pending change and reads the record again', async () => {
+    const { readFileSync } = await import('node:fs');
+    const hook = readFileSync('src/lib/admin/useEntitySave.ts', 'utf8');
+    expect(hook).toMatch(
+      /return onSettled\(\(settled\) => \{\s*if \(settled !== draftId\) return;\s*if \(inFlight\.current \|\| latest\.current\.phase !== 'ready'\) rebaseNext\.current = true;\s*else void rebase\(\);/,
+    );
+    expect(hook).toMatch(/const rebase = useCallback\(async \(\) => \{[\s\S]*?type: 'rebased',/);
+    expect(hook).toMatch(
+      /if \(rebaseNext\.current\) \{\s*rebaseNext\.current = false;\s*void rebase\(\);/,
+    );
+  });
 });
