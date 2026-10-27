@@ -404,6 +404,56 @@ const scheduling: readonly Case[] = [
   },
 ];
 
+// R13: the dashboard card's status (any CMS role that reads a release area, as the versions
+// list) and the purge retry by hand (any role that publishes some area; the version must be
+// published with a failed purge: the row below is one).
+const FAILED_PURGE_ROW = {
+  id: UUID,
+  tenant_id: TENANT,
+  number: 3,
+  kind: 'publish',
+  status: 'published',
+  tags: ['service:logo', 'services:all'],
+  purge_status: 'failed',
+  purge_attempts: 1,
+};
+const releaseUx: readonly Case[] = [
+  {
+    name: 'release status',
+    load: () => import('@/pages/api/admin/releases/status'),
+    method: 'GET',
+    url: '/api/admin/releases/status',
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    releases: true,
+  },
+  {
+    name: 'release status (releases off)',
+    load: () => import('@/pages/api/admin/releases/status'),
+    method: 'GET',
+    url: '/api/admin/releases/status',
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+  },
+  {
+    name: 'release purge retry',
+    load: () => import('@/pages/api/admin/releases/[id]/purge'),
+    method: 'POST',
+    url: `/api/admin/releases/${UUID}/purge`,
+    body: {},
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    releases: true,
+    row: FAILED_PURGE_ROW,
+  },
+  {
+    name: 'release purge retry (releases off)',
+    load: () => import('@/pages/api/admin/releases/[id]/purge'),
+    method: 'POST',
+    url: `/api/admin/releases/${UUID}/purge`,
+    body: {},
+    allow: ['admin', 'content_creator', 'seo', 'developer'],
+    row: FAILED_PURGE_ROW,
+  },
+];
+
 export const cases: readonly Case[] = [
   {
     name: 'services create (releases on)',
@@ -595,4 +645,5 @@ export const cases: readonly Case[] = [
   ...publishOff,
   ...versions,
   ...scheduling,
+  ...releaseUx,
 ];
