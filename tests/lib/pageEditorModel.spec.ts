@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { SORT_ORDER_MAX as SCHEMA_SORT_ORDER_MAX, SectionWriteSchema } from '@schemas/admin';
 import { SECTION_TYPES } from '@schemas/sectionTypes';
@@ -510,6 +511,23 @@ describe('the editor’s steps: leaving the open form, a refused column write, a
     expect(await columnWrite(async () => {}, move, { refusal: 'x', reload: 'always' })).toBe(true);
     expect(move.loads).toBe(1);
     expect(move.error).toBe('');
+  });
+
+  it('the editor sends every column write through these steps (e2e pages.e2e.ts drives them)', () => {
+    const editor = readFileSync('src/components/admin/screens/pageEditor/PageEditor.tsx', 'utf8');
+    // The screen's mode, from its list answer, decides every write's marker.
+    expect(editor).toContain('setRelease(readsThroughRelease(answer));');
+    expect(editor).toContain('body: toggleBody(row, release),');
+    expect(editor).toContain('body: renameBody(row, label, release),');
+    expect(editor).toContain("columnAddress('/api/admin/sections', release)");
+    expect(editor).toContain("columnAddress('/api/admin/sections/reorder', release)");
+    expect(editor).toContain('columnAddress(`/api/admin/sections/${row.id}`, release)');
+    expect(editor).not.toContain('columnWriteRef(');
+    // A refused eye or move: columnWrite; Add section and a switch: mayLeave.
+    expect(editor.match(/await columnWrite\(/g)).toHaveLength(2);
+    expect(editor).toContain('await openAdded(created, leaveOpen, setSelected);');
+    expect(editor).toContain('const leaveOpen = () => mayLeave(form.current, confirmDialog);');
+    expect(editor).not.toMatch(/setSelected\(created/);
   });
 });
 
