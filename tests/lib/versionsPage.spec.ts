@@ -185,7 +185,9 @@ describe('the words (P-12: plain, no dashes)', () => {
 
   it('no line has a dash', () => {
     const lines = [
-      ...Object.values(COPY).map((v) => (typeof v === 'function' ? v(3, 2) : v)),
+      ...Object.values(COPY).map((v) =>
+        typeof v === 'function' ? (v as (a: number, b: number) => string)(3, 2) : v,
+      ),
       ...Object.values(HISTORY_COPY).map((v) =>
         typeof v === 'function' ? (v as (a: never) => string)(3 as never) : v,
       ),
@@ -210,7 +212,7 @@ describe('the versions list as the island draws it', () => {
   const html = renderToStaticMarkup(
     createElement(
       ClockProvider,
-      { tz: 'Asia/Riyadh' },
+      { tz: 'Asia/Riyadh', children: null },
       createElement(Versions, {
         api: SAMPLE_VERSIONS_API,
         ...sampleVersions(NOW),
