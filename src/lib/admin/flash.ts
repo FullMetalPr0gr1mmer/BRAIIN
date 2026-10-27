@@ -24,6 +24,10 @@ export const FLASH_MESSAGES = {
   'service-deleted': 'Service deleted',
   'project-deleted': 'Project deleted',
   'removal-pending': 'Will be removed when the release is published',
+  // Backups & versions (R13): the list is read again after each of these.
+  'version-published': 'Published. The website now shows the restored version.',
+  'release-moved': 'The release’s time was changed.',
+  'release-unscheduled': 'Unscheduled. Its changes are waiting to be published.',
 } as const;
 
 export type FlashKey = keyof typeof FLASH_MESSAGES;

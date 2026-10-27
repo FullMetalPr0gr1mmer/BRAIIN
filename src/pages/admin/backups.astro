@@ -1,0 +1,251 @@
+---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminVersions from '@/components/admin/islands/AdminVersions';
+import Card from '@/components/admin/ui/Card.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Note from '@/components/admin/ui/Note.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { clockFor } from '@/lib/admin/relTime';
+import { RELEASE_ENTITY_TYPES, type ReleaseEntityType } from '@schemas/release';
+import { AREA_WORDS } from '@/components/admin/screens/release/model';
+import { changesLine, kindLine, versionName } from '@/components/admin/screens/versions/model';
+import {
+  loadVersionDetails,
+  loadVersionsPage,
+  mayOpenVersions,
+  type VersionDetails,
+  type VersionsPage,
+} from '@/lib/release/versionsPage';
+import { columnLabel } from '@/lib/release/words';
+
+export const prerender = false;
+
+// Backups & versions (Admin v2 R13; plan B7.3; releases.md §7 "Versions page"; ui.md §4
+// "Backups & versions"). Settings › Backups & versions, for the CMS roles holding a release
+// read capability (Admin, Content Creator, SEO, Developer); any other role (Sales) gets the
+// page's 403 and the layout's refusal, having read nothing, and RLS refuses the ledger again
+// (CMS staff only, 0038).
+//
+//   - Versions: while releases are off (every tenant until R14) the page says so and reads
+//     nothing but the flag; on, the AdminVersions island lists what is scheduled or failed and
+//     every published version (R10's list), with Preview, Details, Restore, Change time,
+//     Unschedule, Retry and a restore's "Publish vN again".
+//   - Details (`?details=<id>`): one version's changes, server-rendered with no script (R10's
+//     reader: a change in an area the person does not read is counted, never shown).
+//   - Backups: "Download content" is a plain link to the content export (`export.backup`,
+//     Admin and Developer, under the export lockdown; it answers a hit hourly limit with a
+//     303 back here, `?export=limit`), what the file never holds, and the database's own
+//     backups in one line. Zero JS.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const url = Astro.url;
+const allowed = session !== null && mayOpenVersions(session.role);
+if (!allowed) Astro.response.status = 403;
+const canExport = allowed && can(session.role, 'export.backup') === 'full';
+
+const tz = await studioTimeZone(Astro.locals);
+const clock = clockFor(tz);
+const beforeRaw = Number(url.searchParams.get('before'));
+const before = Number.isInteger(beforeRaw) && beforeRaw >= 2 ? beforeRaw : undefined;
+const detailsId = url.searchParams.get('details');
+const exportNotice = url.searchParams.get('export');
+
+let page: VersionsPage | null = null;
+let details: VersionDetails | null = null;
+if (allowed && sb) {
+  page = await loadVersionsPage({ sb, auth: session, before });
+  if (page.enabled && detailsId && /^[0-9a-f-]{36}$/i.test(detailsId)) {
+    details = await loadVersionDetails({ sb, auth: session }, detailsId);
+  }
+}
+
+const OP_WORDS: Readonly<Record<string, string>> = {
+  create: 'Added',
+  update: 'Changed',
+  delete: 'Removed',
+};
+const CHILD_WORDS: Readonly<Record<string, string>> = { service_ids: 'Services', media: 'Media' };
+const isType = (t: string): t is ReleaseEntityType =>
+  (RELEASE_ENTITY_TYPES as readonly string[]).includes(t);
+const fieldWord = (type: string, column: string) =>
+  CHILD_WORDS[column] ?? (isType(type) ? columnLabel(type, column) : column);
+const value = (v: unknown) =>
+  v === null || v === undefined || v === ''
+    ? '(empty)'
+    : typeof v === 'boolean'
+      ? v
+        ? 'On'
+        : 'Off'
+      : String(v);
+const LANGS = ['en', 'ar'] as const;
+/** One language's half of a bilingual value (R10 shows those before and after). */
+const half = (v: unknown, lang: (typeof LANGS)[number]): unknown =>
+  v && typeof v === 'object' ? (v as Record<string, unknown>)[lang] : undefined;
+const labelOf = (label: Record<string, unknown> | null, type: string) => {
+  const en = typeof label?.['en'] === 'string' ? label['en'].trim() : '';
+  const ar = typeof label?.['ar'] === 'string' ? label['ar'].trim() : '';
+  return en || ar || type.replace(/_/g, ' ');
+};
+const preload = page ? { releases: page.enabled } : undefined;
+---
+
+<AdminLayout
+  title="Backups & versions"
+  subtitle="Every published version of the site, and a copy of its content to keep."
+  styles={['versions.css']}
+  preload={preload}
+>
+  {
+    !allowed || !page ? (
+      <Refused />
+    ) : (
+      <div class="grid grid--2-1 ver-page">
+        <div class="ver-main">
+          <Card
+            title="Versions"
+            sub={
+              page.enabled
+                ? page.live === null
+                  ? 'Nothing published yet'
+                  : `${page.live} published ${page.live === 1 ? 'version' : 'versions'}`
+                : 'Not switched on yet'
+            }
+          >
+            {page.enabled ? (
+              <AdminVersions
+                client:load
+                tz={tz}
+                versions={page.versions}
+                upcoming={page.upcoming}
+                restores={page.restores}
+                more={page.more}
+              />
+            ) : (
+              <p class="ver-off">
+                Publishing in releases isn’t switched on yet, so there are no versions to list.
+                Until it is, what you save goes live straight away. Once it is on, every publish
+                becomes a numbered version here that you can preview and restore.
+              </p>
+            )}
+          </Card>
+          {details && (
+            <section class="card" id="details" aria-labelledby="ver-details-h">
+              <div class="card__h">
+                <div>
+                  <h2 class="card__t" id="ver-details-h">
+                    Changes in {versionName(details.release.number)}
+                  </h2>
+                  <p class="card__sub">
+                    {[kindLine(details.release), changesLine(details.release)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    {details.release.publishedAt &&
+                      ` · ${clock.formatDateTime(details.release.publishedAt)}`}
+                  </p>
+                </div>
+                <div class="card__acts">
+                  <a class="btn" href="/admin/backups">
+                    Close
+                  </a>
+                </div>
+              </div>
+              {details.items.length === 0 ? (
+                <p class="admin-sub">No change here is in an area your role opens.</p>
+              ) : (
+                <ul class="ver-changes">
+                  {details.items.map((item) => (
+                    <li class="ver-change">
+                      <p class="ver-change__t">
+                        <span dir="auto">{labelOf(item.label, item.entityType)}</span>
+                        <span class="ver-change__m">
+                          {OP_WORDS[item.op] ?? item.op} in{' '}
+                          {AREA_WORDS[item.area as keyof typeof AREA_WORDS] ?? item.area}
+                          {item.cascade && ', a knock-on change'}
+                        </span>
+                      </p>
+                      {item.fields.length > 0 && (
+                        <dl class="ver-fields">
+                          {item.fields.map((field) => (
+                            <div class="ver-field">
+                              <dt>{fieldWord(item.entityType, field.column)}</dt>
+                              {field.kind === 'text' && (
+                                <dd dir="auto">
+                                  {value(field.before)} <span aria-hidden="true">→</span>
+                                  <span class="visually-hidden">became</span> {value(field.after)}
+                                </dd>
+                              )}
+                              {field.kind === 'bilingual' &&
+                                LANGS.map((lang) =>
+                                  half(field.before, lang) === half(field.after, lang) ? null : (
+                                    <dd lang={lang} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+                                      {value(half(field.before, lang))}{' '}
+                                      <span aria-hidden="true">→</span>
+                                      <span class="visually-hidden">became</span>{' '}
+                                      {value(half(field.after, lang))}
+                                    </dd>
+                                  ),
+                                )}
+                              {field.kind === 'changed' && <dd>Changed</dd>}
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {details.hidden > 0 && (
+                <p class="admin-sub">
+                  {details.hidden} more {details.hidden === 1 ? 'change is' : 'changes are'} in
+                  areas your role doesn’t open.
+                </p>
+              )}
+              {details.truncated && <p class="admin-sub">The first 1,000 changes are shown.</p>}
+            </section>
+          )}
+          {page.enabled && detailsId && !details && (
+            <Note tone="warn" role="status">
+              <p>That version doesn’t exist.</p>
+            </Note>
+          )}
+        </div>
+        <div class="ver-side">
+          <Card title="Backups" sub="A copy of the site’s content">
+            {exportNotice === 'limit' && (
+              <Note tone="warn" role="status">
+                <p>You can download three copies an hour. Try again later.</p>
+              </Note>
+            )}
+            {exportNotice === 'unavailable' && (
+              <Note tone="warn" role="status">
+                <p>The download couldn’t be recorded, so it wasn’t made. Try again in a moment.</p>
+              </Note>
+            )}
+            {canExport ? (
+              <p>
+                <a class="btn" data-variant="primary" href="/api/admin/export-backup">
+                  <Icon name="download" size={14} />
+                  Download content
+                </a>
+              </p>
+            ) : (
+              <p class="admin-sub">An Admin or a Developer can download a copy of the content.</p>
+            )}
+            <p class="admin-sub">
+              One JSON file with the pages, services, projects, posts and the rest of the site’s
+              content. Leads, job applications, consent records, the activity log and people’s
+              accounts are never in it. Each download is recorded in the activity log.
+            </p>
+            <p class="admin-sub">
+              The database itself is backed up by the hosting provider. Restoring it is done by
+              whoever runs the site, not from this page.
+            </p>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+</AdminLayout>

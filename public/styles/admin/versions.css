@@ -1,0 +1,172 @@
+/* Screen stylesheet: Backups & versions, /admin/backups (Admin v2 R13), and the kit's gallery,
+   which draws the versions list over made-up versions. Linked only through AdminLayout's
+   `styles` prop (styles={['versions.css']}), after admin.css. The cards, the timeline (.tl),
+   badges, notes, buttons and the schedule's day and time (.pub__slot) are admin.css's; here
+   the page's two columns, the versions list's rows and actions, and a version's changes. It
+   uses admin.css's tokens and declares none, and holds no colour literal
+   (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
+
+/* The page: the versions beside the backups card on a wide screen, stacked below it. */
+.ver-main,
+.ver-side {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  min-inline-size: 0;
+}
+
+.ver-main > .card + .card,
+.ver-side > .card + .card {
+  margin-top: 0;
+}
+
+.ver-off {
+  margin: 0;
+  color: var(--ad-dim);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* The versions list (the island). */
+.ver {
+  display: grid;
+  gap: 16px;
+  min-inline-size: 0;
+}
+
+/* What is scheduled or failed, above the timeline: one bordered row each. */
+.ver__up {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.ver__card {
+  padding: 12px 14px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-surface-2);
+}
+
+.ver__card[data-state='failed'] {
+  border-color: var(--ad-err-line);
+}
+
+.ver__t {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ver__tl .tl__t {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ver__n {
+  font-family: var(--ad-mono);
+}
+
+.ver__kind {
+  font-weight: 500;
+  color: var(--ad-dim);
+}
+
+.ver__note {
+  color: var(--ad-ink);
+  overflow-wrap: anywhere;
+}
+
+/* The row's actions: a wrapping line of small buttons under its lines. */
+.ver__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ver__purge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ver__restored {
+  margin-top: 8px;
+}
+
+.ver__restored p {
+  margin: 0;
+}
+
+.ver__err {
+  margin-top: 8px;
+}
+
+.ver__err p {
+  margin: 0;
+}
+
+.ver__names {
+  margin: 6px 0 0;
+  padding-inline-start: 18px;
+  font-size: 12px;
+}
+
+/* A version's changes (?details=). */
+.ver-changes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.ver-change {
+  padding-block-end: 12px;
+  border-block-end: 1px solid var(--ad-line);
+}
+
+.ver-change:last-child {
+  padding-block-end: 0;
+  border-block-end: 0;
+}
+
+.ver-change__t {
+  margin: 0 0 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ver-change__m {
+  font-weight: 400;
+  color: var(--ad-dim);
+}
+
+.ver-fields {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.ver-field dt {
+  font-weight: 600;
+}
+
+.ver-field dd {
+  margin: 0;
+  color: var(--ad-dim);
+  overflow-wrap: anywhere;
+}

@@ -32,6 +32,8 @@ export const ADMIN_STYLESHEETS = [
   'stats.css',
   'two-step.css',
   'users.css',
+  // Admin v2 R13: Backups & versions (and the kit's gallery, which draws its list).
+  'versions.css',
   'visibility.css',
 ] as const;
 
