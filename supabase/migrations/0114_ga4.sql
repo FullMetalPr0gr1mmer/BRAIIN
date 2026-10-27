@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
--- 0113 — GA4's measurement id reaches the public pages (Admin v2 U15). Forward-only: EXPAND
+-- 0114 — GA4's measurement id reaches the public pages (Admin v2 U15). Forward-only: EXPAND
 -- (one anon column grant). Built with a placeholder number; renumbered at its merge train.
 -- Depends on 0001 (tenants, app.effective_tenant_id), 0009 (public.site_integrations), 0011
 -- (the grant regime) and 0105 (U11: the typed ga4_measurement_id column, its CHECK, the

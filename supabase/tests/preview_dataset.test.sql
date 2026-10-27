@@ -13,7 +13,7 @@
 --   2. the CMS roles read their tenant's pending changes (content_drafts); a `sales` claim
 --      and another tenant read none, and anon holds no privilege;
 --   3. anon's column grants on testimonials, media_assets, disciplines, service_cases,
---      faq_items (0098) and site_integrations (0105, and 0113's GA4 id) equal the literal in
+--      faq_items (0098) and site_integrations (0105, and 0114's GA4 id) equal the literal in
 --      _anon_columns() below,
 --      and the other 17 tables are granted to
 --      anon whole; staff also read _dataset_only_columns() (a quote's consent record);
@@ -285,7 +285,7 @@ insert into public.site_profile (tenant_id, brand_name, contact_email, location)
 values (app.default_tenant_id(), '{"en":"Fixture","ar":"تجربة"}', 'hello@example.test', '{"en":"Riyadh","ar":"الرياض"}')
 on conflict (tenant_id) do nothing;
 insert into public.seo_defaults (tenant_id) values (app.default_tenant_id()) on conflict (tenant_id) do nothing;
--- The verification code a visitor reads (0105), and the GA4 id beside it (0113).
+-- The verification code a visitor reads (0105), and the GA4 id beside it (0114).
 insert into public.site_integrations (tenant_id, search_console_token, ga4_measurement_id)
 values (app.default_tenant_id(), 'PreviewCode_0123456', 'G-PREVIEW1')
 on conflict (tenant_id) do update
