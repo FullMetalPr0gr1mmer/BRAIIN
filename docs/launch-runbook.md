@@ -1734,20 +1734,26 @@ meets columns it ignores) but **not across a contraction** (§5a): the older Wor
 what the contraction took away, and nothing automated stops it (`wrangler rollback` bypasses
 CI, and the guard accepts a production ahead of the checkout). Never roll back past the code
 PR of the newest contraction production has applied; past that line, fix forward through a
-PR (§5b). Today the line is #106 (Admin v2 U11, merged as `1083159`) once
-`0110_integrations_contract.sql` (U11c) is applied: it drops `site_integrations`' four legacy
+PR (§5b). Today the line is #109 (Admin v2 C14a, the leads contract's code, merged as
+`5c02776`) once `0113_crm_leads_contract.sql` (C14b) is applied: it drops the lead columns
+`status`, `internal_notes`, `ip_inet` and `timeline_band`, and `crm_settings.timezone`, which
+a Worker older than #109 names (the legacy lead list and `?pii=1`, the export's `status`,
+notify-lead's and the daily index cron's `timeline_band`, the CRM settings' `timezone`), so
+the lead detail, the export, the reveal, notify-lead, the index cron and CRM settings fail
+(42703, the column does not exist); every public page and the contact form keep working (the
+form's insert names none of them). Behind it is #106 (Admin v2 U11, merged as `1083159`), the
+line since `0110_integrations_contract.sql` (U11c): it drops `site_integrations`' four legacy
 jsonb columns (`ga4`, `search_console`, `calendly`, `recaptcha`), which a Worker older than
 #106 selects and writes on the Integrations screen and its route, so that screen fails to load
-and save (42703, the column does not exist); the rest of the admin and every public page keep
-working (no public page read the table before #106). Behind it is #43 (merged as `cc8c6c4`),
-the line since `0033`: a Worker older than #43 also reads lead columns `0033` revoked from
-staff tokens, so the PII reveal, every lead update and the PII export fail (42501); the lead
-list and the plain lead view keep working. Before a rollback, check that the target contains
-the line: CI's deploys carry their commit in the version message (`ci <sha> run <id>`), so
-`git merge-base --is-ancestor 1083159 <sha>` must succeed (`cc8c6c4` is its ancestor, so the
-one check covers both lines). Versions deployed before this pipeline (#41, merged after #43)
-carry no commit; every one of them is older than #106, so none is a rollback target. A new
-contraction moves the line: its migration PR updates this paragraph.
+and save (42703); no public page read the table before #106. Behind both is #43 (merged as
+`cc8c6c4`), the line since `0033`: a Worker older than #43 also reads lead columns `0033`
+revoked from staff tokens, so the PII reveal, every lead update and the PII export fail
+(42501). Before a rollback, check that the target contains the line: CI's deploys carry their
+commit in the version message (`ci <sha> run <id>`), so
+`git merge-base --is-ancestor 5c02776 <sha>` must succeed (`1083159` and `cc8c6c4` are its
+ancestors, so the one check covers every line). Versions deployed before this pipeline (#41,
+merged after #43) carry no commit; every one of them is older than #109, so none is a
+rollback target. A new contraction moves the line: its migration PR updates this paragraph.
 
 0037 (#51) does not move the line. It revoked staff write privileges on the eight tables
 staff only read (the telemetry tables, the pageview rollup, the search, consent and
@@ -1813,14 +1819,12 @@ A Worker rollback across R11's PR is safe: the older minute cron never calls
 newer Worker is back), and the older publish route refuses `scheduleAt`
 (400). With releases off, as until R14, nothing can be scheduled at all.
 
-The leads contract (Admin v2 C14) **will** move the line. It ships as the two PRs §5a asks
-for. C14a, the code, carries no migration: from its merge on, no Worker query names
-`leads.status`, `internal_notes`, `ip_inet`, `timeline_band` or `crm_settings.timezone`, and
-the legacy `GET /api/admin/leads` list and the `?pii=1` alias are gone. Until C14b is applied
-a rollback across C14a's PR is safe (the columns are still there, and the legacy sync and
-notes mirror still run). C14b, the migration alone, drops those columns, and it is applied
-only after C14a has deployed and one release has passed with no legacy writer. **Once C14b is
-applied, never roll back past C14a's merge commit:** an older Worker names a dropped column,
-so its lead detail, export, reveal, notify-lead, index cron and CRM settings fail (42703).
-C14b's PR writes that commit into the "Today the line is" sentence above, with the
-`git merge-base --is-ancestor` check moved to it.
+The leads contract (Admin v2 C14) moved the line, as the two PRs §5a asks for. C14a (#109),
+the code, carried no migration: from its merge on, no Worker query names `leads.status`,
+`internal_notes`, `ip_inet`, `timeline_band` or `crm_settings.timezone`, and the legacy
+`GET /api/admin/leads` list and the `?pii=1` alias are gone. C14b, the migration alone, drops
+those columns; it is applied only after C14a has deployed and one release has passed with no
+legacy writer, and before C14b is applied a rollback across #109 stays safe (the columns are
+still there, and the legacy sync and notes mirror still run). **Once C14b is applied, never
+roll back past `5c02776`** (the "Today the line is" sentence above). C14b's own PR changes no
+Worker code, so a rollback across it is safe: the Worker before it is C14a's.

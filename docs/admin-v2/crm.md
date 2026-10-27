@@ -297,7 +297,7 @@ grant update (stage_id, is_spam, assigned_to, value_sar, is_starred, read_at, re
 - `sla_hours` smallint 1–168, default 24
 - `assignment_rule` ∈ {manual, round_robin, fixed}, default manual
 - `assignment_pool` uuid[] (≤20, validated as active lead workers), `assignment_fixed_to` uuid, `rr_cursor` int
-- `timezone`: allowlist CHECK, default 'Asia/Riyadh'
+- `timezone`: allowlist CHECK, default 'Asia/Riyadh' (as built: U9 made `site_settings.timezone` the studio's one zone, read through `app.studio_time_zone`, and C14b dropped this column)
 - `version`, `updated_at`, `updated_by`
 
 RLS: select by lead workers or `crm.settings` holders (configuration, no PII); update by `crm.settings` holders. Messaging settings are a different table later (§12) with its own capability: an SEO-style split cutting through one row would fail the §2 Phase-3 amendment.
@@ -526,7 +526,7 @@ Legacy `GET /api/admin/leads?…` and `GET …/[id]?pii=1` are fixed to be fail-
 **Tasks** (CRM-8). Every route needs crm.tasks.
 - `GET /api/admin/crm/tasks?view=mine|all`: RPC `crm_tasks_grouped(view, tz)` returns {overdue, today, upcoming, done (last 20 within 30 days)} with counts.
   - overdue = not done and due_at < now()
-  - today = the same calendar day in `crm_settings.timezone`
+  - today = the same calendar day in the studio's zone (`app.studio_time_zone`, `site_settings.timezone`; C14b dropped `crm_settings.timezone`)
 - `POST /api/admin/crm/tasks`: takes {dueDate, dueTime}, converted in SQL in the tenant time zone.
 - `PATCH /[id]`: version; done; `snooze: 'tomorrow_10'` is computed in SQL in the tenant time zone.
 - `DELETE /[id]`.

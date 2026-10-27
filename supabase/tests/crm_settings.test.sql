@@ -207,8 +207,8 @@ select is(_rows($$ update public.crm_settings set sla_hours = 6 where version = 
 select ok((select sla_hours = 12 and version = 2 and updated_by = '00000000-0000-0000-0000-0000000000a1'
              from public.crm_settings),
   'the change moved the version once and names who made it');
-select throws_ok($$ update public.crm_settings set timezone = 'UTC' $$, '42501', null,
-  'the time zone is not written here (site_profile owns it, the plan''s B7.5)');
+select throws_ok($$ update public.crm_settings set timezone = 'UTC' $$, '42703', null,
+  'the CRM keeps no time zone: C14b dropped it, site_settings.timezone is the studio''s one zone');
 select throws_ok($$ update public.crm_settings set rr_cursor = 3 $$, '42501', null,
   'nor the round-robin cursor (arrival moves it)');
 
