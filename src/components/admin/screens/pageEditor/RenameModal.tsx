@@ -3,9 +3,11 @@ import { SECTION_LABEL_MAX } from '@schemas/sectionTypes';
 import Modal from '@/components/admin/kit/Modal';
 
 // "Rename section" (Admin v2 E1, ui.md: "a small dialog, never a prompt"): the section's name
-// in this column, at most SECTION_LABEL_MAX characters. Empty puts back its kind's own name.
+// in the admin, at most SECTION_LABEL_MAX characters. Empty puts back its kind's own name.
 // The server holds the rule (packages/schemas/admin.ts SectionLabelSchema, 0113's CHECK): a
-// refusal is said under the box.
+// refusal is said under the box. The name is not private (P-12: the copy says so): other
+// staff see it, in the publish dialog and the site versions too once releases are on, and
+// anon's table-level SELECT reads it on a visible section of a published page (0113).
 
 export interface RenameModalProps {
   open: boolean;
@@ -41,7 +43,7 @@ export default function RenameModal({
       open={open}
       onClose={onClose}
       title="Rename section"
-      sub="The name is shown only here, in the sections column."
+      sub="A name to tell this section apart in the admin. Others can see it, so keep private notes out of it."
       dismissible={false}
       footer={
         <>

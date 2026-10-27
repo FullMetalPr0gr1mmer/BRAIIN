@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import { ABOUT_WHO_COPY } from '@/lib/sections/copy/aboutWho';
@@ -17,11 +17,13 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *   About        the sections in the site's order, the first open, its fields prefilled with
  *                the words the page shows (the built-in copy, nothing stored);
  *   a scratch    a page of this run's own (no route shows it, so no visitor sees any of this),
- *   page         with two sections made by the service role: Move down, the eye, Rename, a
+ *   page         with two sections made by the service role: Move down, the eye (and a refused
+ *                one, whose reason stays after the list is read again), Rename, a
  *                heading's words saved as the only difference stored, the switch that asks
  *                before unsaved words are dropped, English / العربية / Both and "Arabic
  *                missing" with Next gap for the whole screen, History, and the page details;
- *   Add section  on About, as Admin: the kinds it may not take say why; a call to action is
+ *   Add section  on About, as Admin: the kinds it may not take say why; with words not saved
+ *                in the open section, opening the new one asks first; a call to action is
  *                added hidden at the end, then deleted (a hidden section renders nowhere);
  *   per role     a Content Creator edits sections but deletes none ("hide it instead"); SEO
  *                gets the SEO drawer only; Developer and Sales are refused by the server.
@@ -269,6 +271,28 @@ test.describe('as admin', () => {
     await expect(eye).toHaveAttribute('aria-checked', 'true');
     expect((await sectionRow(sloganId))?.['visible']).toBe(true);
 
+    // A refused eye (here a 409, as a colleague's save in between gives) says why, and the
+    // reason stays on screen after the column reads the list again.
+    const sloganPath = `/api/admin/sections/${sloganId}`;
+    const refuse = (route: Route) =>
+      route.request().method() === 'PATCH'
+        ? route.fulfill({ status: 409, json: { ok: false, error: 'conflict' } })
+        : route.fallback();
+    const slogan = (url: URL) => url.pathname === sloganPath;
+    await page.route(slogan, refuse);
+    const reread = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === '/api/admin/sections' && r.request().method() === 'GET',
+    );
+    await eye.click();
+    await reread;
+    await expect(eye).toBeEnabled();
+    await expect(column(page).getByRole('alert')).toHaveText(
+      'Not changed. Someone else saved changes while you were editing. Reload to see their version.',
+    );
+    await expect(eye).toHaveAttribute('aria-checked', 'true');
+    await page.unroute(slogan, refuse);
+    expect((await sectionRow(sloganId))?.['visible']).toBe(true);
+
     // Rename the open section (the column's write moves its version: the form follows it).
     await page.getByRole('button', { name: 'Rename' }).click();
     const rename = page.getByRole('dialog', { name: 'Rename section' });
@@ -340,6 +364,8 @@ test.describe('as admin', () => {
     page,
   }) => {
     await openEditor(page, aboutId);
+    // Words not saved in the open section (Who we are): opening the new one asks first.
+    await page.locator('#f-content-heading-en').fill(`Unsaved ${MARK}`);
     await column(page).getByRole('button', { name: 'Add section' }).click();
     const library = page.getByRole('dialog', { name: 'Add a section' });
     const hero = library.getByRole('button', { name: 'Hero' });
@@ -360,6 +386,8 @@ test.describe('as admin', () => {
     added.push(body.data.id);
     await expect(library).toBeHidden();
     await expect(column(page).locator('li.pe__row .pe__name').last()).toHaveText('Call to action');
+    const ask = page.getByRole('dialog').filter({ hasText: 'Leave without saving?' });
+    await ask.getByRole('button', { name: 'Leave without saving' }).click();
     const row = rowOf(page, 'Call to action');
     await expect(row).toHaveAttribute('aria-current', 'true');
     await expect(row.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
@@ -367,8 +395,8 @@ test.describe('as admin', () => {
     expect(stored).toMatchObject({ type: 'cta', visible: false, content: {}, sort_order: 50 });
 
     await page.getByRole('button', { name: 'Delete' }).click();
-    const ask = page.getByRole('dialog').filter({ hasText: 'Delete the section' });
-    await ask.getByRole('button', { name: 'Delete' }).click();
+    const sure = page.getByRole('dialog').filter({ hasText: 'Delete the section' });
+    await sure.getByRole('button', { name: 'Delete' }).click();
     await expect(rowOf(page, 'Call to action')).toHaveCount(0);
     expect(await sectionRow(body.data.id)).toBeNull();
   });

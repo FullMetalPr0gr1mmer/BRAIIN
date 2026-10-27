@@ -13,6 +13,7 @@ import {
 } from '@/lib/sections/types';
 import { ensureServiceExplorer } from '@/lib/services/servicesPage';
 import { PAGE_PATHS } from '@/lib/visibility/routes';
+import { pageEditorAccess } from '@/lib/admin/pages/editor';
 import { pageFileFor } from '../admin/routes';
 import {
   PAGE_NAMES,
@@ -21,7 +22,9 @@ import {
   anchorOf,
   availability,
   collectionLinks,
+  collectionScreens,
   kindOf,
+  linkRows,
   lookKey,
   routeNote,
   routedPage,
@@ -271,5 +274,31 @@ describe('the screens a section links to', () => {
     expect(collectionLinks('faq').map((l) => l.href)).toEqual(['/admin/faq']);
     expect(collectionLinks('proof').map((l) => l.title)).toEqual(['Numbers', 'Testimonials']);
     expect(collectionLinks('slogan')).toEqual([]);
+  });
+
+  it('are links only for a role that opens the screen; the others are named, unlinked', () => {
+    const rows = (type: string, role: 'admin' | 'content_creator') =>
+      linkRows(type, pageEditorAccess(role).opens).map((l) => [l.href, l.open]);
+    // An Admin opens every screen a row names.
+    for (const type of SECTION_TYPES) {
+      expect(
+        linkRows(type, pageEditorAccess('admin').opens).every((l) => l.open),
+        type,
+      ).toBe(true);
+    }
+    // A Content Creator: General settings, Forms and Job applications answer it 403.
+    expect(rows('joinApply', 'content_creator')).toEqual([
+      ['/admin/settings', false],
+      ['/admin/applications', false],
+    ]);
+    expect(rows('contact', 'content_creator')).toEqual([['/admin/forms', false]]);
+    expect(rows('social', 'content_creator')).toEqual([['/admin/settings', false]]);
+    expect(rows('proof', 'content_creator')).toEqual([
+      ['/admin/statistics', true],
+      ['/admin/testimonials', true],
+    ]);
+    expect(collectionScreens()).toEqual(
+      [...new Set(SECTION_TYPES.flatMap((t) => collectionLinks(t).map((l) => l.href)))].sort(),
+    );
   });
 });

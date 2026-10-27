@@ -12,11 +12,16 @@
 --   1. public.page_sections.label: the name a section carries in the page editor's sections
 --      column ("Hero, top of the page"), set by its Rename dialog. Null shows the type's own
 --      name. A CHECK holds what packages/schemas/admin.ts SectionLabelSchema holds: 1 to 60
---      characters, trimmed, no C0/C1 control character (a newline included). No public page
+--      characters, trimmed, no control or format character (Unicode Cc and Cf, as 0044's
+--      display names: a newline, a bidi override U+202E or a zero-width U+200B would reorder
+--      or hide the words around the name where other staff read it, and with releases on the
+--      publish dialog and the site versions name a change by it; tests/lib/sectionLabel.spec.ts
+--      holds the class equal to the schema's, code point by code point). No public page
 --      renders it, but the column rides the table's existing grants: anon's SELECT (0016)
 --      reads it on a visible section of a published page, as the verification accepted
 --      ("page_sections.label is public", README "Verification findings", UI row), and staff
---      write it under the table's RLS as every other column. No grant changes.
+--      write it under the table's RLS as every other column. No grant changes. The copy says
+--      so (P-12): the Rename dialog and the guide call it a name others can see.
 --   2. The release registry's page_section row, restated with `label` appended to its
 --      columns (0038's row otherwise, word for word), so a release stages and publishes a
 --      rename like any other column. apply_release builds its statements from the registry;
@@ -60,10 +65,10 @@ alter table public.page_sections
     check (label is null
            or (char_length(label) between 1 and 60
                and label = pg_catalog.btrim(label)
-               and label !~ '[\u0001-\u001F\u007F-\u009F]'));
+               and label !~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]'));
 
 comment on column public.page_sections.label is
-  'Admin v2 E1: the section''s name in the page editor (Rename), 1 to 60 characters, trimmed, no control character; null shows the type''s name. Admin naming only: no public page renders it, though anon''s table-level SELECT reads it.';
+  'Admin v2 E1: the section''s name in the page editor (Rename), 1 to 60 characters, trimmed, no control or format character (Cc, Cf); null shows the type''s name. Admin naming, not private: no public page renders it, though anon''s table-level SELECT reads it.';
 
 -- ═══ 2. The release registry: page_section with `label` ════════════════════════════════════
 -- 0038's row word for word, `label` appended to the columns.
@@ -120,10 +125,10 @@ select app.put_help_guide($guide$
       {
         "t": "ol",
         "x": [
-          "The column on the left lists the page's sections in the order the site shows them. Drag one by its handle, or use Move up and Move down, to change the order.",
+          "The Sections list shows the page's sections in the order the site shows them. Drag one by its handle, or use Move up and Move down, to change the order.",
           "The eye shows or hides a section on the site. A section the page always needs, such as the contact form, says so: the page shows it either way.",
           "Add section lists the kinds of section this page can take. A kind it already has, or cannot take, is shown with the reason. A new section starts hidden, at the end: fill it in, move it, then show it.",
-          "Rename gives a section a name of up to 60 characters, shown only here. Only an Admin can delete a section; anyone else can hide it instead."
+          "Rename gives a section a name of up to 60 characters, to tell it apart in the admin. Others can see it, so keep private notes out of it. Only an Admin can delete a section; anyone else can hide it instead."
         ]
       },
       {
@@ -167,10 +172,10 @@ select app.put_help_guide($guide$
       {
         "t": "ol",
         "x": [
-          "يعرض العمود الأيسر أقسام الصفحة بالترتيب الذي يظهر به الموقع. اسحب قسمًا من مقبضه، أو استخدم Move up وMove down، لتغيير الترتيب.",
+          "تعرض قائمة الأقسام (Sections) أقسام الصفحة بالترتيب الذي يظهر به الموقع. اسحب قسمًا من مقبضه، أو استخدم Move up وMove down، لتغيير الترتيب.",
           "تُظهر العين القسم في الموقع أو تخفيه. والقسم الذي تحتاجه الصفحة دائمًا، مثل نموذج التواصل، يقول ذلك: فالصفحة تعرضه في كل الأحوال.",
           "يعرض Add section أنواع الأقسام التي تقبلها الصفحة. والنوع الموجود فيها أو الذي لا تقبله يظهر مع السبب. ويبدأ القسم الجديد مخفيًا في آخر الصفحة: املأه، وانقله، ثم أظهره.",
-          "يمنح Rename القسم اسمًا من 60 حرفًا على الأكثر، لا يظهر إلا هنا. ولا يستطيع حذف قسم إلا المسؤول (Admin)، ويستطيع غيره إخفاءه بدلًا من ذلك."
+          "يمنح Rename القسم اسمًا من 60 حرفًا على الأكثر يميّزه في لوحة الإدارة. ويستطيع غيرك رؤيته، فلا تكتب فيه ملاحظات خاصة. ولا يستطيع حذف قسم إلا المسؤول (Admin)، ويستطيع غيره إخفاءه بدلًا من ذلك."
         ]
       },
       {
@@ -225,7 +230,9 @@ begin
                     and conname = 'page_sections_label_shape' and contype = 'c' and convalidated
                     and pg_get_constraintdef(oid) ~ 'char_length\(label\) >= 1'
                     and pg_get_constraintdef(oid) ~ 'char_length\(label\) <= 60'
-                    and pg_get_constraintdef(oid) ~ 'btrim\(label\)') then
+                    and pg_get_constraintdef(oid) ~ 'btrim\(label\)'
+                    and pg_catalog.strpos(pg_get_constraintdef(oid), '\u202A-\u202E') > 0
+                    and pg_catalog.strpos(pg_get_constraintdef(oid), '\U000E0020-\U000E007F') > 0) then
     raise exception '0113: page_sections_label_shape is missing, unvalidated or not as written';
   end if;
   -- The rule itself, on values (the CHECK's own expression, evaluated here).
@@ -234,9 +241,11 @@ begin
             (char_length('Hero, top of the page') between 1 and 60),
             (not (char_length('') between 1 and 60)),
             (' Hero' <> pg_catalog.btrim(' Hero')),
-            (E'Two\nlines' ~ '[\u0001-\u001F\u007F-\u009F]'),
-            (not ('Hero' ~ '[\u0001-\u001F\u007F-\u009F]')),
-            (not ('الصفحة الرئيسية' ~ '[\u0001-\u001F\u007F-\u009F]'))) as t(ok)) then
+            (E'Two\nlines' ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]'),
+            (E'Hero\u202E' ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]'),
+            (E'He\u200Bro' ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]'),
+            (not ('Hero' ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]')),
+            (not ('الصفحة الرئيسية' ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]'))) as t(ok)) then
     raise exception '0113: the label rule does not hold on its own samples';
   end if;
 

@@ -4,7 +4,7 @@ import Icon from '@/components/admin/kit/Icon';
 import Note from '@/components/admin/kit/Note';
 import { sectionFields } from '@/lib/admin/sectionUi';
 import { useEntitySave, type EntitySave } from '@/lib/admin/useEntitySave';
-import { alwaysShown, anchorOf, collectionLinks, kindOf, routeNote, sectionName } from './library';
+import { alwaysShown, anchorOf, kindOf, linkRows, routeNote, sectionName } from './library';
 import { builtInFor, sectionFormFields, variantOf, type SectionRow } from './model';
 import type { BuiltInLooks } from './types';
 
@@ -27,6 +27,8 @@ export interface SectionPanelProps {
   builtIns: BuiltInLooks;
   /** `content.archiveDelete`: Delete, and "Advanced (JSON)" (F5b D5). */
   remove: boolean;
+  /** The link rows' screens this role opens (PageEditorAccess.opens). */
+  opens: readonly string[];
   working: boolean;
   /** The open form, for the editor (a switch asks first; the column's writes follow it). */
   formRef: MutableRefObject<EntitySave | null>;
@@ -41,6 +43,7 @@ export default function SectionPanel({
   firstOfType,
   builtIns,
   remove,
+  opens,
   working,
   formRef,
   onRow,
@@ -69,7 +72,7 @@ export default function SectionPanel({
   const content = save.values['content'];
   const anchor = anchorOf(section.type, page, variantOf(content));
   const note = routeNote(section.type, page, firstOfType);
-  const links = collectionLinks(section.type);
+  const links = linkRows(section.type, opens);
   const builtIn = builtInFor(builtIns, { type: section.type, page, firstOfType, content });
 
   return (
@@ -133,12 +136,18 @@ export default function SectionPanel({
                 <Icon name="layers" size={16} />
               </span>
               <span className="li__main">
-                <a className="li__t" href={link.href}>
-                  Managed in {link.title}
-                </a>
-                <span className="li__s">{link.sub}</span>
+                {link.open ? (
+                  <a className="li__t" href={link.href}>
+                    Managed in {link.title}
+                  </a>
+                ) : (
+                  <span className="li__t">Managed in {link.title}</span>
+                )}
+                <span className="li__s">
+                  {link.open ? link.sub : `${link.sub} Your role does not open this screen.`}
+                </span>
               </span>
-              <Icon name="chevron" size={16} />
+              {link.open && <Icon name="chevron" size={16} />}
             </li>
           ))}
         </ul>

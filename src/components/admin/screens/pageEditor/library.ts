@@ -541,6 +541,27 @@ export function collectionLinks(type: string): readonly CollectionLink[] {
   }
 }
 
+/** Every screen a section's link rows may name (the server keeps those the role opens). */
+export function collectionScreens(): string[] {
+  return [
+    ...new Set(SECTION_TYPES.flatMap((type) => collectionLinks(type).map((link) => link.href))),
+  ].sort();
+}
+
+/** A link row as the fields column draws it: a link only when the role opens that screen. */
+export interface LinkRow extends CollectionLink {
+  open: boolean;
+}
+
+/**
+ * The link rows of a section for a role: `opens` are the screens its menu reaches (the server's
+ * PageEditorAccess.opens). A screen the role cannot open (a Content Creator's General settings,
+ * Forms or Job applications, which answer it 403) is still named, without a link.
+ */
+export function linkRows(type: string, opens: readonly string[]): LinkRow[] {
+  return collectionLinks(type).map((link) => ({ ...link, open: opens.includes(link.href) }));
+}
+
 /** A section's name in the editor: its own label, else its type's name. */
 export function sectionName(section: { type: string; label?: unknown }): string {
   if (typeof section.label === 'string' && section.label.trim() !== '') return section.label.trim();

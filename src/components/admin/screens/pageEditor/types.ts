@@ -21,6 +21,11 @@ export interface PageEditorAccess {
   seo: SeoAccess;
   /** `maintenance.manage` (Admin): the way to the page's visibility setting. */
   visibility: boolean;
+  /**
+   * The screens of the sections' link rows this role opens (its menu's, nav reachableHrefs):
+   * a row naming any other is drawn without its link.
+   */
+  opens: readonly string[];
 }
 
 /** The page the editor opens on, as the server read it. */

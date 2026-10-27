@@ -1,7 +1,8 @@
 -- pgTAP: the page editor's migration (Admin v2 E1, 0113). Run with `supabase test db`.
 --
 --   • page_sections.label: a nullable text column with no default, held by its CHECK to 1 to
---     60 characters, trimmed, with no control character (a newline included); null clears it.
+--     60 characters, trimmed, with no control or format character (a newline, a bidi override
+--     U+202E, a zero-width U+200B: Unicode Cc and Cf, the schema's class); null clears it.
 --   • Who writes it (CLAUDE.md §5 "Pages & sections", §9): the table's own RLS, unchanged.
 --     Admin and Content Creator rename a section of their tenant; SEO, Developer, a Sales
 --     token and another tenant's Admin change no row; anon has no UPDATE at all (42501).
@@ -16,7 +17,7 @@
 -- the token's role, as every content table's).
 
 begin;
-select plan(27);
+select plan(30);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values ('e1000000-0000-0000-0000-0000000000ff', 'T-E1');
@@ -99,6 +100,12 @@ select throws_ok($$ select _rename(repeat('a', 61)) $$, '23514', null,
   'a label of 61 characters is refused');
 select throws_ok($$ select _rename(E'Two\nlines') $$, '23514', null,
   'a label with a line break is refused');
+select throws_ok($$ select _rename(E'Hero\u202E band') $$, '23514', null,
+  'a label with a bidi override (U+202E) is refused');
+select throws_ok($$ select _rename(E'He\u200Bro') $$, '23514', null,
+  'a label with a zero-width space (U+200B) is refused');
+select throws_ok($$ select _rename(E'\u2066Hero\u2069') $$, '23514', null,
+  'a label with a bidi isolate (U+2066, U+2069) is refused');
 select is(_rename(repeat('a', 60)), 1, 'a label of 60 characters is taken');
 select is(_rename('شريط الشعار'), 1, 'an Arabic label is taken');
 select is(_rename(null), 1, 'null clears it (the type''s name shows)');

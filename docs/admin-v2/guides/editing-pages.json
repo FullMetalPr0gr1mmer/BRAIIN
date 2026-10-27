@@ -26,10 +26,10 @@
       {
         "t": "ol",
         "x": [
-          "The column on the left lists the page's sections in the order the site shows them. Drag one by its handle, or use Move up and Move down, to change the order.",
+          "The Sections list shows the page's sections in the order the site shows them. Drag one by its handle, or use Move up and Move down, to change the order.",
           "The eye shows or hides a section on the site. A section the page always needs, such as the contact form, says so: the page shows it either way.",
           "Add section lists the kinds of section this page can take. A kind it already has, or cannot take, is shown with the reason. A new section starts hidden, at the end: fill it in, move it, then show it.",
-          "Rename gives a section a name of up to 60 characters, shown only here. Only an Admin can delete a section; anyone else can hide it instead."
+          "Rename gives a section a name of up to 60 characters, to tell it apart in the admin. Others can see it, so keep private notes out of it. Only an Admin can delete a section; anyone else can hide it instead."
         ]
       },
       {
@@ -73,10 +73,10 @@
       {
         "t": "ol",
         "x": [
-          "يعرض العمود الأيسر أقسام الصفحة بالترتيب الذي يظهر به الموقع. اسحب قسمًا من مقبضه، أو استخدم Move up وMove down، لتغيير الترتيب.",
+          "تعرض قائمة الأقسام (Sections) أقسام الصفحة بالترتيب الذي يظهر به الموقع. اسحب قسمًا من مقبضه، أو استخدم Move up وMove down، لتغيير الترتيب.",
           "تُظهر العين القسم في الموقع أو تخفيه. والقسم الذي تحتاجه الصفحة دائمًا، مثل نموذج التواصل، يقول ذلك: فالصفحة تعرضه في كل الأحوال.",
           "يعرض Add section أنواع الأقسام التي تقبلها الصفحة. والنوع الموجود فيها أو الذي لا تقبله يظهر مع السبب. ويبدأ القسم الجديد مخفيًا في آخر الصفحة: املأه، وانقله، ثم أظهره.",
-          "يمنح Rename القسم اسمًا من 60 حرفًا على الأكثر، لا يظهر إلا هنا. ولا يستطيع حذف قسم إلا المسؤول (Admin)، ويستطيع غيره إخفاءه بدلًا من ذلك."
+          "يمنح Rename القسم اسمًا من 60 حرفًا على الأكثر يميّزه في لوحة الإدارة. ويستطيع غيرك رؤيته، فلا تكتب فيه ملاحظات خاصة. ولا يستطيع حذف قسم إلا المسؤول (Admin)، ويستطيع غيره إخفاءه بدلًا من ذلك."
         ]
       },
       {

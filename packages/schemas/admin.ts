@@ -420,13 +420,20 @@ const SectionPayloadSchema = z
   .record(z.string(), z.unknown())
   .refine((v) => JSON.stringify(v).length <= 65_536, { message: 'section payload exceeds 64 KB' });
 
-/** C0 and C1 control characters, as 0113's CHECK on `page_sections.label` names them. */
-const LABEL_CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
+/**
+ * What a section's name refuses: a control or format character (Unicode Cc and Cf), as a
+ * display name does (adminPrefs.ts DISPLAY_NAME_REFUSED). A line break, a bidi override
+ * (U+202E) or a zero-width mark (U+200B) would reorder or hide the words around the name where
+ * other staff read it. 0113's CHECK on `page_sections.label` holds the same class, code point
+ * by code point (tests/lib/sectionLabel.spec.ts).
+ */
+export const SECTION_LABEL_REFUSED = /[\p{Cc}\p{Cf}]/u;
 
 /**
  * A section's name in the admin (Admin v2 E1, `page_sections.label`): trimmed, at most
- * SECTION_LABEL_MAX characters, no control character, the CHECK's rules; blank is null (the
- * editor then shows the type's own name). Only the page editor shows it.
+ * SECTION_LABEL_MAX characters, no control or format character, the CHECK's rules; blank is
+ * null (the editor then shows the type's own name). Admin naming, not private: the page editor
+ * shows it, and with releases on the publish dialog and the site versions name a change by it.
  */
 export const SectionLabelSchema = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
@@ -434,7 +441,10 @@ export const SectionLabelSchema = z.preprocess(
     .string()
     .trim()
     .max(SECTION_LABEL_MAX)
-    .refine((label) => !LABEL_CONTROL.test(label), 'no line breaks or control characters')
+    .refine(
+      (label) => !SECTION_LABEL_REFUSED.test(label),
+      'Use plain text only: no line breaks or hidden characters.',
+    )
     .nullable(),
 );
 

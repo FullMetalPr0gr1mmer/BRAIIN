@@ -12,16 +12,17 @@ import SeoDrawer from '@/components/admin/screens/seo/SeoDrawer';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { readDraft } from '@/lib/admin/entitySave';
-import { announcePending, openPublishDialog, STAGED_DELETE } from '@/lib/admin/releaseEvents';
+import { announcePending, openPublishDialog } from '@/lib/admin/releaseEvents';
 import { toast } from '@/lib/admin/toast';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
 import { MODE_COPY } from '@/lib/admin/visibilityCopy';
 import { orderChanges } from '../collection/reorder';
 import AddSectionModal from './AddSectionModal';
+import { columnWrite, mayLeave, openAdded } from './flows';
 import HistoryDrawer, { type HistoryTarget } from './HistoryDrawer';
 import { availability, kindOf, sectionName } from './library';
 import {
-  columnWriteRef,
+  columnAddress,
   columnWroteOn,
   draftStamp,
   formSyncAfterWrite,
@@ -30,7 +31,9 @@ import {
   neighbourAfterRemoval,
   newSectionPayload,
   readsThroughRelease,
+  renameBody,
   sectionRowOf,
+  toggleBody,
   type SectionRow,
 } from './model';
 import PagePanel from './PagePanel';
@@ -58,13 +61,16 @@ import type { PageEditorPage, PageEditorSetup } from './types';
 //   the drawers    SEO and History; the dialogs: Add a section, Rename section.
 // The live preview column is E2's (AV-26).
 //
-// Switching away from a section with unsaved changes asks first while releases are off (each
-// save is explicit, P-5); with them on the change is saved as it goes (an 800 ms idle autosave)
-// and a switch saves it. A write the column makes to the open section moves its version, so
-// the open form follows it (model.ts formSyncAfterWrite) instead of answering its own next
-// save with a conflict. Every button is the person's convenience: each route checks again.
-// With releases on, a write from the column names the row's pending change (or carries R12's
-// "made in release mode" marker), as the editors' saves do.
+// Switching away from a section with unsaved changes, or opening the one Add section made,
+// asks first while releases are off (each save is explicit, P-5); with them on the change is
+// saved as it goes (an 800 ms idle autosave) and a switch saves it (flows.ts mayLeave). A
+// write the column makes to the open section moves its version, so the open form follows it
+// (model.ts formSyncAfterWrite) instead of answering its own next save with a conflict. A
+// refused write of the column says why after the list is read again (flows.ts columnWrite).
+// Every button is the person's convenience: each route checks again. The screen's mode is its
+// list answer's (readsThroughRelease, never a row's): with releases on every write it sends
+// names the row's pending change or carries R12's "made in release mode" marker (a PATCH's
+// body, a create's, move's or removal's address), so one sent after a switch-off is refused.
 
 type Row = Record<string, unknown>;
 
@@ -166,25 +172,17 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
 
   const section = rows?.find((row) => row.id === selected) ?? null;
 
-  /** Open another section (or the page details); unsaved work is never dropped silently. */
+  /** Whether the open form may be left; unsaved work is never dropped silently. */
+  const leaveOpen = () => mayLeave(form.current, confirmDialog);
+
+  /** Open another section (or the page details). */
   async function select(next: string) {
     if (next === selected) return;
-    const open = form.current;
-    if (open) {
-      if (open.mode === 'draft') open.flush?.();
-      else if (
-        open.dirty &&
-        !(await confirmDialog({
-          message: 'Leave without saving? Your changes here will be lost.',
-          confirmLabel: 'Leave without saving',
-          cancelLabel: 'Stay',
-        }))
-      ) {
-        return;
-      }
-    }
-    setSelected(next);
+    if (await leaveOpen()) setSelected(next);
   }
+
+  /** What a column write needs around it: the reread, and where its refusal is said. */
+  const io = { load, setError, describe: describeError };
 
   /**
    * After a write the column made to the open section: the form follows it. `wrote` is the
@@ -212,33 +210,33 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
   async function toggle(row: SectionRow) {
     setWorking(true);
     setError('');
-    try {
-      const answer = await adminFetch<Row>(`/api/admin/sections/${row.id}`, {
-        method: 'PATCH',
-        body: { visible: !row.visible, version: row.version, ...columnWriteRef(row) },
-      });
-      take(answer);
-      follow(
-        row.id,
-        columnWroteOn(row),
-        typeof answer['version'] === 'number' ? answer['version'] : null,
-      );
-      const name = sectionName(row);
-      if ('draft' in answer) {
-        announcePending();
-        toast(`${name}: saved as an unpublished change.`, 'ok');
-      } else {
-        toast(
-          row.visible ? `${name} is hidden on the site.` : `${name} is shown on the site.`,
-          'ok',
+    await columnWrite(
+      async () => {
+        const answer = await adminFetch<Row>(`/api/admin/sections/${row.id}`, {
+          method: 'PATCH',
+          body: toggleBody(row, release),
+        });
+        take(answer);
+        follow(
+          row.id,
+          columnWroteOn(row),
+          typeof answer['version'] === 'number' ? answer['version'] : null,
         );
-      }
-    } catch (err) {
-      setError(`Not changed. ${describeError(err)}`);
-      await load();
-    } finally {
-      setWorking(false);
-    }
+        const name = sectionName(row);
+        if ('draft' in answer) {
+          announcePending();
+          toast(`${name}: saved as an unpublished change.`, 'ok');
+        } else {
+          toast(
+            row.visible ? `${name} is hidden on the site.` : `${name} is shown on the site.`,
+            'ok',
+          );
+        }
+      },
+      io,
+      { refusal: 'Not changed.', reload: 'on-refusal' },
+    );
+    setWorking(false);
   }
 
   async function commitOrder(order: readonly string[]) {
@@ -253,19 +251,26 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     setRows(order.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
     setWorking(true);
     setError('');
-    try {
-      const moved = await adminFetch<Row>(`/api/admin/sections/reorder`, {
-        method: 'POST',
-        body: { items: changes },
-      });
-      if ('staged' in moved) announcePending();
-      toast('Section order updated.', 'ok');
-    } catch (err) {
-      setRows(before);
-      setError(`The order was not saved. ${describeError(err)}`);
-    }
-    const listed = await load();
-    const open = listed?.find((row) => row.id === selectedRef.current);
+    // The reread's rows (a holder: the reread runs inside columnWrite).
+    const read: { rows: SectionRow[] | null } = { rows: null };
+    await columnWrite(
+      async () => {
+        const moved = await adminFetch<Row>(columnAddress('/api/admin/sections/reorder', release), {
+          method: 'POST',
+          body: { items: changes },
+        });
+        if ('staged' in moved) announcePending();
+        toast('Section order updated.', 'ok');
+      },
+      {
+        ...io,
+        load: async () => {
+          read.rows = await load();
+        },
+      },
+      { refusal: 'The order was not saved.', reload: 'always', undo: () => setRows(before) },
+    );
+    const open = read.rows?.find((row) => row.id === selectedRef.current);
     const was = before.find((row) => row.id === selectedRef.current);
     if (open && was && stamp(open) !== stamp(was))
       follow(open.id, columnWroteOn(was), open.version);
@@ -277,14 +282,16 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     setWorking(true);
     setError('');
     try {
-      const created = await adminFetch<Row>('/api/admin/sections', {
+      const created = await adminFetch<Row>(columnAddress('/api/admin/sections', release), {
         method: 'POST',
         body: newSectionPayload(initialPage.id, type, rows),
       });
       if ('draft' in created) announcePending();
       setAdding(false);
       await load();
-      if (typeof created['id'] === 'string') setSelected(created['id']);
+      // The open form is left only as a switch leaves it: saved on the way (releases on) or
+      // asked first (releases off); "Stay" keeps it open, the new section listed.
+      await openAdded(created, leaveOpen, setSelected);
       toast(
         `${kindOf(type)?.name ?? 'The section'} added at the end, hidden. Fill it in, move it, then show it.`,
         'ok',
@@ -305,7 +312,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     try {
       const answer = await adminFetch<Row>(`/api/admin/sections/${row.id}`, {
         method: 'PATCH',
-        body: { label, version: row.version, ...columnWriteRef(row) },
+        body: renameBody(row, label, release),
       });
       take(answer);
       follow(
@@ -338,8 +345,10 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     try {
       // Releases on: R12's marker, so a removal sent after a switch-off is refused, not made.
       const answer = await adminFetch<Row>(
-        `/api/admin/sections/${row.id}${release ? STAGED_DELETE : ''}`,
-        { method: 'DELETE' },
+        columnAddress(`/api/admin/sections/${row.id}`, release),
+        {
+          method: 'DELETE',
+        },
       );
       if ('staged' in answer || 'draft' in answer) {
         announcePending();
@@ -494,6 +503,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
                 firstOfType={rows ? isFirstOfType(rows, section.id) : true}
                 builtIns={builtIns}
                 remove={access.remove}
+                opens={access.opens}
                 working={working}
                 formRef={form}
                 onRow={take}

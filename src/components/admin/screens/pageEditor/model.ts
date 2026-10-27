@@ -1,5 +1,6 @@
 import { SECTION_TYPES } from '@schemas/sectionTypes';
 import { readDraft, STAGED_KEY } from '@/lib/admin/entitySave';
+import { STAGED_DELETE } from '@/lib/admin/releaseEvents';
 import type { SectionContentState } from '@/lib/admin/formPayload';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import { PLACEHOLDER_FIELD } from '@/lib/admin/ui/fields';
@@ -24,7 +25,11 @@ export interface SectionRow {
   sortOrder: number;
   version: number;
   placeholder: boolean;
-  /** Releases on: the row's pending change (R3a's DraftMeta), as the list read laid it on. */
+  /**
+   * Releases on: the row's pending change (R3a's DraftMeta), as the list read laid it on. A row
+   * with nothing pending carries no `draft` key at all, exactly like a row read live, so the
+   * key never says which mode the screen is in (readsThroughRelease does).
+   */
   draft?: unknown;
   pendingRemoval?: boolean;
 }
@@ -124,7 +129,19 @@ export function builtInFor(
 
 // ---- Adding, moving -------------------------------------------------------------------
 
-/** A new section: hidden, at the end, with nothing of its own stored. */
+/**
+ * The largest number a section write accepts: SORT_ORDER_MAX in @schemas/admin, restated so
+ * the editor's chunk does not load the server's schemas (as U5 + U6's services model does;
+ * tests/lib/pageEditorModel.spec.ts holds the two equal).
+ */
+export const SORT_ORDER_MAX = 10_000;
+
+/**
+ * A new section: hidden, at the end, with nothing of its own stored. Its number is one step
+ * past the last, held to the route's bound (SORT_ORDER_MAX): a page whose last section already
+ * stands at the bound gets the bound too, and the id breaks the tie, so the add is never
+ * refused for its number.
+ */
 export function newSectionPayload(pageId: string, type: string, rows: readonly SectionRow[]): Row {
   const last = rows.reduce((max, row) => Math.max(max, row.sortOrder), 0);
   return {
@@ -132,7 +149,7 @@ export function newSectionPayload(pageId: string, type: string, rows: readonly S
     type,
     content: {},
     visible: false,
-    sortOrder: last + ORDER_STEP,
+    sortOrder: Math.min(last + ORDER_STEP, SORT_ORDER_MAX),
     isPlaceholder: false,
   };
 }
@@ -182,15 +199,37 @@ export function draftStamp(draft: { id: string; version: number } | null | undef
 }
 
 /**
- * What a write from the column sends beside its values. Releases off (the row was read with no
- * `draft` key): nothing, the request main sends. Releases on: the row's pending change, or with
- * none yet R12's marker ("made in release mode"), so a write sent after a switch-off is refused
- * (409 `releases-off`), never written live.
+ * What a write from the column sends beside its values. The SCREEN's mode decides it (its list
+ * answer, readsThroughRelease), never the row: a row with nothing pending has no `draft` key
+ * with releases on too. Releases off: nothing, the request main sends. Releases on: the row's
+ * pending change, or with none yet R12's marker ("made in release mode"), so a write sent
+ * after a switch-off is refused (409 `releases-off`), never written live.
  */
-export function columnWriteRef(row: SectionRow): Row {
-  if (!('draft' in row)) return {};
+export function columnWriteRef(row: SectionRow, release: boolean): Row {
+  if (!release) return {};
   const draft = readDraft(row as unknown as Row);
   return draft ? { draftId: draft.id, draftVersion: draft.version } : { [STAGED_KEY]: true };
+}
+
+/** The eye's PATCH body: the other visibility, the version read, and the mode's reference. */
+export function toggleBody(row: SectionRow, release: boolean): Row {
+  return { visible: !row.visible, version: row.version, ...columnWriteRef(row, release) };
+}
+
+/** Rename's PATCH body: the label (null puts back the kind's name), as the toggle's. */
+export function renameBody(row: SectionRow, label: string | null, release: boolean): Row {
+  return { label, version: row.version, ...columnWriteRef(row, release) };
+}
+
+/**
+ * The address of a write whose body the route's own schema parses first (Add section's create,
+ * the move's reorder, a removal): with R12's marker in its query in release mode
+ * (`?staged=1`, STAGED_DELETE), so once releases are off the live route can refuse it (R12
+ * does for a DELETE, R12b for a create and a reorder) instead of writing live; releases off,
+ * the address main sends.
+ */
+export function columnAddress(url: string, release: boolean): string {
+  return release ? `${url}${STAGED_DELETE}` : url;
 }
 
 /** The pending change a write from the column names, as formSyncAfterWrite compares it. */
@@ -198,9 +237,11 @@ export function columnWroteOn(row: SectionRow): string {
   return draftStamp(readDraft(row as unknown as Row));
 }
 
-/** Whether a list answer, or a row in it, came through the release (releases on). */
+/**
+ * Whether a list answer came through the release (releases on): R3a's `stagedList` always
+ * answers `draftsInvalid`, and only then. This is the screen's mode, and every write the
+ * column sends follows it.
+ */
 export function readsThroughRelease(answer: Row): boolean {
-  if ('draftsInvalid' in answer) return true;
-  const rows = Array.isArray(answer['rows']) ? (answer['rows'] as Row[]) : [];
-  return rows.some((row) => row && typeof row === 'object' && 'draft' in row);
+  return Array.isArray(answer['draftsInvalid']);
 }

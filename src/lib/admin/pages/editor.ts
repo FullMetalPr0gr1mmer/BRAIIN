@@ -8,7 +8,9 @@ import type {
   PageEditorAccess,
   PageEditorPage,
 } from '@/components/admin/screens/pageEditor/types';
+import { collectionScreens } from '@/components/admin/screens/pageEditor/library';
 import { seoAccess } from '../editorAccess';
+import { reachableHrefs } from '../nav';
 import type { VisibilityModeKey } from '../visibilityCopy';
 
 // The page editor's server half (Admin v2 E1, docs/admin-v2/ui.md "Page editor"). SERVER
@@ -31,12 +33,14 @@ export function mayOpenPages(role: Role): boolean {
 }
 
 export function pageEditorAccess(role: Role): PageEditorAccess {
+  const reachable = reachableHrefs(role);
   return {
     sections: can(role, 'pages.write') === 'full',
     remove: can(role, 'content.archiveDelete') === 'full',
     publish: can(role, 'content.publish') === 'full',
     seo: seoAccess(role),
     visibility: can(role, 'maintenance.manage') === 'full',
+    opens: collectionScreens().filter((href) => reachable.includes(href)),
   };
 }
 

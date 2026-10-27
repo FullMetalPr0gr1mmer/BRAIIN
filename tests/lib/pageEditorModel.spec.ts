@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SectionWriteSchema } from '@schemas/admin';
+import { SORT_ORDER_MAX as SCHEMA_SORT_ORDER_MAX, SectionWriteSchema } from '@schemas/admin';
 import { SECTION_TYPES } from '@schemas/sectionTypes';
 import { ROLES } from '@/lib/auth/types';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
@@ -8,13 +8,18 @@ import { sectionStateFromObject } from '@/lib/admin/formPayload';
 import { pagesUi } from '@/lib/admin/ui/pages';
 import { SECTION_COPY, builtInContent } from '@/lib/sections/copy';
 import { RENDERED_SECTION_TYPES } from '@/lib/sections/registry';
-import { isVisible, ADMIN_NAV } from '@/lib/admin/nav';
+import { isVisible, ADMIN_NAV, reachableHrefs } from '@/lib/admin/nav';
 import { builtInLooks, mayOpenPages, pageEditorAccess } from '@/lib/admin/pages/editor';
+import { overlayList } from '@/lib/release/overlay';
+import { registryByTable } from '@/lib/release/registry';
+import { refuseStagedBody, refuseStagedQuery } from '@/lib/release/releasesOff';
 import {
   PAGE_FIELDS,
   SECTION_CONTENT_FIELD,
   SECTION_TYPE_FIELD,
+  SORT_ORDER_MAX,
   builtInFor,
+  columnAddress,
   columnWriteRef,
   columnWroteOn,
   draftStamp,
@@ -24,11 +29,21 @@ import {
   neighbourAfterRemoval,
   newSectionPayload,
   readsThroughRelease,
+  renameBody,
   sectionFormFields,
   sectionRowOf,
+  toggleBody,
   variantOf,
   type SectionRow,
 } from '@/components/admin/screens/pageEditor/model';
+import {
+  LEAVE_UNSAVED,
+  columnWrite,
+  mayLeave,
+  openAdded,
+  type OpenForm,
+} from '@/components/admin/screens/pageEditor/flows';
+import { collectionScreens } from '@/components/admin/screens/pageEditor/library';
 import { historyRows, pageVersionRows } from '@/components/admin/screens/pageEditor/history';
 
 // The page editor's rules (Admin v2 E1): the server half (src/lib/admin/pages/editor.ts: who
@@ -65,6 +80,7 @@ describe('who opens the page editor, and what each role may do there', () => {
       publish: true,
       seo: 'full',
       visibility: true,
+      opens: collectionScreens(),
     });
     expect(pageEditorAccess('content_creator')).toEqual({
       sections: true,
@@ -72,14 +88,34 @@ describe('who opens the page editor, and what each role may do there', () => {
       publish: true,
       seo: 'view',
       visibility: false,
+      opens: collectionScreens().filter(
+        (href) => !['/admin/applications', '/admin/forms', '/admin/settings'].includes(href),
+      ),
     });
-    expect(pageEditorAccess('seo')).toEqual({
+    expect(pageEditorAccess('seo')).toMatchObject({
       sections: false,
       remove: false,
       publish: false,
       seo: 'full',
       visibility: false,
     });
+  });
+
+  it('links a row only to a screen the role opens: its menu reaches it', () => {
+    // Every screen a link row names is on an Admin's menu; a Content Creator's menu has no
+    // General settings, Forms or Job applications (settings.general, applications.manage),
+    // which answer it 403, so those rows are named without a link.
+    for (const role of ROLES) {
+      const { opens } = pageEditorAccess(role);
+      for (const href of collectionScreens()) {
+        const reached = reachableHrefs(role).includes(href);
+        expect(opens.includes(href), `${role} ${href}`).toBe(reached);
+      }
+    }
+    expect(pageEditorAccess('admin').opens).toEqual(collectionScreens());
+    expect(collectionScreens()).toEqual(
+      expect.arrayContaining(['/admin/applications', '/admin/forms', '/admin/settings']),
+    );
   });
 });
 
@@ -226,6 +262,19 @@ describe('the sections column', () => {
     expect(newSectionPayload(page, 'hero', [])['sortOrder']).toBe(10);
   });
 
+  it('a new section never passes the largest number a write takes (the add is not refused)', () => {
+    const page = '0f0f0f0f-0000-4000-8000-00000000000a';
+    expect(SORT_ORDER_MAX).toBe(SCHEMA_SORT_ORDER_MAX);
+    for (const last of [9_995, SORT_ORDER_MAX]) {
+      const payload = newSectionPayload(page, 'cta', [row({ id: 'a', sortOrder: last })]);
+      expect(payload['sortOrder'], String(last)).toBe(SORT_ORDER_MAX);
+      expect(SectionWriteSchema.safeParse(payload).success, String(last)).toBe(true);
+    }
+    expect(newSectionPayload(page, 'cta', [row({ id: 'a', sortOrder: 9_980 })])['sortOrder']).toBe(
+      9_990,
+    );
+  });
+
   it('after a removal opens the one after it, else the one before', () => {
     const rows = [row({ id: 'a', sortOrder: 10 }), row({ id: 'b', sortOrder: 20 })];
     expect(neighbourAfterRemoval(rows, 'a')).toBe('b');
@@ -233,10 +282,10 @@ describe('the sections column', () => {
     expect(neighbourAfterRemoval([rows[0]!], 'a')).toBeNull();
   });
 
-  it('knows a list read through the release', () => {
+  it('knows a list read through the release: the answer says so, never a row', () => {
     expect(readsThroughRelease({ rows: [], total: 0 })).toBe(false);
     expect(readsThroughRelease({ rows: [], draftsInvalid: [] })).toBe(true);
-    expect(readsThroughRelease({ rows: [{ id: 'a', draft: null }] })).toBe(true);
+    expect(readsThroughRelease({ rows: [{ id: 'a', draft: null }] })).toBe(false);
   });
 });
 
@@ -267,30 +316,200 @@ describe('the open form follows a write the column made to the same section', ()
 });
 
 describe('what a write from the column sends beside its values', () => {
-  const base: SectionRow = {
-    id: 's1',
-    type: 'cta',
-    label: null,
-    visible: true,
-    sortOrder: 10,
-    version: 3,
-    placeholder: false,
+  const PAGE = '0f0f0f0f-0000-4000-8000-00000000000b';
+  const SECTION = '11111111-1111-4111-8111-111111111111';
+  const live = {
+    rows: [
+      {
+        id: SECTION,
+        page_id: PAGE,
+        type: 'cta',
+        label: null,
+        visible: false,
+        sort_order: 10,
+        is_placeholder: false,
+        version: 3,
+        updated_at: '2026-10-27T09:00:00Z',
+      },
+    ],
+    total: 1,
   };
+  const entry = registryByTable('page_sections')!;
 
-  it('releases off (no draft key on the row): nothing, the request main sends', () => {
-    expect(columnWriteRef(base)).toEqual({});
-    expect(columnWroteOn(base)).toBe('');
+  /** The list answer as the route gives it, releases on (R3a's stagedList over overlayList). */
+  function releaseAnswer(): Record<string, unknown> {
+    const out = overlayList(
+      live,
+      [],
+      { filters: { page_id: PAGE }, orderBy: { column: 'sort_order' } } as Parameters<
+        typeof overlayList
+      >[2],
+      entry,
+    );
+    return { rows: out.rows, total: out.total, limit: 100, offset: 0, draftsInvalid: out.invalid };
+  }
+  const rowsOf = (answer: Record<string, unknown>) =>
+    (answer['rows'] as Record<string, unknown>[]).map((raw) => sectionRowOf(raw)!);
+
+  it('releases on, nothing pending: the row has no draft key, yet every write is marked', () => {
+    const answer = releaseAnswer();
+    const release = readsThroughRelease(answer);
+    expect(release).toBe(true);
+    const [section] = rowsOf(answer);
+    // The route's own shape: a row with nothing pending carries no `draft` key at all.
+    expect('draft' in (answer['rows'] as Record<string, unknown>[])[0]!).toBe(false);
+    expect('draft' in section!).toBe(false);
+    const toggle = toggleBody(section!, release);
+    const rename = renameBody(section!, 'Closing band', release);
+    expect(toggle).toEqual({ visible: true, version: 3, staged: true });
+    expect(rename).toEqual({ label: 'Closing band', version: 3, staged: true });
+    // Once releases are off under the screen, the live PATCH refuses both (R12's 409).
+    expect(() => refuseStagedBody(toggle, 'page_section')).toThrow();
+    expect(() => refuseStagedBody(rename, 'page_section')).toThrow();
+    // The create, the move and the removal say so in their address (R12, R12b).
+    for (const path of [
+      '/api/admin/sections',
+      '/api/admin/sections/reorder',
+      `/api/admin/sections/${SECTION}`,
+    ]) {
+      const url = new URL(columnAddress(path, release), 'https://admin.test');
+      expect(url.pathname, path).toBe(path);
+      expect(() => refuseStagedQuery(url, 'page_section'), path).toThrow();
+    }
   });
 
-  it('releases on with nothing pending: R12’s marker, so a write after a switch-off is refused', () => {
-    expect(columnWriteRef({ ...base, draft: null })).toEqual({ staged: true });
-    expect(columnWroteOn({ ...base, draft: null })).toBe('');
+  it('releases off: the requests main sends, which the live routes take', () => {
+    const answer = { rows: live.rows, total: 1, limit: 100, offset: 0 };
+    const release = readsThroughRelease(answer);
+    expect(release).toBe(false);
+    const [section] = rowsOf(answer);
+    expect(columnWriteRef(section!, release)).toEqual({});
+    expect(toggleBody(section!, release)).toEqual({ visible: true, version: 3 });
+    expect(renameBody(section!, null, release)).toEqual({ label: null, version: 3 });
+    expect(() => refuseStagedBody(toggleBody(section!, release), 'page_section')).not.toThrow();
+    for (const path of ['/api/admin/sections', '/api/admin/sections/reorder']) {
+      expect(columnAddress(path, release)).toBe(path);
+    }
+    expect(columnWroteOn(section!)).toBe('');
   });
 
   it('releases on with a pending change: names it, id and version', () => {
+    const [section] = rowsOf(releaseAnswer());
     const draft = { id: 'd1', version: 4, op: 'update', fields: ['label'] };
-    expect(columnWriteRef({ ...base, draft })).toEqual({ draftId: 'd1', draftVersion: 4 });
-    expect(columnWroteOn({ ...base, draft })).toBe('d1:4');
+    expect(columnWriteRef({ ...section!, draft }, true)).toEqual({
+      draftId: 'd1',
+      draftVersion: 4,
+    });
+    expect(toggleBody({ ...section!, draft }, true)).toEqual({
+      visible: true,
+      version: 3,
+      draftId: 'd1',
+      draftVersion: 4,
+    });
+    expect(columnWroteOn({ ...section!, draft })).toBe('d1:4');
+  });
+});
+
+describe('the editor’s steps: leaving the open form, a refused column write, a new section', () => {
+  const form = (patch: Partial<OpenForm>): OpenForm & { flushed: number } => {
+    const state = { flushed: 0 };
+    return Object.assign(state, {
+      mode: 'live' as const,
+      dirty: false,
+      flush: () => {
+        state.flushed += 1;
+      },
+      ...patch,
+    });
+  };
+  const never = async () => {
+    throw new Error('asked');
+  };
+
+  it('a draft-mode form is saved on the way out; a clean one is left; a dirty live one asks', async () => {
+    const draft = form({ mode: 'draft', dirty: true });
+    expect(await mayLeave(draft, never)).toBe(true);
+    expect(draft.flushed).toBe(1);
+    expect(await mayLeave(form({ dirty: false }), never)).toBe(true);
+    expect(await mayLeave(null, never)).toBe(true);
+    const asked: unknown[] = [];
+    const stay = await mayLeave(form({ dirty: true }), async (q) => {
+      asked.push(q);
+      return false;
+    });
+    expect(stay).toBe(false);
+    expect(asked).toEqual([LEAVE_UNSAVED]);
+    expect(await mayLeave(form({ dirty: true }), async () => true)).toBe(true);
+  });
+
+  it('Add section opens the new one only once the open form may be left', async () => {
+    const opened: string[] = [];
+    const open = (id: string) => opened.push(id);
+    // "Stay": the open section keeps its unsaved words; the new one stays listed.
+    expect(await openAdded({ id: 'new' }, async () => false, open)).toBe(false);
+    expect(opened).toEqual([]);
+    expect(await openAdded({ id: 'new' }, async () => true, open)).toBe(true);
+    expect(opened).toEqual(['new']);
+    // No id in the answer: nothing to open, nothing asked.
+    expect(await openAdded({}, never, open)).toBe(false);
+    // And through mayLeave, as the editor wires it: a dirty live form asks first.
+    let asked = 0;
+    const leave = () =>
+      mayLeave(form({ dirty: true }), async () => {
+        asked += 1;
+        return false;
+      });
+    expect(await openAdded({ id: 'next' }, leave, open)).toBe(false);
+    expect(asked).toBe(1);
+    expect(opened).toEqual(['new']);
+  });
+
+  /** The column's io as the editor has it: a successful reread clears the error. */
+  function columnIo() {
+    const state = { error: '', loads: 0 };
+    return Object.assign(state, {
+      load: async () => {
+        state.loads += 1;
+        state.error = '';
+      },
+      setError: (words: string) => {
+        state.error = words;
+      },
+      describe: (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong.'),
+    });
+  }
+
+  it('a refused eye or move keeps its reason on screen after the list is read again', async () => {
+    for (const reload of ['on-refusal', 'always'] as const) {
+      const io = columnIo();
+      let undone = 0;
+      const ok = await columnWrite(
+        async () => {
+          throw new Error('Someone else saved changes while you were editing.');
+        },
+        io,
+        { refusal: 'Not changed.', reload, undo: () => (undone += 1) },
+      );
+      expect(ok, reload).toBe(false);
+      expect(io.loads, reload).toBe(1);
+      expect(undone, reload).toBe(1);
+      expect(io.error, reload).toBe(
+        'Not changed. Someone else saved changes while you were editing.',
+      );
+    }
+  });
+
+  it('a write that goes through: read again only for a move, and no error', async () => {
+    const eye = columnIo();
+    expect(await columnWrite(async () => {}, eye, { refusal: 'x', reload: 'on-refusal' })).toBe(
+      true,
+    );
+    expect(eye.loads).toBe(0);
+    const move = columnIo();
+    move.error = 'An earlier refusal.';
+    expect(await columnWrite(async () => {}, move, { refusal: 'x', reload: 'always' })).toBe(true);
+    expect(move.loads).toBe(1);
+    expect(move.error).toBe('');
   });
 });
 

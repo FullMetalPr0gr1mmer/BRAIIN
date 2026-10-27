@@ -1881,9 +1881,21 @@ describe('editing-pages (E1), a new guide put by the page editor migration', () 
     // A new section: hidden, at the end.
     expect(en).toContain('A new section starts hidden, at the end');
     expect(model).toContain('visible: false,');
-    expect(model).toContain('sortOrder: last + ORDER_STEP,');
-    // Rename's 60 characters, and who deletes.
-    expect(en).toContain('a name of up to 60 characters, shown only here');
+    expect(model).toContain('sortOrder: Math.min(last + ORDER_STEP, SORT_ORDER_MAX),');
+    // The list of sections is named, not placed (below 1024 px it stacks above the fields).
+    expect(en).toContain('The Sections list shows the page');
+    expect(en).not.toMatch(/on the left|on the right/);
+    expect(column).toMatch(/>\s*Sections\s*<\/h2>/);
+    // Rename's 60 characters, that the name is not private (anon and other staff read it:
+    // 0113), and who deletes.
+    expect(en).toContain(
+      'a name of up to 60 characters, to tell it apart in the admin. Others can see it, so keep private notes out of it.',
+    );
+    expect(en).not.toContain('shown only here');
+    expect(source(`${EDITOR}/RenameModal.tsx`)).toContain(
+      'Others can see it, so keep private notes out of it.',
+    );
+    expect(source(`${EDITOR}/RenameModal.tsx`)).not.toContain('shown only here');
     expect(source('packages/schemas/sectionTypes.ts')).toContain('SECTION_LABEL_MAX = 60;');
     expect(en).toContain('Only an Admin can delete a section; anyone else can hide it instead.');
     expect(ROLES.filter((r) => ROLE_CAPS[r]['content.archiveDelete'] === 'full')).toEqual([
