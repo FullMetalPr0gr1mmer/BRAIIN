@@ -3,6 +3,7 @@ import Drawer from '@/components/admin/kit/Drawer';
 import Icon from '@/components/admin/kit/Icon';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import { stagedUrl } from '@/lib/admin/releaseEvents';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { uiFor, type FieldDef } from '@/lib/admin/uiSchema';
@@ -28,6 +29,11 @@ export interface DisciplineDrawerProps {
   name: string;
   write: boolean;
   archive: boolean;
+  /**
+   * Admin v2 R12b: the overview the drawer opens from was read through the release, so a new
+   * discipline says it was made in release mode (SaveTarget `staged`).
+   */
+  staged?: boolean | undefined;
   /** A new discipline's starting values (its place at the end of the list). */
   defaults: Row;
   onClose: () => void;
@@ -56,6 +62,7 @@ export default function DisciplineDrawer({
   name,
   write,
   archive,
+  staged = false,
   defaults,
   onClose,
   onSaved,
@@ -65,7 +72,7 @@ export default function DisciplineDrawer({
   const [open, setOpen] = useState(true);
   const [busy, setBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  const save = useEntitySave({ kind: 'resource', slug: 'disciplines' }, id, {
+  const save = useEntitySave({ kind: 'resource', slug: 'disciplines', staged }, id, {
     fields: ui.fields,
     mode: saveModeFor({ kind: 'resource', slug: 'disciplines' }),
     defaults,
@@ -94,7 +101,10 @@ export default function DisciplineDrawer({
     setBusy(true);
     setDeleteError('');
     try {
-      await adminFetch(`/api/admin/disciplines/${id}`, { method: 'DELETE' });
+      // R12b: a discipline read through the release says so, so a switch-off since is refused.
+      await adminFetch(stagedUrl(`/api/admin/disciplines/${id}`, save.mode === 'draft'), {
+        method: 'DELETE',
+      });
       onDeleted();
       setOpen(false);
     } catch (err) {

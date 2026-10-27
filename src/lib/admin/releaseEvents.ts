@@ -41,6 +41,17 @@ export function stagedUrl(url: string, staged: boolean): string {
 }
 
 /**
+ * A PATCH body as a screen sends it (R12b, a list's eye): with `staged: true` (the editors'
+ * STAGED_KEY, entitySave.ts) when the screen is in release mode, else the body unchanged.
+ */
+export function stagedBody<T extends Record<string, unknown>>(
+  body: T,
+  staged: boolean,
+): T | (T & { staged: true }) {
+  return staged ? { ...body, staged: true } : body;
+}
+
+/**
  * Whether a list answer came through the release (R3a: `stagedList` always answers
  * `draftsInvalid`, and only with releases on). This is the SCREEN's mode, and it decides every
  * write the screen sends (R12b): a row is no guide, since a row with nothing pending carries

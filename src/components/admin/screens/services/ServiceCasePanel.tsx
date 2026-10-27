@@ -4,6 +4,7 @@ import Icon from '@/components/admin/kit/Icon';
 import Note from '@/components/admin/kit/Note';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import { readsThroughRelease } from '@/lib/admin/releaseEvents';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { toast } from '@/lib/admin/toast';
 import { uiFor, type FieldDef } from '@/lib/admin/uiSchema';
@@ -37,6 +38,8 @@ export default function ServiceCasePanel({ serviceId, write, archive }: ServiceC
   const [loaded, setLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  // Admin v2 R12b: the case was looked up through the release, so a new one says so.
+  const [staged, setStaged] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -44,6 +47,7 @@ export default function ServiceCasePanel({ serviceId, write, archive }: ServiceC
         `/api/admin/service-cases?limit=1&service_id=${encodeURIComponent(serviceId)}`,
       );
       setCaseId(data.rows?.[0]?.id ?? null);
+      setStaged(readsThroughRelease(data));
       setError('');
     } catch (err) {
       setError(describeError(err));
@@ -84,6 +88,7 @@ export default function ServiceCasePanel({ serviceId, write, archive }: ServiceC
     <CaseForm
       key={caseId ?? 'new'}
       caseId={caseId}
+      staged={staged}
       serviceId={serviceId}
       write={write}
       archive={archive}
@@ -113,15 +118,16 @@ export function caseFields(
 
 interface CaseFormProps {
   caseId: string | null;
+  staged: boolean;
   serviceId: string;
   write: boolean;
   archive: boolean;
   onCreated: (row: Record<string, unknown>) => void;
 }
 
-function CaseForm({ caseId, serviceId, write, archive, onCreated }: CaseFormProps) {
+function CaseForm({ caseId, staged, serviceId, write, archive, onCreated }: CaseFormProps) {
   const ui = uiFor('service-cases');
-  const target = { kind: 'resource', slug: 'service-cases' } as const;
+  const target = { kind: 'resource', slug: 'service-cases', staged } as const;
   const save = useEntitySave(target, caseId, {
     fields: ui.fields,
     mode: saveModeFor(target),

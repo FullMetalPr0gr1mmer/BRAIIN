@@ -5,6 +5,7 @@ import { MoveButtons, SortHandle, SortHint } from '@/components/admin/kit/Sortab
 import StatusBadge from '@/components/admin/kit/StatusBadge';
 import { useSortable } from '@/components/admin/kit/useSortable';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
+import { readsThroughRelease, stagedBody, stagedUrl } from '@/lib/admin/releaseEvents';
 import { toast } from '@/lib/admin/toast';
 import AddServiceModal from './AddServiceModal';
 import DisciplineDrawer from './DisciplineDrawer';
@@ -63,6 +64,10 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
   const [countsError, setCountsError] = useState('');
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);
+  // Admin v2 R12b: the lists came through the release (releases on). Read from the answers,
+  // never from a row, it decides every write this screen sends: a move, an eye, an add made in
+  // release mode says so, so a switch-off since is refused (409 `releases-off`), never live.
+  const [staged, setStaged] = useState(false);
   const [drawer, setDrawer] = useState(0);
   const [adding, setAdding] = useState(false);
   const [addKey, setAddKey] = useState(0);
@@ -80,6 +85,7 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
       ]);
       setDisciplines([...(d.rows ?? [])].sort(bySort));
       setServices([...(s.rows ?? [])].sort(bySort));
+      setStaged(readsThroughRelease(d) || readsThroughRelease(s));
       setError('');
     } catch (err) {
       setError(describeError(err));
@@ -169,7 +175,7 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
     setServices(order.flatMap((rowId) => (byId.has(rowId) ? [byId.get(rowId)!] : [])));
     setError('');
     try {
-      await adminFetch('/api/admin/services/reorder', {
+      await adminFetch(stagedUrl('/api/admin/services/reorder', staged), {
         method: 'POST',
         body: { items: changes },
       });
@@ -190,12 +196,12 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
     try {
       await adminFetch(`/api/admin/services/${row.id}`, {
         method: 'PATCH',
-        body: { status: next, version: Number(row['version'] ?? 1) },
+        body: stagedBody({ status: next, version: Number(row['version'] ?? 1) }, staged),
       });
       toast(next === 'draft' ? `${name} is hidden.` : `${name} is on the site.`, 'ok');
     } catch (err) {
       setError(
-        err instanceof AdminApiError && err.info.status === 409
+        err instanceof AdminApiError && err.info.status === 409 && err.info.error !== 'releases-off'
           ? 'Someone else changed this service. The list has been reloaded: try again.'
           : `It was not changed. ${describeError(err)}`,
       );
@@ -339,6 +345,7 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
           disciplineId={id}
           disciplineName={nameOf(discipline, 'name')}
           sortOrder={addOrder}
+          staged={staged}
         />
       )}
     </div>

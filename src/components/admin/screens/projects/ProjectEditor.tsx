@@ -149,6 +149,7 @@ export default function ProjectEditor({
         back: '/admin/portfolio',
         done: 'project-deleted',
         go: save.leave,
+        staged: save.mode === 'draft',
       });
       if (!left) setDeleting(false);
     } catch (err) {

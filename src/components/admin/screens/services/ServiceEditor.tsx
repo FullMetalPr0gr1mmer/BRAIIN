@@ -7,6 +7,7 @@ import EditorForm from '@/components/admin/fields/EditorForm';
 import SeoPanel from '@/components/admin/screens/seo/SeoPanel';
 import type { SeoPanelSetup } from '@/components/admin/screens/seo/types';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import { stagedUrl } from '@/lib/admin/releaseEvents';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { deleteFromEditor } from '@/lib/admin/editorDelete';
 import { visibleTabs, type SeoAccess } from '@/lib/admin/editorTabs';
@@ -123,10 +124,15 @@ export default function ServiceEditor({
       const list = await adminFetch<ListResponse>('/api/admin/services?limit=100');
       const taken = new Set((list.rows ?? []).map((row) => String(row['slug'] ?? '')));
       const payload = duplicatePayload(formToPayload(save.saved, ui.fields), taken);
-      const created = await adminFetch<Row>('/api/admin/services', {
-        method: 'POST',
-        body: payload,
-      });
+      // R12b: in draft mode the copy is made from the pending change, so it says so: once
+      // releases are switched off (the change perhaps thrown away) it is refused, never live.
+      const created = await adminFetch<Row>(
+        stagedUrl('/api/admin/services', save.mode === 'draft'),
+        {
+          method: 'POST',
+          body: payload,
+        },
+      );
       window.location.href = `/admin/services/${String(created['id'])}`;
     } catch (err) {
       setCopyError(`It was not copied. ${describeError(err)}`);
@@ -147,6 +153,7 @@ export default function ServiceEditor({
         back: '/admin/services',
         done: 'service-deleted',
         go: save.leave,
+        staged: save.mode === 'draft',
       });
       if (!left) setDeleting(false);
     } catch (err) {
