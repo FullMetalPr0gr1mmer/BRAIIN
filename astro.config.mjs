@@ -39,7 +39,7 @@ const ADMIN_KIT_SCREEN =
 // tabbed editor's SEO tab draws it (ResourceForm imports it), and so are the tabs' rules
 // (editorTabs.ts); left in the SEO screen's group, every editor would import admin-screens.
 const ADMIN_FIELDS =
-  /[\\/]src[\\/](components[\\/]admin[\\/](FormField\.tsx$|fields[\\/]|screens[\\/](resources[\\/]ResourceForm|singleton[\\/]SingletonForm|seo[\\/](SeoPanel|GooglePreview))\.tsx$)|lib[\\/]admin[\\/](formPayload|sectionUi|fieldErrors|fieldValues|entitySave|useEntitySave|saveMode|contrast|accentWords|linkables|editorTabs)\.ts$)/;
+  /[\\/]src[\\/](components[\\/]admin[\\/](FormField\.tsx$|fields[\\/]|screens[\\/](resources[\\/]ResourceForm|singleton[\\/]SingletonForm|seo[\\/](SeoPanel|SeoDrawer|GooglePreview))\.tsx$|screens[\\/]collection[\\/]reorder\.ts$)|lib[\\/]admin[\\/](formPayload|sectionUi|fieldErrors|fieldValues|entitySave|useEntitySave|saveMode|contrast|accentWords|linkables|editorTabs)\.ts$)/;
 // The dashboard (Admin v2 U1): its island's eager code (Dashboard.tsx) stays in the island's
 // `AdminDashboard` entry chunk, and what it loads on first use (the Customize binder, the
 // drawers and modals) is the admin-dashboard group. Claimed by admin-ui's path rule, they and
@@ -63,7 +63,6 @@ const ADMIN_EDITOR_ISLAND_NAMES = [
   'AdminMaintenance',
   'AdminMediaLibrary',
   'AdminNotificationSettings',
-  'AdminPageEditor',
   'AdminResourceForm',
   'AdminSeo',
   'AdminSingletonForm',
@@ -77,7 +76,6 @@ const ADMIN_EDITOR_SCREEN_DIRS = [
   'maintenance',
   'media',
   'notificationSettings',
-  'pageEditor',
   'seo',
 ];
 /** @param {readonly string[]} names */
@@ -120,6 +118,13 @@ const ADMIN_RELEASE =
 // carried by them. Their graphs reach the field kit, so admin-ui leaves them too.
 const ADMIN_CONTENT =
   /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]Admin(Services|Discipline|ServiceEditor|Projects|ProjectEditor)\.tsx$|screens[\\/](services|projects)[\\/])/;
+// The page editor (Admin v2 E1): its island and its screen code, a family of their own (as the
+// Services and Projects areas are), so the shared admin-screens chunk (the collections, SEO,
+// the media library, General settings) does not carry it to every screen that loads that
+// chunk (9.4 KB gz each, measured in E1), nor does the editor load theirs. What it shares
+// with them (the SEO drawer, the collections' reorder rule) is the field kit's (ADMIN_FIELDS).
+const ADMIN_PAGES =
+  /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]AdminPageEditor\.tsx$|screens[\\/]pageEditor[\\/])/;
 // The releases preview's bridge (Admin v2 R9, P-4): the code a `/admin/preview/**` render
 // loads (src/components/preview/AdminPreviewBridge.astro). Its own group, never in admin-ui,
 // which every admin screen loads.
@@ -258,6 +263,7 @@ export default defineConfig({
                     !ADMIN_EDITOR_SCREENS.test(id) &&
                     !ADMIN_LEADS.test(id) &&
                     !ADMIN_CONTENT.test(id) &&
+                    !ADMIN_PAGES.test(id) &&
                     !ADMIN_PREVIEW.test(id) &&
                     !ADMIN_RELEASE.test(id)),
                 priority: 20,
@@ -309,6 +315,14 @@ export default defineConfig({
                 name: 'admin-content',
                 test: ADMIN_CONTENT,
                 priority: 13.5,
+              },
+              {
+                // The page editor (E1): below the field kit, so what both use stays in
+                // admin-fields and this chunk imports it from there; above admin-screens,
+                // whose path rule would claim it otherwise. It imports no other screen group.
+                name: 'admin-pages',
+                test: ADMIN_PAGES,
+                priority: 13.4,
               },
               {
                 // The screens admin-ui leaves (Admin v2 U4, Wave 3's chunk rule): an island

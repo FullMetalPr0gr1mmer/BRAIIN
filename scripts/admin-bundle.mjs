@@ -93,6 +93,7 @@ const OFF_SCREEN_GROUPS = [
   'admin-fields.',
   'admin-screens.',
   'admin-content.',
+  'admin-pages.',
   'admin-dashboard.',
   'admin-leads.',
   'admin-leads-lazy.',
@@ -110,11 +111,15 @@ const FAMILY_GROUPS = [
     group: 'admin-content.',
     importers: /^Admin(?:Services|Discipline|ServiceEditor|Projects|ProjectEditor)\./,
   },
+  // Admin v2 E1: the page editor's own group, on its island only.
+  { group: 'admin-pages.', importers: /^AdminPageEditor\./ },
 ];
 // What a family's group must never import statically: the field kit, and its own lazy part.
 const FAMILY_NEVER = {
   'admin-leads.': ['admin-fields.', 'admin-leads-lazy.'],
   'admin-release.': ['admin-fields.'],
+  // E1: the page editor loads the field kit, never another screen family's code.
+  'admin-pages.': ['admin-screens.', 'admin-content.', 'admin-leads.'],
 };
 // Groups reached only through import() (check 6).
 const LAZY_ONLY_GROUPS = ['admin-leads-lazy.'];
