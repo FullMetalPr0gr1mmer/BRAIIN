@@ -2379,6 +2379,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
 
   it('Content Creator: the basics, content, media, the Style-Finder and stats; no leads, PII, hiring, settings or SEO', () => {
     expect(shown('content_creator')).toEqual([
+      'backups-and-versions',
       'collections-and-faq',
       'finding-your-way',
       'media-library',
@@ -2395,6 +2396,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
 
   it('SEO: the basics, the media library (it opens it), SEO and redirects, and stats', () => {
     expect(shown('seo')).toEqual([
+      'backups-and-versions',
       'finding-your-way',
       'integrations',
       'media-library',
@@ -2410,6 +2412,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
 
   it('Developer: the basics, media, leads and their personal data, maintenance, stats and site health; no hiring', () => {
     expect(shown('developer')).toEqual([
+      'backups-and-versions',
       'finding-your-way',
       'forms-and-spam',
       'general-settings',

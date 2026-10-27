@@ -1,4 +1,5 @@
 import type { Role } from '@/lib/auth/types';
+import { RELEASE_READ_CAPS } from '@/lib/release/readCaps';
 import { mayRead } from './access';
 import { isOnScreen } from './model';
 
@@ -139,6 +140,8 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     ],
     screens: ['/admin/preview'],
   },
+  // R13: Backups & versions, for the roles holding a release read capability (B7.3).
+  { slug: 'backups-and-versions', caps: RELEASE_READ_CAPS, screens: ['/admin/backups'] },
 ];
 
 /**

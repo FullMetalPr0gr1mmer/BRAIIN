@@ -299,3 +299,27 @@ describe('the dashboard’s publish card while releases are off', () => {
     expect(page.match(/releases_enabled/g)).toHaveLength(1);
   });
 });
+
+describe('its guide, backups-and-versions (one app.put_help_guide, revision 0, place 125)', () => {
+  it('is put once, for the release read capabilities, naming the screen, offered on it', async () => {
+    const { helpSet, readMigrations } = await import('../fixtures/helpSet');
+    const { pageGuideFor } = await import('@/lib/admin/help/pageGuides');
+    const set = helpSet(readMigrations());
+    const puts = set.edits.filter((e) => e.slug === 'backups-and-versions');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    const guide = set.set.find((g) => g.slug === 'backups-and-versions')!;
+    expect(guide.sort_order).toBe(125);
+    expect([...(guide['caps'] as string[])].sort()).toEqual([...RELEASE_READ_CAPS].sort());
+    expect(guide['screens']).toEqual(['/admin/backups']);
+    for (const role of ROLES) {
+      expect(pageGuideFor('/admin/backups', role), role).toBe(
+        role === 'sales' ? null : 'backups-and-versions',
+      );
+    }
+    // True with releases on or off: it never says a version exists before the switch.
+    const text = JSON.stringify(guide['body']);
+    expect(text).toContain('Once publishing in releases is switched on');
+    expect(text).not.toMatch(DASH);
+  });
+});
