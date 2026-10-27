@@ -18,6 +18,7 @@ import {
   type DeleteOutcome,
 } from './collections';
 import { drawerFields, SAMPLE_LOCKED, type CollectionPermissions } from './fields';
+import { historyTargetOf } from '@/lib/admin/historyTarget';
 
 // The drawer that adds or edits one item of a collection (Admin v2 U7): the kit Drawer
 // (`dismissible={false}`: a stray press on the scrim keeps what was typed) around the
@@ -200,7 +201,12 @@ export default function CollectionDrawer({
             {!makeReal && !save.busy && !save.loadError && <SampleWords values={save.values} />}
           </>
         )}
-        <EditorForm save={save} fields={fields} submitLabel={id === null ? 'Add' : 'Save changes'}>
+        <EditorForm
+          history={historyTargetOf({ kind: 'resource', slug: def.slug }, id)}
+          save={save}
+          fields={fields}
+          submitLabel={id === null ? 'Add' : 'Save changes'}
+        >
           {def.note && <Note>{def.note}</Note>}
         </EditorForm>
       </div>

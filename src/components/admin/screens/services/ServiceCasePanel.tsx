@@ -9,6 +9,7 @@ import { toast } from '@/lib/admin/toast';
 import { uiFor, type FieldDef } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
 import { textOf, type Row } from './model';
+import { historyTargetOf } from '@/lib/admin/historyTarget';
 
 // A service's Case study tab (Admin v2 U5, AV-14; the prototype's case tab): the service's
 // `service_cases` row (one per service, the 0028 key) in a form of its own, with its own
@@ -137,6 +138,7 @@ function CaseForm({ caseId, serviceId, write, archive, onCreated }: CaseFormProp
   return (
     <div className="svc-case">
       <EditorForm
+        history={historyTargetOf(target, caseId)}
         save={save}
         fields={caseFields(ui.fields, archive, status)}
         submitLabel={caseId ? 'Save case study' : 'Create case study'}

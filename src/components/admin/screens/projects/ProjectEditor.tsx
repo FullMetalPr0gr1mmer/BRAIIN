@@ -16,6 +16,7 @@ import { projectName } from './model';
 import { publishRequirements, requirementsSummary } from './publish';
 import TestimonialsCard from './TestimonialsCard';
 import { PROJECT_FIELDS, PROJECT_GROUPS, PROJECT_TABS } from './view';
+import { historyTargetOf } from '@/lib/admin/historyTarget';
 
 // A project's editor (Admin v2 U6, AV-15; the prototype's /projects/:slug): the
 // AdminProjectEditor island at /admin/portfolio/[id] and /new. U8's EditorForm in tabs, Basics
@@ -182,6 +183,7 @@ export default function ProjectEditor({
 
   return (
     <EditorForm
+      history={historyTargetOf(target, id)}
       save={viewSave}
       fields={projectFields(PROJECT_FIELDS, archive, stored)}
       groups={PROJECT_GROUPS}

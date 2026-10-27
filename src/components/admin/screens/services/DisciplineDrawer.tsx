@@ -7,6 +7,7 @@ import { confirmDialog } from '@/lib/admin/confirm';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { uiFor, type FieldDef } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
+import { historyTargetOf } from '@/lib/admin/historyTarget';
 
 // A discipline's drawer (Admin v2 U5, the prototype's editCat): add or edit one, from the
 // Services overview and from the discipline's own page. The kit Drawer (`dismissible={false}`:
@@ -134,6 +135,7 @@ export default function DisciplineDrawer({
       }
     >
       <EditorForm
+        history={historyTargetOf({ kind: 'resource', slug: 'disciplines' }, id)}
         save={save}
         fields={drawerFields(ui.fields, archive, status)}
         submitLabel={id === null ? 'Create discipline' : 'Save changes'}

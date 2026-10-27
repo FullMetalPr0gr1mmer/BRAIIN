@@ -6,6 +6,7 @@ import ResourceTable, { EDGE_NOT_SYNCED } from '@/components/admin/screens/resou
 import { toast } from '@/lib/admin/toast';
 import { uiFor } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
+import { historyTargetOf } from '@/lib/admin/historyTarget';
 
 // The Redirects tab of /admin/seo (Admin v2 U10, AV-19 D10): the redirects list as before
 // (ResourceTable: the "Sync to edge" line, search, Delete), with "Edit <rule>" and "New
@@ -43,6 +44,7 @@ function RedirectForm({ id, onDone }: RedirectFormProps) {
   }, [id, save.savedAt, save.status, save.edgeMissed]);
   return (
     <EditorForm
+      history={historyTargetOf({ kind: 'resource', slug: ui.slug }, id)}
       save={save}
       fields={ui.fields}
       submitLabel={id === null ? `Create ${ui.singular.toLowerCase()}` : 'Save changes'}

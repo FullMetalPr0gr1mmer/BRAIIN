@@ -17,6 +17,7 @@ import { useEntitySave } from '@/lib/admin/useEntitySave';
 import { duplicatePayload, leadsCount, nameOf, type Row } from './model';
 import ServiceCasePanel from './ServiceCasePanel';
 import ServiceLeadsPanel, { type ServiceLeadRow } from './ServiceLeadsPanel';
+import { historyTargetOf } from '@/lib/admin/historyTarget';
 
 // A service's editor (Admin v2 U5, AV-14; the prototype's route('/services/:cat/:slug')): the
 // AdminServiceEditor island at /admin/services/[id] and /new. U8's EditorForm in tabs, Content
@@ -193,6 +194,7 @@ export default function ServiceEditor({
   return (
     <ClockProvider tz={tz}>
       <EditorForm
+        history={historyTargetOf(target, id)}
         save={save}
         fields={serviceFields(ui.fields, archive, stored)}
         groups={ui.groups}
