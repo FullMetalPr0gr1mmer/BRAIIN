@@ -91,14 +91,28 @@ async function saveId(browser: Browser, id: string | null) {
   }
 }
 
-/** A visitor's browser with every Google host intercepted and every request to one recorded. */
+/**
+ * A visitor's browser with every Google host intercepted and every request to one recorded.
+ *
+ * `google` is every request the page ATTEMPTED, a refused one included: Chromium reports a
+ * request its CSP blocked as one that failed, and Playwright emits `request` (then
+ * `requestfailed`, reason `csp`) for it. What actually left the browser is `routed`, the
+ * requests that reached the interception, which is the network's edge here; `refused` is each
+ * Google request that failed, with the reason.
+ */
 async function visitor(browser: Browser) {
   const context = await browser.newContext({ reducedMotion: 'reduce' });
   const google: string[] = [];
+  const routed: string[] = [];
+  const refused: string[] = [];
   context.on('request', (req) => {
     if (GOOGLE.test(req.url())) google.push(req.url());
   });
+  context.on('requestfailed', (req) => {
+    if (GOOGLE.test(req.url())) refused.push(`${req.failure()?.errorText ?? ''} ${req.url()}`);
+  });
   await context.route(GOOGLE, (route) => {
+    routed.push(route.request().url());
     const url = new URL(route.request().url());
     if (url.hostname === 'www.googletagmanager.com' && url.pathname === '/gtag/js') {
       return route.fulfill({ status: 200, contentType: 'text/javascript', body: FAKE_GTAG });
@@ -109,13 +123,13 @@ async function visitor(browser: Browser) {
     const seen: string[] = [];
     (window as unknown as { __csp: string[] }).__csp = seen;
     document.addEventListener('securitypolicyviolation', (e) => {
-      seen.push(`${e.violatedDirective} ${e.blockedURI}`);
+      seen.push(`${e.disposition} ${e.violatedDirective} ${e.blockedURI}`);
     });
   });
   const page = await context.newPage();
   // The width the other consent specs click the banner at (tests/e2e/analytics-events.e2e.ts).
   await page.setViewportSize({ width: 1366, height: 900 });
-  return { context, page, google };
+  return { context, page, google, routed, refused };
 }
 
 const violations = (page: Page) =>
@@ -275,21 +289,48 @@ test('the policy refuses a GTM container from the host it lists gtag.js on', asy
 }) => {
   // gtm.js?id=GTM-<any> runs whatever its container says: the reason script-src names
   // /gtag/ only. No consent here, so the loader requests nothing and reports nothing.
-  const { context, page, google } = await visitor(browser);
+  //
+  // The page's own attempt is visible to Playwright (`google`): a request the ENFORCED policy
+  // blocks still emits `request`, then fails with reason `csp`. So the refusal is proved by
+  // what follows the attempt, never by its absence: the violation is enforced, the tag errors,
+  // the request fails as a CSP block and never reaches the interception (the network's edge).
+  // A Report-Only policy or a host-wide script-src would let it through to the route and load.
+  const { context, page, google, routed, refused } = await visitor(browser);
   try {
     const res = await page.goto(PAGES.en.next, { waitUntil: 'networkidle' });
     expect((await res!.text()).split(LOADER)).toHaveLength(2);
-    await page.evaluate(() => {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.googletagmanager.com/gtm.js?id=GTM-U15E2E1';
-      document.head.appendChild(tag);
-    });
+    // The policy that lists Google is the enforced one, and nothing else is in Report-Only.
+    expect(res!.headers()['content-security-policy'] ?? '').toMatch(
+      /script-src [^;]*https:\/\/www\.googletagmanager\.com\/gtag\/(?:[\s;]|$)/,
+    );
+    expect(res!.headers()['content-security-policy-report-only']).toBeUndefined();
+    const GTM = 'https://www.googletagmanager.com/gtm.js?id=GTM-U15E2E1';
+    const outcome = await page.evaluate(
+      (src) =>
+        new Promise<string>((done) => {
+          const tag = document.createElement('script');
+          tag.onload = () => done('load');
+          tag.onerror = () => done('error');
+          tag.src = src;
+          document.head.appendChild(tag);
+        }),
+      GTM,
+    );
+    expect(outcome, 'the gtm.js tag errors (refused), never loads').toBe('error');
     await expect
-      .poll(async () => (await violations(page)).filter((v) => v.includes('/gtm.js')).length)
-      .toBe(1);
+      .poll(async () => (await violations(page)).filter((v) => v.includes('/gtm.js')))
+      .toEqual([`enforce script-src-elem ${GTM}`]);
+    await expect.poll(() => refused.filter((r) => r.includes('/gtm.js'))).toHaveLength(1);
+    expect(refused.filter((r) => r.includes('/gtm.js'))[0], 'gtm.js failed as a CSP block').toMatch(
+      /csp/i,
+    );
     expect(
-      google.filter((u) => u.includes('/gtm.js')),
-      'gtm.js never requested',
+      routed.filter((u) => u.includes('/gtm.js')),
+      'gtm.js never left the browser',
+    ).toEqual([]);
+    expect(
+      google.filter((u) => !u.includes('/gtm.js')),
+      'nothing else from Google before consent',
     ).toEqual([]);
   } finally {
     await context.close();
