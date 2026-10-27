@@ -450,6 +450,25 @@ export const cases: readonly Case[] = [
     releases: true,
   },
   {
+    // R12b: a create and a move made in release mode, reaching the live path after a
+    // switch-off. The capability is checked before the refusal (409 `releases-off`), so the
+    // gate is the flag-off row's, word for word.
+    name: 'services create made in release mode (releases off)',
+    load: () => import('@/pages/api/admin/services/index'),
+    method: 'POST',
+    url: '/api/admin/services?staged=1',
+    body: { slug: 'logo', title: VALID_BILINGUAL, status: 'draft' },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'services reorder made in release mode (releases off)',
+    load: () => import('@/pages/api/admin/services/reorder'),
+    method: 'POST',
+    url: '/api/admin/services/reorder?staged=1',
+    body: { items: [{ id: UUID, sortOrder: 10 }] },
+    allow: ['admin', 'content_creator'],
+  },
+  {
     // Hotfix H12: a row that stays archived is an Admin's to move, staged as live; the apply
     // runs as the publisher, whom the archive gates would refuse.
     name: 'services reorder naming an archived row (releases on, Admin only)',

@@ -19,12 +19,40 @@ export const PUBLISH_EVENT = 'admin:publish';
 export const SETTLED_EVENT = 'admin:draft-settled';
 
 /**
- * What a list's or a drawer's DELETE adds when its read came through the release (R12): the
- * server's STAGED_MARKER (src/lib/release/releasesOff.ts). The staged DELETE ignores it; with
- * releases switched off under the screen the live DELETE refuses it (409 `releases-off`) rather
- * than delete for good a row the screen said it would only stage for removal.
+ * What a write made in release mode adds to its address (R12, R12b): the server's
+ * STAGED_MARKER (src/lib/release/releasesOff.ts). The staged paths ignore it; with releases
+ * switched off under the screen, the live DELETE, create (POST) and reorder (POST) of a
+ * release-managed resource refuse it (409 `releases-off`) before they read or write anything,
+ * rather than write live what the screen would only have staged. A PATCH or PUT says the same
+ * in its body (`staged: true`, entitySave.ts STAGED_KEY).
  */
-export const STAGED_DELETE = '?staged=1';
+export const STAGED_QUERY = '?staged=1';
+
+/** R12's name for STAGED_QUERY on a list's or a drawer's DELETE. */
+export const STAGED_DELETE = STAGED_QUERY;
+
+/**
+ * A write's address as a screen sends it (R12b): with STAGED_QUERY when the screen is in
+ * release mode, else exactly as it was (releases off: the request main sends).
+ */
+export function stagedUrl(url: string, staged: boolean): string {
+  if (!staged) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}${STAGED_QUERY.slice(1)}`;
+}
+
+/**
+ * Whether a list answer came through the release (R3a: `stagedList` always answers
+ * `draftsInvalid`, and only with releases on). This is the SCREEN's mode, and it decides every
+ * write the screen sends (R12b): a row is no guide, since a row with nothing pending carries
+ * no `draft` key at all, exactly like a row read live.
+ */
+export function readsThroughRelease(answer: unknown): boolean {
+  return (
+    typeof answer === 'object' &&
+    answer !== null &&
+    Array.isArray((answer as Record<string, unknown>)['draftsInvalid'])
+  );
+}
 
 export interface PublishEventDetail {
   entityId?: string | undefined;

@@ -25,7 +25,12 @@ import {
   versionFallback,
   type SaveTarget,
 } from '@/lib/admin/entitySave';
-import { STAGED_DELETE } from '@/lib/admin/releaseEvents';
+import {
+  readsThroughRelease,
+  STAGED_DELETE,
+  STAGED_QUERY,
+  stagedUrl,
+} from '@/lib/admin/releaseEvents';
 import { uiFor } from '@/lib/admin/uiSchema';
 import { DRAFT_AUDIT_WINDOW_MS, shouldAudit } from '@/lib/release/drafts';
 import { client, freshId, resetIds, type Db } from '../fixtures/stagedDb';
@@ -347,6 +352,109 @@ describe('releases off: a write made in release mode is refused, never written l
   it('the editor and the server name the marker alike', () => {
     expect(STAGED_KEY).toBe(STAGED_MARKER);
     expect(STAGED_DELETE).toBe(`?${STAGED_MARKER}=1`);
+    expect(STAGED_QUERY).toBe(`?${STAGED_MARKER}=1`);
+  });
+
+  // R12b: the POSTs. A create (a drawer's Add, a Duplicate) and a move made in release mode
+  // carry the marker in their address; the live create and reorder refuse them first.
+  const onlyTheFlag = () =>
+    expect(db.calls.map((c) => `${c.kind} ${c.name}`)).toEqual(['rpc releases_enabled']);
+
+  for (const query of [STAGED_QUERY, '?draftId=66666666-6666-4666-8666-666666666666']) {
+    it(`POST create made in release mode (${query.slice(1, 8)}…): 409 releases-off, nothing read or written`, async () => {
+      const res = await call(services.POST, 'POST', {
+        body: { slug: 'motion', title: { en: 'Motion', ar: 'موشن' }, status: 'published' },
+        query,
+      });
+      expect([res.status, res.body['error']]).toEqual([409, 'releases-off']);
+      expect(typeof res.body['detail']).toBe('string');
+      onlyTheFlag();
+      expect(db.tables['services']!).toHaveLength(3);
+      expect(audits()).toEqual([]);
+    });
+  }
+
+  // E1's security review: a screen in release mode numbers a move against the STAGED order
+  // and sends only the rows that moved. Written live, the rows it leaves out would keep their
+  // live numbers, so the public order would be one nobody saw. Refused before any read.
+  it('a move made in release mode (only the rows it moved, numbered on the staged order): 409, the live order untouched', async () => {
+    // With releases on, a pending move put S3 first (its staged sort_order 5).
+    db.flag = true;
+    drafts().push(
+      draft({
+        entity_id: S3,
+        payload: { sortOrder: 5 },
+        base: { sort_order: 30 },
+        base_version: 1,
+      }),
+    );
+    const listed = await call(services.LIST, 'GET');
+    expect(readsThroughRelease(listed.data)).toBe(true);
+    // The owner switches releases off and throws every pending change away; the screen still
+    // shows S3, S1, S2 and moves S2 above S1: only those two rows are sent.
+    db.flag = false;
+    db.tables['content_drafts'] = [];
+    db.calls = [];
+    const res = await call(services.REORDER, 'POST', {
+      body: {
+        items: [
+          { id: S2, sortOrder: 10 },
+          { id: S1, sortOrder: 20 },
+        ],
+      },
+      query: stagedUrl('', readsThroughRelease(listed.data)),
+    });
+    expect([res.status, res.body['error']]).toEqual([409, 'releases-off']);
+    onlyTheFlag();
+    expect([live(S1), live(S2), live(S3)].map((r) => r['sort_order'])).toEqual([10, 20, 30]);
+    expect(audits()).toEqual([]);
+  });
+
+  it('an unmarked create and move (a screen read live) are main’s, request for request', async () => {
+    const listed = await call(services.LIST, 'GET');
+    expect(readsThroughRelease(listed.data)).toBe(false);
+    expect(stagedUrl('/api/admin/services/reorder', false)).toBe('/api/admin/services/reorder');
+    const created = await call(services.POST, 'POST', {
+      body: { slug: 'motion', title: { en: 'Motion', ar: 'موشن' } },
+      query: stagedUrl('', false),
+    });
+    expect(created.status).toBe(200);
+    const moved = await call(services.REORDER, 'POST', {
+      body: { items: [{ id: S1, sortOrder: 5 }] },
+      query: stagedUrl('', false),
+    });
+    expect(moved.data).toEqual({ reordered: 1 });
+    expect(live(S1)['sort_order']).toBe(5);
+    expect(audits()).toEqual(['service.create', 'service.reorder']);
+    expect(draftTouches()).toEqual([]);
+  });
+
+  it('with releases on the POSTs’ marker is ignored: a staged create and a staged move, as without it', async () => {
+    db.flag = true;
+    const created = await call(services.POST, 'POST', {
+      body: { slug: 'motion', title: { en: 'Motion', ar: 'موشن' } },
+      query: STAGED_QUERY,
+    });
+    expect(created.status).toBe(200);
+    expect(created.data['draft']).toMatchObject({ op: 'create' });
+    const moved = await call(services.REORDER, 'POST', {
+      body: { items: [{ id: S2, sortOrder: 5 }] },
+      query: STAGED_QUERY,
+    });
+    expect(moved.data).toEqual({ reordered: 1, staged: 1, discarded: 0 });
+    expect(liveWrites()).toEqual([]);
+  });
+
+  it('a resource outside the release (Style-Finder) never refuses the marker', async () => {
+    db.tables['ai_questions'] = [
+      { id: S1, tenant_id: T, slug: 'q', sort_order: 1, status: 'draft', version: 1 },
+    ];
+    const res = await call(reorderRoute(aiQuestionResource), 'POST', {
+      body: { items: [{ id: S1, sortOrder: 5 }] },
+      query: STAGED_QUERY,
+    });
+    expect(res.data).toEqual({ reordered: 1 });
+    expect(db.calls.filter((c) => c.kind === 'rpc')).toEqual([]);
   });
 
   // The review's case, through the real save machine: an editor that loaded with releases on
