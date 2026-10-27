@@ -19,9 +19,10 @@ import {
   zonedParts,
 } from '@/lib/time/zone';
 
-// The studio's time zone (Admin v2 U9): the closed list, held equal to both database CHECKs,
-// and the calendar arithmetic every "today", "midnight" and day bound uses, across London's and
-// Cairo's daylight saving.
+// The studio's time zone (Admin v2 U9): the closed list, held equal to the database CHECK
+// (site_settings_timezone_closed; crm_settings' copy of the zone, and its CHECK, went with the
+// leads contract, C14b), and the calendar arithmetic every "today", "midnight" and day bound
+// uses, across London's and Cairo's daylight saving.
 
 const ZONES = STUDIO_TIME_ZONES.map((z) => z.value);
 const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
@@ -42,13 +43,21 @@ function checkList(pattern: RegExp): string[] {
 }
 
 describe('the closed list (STUDIO_TIME_ZONES)', () => {
-  it('equals site_settings_timezone_closed (0102) and crm_settings’ CHECK (0035), in order', () => {
+  it('equals site_settings_timezone_closed (0102), in order', () => {
     expect(
       checkList(/constraint site_settings_timezone_closed check \(timezone in \(([^)]*)\)\)/g),
     ).toEqual(ZONES);
-    expect(
-      checkList(/timezone text not null default 'Asia\/Riyadh' check \(timezone in \(([^)]*)\)\)/g),
-    ).toEqual(ZONES);
+  });
+
+  it('is the one zone: crm_settings’ copy (0035) is dropped by the leads contract (C14b)', () => {
+    const drops = readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith('.sql'))
+      .filter((f) =>
+        /\balter table public\.crm_settings drop column timezone;/.test(
+          readFileSync(join(MIGRATIONS, f), 'utf8').replace(/--[^\n]*/g, ''),
+        ),
+      );
+    expect(drops).toHaveLength(1);
   });
 
   it('is ten real zones, Riyadh first and the default, each named by its city', () => {

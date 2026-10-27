@@ -19,8 +19,9 @@ import { serviceClient } from '@/lib/supabase/server';
 // Two rows, as erase has, because the attempt is written before anyone knows whether the
 // note is on that lead: the outcome says what happened (ok, not_found, refused or failed),
 // so a 404 never reads as a deletion in the log. Ids and the note's source only, never its
-// words. The legacy mirror of the old internal_notes field (the expand window) is deleted by
-// clearing that field, so its words cannot come back with the next legacy save.
+// words. A note the old notes field's mirror wrote (source 'legacy') is deleted like any
+// other and no lead row is written: the field and its mirror are gone, and C14b rewrote every
+// lead row that held the field before dropping it, so the words are not left in a lead.
 
 export const prerender = false;
 
