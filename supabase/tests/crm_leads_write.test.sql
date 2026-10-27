@@ -14,14 +14,15 @@
 -- bulk over the six principals and a stale token, with every outcome (applied, conflict,
 -- missing, skipped) and every refusal; erasure and note deletion as the service role, checking
 -- the acting profile live (app.crm_eraser_ok: inactive, locked, a lock run out, another
--- tenant), who the service role writes as (app.acting_for: also when the deleter last saved the
--- field herself, and for the door's own write only), and the note_deleted event; note counts;
+-- tenant), a note from the old field deleted like any other with no lead written (the leads
+-- contract, C14b: the door sets no setting, and a service-role edit made for no one is no
+-- one's), and the note_deleted event; note counts;
 -- a manual lead through ingest and who it names; a multi-row audit insert still chained row by
 -- row (writeAuditMany); and the assignee key's SET NULL and its refusal to let an assigned
 -- profile change tenant. CLAUDE.md §3, §5, §8, §9.
 
 begin;
-select plan(118);
+select plan(117);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -310,7 +311,8 @@ select is((select count(*)::int from public.lead_events
 select is(_rows($$ update public.leads set last_contact_channel = 'email', last_contact_at = now()
                     where id = '00000000-0000-0000-0000-00000000aa07' $$), 1,
   'the developer logs an e-mail on a lead already past New');
-select ok((select last_contact_at = now() and first_response_at is null and status = 'in_progress'
+select ok((select last_contact_at = now() and first_response_at is null
+                  and stage_id = (select id from public.lead_stages where key = 'contacted')
                   and version = 1
              from public.leads where id = '00000000-0000-0000-0000-00000000aa07'),
   'it does not answer that lead: when it was first answered is not known, so it stays unknown');
@@ -356,7 +358,8 @@ select is(
                           _item('00000000-0000-0000-0000-00000000cc01', 1))),
   'aa01:applied,aa02:conflict,bb01:missing,cc01:missing',
   'bulk stage: applied where the version holds, a conflict where it moved on, missing elsewhere');
-select ok((select version = 6 and status = 'done' and won_at = now()
+select ok((select version = 6 and won_at = now()
+                  and stage_id = (select id from public.lead_stages where key = 'won')
              from public.leads where id = '00000000-0000-0000-0000-00000000aa01'),
   'the applied lead is Won, one version on');
 select is(
@@ -549,9 +552,16 @@ select is(
     '00000000-0000-0000-0000-00000000aa02', '00000000-0000-0000-0000-00000000ee02',
     '00000000-0000-0000-0000-0000000000a1'),
   'staff', 'an admin deletes a thread note');
+-- A note copied from the old field before the contract (source 'legacy', as 0034's mirror left
+-- it, with no author) is deleted like any other since C14b: there is no field left to clear,
+-- so the door writes no lead.
 reset role;
-update public.leads set internal_notes = 'Words in the old field'
- where id = '00000000-0000-0000-0000-00000000aa02';
+insert into public.lead_notes (tenant_id, lead_id, body, source, created_by)
+values ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000aa02',
+        'Words from the old field', 'legacy', null);
+create temp table _aa02_before on commit drop as
+  select updated_at, updated_by, version from public.leads
+   where id = '00000000-0000-0000-0000-00000000aa02';
 set local role service_role;
 select is(
   public.crm_delete_lead_note('00000000-0000-0000-0000-000000000001',
@@ -559,17 +569,17 @@ select is(
     (select id from public.lead_notes
       where lead_id = '00000000-0000-0000-0000-00000000aa02' and source = 'legacy'),
     '00000000-0000-0000-0000-0000000000a1'),
-  'legacy', 'the legacy mirror is deleted too');
+  'legacy', 'a note from the old field is deleted like any other (C14b)');
 reset role;
 select ok(
-  (select internal_notes is null from public.leads where id = '00000000-0000-0000-0000-00000000aa02')
-  and not exists (select 1 from public.lead_notes where lead_id = '00000000-0000-0000-0000-00000000aa02'),
-  'its words leave the old field as well, so no later save can bring them back');
--- The field was last saved with no session (updated_by null); the door clears it as the admin.
+  not exists (select 1 from public.lead_notes where lead_id = '00000000-0000-0000-0000-00000000aa02'),
+  'the lead''s notes are gone, the one from the old field included');
 select ok(
-  (select updated_by = '00000000-0000-0000-0000-0000000000a1'
-     from public.leads where id = '00000000-0000-0000-0000-00000000aa02'),
-  'the service role clears the field as the admin who deleted the note, not as no one');
+  (select l.updated_at = b.updated_at and l.updated_by is not distinct from b.updated_by
+          and l.version = b.version
+     from public.leads l, _aa02_before b
+    where l.id = '00000000-0000-0000-0000-00000000aa02'),
+  'the door writes no lead: when it was last changed, by whom, and its version stay (C14b)');
 select is(
   (select string_agg((e.detail ->> 'source') || ':' || (e.detail - 'note_id' - 'source' = '{}'::jsonb)::text,
                      ',' order by e.id)
@@ -579,46 +589,31 @@ select is(
   'staff:true,legacy:true',
   'each deleted note leaves a note_deleted event naming who removed it: its id and source, no words');
 
--- The common case: the admin who deletes a mirror saved its field herself, so she is already
--- the lead's last editor, and an updated_by the door wrote would read as unchanged. The door
--- names her in app.acting_for instead, for its own write only. Since 0097 no staff token
--- writes the legacy field, so her save (made before) is replayed by the service role carrying
--- her claim, which is how the field's existing mirrors came to name her.
-set local role service_role;
-select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
-update public.leads set internal_notes = 'Saved by the admin herself'
- where id = '00000000-0000-0000-0000-00000000aa07';
-reset role;
+-- The door sets no setting and writes no lead any more, and the BEFORE phase names an edit's
+-- person from the session alone: a service-role edit made for no one is no one's, even with
+-- the old app.acting_for setting left in the transaction (C14b: nothing reads it).
 select ok(
-  (select l.updated_by = '00000000-0000-0000-0000-0000000000a1'
-          and n.created_by = '00000000-0000-0000-0000-0000000000a1'
-     from public.leads l
-     join public.lead_notes n on n.lead_id = l.id and n.source = 'legacy'
-    where l.id = '00000000-0000-0000-0000-00000000aa07'),
-  'the admin saved the field: she is the lead''s last editor and the mirror''s author');
+  (select prosrc !~* '\mset_config\M' and prosrc !~* '\macting_for\M'
+          and prosrc !~* 'update\s+public\.leads'
+     from pg_proc where oid = 'public.crm_delete_lead_note(uuid, uuid, uuid, uuid)'::regprocedure),
+  'crm_delete_lead_note sets no setting and writes no lead (C14b)');
 set local role service_role;
 select _as(null, null, null);
-select is(
-  public.crm_delete_lead_note('00000000-0000-0000-0000-000000000001',
-    '00000000-0000-0000-0000-00000000aa07',
-    (select id from public.lead_notes
-      where lead_id = '00000000-0000-0000-0000-00000000aa07' and source = 'legacy'),
-    '00000000-0000-0000-0000-0000000000a1'),
-  'legacy', 'she deletes that mirror');
-reset role;
-select ok(
-  (select internal_notes is null and updated_by = '00000000-0000-0000-0000-0000000000a1'
-     from public.leads where id = '00000000-0000-0000-0000-00000000aa07'),
-  'the lead is still last changed by her, not by no one');
--- Whom the door acted for ends with its write: a later service-role edit in the same
--- transaction, naming no one, is no one's.
-set local role service_role;
 update public.leads set value_sar = 7 where id = '00000000-0000-0000-0000-00000000aa07';
 reset role;
 select ok(
   (select value_sar = 7 and updated_by is null
      from public.leads where id = '00000000-0000-0000-0000-00000000aa07'),
-  'the door''s naming does not outlive its write: a later service-role edit is no one''s');
+  'a service-role edit made for no one is no one''s');
+do $$ begin perform set_config('app.acting_for', '00000000-0000-0000-0000-0000000000a1', true); end $$;
+set local role service_role;
+update public.leads set value_sar = 8 where id = '00000000-0000-0000-0000-00000000aa07';
+reset role;
+select ok(
+  (select value_sar = 8 and updated_by is null
+     from public.leads where id = '00000000-0000-0000-0000-00000000aa07'),
+  'a stray app.acting_for names no one either: the BEFORE phase reads the session alone (C14b)');
+do $$ begin perform set_config('app.acting_for', '', true); end $$;
 
 -- ---- Note counts (the CSV export) ------------------------------------------------------------
 set local role service_role;
@@ -650,7 +645,9 @@ select ok(
           and read_by = '00000000-0000-0000-0000-0000000000a1'
           and created_by = '00000000-0000-0000-0000-0000000000a1'
           and updated_by = '00000000-0000-0000-0000-0000000000a1'
-          and source = 'manual' and channel = 'walk_in' and status = 'new'
+          and source = 'manual' and channel = 'walk_in'
+          and stage_id = (select id from public.lead_stages
+                           where tenant_id = '00000000-0000-0000-0000-000000000001' and is_initial)
      from public.leads where id = '00000000-0000-0000-0000-00000000ab01'),
   'it arrives answered and read by the person who added it, in the initial stage, last changed by them');
 select is(
