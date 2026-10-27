@@ -606,9 +606,14 @@ export function widgetLoaders(
           rows: list.slice(0, ATTENTION_ROWS).map((row) => ({
             title: titleOf(row.title, fallbackTitle(row)),
             type: TYPE_LABEL[row.entity_type] ?? row.entity_type.replaceAll('_', ' '),
-            href: RESOURCE_OF[row.entity_type]
-              ? `/admin/${RESOURCE_OF[row.entity_type]}/${row.id}`
-              : null,
+            // A release row (R5's kinds) opens Backups & versions, which lists scheduled,
+            // failed and purge-failed releases with their actions (R13).
+            href:
+              row.entity_type === 'release'
+                ? '/admin/backups'
+                : RESOURCE_OF[row.entity_type]
+                  ? `/admin/${RESOURCE_OF[row.entity_type]}/${row.id}`
+                  : null,
             // A pending change's slug is its own (a section's draft has none): no page line.
             where:
               row.entity_type === 'page_section' && row.kind !== STALE_DRAFT_KIND

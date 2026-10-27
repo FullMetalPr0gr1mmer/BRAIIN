@@ -11,7 +11,8 @@ import { PER_SOURCE, windowStart, type NotificationSource, type SourceItem } fro
 // staff's, 0038), and never the release's changes: its time, its areas and its failure code,
 // worded by src/lib/release/failureCopy.ts. The item is new from when it failed (the release's
 // `updated_at`, stamped by fail_scheduled_release), so a failure after the person last marked
-// the bell read lights it. No link until R13's versions page lists failed releases.
+// the bell read lights it. Since R13 it links to Backups & versions, which lists failed releases
+// with Review.
 //
 // Releases are off for every tenant until R14, so no release is ever failed and the read answers
 // nothing.
@@ -56,7 +57,7 @@ export const releases: NotificationSource = {
         detail: `${failureWords(row.failure_code)} ${FAILURE_NEXT}`,
         at: row.updated_at,
         since: row.updated_at,
-        href: null,
+        href: '/admin/backups',
       });
     }
     return items.slice(0, PER_SOURCE);

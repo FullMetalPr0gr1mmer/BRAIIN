@@ -798,7 +798,8 @@ describe('the bell: a scheduled release that could not go live (Admin v2 R11)', 
       text: expect.stringContaining('could not go live'),
       detail: expect.stringContaining(RELEASE_FAILURE_COPY.conflict),
       at: FAILED.updated_at,
-      href: null,
+      // R13: Backups & versions lists it, with Review.
+      href: '/admin/backups',
       unread: true,
     });
   });
