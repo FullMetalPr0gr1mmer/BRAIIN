@@ -40,6 +40,11 @@ export interface CollectionDrawerProps {
   /** The list's row for it (status, the sample flag), when it has one. */
   listed: Row | null;
   permissions: CollectionPermissions;
+  /**
+   * Admin v2 R12b: the list the drawer opens from was read through the release, so adding an
+   * item says it was made in release mode (SaveTarget `staged`).
+   */
+  staged?: boolean | undefined;
   /** A new item's starting values (its place at the end of the list). */
   defaults: Row;
   onClose: () => void;
@@ -57,6 +62,7 @@ export default function CollectionDrawer({
   id,
   listed,
   permissions,
+  staged = false,
   defaults,
   onClose,
   onCreated,
@@ -74,7 +80,7 @@ export default function CollectionDrawer({
   const [busy, setBusy] = useState(false);
   const stored = useRef<Row | null>(null);
 
-  const save = useEntitySave({ kind: 'resource', slug: def.slug }, id, {
+  const save = useEntitySave({ kind: 'resource', slug: def.slug, staged }, id, {
     fields: payloadFields,
     mode: saveModeFor({ kind: 'resource', slug: def.slug }),
     defaults,

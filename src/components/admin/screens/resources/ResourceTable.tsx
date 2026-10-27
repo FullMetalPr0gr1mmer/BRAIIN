@@ -11,7 +11,12 @@ import { PAGE_SIZE } from '@/lib/admin/pager';
 import { pageTimeZone, useClock } from '@/components/admin/kit/clock';
 import { clockFor, type Clock } from '@/lib/admin/relTime';
 import { toast } from '@/lib/admin/toast';
-import { announcePending, STAGED_DELETE } from '@/lib/admin/releaseEvents';
+import {
+  announcePending,
+  readsThroughRelease,
+  STAGED_DELETE,
+  stagedUrl,
+} from '@/lib/admin/releaseEvents';
 import {
   columnOf,
   uiFor,
@@ -62,7 +67,11 @@ export interface ResourceTableProps {
    * the row's link still opens its no-JS edit page. Without them nothing changes.
    */
   onEdit?: (row: Row) => void;
-  onCreate?: () => void;
+  /**
+   * Admin v2 R12b: called with whether this list was read through the release, so the
+   * drawer's create says it was made in release mode (SaveTarget `staged`).
+   */
+  onCreate?: (staged: boolean) => void;
   /** Bump to re-read the list and the edge status line (a save made in the drawer). */
   epoch?: number;
   /**
@@ -128,7 +137,7 @@ export default function ResourceTable({
       );
       setRows(data.rows ?? []);
       setTotal(data.total ?? 0);
-      setStaged(Array.isArray(data.draftsInvalid));
+      setStaged(readsThroughRelease(data));
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -199,15 +208,20 @@ export default function ResourceTable({
       // still leave half a swap: the moved row on the archived row's number, the two sharing
       // it until either's Sort order is set (a swap never parts them). A refusal re-reads the
       // list, below.
-      const moved = await adminFetch<Record<string, unknown>>(`/api/admin/${ui.slug}/reorder`, {
-        method: 'POST',
-        body: {
-          items: [
-            { id: a.id, sortOrder: Number(b['sort_order'] ?? target) },
-            { id: b.id, sortOrder: Number(a['sort_order'] ?? index) },
-          ],
+      // R12b: a move made in release mode says so, so a switch-off since is refused rather
+      // than written live (it is numbered on the staged order).
+      const moved = await adminFetch<Record<string, unknown>>(
+        stagedUrl(`/api/admin/${ui.slug}/reorder`, staged),
+        {
+          method: 'POST',
+          body: {
+            items: [
+              { id: a.id, sortOrder: Number(b['sort_order'] ?? target) },
+              { id: b.id, sortOrder: Number(a['sort_order'] ?? index) },
+            ],
+          },
         },
-      });
+      );
       // R12: a staged reorder answers what it staged; the savebar counts the new order.
       if ('staged' in moved) announcePending();
       await load();
@@ -329,7 +343,12 @@ export default function ResourceTable({
         toolbar={
           <>
             {!canCreate ? null : onCreate ? (
-              <button type="button" className="btn" data-variant="primary" onClick={onCreate}>
+              <button
+                type="button"
+                className="btn"
+                data-variant="primary"
+                onClick={() => onCreate(staged)}
+              >
                 <Icon name="plus" size={16} />
                 New {ui.singular.toLowerCase()}
               </button>

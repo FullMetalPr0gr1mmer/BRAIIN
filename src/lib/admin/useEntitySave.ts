@@ -186,6 +186,15 @@ export function useEntitySave(
   // is on screen (and the conflict banner) and is told why: a failed reload never throws
   // the editor's work away the way a failed first load shows no form.
   const reloadTheirs = useCallback(async () => {
+    if (isNew && latest.current.releasesOff) {
+      // R12b: a create refused because releases were switched off under the screen that
+      // opened it. There is no record to read: the screen is read again, live (its list
+      // answer then carries no `draftsInvalid`), and the form starts over, as an editor's
+      // Reload takes the live row over what it held.
+      leaving.current = true;
+      window.location.reload();
+      return;
+    }
     try {
       const row = await adminFetch<Row>(url);
       dispatch({
@@ -201,7 +210,7 @@ export function useEntitySave(
         message: `Their version could not be loaded: ${describeError(err)}`,
       });
     }
-  }, [url, fields]);
+  }, [url, fields, isNew]);
 
   // R12 review: the pending change was settled in the publish dialog (its version moved): read
   // the record again and keep what was typed since the last save over it. A read that fails

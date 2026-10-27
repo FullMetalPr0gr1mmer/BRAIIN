@@ -2,6 +2,7 @@ import type { FieldError } from '@/components/admin/kit/ErrorSummary';
 import type { SaveState } from '@/components/admin/kit/SaveStatus';
 import type { FieldErrors } from './fieldErrors';
 import { formToPayload, rowToForm } from './formPayload';
+import { stagedUrl } from './releaseEvents';
 import type { FieldDef } from './uiSchema';
 
 // The editor's save, as a pure state machine (Admin v2 F5a, ui.md §2.6, P-5): no React,
@@ -73,7 +74,19 @@ export type DraftGone = 'draft-published' | 'draft-discarded';
  * through); the load and a create are unchanged.
  */
 export type SaveTarget =
-  | { kind: 'resource'; slug: string; saveUrl?: ((id: string) => string) | undefined }
+  | {
+      kind: 'resource';
+      slug: string;
+      saveUrl?: ((id: string) => string) | undefined;
+      /**
+       * Admin v2 R12b: the screen this NEW record is added from is in release mode (its list
+       * answer came through the release, releaseEvents.ts readsThroughRelease, or its editor is
+       * in draft mode), so the create says so (STAGED_QUERY): once releases are switched off
+       * under the screen, the live POST refuses it (409 `releases-off`) instead of creating the
+       * record live. A create only: a saved record's mode is its own answer's (`draft`).
+       */
+      staged?: boolean | undefined;
+    }
   | { kind: 'singleton'; endpoint: string }
   /**
    * A page's SEO row (Admin v2 U10, additive): keyed by its target, not its own id. GET
@@ -590,7 +603,13 @@ export function buildSaveRequest(
     };
   }
   if (target.kind === 'resource' && id === null) {
-    return { url: `/api/admin/${target.slug}`, method: 'POST', body };
+    // R12b: a create from a screen in release mode says so in its address; otherwise the
+    // request is exactly what it always was.
+    return {
+      url: stagedUrl(`/api/admin/${target.slug}`, target.staged === true),
+      method: 'POST',
+      body,
+    };
   }
   // The datetime input shows minutes: an untouched one keeps the stored instant's seconds.
   for (const field of fields) {
