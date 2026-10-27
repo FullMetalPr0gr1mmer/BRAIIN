@@ -32,17 +32,20 @@ export const GA4_LOADER_SRC = '/scripts/ga4.js';
  *     (the first-party search log keeps the counts);
  *   - /join: the application form, an applicant's contact details and CV (Admin only in both
  *     server layers, CLAUDE.md §3): Google's script never runs beside it;
+ *   - /contact: the page of the lead form (a lead's name, e-mail, phone, budget and message),
+ *     left out with Join by the owner's privacy-first default, a recorded departure the owner
+ *     can reverse in a reviewed PR (U15's as-built);
  *   - the 404 pages and the /ar catch-all: nothing to measure.
- * The lead form is not a reason on its own: it is on Home, Services, every service page and
- * Contact, so GA4 runs beside it with the property's form interactions OFF (launch runbook
- * §2e) and nothing typed is ever sent (U15's as-built, a residual the owner signs off with the
- * notice). tests/lib/ga4Routes.spec.ts holds this list to the files in src/pages: a new page
- * needs a decision either way, and a page that renders the application form is never listed.
+ * The lead form also sits in a section on Home, Services and every service page, where GA4
+ * still runs beside it with the property's form interactions OFF (launch runbook §2e), so
+ * nothing typed is sent (a residual the owner signs off with the notice).
+ * tests/lib/ga4Routes.spec.ts holds this list to the files in src/pages: a new page needs a
+ * decision either way, and a page that renders the application form or the Contact page is
+ * never listed.
  */
 const EN_ROUTES = [
   '/',
   '/about',
-  '/contact',
   '/services',
   '/services/[slug]',
   '/portfolio',
@@ -65,6 +68,8 @@ export const NOT_GA4_ROUTES: Readonly<Record<string, string>> = {
   '/ar/search': 'what a visitor typed is in its address',
   '/join': "the application form: an applicant's contact details and CV (Admin-only PII)",
   '/ar/join': "the application form: an applicant's contact details and CV (Admin-only PII)",
+  '/contact': "the lead form's page: a lead's contact details and budget (owner's default)",
+  '/ar/contact': "the lead form's page: a lead's contact details and budget (owner's default)",
   '/404': 'nothing to measure',
   '/ar/404': 'nothing to measure',
   '/ar/[...path]': 'the Arabic catch-all, which answers the Arabic 404 page',

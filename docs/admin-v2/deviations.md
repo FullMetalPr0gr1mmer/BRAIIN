@@ -80,11 +80,13 @@
     privacy notice, the cookie policy and the banner that name Google (today's notice says the
     analytics are first-party), so a saved id says "Not loading yet" and why, not "Set up";
   - never on search (what a visitor typed is in its address), Join (the application form:
-    applicant contact details and CV, Admin-only PII) or the 404 routes;
-  - beside the lead form (Home, Services, every service page and Contact), pending the owner's
-    acceptance with the notice: GA4 sends no field value and the property's form interactions
-    must be OFF (launch runbook §2e), but Google's script runs on those pages; the alternative
-    is a reviewed PR leaving them out;
+    applicant contact details and CV, Admin-only PII), Contact (the lead form's page: the
+    owner's privacy-first default of 2026-10-27, which a reviewed PR may reverse; the design
+    lists every public page) or the 404 routes;
+  - beside the lead form's section on Home, Services and every service page, pending the
+    owner's acceptance with the notice: GA4 sends no field value and the property's form
+    interactions must be OFF (launch runbook §2e), but Google's script runs on those pages; the
+    alternative is a reviewed PR leaving them out;
   - the GA tab through the Data API is deferred until the switch-on and O-18 (a service
     account and the property id): it would have nothing to show before.
 - **CRM**:

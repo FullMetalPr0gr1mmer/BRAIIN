@@ -165,7 +165,7 @@ describe('the switch on', () => {
   });
 
   it('a HEAD reads too, so its headers are the GET answer’s', async () => {
-    const { res } = await visit('/contact', '/contact', 'HEAD');
+    const { res } = await visit('/about', '/about', 'HEAD');
     expect(google(res)).toBe(true);
   });
 
@@ -177,10 +177,12 @@ describe('the switch on', () => {
     expect(google(res)).toBe(false);
   });
 
-  it('never reads for the admin, the API, search, Join, an endpoint or a write', async () => {
+  it('never reads for the admin, the API, search, Join, Contact, an endpoint or a write', async () => {
     for (const [path, route, method] of [
       ['/join', '/join', 'GET'],
       ['/ar/join', '/ar/join', 'GET'],
+      ['/contact', '/contact', 'GET'],
+      ['/ar/contact', '/ar/contact', 'GET'],
       ['/admin', '/admin', 'GET'],
       ['/admin/integrations', '/admin/integrations', 'GET'],
       ['/api/contact', '/api/contact', 'POST'],

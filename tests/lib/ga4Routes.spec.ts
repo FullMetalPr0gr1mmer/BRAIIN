@@ -70,25 +70,42 @@ describe('the routes that load GA4', () => {
     }
   });
 
-  it('leave out every page that renders the application form (applicant PII, Admin only)', () => {
-    // By the page file, not by name: a route whose page renders JoinPage (the form's page)
-    // must be named as never loading GA4, wherever it moves.
+  /** The page routes whose page file renders `component` (by the file, not by the route). */
+  const rendering = (component: string) => {
     const root = join(process.cwd(), 'src', 'pages');
-    const withForm = pageRoutes().filter((route) => {
+    return pageRoutes().filter((route) => {
       const file = route === '/' ? 'index' : route.slice(1);
       for (const candidate of [`${file}.astro`, `${file}/index.astro`]) {
         try {
-          return readFileSync(join(root, candidate), 'utf8').includes('JoinPage.astro');
+          return readFileSync(join(root, candidate), 'utf8').includes(component);
         } catch {
           /* the other form of the file name */
         }
       }
       return false;
     });
+  };
+
+  it('leave out every page that renders the application form (applicant PII, Admin only)', () => {
+    // By the page file, not by name: a route whose page renders JoinPage (the form's page)
+    // must be named as never loading GA4, wherever it moves.
+    const withForm = rendering('JoinPage.astro');
     expect(withForm).toEqual(['/ar/join', '/join']);
     for (const route of withForm) {
       expect(GA4_ROUTES.has(route), route).toBe(false);
       expect(NOT_GA4_ROUTES[route], route).toMatch(/application form/);
+    }
+  });
+
+  it('leave out every page that renders the Contact page (the lead form, by the owner’s default)', () => {
+    // The two forms that collect personal data never have Google's script beside them on
+    // their own pages (U15's as-built). The lead form's section elsewhere (Home, Services,
+    // the service pages) is the residual the property's form interactions OFF covers.
+    const withForm = rendering('ContactPage.astro');
+    expect(withForm).toEqual(['/ar/contact', '/contact']);
+    for (const route of withForm) {
+      expect(GA4_ROUTES.has(route), route).toBe(false);
+      expect(NOT_GA4_ROUTES[route], route).toMatch(/lead form/);
     }
   });
 
@@ -133,6 +150,8 @@ describe('ga4Reads', () => {
         '/404',
         '/join',
         '/ar/join',
+        '/contact',
+        '/ar/contact',
         '/admin',
         '/admin/preview/[...path]',
         '/api/contact',

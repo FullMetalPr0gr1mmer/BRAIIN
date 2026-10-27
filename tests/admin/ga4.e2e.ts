@@ -16,7 +16,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *   - withdrawal (what the banner's no does: the cookie rewritten, `consent-updated`) denies
  *     consent mode, sets Google's off switch and clears the _ga cookies; the next page asks
  *     Google for nothing;
- *   - zero CSP violations on every page, and search never carries the loader.
+ *   - zero CSP violations on every page, and search and the pages of the two forms that
+ *     collect personal data (Contact and Join) never carry the loader nor list Google.
  *
  * Its own project (playwright.config.ts `ga4`), alone, after `general` and before
  * `maintenance`: a saved id puts the loader on every public page the other specs read. The id
@@ -49,8 +50,18 @@ const FAKE_GTAG = `(() => {
 })();`;
 
 const PAGES = {
-  en: { first: '/contact', next: '/about', search: '/search' },
-  ar: { first: '/ar/contact', next: '/ar/about', search: '/ar/search' },
+  en: {
+    first: '/privacy',
+    next: '/about',
+    search: '/search',
+    never: ['/search', '/contact', '/join'],
+  },
+  ar: {
+    first: '/ar/privacy',
+    next: '/ar/about',
+    search: '/ar/search',
+    never: ['/ar/search', '/ar/contact', '/ar/join'],
+  },
 } as const;
 
 async function adminPage(browser: Browser): Promise<{ context: BrowserContext; page: Page }> {
@@ -246,10 +257,13 @@ for (const [locale, paths] of Object.entries(PAGES)) {
       expect(await dataLayer(page)).toBeNull();
       expect(await violations(page), `CSP violations on ${paths.next}`).toEqual([]);
 
-      // Search never carries the loader, nor lists Google, whatever was chosen.
-      const search = await page.request.get(paths.search);
-      expect(await search.text()).not.toContain('/scripts/ga4.js');
-      expect(search.headers()['content-security-policy'] ?? '').not.toMatch(/google/);
+      // Search, Contact and Join never carry the loader, nor list Google, whatever was chosen.
+      for (const path of paths.never) {
+        const never = await page.request.get(path);
+        expect(never.status(), path).toBe(200);
+        expect(await never.text(), path).not.toContain('/scripts/ga4.js');
+        expect(never.headers()['content-security-policy'] ?? '', path).not.toMatch(/google/);
+      }
     } finally {
       await context.close();
     }
