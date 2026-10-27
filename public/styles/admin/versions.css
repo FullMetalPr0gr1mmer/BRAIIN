@@ -7,6 +7,10 @@
    (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs). */
 
 /* The page: the versions beside the backups card on a wide screen, stacked below it. */
+.ver-page {
+  align-items: start;
+}
+
 .ver-main,
 .ver-side {
   display: grid;

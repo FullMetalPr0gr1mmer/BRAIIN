@@ -151,6 +151,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'stats.css',
       'two-step.css',
       'users.css',
+      'versions.css',
       'visibility.css',
     ]);
   });

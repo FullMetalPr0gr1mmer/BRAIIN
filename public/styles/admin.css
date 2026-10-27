@@ -4959,6 +4959,10 @@ dialog.drw[data-size='wide'] {
 /* The dashboard's publish card (Admin v2 R13; releases.md §7): stat rows, the live version's
    line under its number, and its actions. Here, not in dashboard.css: the kit's gallery draws
    it too. */
+.pubcard {
+  min-inline-size: 0;
+}
+
 .pubcard__by {
   display: block;
   margin-top: 2px;

@@ -141,7 +141,12 @@ describe('admin code adds no <style> at runtime', () => {
 describe('hydrated admin islands are weighed by the admin budget', () => {
   // `<Name … client:load`, across line breaks: the tag of every hydrated component, with
   // the module its page imports it from.
-  const hydrated = [...ADMIN_PAGES, join(ROOT, 'src/layouts/AdminLayout.astro')].flatMap((path) => {
+  // Admin v2 R13: and the server partials that draw one (the dashboard's publish card).
+  const hydrated = [
+    ...ADMIN_PAGES,
+    join(ROOT, 'src/layouts/AdminLayout.astro'),
+    ...walk(join(ROOT, 'src/components/admin/ui'), ['.astro']),
+  ].flatMap((path) => {
     const src = read(path);
     return [
       ...src.matchAll(/<([A-Z][\w.]*)\b[^<>]*?\sclient:(?:load|idle|visible|media|only)\b/gs),

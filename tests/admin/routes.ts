@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { ADMIN_NAV, isVisible, visibleNav, type NavTab } from '@/lib/admin/nav';
 import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
+import { RELEASE_READ_CAPS } from '@/lib/release/readCaps';
 import { ROLES, type Role } from '@/lib/auth/types';
 
 /*
@@ -103,6 +104,11 @@ export interface LockedScreen {
   href: string;
   api: string;
   cap: Capability;
+  /**
+   * Admin v2 R13: a screen that admits ANY of these (Backups & versions: the release read
+   * capabilities), when it is more than `cap`. Refused then for the roles holding none of them.
+   */
+  anyOf?: readonly Capability[];
   render?: 'island' | 'server';
 }
 
@@ -176,6 +182,16 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/faq', api: '/api/admin/faq', cap: 'pages.write' },
   // Admin v2 C9a: Admin only; the island shows the API's 403.
   { href: '/admin/crm/settings', api: '/api/admin/crm/settings', cap: 'crm.settings' },
+  // Admin v2 R13 (plan B7.3): Backups & versions, for any release read capability, so only
+  // Sales is refused: the page's own 403 and Refused.astro, having read nothing; its JSON twin
+  // is the versions list, behind the same capabilities.
+  {
+    href: '/admin/backups',
+    api: '/api/admin/releases',
+    cap: 'pages.write',
+    anyOf: RELEASE_READ_CAPS,
+    render: 'server',
+  },
 ];
 
 /**
@@ -341,6 +357,19 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   // in General" link and the consent version render only there. tests/lib/adminRoutes.spec.ts
   // holds every tab of the overview (formsTabHref) to this list.
   { href: '/admin/forms?tab=join', label: 'Forms, Join form', caps: ['settings.general'] },
+  // Backups & versions (Admin v2 R13): the notice a download that hit the hourly limit comes
+  // back with, and a version's details asked for while none exists (releases off: no read, the
+  // page as it is), for every role that opens it.
+  {
+    href: '/admin/backups?export=limit',
+    label: 'Backups, download limit',
+    caps: [...RELEASE_READ_CAPS],
+  },
+  {
+    href: '/admin/backups?details=0f0f0f0f-0000-4000-8000-000000000001',
+    label: 'Backups, a version’s details',
+    caps: [...RELEASE_READ_CAPS],
+  },
 ];
 
 /**
