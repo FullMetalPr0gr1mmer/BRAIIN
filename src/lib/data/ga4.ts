@@ -4,7 +4,7 @@ import { reportLoadError } from './parse';
 import { contentClient } from './source';
 
 // The GA4 measurement id a public page loads Google Analytics with (Admin v2 U15): the one
-// `site_integrations` column anon reads beside U11's Search Console code (migration 0113),
+// `site_integrations` column anon reads beside U11's Search Console code (U15's migration),
 // under 0105's policy fenced to the launch tenant. Public by nature: every page that loads
 // GA4 carries it. Read only by src/middleware.ts, and only while the code-owned switch is on
 // and the route loads GA4 (src/lib/http/ga4.ts), so with the switch off no request reads it.

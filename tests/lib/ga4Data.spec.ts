@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The GA4 measurement id a public page loads Google Analytics with (Admin v2 U15,
-// src/lib/data/ga4.ts): anon's one GA4 column of site_integrations (0113), through the content
+// src/lib/data/ga4.ts): anon's one GA4 column of site_integrations (U15's migration), through the content
 // seam. It never throws and never fails the page: anything but a well-formed measurement id
 // is no id (no GA4), and every failure is reported.
 
@@ -65,7 +65,7 @@ describe('getGa4MeasurementId', () => {
     expect(asked).toEqual([]);
   });
 
-  it('is null and reported on a refused read (a database without 0113: 42501)', async () => {
+  it('is null and reported on a refused read (a database without the U15 migration: 42501)', async () => {
     answer = { data: null, error: { code: '42501', message: 'permission denied' } };
     expect(await getGa4MeasurementId()).toBeNull();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('site_integrations load failed'));
