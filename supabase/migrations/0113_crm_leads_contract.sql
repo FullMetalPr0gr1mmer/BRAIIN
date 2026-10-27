@@ -23,7 +23,8 @@
 -- zone, and since C14a nothing reads the CRM's copy.
 --
 --   1. Preconditions, under the drop's own locks (so nothing is written between the counts
---      and the drop), each a COUNT, never a value: no lead holds a plaintext band without an
+--      and the drop), each a COUNT, never a value, run only by a role that bypasses row
+--      security (leads forces it, so any other runner would count nothing): no lead holds a plaintext band without an
 --      encrypted timeline (the daily cron moved every band it could read, 0035); no lead's
 --      legacy notes field differs from its mirrored note (a field longer than the mirror's
 --      5,000 characters differs, so no words are dropped unread); no lead holds an address
@@ -49,6 +50,9 @@
 --   6. app.backfill_lead_pipeline() (0034's one-off backfill) and
 --      app.lead_stage_for_status(uuid, text, uuid) (the sync's helper) dropped: both read
 --      `status`, and nothing calls either after 2.
+--   6b. Every lead still holding a notes field or a band is rewritten with both empty (the
+--      BEFORE phase off for that one statement, so it is no edit): a dropped column's bytes
+--      stay in a row until the row is next written, and the words should not.
 --   7. leads: leads_safe dropped (it names `status`; `create or replace` can only append),
 --      `leads_status_check` and `leads_tenant_status_idx` dropped by name, then the four
 --      columns, RESTRICT: an object that depends on one fails the push instead of going with
@@ -105,6 +109,13 @@ declare
   n_unstaged int;
   n_initial int;
 begin
+  -- leads and lead_stages force row security, so a runner that does not bypass it reads no
+  -- row: every count below would be 0 and the columns would go unread. Production runs this
+  -- as postgres (BYPASSRLS); anything else refuses before a lock is taken.
+  if not coalesce((select r.rolsuper or r.rolbypassrls from pg_roles r
+                    where r.rolname = current_user), false) then
+    raise exception 'C14b: run this as a role that bypasses row security (the counts below would read no lead), so nothing is dropped';
+  end if;
   perform set_config('lock_timeout', '5s', true);
   lock table public.crm_settings in access exclusive mode;
   lock table public.leads in access exclusive mode;
@@ -509,6 +520,32 @@ grant execute on function public.crm_index_lead(uuid, uuid, text, text, text[], 
 drop function app.backfill_lead_pipeline();
 drop function app.lead_stage_for_status(uuid, text, uuid);
 
+-- ═══ 6b. The words leave the rows, not only the catalog ═════════════════════════════════════
+-- DROP COLUMN only hides a column: a row keeps the dropped value's bytes on disk (and in a
+-- physical backup) until that row is next written. So every lead still holding a notes field
+-- (each one matches a mirrored note, 1. refused otherwise) or a moved band is rewritten with
+-- both empty first; autovacuum then reclaims the old versions. This runs after 3., so the
+-- mirror notes stay in the thread. The BEFORE phase is switched off for this one statement,
+-- under the ACCESS EXCLUSIVE lock 1. holds, so the rewrite is no edit: each lead keeps its
+-- updated_at, updated_by and version (the AFTER phase records nothing for these columns).
+-- The postconditions check that every trigger on leads is switched on again.
+alter table public.leads disable trigger leads_pipeline;
+do $$
+declare
+  n_rewritten int;
+begin
+  update public.leads
+     set internal_notes = null, timeline_band = null
+   where internal_notes is not null or timeline_band is not null;
+  get diagnostics n_rewritten = row_count;
+  raise notice 'C14b: % lead row(s) rewritten without the notes field and the band', n_rewritten;
+  if exists (select 1 from public.leads
+              where internal_notes is not null or timeline_band is not null) then
+    raise exception 'C14b: a lead still holds a notes field or a band before the drop';
+  end if;
+end $$;
+alter table public.leads enable trigger leads_pipeline;
+
 -- ═══ 7. The lead columns go, and leads_safe is re-created without status ═════════════════════
 -- One transaction: no reader meets leads_safe missing or with default rights. The view goes
 -- first because it names `status`; the CHECK and the index are named so the file says
@@ -778,6 +815,12 @@ begin
                                   'leads_pipeline app.tg_lead_pipeline',
                                   'leads_timeline app.tg_lead_timeline'] then
     raise exception 'C14b: the triggers on leads are %', v_got;
+  end if;
+  -- 6b switched the BEFORE phase off for one statement: every trigger fires again, always.
+  if exists (select 1 from pg_trigger t
+              where t.tgrelid = 'public.leads'::regclass and not t.tgisinternal
+                and t.tgenabled::text <> 'O') then
+    raise exception 'C14b: a trigger on leads is not switched on';
   end if;
   -- crm_settings: the three stamps fire on the configuration columns, exactly.
   if (select count(*) from pg_trigger t
