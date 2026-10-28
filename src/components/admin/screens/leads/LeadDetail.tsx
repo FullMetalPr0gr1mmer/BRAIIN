@@ -74,11 +74,13 @@ export default function LeadDetail(props: LeadDetailProps) {
     [people],
   );
 
-  async function refetch() {
+  /** Reads the lead again; a read a write overtook is read once more (at most twice). */
+  async function refetch(again = 2): Promise<void> {
     const sent = order.current.send();
     try {
       const row = await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`);
       if (order.current.accept(sent, false)) setLead(row);
+      else if (again > 0) await refetch(again - 1);
     } catch (err) {
       setMessage({ tone: 'err', text: describeError(err) });
     }

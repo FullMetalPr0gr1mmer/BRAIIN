@@ -117,6 +117,23 @@ describe('AnswerOrder (a lead page)', () => {
     expect(o.accept(markRead, true)).toBe(false);
   });
 
+  it('keeps a star saved after the mark-read sent before it answered (either order)', () => {
+    const o = new AnswerOrder();
+    const markRead = o.send();
+    const star = o.send();
+    expect(o.accept(markRead, true)).toBe(true);
+    expect(o.accept(star, true)).toBe(true);
+  });
+
+  it('drops a read sent before a write that answered first, then a read sent after is kept', () => {
+    const o = new AnswerOrder();
+    const refetch = o.send(); // after Log contact
+    const star = o.send();
+    expect(o.accept(star, true)).toBe(true);
+    expect(o.accept(refetch, false)).toBe(false);
+    expect(o.accept(o.send(), false)).toBe(true); // the island's one more read
+  });
+
   it('drops a refetch sent while a write was out when the write answers first', () => {
     const o = new AnswerOrder();
     const write = o.send();

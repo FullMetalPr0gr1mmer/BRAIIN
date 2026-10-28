@@ -26,9 +26,10 @@ for the search before pressing the star; the product itself was not fixed.
      An answer from a read older than one already used is dropped whole. A failed write puts
      back what the server is known to hold, and only once no other write of that field is out.
    - `AnswerOrder` for a lead's page, which is not optimistic (it shows each write's answer):
-     an answer (a read or a write's row) is used only if no write answered after it was sent.
-     So the mark-read PATCH sent on opening, or the refetch after "Log contact", can no longer
-     answer last and undo a star or a stage move saved meanwhile.
+     a read's answer is used only if no write answered after the read was sent; a write's
+     answer only if no write sent after it has answered. So the mark-read PATCH sent on
+     opening, or the refetch after "Log contact", can no longer answer last and undo a star or
+     a stage move saved meanwhile.
 2. **`LeadsList.tsx`** routes its list answers and its star through `RowToggles`.
 3. **`LeadDetail.tsx`** routes the mark-read answer, `write()` and `refetch()` through
    `AnswerOrder`.
@@ -52,7 +53,17 @@ As planned, in three places:
   server confirmed, which after two quick presses is not always the value before the second.
 - **`LeadDetail.tsx`**: the mark-read PATCH on opening, `write()` (every control of the status
   card, the stage move included) and `refetch()` (after "Log contact" and after a 409) take a
-  stamp as they leave and set the lead only if `order.accept(stamp, isWrite)`.
+  stamp as they leave and set the lead only if `order.accept(stamp, isWrite)`. A refetch a
+  write overtook is read once more (at most twice), so what "Log contact" changed still shows
+  when a star's row, saved from before the contact, answered in between.
+
+## Self-review
+
+The first `AnswerOrder` dropped every answer sent before any write answered, writes included.
+Opening an unread lead and pressing the star at once then lost the star's own answer whenever
+the mark-read PATCH answered first: the same bug the other way round. A write's answer is now
+dropped only when a write sent after it has answered; the test "keeps a star saved after the
+mark-read sent before it answered (either order)" fails on the first rule (1 failed, 17 passed).
 
 ## The board
 
@@ -80,18 +91,18 @@ toggle on a card writes anything (the card's star and unread dot are display onl
 
 ## Tests
 
-- `tests/lib/lateAnswers.spec.ts` (16 tests): the R13 order (read leaves, star saved, read
+- `tests/lib/lateAnswers.spec.ts` (18 tests): the R13 order (read leaves, star saved, read
   answers with the star off: the star stays on), a star still out when a read answers, a read
   that left during the write and one after it (the later read decides, so a colleague's change
   shows), an older answer dropped, only the toggled row and field touched, a failed write put
   back and not re-shown by a late answer, two presses (each order, one or both failing), an
-  unknown token; `AnswerOrder`: the mark-read answer after a saved star is dropped, a refetch
-  sent while a write was out is dropped when the write answers first, answers in order are
-  kept; and a source guard that both islands go through the model (no `setRows(asRows(`, no
+  unknown token; `AnswerOrder`: the mark-read answer after a saved star is dropped, a star
+  sent after the mark-read is kept in either order, a refetch overtaken by a write is dropped
+  and the read after it kept, answers in order are kept; and a source guard that both islands go through the model (no `setRows(asRows(`, no
   bare `setLead(await`, no `.then(setLead)`).
 - **Fails without the fix:** with the two islands reverted (`git diff origin/main --
   src/components/admin/screens/leads > p; git apply -R p`), the two source-guard tests fail
-  (2 failed, 14 passed); with the whole change reverted the spec cannot import the model.
+  (2 failed, 16 passed); with the whole change reverted the spec cannot import the model.
 - **e2e** (`tests/admin/leads.e2e.ts`, CI only): "the list: a star pressed while a search is
   out stays pressed (C4 star race)". The lead is put on screen by a first search; a second
   search (its whole e-mail, the same row) is fetched from the server at once through

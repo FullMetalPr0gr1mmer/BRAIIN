@@ -13,7 +13,8 @@
 //     a read sent before a write answered (the refetch after "Log contact") or an earlier
 //     write's answer (the mark-read PATCH sent on opening) could arrive last and replace the
 //     row: the star off again, an old version (the next versioned change then a needless 409).
-//     An answer is used only when no write answered after it was sent.
+//     A read's answer is used only when no write answered after the read was sent; a write's
+//     answer only when no write sent after it has answered (its row holds its own change).
 //
 // Pure and DOM-free, so the rules are unit-tested (tests/lib/lateAnswers.spec.ts); the islands
 // keep one instance in a ref. Nothing here reads a field the island did not set on its own row:
@@ -118,7 +119,9 @@ export class RowToggles {
 export class AnswerOrder {
   private clock = 0;
   /** The stamp at which the last write answered (0: none yet). */
-  private wrote = 0;
+  private answeredAt = 0;
+  /** The send stamp of the newest-sent write that has answered (0: none yet). */
+  private newestWrite = 0;
 
   /** A read or a write leaves: its stamp, handed back with its answer. */
   send(): number {
@@ -126,12 +129,16 @@ export class AnswerOrder {
   }
 
   /**
-   * An answer sent at `sent` arrives: true when it may be shown (no write answered after it was
-   * sent). `write` marks a write's answer, after which any answer sent before it is stale.
+   * An answer sent at `sent` arrives: true when it may be shown. A read's answer is stale once
+   * any write answered after the read left (the read may predate it); a write's answer is stale
+   * once a write sent after it has answered (that row is newer). Every write's answer counts,
+   * shown or not.
    */
   accept(sent: number, write: boolean): boolean {
-    const fresh = this.wrote < sent;
-    if (write) this.wrote = ++this.clock;
+    if (!write) return this.answeredAt < sent;
+    const fresh = this.newestWrite < sent;
+    this.newestWrite = Math.max(this.newestWrite, sent);
+    this.answeredAt = ++this.clock;
     return fresh;
   }
 }
