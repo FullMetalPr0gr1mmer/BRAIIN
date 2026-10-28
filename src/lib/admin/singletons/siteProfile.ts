@@ -1,8 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { readMaintenance } from '@schemas/maintenance';
 import { SiteProfileSchema } from '@schemas/siteProfile';
-import { edgeValueOf, putMaintenanceState, readMaintenanceSnapshot } from '@/lib/http/maintenance';
 import { contactFromRow } from '@/lib/maintenance/contact';
+import { refreshMaintenanceContact } from '@/lib/maintenance/refresh';
 import type { SingletonConfig } from '@/lib/admin/singleton';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { IDENTITY_FALLBACK } from '@/lib/identity/fallback';
@@ -141,21 +140,17 @@ export const siteProfileSingleton: SingletonConfig = {
   // colleague has just changed. KV only says whether the edge has maintenance on (when it
   // does not, nothing is read or written: an identity save never switches the site on), and
   // the row must say on too. Best effort: a failure is in the audit detail and the cron's
-  // reconcile heals it within ten minutes. With releases on, R7's post-publish effects must
-  // do the same.
+  // reconcile heals it within ten minutes. With releases on, a release that changes these
+  // columns does the same after it goes live (src/lib/release/afterEffects.ts, R14-prep); both
+  // through src/lib/maintenance/refresh.ts.
   afterWrite: async ({ auth, sb, row }) => {
-    const edge = await readMaintenanceSnapshot(env);
-    if (!edge?.active) return;
-    const { data, error } = await sb
-      .from('site_settings')
-      .select('maintenance')
-      .eq('tenant_id', auth.tenantId)
-      .maybeSingle<{ maintenance: unknown }>();
-    if (error) return { maintenanceContact: 'not-refreshed' };
-    const stored = readMaintenance(data?.maintenance ?? null);
-    if (!stored.active) return;
-    const kvSynced = await putMaintenanceState(env, edgeValueOf(stored, contactFromRow(row)));
-    return { maintenanceContact: kvSynced ? 'refreshed' : 'not-refreshed' };
+    const refreshed = await refreshMaintenanceContact({
+      sb,
+      tenantId: auth.tenantId,
+      env,
+      contact: contactFromRow(row),
+    });
+    return refreshed === 'not-needed' ? undefined : { maintenanceContact: refreshed };
   },
   // The job-application intake switch is never part of a release (Admin v2 P-3; 0038's
   // exempt_columns): with releases on it gets its own endpoint (R3). The legacy PATCH above

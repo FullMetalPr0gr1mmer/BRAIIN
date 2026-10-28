@@ -12,6 +12,10 @@ const state = vi.hoisted(() => ({
   take: true as unknown,
   logs: [] as Record<string, unknown>[],
   syncs: [] as string[],
+  /** The rows the system's reads answer (R14-prep: the settings row, the identity). */
+  rows: {} as Record<string, Record<string, unknown> | null>,
+  /** Every table the system read, with the tenant it named. */
+  reads: [] as string[],
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -22,6 +26,16 @@ vi.mock('@/lib/supabase/server', () => ({
         ? { data: state.take, error: null }
         : { data: null, error: null };
     },
+    from: (table: string) => ({
+      select: () => ({
+        eq: (_column: string, tenant: string) => ({
+          maybeSingle: async () => {
+            state.reads.push(`${table}:${tenant}`);
+            return { data: state.rows[table] ?? null, error: null };
+          },
+        }),
+      }),
+    }),
   }),
 }));
 vi.mock('@/lib/data/systemLog', () => ({
@@ -43,8 +57,11 @@ vi.mock('@/lib/admin/visibilitySync', () => ({
   },
 }));
 
-const { afterPublish, snapshotNeeds } = await import('@/lib/release/afterEffects');
+const { afterPublish, rebuildSnapshots, snapshotNeeds } =
+  await import('@/lib/release/afterEffects');
 const { resetPurgeBreaker, COLLAPSE_TAG } = await import('@/lib/http/purge');
+const { MAINTENANCE_KV_KEY } = await import('@/lib/http/maintenance');
+const { __kv } = (await import('cloudflare:workers')) as unknown as { __kv: Map<string, string> };
 
 type Item = ApplyResult['items'][number];
 const T = '00000000-0000-4000-8000-0000000000b1';
@@ -112,6 +129,9 @@ beforeEach(() => {
   state.take = true;
   state.logs = [];
   state.syncs = [];
+  state.rows = {};
+  state.reads = [];
+  __kv.delete(MAINTENANCE_KV_KEY);
   resetPurgeBreaker();
 });
 
@@ -130,7 +150,139 @@ describe('the snapshots a release moves', () => {
       snapshotNeeds([item('page', 'update', { slug: 'about' }, { slug: 'about' })]).visibility,
     ).toBe(false);
     expect(snapshotNeeds([item('page', 'create', null, { slug: 'new' })]).visibility).toBe(false);
-    expect(snapshotNeeds(null)).toEqual({ redirects: true, visibility: true });
+    expect(snapshotNeeds(null)).toEqual({
+      redirects: true,
+      visibility: true,
+      maintenance: { row: null },
+    });
+  });
+});
+
+describe("the maintenance page's contact buttons after a release (R14-prep, R7's hand-off)", () => {
+  const BRAND = { en: 'Studio', ar: 'استوديو' };
+  const identity = (over: Record<string, unknown> = {}) => ({
+    tenant_id: T,
+    brand_name: BRAND,
+    contact_email: 'hello@studio.example',
+    whatsapp_e164: '+966500000000',
+    tagline: { en: 'Old', ar: 'قديم' },
+    ...over,
+  });
+  const ON = { active: true, allowlist: [], changedAt: '2026-10-28T08:00:00.000Z' };
+  const edgeContact = () =>
+    (JSON.parse(__kv.get(MAINTENANCE_KV_KEY) ?? 'null') as { contact?: Record<string, unknown> })
+      ?.contact;
+  const needs = (row: Record<string, unknown> | null) => ({
+    redirects: false,
+    visibility: false,
+    maintenance: { row },
+  });
+
+  it('owed only when the release moved the brand, the e-mail or the WhatsApp number', () => {
+    const moved = identity({ contact_email: 'new@studio.example' });
+    expect(snapshotNeeds([item('site_profile', 'update', identity(), moved)])).toEqual(
+      needs(moved),
+    );
+    expect(
+      snapshotNeeds([
+        item('site_profile', 'update', identity(), identity({ brand_name: { en: 'S', ar: 'س' } })),
+      ]).maintenance,
+    ).toBeDefined();
+    // The tagline, or a key order the database wrote differently, is not the buttons' business.
+    expect(
+      snapshotNeeds([
+        item(
+          'site_profile',
+          'update',
+          identity(),
+          identity({ tagline: { en: 'New', ar: 'جديد' } }),
+        ),
+      ]).maintenance,
+    ).toBeUndefined();
+    expect(
+      snapshotNeeds([
+        item(
+          'site_profile',
+          'update',
+          identity(),
+          identity({ brand_name: { ar: BRAND.ar, en: BRAND.en } }),
+        ),
+      ]).maintenance,
+    ).toBeUndefined();
+    // Another type's contact-looking columns are not the identity.
+    expect(
+      snapshotNeeds([item('team_member', 'update', {}, { contact_email: 'x@studio.example' })])
+        .maintenance,
+    ).toBeUndefined();
+  });
+
+  it('maintenance on: the edge carries the settings row with the buttons from the release', async () => {
+    __kv.set(
+      MAINTENANCE_KV_KEY,
+      JSON.stringify({
+        ...ON,
+        contact: { brand: BRAND, email: 'old@studio.example', whatsappE164: null },
+      }),
+    );
+    state.rows['site_settings'] = { maintenance: ON };
+    const moved = identity({ contact_email: 'new@studio.example' });
+    expect(await rebuildSnapshots(T, needs(moved))).toBe(true);
+    // The settings row read as the system, for this tenant; the identity taken from the image.
+    expect(state.reads).toEqual([`site_settings:${T}`]);
+    expect(edgeContact()).toEqual({
+      brand: BRAND,
+      email: 'new@studio.example',
+      whatsappE164: '+966500000000',
+    });
+  });
+
+  it('items not known: the identity is read as the system', async () => {
+    __kv.set(MAINTENANCE_KV_KEY, JSON.stringify(ON));
+    state.rows['site_settings'] = { maintenance: ON };
+    state.rows['site_profile'] = identity({ contact_email: 'read@studio.example' });
+    await rebuildSnapshots(T, needs(null));
+    expect(state.reads).toEqual([`site_settings:${T}`, `site_profile:${T}`]);
+    expect(edgeContact()).toMatchObject({ email: 'read@studio.example' });
+  });
+
+  it('maintenance off at the edge: nothing read, nothing written, nothing owed', async () => {
+    state.rows['site_settings'] = { maintenance: ON };
+    expect(await rebuildSnapshots(T, needs(identity()))).toBeUndefined();
+    expect(state.reads).toEqual([]);
+    expect(__kv.has(MAINTENANCE_KV_KEY)).toBe(false);
+  });
+
+  it('the edge on but the settings row off: never switched on, never rewritten', async () => {
+    const edge = JSON.stringify(ON);
+    __kv.set(MAINTENANCE_KV_KEY, edge);
+    state.rows['site_settings'] = { maintenance: { active: false } };
+    expect(await rebuildSnapshots(T, needs(identity()))).toBeUndefined();
+    expect(__kv.get(MAINTENANCE_KV_KEY)).toBe(edge);
+  });
+
+  it('a publish that changed the identity refreshes the buttons; one that did not reads nothing', async () => {
+    __kv.set(MAINTENANCE_KV_KEY, JSON.stringify(ON));
+    state.rows['site_settings'] = { maintenance: ON };
+    const { sb } = publisher();
+    await afterPublish({
+      sb,
+      auth: AUTH,
+      releaseId: RELEASE,
+      number: 14,
+      items: [
+        item('site_profile', 'update', identity(), identity({ whatsapp_e164: '+966511111111' })),
+      ],
+    });
+    expect(edgeContact()).toMatchObject({ whatsappE164: '+966511111111' });
+    state.reads = [];
+    await afterPublish({
+      sb,
+      auth: AUTH,
+      releaseId: RELEASE,
+      number: 15,
+      items: [item('statistic', 'update', {}, {})],
+    });
+    expect(state.reads).toEqual([]);
   });
 });
 
