@@ -127,8 +127,9 @@ const FAMILY_GROUPS = [
     group: 'admin-content.',
     importers: /^Admin(?:Services|Discipline|ServiceEditor|Projects|ProjectEditor)\./,
   },
-  // Admin v2 E1: the page editor's own group, on its island only.
-  { group: 'admin-pages.', importers: /^AdminPageEditor\./ },
+  // Admin v2 E1: the page editor's own group, on its island only. Admin v2 E2: and its live
+  // preview column (lazy, loaded only on the editor), which takes the editor's words from it.
+  { group: 'admin-pages.', importers: /^(?:AdminPageEditor|admin-page-preview)\./ },
 ];
 // What a family's group must never import statically: the field kit, and its own lazy part.
 const FAMILY_NEVER = {
