@@ -70,7 +70,7 @@ in flight are listed after the table without numbers. A slice's PR adds its own 
 | 0058 | (released) | unused: U1 (0060) merged before U14b, and once 0060 is on `main` a 0058 would sort below its highest (rule 1), so U14b moved to 0061 | 2 |
 | 0059 | C13 | lead attribution capture (built, held for the privacy notice, O-11); moved from 0047, then from 0049. Below Wave 3's numbers: when released it renumbers to the lowest free number above `main`'s highest (rule 3), the wave's slack first | 1 |
 
-In flight (numbers assigned at merge): U7 (FAQ and collections), U10 (SEO), U17 (two-step sign-in), U8, U9, U11, C9a (CRM settings), C10a (the Sales role: an enum file alone, then the rest), R9 (the preview guide, one `app.put_help_guide`), H13 (the attention list for CMS staff, after U7), R10 (numbered versions, one migration), R11 (scheduled releases and the two switches, one migration), E1 (the page section's label, its registry row and the editing-pages guide, built as the 0113 placeholder); R6 (publish) carried none. C13 (held for O-11) takes the next free number when it is released.
+In flight (numbers assigned at merge): U7 (FAQ and collections), U10 (SEO), U17 (two-step sign-in), U8, U9, U11, C9a (CRM settings), C10a (the Sales role: an enum file alone, then the rest), R9 (the preview guide, one `app.put_help_guide`), H13 (the attention list for CMS staff, after U7), R10 (numbered versions, one migration), R11 (scheduled releases and the two switches, one migration), E1 (the page section's label, its registry row and the editing-pages guide, built as the 0113 placeholder, 0115 at its merge train); R6 (publish) carried none. C13 (held for O-11) takes the next free number when it is released.
 
 
 ## Rules

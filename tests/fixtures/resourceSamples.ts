@@ -196,7 +196,7 @@ export const SAMPLE_OVERRIDES: Readonly<Record<string, Readonly<Record<string, u
   custom_theme: { name: 'Sample theme' },
   // The public identity's location is bilingual text; a nav item's is its menu.
   site_profile: { location: BI('Riyadh, Saudi Arabia', 'الرياض، السعودية') },
-  // A section's name in the page editor (Admin v2 E1, 0113) is plain text; a nav item's
+  // A section's name in the page editor (Admin v2 E1, 0115) is plain text; a nav item's
   // label is its bilingual words.
   page_section: { label: 'Slogan, under the hero' },
 };

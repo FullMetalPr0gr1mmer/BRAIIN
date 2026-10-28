@@ -15,7 +15,7 @@ const SECTION_KEYS = {
   visible: 'visible',
   sortOrder: 'sort_order',
   isPlaceholder: 'is_placeholder',
-  // Admin v2 E1 (0113): the section's name in the page editor's sections column. Written only
+  // Admin v2 E1 (0115): the section's name in the page editor's sections column. Written only
   // when a payload carries it (the Rename dialog); the legacy section form never sends it.
   label: 'label',
 };

@@ -62,7 +62,7 @@ describe('SectionLabelSchema', () => {
   });
 });
 
-describe('the CHECK on page_sections.label is the schema’s rule (0113)', () => {
+describe('the CHECK on page_sections.label is the schema’s rule (0115)', () => {
   const dir = join(process.cwd(), 'supabase/migrations');
   const file = readdirSync(dir).find((name) => /^\d{4}_page_editor\.sql$/.test(name));
   const sql = readFileSync(join(dir, file!), 'utf8');

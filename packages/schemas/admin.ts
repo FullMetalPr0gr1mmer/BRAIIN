@@ -424,7 +424,7 @@ const SectionPayloadSchema = z
  * What a section's name refuses: a control or format character (Unicode Cc and Cf), as a
  * display name does (adminPrefs.ts DISPLAY_NAME_REFUSED). A line break, a bidi override
  * (U+202E) or a zero-width mark (U+200B) would reorder or hide the words around the name where
- * other staff read it. 0113's CHECK on `page_sections.label` holds the same class, code point
+ * other staff read it. 0115's CHECK on `page_sections.label` holds the same class, code point
  * by code point (tests/lib/sectionLabel.spec.ts).
  */
 export const SECTION_LABEL_REFUSED = /[\p{Cc}\p{Cf}]/u;
@@ -462,7 +462,7 @@ const SectionWriteBase = z.object({
   sortOrder: SortOrderSchema,
   /** Design-delivery placeholder (0016). The 0025 production guard refuses to show one. */
   isPlaceholder: z.boolean().default(false),
-  /** Admin v2 E1: the section's name in the page editor (0113). Optional: no key, no write. */
+  /** Admin v2 E1: the section's name in the page editor (0115). Optional: no key, no write. */
   label: SectionLabelSchema.optional(),
 });
 

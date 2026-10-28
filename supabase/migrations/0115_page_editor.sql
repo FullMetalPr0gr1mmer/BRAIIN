@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
--- 0113 — The page editor (Admin v2 E1, AV-25). Forward-only and EXPAND only. The number is a
+-- 0115 — The page editor (Admin v2 E1, AV-25). Forward-only and EXPAND only. The number is a
 -- placeholder: it is assigned at merge (scripts/renumber-migration.mjs). Depends on 0001
 -- (public.page_sections), 0011 (its table grants to authenticated), 0016 (anon's SELECT on
 -- page_sections behind the published-page fence), 0038 (app.release_entities and its
@@ -223,7 +223,7 @@ begin
                   where table_schema = 'public' and table_name = 'page_sections'
                     and column_name = 'label' and data_type = 'text' and is_nullable = 'YES'
                     and column_default is null) then
-    raise exception '0113: public.page_sections.label must be a nullable text column with no default';
+    raise exception 'E1: public.page_sections.label must be a nullable text column with no default';
   end if;
   if not exists (select 1 from pg_constraint
                   where conrelid = 'public.page_sections'::regclass
@@ -233,7 +233,7 @@ begin
                     and pg_get_constraintdef(oid) ~ 'btrim\(label\)'
                     and pg_catalog.strpos(pg_get_constraintdef(oid), '\u202A-\u202E') > 0
                     and pg_catalog.strpos(pg_get_constraintdef(oid), '\U000E0020-\U000E007F') > 0) then
-    raise exception '0113: page_sections_label_shape is missing, unvalidated or not as written';
+    raise exception 'E1: page_sections_label_shape is missing, unvalidated or not as written';
   end if;
   -- The rule itself, on values (the CHECK's own expression, evaluated here).
   if not (select bool_and(ok) from (values
@@ -246,33 +246,33 @@ begin
             (E'He\u200Bro' ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]'),
             (not ('Hero' ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]')),
             (not ('الصفحة الرئيسية' ~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]'))) as t(ok)) then
-    raise exception '0113: the label rule does not hold on its own samples';
+    raise exception 'E1: the label rule does not hold on its own samples';
   end if;
 
   -- ---- 2. grants: unchanged. anon reads (0016) and writes nothing; authenticated keeps 0011's
   -- four; nobody holds TRUNCATE (R5, 0066, revoked it on every registry table). REFERENCES
   -- and TRIGGER are whatever the regime left them: this file grants and revokes nothing.
   if not has_column_privilege('anon', 'public.page_sections', 'label', 'select') then
-    raise exception '0113: anon must read page_sections.label as every other column (0016)';
+    raise exception 'E1: anon must read page_sections.label as every other column (0016)';
   end if;
   if has_any_column_privilege('anon', 'public.page_sections', 'insert, update')
      or has_table_privilege('anon', 'public.page_sections', 'insert, update, delete') then
-    raise exception '0113: anon holds a write privilege on page_sections';
+    raise exception 'E1: anon holds a write privilege on page_sections';
   end if;
   if not (has_table_privilege('authenticated', 'public.page_sections', 'select')
           and has_table_privilege('authenticated', 'public.page_sections', 'insert')
           and has_table_privilege('authenticated', 'public.page_sections', 'update')
           and has_table_privilege('authenticated', 'public.page_sections', 'delete')) then
-    raise exception '0113: authenticated lost one of 0011''s privileges on page_sections';
+    raise exception 'E1: authenticated lost one of 0011''s privileges on page_sections';
   end if;
   foreach r in array array['public', 'anon', 'authenticated', 'service_role'] loop
     if has_table_privilege(r::name, 'public.page_sections', 'truncate') then
-      raise exception '0113: % holds TRUNCATE on page_sections (0066 revoked it)', r;
+      raise exception 'E1: % holds TRUNCATE on page_sections (0066 revoked it)', r;
     end if;
   end loop;
   if not (select relrowsecurity and relforcerowsecurity from pg_class
            where oid = 'public.page_sections'::regclass) then
-    raise exception '0113: public.page_sections is not ENABLE + FORCE row level security';
+    raise exception 'E1: public.page_sections is not ENABLE + FORCE row level security';
   end if;
 
   -- ---- 3. the registry stages a rename: page_section's columns hold label, and nothing else
@@ -280,7 +280,7 @@ begin
   select columns into v_got from app.release_entities where entity_type = 'page_section';
   if v_got is distinct from array['page_id', 'type', 'content', 'style', 'visible',
                                   'sort_order', 'is_placeholder', 'label'] then
-    raise exception '0113: the page_section registry columns are %', v_got;
+    raise exception 'E1: the page_section registry columns are %', v_got;
   end if;
   if not exists (select 1 from app.release_entities
                   where entity_type = 'page_section' and table_name = 'page_sections'
@@ -290,10 +290,10 @@ begin
                     and deferred_columns = '{}' and unique_flags = '{}'
                     and exempt_columns = '{}' and apply_order = 90 and not has_status
                     and publish_flag = 'visible') then
-    raise exception '0113: the page_section registry row moved beyond its columns';
+    raise exception 'E1: the page_section registry row moved beyond its columns';
   end if;
   if exists (select 1 from app.release_tenants) then
-    raise exception '0113: releases must stay off (app.release_tenants is not empty)';
+    raise exception 'E1: releases must stay off (app.release_tenants is not empty)';
   end if;
 
   -- ---- 4. the guide: in the catalog at revision 1 (new), its place, caps and screens -------
@@ -301,10 +301,10 @@ begin
                   where slug = 'editing-pages' and revision = 1 and sort_order = 41
                     and title = 'Editing pages' and caps = array['pages.write']
                     and screens = array['/admin/pages']) then
-    raise exception '0113: the catalog must hold editing-pages at revision 1, place 41';
+    raise exception 'E1: the catalog must hold editing-pages at revision 1, place 41';
   end if;
   if (select count(*) from app.help_guide_catalog where sort_order = 41) <> 1 then
-    raise exception '0113: place 41 must hold one guide';
+    raise exception 'E1: place 41 must hold one guide';
   end if;
   select string_agg(t.id::text, ', ') into v_bad
     from public.tenants t
@@ -312,7 +312,7 @@ begin
                       where h.tenant_id = t.id and h.slug = 'editing-pages'
                         and h.sort_order = 41 and h.title = 'Editing pages');
   if v_bad is not null then
-    raise exception '0113: tenants without the editing-pages guide: %', v_bad;
+    raise exception 'E1: tenants without the editing-pages guide: %', v_bad;
   end if;
 
   -- ---- 5. no API role gained anything on the help machinery -------------------------------
@@ -324,6 +324,6 @@ begin
      or has_function_privilege('service_role', 'app.seed_help_articles(uuid)', 'execute')
      or has_table_privilege('authenticated', 'app.help_guide_catalog', 'select')
      or has_table_privilege('anon', 'app.help_guide_catalog', 'select') then
-    raise exception '0113: an API role may read the help set, the catalog or seed guides';
+    raise exception 'E1: an API role may read the help set, the catalog or seed guides';
   end if;
 end $$;

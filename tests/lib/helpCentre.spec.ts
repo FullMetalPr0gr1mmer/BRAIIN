@@ -1887,7 +1887,7 @@ describe('editing-pages (E1), a new guide put by the page editor migration', () 
     expect(en).not.toMatch(/on the left|on the right/);
     expect(column).toMatch(/>\s*Sections\s*<\/h2>/);
     // Rename's 60 characters, that the name is not private (anon and other staff read it:
-    // 0113), and who deletes.
+    // 0115), and who deletes.
     expect(en).toContain(
       'a name of up to 60 characters, to tell it apart in the admin. Others can see it, so keep private notes out of it.',
     );
