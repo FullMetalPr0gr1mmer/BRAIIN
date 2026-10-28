@@ -164,6 +164,15 @@
   - SaveStatus sits with the form in the fields column, not in the bar: a section and the page details are separate saves;
   - `page_sections.label` is not admin-only as ui.md drew it: anon's table-level SELECT (0016) reads it on a visible section of a published page (the verification accepted it), so the Rename dialog and the guide say the name is not private;
   - the page editor is its own bundle group, `admin-pages`, not a member of `admin-screens` (Wave 3 correction 7): in the shared group its code rode on eight other screens and theirs on it.
+- **The page editor's live preview column** (E2; as built: [as-built/E2.md](as-built/E2.md), Departures):
+  - one bridge and one envelope, R9's (`src/lib/admin/previewChannel.ts`, `src/lib/admin/preview/bridge.ts`, `packages/schemas/previewMessage.ts`), not AV-26's `previewBridge.ts` names: P-4 keeps one preview stack; the envelope gains one preview-to-parent message, `select`, for ui.md's "clicking a section in the preview selects it";
+  - no `buildCsp` change: R9 already sends `frame-src 'self'` on `/admin/**` only, and the preview's own policy (`form-action 'none'`, `connect-src` of the read-only endpoints) is R9's;
+  - the Edit | Preview switch serves every width below 1280 px, not only 1024 to 1279 px, because below 1024 px the sections stay a list (E1's departure), not a select;
+  - the column has its own English / العربية switch besides following the editor's language: with the editor on Both, the person still chooses the preview's language;
+  - with releases off the bar does not say ui.md's "Your edits are saved as drafts…" (untrue: each save is live); it says the preview is the page as visitors see it and reloads after each save. With releases on it says ui.md's words;
+  - SEO gets no preview column: E1 gives SEO the editor's SEO card only, and Open page stays;
+  - the preview is mounted the first time it is on screen and kept, hidden by CSS while the fields show, and a reload asked for while it is hidden waits until it shows (P-15: no Worker request for a preview nobody sees);
+  - added: Reload preview (the prototype's refresh button), a note when the open section is not in the preview (hidden, or not on that page), "The preview shows another page" with Back after a link followed inside it, and a note when the frame answers without the bridge.
 - **Backups & versions, the history drawer and the publish card** (R13; as built: [as-built/R13.md](as-built/R13.md)):
   - no bell items for "releases published" and "changes waiting" (ui.md §2.8, AV-24): each is one more read on every admin render of a CMS role (the dashboard sits at 42 of its 50 subrequests); the failed scheduled release keeps its bell item (R11), and the publish card and the savebar say what is waiting. Left to R14 or an owner question;
   - the disaster-recovery card is one line (ui.md: PITR 28 days, nightly encrypted dumps, the media mirror): none of the three runs yet (launch runbook §9), so the page claims only that the hosting provider backs the database up, until they do;
@@ -486,7 +495,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §8.4 | Site renders pixels and GA | deviated-challenge | built under A6 | none | See the GA4/pixels row. |
 | §8.5 | Services/projects screens and tabs; reordering renumbers; featured pickers | covered | covered | AV-14, AV-15 | The number pill derives from disciplines.sort_order. |
 | §8.6 | Library, picker in every image field, where-used before delete | covered | covered | AV-12, R5 |  |
-| §9 | postMessage bridge (text/texts/lang/show/order/jump/item), ready handshake, origin checks, draft rendering | deviated-ok | deviation (standard or owner decision) | R8, R9, AV-26 (P-4) | Reload + jump/highlight/tokens instead of text patching; bridge only on /admin/preview (Pillar 1/2). R9 and AV-26 name different bridge and envelope files: keep one. |
+| §9 | postMessage bridge (text/texts/lang/show/order/jump/item), ready handshake, origin checks, draft rendering | deviated-ok | deviation (standard or owner decision) | R8, R9, AV-26 (P-4) | Reload + jump/highlight/tokens instead of text patching; bridge only on /admin/preview (Pillar 1/2). R9 and AV-26 name different bridge and envelope files: E2 kept R9's (P-4), adding `select` for click-to-select. |
 | §10 | Theme fields mapped to the site's CSS variables | covered | covered | AV-27 (colours, theme.css); AV-32 shapes/type later |  |
 | §10 | Header, footer, loading settings rendered on the site, with previews | covered | covered | AV-28-AV-30 | Real iframe preview instead of mock previews. |
 | §11.1 | Form endpoints validate against config, honeypot, captcha, IP rate limit | covered | covered | /api/contact, /api/apply, EXC-004 limiter, MERGE:forms-config | Captcha missing (KAN-20). |
