@@ -137,6 +137,11 @@
   - a discipline's card line and description stay optional, as the schema holds them (AV-14 drew them required);
   - Duplicate copies a service as saved (a draft, "(copy)" after the English name, its own address) without its case study; archiving is the status's "Archived", offered to an Admin only, not a head button;
   - the admin writes at most 4 value cards and 5 problems (the prototype's caps); the database and the public read keep 6, so a row stored with more still renders and is refused at its next save until one is removed (the read-back counts them in production).
+- **Backups & versions, the history drawer and the publish card** (R13; as built: [as-built/R13.md](as-built/R13.md)):
+  - no bell items for "releases published" and "changes waiting" (ui.md §2.8, AV-24): each is one more read on every admin render of a CMS role (the dashboard sits at 42 of its 50 subrequests); the failed scheduled release keeps its bell item (R11), and the publish card and the savebar say what is waiting. Left to R14 or an owner question;
+  - the disaster-recovery card is one line (ui.md: PITR 28 days, nightly encrypted dumps, the media mirror): none of the three runs yet (launch runbook §9), so the page claims only that the hosting provider backs the database up, until they do;
+  - the history drawer is on row editors only: the two singletons (the identity on General, the SEO defaults), entity SEO and page visibility have no History yet (left for R14 or E1), and the help guide says "the editor of a service, a project, a post or another item in a list";
+  - the route is `/admin/backups` (plan B7.3), for every CMS role holding a release read capability, not `/admin/settings/versions`.
 - **Copy corrected** where untrue:
   - maintenance "…after you publish";
   - page visibility "Takes effect when you publish" / "Hidden from the site after you publish" → "Applies to the live site within a few minutes" until releases switch on (U14a, D7);
