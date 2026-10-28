@@ -119,29 +119,82 @@ function argumentsAt(text: string, open: number): string[] {
   throw new Error('unbalanced call');
 }
 
-/** Every `adminFetch(url, { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', … })` in the client. */
-function writes(): Write[] {
-  const out: Write[] = [];
-  for (const [file, text] of SOURCES) {
-    for (const match of text.matchAll(/\badminFetch(<)?/g)) {
-      let at = match.index! + 'adminFetch'.length;
-      if (match[1]) {
-        // Skip the type arguments: `<…>`, nested ones included.
-        let depth = 0;
-        for (; at < text.length; at += 1) {
-          if (text[at] === '<') depth += 1;
-          if (text[at] === '>' && --depth === 0) break;
-        }
-        at += 1;
+/** What the scan found in one file: its writes, and the calls it could not read. */
+interface Scan {
+  writes: Write[];
+  /** `file: url` of a call that may write but whose method or address is not written out. */
+  unclassified: string[];
+}
+
+/**
+ * Every `adminFetch(url, options)` in `text` (R12b review: hardened). A call is a write when
+ * its options name a literal write method ANYWHERE in them (`{ body, method: 'POST' }` too);
+ * a read when it has no options, or options with no `method` or `'GET'`. Anything else (the
+ * options held in a variable, a method that is not a literal) is unclassified, and so is a
+ * write whose address is not a string or template literal (or `stagedUrl` of one): a constant
+ * of the file (`const API = '…'`) is read as its value. Unclassified calls must be named,
+ * each with its reason, in UNCLASSIFIED below.
+ */
+function scan(file: string, text: string): Scan {
+  const out: Scan = { writes: [], unclassified: [] };
+  for (const match of text.matchAll(/\badminFetch(<)?/g)) {
+    if (/function\s+$/.test(text.slice(Math.max(0, match.index! - 20), match.index!))) continue;
+    let at = match.index! + 'adminFetch'.length;
+    if (match[1]) {
+      // Skip the type arguments: `<…>`, nested ones included.
+      let depth = 0;
+      for (; at < text.length; at += 1) {
+        if (text[at] === '<') depth += 1;
+        if (text[at] === '>' && --depth === 0) break;
       }
-      if (text[at] !== '(') continue; // an import, a type, a mention in a comment
-      const [url = '', options = ''] = argumentsAt(text, at);
-      const method = /^\{\s*method:\s*'(POST|PATCH|PUT|DELETE)'/.exec(options)?.[1];
-      if (method) out.push({ file, url, method, options });
+      at += 1;
     }
+    if (text[at] !== '(') continue; // an import, a type, a mention in a comment
+    const [rawUrl = '', options = ''] = argumentsAt(text, at);
+    const constant = /^[A-Z][A-Z0-9_]*$/.test(rawUrl)
+      ? new RegExp(`\\bconst ${rawUrl} = ('[^']*')`).exec(text)?.[1]
+      : undefined;
+    const url = constant ?? rawUrl;
+    const name = `${file}: ${rawUrl.replace(/\s+/g, ' ')}`;
+    if (options === '') continue; // a read
+    if (!options.startsWith('{')) {
+      out.unclassified.push(name);
+      continue;
+    }
+    const method = /(?:^\{|,)\s*method:\s*([^,}\s]+)/.exec(options)?.[1];
+    if (method === undefined || method === "'GET'") continue; // a read
+    const literal = /^'(POST|PATCH|PUT|DELETE)'$/.exec(method)?.[1];
+    // A literal address (or stagedUrl of one) whose resource is named: a literal slug, or a
+    // screen's own slug. `/api/admin/${other}` names no resource the scan can check.
+    const addressed =
+      /^(['`"]|stagedUrl\(['`])/.test(url) &&
+      !/\/api\/admin\/\$\{(?!(def|ui|req)\.slug\})/.test(url);
+    if (!literal || !addressed) {
+      out.unclassified.push(name);
+      continue;
+    }
+    out.writes.push({ file, url, method: literal, options });
   }
   return out;
 }
+
+const SCANS = [...SOURCES].map(([file, text]) => scan(file, text));
+const writes = (): Write[] => SCANS.flatMap((found) => found.writes);
+
+/**
+ * The calls the scan cannot read, each with why it needs no marker. A new one fails the scan
+ * until it is named here, so an unread write cannot land silently.
+ */
+const UNCLASSIFIED: Record<string, string> = {
+  'src/lib/admin/useEntitySave.ts: request.url':
+    'every editor save and create: buildSaveRequest (entitySave.ts) marks it, tested in entitySave.spec',
+  'src/components/admin/screens/seo/PagesTab.tsx: url':
+    'the SEO list’s read (its options are typed { signal })',
+  'src/components/admin/screens/logs/ClearLogs.tsx: clearUrl(scope)':
+    'system logs: not release-managed',
+  'src/components/admin/screens/resources/ResourceTable.tsx: action.endpoint':
+    'the redirects’ edge sync (ui.syncAction): rebuilds the KV snapshot, writes no content',
+};
 
 /** A write to a release-managed kernel route: a literal slug, or a screen's own slug. */
 function releaseManaged(url: string): boolean {
@@ -149,6 +202,60 @@ function releaseManaged(url: string): boolean {
   const literal = /\/api\/admin\/([a-z-]+)/.exec(url);
   return literal !== null && RELEASE_SLUGS.includes(literal[1]!);
 }
+
+describe('the scan reads what it must (R12b review)', () => {
+  it('finds a write whose method is not first, and refuses to guess an address', () => {
+    const found = scan(
+      'x.tsx',
+      [
+        "adminFetch('/api/admin/faq', { body, method: 'POST' });",
+        "adminFetch(`/api/admin/faq/${id}`, {\n  body: { a: 1 },\n  method: 'PATCH',\n});",
+        "adminFetch(address, { method: 'DELETE' });",
+        'adminFetch(`/api/admin/faq`, { method: verb });',
+        'adminFetch(`/api/admin/faq`, options);',
+        "const API = '/api/admin/faq';\nadminFetch(API, { method: 'POST', body });",
+        "adminFetch('/api/admin/faq', { signal });",
+        "adminFetch('/api/admin/faq', { method: 'GET' });",
+        'adminFetch(`/api/admin/faq?limit=${n}`);',
+        "adminFetch(`/api/admin/${slug}/reorder`, { method: 'POST', body });",
+      ].join('\n'),
+    );
+    expect(found.writes.map((w) => `${w.method} ${w.url}`)).toEqual([
+      "POST '/api/admin/faq'",
+      'PATCH `/api/admin/faq/${id}`',
+      "POST '/api/admin/faq'",
+    ]);
+    expect(found.unclassified).toEqual([
+      'x.tsx: address',
+      'x.tsx: `/api/admin/faq`',
+      'x.tsx: `/api/admin/faq`',
+      'x.tsx: `/api/admin/${slug}/reorder`',
+    ]);
+    // So the first two would fail the marker check below.
+    expect(found.writes.filter((w) => releaseManaged(w.url))).toHaveLength(3);
+  });
+
+  it('every call it cannot read is named, with its reason', () => {
+    expect(SCANS.flatMap((found) => found.unclassified).sort()).toEqual(
+      Object.keys(UNCLASSIFIED).sort(),
+    );
+  });
+
+  it('the constants it reads as addresses are outside the release', () => {
+    const read = writes()
+      .filter((w) =>
+        [
+          'src/components/admin/screens/integrations/IntegrationDrawer.tsx',
+          'src/components/admin/screens/visibility/VisibilityScreen.tsx',
+        ].includes(w.file),
+      )
+      .map((w) => w.url);
+    expect(read).toEqual(
+      expect.arrayContaining(["'/api/admin/integrations'", "'/api/admin/page-visibility'"]),
+    );
+    expect(read.some(releaseManaged)).toBe(false);
+  });
+});
 
 describe('every client write to a release-managed route says when it was made in release mode', () => {
   const found = writes().filter((w) => releaseManaged(w.url));
