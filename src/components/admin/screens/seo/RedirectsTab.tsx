@@ -22,12 +22,14 @@ const RESOURCE = 'redirects';
 
 interface RedirectFormProps {
   id: string | null;
+  /** Admin v2 R12b: the list was read through the release, so a create says so. */
+  staged: boolean;
   onDone: (edgeMissed: boolean) => void;
 }
 
-function RedirectForm({ id, onDone }: RedirectFormProps) {
+function RedirectForm({ id, staged, onDone }: RedirectFormProps) {
   const ui = uiFor(RESOURCE);
-  const save = useEntitySave({ kind: 'resource', slug: ui.slug }, id, {
+  const save = useEntitySave({ kind: 'resource', slug: ui.slug, staged }, id, {
     fields: ui.fields,
     onCreated: (row) => onDone(row['kvSynced'] === false),
   });
@@ -56,6 +58,8 @@ export default function RedirectsTab() {
   const [open, setOpen] = useState<string | null>(null);
   const [epoch, setEpoch] = useState(0);
   const [missed, setMissed] = useState(false);
+  // Admin v2 R12b: whether the list the New button sits on was read through the release.
+  const [staged, setStaged] = useState(false);
 
   return (
     <div>
@@ -68,7 +72,10 @@ export default function RedirectsTab() {
         resource={RESOURCE}
         epoch={epoch}
         onEdit={(row) => setOpen(row.id)}
-        onCreate={() => setOpen('')}
+        onCreate={(throughRelease) => {
+          setStaged(throughRelease);
+          setOpen('');
+        }}
       />
       <Drawer
         open={open !== null}
@@ -80,6 +87,7 @@ export default function RedirectsTab() {
           <RedirectForm
             key={open || 'new'}
             id={open || null}
+            staged={staged}
             onDone={(edgeMissed) => {
               setMissed(edgeMissed);
               toast(open ? 'Redirect saved.' : 'Redirect created.', 'ok');

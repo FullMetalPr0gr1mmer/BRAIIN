@@ -4,6 +4,7 @@ import AdminProjectEditor from '@/components/admin/islands/AdminProjectEditor';
 import { PROJECT_TABS } from '@/components/admin/screens/projects/view';
 import { firstTab, visibleTabs } from '@/lib/admin/editorTabs';
 import { servicesAreaAccess } from '@/lib/admin/servicesArea';
+import { createReleaseMode } from '@/lib/admin/releasesFlag';
 
 export const prerender = false;
 
@@ -18,11 +19,15 @@ const initialTab = firstTab(
   Astro.url.searchParams.get('tab'),
   { readOnly: !access.portfolio, seoAccess: access.seo },
 );
+// R12b: in release mode the create says so (createReleaseMode: the shell's own read of
+// the flag, shared). A resource outside the release is false without asking.
+const releaseMode = await createReleaseMode(Astro.locals, 'portfolio');
 ---
 
 <AdminLayout title="New project" subtitle="Projects" styles={['projects.css']}>
   <AdminProjectEditor
     client:load
+    releaseMode={releaseMode}
     id={null}
     write={access.portfolio}
     archive={access.archive}

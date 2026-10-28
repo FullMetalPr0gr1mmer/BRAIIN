@@ -4,7 +4,7 @@ import Icon from '@/components/admin/kit/Icon';
 import Note from '@/components/admin/kit/Note';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { toast } from '@/lib/admin/toast';
-import { announcePending } from '@/lib/admin/releaseEvents';
+import { announcePending, readsThroughRelease, stagedUrl } from '@/lib/admin/releaseEvents';
 import { uiFor } from '@/lib/admin/uiSchema';
 import { collectionOf, DELETE_WORDS, type CollectionDef } from './collections';
 import { copyPayload } from './copy';
@@ -74,6 +74,11 @@ export default function CollectionScreen({
   );
   const [focusId, setFocusId] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
+  // Admin v2 R12b: the list came through the release (releases on). Read from the answer,
+  // never from a row (a row with nothing pending carries no `draft` key), it decides every
+  // write this screen sends: its moves, copies and the drawer's create say they were made in
+  // release mode, so a switch-off since is refused (409 `releases-off`), never written live.
+  const [staged, setStaged] = useState(false);
   const listRef = useRef<HTMLUListElement | null>(null);
   const opened = useRef(0);
 
@@ -82,6 +87,7 @@ export default function CollectionScreen({
       const data = await adminFetch<ListResponse>(`/api/admin/${def.slug}?limit=${LIST_LIMIT}`);
       setRows(data.rows ?? []);
       setTotal(data.total ?? 0);
+      setStaged(readsThroughRelease(data));
       setError('');
     } catch (err) {
       setError(describeError(err));
@@ -151,34 +157,39 @@ export default function CollectionScreen({
     const byId = new Map(before.map((row) => [row.id, row]));
     setRows(order.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
     setError('');
+    let failure = '';
     try {
-      const moved = await adminFetch<Record<string, unknown>>(`/api/admin/${def.slug}/reorder`, {
-        method: 'POST',
-        body: { items: changes },
-      });
+      const moved = await adminFetch<Record<string, unknown>>(
+        stagedUrl(`/api/admin/${def.slug}/reorder`, staged),
+        { method: 'POST', body: { items: changes } },
+      );
       // R12: a staged reorder answers what it staged; the savebar counts the new order.
       if ('staged' in moved) announcePending();
       toast('Order updated.', 'ok');
     } catch (err) {
       setRows(before);
-      setError(`The order was not saved. ${describeError(err)}`);
+      failure = `The order was not saved. ${describeError(err)}`;
     }
+    // The list is read again first (its read clears the message), then the refusal is said
+    // (R12b review: said before the read, it lasted one round trip).
     await load();
+    if (failure) setError(failure);
   }
 
   async function duplicate(row: Row) {
     if (!def.copy?.(row) || !rows) return;
     setWorking(true);
     setError('');
+    let failure = '';
     try {
       const full = await adminFetch<Record<string, unknown>>(`/api/admin/${def.slug}/${row.id}`);
       const taken = new Set(rows.map((r) => String(r['slug'] ?? '')));
       const payload = copyPayload(def, ui, full, taken);
       if (!payload) return;
-      const created = await adminFetch<Record<string, unknown>>(`/api/admin/${def.slug}`, {
-        method: 'POST',
-        body: payload,
-      });
+      const created = await adminFetch<Record<string, unknown>>(
+        stagedUrl(`/api/admin/${def.slug}`, staged),
+        { method: 'POST', body: payload },
+      );
       const newId = String(created['id']);
       if ('draft' in created) announcePending();
       // Right after the original: the copy and the rows after it renumbered, nothing above.
@@ -191,7 +202,7 @@ export default function CollectionScreen({
         { id: newId, sort_order: Number(created['sort_order'] ?? 0) },
       );
       if (changes.length > 0) {
-        await adminFetch(`/api/admin/${def.slug}/reorder`, {
+        await adminFetch(stagedUrl(`/api/admin/${def.slug}/reorder`, staged), {
           method: 'POST',
           body: { items: changes },
         });
@@ -199,11 +210,14 @@ export default function CollectionScreen({
       toast(`Copied as a draft.`, 'ok');
       setFocusId(newId);
     } catch (err) {
-      setError(`It was not copied. ${describeError(err)}`);
+      failure = `It was not copied. ${describeError(err)}`;
     } finally {
       setWorking(false);
+      // The list is read again first (its read clears the message), then the refusal is said
+      // (R12b review: said before the read, it lasted one round trip).
       await load();
     }
+    if (failure) setError(failure);
   }
 
   // The title link opens the drawer in place; a modified click keeps the browser's own.
@@ -267,6 +281,7 @@ export default function CollectionScreen({
           id={drawer.id}
           listed={listed}
           permissions={permissions}
+          staged={staged}
           defaults={{
             sortOrder: (lastOrder ?? 0) + ORDER_STEP,
             ...(drawer.id === null && drawer.key === 0 ? (presets ?? {}) : {}),

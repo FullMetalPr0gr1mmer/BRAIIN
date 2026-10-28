@@ -318,6 +318,9 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
       const entry = stagedEntry(config);
       if (entry && (await ctx.releasesEnabled()))
         return stagedCreate(config, entry, ctx, ctx.input);
+      // Releases off: a create made in release mode (a list, drawer or editor open across the
+      // switch-off) is refused, never written live (R12b; src/lib/release/releasesOff.ts).
+      if (entry) refuseStagedQuery(ctx.url, config.entity);
       const { auth, sb, input, audit } = ctx;
       const payload = input as ResourcePayload;
       // Creating something already published is a publish. Checking only on transitions
@@ -606,6 +609,11 @@ export function reorderRoute(config: ResourceConfig): APIRoute {
       if (entry && (await ctx.releasesEnabled())) {
         return stagedReorder(config, entry, ctx, ctx.input.items);
       }
+      // Releases off: a move made in release mode is refused, never written live (R12b). A
+      // screen in release mode numbers its move against the staged order and sends only the
+      // rows that moved, so written live it would leave the others on their live numbers: a
+      // public order the person never saw (src/lib/release/releasesOff.ts).
+      if (entry) refuseStagedQuery(ctx.url, config.entity);
       const { auth, sb, input, audit } = ctx;
       await assertReorderable(config, auth, sb, input.items);
       // Sequential, tenant-scoped updates rather than one upsert: an upsert would need

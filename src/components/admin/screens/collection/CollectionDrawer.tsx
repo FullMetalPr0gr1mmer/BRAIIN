@@ -5,7 +5,7 @@ import Note from '@/components/admin/kit/Note';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import FieldShell, { describedBy } from '@/components/admin/fields/FieldShell';
 import { adminFetch, describeError } from '@/lib/admin/client';
-import { announcePending, STAGED_DELETE } from '@/lib/admin/releaseEvents';
+import { announcePending, stagedUrl } from '@/lib/admin/releaseEvents';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { uiFor, type FieldDef } from '@/lib/admin/uiSchema';
@@ -40,6 +40,11 @@ export interface CollectionDrawerProps {
   /** The list's row for it (status, the sample flag), when it has one. */
   listed: Row | null;
   permissions: CollectionPermissions;
+  /**
+   * Admin v2 R12b: the list the drawer opens from was read through the release, so adding an
+   * item says it was made in release mode (SaveTarget `staged`).
+   */
+  staged?: boolean | undefined;
   /** A new item's starting values (its place at the end of the list). */
   defaults: Row;
   onClose: () => void;
@@ -57,6 +62,7 @@ export default function CollectionDrawer({
   id,
   listed,
   permissions,
+  staged = false,
   defaults,
   onClose,
   onCreated,
@@ -74,7 +80,7 @@ export default function CollectionDrawer({
   const [busy, setBusy] = useState(false);
   const stored = useRef<Row | null>(null);
 
-  const save = useEntitySave({ kind: 'resource', slug: def.slug }, id, {
+  const save = useEntitySave({ kind: 'resource', slug: def.slug, staged }, id, {
     fields: payloadFields,
     mode: saveModeFor({ kind: 'resource', slug: def.slug }),
     defaults,
@@ -127,9 +133,8 @@ export default function CollectionDrawer({
     setDeleteError('');
     try {
       // R12: an item read through the release says so, so a switch-off since is refused.
-      const marker = save.mode === 'draft' ? STAGED_DELETE : '';
       const result = await adminFetch<Record<string, unknown>>(
-        `/api/admin/${def.slug}/${id}${marker}`,
+        stagedUrl(`/api/admin/${def.slug}/${id}`, save.mode === 'draft'),
         { method: 'DELETE' },
       );
       // R12: with releases on the answer names the pending removal, or a pending new item

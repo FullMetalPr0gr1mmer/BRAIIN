@@ -7,6 +7,7 @@
 // confirmation says "Will be removed" rather than "deleted".
 
 import { adminFetch } from './client';
+import { stagedUrl } from './releaseEvents';
 import { confirmDialog } from './confirm';
 import { withFlash, type FlashKey } from './flash';
 
@@ -41,6 +42,12 @@ export interface EditorDelete {
    * exists do not ask "Leave site?". Defaults to a plain navigation.
    */
   go?: ((href: string) => void) | undefined;
+  /**
+   * Admin v2 R12b: the editor is in draft mode (its record came through the release), so the
+   * DELETE says so (STAGED_QUERY): once releases are switched off under it, the live DELETE
+   * refuses it rather than delete for good what would have been staged for removal.
+   */
+  staged?: boolean | undefined;
 }
 
 /** Where to go after the DELETE answered: the list, with what happened. */
@@ -62,7 +69,7 @@ export async function deleteFromEditor(req: EditorDelete): Promise<boolean> {
   });
   if (!confirmed) return false;
   const result = await adminFetch<{ pendingRemoval?: unknown }>(
-    `/api/admin/${req.slug}/${encodeURIComponent(req.id)}`,
+    stagedUrl(`/api/admin/${req.slug}/${encodeURIComponent(req.id)}`, req.staged === true),
     { method: 'DELETE' },
   );
   const href = afterDelete(req, result);

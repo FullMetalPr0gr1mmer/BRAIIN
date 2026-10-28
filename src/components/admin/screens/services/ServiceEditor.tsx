@@ -7,6 +7,7 @@ import EditorForm from '@/components/admin/fields/EditorForm';
 import SeoPanel from '@/components/admin/screens/seo/SeoPanel';
 import type { SeoPanelSetup } from '@/components/admin/screens/seo/types';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import { stagedUrl } from '@/lib/admin/releaseEvents';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { deleteFromEditor } from '@/lib/admin/editorDelete';
 import { visibleTabs, type SeoAccess } from '@/lib/admin/editorTabs';
@@ -51,6 +52,13 @@ export interface ServiceEditorProps {
   defaults?: Record<string, unknown> | undefined;
   /** The studio's zone, for the dates the Leads tab prints in the server's HTML. */
   tz: string;
+  /**
+   * R12b: a create page in release mode (the server page's createReleaseMode, from the
+   * shell's flag). The create then carries the marker, so a page left open across a
+   * switch-off is refused (409 `releases-off`), never written live. Only a create uses it: a
+   * saved record's mode is its own answer's.
+   */
+  releaseMode?: boolean | undefined;
 }
 
 /** The form's fields: "Archived" only for a role that may archive (unless it already is). */
@@ -83,9 +91,10 @@ export default function ServiceEditor({
   leadCount,
   defaults,
   tz,
+  releaseMode = false,
 }: ServiceEditorProps) {
   const ui = uiFor('services');
-  const target = { kind: 'resource', slug: ui.slug } as const;
+  const target = { kind: 'resource', slug: ui.slug, staged: releaseMode } as const;
   const save = useEntitySave(target, id, {
     fields: ui.fields,
     mode: saveModeFor(target),
@@ -123,10 +132,15 @@ export default function ServiceEditor({
       const list = await adminFetch<ListResponse>('/api/admin/services?limit=100');
       const taken = new Set((list.rows ?? []).map((row) => String(row['slug'] ?? '')));
       const payload = duplicatePayload(formToPayload(save.saved, ui.fields), taken);
-      const created = await adminFetch<Row>('/api/admin/services', {
-        method: 'POST',
-        body: payload,
-      });
+      // R12b: in draft mode the copy is made from the pending change, so it says so: once
+      // releases are switched off (the change perhaps thrown away) it is refused, never live.
+      const created = await adminFetch<Row>(
+        stagedUrl('/api/admin/services', save.mode === 'draft'),
+        {
+          method: 'POST',
+          body: payload,
+        },
+      );
       window.location.href = `/admin/services/${String(created['id'])}`;
     } catch (err) {
       setCopyError(`It was not copied. ${describeError(err)}`);
@@ -147,6 +161,7 @@ export default function ServiceEditor({
         back: '/admin/services',
         done: 'service-deleted',
         go: save.leave,
+        staged: save.mode === 'draft',
       });
       if (!left) setDeleting(false);
     } catch (err) {

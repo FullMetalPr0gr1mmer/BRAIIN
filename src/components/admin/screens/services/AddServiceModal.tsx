@@ -18,6 +18,8 @@ export interface AddServiceModalProps {
   disciplineId: string;
   disciplineName: string;
   sortOrder: number;
+  /** Admin v2 R12b: the page it opens from was read through the release (SaveTarget `staged`). */
+  staged?: boolean | undefined;
 }
 
 /** The fields the modal draws, and the ones its save sends (the discipline and the order too). */
@@ -41,9 +43,10 @@ export default function AddServiceModal({
   disciplineId,
   disciplineName,
   sortOrder,
+  staged = false,
 }: AddServiceModalProps) {
   const fields = useMemo(modalFields, []);
-  const save = useEntitySave({ kind: 'resource', slug: 'services' }, null, {
+  const save = useEntitySave({ kind: 'resource', slug: 'services', staged }, null, {
     fields: fields.sent,
     mode: saveModeFor({ kind: 'resource', slug: 'services' }),
     defaults: { disciplineId, status: 'draft', sortOrder },

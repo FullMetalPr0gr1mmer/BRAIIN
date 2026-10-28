@@ -5,6 +5,7 @@ import { firstTab, visibleTabs } from '@/lib/admin/editorTabs';
 import { isUuid, servicesAreaAccess } from '@/lib/admin/servicesArea';
 import { studioTimeZone } from '@/lib/admin/studioTimeZone';
 import { uiFor, type EditorPanel } from '@/lib/admin/uiSchema';
+import { createReleaseMode } from '@/lib/admin/releasesFlag';
 
 export const prerender = false;
 
@@ -26,11 +27,15 @@ const initialTab = firstTab(
   { readOnly: !access.services, seoAccess: access.seo, panels },
 );
 const tz = await studioTimeZone(Astro.locals);
+// R12b: in release mode the create says so (createReleaseMode: the shell's own read of
+// the flag, shared). A resource outside the release is false without asking.
+const releaseMode = await createReleaseMode(Astro.locals, 'services');
 ---
 
 <AdminLayout title="New service" subtitle="Services" styles={['services.css']}>
   <AdminServiceEditor
     client:load
+    releaseMode={releaseMode}
     id={null}
     write={access.services}
     archive={access.archive}

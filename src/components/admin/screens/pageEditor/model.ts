@@ -1,6 +1,6 @@
 import { SECTION_TYPES } from '@schemas/sectionTypes';
-import { readDraft, STAGED_KEY } from '@/lib/admin/entitySave';
-import { STAGED_DELETE } from '@/lib/admin/releaseEvents';
+import { readDraft } from '@/lib/admin/entitySave';
+import { stagedBody } from '@/lib/admin/releaseEvents';
 import type { SectionContentState } from '@/lib/admin/formPayload';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import { PLACEHOLDER_FIELD } from '@/lib/admin/ui/fields';
@@ -199,49 +199,49 @@ export function draftStamp(draft: { id: string; version: number } | null | undef
 }
 
 /**
- * What a write from the column sends beside its values. The SCREEN's mode decides it (its list
- * answer, readsThroughRelease), never the row: a row with nothing pending has no `draft` key
- * with releases on too. Releases off: nothing, the request main sends. Releases on: the row's
- * pending change, or with none yet R12's marker ("made in release mode"), so a write sent
- * after a switch-off is refused (409 `releases-off`), never written live.
+ * The pending change a write from the column names beside its values: releases on and the row
+ * has one, its id and version; otherwise nothing. The SCREEN's mode decides it (its list
+ * answer, releaseEvents.ts readsThroughRelease), never the row: a row with nothing pending has
+ * no `draft` key with releases on too.
  */
-export function columnWriteRef(row: SectionRow, release: boolean): Row {
+export function columnDraftRef(row: SectionRow, release: boolean): Row {
   if (!release) return {};
   const draft = readDraft(row as unknown as Row);
-  return draft ? { draftId: draft.id, draftVersion: draft.version } : { [STAGED_KEY]: true };
-}
-
-/** The eye's PATCH body: the other visibility, the version read, and the mode's reference. */
-export function toggleBody(row: SectionRow, release: boolean): Row {
-  return { visible: !row.visible, version: row.version, ...columnWriteRef(row, release) };
-}
-
-/** Rename's PATCH body: the label (null puts back the kind's name), as the toggle's. */
-export function renameBody(row: SectionRow, label: string | null, release: boolean): Row {
-  return { label, version: row.version, ...columnWriteRef(row, release) };
+  return draft ? { draftId: draft.id, draftVersion: draft.version } : {};
 }
 
 /**
- * The address of a write whose body the route's own schema parses first (Add section's create,
- * the move's reorder, a removal): with R12's marker in its query in release mode
- * (`?staged=1`, STAGED_DELETE), so once releases are off the live route can refuse it (R12
- * does for a DELETE, R12b for a create and a reorder) instead of writing live; releases off,
- * the address main sends.
+ * Whether a column PATCH carries R12's "made in release mode" marker (`staged: true`, through
+ * releaseEvents.ts stagedBody): releases on and nothing pending to name. With a pending change
+ * the write names it instead (columnDraftRef), which the live route refuses just the same once
+ * releases are off (409 `releases-off`). Releases off: never, the request main sends.
  */
-export function columnAddress(url: string, release: boolean): string {
-  return release ? `${url}${STAGED_DELETE}` : url;
+export function columnMarks(row: SectionRow, release: boolean): boolean {
+  return release && !readDraft(row as unknown as Row);
+}
+
+/**
+ * Everything a write from the column sends beside its values: the pending change it names, or
+ * R12's marker, or (releases off) nothing.
+ */
+export function columnWriteRef(row: SectionRow, release: boolean): Row {
+  return stagedBody(columnDraftRef(row, release), columnMarks(row, release));
+}
+
+/**
+ * The eye's PATCH values: the other visibility, the version read, and the pending change it
+ * names. The editor sends it through stagedBody(…, columnMarks(…)), which adds the marker.
+ */
+export function toggleBody(row: SectionRow, release: boolean): Row {
+  return { visible: !row.visible, version: row.version, ...columnDraftRef(row, release) };
+}
+
+/** Rename's PATCH values (null puts back the kind's name), sent as the eye's are. */
+export function renameBody(row: SectionRow, label: string | null, release: boolean): Row {
+  return { label, version: row.version, ...columnDraftRef(row, release) };
 }
 
 /** The pending change a write from the column names, as formSyncAfterWrite compares it. */
 export function columnWroteOn(row: SectionRow): string {
   return draftStamp(readDraft(row as unknown as Row));
-}
-
-/**
- * Whether a list answer came through the release (releases on): R3a's `stagedList` always
- * answers `draftsInvalid`, and only then. This is the screen's mode, and every write the
- * column sends follows it.
- */
-export function readsThroughRelease(answer: Row): boolean {
-  return Array.isArray(answer['draftsInvalid']);
 }

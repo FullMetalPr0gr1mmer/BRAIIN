@@ -6,6 +6,7 @@ import { MoveButtons, SortHandle, SortHint } from '@/components/admin/kit/Sortab
 import StatusBadge from '@/components/admin/kit/StatusBadge';
 import { useSortable } from '@/components/admin/kit/useSortable';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
+import { readsThroughRelease, stagedBody, stagedUrl } from '@/lib/admin/releaseEvents';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { showFlash } from '@/lib/admin/flash';
 import { toast } from '@/lib/admin/toast';
@@ -14,6 +15,7 @@ import {
   ORDER_STEP,
   bySort,
   eyeLabel,
+  eyeRefusal,
   eyeTarget,
   groupServices,
   hideDisciplineQuestion,
@@ -66,6 +68,10 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
   const [totals, setTotals] = useState({ disciplines: 0, services: 0 });
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);
+  // Admin v2 R12b: the lists came through the release (releases on). Read from the answers,
+  // never from a row, it decides every write this screen sends: a move, an eye, an add made in
+  // release mode says so, so a switch-off since is refused (409 `releases-off`), never live.
+  const [staged, setStaged] = useState(false);
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const opened = useRef(0);
 
@@ -78,6 +84,7 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
       setDisciplines([...(d.rows ?? [])].sort(bySort));
       setServices(s.rows ?? []);
       setTotals({ disciplines: d.total ?? 0, services: s.total ?? 0 });
+      setStaged(readsThroughRelease(d) || readsThroughRelease(s));
     } catch (err) {
       setError(describeError(err));
       setDisciplines((current) => current ?? []);
@@ -127,17 +134,21 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
     const byId = new Map(before.map((row) => [row.id, row]));
     setDisciplines(order.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
     setError('');
+    let failure = '';
     try {
-      await adminFetch('/api/admin/disciplines/reorder', {
+      await adminFetch(stagedUrl('/api/admin/disciplines/reorder', staged), {
         method: 'POST',
         body: { items: changes },
       });
       toast('Order updated.', 'ok');
     } catch (err) {
       setDisciplines(before);
-      setError(`The order was not saved. ${describeError(err)}`);
+      failure = `The order was not saved. ${describeError(err)}`;
     }
+    // The list is read again first (its read clears the message), then the refusal is said
+    // (R12b review: said before the read, it lasted one round trip).
     await load();
+    if (failure) setError(failure);
   }
 
   async function toggle(row: Row) {
@@ -155,22 +166,26 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
     }
     setWorking(true);
     setError('');
+    let failure = '';
     try {
       await adminFetch(`/api/admin/disciplines/${row.id}`, {
         method: 'PATCH',
-        body: { status: next, version: Number(row['version'] ?? 1) },
+        body: stagedBody({ status: next, version: Number(row['version'] ?? 1) }, staged),
       });
       toast(next === 'draft' ? `${name} is hidden.` : `${name} is on the site.`, 'ok');
     } catch (err) {
-      setError(
-        err instanceof AdminApiError && err.info.status === 409
-          ? 'Someone else changed this discipline. The list has been reloaded: try again.'
-          : `It was not changed. ${describeError(err)}`,
+      failure = eyeRefusal(
+        'discipline',
+        err instanceof AdminApiError ? err.info : null,
+        describeError(err),
       );
     } finally {
       setWorking(false);
+      // The list is read again first (its read clears the message), then the refusal is said
+      // (R12b review: said before the read, it lasted one round trip).
       await load();
     }
+    if (failure) setError(failure);
   }
 
   const lastOrder = rows.reduce((max, row) => Math.max(max, Number(row['sort_order'] ?? 0)), 0);
@@ -254,6 +269,7 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
           name={listed ? nameOf(listed, 'name') : 'New discipline'}
           write={write}
           archive={archive}
+          staged={staged}
           defaults={{ sortOrder: lastOrder + ORDER_STEP, status: 'draft' }}
           onClose={() => setDrawer(null)}
           onSaved={(_, created) => {

@@ -3,6 +3,7 @@ import Drawer from '@/components/admin/kit/Drawer';
 import Icon from '@/components/admin/kit/Icon';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import { readsThroughRelease } from '@/lib/admin/releaseEvents';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { toast } from '@/lib/admin/toast';
 import { uiFor } from '@/lib/admin/uiSchema';
@@ -49,6 +50,8 @@ export default function TagsDrawer({
   const [clients, setClients] = useState<ListResponse['rows'] | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<Editing>(null);
+  // Admin v2 R12b: the sectors came through the release, so adding one says so.
+  const [staged, setStaged] = useState(false);
   const opened = useRef(0);
 
   const load = useCallback(async () => {
@@ -62,6 +65,7 @@ export default function TagsDrawer({
           : Promise.resolve({ rows: [] }),
       ]);
       setSectors(s.rows ?? []);
+      setStaged(readsThroughRelease(s));
       setClients(c.rows ?? []);
       setError('');
     } catch (err) {
@@ -116,6 +120,7 @@ export default function TagsDrawer({
               <SectorForm
                 key={editing.key}
                 id={editing.id}
+                staged={staged}
                 sortOrder={lastSector + 10}
                 onDone={(changed) => {
                   setEditing(null);
@@ -232,15 +237,17 @@ export default function TagsDrawer({
 /** A sector added or edited in place: the sectors resource's own form. */
 function SectorForm({
   id,
+  staged,
   sortOrder,
   onDone,
 }: {
   id: string | null;
+  staged: boolean;
   sortOrder: number;
   onDone: (changed: boolean) => void;
 }) {
   const ui = uiFor('sectors');
-  const target = { kind: 'resource', slug: 'sectors' } as const;
+  const target = { kind: 'resource', slug: 'sectors', staged } as const;
   const save = useEntitySave(target, id, {
     fields: ui.fields,
     mode: saveModeFor(target),

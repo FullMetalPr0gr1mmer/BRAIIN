@@ -48,6 +48,13 @@ export interface ProjectEditorProps {
   seo: SeoPanelSetup | null;
   /** A new project's starting values. */
   defaults?: Row | undefined;
+  /**
+   * R12b: a create page in release mode (the server page's createReleaseMode, from the
+   * shell's flag). The create then carries the marker, so a page left open across a
+   * switch-off is refused (409 `releases-off`), never written live. Only a create uses it: a
+   * saved record's mode is its own answer's.
+   */
+  releaseMode?: boolean | undefined;
 }
 
 /** The view over the save: the media set as its four controls (see the header). */
@@ -103,9 +110,10 @@ export default function ProjectEditor({
   initialTab,
   seo,
   defaults,
+  releaseMode = false,
 }: ProjectEditorProps) {
   const ui = uiFor('portfolio');
-  const target = { kind: 'resource', slug: ui.slug } as const;
+  const target = { kind: 'resource', slug: ui.slug, staged: releaseMode } as const;
   const save = useEntitySave(target, id, {
     fields: ui.fields,
     mode: saveModeFor(target),
@@ -149,6 +157,7 @@ export default function ProjectEditor({
         back: '/admin/portfolio',
         done: 'project-deleted',
         go: save.leave,
+        staged: save.mode === 'draft',
       });
       if (!left) setDeleting(false);
     } catch (err) {

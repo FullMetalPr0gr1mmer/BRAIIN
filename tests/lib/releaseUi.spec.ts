@@ -185,9 +185,12 @@ describe('Sales sees nothing of releases (C10a, P-2)', () => {
   it('the kit draws no Publishing card for Sales, and the shell never reads the flag for it', () => {
     const kit = readFileSync('src/pages/admin/kit.astro', 'utf8');
     expect(kit).toContain('(CMS_ROLES as readonly string[]).includes(role) ? role : null');
+    // R12b review: the read is releasesFlag.ts's, shared by the shell and the create pages.
     const shell = readFileSync('src/lib/admin/shell.ts', 'utf8');
-    expect(shell).toContain(
-      'const readsReleases = (CMS_ROLES as readonly string[]).includes(auth.role);',
+    expect(shell).toContain('releasesRead ?? readReleasesEnabled(sb, auth)');
+    const flag = readFileSync('src/lib/admin/releasesFlag.ts', 'utf8');
+    expect(flag).toContain(
+      'if (!sb || !auth || !(CMS_ROLES as readonly string[]).includes(auth.role)) return false;',
     );
   });
 });

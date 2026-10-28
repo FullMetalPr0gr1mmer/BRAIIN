@@ -1,10 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { CMS_ROLES, type AuthContext } from '@/lib/auth/types';
+import type { AuthContext } from '@/lib/auth/types';
 import { getMaintenanceState, type MaintenanceState } from '@/lib/http/maintenance';
 import { COUNTERS } from './counters';
 import { adminEnvironment, type AdminEnvironment } from './environment';
 import type { NavCount, NavGroup } from './nav';
 import { loadNotifications, type NotificationFeed } from './notifications';
+import { readReleasesEnabled } from './releasesFlag';
 
 export { initialsOf } from './initials';
 
@@ -28,7 +29,9 @@ export { initialsOf } from './initials';
 // nothing a release holds), in the same parallel batch: one more subrequest on a CMS
 // render. True draws the savebar (AdminLayout); false, a failed read included, draws nothing,
 // so with releases off every admin page is what it was. An editor never reads this: it
-// follows the server's answer on its own route (entitySave.ts).
+// follows the server's answer on its own route (entitySave.ts). R12b: the read is the
+// request's one (src/lib/admin/releasesFlag.ts, `releasesRead`), shared with a create page that
+// asked for its mode first; without it, the shell reads the flag itself, as before.
 
 export interface ShellState {
   displayName: string | null;
@@ -72,6 +75,8 @@ export async function loadShellState(
   preload?: ShellPreload,
   /** The studio's time zone (Admin v2 U9): which day the bell's "goes live today" is. */
   tz?: string,
+  /** R12b: the request's releases flag (releasesFlag.ts `releasesEnabled(locals)`). */
+  releasesRead?: PromiseLike<boolean>,
 ): Promise<ShellState> {
   const wanted = [
     ...new Set(
@@ -86,7 +91,6 @@ export async function loadShellState(
     : settle(() => getMaintenanceState(env));
 
   const preloadedName = preload && preload.displayName !== undefined;
-  const readsReleases = (CMS_ROLES as readonly string[]).includes(auth.role);
   const [profile, maintenance, environment, feed, releases, ...counts] = await Promise.all([
     preloadedName
       ? Promise.resolve({ data: { display_name: preload?.displayName ?? null } })
@@ -107,9 +111,8 @@ export async function loadShellState(
             ...(tz ? { tz } : {}),
           }),
         ),
-    readsReleases
-      ? settle(() => sb.rpc('releases_enabled', { p_tenant: auth.tenantId }))
-      : Promise.resolve(null),
+    // Never read for Sales; false on any failure (releasesFlag.ts).
+    releasesRead ?? readReleasesEnabled(sb, auth),
     ...wanted.map((key) => settle(() => COUNTERS[key](sb, auth.tenantId))),
   ]);
 
@@ -119,7 +122,7 @@ export async function loadShellState(
     counts: {},
     environment: environment ?? null,
     unread: feed?.unread ?? 0,
-    releases: releases?.error == null && releases?.data === true,
+    releases: releases === true,
   };
   wanted.forEach((key, index) => {
     const count = counts[index]?.count;

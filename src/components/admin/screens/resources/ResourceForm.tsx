@@ -48,6 +48,13 @@ export interface ResourceFormProps {
   seoAccess?: SeoAccess | undefined;
   /** U8b: the SEO tab's setup, made on the server page; null for a new record. */
   seo?: SeoPanelSetup | null | undefined;
+  /**
+   * R12b: a create page in release mode (the server page's createReleaseMode, from the
+   * shell's flag). The create then carries the marker, so a page left open across a
+   * switch-off is refused (409 `releases-off`), never written live. Only a create uses it: a
+   * saved record's mode is its own answer's.
+   */
+  releaseMode?: boolean | undefined;
 }
 
 /** What a read-only role is told above the fields. */
@@ -66,9 +73,10 @@ export default function ResourceForm({
   initialTab,
   seoAccess = 'none',
   seo = null,
+  releaseMode = false,
 }: ResourceFormProps) {
   const ui = uiFor(resource);
-  const target = { kind: 'resource', slug: ui.slug } as const;
+  const target = { kind: 'resource', slug: ui.slug, staged: releaseMode } as const;
   const save = useEntitySave(target, id, { fields: ui.fields, mode: saveModeFor(target) });
   const tabs = ui.tabs ? visibleTabs(ui.tabs, { seoAccess }) : undefined;
   const hasSeoTab = Boolean(tabs?.some((t) => t.panel === 'seo'));
