@@ -1,0 +1,425 @@
+/* Pages and the page editor (/admin/pages, /admin/pages/<id>; Admin v2 E1): what only these
+   two screens render. The prototype's app.css 269-297 (.ed, .ed__bar, .secs, .sec, .addsec,
+   .fgroup) and its pages grid, on the kit's own pieces (.card, .li, .badge, .btn, .icon-btn,
+   the Sortable handle and Move buttons, in admin.css). Tokens only
+   (scripts/contrast-audit.mjs reads admin.css); no colour, motion or font of its own. */
+
+/* ---- The pages list: a card per page, three across on a wide screen ---- */
+
+.pg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pg-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-inline-size: 0;
+  margin: 0;
+}
+
+.pg-grid > .pg-card + .pg-card {
+  margin-top: 0;
+}
+
+.pg-card:has(.pg-card__link:hover) {
+  border-color: var(--ad-line-2);
+  box-shadow: var(--ad-shadow-sm);
+}
+
+/* A page that is not open to everyone: a dashed edge, and its badge says which. */
+.pg-card[data-hidden] {
+  border-style: dashed;
+  background: var(--ad-surface-2);
+}
+
+.pg-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.pg-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.pg-card__t {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.pg-card__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.pg-card__link:hover {
+  text-decoration: underline;
+}
+
+/* The title link covers the card; the card's own controls sit above it. */
+.pg-card__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.pg-card__s {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ad-dim);
+  overflow-wrap: anywhere;
+}
+
+.pg-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.pg-card__ago {
+  font-size: 12px;
+  color: var(--ad-dim2);
+}
+
+.pg-card__acts {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 4px;
+}
+
+.pg-card__acts .icon-btn {
+  display: inline-grid;
+  place-items: center;
+  text-decoration: none;
+}
+
+.pg-card__ar {
+  font-family: var(--ad-font-ar);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pg-tpl {
+  margin-top: 28px;
+}
+
+.pg-tpl__h {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.pg-tpl__s {
+  margin: 4px 0 14px;
+  font-size: 13px;
+  color: var(--ad-dim);
+}
+
+.pg-tpl .pg-card__t {
+  font-size: 15px;
+}
+
+/* ---- The page editor ---- */
+
+.pe {
+  display: grid;
+  gap: 16px;
+  min-inline-size: 0;
+}
+
+/* The bar (the prototype's .ed__bar): the page's badges, the language, then its actions. */
+.pe__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r);
+  background: var(--ad-card);
+  min-inline-size: 0;
+}
+
+.pe__badges,
+.pe__lang,
+.pe__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-inline-size: 0;
+}
+
+.pe__acts {
+  margin-inline-start: auto;
+}
+
+.pe__acts .btn {
+  text-decoration: none;
+}
+
+/* Two columns from 1024px (sections, fields); the preview column is E2's. Below, one. */
+.pe__cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-inline-size: 0;
+}
+
+@media (min-width: 1024px) {
+  .pe__cols {
+    grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
+  }
+}
+
+.pe__secs,
+.pe__fields,
+.pe__panel {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+  align-content: start;
+}
+
+.pe__secs {
+  padding: 14px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r);
+  background: var(--ad-surface-2);
+}
+
+.pe__secs-h,
+.pe__panel-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.pe__h {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.pe__h3 {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.pe__tiny {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ad-dim2);
+  overflow-wrap: anywhere;
+}
+
+.pe__panel-t {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.pe__panel-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* A section row (the prototype's .sec): the handle, the name and kind as one button that
+   opens it (stretched over the row), its pending badge, the eye and Move up / down. On a
+   narrow column the controls go under the name instead of pushing the row wider. */
+.pe__list {
+  gap: 6px;
+}
+
+.pe__row {
+  flex-wrap: wrap;
+  row-gap: 4px;
+  padding: 8px 10px;
+}
+
+.pe__pick {
+  flex: 1 1 8rem;
+  display: grid;
+  gap: 1px;
+  min-inline-size: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.pe__pick::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.pe__name {
+  font-size: 13.5px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.pe__row[data-hidden] .pe__name {
+  text-decoration: line-through;
+}
+
+.pe__kind {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ad-dim2);
+}
+
+.pe__ctl,
+.pe__row > .badge {
+  position: relative;
+  z-index: 1;
+}
+
+.pe__ctl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.pe__eye[aria-checked='false'] {
+  color: var(--ad-dim2);
+}
+
+/* "Add section" (the prototype's .addsec): the column's width, a dashed edge. */
+.pe__add {
+  inline-size: 100%;
+  justify-content: center;
+  border-style: dashed;
+}
+
+/* The screens that hold what a section shows. */
+.pe__links {
+  gap: 6px;
+}
+
+.pe__links .li {
+  padding: 10px 12px;
+}
+
+/* Add a section: the library, two across where it fits. */
+.pe__lib {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pe__libitem {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  inline-size: 100%;
+  block-size: 100%;
+  padding: 12px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+.pe__libitem:hover:not([aria-disabled='true']) {
+  border-color: var(--ad-primary);
+}
+
+.pe__libitem[aria-disabled='true'] {
+  border-style: dashed;
+  background: var(--ad-surface-2);
+  cursor: not-allowed;
+}
+
+.pe__libitem[aria-disabled='true'] .li__ico {
+  color: var(--ad-dim2);
+}
+
+.pe__libtext {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.pe__libname {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.pe__libsub {
+  font-size: 12px;
+  color: var(--ad-dim);
+  overflow-wrap: anywhere;
+}
+
+/* The History drawer's two lists. */
+.pe__hist + .pe__hist {
+  margin-top: 22px;
+}
+
+.pe__hist .tl__i > .btn,
+.pe__hist-acts {
+  margin-top: 6px;
+}
+
+.pe__hist-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pe__hist-acts .btn {
+  text-decoration: none;
+}
+
+/* SEO's view: the page's SEO only. */
+.pe__seo-only {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+
+.pe__seo-only p {
+  margin: 0;
+}

@@ -15,6 +15,9 @@ const SECTION_KEYS = {
   visible: 'visible',
   sortOrder: 'sort_order',
   isPlaceholder: 'is_placeholder',
+  // Admin v2 E1 (0115): the section's name in the page editor's sections column. Written only
+  // when a payload carries it (the Rename dialog); the legacy section form never sends it.
+  label: 'label',
 };
 
 export const sectionResource: ResourceConfig = {
@@ -25,9 +28,9 @@ export const sectionResource: ResourceConfig = {
   publishFlag: 'visible',
   entity: 'page_section',
   writeCap: 'pages.write',
-  listColumns: 'id,page_id,type,visible,sort_order,version,updated_at',
+  listColumns: 'id,page_id,type,label,visible,sort_order,is_placeholder,version,updated_at',
   columns:
-    'id,page_id,type,content,visible,sort_order,is_placeholder,version,created_at,updated_at',
+    'id,page_id,type,label,content,visible,sort_order,is_placeholder,version,created_at,updated_at',
   orderBy: { column: 'sort_order', ascending: true },
   filterableColumns: ['page_id'],
   createSchema: SectionWriteSchema,

@@ -154,6 +154,16 @@
   - a discipline's card line and description stay optional, as the schema holds them (AV-14 drew them required);
   - Duplicate copies a service as saved (a draft, "(copy)" after the English name, its own address) without its case study; archiving is the status's "Archived", offered to an Admin only, not a head button;
   - the admin writes at most 4 value cards and 5 problems (the prototype's caps); the database and the public read keep 6, so a row stored with more still renders and is refused at its next save until one is removed (the read-back counts them in production).
+- **Pages list and page editor** (E1; as built: [as-built/E1.md](as-built/E1.md), Departures):
+  - a page's visibility is a link to Page visibility (`/admin/visibility`, maintenance.manage), on the list's cards and in the editor's bar, not an eye that hides the page at once nor a drawer reusing AV-13: the setting has one screen and one API, so one write path; the bar shows the page's mode as a badge;
+  - History lists a section's or the page's numbered saves (who, when, the site version that published it) without their changed fields: R10's history route returns `content_versions` rows, whole snapshots with no field list, and a diff per row would read every snapshot; a pending change still names its fields. Restore is offered only with releases on (R10's restores stage a change; with releases off there is nothing to stage into, and a live restore would be a second write path);
+  - the collection link rows carry no item counts ("Managed in Testimonials", not "· 3 items": a count per row is one more read per section for a label), and a row whose screen the role does not open (a Content Creator's General settings, Forms, Job applications) is named without its link;
+  - Rename and Delete (or "Hide it instead") sit in the fields column's header, beside the open section's name, not in the sections column: they act on the open section, and the column's rows keep only what each row needs (the handle, Move up and down, the eye);
+  - below 1024 px the sections list stacks above the fields, not a select: a select would drop each row's eye and Move buttons, and the stacked list keeps every control;
+  - joinWhy and joinSteps items are the field kit's inline repeater (up to four, the steps' time label kept), not a collection-style list with a drawer;
+  - SaveStatus sits with the form in the fields column, not in the bar: a section and the page details are separate saves;
+  - `page_sections.label` is not admin-only as ui.md drew it: anon's table-level SELECT (0016) reads it on a visible section of a published page (the verification accepted it), so the Rename dialog and the guide say the name is not private;
+  - the page editor is its own bundle group, `admin-pages`, not a member of `admin-screens` (Wave 3 correction 7): in the shared group its code rode on eight other screens and theirs on it.
 - **Copy corrected** where untrue:
   - maintenance "…after you publish";
   - page visibility "Takes effect when you publish" / "Hidden from the site after you publish" → "Applies to the live site within a few minutes" until releases switch on (U14a, D7);

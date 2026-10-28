@@ -1,0 +1,112 @@
+{
+  "slug": "editing-pages",
+  "sort_order": 41,
+  "minutes": 3,
+  "tags": [
+    "content"
+  ],
+  "screens": [
+    "/admin/pages"
+  ],
+  "caps": [
+    "pages.write"
+  ],
+  "title": "Editing pages",
+  "title_ar": "تعديل الصفحات",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Pages lists every page of the site. Open one to change its sections: their order, which ones show, and every word in English and Arabic."
+      },
+      {
+        "t": "h",
+        "x": "Sections"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "The Sections list shows the page's sections in the order the site shows them. Drag one by its handle, or use Move up and Move down, to change the order.",
+          "The eye shows or hides a section on the site. A section the page always needs, such as the contact form, says so: the page shows it either way.",
+          "Add section lists the kinds of section this page can take. A kind it already has, or cannot take, is shown with the reason. A new section starts hidden, at the end: fill it in, move it, then show it.",
+          "Rename gives a section a name of up to 60 characters, to tell it apart in the admin. Others can see it, so keep private notes out of it. Only an Admin can delete a section; anyone else can hide it instead."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Words"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Every field starts as the words the page already shows. Change one to make it yours; a field you leave keeps the built-in words, even when they are improved later. Reset to the built-in copy puts them all back.",
+          "English, العربية or Both at the top chooses the language you edit. Arabic missing counts the fields with English and no Arabic, and Next gap takes you to each one.",
+          "Highlighted words are a range of the heading's words, from one word to another.",
+          "Press Save changes, or Ctrl+S. If someone else saved the section meanwhile, nothing is overwritten: you are asked to reload their version first."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "SEO and history"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "SEO opens the page's title, description and share image for search engines and shared links. Admin and SEO change them; a Content Creator reads them.",
+          "History lists the saves of the open section, or of the page details, newest first, with who saved and when."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "Hiding a section is not deleting it: its words stay saved and come back when you show it again."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تعرض شاشة Pages كل صفحات الموقع. افتح صفحة لتغيير أقسامها: ترتيبها، وما يظهر منها، وكل كلمة فيها بالإنجليزية والعربية."
+      },
+      {
+        "t": "h",
+        "x": "الأقسام (Sections)"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "تعرض قائمة الأقسام (Sections) أقسام الصفحة بالترتيب الذي يظهر به الموقع. اسحب قسمًا من مقبضه، أو استخدم Move up وMove down، لتغيير الترتيب.",
+          "تُظهر العين القسم في الموقع أو تخفيه. والقسم الذي تحتاجه الصفحة دائمًا، مثل نموذج التواصل، يقول ذلك: فالصفحة تعرضه في كل الأحوال.",
+          "يعرض Add section أنواع الأقسام التي تقبلها الصفحة. والنوع الموجود فيها أو الذي لا تقبله يظهر مع السبب. ويبدأ القسم الجديد مخفيًا في آخر الصفحة: املأه، وانقله، ثم أظهره.",
+          "يمنح Rename القسم اسمًا من 60 حرفًا على الأكثر يميّزه في لوحة الإدارة. ويستطيع غيرك رؤيته، فلا تكتب فيه ملاحظات خاصة. ولا يستطيع حذف قسم إلا المسؤول (Admin)، ويستطيع غيره إخفاءه بدلًا من ذلك."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "الكلمات"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "يبدأ كل حقل بالكلمات التي تعرضها الصفحة الآن. غيّر حقلًا ليصبح نصك أنت، والحقل الذي تتركه يحتفظ بالكلمات المدمجة حتى إن تحسّنت لاحقًا. ويعيدها Reset to the built-in copy كلها.",
+          "يختار English أو العربية أو Both في الأعلى لغة التعديل. ويعدّ Arabic missing الحقول التي فيها إنجليزية بلا عربية، وينقلك Next gap إلى كل منها.",
+          "الكلمات المميزة نطاق من كلمات العنوان، من كلمة إلى أخرى.",
+          "اضغط Save changes أو Ctrl+S. وإن حفظ شخص آخر القسم في الأثناء فلا يُكتب فوق شيء: يُطلب منك تحميل نسخته أولًا."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "SEO والسجل"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "يفتح SEO عنوان الصفحة ووصفها وصورة المشاركة لمحركات البحث والروابط المشتركة. يغيّرها المسؤول (Admin) ودور SEO، ويقرؤها صانع المحتوى (Content Creator).",
+          "يعرض History مرات حفظ القسم المفتوح، أو تفاصيل الصفحة، من الأحدث، مع من حفظ ومتى."
+        ]
+      },
+      {
+        "t": "tip",
+        "x": "إخفاء القسم ليس حذفًا: تبقى كلماته محفوظة وتعود حين تُظهره من جديد."
+      }
+    ]
+  }
+}

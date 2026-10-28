@@ -1757,7 +1757,9 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
     expect(pageGuideFor('/admin/service-cases/1234', 'content_creator')).toBe(
       'saving-and-publishing',
     );
-    expect(pageGuideFor('/admin/pages/new', 'admin')).toBe('saving-and-publishing');
+    // Admin v2 E1: Pages and the page editor below it open the page editor's own guide.
+    expect(pageGuideFor('/admin/pages/new', 'admin')).toBe('editing-pages');
+    expect(pageGuideFor('/admin/sections/1234', 'admin')).toBe('saving-and-publishing');
     expect(pageGuideFor('/admin/analytics/search', 'seo')).toBe('website-stats');
     expect(pageGuideFor('/admin/redirects/9', 'seo')).toBe('seo-and-redirects');
     expect(pageGuideFor('/admin', 'developer')).toBe('your-dashboard');
@@ -1781,7 +1783,8 @@ describe('the page heads’ guides (src/lib/admin/help/pageGuides.ts) follow the
     expect(pageGuideFor('/admin/portfolio/1', 'seo')).toBe('services-and-projects');
     expect(pageGuideFor('/admin/pages', 'seo')).toBeNull();
     expect(pageGuideFor('/admin/blog/1', 'seo')).toBeNull();
-    expect(pageGuideFor('/admin/pages', 'content_creator')).toBe('saving-and-publishing');
+    expect(pageGuideFor('/admin/pages', 'content_creator')).toBe('editing-pages');
+    expect(pageGuideFor('/admin/pages/1234', 'content_creator')).toBe('editing-pages');
   });
 });
 
@@ -1837,6 +1840,89 @@ describe('collections-and-faq (U7), a new guide put by the FAQ migration', () =>
     expect(COLLECTIONS['team']?.copy).toBeUndefined();
     expect(COLLECTIONS['testimonials']?.copy?.({ is_placeholder: true })).toBeNull();
     expect(COLLECTIONS['clients']?.copy?.({ is_placeholder: true })).toBeNull();
+  });
+});
+
+describe('editing-pages (E1), a new guide put by the page editor migration', () => {
+  const article = () => SET.find((a) => a.slug === 'editing-pages')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const EDITOR = 'src/components/admin/screens/pageEditor';
+
+  it('is put once, at revision 0 (new), by the migration that adds the section label', () => {
+    const puts = HELP.edits.filter((e) => e.slug === 'editing-pages');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts[0]?.file).toMatch(/^\d{4}_page_editor\.sql$/);
+    expect(HELP.revisions.get('editing-pages')).toBe(1);
+  });
+
+  it('takes the free place 41 (after saving 40), for the roles that edit pages', () => {
+    expect(article().sort_order).toBe(41);
+    expect(SET.filter((a) => a.sort_order === 41)).toHaveLength(1);
+    expect(article().tags).toEqual(['content']);
+    expect(article().screens).toEqual(['/admin/pages']);
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual(['admin', 'content_creator']);
+  });
+
+  it('says what the page editor does, in the words it uses', () => {
+    const en = text('en');
+    const ar = text('ar');
+    const column = source(`${EDITOR}/SectionsColumn.tsx`);
+    const model = source(`${EDITOR}/model.ts`);
+    // Order: the handle, and Move up / Move down (the kit's, on every row).
+    expect(en).toContain('Drag one by its handle, or use Move up and Move down');
+    expect(column).toContain('<SortHandle label={name}');
+    expect(column).toContain('<MoveButtons label={name} />');
+    // The eye, and the forms the routes keep.
+    expect(column).toContain('aria-label={`Show ${name} on the site`}');
+    expect(en).toContain('such as the contact form, says so: the page shows it either way');
+    expect(source(`${EDITOR}/library.ts`)).toContain('The inquiry form is always on this page');
+    // A new section: hidden, at the end.
+    expect(en).toContain('A new section starts hidden, at the end');
+    expect(model).toContain('visible: false,');
+    expect(model).toContain('sortOrder: Math.min(last + ORDER_STEP, SORT_ORDER_MAX),');
+    // The list of sections is named, not placed (below 1024 px it stacks above the fields).
+    expect(en).toContain('The Sections list shows the page');
+    expect(en).not.toMatch(/on the left|on the right/);
+    expect(column).toMatch(/>\s*Sections\s*<\/h2>/);
+    // Rename's 60 characters, that the name is not private (anon and other staff read it:
+    // 0115), and who deletes.
+    expect(en).toContain(
+      'a name of up to 60 characters, to tell it apart in the admin. Others can see it, so keep private notes out of it.',
+    );
+    expect(en).not.toContain('shown only here');
+    expect(source(`${EDITOR}/RenameModal.tsx`)).toContain(
+      'Others can see it, so keep private notes out of it.',
+    );
+    expect(source(`${EDITOR}/RenameModal.tsx`)).not.toContain('shown only here');
+    expect(source('packages/schemas/sectionTypes.ts')).toContain('SECTION_LABEL_MAX = 60;');
+    expect(en).toContain('Only an Admin can delete a section; anyone else can hide it instead.');
+    expect(ROLES.filter((r) => ROLE_CAPS[r]['content.archiveDelete'] === 'full')).toEqual([
+      'admin',
+    ]);
+    // The words: prefilled, Reset, the language bar, the gap count, Save and the conflict.
+    expect(source('src/components/admin/fields/SectionContentField.tsx')).toContain(
+      'Reset to the built-in copy',
+    );
+    for (const words of ['Reset to the built-in copy', 'Arabic missing', 'Next gap']) {
+      expect(en, words).toContain(words);
+      expect(ar, words).toContain(words);
+    }
+    expect(source('src/components/admin/fields/editorLanguage.tsx')).toContain(
+      '`Arabic missing: ${count}`',
+    );
+    expect(source(`${EDITOR}/SectionPanel.tsx`)).toContain('submitLabel="Save changes"');
+    expect(source('src/components/admin/fields/EditorForm.tsx')).toContain('Reload their version');
+    expect(en).toContain('you are asked to reload their version first');
+    // SEO: Admin and SEO change it, a Content Creator reads it.
+    expect(en).toContain('Admin and SEO change them; a Content Creator reads them.');
+    expect(ROLE_CAPS.admin['seo.entityMeta']).toBe('full');
+    expect(ROLE_CAPS.seo['seo.entityMeta']).toBe('full');
+    expect(ROLE_CAPS.content_creator['seo.entityMeta']).toBe('view');
+    // History: the open item's saves, who and when.
+    expect(en).toContain('History lists the saves of the open section, or of the page details');
+    expect(source(`${EDITOR}/history.ts`)).toContain('by: `Saved by ${who(v.by)}`');
   });
 });
 
@@ -2380,6 +2466,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
   it('Content Creator: the basics, content, media, the Style-Finder and stats; no leads, PII, hiring, settings or SEO', () => {
     expect(shown('content_creator')).toEqual([
       'collections-and-faq',
+      'editing-pages',
       'finding-your-way',
       'media-library',
       'previewing-changes',

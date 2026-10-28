@@ -1,16 +1,106 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
+import AdminPageEditor from '@/components/admin/islands/AdminPageEditor';
+import Refused from '@/components/admin/ui/Refused.astro';
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import {
+  builtInLooks,
+  loadEditorPage,
+  mayOpenPages,
+  pageEditorAccess,
+} from '@/lib/admin/pages/editor';
+import { loadSeoPanelSetup, type SeoPanelSetup } from '@/lib/admin/seo/list';
+import { writeSystemLog } from '@/lib/data/systemLog';
+import type { PageEditorPage } from '@/components/admin/screens/pageEditor/types';
 
 export const prerender = false;
 
-// Astro resolves the static `new.astro` before this dynamic route, so /admin/pages/new
+// The page editor (Admin v2 E1, docs/admin-v2/ui.md "Page editor (/admin/pages/[id]; AV-25)").
+// Astro resolves the static `new.astro` before this dynamic route, so /admin/pages/new still
 // reaches the create form rather than being read as an id.
-const ui = uiFor('pages');
-const id = Astro.params.id ?? null;
+//
+// Decided here, from the same ROLE_CAPS the routes enforce (UX only; every route refuses
+// whatever this shows): who opens it at all (Admin, Content Creator and SEO; anyone else gets
+// the refusal and a 403, having read nothing), what the role may do (pageEditorAccess), and,
+// read under the person's own RLS: the page and its visibility, and the SEO drawer's setup
+// (loadSeoPanelSetup, for a role with seo.entityMeta). The built-in copy of every section look
+// goes to the island as props, so it never ships in the admin bundle (F6). The island reads
+// the sections, the open item and its history itself, through the resource routes.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = Boolean(session && sb && mayOpenPages(session.role));
+const id = Astro.params.id ?? '';
+
+let page: PageEditorPage | null = null;
+let seo: SeoPanelSetup | null = null;
+let failed = false;
+if (allowed && session && sb) {
+  try {
+    page = await loadEditorPage(sb, session, id);
+  } catch (err) {
+    failed = true;
+    await writeSystemLog({
+      level: 'error',
+      source: 'admin:pages.editor',
+      message: err instanceof Error ? err.message : 'page editor read failed',
+      detail: { path: Astro.url.pathname },
+    });
+  }
+}
+const access = session ? pageEditorAccess(session.role) : null;
+if (page && session && sb && access && access.seo !== 'none') {
+  try {
+    seo = await loadSeoPanelSetup(sb, session, 'page', page.id);
+  } catch (err) {
+    await writeSystemLog({
+      level: 'error',
+      source: 'admin:pages.seo',
+      message: err instanceof Error ? err.message : 'SEO panel setup read failed',
+      detail: { path: Astro.url.pathname },
+    });
+  }
+}
+if (!allowed) Astro.response.status = 403;
+else if (!page && !failed) {
+  Astro.response.status = 404;
+  Astro.response.statusText = 'Not Found';
+}
+const section = Astro.url.searchParams.get('section');
 ---
 
-<AdminLayout title={`Edit ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="pages" id={id} />
+<AdminLayout
+  title={page ? page.title.en : 'Page'}
+  headingDir={page ? 'auto' : undefined}
+  subtitle="Pages"
+  styles={['pages.css']}
+>
+  {
+    !allowed ? (
+      <Refused />
+    ) : failed ? (
+      <p class="msg" data-kind="error" role="alert">
+        This page could not be read just now. Reload to try again.
+      </p>
+    ) : !page || !access ? (
+      <EmptyState
+        title="This page is not here"
+        text="It may have been deleted, or the link is wrong."
+        icon="pages"
+      >
+        <a class="btn" href="/admin/pages">
+          Back to pages
+        </a>
+      </EmptyState>
+    ) : (
+      <AdminPageEditor
+        client:load
+        page={page}
+        access={access}
+        builtIns={access.sections ? builtInLooks() : {}}
+        seo={seo}
+        initialSection={section}
+      />
+    )
+  }
 </AdminLayout>
