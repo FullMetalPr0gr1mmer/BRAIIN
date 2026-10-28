@@ -5,6 +5,7 @@ import Icon from '@/components/admin/kit/Icon';
 import StatusBadge from '@/components/admin/kit/StatusBadge';
 import { isArchiveRefusal, MOVE_ARCHIVED, swapTarget } from '../resources/reorder';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
+import { readsThroughRelease, stagedUrl } from '@/lib/admin/releaseEvents';
 import { showFlash } from '@/lib/admin/flash';
 import { PAGE_SIZE } from '@/lib/admin/pager';
 import AddProjectModal from './AddProjectModal';
@@ -53,6 +54,10 @@ export default function ProjectsList({ write, archive, sectors }: ProjectsListPr
   const [offset, setOffset] = useState(0);
   const [tags, setTags] = useState(false);
   const [adding, setAdding] = useState(0);
+  // Admin v2 R12b: the list came through the release (releases on). Read from the answer,
+  // never from a row, it decides every write this screen sends: a move or an add made in
+  // release mode says so, so a switch-off since is refused (409 `releases-off`), never live.
+  const [staged, setStaged] = useState(false);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -61,6 +66,7 @@ export default function ProjectsList({ write, archive, sectors }: ProjectsListPr
       const projects = await adminFetch<ListResponse>(`/api/admin/portfolio?limit=${LIST_LIMIT}`);
       setRows(projects.rows ?? []);
       setTotal(projects.total ?? 0);
+      setStaged(readsThroughRelease(projects));
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -126,7 +132,7 @@ export default function ProjectsList({ write, archive, sectors }: ProjectsListPr
     if (!a || !b) return;
     setError('');
     try {
-      await adminFetch('/api/admin/portfolio/reorder', {
+      await adminFetch(stagedUrl('/api/admin/portfolio/reorder', staged), {
         method: 'POST',
         body: {
           items: [
@@ -341,6 +347,7 @@ export default function ProjectsList({ write, archive, sectors }: ProjectsListPr
           open
           onClose={() => setAdding(0)}
           sortOrder={lastOrder + 10}
+          staged={staged}
         />
       )}
     </div>

@@ -14,13 +14,14 @@ import { builtInLooks, mayOpenPages, pageEditorAccess } from '@/lib/admin/pages/
 import { overlayList } from '@/lib/release/overlay';
 import { registryByTable } from '@/lib/release/registry';
 import { refuseStagedBody, refuseStagedQuery } from '@/lib/release/releasesOff';
+import { readsThroughRelease, stagedBody, stagedUrl } from '@/lib/admin/releaseEvents';
 import {
   PAGE_FIELDS,
   SECTION_CONTENT_FIELD,
   SECTION_TYPE_FIELD,
   SORT_ORDER_MAX,
   builtInFor,
-  columnAddress,
+  columnMarks,
   columnWriteRef,
   columnWroteOn,
   draftStamp,
@@ -29,7 +30,6 @@ import {
   isFirstOfType,
   neighbourAfterRemoval,
   newSectionPayload,
-  readsThroughRelease,
   renameBody,
   sectionFormFields,
   sectionRowOf,
@@ -351,6 +351,12 @@ describe('what a write from the column sends beside its values', () => {
   }
   const rowsOf = (answer: Record<string, unknown>) =>
     (answer['rows'] as Record<string, unknown>[]).map((raw) => sectionRowOf(raw)!);
+  // The eye's and Rename's bodies exactly as the editor sends them (R12b's stagedBody; the
+  // source check at the end of this file holds PageEditor.tsx to the same composition).
+  const sentToggle = (row: SectionRow, release: boolean) =>
+    stagedBody(toggleBody(row, release), columnMarks(row, release));
+  const sentRename = (row: SectionRow, label: string | null, release: boolean) =>
+    stagedBody(renameBody(row, label, release), columnMarks(row, release));
 
   it('releases on, nothing pending: the row has no draft key, yet every write is marked', () => {
     const answer = releaseAnswer();
@@ -360,10 +366,13 @@ describe('what a write from the column sends beside its values', () => {
     // The route's own shape: a row with nothing pending carries no `draft` key at all.
     expect('draft' in (answer['rows'] as Record<string, unknown>[])[0]!).toBe(false);
     expect('draft' in section!).toBe(false);
-    const toggle = toggleBody(section!, release);
-    const rename = renameBody(section!, 'Closing band', release);
+    const toggle = sentToggle(section!, release);
+    const rename = sentRename(section!, 'Closing band', release);
     expect(toggle).toEqual({ visible: true, version: 3, staged: true });
     expect(rename).toEqual({ label: 'Closing band', version: 3, staged: true });
+    // The bytes on the wire, key order included, are E1's own (R12b's helpers changed none).
+    expect(JSON.stringify(toggle)).toBe('{"visible":true,"version":3,"staged":true}');
+    expect(JSON.stringify(rename)).toBe('{"label":"Closing band","version":3,"staged":true}');
     // Once releases are off under the screen, the live PATCH refuses both (R12's 409).
     expect(() => refuseStagedBody(toggle, 'page_section')).toThrow();
     expect(() => refuseStagedBody(rename, 'page_section')).toThrow();
@@ -373,7 +382,7 @@ describe('what a write from the column sends beside its values', () => {
       '/api/admin/sections/reorder',
       `/api/admin/sections/${SECTION}`,
     ]) {
-      const url = new URL(columnAddress(path, release), 'https://admin.test');
+      const url = new URL(stagedUrl(path, release), 'https://admin.test');
       expect(url.pathname, path).toBe(path);
       expect(() => refuseStagedQuery(url, 'page_section'), path).toThrow();
     }
@@ -385,11 +394,11 @@ describe('what a write from the column sends beside its values', () => {
     expect(release).toBe(false);
     const [section] = rowsOf(answer);
     expect(columnWriteRef(section!, release)).toEqual({});
-    expect(toggleBody(section!, release)).toEqual({ visible: true, version: 3 });
-    expect(renameBody(section!, null, release)).toEqual({ label: null, version: 3 });
-    expect(() => refuseStagedBody(toggleBody(section!, release), 'page_section')).not.toThrow();
+    expect(sentToggle(section!, release)).toEqual({ visible: true, version: 3 });
+    expect(sentRename(section!, null, release)).toEqual({ label: null, version: 3 });
+    expect(() => refuseStagedBody(sentToggle(section!, release), 'page_section')).not.toThrow();
     for (const path of ['/api/admin/sections', '/api/admin/sections/reorder']) {
-      expect(columnAddress(path, release)).toBe(path);
+      expect(stagedUrl(path, release)).toBe(path);
     }
     expect(columnWroteOn(section!)).toBe('');
   });
@@ -401,12 +410,15 @@ describe('what a write from the column sends beside its values', () => {
       draftId: 'd1',
       draftVersion: 4,
     });
-    expect(toggleBody({ ...section!, draft }, true)).toEqual({
+    expect(sentToggle({ ...section!, draft }, true)).toEqual({
       visible: true,
       version: 3,
       draftId: 'd1',
       draftVersion: 4,
     });
+    expect(JSON.stringify(sentRename({ ...section!, draft }, null, true))).toBe(
+      '{"label":null,"version":3,"draftId":"d1","draftVersion":4}',
+    );
     expect(columnWroteOn({ ...section!, draft })).toBe('d1:4');
   });
 });
@@ -517,11 +529,15 @@ describe('the editor’s steps: leaving the open form, a refused column write, a
     const editor = readFileSync('src/components/admin/screens/pageEditor/PageEditor.tsx', 'utf8');
     // The screen's mode, from its list answer, decides every write's marker.
     expect(editor).toContain('setRelease(readsThroughRelease(answer));');
-    expect(editor).toContain('body: toggleBody(row, release),');
-    expect(editor).toContain('body: renameBody(row, label, release),');
-    expect(editor).toContain("columnAddress('/api/admin/sections', release)");
-    expect(editor).toContain("columnAddress('/api/admin/sections/reorder', release)");
-    expect(editor).toContain('columnAddress(`/api/admin/sections/${row.id}`, release)');
+    expect(editor).toContain(
+      'body: stagedBody(toggleBody(row, release), columnMarks(row, release)),',
+    );
+    expect(editor).toContain(
+      'body: stagedBody(renameBody(row, label, release), columnMarks(row, release)),',
+    );
+    expect(editor).toContain("stagedUrl('/api/admin/sections', release)");
+    expect(editor).toContain("stagedUrl('/api/admin/sections/reorder', release)");
+    expect(editor).toContain('stagedUrl(`/api/admin/sections/${row.id}`, release)');
     expect(editor).not.toContain('columnWriteRef(');
     // A refused eye or move: columnWrite; Add section and a switch: mayLeave.
     expect(editor.match(/await columnWrite\(/g)).toHaveLength(2);

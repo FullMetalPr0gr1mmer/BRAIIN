@@ -4,6 +4,7 @@ import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
 import { uiFor } from '@/lib/admin/uiSchema';
 import { canWriteResource, seoAccess } from '@/lib/admin/editorAccess';
 import { firstTab, visibleTabs } from '@/lib/admin/editorTabs';
+import { createReleaseMode } from '@/lib/admin/releasesFlag';
 
 export const prerender = false;
 
@@ -19,11 +20,15 @@ const initialTab = firstTab(
   Astro.url.searchParams.get('tab'),
   { readOnly, seoAccess: seo },
 );
+// R12b: in release mode the create says so (createReleaseMode: the shell's own read of
+// the flag, shared). A resource outside the release is false without asking.
+const releaseMode = await createReleaseMode(Astro.locals, 'blog');
 ---
 
 <AdminLayout title={`New ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
   <AdminResourceForm
     client:load
+    releaseMode={releaseMode}
     resource="blog"
     id={null}
     readOnly={readOnly}

@@ -676,3 +676,51 @@ describe('the hook in live mode (F5a, unchanged by R12)', () => {
     );
   });
 });
+
+// Admin v2 R12b: a create from a screen in release mode (a collection's drawer, a list's
+// modal, a case study added in a service's draft-mode editor) says so in its address, so the
+// live POST refuses it once releases are switched off under the screen.
+describe('a create made in release mode (R12b)', () => {
+  const fresh = () =>
+    run(initialSaveState(FIELDS, true), {
+      type: 'set',
+      name: 'title',
+      value: { en: 'New', ar: 'جديد' },
+    });
+
+  it('carries the marker in its address, and nothing else changes', () => {
+    const plain = buildSaveRequest(SERVICES, null, fresh(), FIELDS);
+    const staged = buildSaveRequest({ ...SERVICES, staged: true }, null, fresh(), FIELDS);
+    expect(plain.url).toBe('/api/admin/services');
+    expect(staged.url).toBe('/api/admin/services?staged=1');
+    expect(staged.method).toBe('POST');
+    expect(staged.body).toEqual(plain.body);
+    expect(staged.body).not.toHaveProperty(STAGED_KEY);
+  });
+
+  it('a screen read live (or no word either way) sends main’s create', () => {
+    for (const target of [
+      SERVICES,
+      { ...SERVICES, staged: false },
+      { ...SERVICES, staged: undefined },
+    ]) {
+      expect(buildSaveRequest(target, null, fresh(), FIELDS).url).toBe('/api/admin/services');
+    }
+  });
+
+  it('the flag is for a create only: a saved record follows its own answer', () => {
+    const live = buildSaveRequest({ ...SERVICES, staged: true }, 'r1', loaded(), FIELDS);
+    expect(live.url).toBe('/api/admin/services/r1');
+    expect(live.body).not.toHaveProperty(STAGED_KEY);
+  });
+
+  it('a refused create holds, and its Reload reads the screen again (there is no record)', async () => {
+    const held = entitySaveReducer(fresh(), { type: 'releases-off' });
+    expect(held).toMatchObject({ releasesOff: true, held: true, message: RELEASES_OFF_WORDS });
+    const { readFileSync } = await import('node:fs');
+    const hook = readFileSync('src/lib/admin/useEntitySave.ts', 'utf8');
+    expect(hook).toMatch(
+      /const reloadTheirs = useCallback\(async \(\) => \{\s*if \(isNew && latest\.current\.releasesOff\) \{[\s\S]*?leaving\.current = true;\s*window\.location\.reload\(\);\s*return;/,
+    );
+  });
+});

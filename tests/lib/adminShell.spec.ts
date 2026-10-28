@@ -292,6 +292,58 @@ describe('the release flag (Admin v2 R12: whether the savebar is drawn)', () => 
     // The import (its name and its path) and the one place it is drawn.
     expect(layout.match(/AdminSavebar/g)).toHaveLength(3);
   });
+
+  // R12b: a create page asks for its mode (createReleaseMode) so its create carries the
+  // marker; the read is the request's one, shared with the shell, so it adds no request.
+  describe('a create page’s mode (R12b, src/lib/admin/releasesFlag.ts)', () => {
+    const locals = (sb: SupabaseClient, role: Role) =>
+      ({ supabase: sb, session: auth(role) }) as Pick<
+        App.Locals,
+        'releasesEnabled' | 'supabase' | 'session'
+      >;
+
+    it('is the shell’s own read: a page and the shell ask once between them', async () => {
+      const { createReleaseMode, releasesEnabled } = await import('@/lib/admin/releasesFlag');
+      const { sb, calls } = flagClient({ data: true });
+      const request = locals(sb, 'content_creator');
+      expect(await createReleaseMode(request, 'services')).toBe(true);
+      expect(await createReleaseMode(request, 'blog')).toBe(true);
+      const state = await loadShellState(
+        sb,
+        auth('content_creator'),
+        visibleNav('content_creator'),
+        kv(null),
+        undefined,
+        undefined,
+        releasesEnabled(request),
+      );
+      expect(state.releases).toBe(true);
+      expect(calls.filter((c) => c.fn === 'releases_enabled')).toEqual([
+        { fn: 'releases_enabled', args: { p_tenant: 't-1' } },
+      ]);
+    });
+
+    it('is false with releases off, on a failure, for Sales, and outside the release', async () => {
+      const { createReleaseMode } = await import('@/lib/admin/releasesFlag');
+      for (const answer of [{ data: false }, { data: 'true' }, { error: { message: 'x' } }]) {
+        const { sb } = flagClient(answer);
+        expect(await createReleaseMode(locals(sb, 'admin'), 'portfolio')).toBe(false);
+      }
+      const thrown = flagClient({ data: true });
+      (thrown.sb as unknown as { rpc: unknown }).rpc = () => Promise.reject(new Error('down'));
+      expect(await createReleaseMode(locals(thrown.sb, 'admin'), 'portfolio')).toBe(false);
+      // Sales reads nothing a release holds; the Style-Finder is outside the release: no read.
+      for (const [role, slug] of [
+        ['sales', 'services'],
+        ['admin', 'ai-questions'],
+        ['admin', 'no-such-resource'],
+      ] as const) {
+        const { sb, calls } = flagClient({ data: true });
+        expect(await createReleaseMode(locals(sb, role), slug), `${role} ${slug}`).toBe(false);
+        expect(calls, `${role} ${slug}`).toEqual([]);
+      }
+    });
+  });
 });
 
 describe('the counters registry (src/lib/admin/counters)', () => {

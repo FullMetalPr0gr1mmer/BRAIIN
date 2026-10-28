@@ -13,6 +13,12 @@ import { DraftConflictError } from '@/lib/admin/errors';
 // names and ignores the marker. With releases off the live path of every release-managed route
 // refuses such a request, 409 `releases-off`, before it reads or writes anything. No client
 // sends these with releases off, so the live path is otherwise what it always was.
+//
+// R12b: the POSTs too. A create (a drawer's or a modal's Add, a Duplicate) and a reorder (a
+// list's move) made in release mode carry `?staged=1` (their bodies are parsed by the route's
+// own schema before the handler, so the address carries it), and the live create and reorder
+// refuse them the same way. A screen's mode is its own list answer's (`draftsInvalid`,
+// releaseEvents.ts readsThroughRelease) or its editor's (`draft`), never a row's.
 
 /** The body key (a save) and the query parameter (a DELETE) that say "made in release mode". */
 export const STAGED_MARKER = 'staged';
@@ -32,7 +38,10 @@ export function refuseStagedBody(raw: unknown, entity: string): void {
   if (RELEASE_NAMES.some((name) => name in raw)) throw releasesOff(entity);
 }
 
-/** Releases off: refuse a DELETE whose address says it was made in release mode. */
+/**
+ * Releases off: refuse a DELETE, a create or a reorder whose address says it was made in
+ * release mode.
+ */
 export function refuseStagedQuery(url: URL, entity: string): void {
   if (RELEASE_NAMES.some((name) => url.searchParams.has(name))) throw releasesOff(entity);
 }

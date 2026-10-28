@@ -12,7 +12,13 @@ import SeoDrawer from '@/components/admin/screens/seo/SeoDrawer';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { readDraft } from '@/lib/admin/entitySave';
-import { announcePending, openPublishDialog } from '@/lib/admin/releaseEvents';
+import {
+  announcePending,
+  openPublishDialog,
+  readsThroughRelease,
+  stagedBody,
+  stagedUrl,
+} from '@/lib/admin/releaseEvents';
 import { toast } from '@/lib/admin/toast';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
 import { MODE_COPY } from '@/lib/admin/visibilityCopy';
@@ -22,7 +28,7 @@ import { columnWrite, mayLeave, openAdded } from './flows';
 import HistoryDrawer, { type HistoryTarget } from './HistoryDrawer';
 import { availability, kindOf, sectionName } from './library';
 import {
-  columnAddress,
+  columnMarks,
   columnWroteOn,
   draftStamp,
   formSyncAfterWrite,
@@ -30,7 +36,6 @@ import {
   isFirstOfType,
   neighbourAfterRemoval,
   newSectionPayload,
-  readsThroughRelease,
   renameBody,
   sectionRowOf,
   toggleBody,
@@ -214,7 +219,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
       async () => {
         const answer = await adminFetch<Row>(`/api/admin/sections/${row.id}`, {
           method: 'PATCH',
-          body: toggleBody(row, release),
+          body: stagedBody(toggleBody(row, release), columnMarks(row, release)),
         });
         take(answer);
         follow(
@@ -255,7 +260,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     const read: { rows: SectionRow[] | null } = { rows: null };
     await columnWrite(
       async () => {
-        const moved = await adminFetch<Row>(columnAddress('/api/admin/sections/reorder', release), {
+        const moved = await adminFetch<Row>(stagedUrl('/api/admin/sections/reorder', release), {
           method: 'POST',
           body: { items: changes },
         });
@@ -282,7 +287,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     setWorking(true);
     setError('');
     try {
-      const created = await adminFetch<Row>(columnAddress('/api/admin/sections', release), {
+      const created = await adminFetch<Row>(stagedUrl('/api/admin/sections', release), {
         method: 'POST',
         body: newSectionPayload(initialPage.id, type, rows),
       });
@@ -312,7 +317,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     try {
       const answer = await adminFetch<Row>(`/api/admin/sections/${row.id}`, {
         method: 'PATCH',
-        body: renameBody(row, label, release),
+        body: stagedBody(renameBody(row, label, release), columnMarks(row, release)),
       });
       take(answer);
       follow(
@@ -344,12 +349,9 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     const next = neighbourAfterRemoval(rows, row.id);
     try {
       // Releases on: R12's marker, so a removal sent after a switch-off is refused, not made.
-      const answer = await adminFetch<Row>(
-        columnAddress(`/api/admin/sections/${row.id}`, release),
-        {
-          method: 'DELETE',
-        },
-      );
+      const answer = await adminFetch<Row>(stagedUrl(`/api/admin/sections/${row.id}`, release), {
+        method: 'DELETE',
+      });
       if ('staged' in answer || 'draft' in answer) {
         announcePending();
         toast(`The removal of ${name} is saved as an unpublished change.`, 'ok');

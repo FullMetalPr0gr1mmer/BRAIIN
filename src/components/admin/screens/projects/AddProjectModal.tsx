@@ -16,6 +16,8 @@ export interface AddProjectModalProps {
   open: boolean;
   onClose: () => void;
   sortOrder: number;
+  /** Admin v2 R12b: the list it opens from was read through the release (SaveTarget `staged`). */
+  staged?: boolean | undefined;
 }
 
 function modalFields(): { drawn: FieldDef[]; sent: FieldDef[] } {
@@ -34,9 +36,14 @@ function modalFields(): { drawn: FieldDef[]; sent: FieldDef[] } {
   return { drawn, sent: [...drawn, pick('status'), pick('sortOrder')] };
 }
 
-export default function AddProjectModal({ open, onClose, sortOrder }: AddProjectModalProps) {
+export default function AddProjectModal({
+  open,
+  onClose,
+  sortOrder,
+  staged = false,
+}: AddProjectModalProps) {
   const fields = useMemo(modalFields, []);
-  const save = useEntitySave({ kind: 'resource', slug: 'portfolio' }, null, {
+  const save = useEntitySave({ kind: 'resource', slug: 'portfolio', staged }, null, {
     fields: fields.sent,
     mode: saveModeFor({ kind: 'resource', slug: 'portfolio' }),
     defaults: { status: 'draft', sortOrder },

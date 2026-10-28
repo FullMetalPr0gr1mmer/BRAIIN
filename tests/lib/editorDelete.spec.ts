@@ -72,6 +72,18 @@ describe('deleteFromEditor', () => {
     expect(go).toHaveBeenCalledWith('/admin/services?done=service-deleted');
   });
 
+  it('an editor in draft mode says so (R12b): a switch-off since is refused, never a live delete', async () => {
+    confirmDialog.mockResolvedValue(true);
+    adminFetch.mockResolvedValue({ deleted: REQ.id, pendingRemoval: true });
+    await deleteFromEditor({ ...REQ, go: vi.fn(), staged: true });
+    expect(adminFetch).toHaveBeenCalledWith(`/api/admin/services/${REQ.id}?staged=1`, {
+      method: 'DELETE',
+    });
+    adminFetch.mockClear();
+    await deleteFromEditor({ ...REQ, go: vi.fn(), staged: false });
+    expect(adminFetch).toHaveBeenCalledWith(`/api/admin/services/${REQ.id}`, { method: 'DELETE' });
+  });
+
   it('does nothing when the person cancels', async () => {
     confirmDialog.mockResolvedValue(false);
     const go = vi.fn();
