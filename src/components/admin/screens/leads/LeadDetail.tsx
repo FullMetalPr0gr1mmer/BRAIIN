@@ -60,9 +60,9 @@ export default function LeadDetail(props: LeadDetailProps) {
   const [eraseError, setEraseError] = useState('');
   const [now, setNow] = useState(() => Date.parse(props.now));
   const marked = useRef(false);
-  // The lead's reads and writes on one clock: an answer sent before a write answered (the
-  // mark-read on opening, the refetch after "Log contact") cannot replace that write's row
-  // (src/lib/crm/lateAnswers.ts).
+  // The lead's reads and writes on one clock: an answer never replaces one sent after it
+  // (the mark-read on opening, the refetch after "Log contact" or a 409), and a write's
+  // answer not shown is followed by one more read (src/lib/crm/lateAnswers.ts).
   const order = useRef(new AnswerOrder());
 
   const stagesByKey = useMemo(
@@ -136,7 +136,9 @@ export default function LeadDetail(props: LeadDetailProps) {
         method: 'PATCH',
         body: versioned ? { ...body, version: lead.version } : body,
       });
+      // An answer not shown leaves the row on screen possibly older than this write: read again.
       if (order.current.accept(sent, true)) setLead(answer);
+      else void refetch();
       void reloadEvents();
       return true;
     } catch (err) {
@@ -168,6 +170,7 @@ export default function LeadDetail(props: LeadDetailProps) {
     })
       .then((row) => {
         if (order.current.accept(sent, true)) setLead(row);
+        else void refetch();
       })
       .catch(() => undefined);
   }, []);

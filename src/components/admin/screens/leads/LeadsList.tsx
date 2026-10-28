@@ -285,10 +285,20 @@ export default function LeadsList({
     // Once every press of this star has answered: what the server holds (a failure puts the
     // last saved value back, never one a later press already replaced).
     const shown = toggles.current.settle(token, ok);
-    if (shown) setRows((list) => withField(list, shown.id, shown.field, shown.value));
+    // A bulk Star landed while this press was out: only a read can say which ran last.
+    if (shown === 'reread') setReload((n) => n + 1);
+    else if (shown) setRows((list) => withField(list, shown.id, shown.field, shown.value));
   }
 
-  function bulkDone(outcome: BulkOutcome) {
+  function bulkDone(outcome: BulkOutcome, action: string) {
+    // The bulk Star is another write of the star: a single press still out may run before or
+    // after it, so it stops overriding the read below and asks for one more when it answers.
+    if (action === 'star') {
+      toggles.current.forget(
+        outcome.applied.map((item) => item.id),
+        'is_starred',
+      );
+    }
     const next: { tone: 'warn' | 'err'; text: string }[] = [];
     const changed = outcome.applied.length;
     if (outcome.conflicts.length > 0) {

@@ -65,6 +65,44 @@ the mark-read PATCH answered first: the same bug the other way round. A write's 
 dropped only when a write sent after it has answered; the test "keeps a star saved after the
 mark-read sent before it answered (either order)" fails on the first rule (1 failed, 17 passed).
 
+## Review fixes
+
+Two findings, both checked against the code and both real; neither refuted, none skipped.
+
+- **LS-1 (low), a lead's page: a write's answer shown over a newer read.** `AnswerOrder`
+  compared a write's answer only with other writes, so the mark-read PATCH sent on opening
+  could answer after a later refetch (the one after a 409, or after "Log contact") had been
+  shown and put the older row back (an old stage and version, the next versioned change a
+  needless 409). The model now keeps the send stamp of the newest answer shown, read or write:
+  no answer replaces one sent after it, and an older read is dropped once a newer read was
+  shown. The reviewer's suggested rule alone (drop the write's answer) was not enough: the
+  status card's write and "Log contact" are on separate cards, so a star can be out while a
+  refetch sent after it answers first, and the server may have run the star after that read.
+  Dropping the star's row would then show the star off while the database has it on, the bug
+  this slice fixes. So a write's answer that is not shown is followed by one more read
+  (`else void refetch()` in `write()` and in the mark-read effect): the order of the two rows
+  is unknown, only a read made after both can tell. Guarded by "drops the mark-read answer
+  once a refetch sent after it was shown (LS-1)", "a write whose answer arrives after a later
+  read was shown is not shown, then read again", "drops an older read once a newer read was
+  shown" and the source guard "a lead's page reads again whenever a write's answer is not
+  shown". With the review fix reverted under `src/` (tests kept) all eight new tests fail (8 failed,
+  18 passed).
+- **LS-2 (low), the list: a single star press laid over the bulk Star's read.** The bulk bar's
+  Star is another write of `is_starred` the model did not know about: a single unstar still out
+  was laid over the read `bulkDone` asks for, and `settle` showed it again, while the server
+  could have run the bulk Star last. The bulk bar now passes its action to `onDone`, and on a
+  bulk Star the list calls the new `RowToggles.forget(ids, 'is_starred')` before reading again:
+  a toggle whose writes have all answered is dropped, one with a write still out is detached
+  (it overrides no answer, and its `settle` returns `'reread'`, on which the list reads again,
+  since only a read made after both writes can say which ran last). A press after the bulk
+  answered reattaches the toggle (it is the newest write from this screen). Disabling the bulk
+  Star while a single write is out was the other option; it would not cover a single press
+  made while the bulk Star is out, which the detach rule handles the same way. Guarded by "a
+  bulk Star that lands while a single unstar is out: the read after it decides (LS-2)", "forget
+  drops a settled toggle, leaves other rows and fields, and a later press counts", "a detached
+  press that is pressed again is laid over answers again" and the source guard "the list
+  forgets its star toggles on a bulk Star and reads again when asked".
+
 ## The board
 
 `LeadsBoard.tsx` was checked and left as it is. Its one write, the stage move, is not
@@ -91,7 +129,7 @@ toggle on a card writes anything (the card's star and unread dot are display onl
 
 ## Tests
 
-- `tests/lib/lateAnswers.spec.ts` (18 tests): the R13 order (read leaves, star saved, read
+- `tests/lib/lateAnswers.spec.ts` (26 tests since the review fixes, see above): the R13 order (read leaves, star saved, read
   answers with the star off: the star stays on), a star still out when a read answers, a read
   that left during the write and one after it (the later read decides, so a colleague's change
   shows), an older answer dropped, only the toggled row and field touched, a failed write put

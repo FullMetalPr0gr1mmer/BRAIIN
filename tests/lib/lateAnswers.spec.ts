@@ -103,6 +103,52 @@ describe('RowToggles (the leads list)', () => {
     expect(t.settle(42, true)).toBeNull();
   });
 
+  it('a bulk Star that lands while a single unstar is out: the read after it decides (LS-2)', () => {
+    const t = new RowToggles();
+    const unstar = t.begin(A, 'is_starred', false, true); // a single press, still out
+    // The bulk Star (sent after it, run after it) answers; the list forgets its star toggles.
+    t.forget([A], 'is_starred');
+    const after = t.read(); // the read bulkDone asks for
+    expect(starOf(t.answer(rows(true), after), A)).toBe(true); // what the database holds
+    // The single press answers: which write ran last is unknown, so read the list again.
+    expect(t.settle(unstar, true)).toBe('reread');
+    expect(starOf(t.answer(rows(true), t.read()), A)).toBe(true);
+  });
+
+  it('forget drops a settled toggle, leaves other rows and fields, and a later press counts', () => {
+    const t = new RowToggles();
+    const a = t.begin(A, 'is_starred', true, false);
+    t.settle(a, true);
+    const b = t.begin(B, 'is_starred', true, false); // B is not in the bulk
+    t.begin(A, 'other', 'x', 'y'); // another field of A
+    t.forget([A], 'is_starred');
+    const read = t.read();
+    const shown = t.answer(
+      rows(false, false).map((r) => ({ ...r, other: 'y' })),
+      read,
+    );
+    expect(starOf(shown, A)).toBe(false); // the settled toggle is gone
+    expect(starOf(shown, B)).toBe(true); // still out, not in the bulk: laid over
+    expect(shown?.find((r) => r.id === A)?.other).toBe('x');
+    expect(t.settle(b, true)).toEqual({ id: B, field: 'is_starred', value: true });
+    // A press after the bulk answered is the newest write of the star from this screen.
+    const c = t.begin(A, 'is_starred', true, false);
+    t.forget([B], 'is_starred');
+    const again = t.begin(A, 'is_starred', false, true);
+    expect(t.settle(c, true)).toBeNull();
+    expect(t.settle(again, true)).toEqual({ id: A, field: 'is_starred', value: false });
+  });
+
+  it('a detached press that is pressed again is laid over answers again', () => {
+    const t = new RowToggles();
+    const first = t.begin(A, 'is_starred', true, false);
+    t.forget([A], 'is_starred');
+    const second = t.begin(A, 'is_starred', false, true);
+    expect(starOf(t.answer(rows(true), t.read()), A)).toBe(false);
+    expect(t.settle(first, true)).toBeNull();
+    expect(t.settle(second, true)).toEqual({ id: A, field: 'is_starred', value: false });
+  });
+
   it('withField sets one row only', () => {
     expect(withField(rows(), B, 'is_starred', true)).toEqual(rows(false, true));
   });
@@ -142,6 +188,33 @@ describe('AnswerOrder (a lead page)', () => {
     expect(o.accept(refetch, false)).toBe(false);
   });
 
+  it('drops the mark-read answer once a refetch sent after it was shown (LS-1)', () => {
+    const o = new AnswerOrder();
+    const markRead = o.send(); // on opening; its answer is slow
+    // A stage move gets a 409 (the 409 answers no row), and the refetch shows v2.
+    const refetch = o.send();
+    expect(o.accept(refetch, false)).toBe(true);
+    expect(o.accept(markRead, true)).toBe(false); // v1 never comes back
+  });
+
+  it('a write whose answer arrives after a later read was shown is not shown, then read again', () => {
+    const o = new AnswerOrder();
+    const star = o.send(); // the status card
+    const refetch = o.send(); // "Log contact" meanwhile (its own card)
+    expect(o.accept(refetch, false)).toBe(true);
+    // The server may have run the star before or after that read: the island reads again.
+    expect(o.accept(star, true)).toBe(false);
+    expect(o.accept(o.send(), false)).toBe(true);
+  });
+
+  it('drops an older read once a newer read was shown', () => {
+    const o = new AnswerOrder();
+    const first = o.send();
+    const second = o.send();
+    expect(o.accept(second, false)).toBe(true);
+    expect(o.accept(first, false)).toBe(false);
+  });
+
   it('keeps answers that arrive in order, and a read sent after a write', () => {
     const o = new AnswerOrder();
     const refetch = o.send();
@@ -166,6 +239,14 @@ describe('the islands use the model', () => {
     expect(src).not.toMatch(/setRows\(asRows\(/);
   });
 
+  it('the list forgets its star toggles on a bulk Star and reads again when asked', () => {
+    const src = read('src/components/admin/screens/leads/LeadsList.tsx');
+    expect(src).toMatch(/if \(action === 'star'\) \{\s*toggles\.current\.forget\(/);
+    expect(src).toContain("if (shown === 'reread') setReload(");
+    const bar = read('src/components/admin/screens/leads/LeadsBulkBar.tsx');
+    expect(bar).toContain('onDone(outcome, body.action)');
+  });
+
   it("a lead's page sends every read and write of the row through one order", () => {
     const src = read('src/components/admin/screens/leads/LeadDetail.tsx');
     expect(src).not.toMatch(/\.then\(setLead\)/);
@@ -174,5 +255,16 @@ describe('the islands use the model', () => {
     const guarded = src.match(/order\.current\.accept\([^)]*\)\) setLead\(/g) ?? [];
     expect(sets.length).toBeGreaterThan(0);
     expect(guarded.length).toBe(sets.length);
+  });
+
+  it("a lead's page reads again whenever a write's answer is not shown", () => {
+    const src = read('src/components/admin/screens/leads/LeadDetail.tsx');
+    const writes = src.match(/order\.current\.accept\(sent, true\)\) setLead\(\w+\);/g) ?? [];
+    const reread =
+      src.match(
+        /order\.current\.accept\(sent, true\)\) setLead\(\w+\);\s*else void refetch\(\);/g,
+      ) ?? [];
+    expect(writes.length).toBe(2); // write() and the mark-read on opening
+    expect(reread.length).toBe(writes.length);
   });
 });

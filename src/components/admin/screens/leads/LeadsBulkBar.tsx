@@ -26,7 +26,8 @@ interface Props {
   people: readonly PersonView[];
   stages: readonly StageView[];
   spamView: boolean;
-  onDone: (outcome: BulkOutcome) => void;
+  /** The bulk answer, with the action it applied (the list forgets its own star toggles). */
+  onDone: (outcome: BulkOutcome, action: LeadBulk['action']) => void;
   onError: (message: string) => void;
 }
 
@@ -48,7 +49,11 @@ export default function LeadsBulkBar({
   async function run(body: LeadBulk) {
     setBusy(true);
     try {
-      onDone(await adminFetch<BulkOutcome>('/api/admin/leads/bulk', { method: 'POST', body }));
+      const outcome = await adminFetch<BulkOutcome>('/api/admin/leads/bulk', {
+        method: 'POST',
+        body,
+      });
+      onDone(outcome, body.action);
     } catch (err) {
       onError(describeError(err));
     } finally {
