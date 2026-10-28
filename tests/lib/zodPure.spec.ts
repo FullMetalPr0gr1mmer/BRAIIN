@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { build, parseSync, type Plugin, type Rollup } from 'vite';
+import { build, parseSync, type Plugin, type Rolldown } from 'vite';
 import {
   annotateZodCalls,
   assertZodMajor,
@@ -113,7 +113,7 @@ async function viteBuild(
     },
     plugins: marks ? [zodPurePlugin()] : [],
   });
-  const outputs = (Array.isArray(result) ? result : [result]) as Rollup.RollupOutput[];
+  const outputs = (Array.isArray(result) ? result : [result]) as Rolldown.RolldownOutput[];
   return outputs
     .flatMap((o) => o.output)
     .map((chunk) => (chunk.type === 'chunk' ? chunk.code : ''))

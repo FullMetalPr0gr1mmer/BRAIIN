@@ -211,7 +211,7 @@ CI gates — each a required check on `main` and a `needs` of the deploy: A `@lh
 ## 8. Conventions
 
 ### TypeScript & validation
-`strict` + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`. One Zod schema per shape in `packages/schemas`, imported by site, admin, Edge Functions. Zod is the single content boundary.
+`strict` + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`. One Zod schema per shape in `packages/schemas`, imported by site, admin, Edge Functions. Zod is the single content boundary. `scripts/zod-pure.mjs` (R13) marks each zod chain in `packages/schemas` `/* @__PURE__ */` in `astro build`'s **client** environment only (vitest, `astro dev` and the server bundle never run it), so an unused schema leaves the admin chunks; it is an allow-list that fails the build on anything else, and requires zod 3. So a schema module has **one named `import { z } from 'zod'`** (no other value import of zod, no second `z` binding), **holds schemas only** (each chain a factory, then allow-listed schema-building methods, in a value position), and makes **no parse and no effect at module level** or anywhere else (`parse`/`safeParse`, `setErrorMap`, `describe`/`meta`/`register` are refused); a new zod method joins the allow-list only after checking it builds without effects.
 
 ### Data model & schema
 - Every table: `id`, `tenant_id NOT NULL`, timestamps, `created_by`/`updated_by`; RLS `ENABLE`+`FORCE` on creation; `WITH CHECK (tenant_id = app.effective_tenant_id())`.
