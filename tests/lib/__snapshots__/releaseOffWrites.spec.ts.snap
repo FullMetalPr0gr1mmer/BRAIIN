@@ -2142,6 +2142,7 @@ exports[`resource configs: toRow is what it was before R2 > sections 1`] = `
       },
     },
     "is_placeholder": false,
+    "label": "Slogan, under the hero",
     "page_id": "0f0f0f0f-0000-4000-8000-00000000000a",
     "sort_order": 7,
     "type": "richText",
@@ -2158,6 +2159,9 @@ exports[`resource configs: toRow is what it was before R2 > sections 1`] = `
     },
     "isPlaceholder": {
       "is_placeholder": false,
+    },
+    "label": {
+      "label": "Slogan, under the hero",
     },
     "pageId": {
       "page_id": "0f0f0f0f-0000-4000-8000-00000000000a",
@@ -2178,6 +2182,9 @@ exports[`resource configs: toRow is what it was before R2 > sections 1`] = `
     },
     "isPlaceholder": {
       "is_placeholder": null,
+    },
+    "label": {
+      "label": null,
     },
     "pageId": {
       "page_id": null,
@@ -2204,6 +2211,7 @@ exports[`resource configs: toRow is what it was before R2 > sections 2`] = `
     "visible",
     "sort_order",
     "is_placeholder",
+    "label",
   ],
   "keys": {
     "content": [
@@ -2211,6 +2219,9 @@ exports[`resource configs: toRow is what it was before R2 > sections 2`] = `
     ],
     "isPlaceholder": [
       "is_placeholder",
+    ],
+    "label": [
+      "label",
     ],
     "pageId": [
       "page_id",
@@ -2231,6 +2242,9 @@ exports[`resource configs: toRow is what it was before R2 > sections 2`] = `
     ],
     "isPlaceholder": [
       "is_placeholder",
+    ],
+    "label": [
+      "label",
     ],
     "pageId": [
       "page_id",

@@ -53,7 +53,6 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
       'categories.manage',
     ],
     screens: [
-      '/admin/pages',
       '/admin/sections',
       '/admin/service-cases',
       '/admin/sectors',
@@ -70,6 +69,10 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     caps: ['services.write', 'portfolio.write', 'seo.entityMeta'],
     screens: ['/admin/services', '/admin/disciplines', '/admin/portfolio'],
   },
+  // Admin v2 E1: the page editor opens its own guide (put by the page editor's migration,
+  // revision 0). For the roles that edit pages: SEO opens Pages for SEO only, which the SEO
+  // guide covers, so it gets no Guide there.
+  { slug: 'editing-pages', caps: ['pages.write'], screens: ['/admin/pages'] },
   // Admin v2 U7: the collection screens and the FAQ (the FAQ migration's put, revision 0).
   {
     slug: 'collections-and-faq',

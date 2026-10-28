@@ -24,6 +24,7 @@ export const ADMIN_STYLESHEETS = [
   'login.css',
   'maintenance.css',
   'media.css',
+  'pages.css',
   'personal.css',
   'projects.css',
   'search.css',

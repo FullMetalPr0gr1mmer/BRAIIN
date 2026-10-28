@@ -396,6 +396,7 @@ describe('the locked screens the refusals e2e opens', () => {
       '/admin/leads',
       '/admin/leads/board',
       '/admin/maintenance',
+      '/admin/pages',
       '/admin/seo',
       '/admin/settings',
       '/admin/site-health',
@@ -406,7 +407,10 @@ describe('the locked screens the refusals e2e opens', () => {
         "import Refused from '@/components/admin/ui/Refused.astro'",
       );
       expect(page, screen.href).toMatch(/if \(!allowed\) Astro\.response\.status = 403;/);
-      if (screen.anyOf) {
+      if (screen.gate) {
+        // Admin v2 E1: a gate the page spells its own way (Pages: mayOpenPages).
+        expect(page, screen.href).toContain(screen.gate);
+      } else if (screen.anyOf) {
         // Admin v2 R13: a gate over several capabilities, in one named rule the page calls
         // (Backups & versions: mayOpenVersions, the release read capabilities).
         expect(page, screen.href).toMatch(

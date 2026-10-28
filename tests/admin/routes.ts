@@ -110,6 +110,12 @@ export interface LockedScreen {
    */
   anyOf?: readonly Capability[];
   render?: 'island' | 'server';
+  /**
+   * A server-rendered screen's gate as its page spells it, when it is not
+   * `can(session.role, '<cap>') === 'full'` (tests/lib/adminRoutes.spec.ts reads the page for
+   * it): Pages opens for any access to `seo.entityMeta` (a Content Creator's view included).
+   */
+  gate?: string;
 }
 
 export const LOCKED_SCREENS: readonly LockedScreen[] = [
@@ -182,6 +188,17 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
   { href: '/admin/faq', api: '/api/admin/faq', cap: 'pages.write' },
   // Admin v2 C9a: Admin only; the island shows the API's 403.
   { href: '/admin/crm/settings', api: '/api/admin/crm/settings', cap: 'crm.settings' },
+  // Admin v2 E1: Pages and the page editor open for a role that edits pages or reads their SEO
+  // (Admin, Content Creator, SEO: exactly the holders of seo.entityMeta at any access), and
+  // refuse themselves on the server (a 403 and Refused.astro) for Developer and Sales. Its API
+  // twin is the sections list (pages.write), which refuses both as well.
+  {
+    href: '/admin/pages',
+    api: '/api/admin/sections',
+    cap: 'seo.entityMeta',
+    render: 'server',
+    gate: 'mayOpenPages(session.role)',
+  },
   // Admin v2 R13 (plan B7.3): Backups & versions, for any release read capability, so only
   // Sales is refused: the page's own 403 and Refused.astro, having read nothing; its JSON twin
   // is the versions list, behind the same capabilities.

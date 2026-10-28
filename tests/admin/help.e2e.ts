@@ -349,7 +349,7 @@ test.describe('as content_creator', () => {
     await ready(page, '/admin/pages');
     await expect(guideButton(page)).toHaveAttribute(
       'href',
-      '/admin/help?guide=saving-and-publishing&screen=%2Fadmin%2Fpages',
+      '/admin/help?guide=editing-pages&screen=%2Fadmin%2Fpages',
     );
   });
 
