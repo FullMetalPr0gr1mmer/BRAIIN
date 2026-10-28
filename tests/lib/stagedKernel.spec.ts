@@ -12,8 +12,16 @@ import {
   aiQuestionResource,
   clientResource,
   mediaResource,
+  sectionResource,
   serviceResource,
 } from '@/lib/admin/resources';
+import {
+  columnMarks,
+  newSectionPayload,
+  renameBody,
+  toggleBody,
+  type SectionRow,
+} from '@/components/admin/screens/pageEditor/model';
 import { stageTransition } from '@/lib/release/staged';
 import { STAGED_MARKER } from '@/lib/release/releasesOff';
 import {
@@ -29,6 +37,7 @@ import {
   readsThroughRelease,
   STAGED_DELETE,
   STAGED_QUERY,
+  stagedBody,
   stagedUrl,
 } from '@/lib/admin/releaseEvents';
 import { uiFor } from '@/lib/admin/uiSchema';
@@ -508,6 +517,96 @@ describe('releases off: a write made in release mode is refused, never written l
       expect(held).toMatchObject({ held: true, releasesOff: true, status: 'error' });
       expect(autosaveDecision(held, false, false)).toBe('no');
     }
+  });
+
+  // E1's page editor (merge train): its sections column writes through the same kernel routes
+  // (src/pages/api/admin/sections/*), so a page left open in release mode across the
+  // switch-off is refused there too. Each request is built as PageEditor.tsx builds it.
+  describe('the page editor’s sections column', () => {
+    const PAGE = '0f0f0f0f-0000-4000-8000-00000000000b';
+    const SEC = '77777777-7777-4777-8777-777777777701';
+    const sections = {
+      POST: collectionRoutes(sectionResource).POST,
+      PATCH: itemRoutes(sectionResource).PATCH,
+      DELETE: itemRoutes(sectionResource).DELETE,
+      REORDER: reorderRoute(sectionResource),
+    };
+    const sectionRow: Row = {
+      id: SEC,
+      tenant_id: T,
+      page_id: PAGE,
+      type: 'cta',
+      label: null,
+      content: {},
+      visible: false,
+      sort_order: 10,
+      is_placeholder: false,
+      version: 3,
+    };
+    const column: SectionRow = {
+      id: SEC,
+      type: 'cta',
+      label: null,
+      visible: false,
+      sortOrder: 10,
+      version: 3,
+      placeholder: false,
+    };
+    /** The query the editor's stagedUrl adds to an address, in release mode. */
+    const marked = (path: string) => new URL(stagedUrl(path, true), 'https://admin.test').search;
+
+    beforeEach(() => {
+      db.tables['page_sections'] = [{ ...sectionRow }];
+      db.calls = [];
+    });
+
+    const untouched = () => {
+      expect(db.calls.map((c) => `${c.kind} ${c.name}`)).toEqual(['rpc releases_enabled']);
+      expect(db.tables['page_sections']).toEqual([sectionRow]);
+      expect(audits()).toEqual([]);
+    };
+
+    it('Add section (a create made in release mode): 409 releases-off, nothing written', async () => {
+      const res = await call(sections.POST, 'POST', {
+        body: newSectionPayload(PAGE, 'cta', [column]),
+        query: marked('/api/admin/sections'),
+      });
+      expect([res.status, res.body['error']]).toEqual([409, 'releases-off']);
+      untouched();
+    });
+
+    it('a move (only the rows it moved): 409 releases-off, the live order untouched', async () => {
+      const res = await call(sections.REORDER, 'POST', {
+        body: { items: [{ id: SEC, sortOrder: 5 }] },
+        query: marked('/api/admin/sections/reorder'),
+      });
+      expect([res.status, res.body['error']]).toEqual([409, 'releases-off']);
+      untouched();
+    });
+
+    it('a removal: 409 releases-off, the section stays', async () => {
+      const res = await call(sections.DELETE, 'DELETE', {
+        id: SEC,
+        query: marked(`/api/admin/sections/${SEC}`),
+      });
+      expect([res.status, res.body['error']]).toEqual([409, 'releases-off']);
+      untouched();
+    });
+
+    it('the eye and Rename, nothing pending or naming a pending change: 409, nothing written', async () => {
+      const draftMeta = { id: '66666666-6666-4666-8666-666666666666', version: 2, op: 'update' };
+      for (const row of [column, { ...column, draft: draftMeta }]) {
+        for (const body of [
+          stagedBody(toggleBody(row, true), columnMarks(row, true)),
+          stagedBody(renameBody(row, 'Closing band', true), columnMarks(row, true)),
+        ]) {
+          db.calls = [];
+          const res = await call(sections.PATCH, 'PATCH', { id: SEC, body });
+          expect([res.status, res.body['error']]).toEqual([409, 'releases-off']);
+          untouched();
+        }
+      }
+    });
   });
 });
 

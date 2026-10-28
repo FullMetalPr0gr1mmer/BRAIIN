@@ -282,6 +282,7 @@ describe('every client write to a release-managed route says when it was made in
       [
         'src/components/admin/screens/collection/CollectionScreen.tsx',
         'src/components/admin/screens/collection/CollectionScreen.tsx',
+        'src/components/admin/screens/pageEditor/PageEditor.tsx',
         'src/components/admin/screens/projects/ProjectsList.tsx',
         'src/components/admin/screens/resources/ResourceTable.tsx',
         'src/components/admin/screens/services/DisciplinePage.tsx',
@@ -309,6 +310,9 @@ describe('each screen takes its mode from its own answer, never from a row', () 
     'src/components/admin/screens/projects/TagsDrawer.tsx': /setStaged\(readsThroughRelease\(s\)\)/,
     'src/components/admin/screens/services/ServiceCasePanel.tsx':
       /setStaged\(readsThroughRelease\(data\)\)/,
+    // E1's page editor: its sections list (merge train).
+    'src/components/admin/screens/pageEditor/PageEditor.tsx':
+      /setRelease\(readsThroughRelease\(answer\)\)/,
   };
 
   it('the lists: from their answer’s `draftsInvalid`', () => {
@@ -385,6 +389,26 @@ describe('a create made in a drawer or a modal says so (SaveTarget `staged`)', (
   /** The resource editors that never need a mode: media is not release-managed. */
   const NO_SCREEN_MODE = new Set(['src/components/admin/screens/media/MediaDrawer.tsx']);
 
+  /**
+   * The resource editors that never create (E1's page editor panels, merge train): each opens
+   * a saved row by its own id, so every save is a PATCH whose mode is its own answer's (`draft`,
+   * buildSaveRequest marks it, entitySave.spec). E1's Add section is the column's own POST,
+   * marked through stagedUrl and checked by the scan above.
+   */
+  const EDITS_ONLY: Record<string, RegExp> = {
+    'src/components/admin/screens/pageEditor/PagePanel.tsx':
+      /useEntitySave\(PAGE_TARGET, page\.id,/,
+    'src/components/admin/screens/pageEditor/SectionPanel.tsx':
+      /useEntitySave\(SECTION_TARGET, section\.id,/,
+  };
+
+  it('an editor that never creates opens a saved row by its id', () => {
+    for (const [file, wiring] of Object.entries(EDITS_ONLY)) {
+      expect(source(file), file).toMatch(wiring);
+      expect(source(file), file).not.toMatch(/useEntitySave\([^)]*\bnull\b/);
+    }
+  });
+
   it('each create site carries its screen’s mode', () => {
     for (const [file, wiring] of Object.entries(CREATES)) {
       for (const pattern of wiring) expect(source(file), file).toMatch(pattern);
@@ -401,8 +425,8 @@ describe('a create made in a drawer or a modal says so (SaveTarget `staged`)', (
       )
       .map(([file]) => file)
       .sort();
-    const known = [...Object.keys(CREATES), ...NO_SCREEN_MODE].filter((file) =>
-      editors.includes(file),
+    const known = [...Object.keys(CREATES), ...NO_SCREEN_MODE, ...Object.keys(EDITS_ONLY)].filter(
+      (file) => editors.includes(file),
     );
     expect(editors).toEqual([...new Set(known)].sort());
   });
