@@ -38,6 +38,77 @@ for the search before pressing the star; the product itself was not fixed.
    holds the search's answer (read on the server first, delivered after the star is saved) and
    checks the star stays pressed.
 
+## What was built
+
+As planned, in three places:
+
+- **`src/lib/crm/lateAnswers.ts`** (new, pure): `RowToggles` (`read`, `begin`, `settle`,
+  `answer`), `AnswerOrder` (`send`, `accept`) and `withField`. One clock per island; nothing
+  async inside, so every order of events is a few lines of a unit test.
+- **`LeadsList.tsx`**: each list read takes a stamp as it leaves and its answer goes through
+  `toggles.answer(rows, stamp)` (null: a newer read already answered, the answer is dropped
+  whole, total and all); the star goes through `begin` before its PATCH and `settle` after it.
+  A failed star still says "{name} could not be starred." and now puts back the last value the
+  server confirmed, which after two quick presses is not always the value before the second.
+- **`LeadDetail.tsx`**: the mark-read PATCH on opening, `write()` (every control of the status
+  card, the stage move included) and `refetch()` (after "Log contact" and after a 409) take a
+  stamp as they leave and set the lead only if `order.accept(stamp, isWrite)`.
+
+## The board
+
+`LeadsBoard.tsx` was checked and left as it is. Its one write, the stage move, is not
+optimistic: the card moves when the PATCH answers. A board read that left before the move and
+is still out when the move answers is aborted and read again (`reading` ref and `setReload`,
+since C4c), so its answer can never redraw the card in its old column; a read that answered
+before the move answered is the state before the move, and the move is applied over it. No
+toggle on a card writes anything (the card's star and unread dot are display only).
+
+## Departures
+
+- **One write per field at a time is not enforced.** Two quick presses of one star send two
+  PATCHes; the model shows the last press, waits for both answers and then shows the last value
+  the server confirmed (in answer order). If the network delivered the two writes to the
+  server out of order, the database could hold the first press while the screen shows the
+  second, until the next read. Queuing presses would close that, at the cost of a slower
+  star; the risk is the same as before this fix, so it is left and recorded here.
+- **A lead's page drops, not merges, a stale answer.** When the mark-read answer is dropped,
+  the screen keeps the later write's row, whose `read_at` may still be empty if the server ran
+  the star first. Nothing on the page shows `read_at` after opening, and the page never marks a
+  lead read twice (`marked` ref), so nothing visible changes.
+- The existing list e2e keeps its wait for the search answer (it means to press the star on the
+  searched rows); its comment now points at the new e2e test, which holds the race on purpose.
+
+## Tests
+
+- `tests/lib/lateAnswers.spec.ts` (16 tests): the R13 order (read leaves, star saved, read
+  answers with the star off: the star stays on), a star still out when a read answers, a read
+  that left during the write and one after it (the later read decides, so a colleague's change
+  shows), an older answer dropped, only the toggled row and field touched, a failed write put
+  back and not re-shown by a late answer, two presses (each order, one or both failing), an
+  unknown token; `AnswerOrder`: the mark-read answer after a saved star is dropped, a refetch
+  sent while a write was out is dropped when the write answers first, answers in order are
+  kept; and a source guard that both islands go through the model (no `setRows(asRows(`, no
+  bare `setLead(await`, no `.then(setLead)`).
+- **Fails without the fix:** with the two islands reverted (`git diff origin/main --
+  src/components/admin/screens/leads > p; git apply -R p`), the two source-guard tests fail
+  (2 failed, 14 passed); with the whole change reverted the spec cannot import the model.
+- **e2e** (`tests/admin/leads.e2e.ts`, CI only): "the list: a star pressed while a search is
+  out stays pressed (C4 star race)". The lead is put on screen by a first search; a second
+  search (its whole e-mail, the same row) is fetched from the server at once through
+  `page.route` + `route.fetch()`, and its answer is held; the star is pressed and its PATCH
+  answers 200; the held answer is then released, the table stops being busy, and the star must
+  still be pressed and the database must say starred. Without the fix the held rows turn it off.
+
+## Sizes
+
+`npm run size`: public route JS 26.07 kB (limit 100); admin bundle sum 394.9 kB (limit 400,
+main was 394.4); the leads screens' eager graphs 159.5 kB each (limit 300); admin chunk plan
+holds.
+
+## Owner questions
+
+None.
+
 ## PII
 
 Nothing new reaches a row: the model only copies a field the island already set on its own
