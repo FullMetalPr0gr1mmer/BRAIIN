@@ -124,6 +124,9 @@ export default function Versions({
         [v.id]: {
           items: result.staged.map((s) => ({ draftId: s.draftId, draftVersion: s.draftVersion })),
           untouched: result.marked,
+          // The person staged every change just now, so they may publish them; the server
+          // decides again on Publish.
+          publishable: true,
         },
       }));
       announcePending();
@@ -331,11 +334,13 @@ export default function Versions({
                 {open && (
                   <Note className="ver__restored">
                     <p>
-                      {open.untouched
-                        ? COPY.restoredWaiting(open.items.length)
-                        : COPY.restoredEdited}
+                      {!open.publishable
+                        ? COPY.restoredOthers
+                        : open.untouched
+                          ? COPY.restoredWaiting(open.items.length)
+                          : COPY.restoredEdited}
                     </p>
-                    {open.untouched && (
+                    {open.untouched && open.publishable && (
                       <div className="ver__acts">
                         <button
                           type="button"

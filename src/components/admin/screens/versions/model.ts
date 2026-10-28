@@ -78,6 +78,8 @@ export const COPY = {
   restored: (n: number) => `v${n} restored. Publish to make it live.`,
   restoredWaiting: (k: number) =>
     `Restored as ${plural(k, 'unpublished change')}. Nothing is live until it is published.`,
+  restoredOthers:
+    'This version was restored. Some of its changes are ones your role can’t publish, so someone who can publish all of them makes it live.',
   restoredEdited:
     'These restored changes now publish as an ordinary release, from the bar at the bottom of the screen.',
   publishAgain: (n: number) => `Publish v${n} again`,

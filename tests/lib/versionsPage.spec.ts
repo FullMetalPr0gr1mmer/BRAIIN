@@ -142,11 +142,93 @@ describe('what the page reads', () => {
         { draftId: '77777777-7777-4777-8777-000000000002', draftVersion: 2 },
       ],
       untouched: true,
+      publishable: true,
     });
     // Edited after the restore (version 3): no longer the version's rollback.
     expect(page.restores[R2]?.untouched).toBe(false);
     // Every read named the caller's tenant: the stand-in serves only T.
     expect(db.calls.filter((c) => c.kind === 'from').length).toBeGreaterThan(0);
+  });
+
+  it('a restore with a change the role does not read or publish reaches no props, and offers nothing (review R13-SEC-2)', async () => {
+    const R1 = '0f0f0f0f-0000-4000-8000-000000000001';
+    const R2 = '0f0f0f0f-0000-4000-8000-000000000002';
+    const R3 = '0f0f0f0f-0000-4000-8000-000000000003';
+    const release = (id: string, number: number) => ({
+      id,
+      tenant_id: T,
+      number,
+      kind: 'publish',
+      status: 'published',
+      item_count: 1,
+      areas: ['settings'],
+      purge_status: 'done',
+      version: 1,
+      created_at: '2026-10-20T08:00:00Z',
+    });
+    const restore = (n: number, origin: string, over = {}) =>
+      draftRow({
+        id: `77777777-7777-4777-8777-${String(n).padStart(12, '0')}`,
+        origin_kind: 'restore',
+        origin_release_id: origin,
+        version: 2,
+        ...over,
+      });
+    const SERVICE = { entity_type: 'service', entity_id: T, payload: { status: 'published' } };
+    // An Admin restored v1 (the identity, General settings: Admin and Developer only), v2 (a
+    // service and the identity together) and v3 (a service alone).
+    const tables = () => ({
+      content_releases: [release(R1, 1), release(R2, 2), release(R3, 3)],
+      content_drafts: [
+        restore(1, R1),
+        restore(2, R2, SERVICE),
+        restore(3, R2),
+        restore(4, R3, SERVICE),
+      ],
+    });
+    const as = async (role: Role) =>
+      (
+        await loadVersionsPage({
+          sb: client(makeDb(tables())) as never,
+          auth: { userId: ADMIN, tenantId: T, role, isActive: true, email: 'a@x.test' },
+        })
+      ).restores;
+
+    const creator = await as('content_creator');
+    expect(creator[R1]).toEqual({ items: [], untouched: true, publishable: false });
+    expect(creator[R2]).toEqual({ items: [], untouched: true, publishable: false });
+    expect(creator[R3]).toEqual({
+      items: [{ draftId: '77777777-7777-4777-8777-000000000004', draftVersion: 2 }],
+      untouched: true,
+      publishable: true,
+    });
+    expect(JSON.stringify(creator)).not.toContain('77777777-7777-4777-8777-000000000001');
+    expect(JSON.stringify(creator)).not.toContain('77777777-7777-4777-8777-000000000003');
+
+    const admin = await as('admin');
+    expect(admin[R2]?.publishable).toBe(true);
+    expect(admin[R2]?.items).toHaveLength(2);
+
+    // The island draws neither Publish vN again nor the restore's preview for the restore the
+    // role cannot publish, and says whose it is.
+    const sample = sampleVersions(NOW);
+    const restored = Object.keys(sample.restores)[0]!;
+    const html = renderToStaticMarkup(
+      createElement(
+        ClockProvider,
+        { tz: 'Asia/Riyadh', children: null },
+        createElement(Versions, {
+          api: SAMPLE_VERSIONS_API,
+          ...sample,
+          restores: { [restored]: creator[R1]! },
+          more: false,
+          inline: true,
+        }),
+      ),
+    );
+    expect(html).toContain(COPY.restoredOthers);
+    expect(html).not.toMatch(/Publish v\d+ again/);
+    expect(html).not.toContain('?only=');
   });
 });
 

@@ -1,9 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { RELEASE_MAX_ITEMS } from '@schemas/release';
+import { RELEASE_ENTITY_TYPES, RELEASE_MAX_ITEMS, type ReleaseEntityType } from '@schemas/release';
 import type { AuthContext } from '@/lib/auth/types';
 import { can, type Access } from '@/lib/authz/matrix';
 import type { AdminRouteContext } from '@/lib/admin/route';
-import { PENDING_ANY_CAP } from './draftEndpoints';
+import { canPublish } from './caps';
+import { mayRead, PENDING_ANY_CAP } from './draftEndpoints';
+import { RELEASE_REGISTRY } from './registry';
 import { untouchedRestore } from './drafts';
 import { listVersions, versionDetail, type VersionSummary } from './versions';
 
@@ -42,10 +44,21 @@ export interface RestoreRef {
 
 /** A restore waiting to be published, for the version it restores. */
 export interface OpenRestore {
-  /** The changes the restore staged, as they stand. */
+  /**
+   * The changes the restore staged, as they stand: only while the person may publish every one
+   * of them (`publishable`), else none (review R13-SEC-2: a draft of an area the role does not
+   * read never reaches the page's props).
+   */
   items: RestoreRef[];
   /** Every one is as the restore left it, so they publish as the version's rollback. */
   untouched: boolean;
+  /**
+   * The person reads and may publish every change of the restore, so the row offers Publish vN
+   * again and its preview. False when any change is in an area their role does not read or
+   * cannot publish: the rollback must be every change of that restore (R10), so it is someone
+   * else's to publish, and the row says so.
+   */
+  publishable: boolean;
 }
 
 export interface VersionsPage {
@@ -84,14 +97,26 @@ function readerContext(
   } as unknown as AdminRouteContext<unknown>;
 }
 
-/** The restores waiting to be published, grouped by the version each restores. */
+/**
+ * The restores waiting to be published, grouped by the version each restores. Read under the
+ * person's RLS (CMS staff read every draft of the tenant, 0038, as R10's rollback check reads
+ * them), so a restore with a change in an area the person does not read is still seen whole; but
+ * only the changes of a restore the person may publish entirely are handed to the page, and only
+ * by id and version (pendingSummary's per-area rule for what reaches a screen).
+ */
 async function openRestores(
   sb: SupabaseClient,
   auth: AuthContext,
 ): Promise<Record<string, OpenRestore>> {
+  const readable = new Set<string>(
+    RELEASE_ENTITY_TYPES.filter((type) => mayRead(auth.role, RELEASE_REGISTRY[type])),
+  );
+  if (readable.size === 0) return {};
   const { data, error } = await sb
     .from('content_drafts')
-    .select('id,version,origin_kind,origin_release_id,release_id')
+    .select(
+      'id,version,entity_type,op,status:payload->>status,origin_kind,origin_release_id,release_id',
+    )
     .eq('tenant_id', auth.tenantId)
     .eq('origin_kind', 'restore')
     .limit(4 * RELEASE_MAX_ITEMS);
@@ -100,7 +125,22 @@ async function openRestores(
   for (const row of (data ?? []) as Row[]) {
     const origin = row['origin_release_id'];
     if (typeof origin !== 'string' || typeof row['version'] !== 'number') continue;
-    const entry = (out[origin] ??= { items: [], untouched: true });
+    const entry = (out[origin] ??= { items: [], untouched: true, publishable: true });
+    const type = row['entity_type'];
+    const op = row['op'];
+    const status = typeof row['status'] === 'string' ? row['status'] : null;
+    if (
+      typeof type !== 'string' ||
+      !readable.has(type) ||
+      (op !== 'create' && op !== 'update' && op !== 'delete') ||
+      !canPublish(auth.role, {
+        entityType: type as ReleaseEntityType,
+        op,
+        patch: status ? { status } : null,
+      })
+    ) {
+      entry.publishable = false;
+    }
     entry.items.push({ draftId: String(row['id']), draftVersion: row['version'] });
     // A change a scheduled release holds is not this restore's to publish now.
     if (
@@ -110,6 +150,7 @@ async function openRestores(
       entry.untouched = false;
     }
   }
+  for (const entry of Object.values(out)) if (!entry.publishable) entry.items = [];
   return out;
 }
 

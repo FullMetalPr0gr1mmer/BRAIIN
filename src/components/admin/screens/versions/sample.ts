@@ -106,6 +106,7 @@ export function sampleVersions(now: number): SampleVersions {
           { draftId: id(22), draftVersion: 2 },
         ],
         untouched: true,
+        publishable: true,
       },
     },
   };
