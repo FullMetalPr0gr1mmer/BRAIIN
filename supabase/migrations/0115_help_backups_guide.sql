@@ -75,7 +75,7 @@ select app.put_help_guide($guide$
       },
       {
         "t": "tip",
-        "x": "Every editor also has a History button: it lists the versions of that one item, newest first."
+        "x": "The editor of a service, a project, a post or another item in a list also has a History button: it lists the versions of that one item, newest first."
       },
       {
         "t": "h",
@@ -110,7 +110,7 @@ select app.put_help_guide($guide$
       },
       {
         "t": "tip",
-        "x": "في كل محرر أيضًا زر السجل، ويعرض إصدارات ذلك العنصر وحده، من الأحدث إلى الأقدم."
+        "x": "ولمحرر الخدمة أو المشروع أو المقالة أو أي عنصر آخر في قائمة زر السجل أيضًا، ويعرض إصدارات ذلك العنصر وحده، من الأحدث إلى الأقدم."
       },
       {
         "t": "h",

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -379,6 +379,20 @@ describe('the history drawer’s records (the editors, historyTargetOf)', () => 
     expect(
       historyTargetOf({ kind: 'singleton', endpoint: '/api/admin/site-profile' }, id),
     ).toBeNull();
+  });
+
+  it('the guide promises History only where an editor has it (review R13-C5)', () => {
+    // Row editors only: the singletons have none (historyTargetOf above), so "every editor" is
+    // not true, in either language.
+    // Found by name, not number: the merge train renumbers the migration.
+    const file = readdirSync('supabase/migrations').find((f) =>
+      /^\d{4}_help_backups_guide\.sql$/.test(f),
+    );
+    expect(file).toBeTruthy();
+    const guide = readFileSync(`supabase/migrations/${file!}`, 'utf8');
+    expect(guide).not.toMatch(/Every editor also has a History button/);
+    expect(guide).not.toContain('في كل محرر أيضًا زر السجل');
+    expect(guide).toContain('The editor of a service, a project, a post or another item in a list');
   });
 
   it('EditorForm loads the drawer through import() only', () => {
