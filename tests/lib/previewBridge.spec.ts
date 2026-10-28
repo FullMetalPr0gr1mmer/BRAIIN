@@ -6,10 +6,12 @@ import {
 } from '@schemas/previewMessage';
 import {
   acceptToPreview,
+  installBridge,
   postToParent,
   previewHrefFor,
   READ_ONLY_ENDPOINTS,
   requestAllowed,
+  sectionOfClick,
   sectionsOf,
 } from '@/lib/admin/preview/bridge';
 import { acceptFromPreview, createPreviewChannel } from '@/lib/admin/previewChannel';
@@ -233,6 +235,131 @@ describe('the parent side (src/lib/admin/previewChannel.ts)', () => {
       acceptFromPreview(
         { origin: ORIGIN, source: null, data: msg },
         { origin: ORIGIN, source: null },
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('a click in a section opens it in the page editor (Admin v2 E2)', () => {
+  const SECTION = '5eed5000-0000-4000-8000-000000000001';
+  /** A clicked element: inside a link or not, inside a marked section or not. */
+  const clicked = (opts: { link?: boolean; section?: string | null }) => ({
+    closest: (selector: string) =>
+      selector === 'a[href]'
+        ? opts.link
+          ? { hasAttribute: () => false, getAttribute: () => '#who' }
+          : null
+        : selector === '[data-pv-section]' && opts.section != null
+          ? { getAttribute: (name: string) => (name === 'data-pv-section' ? opts.section : null) }
+          : null,
+  });
+
+  it('the envelope carries `select` with a section id, and nothing else', () => {
+    expect(
+      FromPreviewMessageSchema.safeParse({ v: 1, type: 'select', sectionId: SECTION }).success,
+    ).toBe(true);
+    for (const bad of [
+      { v: 1, type: 'select', sectionId: '"><img>' },
+      { v: 1, type: 'select', sectionId: SECTION, extra: 1 },
+      { v: 1, type: 'select' },
+      { v: 2, type: 'select', sectionId: SECTION },
+    ])
+      expect(FromPreviewMessageSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    // Parent to preview has no such message.
+    expect(
+      ToPreviewMessageSchema.safeParse({ v: 1, type: 'select', sectionId: SECTION }).success,
+    ).toBe(false);
+  });
+
+  it('names the section a click landed in, never from a link or a marker that is not an id', () => {
+    expect(sectionOfClick(clicked({ section: SECTION }) as never)).toBe(SECTION);
+    expect(sectionOfClick(clicked({ section: 'default-2' }) as never)).toBe('default-2');
+    expect(sectionOfClick(clicked({ section: SECTION, link: true }) as never)).toBeNull();
+    expect(sectionOfClick(clicked({ section: null }) as never)).toBeNull();
+    expect(sectionOfClick(clicked({ section: '"><x' }) as never)).toBeNull();
+    expect(sectionOfClick(null)).toBeNull();
+    expect(sectionOfClick({} as never)).toBeNull();
+  });
+
+  function fakeWindow(framed: boolean) {
+    const listeners: Record<string, ((event: unknown) => void)[]> = {};
+    const up = { postMessage: vi.fn() };
+    const win = {
+      location: {
+        origin: ORIGIN,
+        href: `${ORIGIN}/admin/preview/about`,
+        pathname: '/admin/preview/about',
+        search: '',
+      },
+      fetch: vi.fn(),
+      navigator: { sendBeacon: vi.fn() },
+      addEventListener: vi.fn(),
+      requestAnimationFrame: vi.fn(),
+      document: {
+        addEventListener: (type: string, listener: (event: unknown) => void) =>
+          (listeners[type] ??= []).push(listener),
+        querySelectorAll: () => [],
+        documentElement: { lang: 'en' },
+      },
+    } as Record<string, unknown>;
+    win['parent'] = framed ? up : win;
+    const click = (target: unknown, button = 0) =>
+      (listeners['click'] ?? []).forEach((l) =>
+        l({
+          target,
+          button,
+          defaultPrevented: false,
+          metaKey: false,
+          ctrlKey: false,
+          shiftKey: false,
+          altKey: false,
+          preventDefault: () => undefined,
+        }),
+      );
+    return { win: win as unknown as Window, up, click };
+  }
+
+  it('posts `select` to the parent with its own origin as targetOrigin, only when framed', () => {
+    const framed = fakeWindow(true);
+    installBridge(framed.win);
+    framed.up.postMessage.mockClear(); // the `ready` message
+    framed.click(clicked({ section: SECTION }));
+    expect(framed.up.postMessage).toHaveBeenCalledTimes(1);
+    expect(framed.up.postMessage).toHaveBeenCalledWith(
+      { v: 1, type: 'select', sectionId: SECTION },
+      ORIGIN,
+    );
+    // A link, a click outside every section, another button: nothing.
+    framed.click(clicked({ section: SECTION, link: true }));
+    framed.click(clicked({ section: null }));
+    framed.click(clicked({ section: SECTION }), 2);
+    expect(framed.up.postMessage).toHaveBeenCalledTimes(1);
+
+    const alone = fakeWindow(false);
+    installBridge(alone.win);
+    alone.click(clicked({ section: SECTION }));
+    expect(alone.up.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('the parent hears `select` only from its own frame and origin', () => {
+    const frame = { postMessage: vi.fn() };
+    const msg = { v: 1, type: 'select', sectionId: SECTION };
+    expect(
+      acceptFromPreview(
+        { origin: ORIGIN, source: frame, data: msg },
+        { origin: ORIGIN, source: frame },
+      ),
+    ).toEqual(msg);
+    expect(
+      acceptFromPreview(
+        { origin: 'https://evil.test', source: frame, data: msg },
+        { origin: ORIGIN, source: frame },
+      ),
+    ).toBeNull();
+    expect(
+      acceptFromPreview(
+        { origin: ORIGIN, source: {}, data: msg },
+        { origin: ORIGIN, source: frame },
       ),
     ).toBeNull();
   });
