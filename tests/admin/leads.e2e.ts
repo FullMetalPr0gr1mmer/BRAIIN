@@ -201,10 +201,9 @@ test.describe('as admin', () => {
     // A whole e-mail finds its lead (the blind index) and never reaches the address.
     const search = page.getByRole('searchbox', { name: 'Search leads' });
     await search.fill(one.email!);
-    // The search's answer replaces every row, a star pressed meanwhile included: the lead is
-    // already listed (it is the newest), so without this wait the star below could be pressed
-    // while the search is still out, and its answer (read before the star was saved) would
-    // turn it off again on screen. The test waits for the answer, as a person sees it land.
+    // The search's answer first, as a person sees it land, so the star below is pressed on
+    // the searched rows. (A star pressed while a search is out is kept since the C4 star-race
+    // fix; the next test holds that order on purpose.)
     const searched = page.waitForResponse(
       (res) =>
         res.url().endsWith('/api/admin/leads/query') &&
@@ -240,6 +239,70 @@ test.describe('as admin', () => {
     await bar.getByRole('button', { name: 'Move' }).click();
     await expect(page.locator('#admin-toasts')).toContainText('Done. 2 leads changed.');
     await axe(page, 'the leads list');
+  });
+
+  test('the list: a star pressed while a search is out stays pressed (C4 star race)', async ({
+    page,
+  }) => {
+    const lead = await addLead(page, 'star-race');
+    await visit(page, '/admin/leads');
+    const search = page.getByRole('searchbox', { name: 'Search leads' });
+    const table = page.getByRole('table', { name: 'Leads', exact: true });
+    const isQuery = (res: { url(): string }) => res.url().endsWith('/api/admin/leads/query');
+    const asked = (body: unknown) => (body as { q?: unknown } | null)?.q;
+
+    // The lead on screen first, through a search that answers as usual.
+    const first = page.waitForResponse(
+      (res) => isQuery(res) && asked(res.request().postDataJSON()) === lead.name,
+    );
+    await search.fill(lead.name);
+    await search.press('Enter');
+    expect((await first).status()).toBe(200);
+    await expect(table).not.toHaveAttribute('aria-busy', 'true');
+    const star = page.getByRole('button', { name: `Star ${lead.name}` });
+    await expect(star).toHaveAttribute('aria-pressed', 'false');
+
+    // A second search (the lead's whole e-mail: the same one row) is read on the server at
+    // once, before the star, but its answer is held until the star is saved: the order R13's
+    // e2e met by chance. Its rows say the star is off.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let markRead: () => void = () => undefined;
+    const read = new Promise<void>((resolve) => {
+      markRead = resolve;
+    });
+    await page.route('**/api/admin/leads/query', async (route) => {
+      if (asked(route.request().postDataJSON()) !== lead.email) return route.continue();
+      const response = await route.fetch();
+      markRead();
+      await held;
+      await route.fulfill({ response });
+    });
+    const second = page.waitForResponse(
+      (res) => isQuery(res) && asked(res.request().postDataJSON()) === lead.email,
+    );
+    await search.fill(lead.email!);
+    await search.press('Enter');
+    await read;
+
+    const saved = page.waitForResponse(
+      (res) =>
+        new URL(res.url()).pathname === `/api/admin/leads/${lead.id}` &&
+        res.request().method() === 'PATCH',
+    );
+    await star.click();
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+    expect((await saved).status()).toBe(200);
+
+    // The held answer lands: its rows are drawn, and the star stays pressed.
+    release();
+    expect((await second).status()).toBe(200);
+    await expect(table).not.toHaveAttribute('aria-busy', 'true');
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+    await page.unroute('**/api/admin/leads/query');
+    expect((await leadOf(page, lead.id))['is_starred']).toBe(true);
   });
 
   test('the list: a lead a colleague changed meanwhile is a conflict, said and refreshed', async ({
