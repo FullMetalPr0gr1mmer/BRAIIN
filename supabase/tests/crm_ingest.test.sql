@@ -4,13 +4,15 @@
 -- The two doors are the service role's alone; arrival is idempotent on the Worker's id
 -- (a retry spends no lead number) and takes every field the Worker sends; a lead that
 -- arrives without its indexes waits for the cron; `returning` and the score are the
--- database's to decide; the backfill moves a legacy plaintext timeline band into the
--- encrypted field without ever dropping it with nothing in its place, and is not an edit;
--- staff read the score, never the indexes or the reasons; crm_settings over the six
--- principals. CLAUDE.md §3, §9.
+-- database's to decide; the backfill door writes only what the CRM derives (since the leads
+-- contract, C14b, there is no plaintext band left to move, and the timeline it once filled
+-- is never touched) and is not an edit; a lead that names no stage (the fallback insert)
+-- starts in the initial one; staff read the score, never the indexes or the reasons;
+-- crm_settings over the six principals, with no time zone of its own (C14b).
+-- CLAUDE.md §3, §9.
 
 begin;
-select plan(47);
+select plan(48);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -83,9 +85,10 @@ select is(
   'company_email,company_named,named_service/25',
   'the caller''s `returning` is ignored (the database decides it); default points: 10 + 10 + 5');
 select ok(
-  (select source = 'web_form' and channel = 'unknown' and crm_indexed_at is not null
-          and lead_number = 1 and status = 'new' and timeline_band is null
-     from public.leads where id = '00000000-0000-0000-0000-00000000ee01'),
+  (select l.source = 'web_form' and l.channel = 'unknown' and l.crm_indexed_at is not null
+          and l.lead_number = 1 and s.is_initial
+     from public.leads l join public.lead_stages s on s.id = l.stage_id
+    where l.id = '00000000-0000-0000-0000-00000000ee01'),
   'arrival sets source, channel, the index time, the number and the initial stage');
 select is(
   (select count(*)::int from public.lead_events
@@ -163,6 +166,11 @@ select ok(
   (select crm_indexed_at is null and email_hmac is null and score = 0
      from public.leads where id = '00000000-0000-0000-0000-00000000ee08'),
   'an unindexed arrival is left for the daily cron: crm_indexed_at stays null');
+select ok(
+  (select s.is_initial and s.tenant_id = l.tenant_id
+     from public.leads l join public.lead_stages s on s.id = l.stage_id
+    where l.id = '00000000-0000-0000-0000-00000000ee07'),
+  'the fallback insert, naming no stage, starts in its tenant''s initial stage (C14b)');
 select is(
   (select concat_ws('|', kind, locale, name, company, email_enc, phone_enc, budget_enc,
                     timeline_text_enc, message, service_of_interest::text,
@@ -175,26 +183,30 @@ select is(
 
 -- ---- The backfill door ---------------------------------------------------------------------
 -- Old leads, last changed by the admin (the owner inserts them under her claims, so
--- updated_by names her) on the day they arrived. ff03 arrived already past New.
+-- updated_by names her) on the day they arrived. ff02 holds the visitor's own timeline; ff03
+-- arrived already past New.
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
-insert into public.leads (id, tenant_id, name, email_enc, message, timeline_band, status,
+insert into public.leads (id, tenant_id, name, email_enc, message, timeline_text_enc, stage_id,
                           created_at, updated_at)
 values ('00000000-0000-0000-0000-00000000ff01', '00000000-0000-0000-0000-000000000001', 'Old',
-        'ciphertext', 'hi', '3_6m', 'new', now() - interval '30 days', now() - interval '30 days'),
+        'ciphertext', 'hi', null, null, now() - interval '30 days', now() - interval '30 days'),
        ('00000000-0000-0000-0000-00000000ff02', '00000000-0000-0000-0000-000000000001', 'Old 2',
-        'ciphertext', 'hi', 'asap', 'new', now() - interval '20 days', now() - interval '20 days'),
+        'ciphertext', 'hi', 'visitor-words', null, now() - interval '20 days', now() - interval '20 days'),
        ('00000000-0000-0000-0000-00000000ff03', '00000000-0000-0000-0000-000000000001', 'Old 3',
-        'ciphertext', 'hi', null, 'in_progress', now() - interval '10 days', now() - interval '10 days');
+        'ciphertext', 'hi', null,
+        (select id from public.lead_stages
+          where tenant_id = '00000000-0000-0000-0000-000000000001' and key = 'contacted'),
+        now() - interval '10 days', now() - interval '10 days');
 set local role service_role;
 select _as(null, null, null);
 select ok(
   public.crm_index_lead('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000ff01',
     repeat('a', 64), null, array['timeline_given'], 'encrypted-band-label'),
-  'crm_index_lead writes an old lead');
+  'crm_index_lead writes an old lead (an older cron''s last argument still resolves)');
 select ok(
   public.crm_index_lead('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000ff02',
-    repeat('b', 64), null, array['timeline_given'], null),
-  'and another, with no replacement for its band');
+    repeat('b', 64), null, array['timeline_given'], 'encrypted-band-label'),
+  'and another, that holds the visitor''s own timeline');
 select ok(
   not public.crm_index_lead('00000000-0000-0000-0000-0000000000ff', '00000000-0000-0000-0000-00000000ff01',
     null, null, array[]::text[], null),
@@ -206,14 +218,14 @@ select ok(
 reset role;
 select ok(
   (select email_hmac = repeat('a', 64) and crm_indexed_at is not null
-          and timeline_text_enc = 'encrypted-band-label' and timeline_band is null
+          and timeline_text_enc is null
           and not ('returning' = any(score_signals)) and score = 5
      from public.leads where id = '00000000-0000-0000-0000-00000000ff01'),
-  'indexed: the band moved into the encrypted timeline; not returning (the first with this address)');
+  'indexed: not returning (the first with this address); the last argument is ignored, no band is left to move (C14b)');
 select ok(
-  (select timeline_band = 'asap' and timeline_text_enc is null
+  (select timeline_text_enc = 'visitor-words' and email_hmac = repeat('b', 64)
      from public.leads where id = '00000000-0000-0000-0000-00000000ff02'),
-  'a band with nothing to replace it is kept, never silently dropped');
+  'the door never writes the timeline: the visitor''s own words stay as they were');
 select ok(
   (select updated_at = now() - interval '30 days'
           and updated_by = '00000000-0000-0000-0000-0000000000a1'
@@ -260,10 +272,10 @@ select _as(null, null, null);
 select throws_ok($$ select count(*) from public.crm_settings $$, '42501', null, 'anon is denied crm_settings');
 set local role authenticated;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
-select is((select sla_hours || '/' || timezone from public.crm_settings), '24/Asia/Riyadh',
-  'admin reads its tenant''s settings (defaults: 24 hours, Riyadh)');
-select throws_ok($$ update public.crm_settings set timezone = 'UTC' $$, '42501', null,
-  'admin cannot change the time zone through the API (C9a edits the rest; site_profile owns it, B7.5)');
+select is((select sla_hours from public.crm_settings), 24::smallint,
+  'admin reads its tenant''s settings (default: 24 hours)');
+select throws_ok($$ select timezone from public.crm_settings $$, '42703', null,
+  'the CRM keeps no time zone of its own: site_settings.timezone is the studio''s one zone (C14b)');
 select lives_ok($$ select score, source, channel from public.leads $$, 'admin reads the score, source and channel');
 select throws_ok($$ select email_hmac from public.leads $$, '42501', null,
   'admin cannot read the blind indexes');

@@ -10,7 +10,8 @@
 --     another tenant) write nothing to site_profile or site_settings, the maintenance switch
 --     included (U9b: the route writes the row before KV, so this gates the edge too).
 --   • site_settings.timezone: the default, the closed list, who writes and reads it, the
---     copy from crm_settings; app.studio_time_zone's tenant fence; public.studio_time_zone(),
+--     one zone (C14b dropped the crm_settings copy 0102 took it from); app.studio_time_zone's
+--     tenant fence; public.studio_time_zone(),
 --     the Worker's door, which answers every member its own tenant's zone, Sales included
 --     (Sales reads no site_settings row, 0097).
 --   • media_assets_public_read's icon branch, media_usage v6's icon rows.
@@ -414,10 +415,9 @@ select is((select count(*)::int from public.site_settings where tenant_id = _a()
   'other_tenant does not read it');
 reset role;
 select is(
-  (select count(*)::int from public.site_settings s join public.crm_settings c using (tenant_id)
-    where s.timezone is distinct from c.timezone
-      and s.tenant_id not in (select id from public.tenants where name like 'Gen%')),
-  0, 'every row the migration found took its tenant''s crm_settings zone');
+  (select count(*)::int from information_schema.columns
+    where table_schema = 'public' and table_name = 'crm_settings' and column_name = 'timezone'),
+  0, 'site_settings.timezone is the one zone: the crm_settings copy 0102 took it from is gone (C14b)');
 
 -- ── app.studio_time_zone ────────────────────────────────────────────────
 set local role authenticated;

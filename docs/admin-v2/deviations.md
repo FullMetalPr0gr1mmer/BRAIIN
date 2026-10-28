@@ -72,6 +72,23 @@
     not used yet ("Saved", never "Set up" or "Connected": U15 loads GA4 behind consent, no
     page shows a booking button); the verification meta is on the home pages only (`/`,
     `/ar`), where Google reads it ([U11](as-built/U11.md)).
+- **Google Analytics 4** (U15, as built: [as-built/U15.md](as-built/U15.md)):
+  - loaded only behind analytics consent, by a same-origin loader, with every advertising
+    signal denied, Google signals and ad personalisation off, cookies for 180 days instead of
+    Google's two years, and page addresses without their query;
+  - held off in production by a code switch (`GA4_NOTICE_READY`) until the owner signs off the
+    privacy notice, the cookie policy and the banner that name Google (today's notice says the
+    analytics are first-party), so a saved id says "Not loading yet" and why, not "Set up";
+  - never on search (what a visitor typed is in its address), Join (the application form:
+    applicant contact details and CV, Admin-only PII), Contact (the lead form's page: the
+    owner's privacy-first default of 2026-10-27, which a reviewed PR may reverse; the design
+    lists every public page) or the 404 routes;
+  - beside the lead form's section on Home, Services and every service page, pending the
+    owner's acceptance with the notice: GA4 sends no field value and the property's form
+    interactions must be OFF (launch runbook §2e), but Google's script runs on those pages; the
+    alternative is a reviewed PR leaving them out;
+  - the GA tab through the Data API is deferred until the switch-on and O-18 (a service
+    account and the property id): it would have nothing to show before.
 - **CRM**:
   - contact details behind an audited reveal; no budget in lists;
   - a lead's score shows as a number until the reveal: its reasons come with the contact details, through the audited reveal, because three of them (a budget given, a budget over 200k, a timeline given) name the budget band and the timeline (C4a, D7). The number itself is readable by every lead worker (all of whom hold `leads.pii`) and, with the scoring points, can imply the band: with the default points any score above 65 includes a budget over 200k;
@@ -127,7 +144,7 @@
   - no ribbon on public pages a signed-in person sees past maintenance (D13): the admin's top bar says it is on;
   - the reconcile after "Back on" runs every 10 minutes in G2's schedule (the plan's §5.7 default), not hourly as U9's brief said: one fewer cron trigger, and the row follows the edge sooner;
   - every admin clock follows the studio's zone (D3), and so do the busiest hours (G1) and the uptime strip's days (G2), whose guides U9 re-words; page visibility's hide-from and show-on days stay Riyadh days (U14a stores their midnights at +03:00 and the edge compares instants), which its guide says, so a zone change never moves a window someone already set (moving them is a follow-up with its own guide edit);
-  - C9a (0091) wrote, before this PR, that the zone moves to `site_profile.timezone` (B7.5): it is `site_settings.timezone` (the first bullet); C9a's screen reads `crm_settings.timezone` but never shows or writes it.
+  - C9a (0091) wrote, before this PR, that the zone moves to `site_profile.timezone` (B7.5): it is `site_settings.timezone` (the first bullet); C9a's screen read `crm_settings.timezone` but never showed or wrote it; since C14a no code reads it, and C14b dropped the column.
 - **Services and projects** (U5 + U6, one folded PR; as built: [as-built/U5-U6.md](as-built/U5-U6.md)):
   - "Visible on the site" is the row's status (the one lifecycle, §8: published shows it), set in the editor's Publishing tab and by the lists' eye, not a switch of its own (as U7's D7 for the collections);
   - a service's and a project's address (slug) stays its writers' (Admin, Content Creator), as every content slug is today, not "Admin and SEO, Content Creator read-only" (AV-14): that would split one row across two capabilities, which RLS cannot hold (the §2 Phase 3 amendment: a split inside a row is one layer). A changed address of a live page breaks the old one until a redirect points it there (the field says so); the 301 staged with the release waits for releases;
@@ -380,7 +397,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §2.3 | Theme, header, footer, loading screen, logo and general settings applied to the site | covered | covered | AV-18, AV-27-AV-30, MERGE:header-options, P-9 | Storage must follow P-9 (site_appearance + footer on site_profile), not AV-28's site_chrome. Logo stays a code asset (owner item 7). |
 | §2.4 | Leads into a CRM: contacts, companies, pipeline, tasks, PDPL consent | covered | covered | CRM-1-CRM-12, CRM-14 | Erasure, retention and audited reveal go further than the prototype on PDPL. |
 | §2.4 | Inbox (email/WhatsApp), campaigns, broadcasts, automations, templates with approval, CRM reports, exports, ad audiences | deferred | later phase (A1) or legal gate | A1 later phase; CRM design §12 hooks | Consistent with A1. |
-| §2.5 | Website statistics (built in plus Google Analytics) and a site health page | deviated-challenge | built under A6 | AV-10, AV-20 | v1 only. GA4 injection and the GA tab are deferred although A1 does not list them, and CLAUDE.md §2 locks 'GA4 secondary, behind consent'. |
+| §2.5 | Website statistics (built in plus Google Analytics) and a site health page | deviated-challenge | built under A6 | AV-10, AV-20 | v1 only. GA4 injection is built behind analytics consent and held off until the notice names Google (U15); the GA tab (Data API) is deferred until then and O-18. CLAUDE.md §2 locks 'GA4 secondary, behind consent'. |
 | §2.6 | Seven roles, per-role and per-person permissions, View as | deviated-ok | deviation (standard or owner decision) | A2/A4 (binding); CRM-10; AV-21 read-only matrix | 4 roles + Sales. Per-person grants cannot be expressed in RLS (§3 two layers). |
 | §2.6 | Invitations, activity log, backups and versions | covered | covered | AV-21, AV-22, R10, R13, AV-24 | 7-day invite expiry and scheduled backups are gaps (rows below). |
 | §2.7 | Get connected centre with guided wizards | deferred | later phase (A1) or legal gate | A1 later phase | Consistent with A1. |
@@ -393,7 +410,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §5.4 | Field kit (rich bold/em highlight/link, video window {src,start,end,poster}, repeater, sortable, 25-row tables, charts, drawer, modal, toast, mediaPicker) | covered | covered | AV-04, AV-07, AV-08 | Stored HTML -> typed fields + AccentSchema + Tiptap (Pillar 1); window model kept (EXC-009); warn/error toasts become inline (WCAG). **Built (F5b):** the highlight is a word range per language (`accent`), the link a page picked from `GET /api/admin/linkables`, the window a pick from the site clip registry with its length; no markup is stored by any of them. |
 | §5.5 | Admin follows the theme live; simple palette from one colour; custom fonts (upload or link) | covered | covered | AV-27 | Google/Adobe links refused (Pillar 2 self-hosted fonts, CSP font-src 'self', PDPL). Uploads need the subset + metric-override pipeline. |
 | §6.1 site | Identity: name, tagline, email, phone, WhatsApp, address, favicon, socials with visible flag | covered | covered | AV-18 (site_profile v2), P-3 staged |  |
-| §6.1 site | langs, defaultLang, domain, timezone editable | deviated-ok | deviation (standard or owner decision) | AV-18 read-only facts; U9 (0102) | §2 i18n (both twins, x-default EN) and PUBLIC_SITE_URL canonicals: languages and the domain stay read-only facts. U9: the timezone IS editable, from a closed list, in `site_settings.timezone` (immediate; copied from crm_settings.timezone, which is deprecated, C14 drops it): one source, and every admin clock follows it. |
+| §6.1 site | langs, defaultLang, domain, timezone editable | deviated-ok | deviation (standard or owner decision) | AV-18 read-only facts; U9 (0102) | §2 i18n (both twins, x-default EN) and PUBLIC_SITE_URL canonicals: languages and the domain stay read-only facts. U9: the timezone IS editable, from a closed list, in `site_settings.timezone` (immediate; copied from crm_settings.timezone, which C14b dropped): one source, and every admin clock follows it. |
 | §6.1 site | logo and logoDark editable | deviated-ok | deviation (standard or owner decision) | AV-18 (owner item 7) | Home LCP element (§6). A bounded slice with an lhci re-gate is possible later. |
 | §6.1 site.maint | Maintenance copy {en,ar}, background, contact buttons, 'Back on' auto-off, show date, allowTeam toggle, allowIps | covered | built under A6 (U9b) | src/middleware.ts block 1, src/lib/http/maintenance.ts, src/lib/http/maintenanceBypass.ts, src/lib/maintenance/page.ts; tests/admin/maintenance.e2e.ts | Built, immediate, all in the one KV value with the switch (no DB on the critical path). "The hero image" for "The hero video" (no video bytes on the 503). The bypass is the admin's own session check, fail-closed. |
 | §6.1 theme | Colours: simple (opsPalette) and advanced | covered | covered | AV-27 | The contrast gate may adjust generated colours (DoD #4). |
@@ -413,7 +430,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §6.1 forms | Captcha | missing | added as a slice | none (src/pages/api/contact.ts:65 TODO KAN-20) | Not provisioned. The honeypot and the EXC-004 limiter remain. |
 | §6.1 leadSettings | Editable statuses (label, colour), assignment rule, SLA hours | covered | covered | CRM-1, CRM-9 | Fixed tones instead of hex (challenged). TDD 'by-service' is not in the prototype (manual/round-robin/fixed), so the prototype wins. |
 | §6.1 leadSettings.notify | Team e-mail/WhatsApp alerts, auto reply, Slack webhook | deferred | later phase (A1) or legal gate | A1 (no outbound); AV-20 bell preferences | Consistent with A1. |
-| §6.1 ga/pixels | GA4 id/anonymize/events and Meta/TikTok/Snap pixels injected when set | deviated-challenge | built under A6 | AV-20 stores the GA4 id only | GA4 behind hasConsent is a locked decision; needs a CSP amendment. Pixels belong with ad audiences (A1 later): owner. |
+| §6.1 ga/pixels | GA4 id/anonymize/events and Meta/TikTok/Snap pixels injected when set | deviated-challenge | built under A6 | AV-20 stores the GA4 id; U15 injects it | GA4 behind hasConsent('analytics') with its CSP amendment (U15), held off until the notice sign-off; no "anonymize" setting (GA4 stores no IP addresses) and no custom events from the site (what GA4 measures beyond page views is the property's enhanced measurement, O-18). Pixels belong with ad audiences (A1 later): owner. |
 | §6.1 integrations | Email, WhatsApp, Sheets, Slack, HubSpot, inbound, calendar, Meta; setupState; secrets masked | deferred | later phase (A1) or legal gate | A1 later; AV-20 typed GA4/Search Console/Calendly/reCAPTCHA | Secrets never in a staff-readable row (§7) is honoured. |
 | §6.2 content/raw | Flat map of 253 bilingual keys + raw values shared with the site | covered | covered | AV-23, AV-25 | Typed section fields replace data-i keys. Add a key inventory test: every seed_home/seed_pages key maps to a field or a documented code-owned exception. |
 | §6.2 pages | Section label, visible, order | covered | covered | AV-25 (page_sections.label) |  |

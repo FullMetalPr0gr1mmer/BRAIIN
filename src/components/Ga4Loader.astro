@@ -1,0 +1,32 @@
+---
+// Google Analytics 4's loader tag (Admin v2 U15): rendered only when the middleware's read
+// found a measurement id (src/lib/http/ga4.ts: the switch on, a public page route answered
+// publicly), so with no id, or with the switch off, it renders nothing at all and the page is
+// the one it was (tests/render/baseLayout.spec.ts holds it to the byte).
+//
+// A same-origin CLASSIC script (public/scripts/ga4.js), never inline and never JSON: the CSP
+// has no 'unsafe-inline', and `script-src 'self'` covers a file of our own. What it needs
+// rides its data attributes: the id, and the consent version a visitor's choice must carry
+// (packages/consent/gate.ts CONSENT_VERSION: a choice made under an older notice never loads
+// Google). It loads nothing from Google until analytics consent; see the file's header.
+import { CONSENT_VERSION } from '@consent/gate';
+import { GA4_ID } from '@schemas/integrations';
+import { GA4_LOADER_SRC } from '@/lib/http/ga4';
+
+const pending = Astro.locals.ga4;
+const found = pending ? await pending : null;
+// The loader checks the shape again; the read refused anything else already.
+const id = found !== null && GA4_ID.test(found) ? found : null;
+---
+
+{
+  id ? (
+    <script
+      is:inline
+      src={GA4_LOADER_SRC}
+      data-ga4-id={id}
+      data-consent-version={String(CONSENT_VERSION)}
+      defer
+    />
+  ) : null
+}

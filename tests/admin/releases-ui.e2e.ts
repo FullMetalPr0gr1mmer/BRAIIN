@@ -43,14 +43,45 @@ async function expected(role: Role): Promise<SavebarCounts> {
   return savebarCounts(buildRows((await sampleReleaseApi(role).pending()).items));
 }
 
-/** A list each role opens, and (for a role that has one) an editor it saves live. */
-const SCREENS: Readonly<Record<Role, { list: string; editor: string | null }>> = {
-  admin: { list: '/admin/services', editor: '/admin/services' },
-  content_creator: { list: '/admin/services', editor: '/admin/services' },
-  seo: { list: '/admin/seo', editor: null },
-  developer: { list: '/admin/settings', editor: null },
-  sales: { list: '/admin/leads', editor: null },
+/**
+ * A list each role opens, and (for a role that has one) whether it opens a service's editor,
+ * which it saves live.
+ */
+const SCREENS: Readonly<Record<Role, { list: string; editor: boolean }>> = {
+  admin: { list: '/admin/services', editor: true },
+  content_creator: { list: '/admin/services', editor: true },
+  seo: { list: '/admin/seo', editor: false },
+  developer: { list: '/admin/settings', editor: false },
+  sales: { list: '/admin/leads', editor: false },
 };
+
+/**
+ * A real service's editor address. Since U5 + U6 the Services overview lists disciplines (a
+ * service links from it only while it is filed under none); each discipline's own page links
+ * its services' editors. So: the overview's disciplines in order, the first whose page lists a
+ * service.
+ */
+async function firstServiceEditor(page: Page): Promise<string> {
+  await open(page, '/admin/services');
+  // Both screens read their rows after they mount: wait for the list, not just the network.
+  const list = page.getByRole('list', { name: 'Disciplines' });
+  await expect(list).toBeVisible();
+  const disciplines = await list
+    .locator('a.li__t[href^="/admin/disciplines/"]')
+    .evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+  expect(disciplines.length).toBeGreaterThan(0);
+  for (const href of disciplines) {
+    await open(page, href);
+    const own = page.locator('.svc-d__main');
+    await expect(own.getByText('Loading…')).toHaveCount(0);
+    const services = own.locator('a.li__t[href^="/admin/services/"]');
+    if ((await services.count()) > 0) {
+      const editor = await services.first().getAttribute('href');
+      if (editor) return editor;
+    }
+  }
+  throw new Error('No discipline lists a service.');
+}
 
 for (const role of STAFF_ROLES) {
   test.describe(`releases off, as ${role}`, () => {
@@ -78,16 +109,18 @@ for (const role of STAFF_ROLES) {
       test('an editor saves live: the status select, the schedule, no release notice', async ({
         page,
       }) => {
-        await open(page, SCREENS[role].editor!);
-        const first = page.locator('a[href^="/admin/services/"]:not([href$="/new"])').first();
-        const href = await first.getAttribute('href');
-        expect(href).toBeTruthy();
-        await open(page, href!);
-        // The record's own form (an SEO tab's panel is another form, mounted once opened).
+        const href = await firstServiceEditor(page);
+        expect(href).toMatch(/^\/admin\/services\/[0-9a-f-]{36}$/);
+        await open(page, href);
+        // The record's own form (the case study's and the SEO tab's panels are other forms,
+        // mounted once opened).
         const form = page.locator('form.editor').first();
         await expect(form).toBeAttached();
-        // Every field tab is mounted (U8), so these are in the form whichever tab is shown.
+        // Every field tab is mounted (U8), so these are in the form whichever tab is shown:
+        // the Publishing tab's status select and per-item schedule, which release mode
+        // replaces with the "Visible on the site" switch and drops (EditorForm, R12).
         await expect(form.locator('select#f-status')).toHaveCount(1);
+        await expect(form.locator('input#f-scheduledFor[type="datetime-local"]')).toHaveCount(1);
         await expect(form.getByText('Visible on the site')).toHaveCount(0);
         await expect(page.locator('.draft-note')).toHaveCount(0);
         await expect(form.getByText(/^Version \d+$/)).toHaveCount(1);

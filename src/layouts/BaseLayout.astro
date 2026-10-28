@@ -10,6 +10,7 @@ import ConsentBanner from '@/components/ConsentBanner.astro';
 import WebVitals from '@/components/WebVitals.astro';
 import PageView from '@/components/PageView.astro';
 import ErrorReporter from '@/components/ErrorReporter.astro';
+import Ga4Loader from '@/components/Ga4Loader.astro';
 import AdminPreviewBridge from '@/components/preview/AdminPreviewBridge.astro';
 import { dir } from '@/lib/i18n';
 
@@ -66,9 +67,9 @@ const {
 } = Astro.props;
 const direction = dir(locale);
 // The releases preview (Admin v2 R9): set only by the middleware's /admin/preview branch. A
-// preview never asks for consent or sends telemetry (no banner, RUM, page view or error
-// reporter), is never indexed, and loads the bridge the page editor talks to. A public
-// request has no `preview`, so none of this changes a public page.
+// preview never asks for consent or sends telemetry (no banner, RUM, page view, error
+// reporter or GA4 loader), is never indexed, and loads the bridge the page editor talks to. A
+// public request has no `preview`, so none of this changes a public page.
 const preview = Astro.locals.preview;
 const robotsValue = preview ? 'noindex,nofollow' : robots;
 ---
@@ -124,6 +125,7 @@ const robotsValue = preview ? 'noindex,nofollow' : robots;
           <WebVitals />
           <PageView />
           <ErrorReporter />
+          <Ga4Loader />
         </>
       )
     }

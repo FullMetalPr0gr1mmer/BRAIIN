@@ -12,7 +12,10 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *              not; Remove asks first, and the tag is gone again;
  *   refused    an id that is not a GA4 measurement id lands on its field with the schema's
  *              words, and nothing is saved;
- *   conflict   a second editor's save is a 409 with "Reload their version".
+ *   conflict   a second editor's save is a 409 with "Reload their version" (on the Calendly
+ *              link since U15: no spec but tests/admin/ga4.e2e.ts, which runs alone, saves a
+ *              GA4 id, because the CI preview is built with GA4 switched on and a saved id
+ *              would put the loader on the pages parallel workers are reading).
  * Content Creator and Developer are refused by the server (tests/admin/refusals.e2e.ts,
  * through LOCKED_SCREENS). The tag's absence when nothing is set is the render test's
  * (tests/render/seoHeadVerification.spec.ts), never asserted on the shared preview here:
@@ -79,12 +82,19 @@ async function clear(browser: Browser) {
     const got = await page.request.get('/api/admin/integrations');
     expect(got.status(), await got.text()).toBe(200);
     const row = ((await got.json()) as { data: Record<string, unknown> }).data;
-    if (row['search_console_token'] === null && row['ga4_measurement_id'] === null) return;
+    if (
+      row['search_console_token'] === null &&
+      row['ga4_measurement_id'] === null &&
+      row['calendly_url'] === null
+    ) {
+      return;
+    }
     const res = await page.request.patch('/api/admin/integrations', {
       headers,
       data: {
         searchConsoleToken: null,
         ga4MeasurementId: null,
+        calendlyUrl: null,
         version: Number(row['version'] ?? 0),
       },
     });
@@ -210,9 +220,9 @@ test.describe('as SEO, end to end', () => {
       const [first, second] = await Promise.all(contexts.map((c) => c.newPage()));
       await open(first!);
       await open(second!);
-      const one = await drawerOf(first!, 'Google Analytics 4');
-      const two = await drawerOf(second!, 'Google Analytics 4');
-      await one.getByLabel('Google Analytics measurement ID').fill('G-U11FIRST1');
+      const one = await drawerOf(first!, 'Calendly');
+      const two = await drawerOf(second!, 'Calendly');
+      await one.getByLabel('Calendly booking link').fill('https://calendly.com/u11-first');
       // Wait for the first save's answer, not for the screen: the typed value and "Version N"
       // are both on it before the PATCH returns, so the second save could otherwise land first.
       const firstSaved = first!.waitForResponse(
@@ -221,9 +231,11 @@ test.describe('as SEO, end to end', () => {
       await one.getByRole('button', { name: 'Save' }).click();
       const saved = await firstSaved;
       expect(saved.status(), await saved.text()).toBe(200);
-      await expect(one.getByLabel('Google Analytics measurement ID')).toHaveValue('G-U11FIRST1');
+      await expect(one.getByLabel('Calendly booking link')).toHaveValue(
+        'https://calendly.com/u11-first',
+      );
 
-      await two.getByLabel('Google Analytics measurement ID').fill('G-U11SECOND');
+      await two.getByLabel('Calendly booking link').fill('https://calendly.com/u11-second');
       const answer = second!.waitForResponse(
         (r) => r.url().endsWith('/api/admin/integrations') && r.request().method() === 'PATCH',
       );
@@ -232,7 +244,9 @@ test.describe('as SEO, end to end', () => {
       expect(res.status(), await res.text()).toBe(409);
       await expect(two.getByRole('button', { name: 'Reload their version' })).toBeVisible();
       await two.getByRole('button', { name: 'Reload their version' }).click();
-      await expect(two.getByLabel('Google Analytics measurement ID')).toHaveValue('G-U11FIRST1');
+      await expect(two.getByLabel('Calendly booking link')).toHaveValue(
+        'https://calendly.com/u11-first',
+      );
     } finally {
       await Promise.all(contexts.map((c) => c.close()));
     }

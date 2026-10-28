@@ -70,6 +70,7 @@ const CONTENT_LOADERS = [
   'src/lib/data/certifications.ts',
   'src/lib/data/disciplines.ts',
   'src/lib/data/faq.ts',
+  'src/lib/data/ga4.ts',
   'src/lib/data/navigation.ts',
   'src/lib/data/pageSections.ts',
   'src/lib/data/portfolio.ts',
@@ -263,6 +264,17 @@ const MODULE_STATE_ALLOWED: Record<string, string> = {
 const CALLER_STATE_ALLOWED: Record<string, string> = {
   'src/lib/legal/render.ts:TOKEN':
     'a global RegExp of the legal-notice tokens: no data (replace and matchAll reset lastIndex)',
+  // The middleware reaches a loader since Admin v2 U15 (it reads the GA4 id before the
+  // render, src/lib/data/ga4.ts). Its five module-level Sets are the request rules, built once
+  // from literals and only ever asked `.has()`: no request writes them.
+  'src/middleware.ts:OWN_BODY_LIMIT_ROUTES':
+    'the public endpoints that bound their own bodies (H14), a constant Set only read (.has)',
+  'src/middleware.ts:PRE_AUTH_PATHS': 'the pre-auth paths, a constant Set only read (.has)',
+  'src/middleware.ts:REDIRECTABLE_METHODS':
+    'the methods an authored redirect answers, a constant Set only read (.has)',
+  'src/middleware.ts:SAFE_METHODS': 'the safe methods, a constant Set only read (.has)',
+  'src/middleware.ts:SECOND_STEP_PATHS':
+    "the second step's two paths, a constant Set only read (.has)",
 };
 
 /** Paths of admin code, which never renders a public page. */
