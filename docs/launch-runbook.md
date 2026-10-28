@@ -1684,8 +1684,9 @@ and the fallback scheduler.
    or `psql`) and compare it with its "Expected before the switch" lines. Note `legacy_to_convert`
    (items scheduled the old way, with a time) and `left_scheduled`. Any other difference stops
    here: `pending_changes`, `scheduled_releases` and `applying_releases` must be 0,
-   `identity_rows` and `seo_defaults_rows` 1 (a missing row cannot be added once releases are
-   on), `active_admins` at least 1, `switches_owner_only` true. The tenant id is the first row of
+   `identity_rows` 1 (the job-applications switch updates that row at once, and once releases
+   are on nothing but a release may add it), `active_admins` at least 1, `switches_owner_only`
+   true. The tenant id is the first row of
    `select id from public.tenants order by created_at limit 1`.
 2. **Switch on.** As `postgres`, on a direct session (the SQL editor or `psql`, never an API
    key):

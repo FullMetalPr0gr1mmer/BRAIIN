@@ -23,13 +23,13 @@
 --   legacy_to_convert            = n       (enable's `converted`: rows scheduled with a time)
 --   left_scheduled               = m       (enable's `left_scheduled`: left as they are)
 --   active_admins                = >= 1    (the operator and the fallback scheduler are among them)
---   identity_rows                = 1       (a missing row cannot be added once releases are on)
---   seo_defaults_rows            = 1
+--   identity_rows                = 1       (the intake switch updates it; the guard refuses an
+--                                          insert outside a release once releases are on)
 --   publish_scheduled_job        = true    (pg_cron: still publishes for a tenant with releases off)
 --   enable_audits                = 0
 -- Expected after the switch (and before the drill):
---   runner_bypasses_rls, tenants, ledger_*, switches_owner_only, active_admins, identity_rows,
---   seo_defaults_rows and publish_scheduled_job as before, and:
+--   runner_bypasses_rls, tenants, ledger_*, switches_owner_only, active_admins, identity_rows
+--   and publish_scheduled_job as before, and:
 --   releases_on                  = true
 --   release_tenants              = 1
 --   pending_changes              = n       (the converted rows, each claimed by its release)
@@ -111,8 +111,6 @@ select
       and (p.locked_until is null or p.locked_until <= pg_catalog.now())) as active_admins,
   (select count(*) from public.site_profile s where s.tenant_id = (select id from t))
     as identity_rows,
-  (select count(*) from public.seo_defaults s where s.tenant_id = (select id from t))
-    as seo_defaults_rows,
   exists (select 1 from cron.job j where j.jobname = 'publish-scheduled') as publish_scheduled_job,
   (select count(*) from public.audit_log a
     where a.tenant_id = (select id from t) and a.action = 'releases.enable') as enable_audits;
