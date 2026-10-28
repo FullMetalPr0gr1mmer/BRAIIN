@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import { AuthorizationError } from '@/lib/authz/errors';
@@ -15,6 +16,7 @@ const USER = '11111111-1111-4111-8111-111111111111';
 
 const order: string[] = [];
 let limited = false;
+let siteLimited = false;
 let ledgerDown = false;
 let attemptFails = false;
 let demoted = false;
@@ -29,6 +31,7 @@ vi.mock('@/lib/admin/rateLimit', () => ({
   claimPrivilegedOp: async (_auth: unknown, op: string) => {
     order.push(`limit:${op}`);
     if (limited) throw new RateLimitError(`${op}:user`);
+    if (siteLimited) throw new RateLimitError(`${op}:tenant`);
     if (ledgerDown) throw new RateLimitError(`${op}:unavailable`);
   },
 }));
@@ -80,6 +83,7 @@ function call({
 beforeEach(() => {
   order.length = 0;
   limited = false;
+  siteLimited = false;
   ledgerDown = false;
   attemptFails = false;
   demoted = false;
@@ -116,6 +120,16 @@ describe('GET /api/admin/export-backup, followed as a link', () => {
     expect(person.headers.get('location')).toBe('/admin/backups?export=limit');
     expect(person.headers.get('cache-control')).toContain('no-store');
     expect(order.filter((o) => o.startsWith('read') || o.startsWith('export'))).toEqual([]);
+  });
+
+  it('the site’s hourly ceiling is its own notice, never the person’s three (review R13-C4)', async () => {
+    siteLimited = true;
+    expect((await call()).status).toBe(429);
+    const person = await call({ navigate: true });
+    expect(person.status).toBe(303);
+    expect(person.headers.get('location')).toBe('/admin/backups?export=limit-site');
+    const page = readFileSync('src/pages/admin/backups.astro', 'utf8');
+    expect(page).toContain("exportNotice === 'limit-site'");
   });
 
   it('a limiter that cannot be read is not the hourly limit: the page says it could not run', async () => {

@@ -32,7 +32,7 @@ function navigated(request: Request): boolean {
 }
 
 /** Back to Backups & versions, with the notice the page explains. */
-function backToBackups(notice: 'limit' | 'unavailable'): Response {
+function backToBackups(notice: 'limit' | 'limit-site' | 'unavailable'): Response {
   return new Response(null, {
     status: 303,
     headers: { location: `/admin/backups?export=${notice}`, 'cache-control': NO_STORE },
@@ -53,9 +53,17 @@ export const GET = defineAdminRoute({
     try {
       await claimPrivilegedOp(auth, 'export-backup');
     } catch (err) {
-      // The ledger itself down (`:unavailable`) is no hourly limit: say it could not run.
+      // The ledger itself down (`:unavailable`) is no hourly limit: say it could not run. The
+      // site's own ceiling (`:tenant`, ten an hour across everyone) is not the person's three,
+      // so it has its own notice (review R13-C4).
       if (err instanceof RateLimitError && navigated(request)) {
-        return backToBackups(err.scope.endsWith(':unavailable') ? 'unavailable' : 'limit');
+        return backToBackups(
+          err.scope.endsWith(':unavailable')
+            ? 'unavailable'
+            : err.scope.endsWith(':tenant')
+              ? 'limit-site'
+              : 'limit',
+        );
       }
       throw err;
     }

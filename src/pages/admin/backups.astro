@@ -36,8 +36,8 @@ export const prerender = false;
 //     reader: a change in an area the person does not read is counted, never shown).
 //   - Backups: "Download content" is a plain link to the content export (`export.backup`,
 //     Admin and Developer, under the export lockdown; it answers a hit hourly limit with a
-//     303 back here, `?export=limit`), what the file never holds, and the database's own
-//     backups in one line. Zero JS.
+//     303 back here, `?export=limit`, or `?export=limit-site` for the site's own ceiling),
+//     what the file never holds, and the database's own backups in one line. Zero JS.
 
 const session = Astro.locals.session;
 const sb = Astro.locals.supabase;
@@ -217,6 +217,11 @@ const preload = page ? { releases: page.enabled } : undefined;
             {exportNotice === 'limit' && (
               <Note tone="warn" role="status">
                 <p>You can download three copies an hour. Try again later.</p>
+              </Note>
+            )}
+            {exportNotice === 'limit-site' && (
+              <Note tone="warn" role="status">
+                <p>The site’s downloads for this hour have all been used. Try again later.</p>
               </Note>
             )}
             {exportNotice === 'unavailable' && (
