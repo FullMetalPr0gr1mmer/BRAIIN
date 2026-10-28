@@ -42,6 +42,21 @@ export function pendingWords(pending: ReleaseStatusAnswer['pending']): string {
   return parts.length > 0 ? parts.join(' · ') : 'None';
 }
 
+/**
+ * The badge after the pending words: "Yes" while anything is pending, none otherwise (the words
+ * already say "None"; review R13-C2: the row read "None None").
+ */
+export function pendingBadge(pending: ReleaseStatusAnswer['pending']): string | null {
+  return pending.publishable + pending.waiting > 0 ? 'Yes' : null;
+}
+
+/** The week's failed scheduled releases, in words that agree with their count. */
+export function failedWords(count: number): string {
+  return `${plural(count, 'scheduled release')} couldn’t go live this week. ${
+    count === 1 ? 'Its changes are' : 'Their changes are'
+  } waiting to be published again.`;
+}
+
 export default function PublishCard({ load, retry, inline = false }: PublishCardProps) {
   const clock = useClock();
   const [status, setStatus] = useState<ReleaseStatusAnswer | null>(null);
@@ -109,6 +124,7 @@ export default function PublishCard({ load, retry, inline = false }: PublishCard
 
   const live = status.live;
   const cache = cacheWords(status);
+  const badge = pendingBadge(status.pending);
   const next = status.next;
   return (
     <div className="pubcard">
@@ -133,10 +149,13 @@ export default function PublishCard({ load, retry, inline = false }: PublishCard
         <div className="stat-row">
           <dt>Unpublished changes</dt>
           <dd>
-            {pendingWords(status.pending)}{' '}
-            <Badge tone={status.pending.publishable + status.pending.waiting > 0 ? 'warn' : 'gray'}>
-              {status.pending.publishable + status.pending.waiting > 0 ? 'Yes' : 'None'}
-            </Badge>
+            {pendingWords(status.pending)}
+            {badge && (
+              <>
+                {' '}
+                <Badge tone="warn">{badge}</Badge>
+              </>
+            )}
           </dd>
         </div>
         <div className="stat-row">
@@ -158,8 +177,7 @@ export default function PublishCard({ load, retry, inline = false }: PublishCard
       </dl>
       {status.failed > 0 && (
         <p className="msg pubcard__line" data-kind="error">
-          {plural(status.failed, 'scheduled release')} couldn’t go live this week. Its changes are
-          waiting to be published again.
+          {failedWords(status.failed)}
         </p>
       )}
       {error && (

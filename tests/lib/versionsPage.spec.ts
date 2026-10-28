@@ -31,7 +31,13 @@ import {
   sampleStatus,
   sampleVersions,
 } from '@/components/admin/screens/versions/sample';
-import { cacheWords, pendingWords } from '@/components/admin/screens/release/PublishCard';
+import {
+  cacheWords,
+  failedWords,
+  pendingBadge,
+  pendingWords,
+} from '@/components/admin/screens/release/PublishCard';
+import { purgeFailedAgainWords } from '@/components/admin/screens/release/model';
 import { HISTORY_COPY, historyRowTitle } from '@/components/admin/screens/history/model';
 import { T } from '../fixtures/stagedDb';
 import { ADMIN, draftRow, makeDb } from '../fixtures/stagedRoute';
@@ -287,6 +293,25 @@ describe('the words (P-12: plain, no dashes)', () => {
     expect(cacheWords({ ...status, cacheConnected: false }).text).toBe('Not connected yet');
     expect(pendingWords(status.pending)).toBe('2 yours to publish · 1 waiting');
     expect(pendingWords({ publishable: 0, waiting: 0, scheduled: 4 })).toBe('None');
+    // Review R13-C2: the row never reads "None None", and the failure line agrees with its count.
+    expect(pendingBadge({ publishable: 0, waiting: 0, scheduled: 4 })).toBeNull();
+    expect(pendingBadge({ publishable: 0, waiting: 1, scheduled: 0 })).toBe('Yes');
+    expect(failedWords(1)).toBe(
+      '1 scheduled release couldn’t go live this week. Its changes are waiting to be published again.',
+    );
+    expect(failedWords(2)).toBe(
+      '2 scheduled releases couldn’t go live this week. Their changes are waiting to be published again.',
+    );
+    // Review R13-C3: a failed retry promises an automatic retry only while one is due.
+    expect(purgeFailedAgainWords(true)).toContain('tried again by itself');
+    expect(purgeFailedAgainWords(false)).toContain('won’t be tried again by itself');
+    for (const line of [
+      failedWords(2),
+      purgeFailedAgainWords(true),
+      purgeFailedAgainWords(false),
+    ]) {
+      expect(line).not.toMatch(DASH);
+    }
   });
 });
 
