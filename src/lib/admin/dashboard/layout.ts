@@ -10,13 +10,22 @@ import {
 } from '@schemas/dashboard';
 import type { Role } from '@/lib/auth/types';
 import { libraryAction, mayUse, QUICK_DEFAULTS } from '../quickActions';
-import { DEFAULT_LAYOUTS, widgetsFor } from './widgets';
+import { DEFAULT_LAYOUTS, RELEASE_WIDGETS, widgetsFor } from './widgets';
 
 // Which layout and which quick actions a person sees (Admin v2 U1, README U1 D2): their own,
 // else their role's preset (admin_role_defaults, 0060), else the code's default; then every id
 // the role may not use is dropped, so a preference never grants access (ui.md §4), and every
 // widget the role sees but the layout does not mention is kept off the board, in `hidden`, so
 // "Add widget" can offer it (the prototype's dashLayout()).
+//
+// One exception (Admin v2 R14-prep, R13's open item): a RELEASE widget (the publish card) that a
+// stored layout or role preset names NOWHERE, no column and not hidden, takes its place from the
+// role's default layout. While releases are off the dashboard strips the release widgets from
+// the board, Add widget and every save (R13), so a layout saved then never names them; without
+// this the card would arrive hidden for everyone who had arranged their dashboard before the
+// switch-on. A layout that names it (moved, or hidden by the person) keeps it where it is. Every
+// other widget keeps the rule above, and with releases off the page strips the card again, so
+// the dashboard is unchanged then.
 
 export type LayoutSource = 'mine' | 'preset' | 'default';
 
@@ -48,8 +57,26 @@ export function resolveLayout(stored: unknown, preset: unknown, role: Role): Res
     right: keep(raw.right),
     hidden: keep(raw.hidden),
   };
+  for (const id of RELEASE_WIDGETS) {
+    if (allowed.has(id) && !seen.has(id) && placeAsDefault(layout, id, role)) seen.add(id);
+  }
   for (const id of allowed) if (!seen.has(id)) layout.hidden.push(id);
   return { layout, source };
+}
+
+/**
+ * Puts a widget the layout never named where the role's default layout has it: its column, at
+ * its index there (or last, in a shorter column). False when the default board does not show it.
+ */
+function placeAsDefault(layout: DashboardLayout, id: WidgetId, role: Role): boolean {
+  const defaults = DEFAULT_LAYOUTS[role];
+  for (const column of DASH_COLUMNS) {
+    const at = defaults[column].indexOf(id);
+    if (at < 0) continue;
+    layout[column].splice(Math.min(at, layout[column].length), 0, id);
+    return true;
+  }
+  return false;
 }
 
 /**
