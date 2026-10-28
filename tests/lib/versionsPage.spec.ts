@@ -33,6 +33,7 @@ import {
 } from '@/components/admin/screens/versions/sample';
 import {
   cacheWords,
+  FailedReleasesNote,
   failedWords,
   pendingBadge,
   pendingWords,
@@ -419,6 +420,22 @@ describe('the history drawer’s records (the editors, historyTargetOf)', () => 
       "import HistoryDrawer, { type HistoryTarget } from './HistoryDrawer';",
     );
     expect(editor).not.toContain('screens/history/');
+  });
+});
+
+describe('the publish card’s failed releases (R13 merge train: the sweep’s on-screen errors)', () => {
+  it('are a warning note, never the error line a screen shows when it failed', () => {
+    // The sweep (tests/admin/sweep.e2e.ts) counts every shown `.msg[data-kind="error"]` as an
+    // error on the screen. A release that could not go live is something to attend to; the
+    // card read its status fine.
+    const html = renderToStaticMarkup(createElement(FailedReleasesNote, { count: 1 }));
+    expect(html).toContain('class="note pubcard__line" data-tone="warn"');
+    expect(html).toContain(failedWords(1));
+    expect(html).not.toContain('data-kind="error"');
+    const card = readFileSync('src/components/admin/screens/release/PublishCard.tsx', 'utf8');
+    expect(card).toContain('{status.failed > 0 && <FailedReleasesNote count={status.failed} />}');
+    // The card's own failures stay error lines: its status unread, and a refused retry.
+    expect(card.match(/data-kind="error"/g)).toHaveLength(2);
   });
 });
 

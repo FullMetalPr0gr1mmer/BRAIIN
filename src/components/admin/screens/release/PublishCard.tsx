@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import Note from '@/components/admin/kit/Note';
 import { Badge } from '@/components/admin/kit/StatusBadge';
 import { useClock } from '@/components/admin/kit/clock';
 import { openPublishDialog, PENDING_EVENT } from '@/lib/admin/releaseEvents';
@@ -55,6 +56,19 @@ export function failedWords(count: number): string {
   return `${plural(count, 'scheduled release')} couldn’t go live this week. ${
     count === 1 ? 'Its changes are' : 'Their changes are'
   } waiting to be published again.`;
+}
+
+/**
+ * The week's failed releases: something to attend to, not an error of this page (which read
+ * its status fine), so a warning note with its icon, never the `.msg` error line a screen
+ * shows when it failed (the sweep counts those as errors on the screen).
+ */
+export function FailedReleasesNote({ count }: { count: number }) {
+  return (
+    <Note tone="warn" className="pubcard__line">
+      <p>{failedWords(count)}</p>
+    </Note>
+  );
 }
 
 export default function PublishCard({ load, retry, inline = false }: PublishCardProps) {
@@ -175,11 +189,7 @@ export default function PublishCard({ load, retry, inline = false }: PublishCard
           <dd>{status.maintenance === null ? 'Unknown' : status.maintenance ? 'On' : 'Off'}</dd>
         </div>
       </dl>
-      {status.failed > 0 && (
-        <p className="msg pubcard__line" data-kind="error">
-          {failedWords(status.failed)}
-        </p>
-      )}
+      {status.failed > 0 && <FailedReleasesNote count={status.failed} />}
       {error && (
         <p className="msg pubcard__line" data-kind="error" role="alert">
           {error}
