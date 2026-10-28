@@ -102,13 +102,18 @@ async function open(page: Page, path: string) {
 
 /** The sections column, once the island has read the sections. */
 const column = (page: Page) => page.getByRole('complementary', { name: 'Sections' });
-/** A section's row in the column, by its name (the open button's name starts with it). */
+/**
+ * A section's row in the column, by the exact text of its visible name (`.pe__name`). Not by the
+ * open button's accessible name: its ", " separator is `.visually-hidden` (position: absolute),
+ * and Chromium pads such a box with spaces when it computes the name ("Who we are , Who we
+ * are"), so a `^name,` pattern never matched in CI.
+ */
 const rowOf = (page: Page, name: string) =>
   column(page)
     .locator('li.pe__row')
-    .filter({ has: page.getByRole('button', { name: new RegExp(`^${name},`) }) });
-const pick = (page: Page, name: string) =>
-  column(page).getByRole('button', { name: new RegExp(`^${name},`) });
+    .filter({ has: page.locator(`.pe__name:text-is(${JSON.stringify(name)})`) });
+/** The row's open button (the one that selects the section). */
+const pick = (page: Page, name: string) => rowOf(page, name).locator('button.pe__pick');
 
 /** A row control: focus, then Enter (the kit's rule for row actions). */
 async function press(control: Locator) {
