@@ -11,6 +11,7 @@ import { useClock } from '@/components/admin/kit/clock';
 import { toast } from '@/lib/admin/toast';
 import { deltaOf, MIN_RESPONSE_SAMPLE, type LeadKpis } from '@/lib/crm/leadKpis';
 import type { LeadsFrame } from '@/lib/crm/leadPage';
+import { RowToggles, withField } from '@/lib/crm/lateAnswers';
 import type { LeadPage, LeadRow, LeadSummaryAnswer } from '@/lib/crm/leadReads';
 import {
   LEADS_PAGE_SIZE,
@@ -173,6 +174,9 @@ export default function LeadsList({
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(() => Date.parse(renderedAt));
   const addLead = useAddLead(permissions.canSeePii, disciplines);
+  // The row toggles (the star) and the list reads on one clock, so a read that left before a
+  // toggle was saved cannot draw it back on screen (src/lib/crm/lateAnswers.ts).
+  const toggles = useRef(new RowToggles());
 
   // A confirmation the last page sent here (a lead erased): shown once, then taken out of
   // the address. First, before the address is rewritten from the filters.
@@ -199,13 +203,17 @@ export default function LeadsList({
     const controller = new AbortController();
     setBusy(true);
     const body = { ...listQueryOf(filters, new Date(), zone), ...(q ? { q } : {}) };
+    const stamp = toggles.current.read();
     adminFetch<LeadPage>('/api/admin/leads/query', {
       method: 'POST',
       body,
       signal: controller.signal,
     })
       .then((page) => {
-        setRows(asRows(page));
+        // A star pressed while this read was out stays as pressed: the answer may predate it.
+        const shown = toggles.current.answer(asRows(page), stamp);
+        if (!shown) return;
+        setRows(shown);
         setTotal(page.total);
         setError('');
         setSearchError('');
@@ -262,16 +270,22 @@ export default function LeadsList({
   async function toggleStar(row: Row) {
     const next = row.is_starred !== true;
     setStarError('');
-    setRows((list) => list.map((r) => (r.id === row.id ? { ...r, is_starred: next } : r)));
+    const token = toggles.current.begin(row.id, 'is_starred', next, row.is_starred);
+    setRows((list) => withField(list, row.id, 'is_starred', next));
+    let ok = true;
     try {
       await adminFetch(`/api/admin/leads/${row.id}`, {
         method: 'PATCH',
         body: { isStarred: next },
       });
     } catch (err) {
-      setRows((list) => list.map((r) => (r.id === row.id ? { ...r, is_starred: !next } : r)));
+      ok = false;
       setStarError(`${leadName(row)} could not be starred. ${describeError(err)}`);
     }
+    // Once every press of this star has answered: what the server holds (a failure puts the
+    // last saved value back, never one a later press already replaced).
+    const shown = toggles.current.settle(token, ok);
+    if (shown) setRows((list) => withField(list, shown.id, shown.field, shown.value));
   }
 
   function bulkDone(outcome: BulkOutcome) {

@@ -11,6 +11,7 @@ import type {
   PersonView,
   StageView,
 } from '@/lib/crm/leadPage';
+import { AnswerOrder } from '@/lib/crm/lateAnswers';
 import LeadContactCard, { type Revealed } from './LeadContactCard';
 import LeadNotes from './LeadNotes';
 import LeadStatusCard from './LeadStatusCard';
@@ -59,6 +60,10 @@ export default function LeadDetail(props: LeadDetailProps) {
   const [eraseError, setEraseError] = useState('');
   const [now, setNow] = useState(() => Date.parse(props.now));
   const marked = useRef(false);
+  // The lead's reads and writes on one clock: an answer sent before a write answered (the
+  // mark-read on opening, the refetch after "Log contact") cannot replace that write's row
+  // (src/lib/crm/lateAnswers.ts).
+  const order = useRef(new AnswerOrder());
 
   const stagesByKey = useMemo(
     () => new Map(stages.map((stage) => [stage.key, { label: stage.label }])),
@@ -70,8 +75,10 @@ export default function LeadDetail(props: LeadDetailProps) {
   );
 
   async function refetch() {
+    const sent = order.current.send();
     try {
-      setLead(await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`));
+      const row = await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`);
+      if (order.current.accept(sent, false)) setLead(row);
     } catch (err) {
       setMessage({ tone: 'err', text: describeError(err) });
     }
@@ -121,12 +128,13 @@ export default function LeadDetail(props: LeadDetailProps) {
   async function write(body: Record<string, unknown>, versioned: boolean): Promise<boolean> {
     setBusy(true);
     setMessage(null);
+    const sent = order.current.send();
     try {
       const answer = await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
         method: 'PATCH',
         body: versioned ? { ...body, version: lead.version } : body,
       });
-      setLead(answer);
+      if (order.current.accept(sent, true)) setLead(answer);
       void reloadEvents();
       return true;
     } catch (err) {
@@ -151,11 +159,14 @@ export default function LeadDetail(props: LeadDetailProps) {
   useEffect(() => {
     if (marked.current || lead.read_at !== null) return;
     marked.current = true;
+    const sent = order.current.send();
     adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
       method: 'PATCH',
       body: { read: true },
     })
-      .then(setLead)
+      .then((row) => {
+        if (order.current.accept(sent, true)) setLead(row);
+      })
       .catch(() => undefined);
   }, []);
 
