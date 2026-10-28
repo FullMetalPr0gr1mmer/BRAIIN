@@ -13,7 +13,9 @@ import { ROLE_LABELS } from '@/lib/authz/capLabels';
 import { greeting, subLine } from '@/lib/admin/dashboard/greeting';
 import { shownWidgets } from '@/lib/admin/dashboard/layout';
 import { loadDashboard, type Dashboard } from '@/lib/admin/dashboard/loaders';
-import { WIDGETS, widgetsFor } from '@/lib/admin/dashboard/widgets';
+import { RELEASE_WIDGETS, WIDGETS, widgetsFor } from '@/lib/admin/dashboard/widgets';
+import { CMS_ROLES } from '@/lib/auth/types';
+import { withoutWidgets } from '@/lib/admin/dashboard/layout';
 import { libraryFor, QUICK_DEFAULTS } from '@/lib/admin/quickActions';
 import type { ShellPreload } from '@/lib/admin/shell';
 import { getMaintenanceState, type MaintenanceState } from '@/lib/http/maintenance';
@@ -39,20 +41,36 @@ const now = new Date();
 let dashboard: Dashboard | null = null;
 let maintenance: MaintenanceState | null = null;
 let displayName: string | null = null;
+// Admin v2 R13: whether releases are on, read once here for a CMS role (the shell reads it
+// anyway for the savebar, so it is handed over below and not asked twice); a failed read is
+// off. While off, the publish card is not on the board, in Add widget or in the presets.
+let releases = false;
 if (session && sb) {
-  const [loaded, state, profile] = await Promise.all([
+  const readsReleases = (CMS_ROLES as readonly string[]).includes(session.role);
+  const [loaded, state, profile, flag] = await Promise.all([
     loadDashboard({ sb, auth: session, now, siteUrl: PUBLIC_SITE_URL, tz: studioTz }),
     getMaintenanceState(env).catch(() => null),
     Promise.resolve(
       sb.from('profiles').select('display_name').eq('id', session.userId).maybeSingle(),
     ).catch(() => null),
+    readsReleases
+      ? Promise.resolve(sb.rpc('releases_enabled', { p_tenant: session.tenantId })).catch(
+          () => null,
+        )
+      : Promise.resolve(null),
   ]);
-  dashboard = loaded;
+  releases = flag?.error == null && flag?.data === true;
+  dashboard = releases
+    ? loaded
+    : { ...loaded, layout: withoutWidgets(loaded.layout, RELEASE_WIDGETS) };
   maintenance = state;
   const name = (profile?.data as { display_name?: unknown } | null)?.display_name;
   displayName = typeof name === 'string' ? name.trim() || null : null;
 }
-const preload: ShellPreload = { maintenance, displayName };
+const preload: ShellPreload = { maintenance, displayName, releases };
+/** The widgets a role may add here: its own, less the release ones while releases are off. */
+const offered = (role: Parameters<typeof widgetsFor>[0]) =>
+  widgetsFor(role).filter((id) => releases || !RELEASE_WIDGETS.includes(id));
 
 const title = session ? greeting(now, displayName, session.email, studioTz) : 'Dashboard';
 const shown = dashboard ? shownWidgets(dashboard.layout) : [];
@@ -68,7 +86,7 @@ const island: DashboardIslandProps | null =
           typeof dashboard.prefs?.dashboard === 'object' &&
           dashboard.prefs?.dashboard !== null &&
           (dashboard.prefs.dashboard as { quickSet?: unknown }).quickSet === true,
-        catalog: widgetsFor(session.role).map((id) => ({
+        catalog: offered(session.role).map((id) => ({
           id,
           label: WIDGETS[id].label,
           description: WIDGETS[id].description,
@@ -89,7 +107,7 @@ const island: DashboardIslandProps | null =
             ? ROLES.map((role) => ({
                 role,
                 label: ROLE_LABELS[role],
-                widgets: widgetsFor(role),
+                widgets: offered(role),
                 library: libraryFor(role).map((a) => a.id),
               }))
             : null,

@@ -1,0 +1,10 @@
+---
+import AdminPublishCard from '@/components/admin/islands/AdminPublishCard';
+
+// "Publish status" (Admin v2 R13, `publish`; releases.md §7): the live version, unpublished
+// changes, the next scheduled release, the website cache and maintenance, with Publish now. The
+// dashboard puts it on the board only while releases are on; its figures are the island's to
+// fetch (GET /api/admin/releases/status), so the dashboard's own render reads nothing for it.
+---
+
+<AdminPublishCard client:idle />

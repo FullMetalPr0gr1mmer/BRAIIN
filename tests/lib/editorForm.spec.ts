@@ -204,6 +204,37 @@ describe('EditorForm in tabs and read-only (Admin v2 U8b)', () => {
     expect(html).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>SEO</);
   });
 
+  it('History is reachable from every tab: in the action bar on a field tab, after the panel on a panel tab (review R13-C1)', () => {
+    const history = { entityType: 'blog_post', entityId: '0f0f0f0f-0000-4000-8000-000000000001' };
+    const visibleHistory = (html: string) => {
+      // The buttons outside a hidden form: what a person (and getByRole) can reach.
+      const form = html.slice(html.indexOf('<form'), html.indexOf('</form>'));
+      const formHidden = /^<form[^>]*\shidden=""/.test(form);
+      const inForm = (
+        form.match(/>History<span class="visually-hidden"> of Colour<\/span><\/button>/g) ?? []
+      ).length;
+      const outside = (
+        html
+          .replace(form, '')
+          .match(/>History<span class="visually-hidden"> of Colour<\/span><\/button>/g) ?? []
+      ).length;
+      return (formHidden ? 0 : inForm) + outside;
+    };
+    const content = tabbed({}, { history });
+    expect(visibleHistory(content)).toBe(1);
+    const form = content.slice(content.indexOf('<form'), content.indexOf('</form>'));
+    expect(form).toContain('>History<span class="visually-hidden"> of Colour</span></button>');
+    // SEO's editors open on the SEO tab, read only: the form is hidden, History is not.
+    const seo = tabbed({}, { history, initialTab: 'seo', readOnly: true });
+    expect(seo).toMatch(/<form class="editor" novalidate="" hidden="">/i);
+    expect(visibleHistory(seo)).toBe(1);
+    expect(seo.slice(seo.indexOf('</form>'))).toMatch(
+      /<div class="toolbar form-actions"><button type="button" class="btn" aria-haspopup="dialog">History<span class="visually-hidden"> of Colour<\/span><\/button><\/div><\/div>$/,
+    );
+    // A new record has no history yet, on any tab.
+    expect(tabbed({ isNew: true }, { history, initialTab: 'seo' })).not.toContain('History<');
+  });
+
   it('a tab holding an error says so: a dot, and words that end its name', () => {
     const html = tabbed(
       {

@@ -7,6 +7,7 @@ import { saveModeFor } from '@/lib/admin/saveMode';
 import { uiFor } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
 import { EDGE_NOT_SYNCED } from './ResourceTable';
+import { historyTargetOf } from '@/lib/admin/historyTarget';
 
 // The create/edit form for every CRUD resource, driven by RESOURCE_UI.
 //
@@ -99,6 +100,7 @@ export default function ResourceForm({
 
   return (
     <EditorForm
+      history={historyTargetOf(target, id)}
       save={save}
       fields={ui.fields}
       groups={ui.groups}

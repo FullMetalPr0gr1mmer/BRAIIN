@@ -164,6 +164,11 @@
   - SaveStatus sits with the form in the fields column, not in the bar: a section and the page details are separate saves;
   - `page_sections.label` is not admin-only as ui.md drew it: anon's table-level SELECT (0016) reads it on a visible section of a published page (the verification accepted it), so the Rename dialog and the guide say the name is not private;
   - the page editor is its own bundle group, `admin-pages`, not a member of `admin-screens` (Wave 3 correction 7): in the shared group its code rode on eight other screens and theirs on it.
+- **Backups & versions, the history drawer and the publish card** (R13; as built: [as-built/R13.md](as-built/R13.md)):
+  - no bell items for "releases published" and "changes waiting" (ui.md §2.8, AV-24): each is one more read on every admin render of a CMS role (the dashboard sits at 42 of its 50 subrequests); the failed scheduled release keeps its bell item (R11), and the publish card and the savebar say what is waiting. Left to R14 or an owner question;
+  - the disaster-recovery card is one line (ui.md: PITR 28 days, nightly encrypted dumps, the media mirror): none of the three runs yet (launch runbook §9), so the page claims only that the hosting provider backs the database up, until they do;
+  - the history drawer is on row editors only: the two singletons (the identity on General, the SEO defaults), entity SEO and page visibility have no History yet (left for R14); the page editor keeps E1's own History drawer (a section's or the page details' saves), and its panels pass EditorForm no `history`, so the screen has one History, not two; the help guide says "the editor of a service, a project, a post or another item in a list";
+  - the route is `/admin/backups` (plan B7.3), for every CMS role holding a release read capability, not `/admin/settings/versions`.
 - **Copy corrected** where untrue:
   - maintenance "…after you publish";
   - page visibility "Takes effect when you publish" / "Hidden from the site after you publish" → "Applies to the live site within a few minutes" until releases switch on (U14a, D7);

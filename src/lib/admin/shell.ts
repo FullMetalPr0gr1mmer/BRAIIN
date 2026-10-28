@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AuthContext } from '@/lib/auth/types';
+import { CMS_ROLES, type AuthContext } from '@/lib/auth/types';
 import { getMaintenanceState, type MaintenanceState } from '@/lib/http/maintenance';
 import { COUNTERS } from './counters';
 import { adminEnvironment, type AdminEnvironment } from './environment';
@@ -62,9 +62,15 @@ async function settle<T>(work: () => PromiseLike<T>): Promise<T | null> {
  */
 export interface ShellPreload {
   feed?: NotificationFeed | undefined;
-  maintenance: MaintenanceState | null;
+  /** The maintenance snapshot as the page read it (null: unreadable); absent: not read. */
+  maintenance?: MaintenanceState | null | undefined;
   /** The signed-in person's display name as the page read it (null: none set). */
   displayName?: string | null | undefined;
+  /**
+   * Admin v2 R13: whether releases are on, as the page read it (the dashboard draws its publish
+   * card, Backups & versions its list, from the same read), so the shell does not ask again.
+   */
+  releases?: boolean | undefined;
 }
 
 export async function loadShellState(
@@ -86,9 +92,10 @@ export async function loadShellState(
 
   // One KV read, for the badge and the bell's maintenance item alike (none at all when the
   // page read it already).
-  const maintenanceRead: Promise<MaintenanceState | null> = preload
-    ? Promise.resolve(preload.maintenance)
-    : settle(() => getMaintenanceState(env));
+  const maintenanceRead: Promise<MaintenanceState | null> =
+    preload && preload.maintenance !== undefined
+      ? Promise.resolve(preload.maintenance)
+      : settle(() => getMaintenanceState(env));
 
   const preloadedName = preload && preload.displayName !== undefined;
   const [profile, maintenance, environment, feed, releases, ...counts] = await Promise.all([
@@ -111,8 +118,13 @@ export async function loadShellState(
             ...(tz ? { tz } : {}),
           }),
         ),
-    // Never read for Sales; false on any failure (releasesFlag.ts).
-    releasesRead ?? readReleasesEnabled(sb, auth),
+    // A page that read the flag hands it over (R13; never Sales'); else the request's one read
+    // (R12b), never for Sales, false on any failure (releasesFlag.ts).
+    preload?.releases !== undefined
+      ? Promise.resolve(
+          preload.releases === true && (CMS_ROLES as readonly string[]).includes(auth.role),
+        )
+      : (releasesRead ?? readReleasesEnabled(sb, auth)),
     ...wanted.map((key) => settle(() => COUNTERS[key](sb, auth.tenantId))),
   ]);
 

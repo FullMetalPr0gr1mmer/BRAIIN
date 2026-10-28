@@ -85,7 +85,8 @@ const shell: ShellState =
         env,
         preload,
         studioTz,
-        releasesEnabled(Astro.locals),
+        // A page that read the flag itself hands it over (R13), so no second read starts.
+        preload?.releases === undefined ? releasesEnabled(Astro.locals) : undefined,
       )
     : {
         displayName: null,

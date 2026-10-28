@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Role } from '@/lib/auth/types';
 import ReleaseUi from '@/components/admin/screens/release/ReleaseUi';
+import PublishCard from '@/components/admin/screens/release/PublishCard';
 import { sampleReleaseApi } from '@/components/admin/screens/release/sampleApi';
+import Versions from '@/components/admin/screens/versions/Versions';
+import {
+  SAMPLE_VERSIONS_API,
+  sampleStatus,
+  sampleVersions,
+} from '@/components/admin/screens/versions/sample';
 import { Field } from '@/components/admin/FormField';
 import {
   ArabicGapsProvider,
@@ -93,6 +100,11 @@ export default function KitGallery({ tab, publishing = null }: KitGalleryProps) 
  */
 function PublishingDemo({ role }: { role: Role }) {
   const api = useMemo(() => sampleReleaseApi(role), [role]);
+  // R13: the publish card and the versions list print dates and times, on the studio's clock;
+  // drawn once the page has loaded, so the server's render and the browser's never differ.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => setNow(Date.now()), []);
+  const versions = useMemo(() => (now === null ? null : sampleVersions(now)), [now]);
   return (
     <section className="card" aria-labelledby="kit-publishing-h" data-kit="publishing">
       <h3 id="kit-publishing-h" className="card-title">
@@ -102,6 +114,26 @@ function PublishingDemo({ role }: { role: Role }) {
         The bar and the dialog over sample changes, as your role sees them. Nothing is sent.
       </p>
       <ReleaseUi api={api} role={role} inline />
+      {now !== null && versions && (
+        <div className="grid grid--2 kit__release" data-kit="versions">
+          <section aria-labelledby="kit-publish-card-h">
+            <h4 id="kit-publish-card-h" className="kit__sub">
+              Publish status
+            </h4>
+            <PublishCard
+              load={async () => sampleStatus(now)}
+              retry={SAMPLE_VERSIONS_API.retryPurge}
+              inline
+            />
+          </section>
+          <section aria-labelledby="kit-versions-h">
+            <h4 id="kit-versions-h" className="kit__sub">
+              Versions
+            </h4>
+            <Versions api={SAMPLE_VERSIONS_API} {...versions} more={false} inline />
+          </section>
+        </div>
+      )}
     </section>
   );
 }

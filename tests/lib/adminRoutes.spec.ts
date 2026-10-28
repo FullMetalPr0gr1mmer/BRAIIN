@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { PENDING_ANY_CAP } from '@/lib/release/draftEndpoints';
 import { describe, expect, it } from 'vitest';
 import { ROLES, type Role } from '@/lib/auth/types';
 import { ROLE_CAPS, type Capability } from '@/lib/authz/matrix';
@@ -350,10 +351,21 @@ describe('the locked screens the refusals e2e opens', () => {
       // The options before the handler: its capability and the levels it accepts
       // (defineAdminRoute's default is 'full' only).
       const options = code.slice(own, code.indexOf('handler', own));
-      const cap = /\bcap:\s*'([^']+)'/.exec(options)?.[1] as Capability | undefined;
-      expect(cap, `${entry.api}: GET's capability`).toBeDefined();
       const access = /\baccess:\s*\[([^\]]*)\]/.exec(options)?.[1];
       const accepted = access ? [...access.matchAll(/'([^']+)'/g)].map((m) => m[1]) : ['full'];
+      // Admin v2 R13: a GET admitting the release read capabilities names them as one list
+      // (the versions list: `anyCap: PENDING_ANY_CAP`), which the screen's `anyOf` copies.
+      if (/\banyCap:\s*PENDING_ANY_CAP\b/.test(options)) {
+        expect([...(entry.anyOf ?? [])].sort(), entry.api).toEqual([...PENDING_ANY_CAP].sort());
+        for (const role of refusedRoles(entry)) {
+          for (const c of PENDING_ANY_CAP) {
+            expect(accepted, `${entry.api} as ${role}`).not.toContain(ROLE_CAPS[role][c]);
+          }
+        }
+        continue;
+      }
+      const cap = /\bcap:\s*'([^']+)'/.exec(options)?.[1] as Capability | undefined;
+      expect(cap, `${entry.api}: GET's capability`).toBeDefined();
       for (const role of refusedRoles(entry)) {
         expect(accepted, `${entry.api} as ${role}`).not.toContain(ROLE_CAPS[role][cap!]);
       }
@@ -378,6 +390,7 @@ describe('the locked screens the refusals e2e opens', () => {
     expect(server.map((s) => s.href).sort()).toEqual([
       '/admin/analytics/search',
       '/admin/audit',
+      '/admin/backups',
       '/admin/forms',
       '/admin/integrations',
       '/admin/leads',
@@ -394,9 +407,18 @@ describe('the locked screens the refusals e2e opens', () => {
         "import Refused from '@/components/admin/ui/Refused.astro'",
       );
       expect(page, screen.href).toMatch(/if \(!allowed\) Astro\.response\.status = 403;/);
-      expect(page, screen.href).toContain(
-        screen.gate ?? `can(session.role, '${screen.cap}') === 'full'`,
-      );
+      if (screen.gate) {
+        // Admin v2 E1: a gate the page spells its own way (Pages: mayOpenPages).
+        expect(page, screen.href).toContain(screen.gate);
+      } else if (screen.anyOf) {
+        // Admin v2 R13: a gate over several capabilities, in one named rule the page calls
+        // (Backups & versions: mayOpenVersions, the release read capabilities).
+        expect(page, screen.href).toMatch(
+          /const allowed = session !== null && \w+\(session\.role\);/,
+        );
+      } else {
+        expect(page, screen.href).toContain(`can(session.role, '${screen.cap}') === 'full'`);
+      }
     }
     // An island screen loads its data on mount, so its page has no Refused of its own.
     for (const screen of LOCKED_SCREENS.filter((s) => renderOf(s) === 'island')) {
@@ -484,6 +506,7 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'Integrations /admin/integrations',
       'Users & roles /admin/users',
       'Activity log /admin/audit',
+      'Backups & versions /admin/backups',
       'CRM settings /admin/crm/settings',
     ],
   },
@@ -505,8 +528,8 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
     ],
     Growth: ['Website stats /admin/analytics', 'Style-Finder /admin/ai-questions'],
     Appearance: ['Menus /admin/navigation'],
-    // Admin v2 U11: the bell's settings, every member's own.
-    Settings: ['Notifications /admin/settings/notifications'],
+    // Admin v2 U11: the bell's settings, every member's own. R13: Backups & versions.
+    Settings: ['Notifications /admin/settings/notifications', 'Backups & versions /admin/backups'],
   },
   // Entity meta (so the content lists, not their bodies), media meta, SEO, integrations.
   seo: {
@@ -523,6 +546,7 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'SEO /admin/seo',
       'Notifications /admin/settings/notifications',
       'Integrations /admin/integrations',
+      'Backups & versions /admin/backups',
     ],
   },
   // Technical: media, leads, health, theme, settings, audit; no content, no applications.
@@ -537,6 +561,7 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'Forms /admin/forms',
       'Notifications /admin/settings/notifications',
       'Activity log /admin/audit',
+      'Backups & versions /admin/backups',
     ],
   },
   // Sales (C10a): works leads and reads the stats; no content, media, site settings or logs.

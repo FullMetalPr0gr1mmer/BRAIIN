@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import ErrorSummary, { type FieldError } from '@/components/admin/kit/ErrorSummary';
 import Note from '@/components/admin/kit/Note';
@@ -6,6 +6,7 @@ import SaveStatus from '@/components/admin/kit/SaveStatus';
 import { TabStrip, tabIds, writeTabParam } from '@/components/admin/kit/Tabs';
 import { tabOfElement, tabsWithErrors } from '@/lib/admin/editorTabs';
 import { badInputErrors, type MappedErrors } from '@/lib/admin/fieldErrors';
+import type { HistoryTarget } from '@/lib/admin/historyTarget';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
 import { useSaveShortcut } from '@/lib/admin/useEntitySave';
 import type {
@@ -70,11 +71,34 @@ import {
 // published post's slug, links nowhere until it is saved. Field groups
 // (U9a) compose inside a field tab: a group renders in its tab's card, never across two tabs.
 // The tab API is frozen in docs/admin-v2/as-built/U8.md for U5 and U6.
+// Admin v2 R13: `history` (the record, for a release-managed type; historyTarget.ts) adds a
+// History button to the action bar of a saved record, which opens the history drawer
+// (screens/history/HistoryDrawer.tsx: every version that went live, and Restore once releases are
+// on), loaded through import() on first use (the `admin-history` chunk), so no editor carries it
+// until someone opens it. Without `history` the form is what it was.
 // Admin v2 E1, the page editor, adds three props, each off unless asked for (without them the
 // output is byte for byte what it was): `hidden` (fields the save carries but the form never
 // draws: a section's `type`), `builtIn` (a field's built-in value, by name: the section
 // content field's prefill, F5b) and `languageBar: 'page'` (the screen draws the language
 // switch and "Arabic missing: N" for every column, and its providers wrap this form).
+
+/** The history drawer, loaded the first time someone opens it (R13). */
+const HistoryDrawer = lazy(() => import('@/components/admin/screens/history/HistoryDrawer'));
+
+/** The record in words for the drawer's title: its title or name, else the noun. */
+function recordWords(values: Readonly<Record<string, unknown>>, noun: string): string {
+  for (const key of ['title', 'name', 'label', 'question', 'authorName', 'slug', 'source']) {
+    const value = values[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (value && typeof value === 'object') {
+      const en = (value as Record<string, unknown>)['en'];
+      const ar = (value as Record<string, unknown>)['ar'];
+      if (typeof en === 'string' && en.trim()) return en.trim();
+      if (typeof ar === 'string' && ar.trim()) return ar.trim();
+    }
+  }
+  return `this ${noun}`;
+}
 
 export interface EditorFormProps {
   save: EntitySave;
@@ -142,6 +166,11 @@ export interface EditorFormProps {
   heading?: { title: string; sub?: string | undefined } | undefined;
   /** Admin v2 R12: the record in words for the discard confirm ("service"). */
   noun?: string | undefined;
+  /**
+   * Admin v2 R13: the record a History button opens (a release-managed type, a saved record:
+   * historyTargetOf), or none. Without it there is no History button.
+   */
+  history?: HistoryTarget | null | undefined;
   /**
    * Admin v2 E1: fields the save carries (loaded and sent) but the form never draws: a page
    * section's `type`, which its content field reads to know its own fields.
@@ -274,10 +303,14 @@ export default function EditorForm({
   idPrefix = 'f',
   heading,
   noun = 'item',
+  history,
   hidden,
   builtIn,
   languageBar = 'own',
 }: EditorFormProps) {
+  // R13: the history drawer, mounted (and its chunk loaded) once it is first opened.
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyMounted, setHistoryMounted] = useState(false);
   // R12: the server put this record in release mode (its answer carried `draft`).
   const draftMode = save.mode === 'draft';
   // A staged removal, or a change a scheduled release holds, is read only until undone.
@@ -469,6 +502,29 @@ export default function EditorForm({
   // The stored record's address: a new record has none, and an unsaved edit moves nothing.
   const href = save.isNew ? null : (publicHref?.(save.saved) ?? null);
 
+  // R13: History, in the form's action bar; while a panel tab is current (the form hidden, as
+  // SEO's editors open on the SEO tab) it follows the panel instead, so every tab reaches it
+  // (review R13-C1). Its name says whose history it opens ("History of Logo Design").
+  const historyButton =
+    history && !save.isNew ? (
+      <button
+        type="button"
+        className="btn"
+        aria-haspopup="dialog"
+        onClick={() => {
+          // A pending change typed but not saved yet is saved first (P-5's blur rule).
+          save.flush?.();
+          setHistoryMounted(true);
+          setHistoryOpen(true);
+        }}
+      >
+        History
+        {/* Named for its record: on a service's Case study tab the case's own History sits
+            beside the service's. */}
+        <span className="visually-hidden"> of {recordWords(save.saved, noun)}</span>
+      </button>
+    ) : null;
+
   const form = (
     // noValidate: an input of the hidden language must never block a save silently (a
     // browser cannot show its bubble on a hidden input); the server validates, and its
@@ -536,6 +592,7 @@ export default function EditorForm({
             Open on site
           </a>
         )}
+        {historyButton}
         {!readOnly && (
           <SaveStatus
             state={save.status}
@@ -590,6 +647,9 @@ export default function EditorForm({
           </div>
         );
       })}
+      {current?.panel && historyButton && (
+        <div className="toolbar form-actions">{historyButton}</div>
+      )}
     </div>
   ) : (
     form
@@ -600,6 +660,18 @@ export default function EditorForm({
   return (
     <EditorLanguageProvider initial={initialLanguage}>
       <ArabicGapsProvider>{content}</ArabicGapsProvider>
+      {history && historyMounted && (
+        <Suspense fallback={null}>
+          <HistoryDrawer
+            open={historyOpen}
+            onClose={() => setHistoryOpen(false)}
+            target={history}
+            label={recordWords(save.saved, noun)}
+            publicPath={href ? href.replace(/^https?:\/\/[^/]+/, '') : null}
+            onChanged={() => void save.reloadTheirs()}
+          />
+        </Suspense>
+      )}
     </EditorLanguageProvider>
   );
 }

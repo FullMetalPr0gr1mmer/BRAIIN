@@ -23,6 +23,9 @@ export const WIDGET_IDS = [
   'notes',
   // Website stats v2 (G1b): people on the site now and their pages, from the minute rollup.
   'realtime',
+  // Release UX II (R13): the live version, unpublished changes and what is scheduled; drawn
+  // only while releases are on (the dashboard drops it from the board otherwise).
+  'publish',
 ] as const;
 export type WidgetId = (typeof WIDGET_IDS)[number];
 

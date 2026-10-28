@@ -9,6 +9,7 @@ import Kpis from './Kpis.astro';
 import Leads from './Leads.astro';
 import Notes from './Notes.astro';
 import Pages from './Pages.astro';
+import Publish from './Publish.astro';
 import Quick from './Quick.astro';
 import Realtime from './Realtime.astro';
 import Views from './Views.astro';
@@ -39,6 +40,7 @@ const SUB: Partial<Record<WidgetId, string>> = {
   disciplines: 'The last 90 days',
   leads: 'Name, interest and stage only',
   realtime: 'Who accepted analytics cookies, active in the last 5 minutes',
+  publish: 'What the site shows, and what waits to go live',
 };
 const OPEN: Partial<Record<WidgetId, { href: string; label: string }>> = {
   views: { href: '/admin/analytics', label: 'Open stats' },
@@ -115,4 +117,5 @@ const data = result && result.ok ? (result.data as never) : null;
   {data && id === 'disciplines' && <Disciplines data={data} />}
   {data && id === 'notes' && <Notes notes={data} now={now} />}
   {data && id === 'realtime' && <Realtime view={data} />}
+  {!failed && id === 'publish' && <Publish />}
 </WidgetFrame>

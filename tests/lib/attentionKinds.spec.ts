@@ -280,7 +280,7 @@ describe('the attention widget and the release kinds', () => {
     expect(byKind['draft_stale']?.rows[0]?.href).toBe('/admin/sections/d0');
   });
 
-  it('a release row has its words: the kind, the type, a title from its note or number, no link', async () => {
+  it('a release row has its words: the kind, the type, a title from its note or number, and Backups & versions (R13)', async () => {
     const content = [
       row('release_scheduled_today', 'release', 'r1', '', { en: 'Evening drop', ar: 'x' }),
       row('release_overdue', 'release', 'r2', ''),
@@ -292,12 +292,13 @@ describe('the attention widget and the release kinds', () => {
     expect(byKind['release_scheduled_today']?.rows[0]).toMatchObject({
       title: 'Evening drop',
       type: 'Release',
-      href: null,
+      href: '/admin/backups',
       where: null,
     });
     expect(byKind['release_overdue']?.rows[0]?.title).toBe('A scheduled release');
     expect(byKind['purge_failed']?.label).toBe('Website cache not refreshed after a release');
     expect(byKind['purge_failed']?.rows[0]?.title).toBe('Version 12');
+    expect(byKind['purge_failed']?.rows[0]?.href).toBe('/admin/backups');
     expect(data.groups.some((g) => g.kind === 'draft_stale')).toBe(false);
   });
 });

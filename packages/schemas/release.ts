@@ -1014,3 +1014,68 @@ export const RestoreResultSchema = z.object({
   marked: z.boolean(),
 });
 export type RestoreResult = z.infer<typeof RestoreResultSchema>;
+
+// ---- Release UX II (Admin v2 R13): the dashboard's card and the purge retry ------------------
+
+const PersonSchema = z.object({ id: Uuid, name: z.string().nullable() }).strict();
+
+/**
+ * `GET /api/admin/releases/status` (releases.md §7, the dashboard's "Publish status" card).
+ * Releases off: `enabled: false` and nothing else is read, so every other key is null or zero.
+ */
+export const ReleaseStatusAnswerSchema = z
+  .object({
+    enabled: z.boolean(),
+    /** The version the site shows now. */
+    live: z
+      .object({
+        id: Uuid,
+        number: z.number().int().min(1),
+        publishedAt: Timestamp.nullable(),
+        publishedBy: PersonSchema.nullable(),
+        note: z.string().nullable(),
+        purge: PurgeStatusSchema,
+      })
+      .strict()
+      .nullable(),
+    /** Pending changes, counted as the savebar counts them (a reordered list once). */
+    pending: z
+      .object({
+        publishable: z.number().int().min(0),
+        waiting: z.number().int().min(0),
+        scheduled: z.number().int().min(0),
+      })
+      .strict(),
+    /** The next scheduled release, and how many are scheduled. */
+    next: z
+      .object({
+        id: Uuid,
+        scheduledFor: Timestamp,
+        changes: z.number().int().min(0),
+        total: z.number().int().min(1),
+      })
+      .strict()
+      .nullable(),
+    /** Scheduled releases that could not go live in the last 7 days (the dashboard's window). */
+    failed: z.number().int().min(0),
+    /** A cache zone is set up (O-3): until then a purge is a logged no-op. */
+    cacheConnected: z.boolean(),
+    /** Maintenance mode is on now; null when its value could not be read. */
+    maintenance: z.boolean().nullable(),
+  })
+  .strict();
+export type ReleaseStatusAnswer = z.infer<typeof ReleaseStatusAnswerSchema>;
+
+/** `POST /api/admin/releases/[id]/purge`: how the retry by hand went. */
+export const PurgeRetryResultSchema = z
+  .object({
+    release: z.object({ id: Uuid, number: z.number().int().min(1) }).strict(),
+    purge: PurgeStatusSchema,
+    /**
+     * A purge that failed again: whether the minute cron still tries it by itself (false once
+     * the version has failed ten times, RELEASE_PURGE_MAX_ATTEMPTS). Always false otherwise.
+     */
+    autoRetry: z.boolean(),
+  })
+  .strict();
+export type PurgeRetryResult = z.infer<typeof PurgeRetryResultSchema>;

@@ -83,7 +83,11 @@ const project = (row: Row, names: { as: string; from: string }[] | null): Row =>
   return out;
 };
 
-type Filter = [kind: 'eq' | 'neq' | 'is' | 'in' | 'ilike' | 'lt', column: string, value: unknown];
+type Filter = [
+  kind: 'eq' | 'neq' | 'is' | 'in' | 'ilike' | 'lt' | 'gte',
+  column: string,
+  value: unknown,
+];
 
 function matches(row: Row, filters: Filter[]): boolean {
   return filters.every(([kind, column, value]) => {
@@ -93,6 +97,8 @@ function matches(row: Row, filters: Filter[]): boolean {
     if (kind === 'is') return v === value || (value === null && v === undefined);
     if (kind === 'in') return (value as unknown[]).map(String).includes(String(v));
     if (kind === 'lt') return v !== null && v !== undefined && (v as number) < (value as number);
+    // R13: a time at or after a bound (ISO strings compare as times).
+    if (kind === 'gte') return v !== null && v !== undefined && (v as number) >= (value as number);
     const term = String(value).replace(/^%|%$/g, '').replace(/\\(.)/g, '$1').toLowerCase();
     return typeof v === 'string' && v.toLowerCase().includes(term);
   });
@@ -104,6 +110,8 @@ function query(db: Db, table: string) {
   let columns = '*';
   let returning = false;
   let count = false;
+  // R13: `{ count: 'exact', head: true }` answers the count and no rows, as PostgREST does.
+  let head = false;
   let order: { column: string; ascending: boolean } | null = null;
   let range: [number, number] | null = null;
   let limit: number | null = null;
@@ -142,17 +150,18 @@ function query(db: Db, table: string) {
     if (range) out = out.slice(range[0], range[1] + 1);
     if (limit !== null) out = out.slice(0, limit);
     return {
-      data: out.map((r) => project(r, topNames(columns))),
+      data: head ? null : out.map((r) => project(r, topNames(columns))),
       error: null,
       ...(count ? { count: total } : {}),
     };
   };
 
   const b: Record<string, unknown> = {
-    select(cols = '*', opts?: { count?: string }) {
+    select(cols = '*', opts?: { count?: string; head?: boolean }) {
       columns = cols;
       if (op !== 'select') returning = true;
       count = opts?.count === 'exact';
+      head = opts?.head === true;
       return b;
     },
     eq: (c: string, v: unknown) => (filters.push(['eq', c, v]), b),
@@ -161,6 +170,7 @@ function query(db: Db, table: string) {
     in: (c: string, v: unknown[]) => (filters.push(['in', c, v]), b),
     ilike: (c: string, v: unknown) => (filters.push(['ilike', c, v]), b),
     lt: (c: string, v: unknown) => (filters.push(['lt', c, v]), b),
+    gte: (c: string, v: unknown) => (filters.push(['gte', c, v]), b),
     order: (c: string, o?: { ascending?: boolean }) => (
       (order = { column: c, ascending: o?.ascending ?? true }),
       b

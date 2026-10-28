@@ -201,7 +201,22 @@ test.describe('as admin', () => {
     // A whole e-mail finds its lead (the blind index) and never reaches the address.
     const search = page.getByRole('searchbox', { name: 'Search leads' });
     await search.fill(one.email!);
+    // The search's answer replaces every row, a star pressed meanwhile included: the lead is
+    // already listed (it is the newest), so without this wait the star below could be pressed
+    // while the search is still out, and its answer (read before the star was saved) would
+    // turn it off again on screen. The test waits for the answer, as a person sees it land.
+    const searched = page.waitForResponse(
+      (res) =>
+        res.url().endsWith('/api/admin/leads/query') &&
+        (res.request().postDataJSON() as { q?: unknown } | null)?.q === one.email,
+    );
     await search.press('Enter');
+    expect((await searched).status()).toBe(200);
+    // ...and its rows drawn: the table is busy from the request until they are in.
+    await expect(page.getByRole('table', { name: 'Leads', exact: true })).not.toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
     await expect(page.getByRole('link', { name: one.name })).toBeVisible();
     expect(page.url()).not.toContain('q=');
     expect(decodeURIComponent(page.url())).not.toContain(one.email!);
@@ -332,10 +347,10 @@ test.describe('as admin', () => {
       'href',
       `/admin/leads/${rows[2]}?source=manual&channel=event`,
     );
-    await expect(page.getByRole('link', { name: /^Back/ })).toHaveAttribute(
-      'href',
-      '/admin/leads?source=manual&channel=event',
-    );
+    // Exact: the sidebar's "Backups & versions" (R13) also starts with "Back".
+    await expect(
+      page.getByRole('link', { name: 'Back to the leads', exact: true }),
+    ).toHaveAttribute('href', '/admin/leads?source=manual&channel=event');
     // The tab never carries the person's name; the h1 does.
     await expect(page).toHaveTitle(/^Lead · /);
   });

@@ -194,6 +194,10 @@ const UNCLASSIFIED: Record<string, string> = {
     'system logs: not release-managed',
   'src/components/admin/screens/resources/ResourceTable.tsx: action.endpoint':
     'the redirects’ edge sync (ui.syncAction): rebuilds the KV snapshot, writes no content',
+  'src/components/admin/screens/versions/api.ts: path(id)':
+    'Backups & versions’ Change time (R13): PATCH /api/admin/releases/[id], R11’s release route, ' +
+    'not a kernel resource; it refuses itself while releases are off (409 releases-off, ' +
+    'src/lib/release/schedule.ts)',
 };
 
 /** A write to a release-managed kernel route: a literal slug, or a screen's own slug. */

@@ -2,31 +2,78 @@ import { defineAdminRoute } from '@/lib/admin/route';
 import { writeAudit } from '@/lib/admin/audit';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { claimPrivilegedOp } from '@/lib/admin/rateLimit';
+import { RateLimitError } from '@/lib/admin/errors';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { BACKUP_TABLES } from '@/lib/admin/backupTables';
+import { isSameSiteGet } from '@/lib/http/csrf';
 
 // Content backup export — `export.backup` (Admin + Developer). Same seven-step lockdown
 // as the CSV export (see leads/export.ts), applied to content rather than leads.
 //
 // What it dumps, and the tables it must never dump (leads, applications, consent
 // records, …), live in src/lib/admin/backupTables.ts — see the rationale there.
+//
+// Admin v2 R13: Backups & versions' "Download content" is a plain link to this route, so, as
+// the activity log's export (U13): a link followed from another site's page is refused (403)
+// before a slot or a row is spent (`isSameSiteGet`: the session cookie is SameSite=Lax, and
+// Astro's origin check covers non-GET methods only), and a refusal a person can act on (the
+// hourly limit, an audit that could not be written) sends a browser that navigated here back
+// to the page with a notice (303 to /admin/backups?export=limit|unavailable) instead of a JSON
+// body. A script's request is answered as every admin API answers, as before.
 
 export const prerender = false;
+
+const NO_STORE = 'private, no-store, max-age=0, must-revalidate';
+
+/** Did a person follow the link (a top-level navigation), rather than a script fetch it? */
+function navigated(request: Request): boolean {
+  return request.headers.get('sec-fetch-mode') === 'navigate';
+}
+
+/** Back to Backups & versions, with the notice the page explains. */
+function backToBackups(notice: 'limit' | 'limit-site' | 'unavailable'): Response {
+  return new Response(null, {
+    status: 303,
+    headers: { location: `/admin/backups?export=${notice}`, 'cache-control': NO_STORE },
+  });
+}
 
 const MAX_ROWS_PER_TABLE = 5000;
 
 export const GET = defineAdminRoute({
   cap: 'export.backup',
-  handler: async ({ auth, sb }) => {
+  handler: async ({ auth, sb, request }) => {
+    // A plain-link GET with side effects (a limiter slot, two audit rows): never on another
+    // site's say-so (src/lib/http/csrf.ts isSameSiteGet), and before anything is spent.
+    if (!isSameSiteGet(request)) {
+      throw new AuthorizationError('export.backup', 'cross-site export refused');
+    }
     await liveRecheck(auth);
-    await claimPrivilegedOp(auth, 'export-backup');
+    try {
+      await claimPrivilegedOp(auth, 'export-backup');
+    } catch (err) {
+      // The ledger itself down (`:unavailable`) is no hourly limit: say it could not run. The
+      // site's own ceiling (`:tenant`, ten an hour across everyone) is not the person's three,
+      // so it has its own notice (review R13-C4).
+      if (err instanceof RateLimitError && navigated(request)) {
+        return backToBackups(
+          err.scope.endsWith(':unavailable')
+            ? 'unavailable'
+            : err.scope.endsWith(':tenant')
+              ? 'limit-site'
+              : 'limit',
+        );
+      }
+      throw err;
+    }
 
     const attemptLogged = await writeAudit(sb, auth, {
       action: 'export.backup.attempt',
       detail: { tables: BACKUP_TABLES.length },
     });
     if (!attemptLogged) {
+      if (navigated(request)) return backToBackups('unavailable');
       throw new AuthorizationError('export.backup', 'audit unavailable — export refused');
     }
 
@@ -80,7 +127,7 @@ export const GET = defineAdminRoute({
         headers: {
           'content-type': 'application/json; charset=utf-8',
           'content-disposition': `attachment; filename="${filename}"`,
-          'cache-control': 'private, no-store, max-age=0, must-revalidate',
+          'cache-control': NO_STORE,
         },
       },
     );

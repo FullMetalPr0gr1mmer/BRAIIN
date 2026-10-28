@@ -1,3 +1,4 @@
+import { RELEASE_READ_CAPS } from '@/lib/release/readCaps';
 import type { NavArea } from './types';
 
 // Settings: the site's identity, SEO, integrations, people, the activity log and the CRM's
@@ -48,6 +49,15 @@ export const settings: NavArea = {
     },
     { href: '/admin/users', label: 'Users & roles', icon: 'key', caps: ['users.manage'] },
     { href: '/admin/audit', label: 'Activity log', icon: 'history', caps: ['audit.view'] },
+    // Admin v2 R13 (plan B7.3): the site's versions and the content backup, for the CMS roles
+    // holding a release read capability (the pending summary's gate, PENDING_ANY_CAP: every
+    // role but Sales), at full, view or meta.
+    {
+      href: '/admin/backups',
+      label: 'Backups & versions',
+      icon: 'db',
+      caps: [...RELEASE_READ_CAPS],
+    },
     // Admin v2 C9a: the pipeline stages, scoring, response time and assignment (Admin only).
     {
       href: '/admin/crm/settings',

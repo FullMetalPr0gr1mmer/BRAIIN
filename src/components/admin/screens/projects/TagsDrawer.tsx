@@ -9,6 +9,7 @@ import { toast } from '@/lib/admin/toast';
 import { uiFor } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
 import { countBy, projectsCount, textIn, type Row } from './model';
+import { historyTargetOf } from '@/lib/admin/historyTarget';
 
 // Manage tags (Admin v2 U6, AV-15; the prototype's taxonomyDrawer, "Tags and filters"): the wide
 // drawer the Projects list opens, with what powers the filters on Our Work and All projects.
@@ -267,6 +268,7 @@ function SectorForm({
   return (
     <div className="prj-tags__form">
       <EditorForm
+        history={historyTargetOf(target, id)}
         save={save}
         fields={ui.fields.filter((f) => f.name !== 'sortOrder')}
         submitLabel={id === null ? 'Add sector' : 'Save changes'}

@@ -535,6 +535,17 @@ export function publishedWords(number: number, purge: PurgeStatus): string {
   return `Published v${number}. The website now shows these changes.`;
 }
 
+/**
+ * A retry by hand that failed again (R13; the card and Backups & versions): the minute cron tries
+ * it by itself only while the version has attempts left (ten, RELEASE_PURGE_MAX_ATTEMPTS), and a
+ * retry by hand uses one of them, so past the tenth the words say so (review R13-C3).
+ */
+export function purgeFailedAgainWords(autoRetry: boolean): string {
+  return autoRetry
+    ? 'The website cache still couldn’t be refreshed. It’s tried again by itself in a few minutes.'
+    : 'The website cache still couldn’t be refreshed, and it won’t be tried again by itself. Try again later, or ask whoever runs the site to check the cache.';
+}
+
 /** What the edge not taking a release's redirects or visibility means, and what to do. */
 export const EDGE_MISSED =
   'The redirect and page visibility rules did not reach the edge yet. They are rebuilt every day; to do it now, use Sync to edge on the SEO screen.';

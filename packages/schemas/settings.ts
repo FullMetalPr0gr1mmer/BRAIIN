@@ -15,7 +15,10 @@ export {
   type StudioTimeZone,
 } from './timeZones';
 
-const ZONE_IDS = STUDIO_TIME_ZONES.map((z) => z.value) as [StudioTimeZone, ...StudioTimeZone[]];
+const ZONE_IDS = STUDIO_TIME_ZONES.map((zone) => zone.value) as [
+  StudioTimeZone,
+  ...StudioTimeZone[],
+];
 
 export const StudioTimeZoneSchema = z.enum(ZONE_IDS);
 
