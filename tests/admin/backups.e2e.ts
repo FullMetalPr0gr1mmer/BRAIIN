@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import type { Role } from '@/lib/auth/types';
-import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * Release UX II (Admin v2 R13) in a real browser.
@@ -51,6 +51,8 @@ async function check(page: Page, where: string) {
 for (const role of CMS) {
   test.describe(`Backups & versions, releases off, as ${role}`, () => {
     test.use({ storageState: authFile(role) });
+    // The release-mode rehearsal (Admin v2 R14-prep): releases-mode.e2e.ts drives the page on.
+    test.skip(releasesOn(), RELEASES_OFF_ONLY);
 
     test('says publishing in releases is not on yet, and offers what exists', async ({ page }) => {
       const asked: string[] = [];
@@ -132,6 +134,8 @@ async function serviceId(page: Page, slug: string): Promise<string> {
 for (const role of ['admin', 'seo'] as const) {
   test.describe(`the history drawer on a service's editor, as ${role}`, () => {
     test.use({ storageState: authFile(role) });
+    // The release-mode rehearsal (Admin v2 R14-prep): "no Restore while releases are off".
+    test.skip(releasesOn(), RELEASES_OFF_ONLY);
 
     test('lists what went live, offers no Restore while releases are off, loads on first use', async ({
       page,

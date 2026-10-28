@@ -1,0 +1,90 @@
+name: Releases rehearsal
+
+# The release-mode rehearsal (Admin v2 R14-prep; plan B5: "rehearsed first in CI, where the
+# whole e2e suite runs in release mode; then a publish and a rollback drill"). The e2e job of
+# perf-seo-a11y.yml, step for step, with two differences: E2E_RELEASES=on, so Playwright switches
+# releases ON for the e2e tenant (tests/admin/releases.setup.ts runs `app.enable_releases` as the
+# owner on this job's local database, after the sample rows) and runs the release drill
+# (tests/admin/releases-mode.e2e.ts: a publish, a scheduled release fired by the minute cron, a
+# rollback); and `wrangler dev --test-scheduled`, so the drill can fire that cron
+# (GET /__scheduled). Plus the psql client the switch is sent with. No design capture.
+#
+# BY HAND ONLY (Actions → Releases rehearsal → Run workflow, on the branch to rehearse): it is
+# never started by a push or a pull request, no required check names it and the deploy does not
+# wait for it (tests/ci/workflows.spec.ts and releasesRehearsal.spec.ts hold all three, and its
+# steps equal to the e2e job's). Releases stay OFF in the required e2e job, as in production,
+# until R14 switches them on; the launch runbook's §6p asks for a green run of this before the
+# production switch-on (owner decision 2026-10-28).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # As perf-seo-a11y.yml: a local origin, dummies where the stack has no counterpart.
+  PUBLIC_SITE_URL: http://localhost:8788
+  ALLOW_LOCAL_SITE_URL: '1'
+  PREVIEW_URL: http://localhost:8788
+  LEAD_PII_ENC_KEY: ci-dummy-lead-pii-enc-key
+  AUDIT_HMAC_KEY: ci-dummy-audit-hmac-key
+  NOTIFY_LEAD_SECRET: ci-dummy-notify-lead-secret
+  SUPABASE_EXCLUDE: studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta
+
+jobs:
+  e2e-releases-on:
+    name: E2E with releases on
+    runs-on: ubuntu-latest
+    # The e2e job's 55, plus the drill's scheduled release (about five minutes).
+    timeout-minutes: 60
+    env:
+      SUPABASE_EXCLUDE: studio,imgproxy,edge-runtime,logflare,vector,realtime,postgres-meta
+      GA4_NOTICE_READY: 'true'
+      # The rehearsal itself: playwright.config.ts adds the switch and the drill.
+      E2E_RELEASES: 'on'
+    steps:
+      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.118.0
+      - run: npm ci
+      - name: Start Supabase (migrations + seed.sql)
+        run: supabase start -x "$SUPABASE_EXCLUDE"
+      - name: Export local Supabase into the build environment
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "PUBLIC_SUPABASE_URL=${API_URL}"
+            echo "PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY:-$PUBLISHABLE_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:-$SECRET_KEY}"
+            echo "SUPABASE_DB_POOL_URL=${DB_URL}"
+          } >> "$GITHUB_ENV"
+      - run: npm run build
+      - name: Preview config (local KV simulation, no Cloudflare credentials)
+        run: node scripts/local-preview-config.mjs
+      - name: Seed the authored-redirects snapshot into local KV
+        run: >-
+          npx wrangler kv key put site:redirects
+          '{"/e2e-old":{"to":"/about","status":301},"/e2e-temp":{"to":"/contact?from=e2e","status":302},"/e2e-anchor":{"to":"/services#e2e","status":308},"/api/e2e-old":{"to":"/about","status":301}}'
+          --binding SESSION --local --preview
+      - name: Install Playwright Chromium
+        timeout-minutes: 20
+        run: npx playwright install --with-deps chromium
+      - name: psql (the client the switch is sent with)
+        run: |
+          command -v psql >/dev/null 2>&1 ||
+            { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends postgresql-client; }
+          psql --version
+      - name: Start preview (wrangler dev)
+        run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env --test-scheduled &
+      - name: Wait for preview
+        run: npx wait-on http://localhost:8788 --timeout 90000
+      - name: Playwright (e2e, axe WCAG 2.2 AA, CSP, served HTML, video bytes, admin sweep)
+        run: npm run test:e2e
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop

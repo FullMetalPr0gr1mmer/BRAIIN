@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Role } from '@/lib/auth/types';
 import { SECTION_UI } from '@/lib/admin/sectionUi';
-import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The field kit v2 on a real editor (Admin v2 F5a), signed in, against this job's local
@@ -24,6 +24,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
+// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
+test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
 const DIGITS = '٠١٢٣٤ ۵۶۷۸۹';

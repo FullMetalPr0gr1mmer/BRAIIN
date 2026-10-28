@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
-import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The tabbed and read-only post editor (Admin v2 U8b), signed in, through the real Worker:
@@ -27,6 +27,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 const env = staffEnv();
 test.skip(!env, SKIP_REASON);
+// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
+test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
