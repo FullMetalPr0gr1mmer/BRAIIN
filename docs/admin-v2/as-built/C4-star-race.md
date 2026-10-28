@@ -149,9 +149,10 @@ toggle on a card writes anything (the card's star and unread dot are display onl
   still be pressed and the database must say starred. Without the fix the held rows turn it off.
 
 ## Sizes
-
-`npm run size`: public route JS 26.07 kB (limit 100); admin bundle sum 394.9 kB (limit 400,
-main was 394.4); the leads screens' eager graphs 159.5 kB each (limit 300); admin chunk plan
+`npm run size` after the review fixes: public route JS 26.07 kB (limit 100); admin bundle sum
+395.07 kB (limit 400, main was 394.4); the leads screens' eager graphs 159.6 kB each (limit
+300); admin chunk plan holds. Raising the sum tripwire to 450 kB is E2's (owner decision
+2026-10-28), not this fix's.
 holds.
 
 ## Owner questions
