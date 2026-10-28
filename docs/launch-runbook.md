@@ -276,6 +276,67 @@ as before. **Do not switch Require 2FA for everyone on until the new Worker is l
 one has no `/admin/2fa`). The residuals the owner accepts with O-25 are in
 `docs/admin-v2/deviations.md` ("Residual risks").
 
+### 2e. Google Analytics 4: the property, the notice, then the switch (Admin v2 U15, owner item O-18)
+
+Not a blocker. GA4 ships switched off: a measurement id saved on `/admin/integrations` loads
+nothing, and the tile says "Not loading yet" (`GA4_NOTICE_READY`, default `false`, absent from
+`wrangler.jsonc`'s `vars`). The privacy notice says the site's analytics are first-party, and GA4
+sends visit data to Google outside the Kingdom, so the order is fixed:
+
+1. **The property (O-18).** In Google Analytics, a GA4 property with one web stream for the site's
+   origin; note its measurement id (`G-…`). In the property's admin: **Data retention = 2 months**;
+   **Google signals off**; **ads personalisation off** in every region; the account's data-sharing
+   settings off; enhanced measurement with page views on, but in their advanced settings **page
+   changes based on browser history events OFF** (required: the site is multi-page, so every real
+   navigation is a full load and is counted anyway, while the Our Work and All projects filters
+   write their query into the address with `history.replaceState`, and a history-event page view
+   would send it, against the notice's "without anything after a ?": the loader strips the query
+   only from the address it sets at the page's start); **form interactions OFF** (required: GA4 runs
+   on Home, Services and the service pages, which carry the lead form's section, and the notice says
+   nothing typed into a form is sent); and **site search off** (the site strips query strings
+   anyway). Join and Contact, the pages of the two forms that collect personal data, never load GA4.
+   The notice drafts state these settings, so keep them (`tests/lib/ga4Switch.spec.ts` holds this
+   list).
+2. **The notice sign-off.** The owner (with legal review of the cross-border transfer) approves
+   the EN and AR texts in `docs/admin-v2/as-built/U15.md` ("The notice drafts").
+3. **The switch-on PR**, one reviewed PR carrying all of it (`tests/lib/ga4Switch.spec.ts`
+   lists whatever is missing): the approved texts in `src/lib/legal/content.ts` with new
+   `updated` dates (EN and AR; the recruitment notice version moves only if its own text
+   does); the banner's copy (`ConsentBanner.astro`); `CONSENT_VERSION` 1 → 2 (everyone is asked
+   again, and a yes given to the first-party notice never loads Google); a "Cookie settings"
+   control on every page that reopens the banner (`data-consent-open`); the `integrations`
+   guide put through H11's catalog (it must stop saying the site does not load GA4); and
+   `"GA4_NOTICE_READY": "true"` in `vars`. Re-run the banner's layout and LCP gates
+   (`consent-banner.e2e.ts`, `layout-shift.e2e.ts`, Lighthouse): the banner's text is a first
+   mobile visit's LCP element.
+4. **The id.** After that PR's deploy, an Admin or SEO saves the measurement id on
+   `/admin/integrations`: it takes effect on the next page view (immediate, never staged)
+   while nothing caches Tier A, as today (see Rollback).
+
+**What to check on production.** In a private window: before any choice, DevTools → Network
+shows nothing from `googletagmanager.com` or `google-analytics.com`, and the page's
+`Content-Security-Policy` lists those hosts. "Accept analytics": `gtag/js?id=G-…` once the page
+has loaded, then `g/collect` hits; GA4's Realtime report shows the visit. On `/portfolio`, pick
+a filter: the address gains `?service=…`, and no new `g/collect` hit follows (history events
+are off). "Cookie settings" →
+"Reject non-essential": no further hits, and the `_ga` cookies are gone. Search
+(`/search?q=…`), Contact and Join never carry the loader. Over the first release cycle:
+`select created_at, message from system_logs where source = 'ga4-csp' order by id desc limit 20;`
+must stay empty; a row names a Google address (host and path, never the query) the CSP
+refused, for a reviewed PR (CLAUDE.md §3). A row naming `www.googletagmanager.com` with a path
+outside `/gtag/` (`gtm.js`, `debug/…`) is expected to stay refused: script-src lists only
+gtag's path on purpose.
+
+**Rollback.** Remove the id on `/admin/integrations`, or a PR that takes `GA4_NOTICE_READY` out
+of `vars`. Either is immediate while nothing caches Tier A, as today: the middleware decides the
+loader and the CSP per render, so the next page view loads nothing and lists no Google host.
+Once the Tier A edge cache is on (O-3, KAN-20), a cached page keeps the loader and Google's
+hosts until it is purged: every Tier A page carries `site:identity`, so the integrations save
+must then purge that tag (R7's seam owes it, `src/pages/api/admin/integrations.ts`;
+`tests/lib/ga4Switch.spec.ts` fails a cache lookup without it), and a switch-off deploy needs
+a `tenant:default` purge. Until the save does, purge `site:identity` by hand after removing the
+id.
+
 ## 3. Create and promote the first admin  ⛔ blocker
 
 `users.manage` is Admin-only, so there is no in-product path to the first admin.

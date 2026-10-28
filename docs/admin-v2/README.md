@@ -623,7 +623,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
   - **O-2** SMTP for Supabase Auth (invites, reset), with SPF/DKIM. For the reset (F7), also the recovery template, the link's one-hour lifetime and `AUTH_EMAIL_READY` (launch runbook §2b), and, before that switch, a decision on the reset token in Workers Logs' request URLs ([deviations.md](deviations.md), residual risks); until then "Forgot password?" says "Not set up".
   - **O-3** Cloudflare zone + a cache-purge-only token (KAN-20). Until then purges do nothing and pages stay fresh.
   - **O-17** An R2 bucket for scheduled content backups (R17).
-  - **O-18** A GA4 property + Data API service account (U15).
+  - **O-18** A GA4 property + Data API service account (U15). As built: the property (2 months' retention, Google signals and ad personalisation off) and the owner's sign-off of the notice that names Google come before GA4's switch-on (launch runbook §2e); the service account waits for the GA tab, deferred until then ([U15](as-built/U15.md)).
   - **O-19** A captcha provider for forms. Turnstile is recommended: free and Cloudflare-native.
   - **O-20** An external uptime monitor API key (G2).
   - **O-21** The font families for the catalogue, with web licences (E13).
@@ -713,6 +713,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [U17](as-built/U17.md): two factor sign in: TOTP set up on `/admin/2fa` (zero JS, the key and an `otpauth://` link), the second step held in two layers (the token hook at the required `aal`, `resolveAuthContext`'s pending step), Require 2FA for everyone, Reset 2FA, the 2FA column and health check, its two guides put through H11's catalog, 0072 (PR number at review)
 - [U11](as-built/U11.md): integrations, typed: a GA4 measurement id, the Search Console code and a Calendly link as CHECKed public identifiers, Admin + SEO in both layers behind a live check, the verification tag on the home pages through the content seam and the preview mirror, the captcha Not set up; the Forms overview; the bell's settings for every member; four guides put through H11's catalog, 0105 placeholder (PR number at review)
 - [U11c](as-built/U11c.md): the integrations contract: `site_integrations`' four legacy jsonb columns dropped after U11's deploy (the push refuses while any row still holds JSON), the grants restated on the columns that remain, every reader of the table held to them by a test, the rollback line moved to U11's PR, 0110 placeholder (PR number at review)
+- [U15](as-built/U15.md): GA4 behind analytics consent: anon's read of the measurement id, one read per public page only while the code switch `GA4_NOTICE_READY` is on (off in production until the owner signs off the notice that names Google; on in the CI e2e build), the same-origin loader (gtag.js after a yes and after `load`, consent mode with every ad signal denied, withdrawal across tabs), Google's hosts in the CSP only on a page that loads it, the Report-Only cycle as reports of refused Google hosts, the tile saying why a saved id does not load yet, the switch-on guard and the notice drafts; the GA tab (Data API) deferred to O-18; 0114 placeholder (PR number at review)
 
 **Releases**
 - [R1](as-built/R1.md): the release ledger schema, inert, 0038 (#56)

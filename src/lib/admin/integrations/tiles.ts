@@ -10,6 +10,12 @@ import type { IntegrationsView } from './view';
 // P-12 (plain, no dashes, no brand) and says only what is true: a value nothing on the site
 // uses yet is "Saved", never "Set up" or "Connected" (the prototype's fake "Connected" and
 // "Test connection" are gone; deviations.md, Integrations).
+//
+// Google Analytics 4 (Admin v2 U15) follows the code-owned switch, GA4_NOTICE_READY
+// (src/lib/http/ga4.ts): off (every production build until the owner signs off the privacy
+// notice that names Google), a saved id loads nothing, and the tile and its drawer say why;
+// on, the site loads it for visitors who accept analytics cookies, and the tile says Set up.
+// The page reads the switch on the server and hands it to the island (`integrationTiles`).
 
 export type IntegrationKey = 'ga4' | 'searchConsole' | 'calendly' | 'captcha';
 
@@ -33,24 +39,51 @@ export interface IntegrationTile {
   notes: readonly IntegrationNote[];
   /** What the drawer says once a value is saved. */
   saved?: IntegrationNote | undefined;
+  /** What the tile itself says while a saved value is not used yet, and why. */
+  waiting?: IntegrationNote | undefined;
 }
 
-export const INTEGRATION_TILES: readonly IntegrationTile[] = [
-  {
-    key: 'ga4',
-    name: 'Google Analytics 4',
-    icon: 'chart',
-    description: 'Mirrors visits to Google Analytics. The built-in stats stay the main numbers.',
-    value: 'ga4MeasurementId',
-    live: false,
-    field: GA4_FIELD,
-    notes: [
-      {
-        tone: 'info',
-        text: 'Saved only. The site does not load Google Analytics yet. When it does, it will load only for visitors who accept analytics cookies.',
-      },
-    ],
+/** The GA4 tile while the switch is off: saved, not loaded, and why. */
+const GA4_HELD: IntegrationTile = {
+  key: 'ga4',
+  name: 'Google Analytics 4',
+  icon: 'chart',
+  description: 'Mirrors visits to Google Analytics. The built-in stats stay the main numbers.',
+  value: 'ga4MeasurementId',
+  live: false,
+  field: GA4_FIELD,
+  notes: [
+    {
+      tone: 'info',
+      text: 'Saved only. The site does not load Google Analytics yet: first the privacy notice has to say that visit data goes to Google, and the site owner has to approve that wording. After that it loads only for visitors who accept analytics cookies.',
+    },
+  ],
+  waiting: {
+    tone: 'info',
+    text: 'Not loading yet. It waits for the privacy notice to name Google, which the site owner approves.',
   },
+};
+
+/** The GA4 tile once the switch is on: the site loads it, behind analytics consent. */
+const GA4_LIVE: IntegrationTile = {
+  ...GA4_HELD,
+  live: true,
+  notes: [
+    {
+      tone: 'info',
+      text: 'Loads only for visitors who accept analytics cookies. Nothing from Google loads before they do, and it stops when they say no.',
+    },
+  ],
+  saved: {
+    tone: 'ok',
+    text: 'Visitors who accept analytics cookies now count in Google Analytics too. The built-in stats stay the main numbers.',
+  },
+  waiting: undefined,
+};
+
+/** The tiles as every production build shows them until the GA4 switch is on. */
+export const INTEGRATION_TILES: readonly IntegrationTile[] = [
+  GA4_HELD,
   {
     key: 'searchConsole',
     name: 'Google Search Console',
@@ -96,6 +129,13 @@ export const INTEGRATION_TILES: readonly IntegrationTile[] = [
     ],
   },
 ];
+
+/** The tiles, with GA4 as the switch has it (`ga4Live`: GA4_NOTICE_READY on). */
+export function integrationTiles(ga4Live: boolean): readonly IntegrationTile[] {
+  return ga4Live
+    ? INTEGRATION_TILES.map((tile) => (tile.key === 'ga4' ? GA4_LIVE : tile))
+    : INTEGRATION_TILES;
+}
 
 export interface TileStatus {
   label: 'Set up' | 'Saved' | 'Not set up';

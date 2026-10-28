@@ -469,6 +469,12 @@ export default defineConfig({
       // dashboard, and the recovery template linking to /admin/reset, runbook §2b). Off,
       // "Forgot password?" says "Not set up" instead of pretending to send.
       AUTH_EMAIL_READY: envField.boolean({ context: 'server', access: 'public', default: false }),
+      // Admin v2 U15: true once the owner has signed off the privacy notice and cookie policy
+      // that name Google Analytics (the switch-on PR carries them, launch runbook §2e). Off, a
+      // saved GA4 id loads nothing: no read, no loader, no CSP source. Read at build time like
+      // AUTH_EMAIL_READY, and deliberately NOT in wrangler.jsonc's `vars` until that PR, so
+      // every production build has it off (tests/lib/ga4Switch.spec.ts guards the switch-on).
+      GA4_NOTICE_READY: envField.boolean({ context: 'server', access: 'public', default: false }),
       // Admin v2 G2: the uptime monitor's ids to read, "123-456" (at most five, joined by "-";
       // src/lib/health/uptime/uptimeRobot.ts checks the grammar). Unset: the account's first
       // five monitors. Not a secret: an id reads nothing without the key below.
