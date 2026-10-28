@@ -5,7 +5,7 @@ import type { VersionSummary } from './model';
 
 // Made-up versions for the kit's gallery (/admin/kit, Admin v2 R13): the versions list and the
 // dashboard's publish card as a CMS role meets them once releases are on, so the per-role sweep
-// (axe, CSP, overflow at three widths) and tests/admin/releases-ui.e2e.ts reach them before R14.
+// (axe, CSP, overflow at three widths) and tests/admin/backups.e2e.ts reach them before R14.
 // No person's data, and an API that sends nothing.
 
 const DAY = 86_400_000;
@@ -168,6 +168,6 @@ export const SAMPLE_VERSIONS_API: VersionsApi = {
   },
   retryPurge: async (releaseId) => {
     await wait();
-    return { release: { id: releaseId, number: 3 }, purge: 'done' };
+    return { release: { id: releaseId, number: 3 }, purge: 'done', autoRetry: false };
   },
 };

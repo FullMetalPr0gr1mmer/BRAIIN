@@ -93,8 +93,6 @@ export const COPY = {
   changeTimeSub: 'It goes live at this day and time, on the studio’s clock.',
   purgeDone: 'The website cache was refreshed.',
   purgeSkipped: 'No website cache is connected yet, so the site already shows this version.',
-  purgeFailed:
-    'The website cache still couldn’t be refreshed. It’s tried again by itself every few minutes.',
   failedRetry: 'Review',
   noVersions: 'No version has been published yet.',
   forbidden: 'Your role can’t publish all of this. Ask an Admin.',

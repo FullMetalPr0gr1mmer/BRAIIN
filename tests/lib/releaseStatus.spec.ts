@@ -28,7 +28,33 @@ vi.mock('@/lib/supabase/server', () => ({
     },
   }),
 }));
-vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+const logs = vi.hoisted(() => ({
+  rows: [] as { level: string; source: string; message: string }[],
+}));
+vi.mock('@/lib/data/systemLog', () => ({
+  writeSystemLog: async (row: { level: string; source: string; message: string }) => {
+    logs.rows.push(row);
+    return true;
+  },
+}));
+
+// The retry's limiter slot (R13 review SEC-1): the ledger is the service role's, so the spec
+// stands in for claimPrivilegedOp and records what was claimed.
+const limiter = vi.hoisted(() => ({
+  claims: [] as { op: string; limits: unknown }[],
+  refuse: null as string | null,
+}));
+vi.mock('@/lib/admin/rateLimit', async (load) => {
+  const actual = await load<typeof import('@/lib/admin/rateLimit')>();
+  const { RateLimitError } = await import('@/lib/admin/errors');
+  return {
+    ...actual,
+    claimPrivilegedOp: async (_auth: unknown, op: string, limits: unknown) => {
+      limiter.claims.push({ op, limits });
+      if (limiter.refuse) throw new RateLimitError(`${op}:${limiter.refuse}`);
+    },
+  };
+});
 
 const purge = vi.hoisted(() => ({
   outcome: null as PurgeOutcome | null,
@@ -53,7 +79,8 @@ const { GET: STATUS } = await import('@/pages/api/admin/releases/status');
 const { POST: RETRY } = await import('@/pages/api/admin/releases/[id]/purge');
 const { ReleaseStatusAnswerSchema, PurgeRetryResultSchema } = await import('@schemas/release');
 const { releaseStatus } = await import('@/lib/release/status');
-const { RETRY_COPY } = await import('@/lib/release/purgeRetry');
+const { RETRY_COPY, RELEASE_PURGE_OP } = await import('@/lib/release/purgeRetry');
+const { RELEASE_PURGE_LIMITS } = await import('@/lib/admin/rateLimit');
 
 const id = (n: number) => `0f0f0f0f-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const BI = (en: string, ar: string) => ({ en, ar });
@@ -108,6 +135,9 @@ beforeEach(() => {
   svc.calls = [];
   purge.outcome = null;
   purge.calls = [];
+  logs.rows = [];
+  limiter.claims = [];
+  limiter.refuse = null;
 });
 
 describe('GET /api/admin/releases/status', () => {
@@ -324,15 +354,17 @@ describe('POST /api/admin/releases/[id]/purge', () => {
     }
     expect(purge.calls).toEqual([]);
     expect(svc.calls).toEqual([]);
+    expect(limiter.claims).toEqual([]);
   });
 
-  it('a failed purge, no cache set up: the stored tags, skipped, recorded, no audit row', async () => {
+  it('a failed purge, no cache set up: the stored tags, skipped, recorded and audited', async () => {
     const db = seed({ content_releases: [failed()] });
     const res = await call(db, 'content_creator');
     expect(res.status).toBe(200);
     expect(PurgeRetryResultSchema.parse(res.data)).toEqual({
       release: { id: id(50), number: 4 },
       purge: 'skipped',
+      autoRetry: false,
     });
     expect(purge.calls).toEqual([
       { tenant: T, tags: ['service:logo', 'services:all'], source: 'release' },
@@ -349,7 +381,15 @@ describe('POST /api/admin/releases/[id]/purge', () => {
         }),
       },
     ]);
-    expect(auditRowsOf(db)).toEqual([]);
+    // The press changed the row (its purge now `skipped`), so the activity log says so.
+    expect(auditRowsOf(db)).toEqual([
+      expect.objectContaining({
+        action: 'release.purge',
+        entity_id: id(50),
+        detail: { number: 4, status: 'skipped', tags: 2, retry: true, reason: 'not-set-up' },
+      }),
+    ]);
+    expect(limiter.claims).toEqual([{ op: RELEASE_PURGE_OP, limits: RELEASE_PURGE_LIMITS }]);
   });
 
   it('a purge that went through: done, recorded, and audited as a retry by hand', async () => {
@@ -358,6 +398,7 @@ describe('POST /api/admin/releases/[id]/purge', () => {
     const res = await call(db, 'seo');
     expect(res.status).toBe(200);
     expect(res.data['purge']).toBe('done');
+    expect(res.data['autoRetry']).toBe(false);
     expect(svc.calls[0]?.args['p_status']).toBe('done');
     expect(auditRowsOf(db)).toEqual([
       expect.objectContaining({
@@ -372,14 +413,67 @@ describe('POST /api/admin/releases/[id]/purge', () => {
   it('failing again: due for the cron with its backoff; none after the tenth attempt', async () => {
     purge.outcome = { status: 'failed', tags: ['service:logo'], requests: 1, reason: 'http' };
     const again = seed({ content_releases: [failed()] });
-    await call(again);
+    const first = await call(again);
     expect(typeof svc.calls[0]?.args['p_next_at']).toBe('string');
     expect(auditRowsOf(again)[0]?.['detail']).toMatchObject({ status: 'failed', reason: 'http' });
+    expect(first.data['autoRetry']).toBe(true);
+    expect(logs.rows.filter((r) => r.level === 'error')).toEqual([]);
 
     svc.calls = [];
     const last = seed({ content_releases: [failed({ purge_attempts: 9 })] });
-    await call(last);
+    const tenth = await call(last);
     expect(svc.calls[0]?.args['p_next_at']).toBeNull();
+    // The card and the page say the cron will not try again, and the end is logged as the
+    // cron logs its own (R13 review C3, SEC-1).
+    expect(tenth.data['autoRetry']).toBe(false);
+    expect(logs.rows).toContainEqual(
+      expect.objectContaining({
+        level: 'error',
+        source: 'release:purge',
+        message: expect.stringContaining('will not be retried'),
+      }),
+    );
+  });
+
+  it('a press the seam sent nothing for (breaker, budget): 503, the version untouched, no audit row', async () => {
+    for (const reason of ['breaker', 'budget', 'budget-unread'] as const) {
+      purge.outcome = { status: 'failed', tags: ['service:logo'], requests: 0, reason };
+      svc.calls = [];
+      // Nine attempts: a press that counted would end the cron's retries.
+      const db = seed({ content_releases: [failed({ purge_attempts: 9 })] });
+      const res = await call(db, 'content_creator');
+      expect(res.status, reason).toBe(503);
+      expect(res.body, reason).toEqual({
+        ok: false,
+        error: 'purge-not-sent',
+        detail: RETRY_COPY.notSent,
+        reason,
+      });
+      expect(svc.calls, reason).toEqual([]);
+      expect(auditRowsOf(db), reason).toEqual([]);
+    }
+  });
+
+  it('the limiter: a slot per press, claimed after the checks; past it 429, the ledger down 503, nothing sent', async () => {
+    expect(RELEASE_PURGE_LIMITS).toEqual({ perUser: 5, perTenant: 10, windowMinutes: 60 });
+    for (const [refuse, status, error] of [
+      ['user', 429, 'rate-limit'],
+      ['tenant', 429, 'rate-limit'],
+      ['unavailable', 503, 'unavailable'],
+    ] as const) {
+      limiter.refuse = refuse;
+      const db = seed({ content_releases: [failed()] });
+      const res = await call(db);
+      expect(res.status, refuse).toBe(status);
+      expect(res.body['error'], refuse).toBe(error);
+      expect(res.body['detail'], refuse).toBe(
+        refuse === 'unavailable' ? RETRY_COPY.ledger : RETRY_COPY.limited,
+      );
+      if (status === 429) expect(res.headers.get('retry-after')).toBe('3600');
+      expect(auditRowsOf(db), refuse).toEqual([]);
+    }
+    expect(purge.calls).toEqual([]);
+    expect(svc.calls).toEqual([]);
   });
 
   it('a version that kept no tags owes the whole site', async () => {

@@ -1071,6 +1071,11 @@ export const PurgeRetryResultSchema = z
   .object({
     release: z.object({ id: Uuid, number: z.number().int().min(1) }).strict(),
     purge: PurgeStatusSchema,
+    /**
+     * A purge that failed again: whether the minute cron still tries it by itself (false once
+     * the version has failed ten times, RELEASE_PURGE_MAX_ATTEMPTS). Always false otherwise.
+     */
+    autoRetry: z.boolean(),
   })
   .strict();
 export type PurgeRetryResult = z.infer<typeof PurgeRetryResultSchema>;

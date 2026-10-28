@@ -11,6 +11,7 @@ import type { OpenRestore } from '@/lib/release/versionsPage';
 import { refusalOf } from '@/components/admin/screens/release/api';
 import {
   COPY as RELEASE_COPY,
+  purgeFailedAgainWords,
   scheduleDayBounds,
   scheduleInstant,
   scheduleProblem,
@@ -176,7 +177,7 @@ export default function Versions({
     run(v.id, async () => {
       const out = await api.retryPurge(v.id);
       setPurges((all) => ({ ...all, [v.id]: out.purge }));
-      if (out.purge === 'failed') throw new Error(COPY.purgeFailed);
+      if (out.purge === 'failed') throw new Error(purgeFailedAgainWords(out.autoRetry));
       toast(out.purge === 'skipped' ? COPY.purgeSkipped : COPY.purgeDone, 'ok');
     });
 

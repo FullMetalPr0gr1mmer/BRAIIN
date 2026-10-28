@@ -5,6 +5,7 @@ import { openPublishDialog, PENDING_EVENT } from '@/lib/admin/releaseEvents';
 import { toast } from '@/lib/admin/toast';
 import type { PurgeRetryResult, ReleaseStatusAnswer } from '@schemas/release';
 import { refusalOf } from './api';
+import { purgeFailedAgainWords } from './model';
 
 // The dashboard's "Publish status" card (Admin v2 R13; releases.md §7): the live version and
 // who published it when, the unpublished changes (mine to publish, waiting), the next scheduled
@@ -85,7 +86,7 @@ export default function PublishCard({ load, retry, inline = false }: PublishCard
     try {
       const out = await retry(id);
       if (out.purge === 'failed') {
-        setError('The website cache still couldn’t be refreshed. It’s tried again by itself.');
+        setError(purgeFailedAgainWords(out.autoRetry));
       } else {
         toast('The website cache was refreshed.', 'ok');
       }

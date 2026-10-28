@@ -94,6 +94,19 @@ export const HEALTH_CHECK_LIMITS: RateLimitOptions = {
 };
 
 /**
+ * Retrying a version's cache purge by hand (Admin v2 R13): 5 an hour per person and 10 per
+ * tenant. Each press that reaches the zone is one purge request against the Free plan's 5 a
+ * minute and the 24-hour tag budget, and is counted against the version's ten attempts (the
+ * minute cron stops retrying after the tenth), so a ceiling keeps a few presses, by one account
+ * or several, from spending either.
+ */
+export const RELEASE_PURGE_LIMITS: RateLimitOptions = {
+  perUser: 5,
+  perTenant: 10,
+  windowMinutes: 60,
+};
+
+/**
  * Claims one slot for a privileged operation, or refuses with RateLimitError. Call it
  * BEFORE the work, so an operation that dies halfway still consumed its slot.
  *
