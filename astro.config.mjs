@@ -12,6 +12,9 @@ import { mediaRemotePatternsIntegration } from './scripts/media-remote-patterns.
 // The `/_image` endpoint: the guard on the route itself, uploads checked before they are
 // transformed and cached for an hour, stills handed to the adapter (the script's header).
 import { imageEndpointIntegration } from './scripts/image-endpoint.mjs';
+// Unused zod schemas leave the browser bundles: each call rooted at a schema module's zod
+// import is marked pure, in the client build only (R13 merge train; the script's header).
+import { zodPurePlugin } from './scripts/zod-pure.mjs';
 
 // The component kit's own modules (Admin v2 F4b): its React pieces
 // (src/components/admin/kit/), the vanilla client code (src/lib/admin/client/: the
@@ -201,6 +204,7 @@ export default defineConfig({
   // a predictably-named `admin-*` chunk lets the public entry exclude it by name and
   // gives /admin its own honest budget instead.
   vite: {
+    plugins: [zodPurePlugin()],
     build: {
       assetsInlineLimit: 0,
       rollupOptions: {
