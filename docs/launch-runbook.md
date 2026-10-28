@@ -1588,8 +1588,8 @@ finds nothing. Read back with the R11 read-back query. **Deploy order:** the mig
 then the Worker: from its first minute the cron calls `claim_scheduled_releases`, and without the
 function each minute logs an error under `cron:releases` (the purge retries still run).
 
-Switching releases on and off is **R14's** (the freeze, the order and the checks are written
-there, owner item O-5). This section only says what the two functions do and how to call them.
+Switching releases on and off is **R14's**: the freeze, the order and the checks are §6p
+(owner item O-5). This section only says what the two functions do and how to call them.
 Run each in the Supabase SQL editor or `psql` **as the owner (`postgres`), on a direct session**:
 no API role holds EXECUTE, and each refuses a switched role or a request's role claim.
 
@@ -1639,6 +1639,122 @@ select app.disable_releases('<tenant id>', '<operator profile id>', p_discard_pe
   person. A release someone moved to a later time while the cron was failing it is left as it
   is. One that goes live more than five minutes late (a cron outage) is a warning under
   `cron:releases` saying by how much.
+
+### 6p. Releases: the switch-on, the drill, and the way back (Admin v2 R14, owner item O-5)
+
+From this switch on, an edit in a release-managed area (pages and sections, services, our work,
+collections, blog, navigation, the site identity, SEO, redirects, themes) is saved as an
+unpublished change and goes live only when someone publishes it. §6o says what the two functions
+do; this section is the order to run them in. Nothing here is automated: the owner (or the
+operator the owner names) runs every step by hand. Owner item O-5 names the window, the operator
+and the fallback scheduler.
+
+**Before the day** (each one done, none skipped):
+
+1. **Code and database.** Production holds every migration through the newest on `main` (the
+   deploy guard says so on every deploy) and runs a Worker built from a `main` that contains
+   R14-prep. R14-prep adds no migration: the switch needs only R11's (0112).
+2. **A green rehearsal.** In GitHub: Actions → *Releases rehearsal* → Run workflow, on `main`.
+   It runs the whole e2e suite with releases ON for a throwaway local database, including the
+   drill below (`tests/admin/releases-mode.e2e.ts`). The owner's final go (decision 2026-10-28)
+   comes after a green run of the commit production is about to run. A red run stops here.
+3. **Staging first** (README, "Before R14"): run steps 2 to 6 below on `braiin-staging` with the
+   same SQL, walk the editors' flows there, and measure the Worker's CPU for a publish of many
+   changes and for the scheduled release's fire (owner item O-16; Workers Free plan: 10 ms).
+4. **Name the people** (O-5): the **operator**, who runs the switch, and the **fallback
+   scheduler**, who becomes the scheduler of any old scheduled item whose last editor can no
+   longer publish it. Both must be active, unlocked Admins of the site; they may be the same
+   person. Their profile ids:
+
+   ```sql
+   select p.id, p.display_name from public.profiles p
+    where p.role = 'admin' and p.is_active
+      and (p.locked_until is null or p.locked_until <= now());
+   ```
+
+5. **Announce the freeze**: a window of about 15 minutes, at a quiet hour, to everyone who edits
+   the site. During it nobody saves anything in the admin and every editor tab is closed (a form
+   left open across the switch saves into the new path on its next save, which is safe, but the
+   person would not expect it). The public site stays up throughout: there is no maintenance
+   page, and visitors see no change.
+
+**The switch** (in the window):
+
+1. **Read back, before.** Run `scripts/releases-switch-readback.sql` as `postgres` (the SQL editor
+   or `psql`) and compare it with its "Expected before the switch" lines. Note `legacy_to_convert`
+   (items scheduled the old way, with a time) and `left_scheduled`. Any other difference stops
+   here: `pending_changes`, `scheduled_releases` and `applying_releases` must be 0,
+   `identity_rows` and `seo_defaults_rows` 1 (a missing row cannot be added once releases are
+   on), `active_admins` at least 1, `switches_owner_only` true. The tenant id is the first row of
+   `select id from public.tenants order by created_at limit 1`.
+2. **Switch on.** As `postgres`, on a direct session (the SQL editor or `psql`, never an API
+   key):
+
+   ```sql
+   select app.enable_releases('<tenant id>', '<operator profile id>', '<fallback admin profile id>');
+   ```
+
+   It answers `{"baseline": {"id": …, "number": 1}, "converted": n, "legacy_releases": k,
+   "fallback_scheduled": f, "left_scheduled": m}`: `converted` equals the read-back's
+   `legacy_to_convert` and `left_scheduled` its `left_scheduled`. Its refusals: `55P03` (a
+   release is publishing, or a write held a lock for more than five seconds: wait a moment and
+   run it again), `55000` (already on, or something pending from an earlier switch: stop and
+   read back), `22023` (an operator or fallback who is not an active Admin of this site: fix the
+   ids), `42501` (run it as `postgres` on a direct session, not through an API role). It is one
+   transaction: a refusal changes nothing.
+3. **Read back, after.** Run the read-back again and compare it with "Expected after the switch".
+4. **In the admin**, signed in as the operator: the dashboard shows the *Publish status* card with
+   "v1"; *Settings › Backups & versions* lists v1, "The site as it was when publishing in
+   releases began"; the activity log shows "releases.enable" by the operator. Each converted
+   item is now a scheduled release ("Scheduled before publishing in releases began"), which the
+   minute cron publishes at its time (one whose time has passed, within a minute).
+5. **The drill**, as the operator, on something no visitor sees:
+   1. *FAQ* (in the menu's content group): add a question, "Release drill", in both languages,
+      with *Visible on the site* left **off** (a draft, so it is never on the site), and save.
+      The bar at the bottom says there is an unpublished change.
+   2. **Publish** (the bar's *Publish…*, then *Publish 1 change*). The toast names v2. Backups &
+      versions lists v2 with one change; the public FAQ (`/contact`) is unchanged.
+   3. **Roll back**: on Backups & versions, *Restore* v1, confirm, then *Publish v1 again*,
+      confirm. The page says it is published; v3 is listed as "Restored v1", and the drill
+      question is gone from the FAQ list in the admin. The public site never changed.
+   4. Optional, to see the minute cron: add the drill question again, open *Publish…*, choose
+      *Schedule for* five minutes ahead, wait, and check that it is listed as published; then
+      roll it back the same way.
+   5. Read back once more: `published_versions` and `live_version` are 3 (5 with step 4).
+6. **End the freeze** and tell the editors: Save now keeps a change; *Publish…* puts it live;
+   History on every editor and Backups & versions show and restore earlier versions.
+
+**The way back** (any time before the contract slice, R15): switching off returns every editor
+to saving live, and nothing published is undone.
+
+1. Freeze the editors again (as above), and read back.
+2. Publish or throw away what is pending. Then, as `postgres` on a direct session:
+
+   ```sql
+   select app.disable_releases('<tenant id>', '<operator profile id>');
+   ```
+
+   It refuses (`55000`, with the counts) while any change is pending or any release is
+   scheduled. To switch off anyway, name the discard:
+
+   ```sql
+   select app.disable_releases('<tenant id>', '<operator profile id>', p_discard_pending => true);
+   ```
+
+   **The discard rule** (as built in R11, kept for R14): the flag goes off first; every item the
+   switch-on converted from the old schedule goes back to its own schedule (`scheduled` at its
+   release's time, so `app.publish_scheduled()` publishes it as before; one that cannot is
+   counted in `not_restored`); every other scheduled release is cancelled; every pending change
+   is thrown away, with no undo. Versions, history and the release ledger stay; switching on
+   again writes a new baseline.
+3. Read back: `releases_on` false, `release_tenants`, `pending_changes` and `scheduled_releases`
+   0. The `publish-scheduled` job (pg_cron) publishes old-style scheduled items again from the
+   switch-off on.
+
+**A Worker rollback while releases are on** (§10): roll back only to a build that contains R13
+(#117, merged as `42b61c6f`), the first with the whole release interface
+(`git merge-base --is-ancestor 42b61c6f <sha>` must succeed); an older build cannot publish what
+editors save. To go further back, switch releases off first (the way back, above).
 
 ## 7. Cloudflare WAF (CLAUDE.md §3)
 
@@ -1818,6 +1934,11 @@ A Worker rollback across R11's PR is safe: the older minute cron never calls
 `claim_scheduled_releases` (a release scheduled meanwhile waits, its drafts claimed, until the
 newer Worker is back), and the older publish route refuses `scheduleAt`
 (400). With releases off, as until R14, nothing can be scheduled at all.
+
+R14-prep carries no migration, so it does not move the line either, and a Worker rollback across
+it is safe while releases are off. **Once releases are switched on (§6p), roll the Worker back
+only to a build that contains R13** (`42b61c6f`: `git merge-base --is-ancestor 42b61c6f <sha>`),
+or switch releases off first (§6p, the way back): an older build cannot publish what editors save.
 
 The leads contract (Admin v2 C14) moved the line, as the two PRs §5a asks for. C14a (#109),
 the code, carried no migration: from its merge on, no Worker query names `leads.status`,
