@@ -180,7 +180,9 @@
   text-decoration: none;
 }
 
-/* Two columns from 1024px (sections, fields); the preview column is E2's. Below, one. */
+/* Three columns from 1280px: sections, fields and the live preview (E2). Below, the Edit |
+   Preview switch shows the fields or the preview: beside the sections from 1024px, under them
+   below (ui.md "Responsive"). */
 .pe__cols {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -189,9 +191,36 @@
   min-inline-size: 0;
 }
 
+.pe__view {
+  grid-column: 1 / -1;
+  min-inline-size: 0;
+}
+
 @media (min-width: 1024px) {
   .pe__cols {
     grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1279.98px) {
+  .pe__cols:not([data-view='preview']) > .pe__preview,
+  .pe__cols[data-view='preview'] > .pe__fields {
+    display: none;
+  }
+}
+
+@media (min-width: 1280px) {
+  .pe__cols {
+    grid-template-columns: minmax(14rem, 17rem) minmax(20rem, 1fr) minmax(20rem, 1fr);
+  }
+
+  .pe__view {
+    display: none;
+  }
+
+  .pe__preview {
+    position: sticky;
+    top: 16px;
   }
 }
 
@@ -422,4 +451,89 @@
 
 .pe__seo-only p {
   margin: 0;
+}
+
+/* ---- The live preview column (Admin v2 E2; the prototype's .ed__col--preview, .pv__bar and
+   .pv__frame, app.css 274-280). The frame's width, height and scale are set through the CSSOM
+   after hydration (PreviewColumn.tsx): never a style attribute. ---- */
+
+.pe__preview {
+  display: grid;
+  gap: 10px;
+  min-inline-size: 0;
+  align-content: start;
+  padding: 14px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r);
+  background: var(--ad-surface-2);
+}
+
+.pe__preview-h {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.pv-col {
+  display: grid;
+  gap: 10px;
+  min-inline-size: 0;
+}
+
+.pv-col__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.pv-col__note .btn {
+  margin-top: 6px;
+}
+
+.pv-col__area {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  box-sizing: border-box;
+  block-size: clamp(22rem, calc(100vh - 16rem), 56rem);
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-bg);
+}
+
+.pv-col__fit {
+  flex: none;
+  max-inline-size: 100%;
+  overflow: hidden;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+  box-shadow: var(--ad-shadow-sm);
+}
+
+.pv-col__frame {
+  display: block;
+  border: 0;
+  transform-origin: 0 0;
+  background: var(--ad-card);
+}
+
+.pv-col__loading {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ad-dim);
+}
+
+.pv-col__area > .pv-col__loading {
+  position: absolute;
+  top: 20px;
+  inset-inline-start: 20px;
+  padding: 6px 10px;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+  box-shadow: var(--ad-shadow-sm);
 }

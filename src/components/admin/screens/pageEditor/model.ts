@@ -245,3 +245,26 @@ export function renameBody(row: SectionRow, label: string | null, release: boole
 export function columnWroteOn(row: SectionRow): string {
   return draftStamp(readDraft(row as unknown as Row));
 }
+
+// ---- The live preview's save signal (Admin v2 E2) ---------------------------------------
+
+/** A row's version and its pending change's: a write to it moves one or the other. */
+export function rowStamp(row: { version: number | unknown; draft?: unknown }): string {
+  return `${String(row.version ?? '')}:${readDraft(row as unknown as Row)?.version ?? ''}`;
+}
+
+/**
+ * Whether a row a form read or saved is a save (E2: the preview then reloads): its version or
+ * its pending change moved since the list held it. A read of the version the list holds (the
+ * form's first load, a rebase after a column write) is not, and neither is a row the list does
+ * not hold yet.
+ */
+export function rowMoved(before: SectionRow | undefined, after: SectionRow): boolean {
+  if (!before) return false;
+  return rowStamp(before) !== rowStamp({ ...before, ...after });
+}
+
+/** The same rule for the page's own row (the page details): `null` until the first read. */
+export function pageMoved(before: string | null, row: Row): boolean {
+  return before !== null && before !== rowStamp(row as { version: unknown; draft?: unknown });
+}

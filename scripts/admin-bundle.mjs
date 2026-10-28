@@ -32,7 +32,9 @@
 //      Admin v2 R13: the dashboard's publish card shares it (drawn only while releases are on),
 //      and Backups & versions' own group (admin-versions) imports its schedule rules from it;
 //      admin-versions is its island's and the kit gallery's alone, and the history drawer
-//      (admin-history) is reached only through import() from the editors.
+//      (admin-history) is reached only through import() from the editors. Admin v2 E2: the
+//      page editor's live preview column (admin-page-preview) is reached only through import()
+//      too, and the editor's own group never imports it or the preview's bridge statically.
 //
 // Since C4b (owner item O-15, decided by the approved plan's default on 2026-10-18) check 3,
 // each admin screen's eager graph within ROUTE_BUDGET, is THE admin bundle gate; the
@@ -98,6 +100,7 @@ const OFF_SCREEN_GROUPS = [
   'admin-screens.',
   'admin-content.',
   'admin-pages.',
+  'admin-page-preview.',
   'admin-dashboard.',
   'admin-leads.',
   'admin-leads-lazy.',
@@ -133,10 +136,19 @@ const FAMILY_NEVER = {
   'admin-release.': ['admin-fields.'],
   'admin-versions.': ['admin-fields.'],
   // E1: the page editor loads the field kit, never another screen family's code.
-  'admin-pages.': ['admin-screens.', 'admin-content.', 'admin-leads.', 'admin-versions.'],
+  'admin-pages.': [
+    'admin-screens.',
+    'admin-content.',
+    'admin-leads.',
+    'admin-versions.',
+    // E2: the live preview column and the preview's own bridge load only once it is on screen.
+    'admin-page-preview.',
+    'admin-preview.',
+  ],
 };
-// Groups reached only through import() (check 6). Admin v2 R13: the history drawer.
-const LAZY_ONLY_GROUPS = ['admin-leads-lazy.', 'admin-history.'];
+// Groups reached only through import() (check 6). Admin v2 R13: the history drawer. Admin v2
+// E2: the page editor's live preview column.
+const LAZY_ONLY_GROUPS = ['admin-leads-lazy.', 'admin-history.', 'admin-page-preview.'];
 
 // The preview bridge's script (check 7) and what its eager graph must never hold.
 const PREVIEW_BRIDGE_FILE = /^AdminPreviewBridge\.astro_/;

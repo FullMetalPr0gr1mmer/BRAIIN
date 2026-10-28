@@ -69,5 +69,8 @@ export const FromPreviewMessageSchema = z.discriminatedUnion('type', [
     .strict(),
   z.object({ v, type: z.literal('scroll'), y }).strict(),
   z.object({ v, type: z.literal('navigate'), path: PreviewPathSchema }).strict(),
+  // Admin v2 E2: a click inside a marked section (not on a link) asks the page editor to open
+  // that section. The editor takes it only for a section it lists.
+  z.object({ v, type: z.literal('select'), sectionId: PreviewSectionIdSchema }).strict(),
 ]);
 export type FromPreviewMessage = z.infer<typeof FromPreviewMessageSchema>;

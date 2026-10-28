@@ -22,6 +22,8 @@ import { PREVIEW_PREFIX, READ_ONLY_ENDPOINTS, toPreviewPath } from './paths';
 //   - a same-origin link to a previewable page stays in the preview (rewritten to
 //     `/admin/preview/<path>`, the `only` selection or the version `v` kept) and is reported
 //     to the parent;
+//   - a click inside a marked section, not on a link, is reported to the parent as `select`
+//     (Admin v2 E2: the page editor opens that section);
 //   - a form never sends: the submit is stopped before the page's own handler sees it, and the
 //     response's CSP already says `form-action 'none'` (src/lib/http/preview.ts);
 //   - a script's request that could change something (any method but GET and HEAD) is refused,
@@ -105,6 +107,19 @@ export function sectionsOf(doc: Pick<Document, 'querySelectorAll'>): {
     if (out.length === 200) break;
   }
   return out;
+}
+
+/**
+ * The marked section a click landed in, for the editor to open (Admin v2 E2), or null: a click
+ * on a link (it navigates, and says so), outside every section, or on a marker that is not an
+ * id.
+ */
+export function sectionOfClick(target: EventTarget | null): string | null {
+  const el = target as Element | null;
+  if (!el || typeof el.closest !== 'function') return null;
+  if (el.closest('a[href]')) return null;
+  const id = el.closest('[data-pv-section]')?.getAttribute('data-pv-section') ?? '';
+  return PreviewSectionIdSchema.safeParse(id).success ? id : null;
 }
 
 export { READ_ONLY_ENDPOINTS };
@@ -227,6 +242,16 @@ export function installBridge(win: Window): void {
     event.preventDefault();
     postToParent(parent, origin, { v: PREVIEW_MESSAGE_VERSION, type: 'navigate', path: to });
     win.location.assign(to);
+  });
+
+  // A click in a section opens it in the page editor that frames this preview (E2). Only
+  // when framed; the page's own handling of the click goes on unchanged.
+  doc.addEventListener('click', (event) => {
+    if (!parent || event.button !== 0) return;
+    const sectionId = sectionOfClick(event.target);
+    if (sectionId) {
+      postToParent(parent, origin, { v: PREVIEW_MESSAGE_VERSION, type: 'select', sectionId });
+    }
   });
 
   let queued = false;

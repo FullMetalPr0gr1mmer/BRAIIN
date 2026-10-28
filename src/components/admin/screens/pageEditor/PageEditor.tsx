@@ -1,17 +1,29 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArabicGapsProvider,
   ArabicMissingBar,
   EditorLanguageProvider,
   EditorLanguageSwitch,
+  useEditorLanguage,
 } from '@/components/admin/fields/editorLanguage';
 import Icon from '@/components/admin/kit/Icon';
 import Note from '@/components/admin/kit/Note';
+import Segmented from '@/components/admin/kit/Segmented';
+import {
+  NO_PREVIEW,
+  PREVIEW_HEADING,
+  PREVIEW_LOADING,
+  VIEW_LABEL,
+  VIEW_OPTIONS,
+  previewLangAfter,
+  previewLead,
+  type EditorView,
+  type PreviewLang,
+} from '@/components/admin/screens/pagePreview/editorSide';
 import StatusBadge, { Badge } from '@/components/admin/kit/StatusBadge';
 import SeoDrawer from '@/components/admin/screens/seo/SeoDrawer';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
-import { readDraft } from '@/lib/admin/entitySave';
 import {
   announcePending,
   openPublishDialog,
@@ -36,7 +48,10 @@ import {
   isFirstOfType,
   neighbourAfterRemoval,
   newSectionPayload,
+  pageMoved,
   renameBody,
+  rowMoved,
+  rowStamp,
   sectionRowOf,
   toggleBody,
   type SectionRow,
@@ -46,6 +61,14 @@ import RenameModal from './RenameModal';
 import SectionPanel from './SectionPanel';
 import SectionsColumn, { PAGE_DETAILS } from './SectionsColumn';
 import type { PageEditorPage, PageEditorSetup } from './types';
+
+// The live preview column (Admin v2 E2): its own lazy chunk (`admin-page-preview`), loaded only
+// once the preview is on screen, so a narrow screen that never opens it never downloads it or
+// asks the Worker for a preview (P-15).
+const PreviewColumn = lazy(() => import('@/components/admin/screens/pagePreview/PreviewColumn'));
+
+/** The width from which the editor shows its three columns (ui.md "Responsive"). */
+const THREE_COLUMNS = '(min-width: 1280px)';
 
 // The page editor (Admin v2 E1, docs/admin-v2/ui.md "Page editor (/admin/pages/[id]; AV-25)";
 // the prototype's route('/pages/:id')): the AdminPageEditor island. The server page decides
@@ -63,8 +86,12 @@ import type { PageEditorPage, PageEditorSetup } from './types';
 //                  select one, show or hide it, move it (drag, keys, or Move up / down: only
 //                  the rows whose number moved are written, as the collections do), Add.
 //   the fields     the selected section (SectionPanel) or the page details (PagePanel).
+//   the preview    the live preview column (Admin v2 E2, screens/pagePreview/): R9's preview
+//                  route in a frame, following the open section, reloaded after each save
+//                  this screen makes (`revision`), a click in it opening that section. From
+//                  1280 px it is the third column; below, an Edit | Preview switch shows it in
+//                  place of the fields. Its code loads only once it is on screen.
 //   the drawers    SEO and History; the dialogs: Add a section, Rename section.
-// The live preview column is E2's (AV-26).
 //
 // Switching away from a section with unsaved changes, or opening the one Add section made,
 // asks first while releases are off (each save is explicit, P-5); with them on the change is
@@ -89,11 +116,6 @@ const TONE: Record<string, 'gray' | 'sky' | 'warn'> = {
 };
 
 const arabicPath = (path: string) => (path === '/' ? '/ar' : `/ar${path}`);
-
-/** A row's version and its pending change's: a write to it moves one or the other. */
-function stamp(row: SectionRow): string {
-  return `${row.version}:${readDraft(row as unknown as Row)?.version ?? ''}`;
-}
 
 export interface PageEditorProps extends PageEditorSetup {
   /** The section to open first (the address's `?section=`), when it is on this page. */
@@ -129,6 +151,28 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
   const [renameKey, setRenameKey] = useState(0);
   const [renameError, setRenameError] = useState('');
   const form = useRef<EntitySave | null>(null);
+  // The live preview (E2): a counter every save this screen makes moves (the preview reloads
+  // once per burst), the preview's language (the editor's; Both keeps the last one), the
+  // narrow screens' Edit | Preview choice, and whether the screen is wide enough for three
+  // columns (read after hydration, so the server and the first render agree).
+  const [revision, setRevision] = useState(0);
+  const changed = useCallback(() => setRevision((n) => n + 1), []);
+  const { lang } = useEditorLanguage();
+  const [previewLang, setPreviewLang] = useState<PreviewLang>('en');
+  useEffect(() => setPreviewLang((current) => previewLangAfter(lang, current)), [lang]);
+  const [view, setView] = useState<EditorView>('edit');
+  const [wide, setWide] = useState<boolean | null>(null);
+  useEffect(() => {
+    const query = window.matchMedia(THREE_COLUMNS);
+    const update = () => setWide(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  // The rows as last read or written, for telling a save from a reread (formRow).
+  const rowsRef = useRef<SectionRow[] | null>(null);
+  rowsRef.current = rows;
+  const pageStamp = useRef<string | null>(null);
 
   const load = useCallback(async (): Promise<SectionRow[] | null> => {
     if (!access.sections) return null;
@@ -212,6 +256,28 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     setRows((current) => current && current.map((r) => (r.id === row.id ? { ...r, ...row } : r)));
   }
 
+  /**
+   * A row the open section's form read or saved: taken into the list, and when its version
+   * or its pending change moved, a save happened, so the preview reloads (a read of the same
+   * version, the form's first load or a rebase after a column write, does not).
+   */
+  function formRow(answer: Row) {
+    const row = sectionRowOf(answer);
+    const before = row ? rowsRef.current?.find((r) => r.id === row.id) : undefined;
+    take(answer);
+    if (row && rowMoved(before, row)) changed();
+  }
+
+  /** The page details' form read or saved its row: the same rule, for the page's own row. */
+  function pageRow(row: Row) {
+    setPage((current) => ({
+      ...current,
+      status: typeof row['status'] === 'string' ? row['status'] : current.status,
+    }));
+    if (pageMoved(pageStamp.current, row)) changed();
+    pageStamp.current = rowStamp(row as { version: unknown });
+  }
+
   async function toggle(row: SectionRow) {
     setWorking(true);
     setError('');
@@ -222,6 +288,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
           body: stagedBody(toggleBody(row, release), columnMarks(row, release)),
         });
         take(answer);
+        changed();
         follow(
           row.id,
           columnWroteOn(row),
@@ -265,6 +332,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
           body: { items: changes },
         });
         if ('staged' in moved) announcePending();
+        changed();
         toast('Section order updated.', 'ok');
       },
       {
@@ -277,7 +345,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     );
     const open = read.rows?.find((row) => row.id === selectedRef.current);
     const was = before.find((row) => row.id === selectedRef.current);
-    if (open && was && stamp(open) !== stamp(was))
+    if (open && was && rowStamp(open) !== rowStamp(was))
       follow(open.id, columnWroteOn(was), open.version);
     setWorking(false);
   }
@@ -293,6 +361,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
       });
       if ('draft' in created) announcePending();
       setAdding(false);
+      changed();
       await load();
       // The open form is left only as a switch leaves it: saved on the way (releases on) or
       // asked first (releases off); "Stay" keeps it open, the new section listed.
@@ -352,6 +421,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
       const answer = await adminFetch<Row>(stagedUrl(`/api/admin/sections/${row.id}`, release), {
         method: 'DELETE',
       });
+      changed();
       if ('staged' in answer || 'draft' in answer) {
         announcePending();
         toast(`The removal of ${name} is saved as an unpublished change.`, 'ok');
@@ -378,6 +448,16 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     : selected === PAGE_DETAILS
       ? { entityType: 'page', entityId: page.id, name: 'Page details' }
       : null;
+
+  // The live preview (E2): only for a page an address of the site shows; drawn once it is on
+  // screen (from 1280 px, or Preview chosen below).
+  const hasPreview = Boolean(page.path);
+  const showPreview = hasPreview && wide !== null && (wide || view === 'preview');
+  const previewSections = (rows ?? []).map((row) => ({
+    id: row.id,
+    name: sectionName(row),
+    visible: row.visible,
+  }));
 
   const options = rows
     ? availability(
@@ -476,7 +556,17 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
       </div>
 
       {access.sections ? (
-        <div className="pe__cols">
+        <div className="pe__cols" data-view={hasPreview ? view : undefined}>
+          {hasPreview && (
+            <div className="pe__view">
+              <Segmented<EditorView>
+                label={VIEW_LABEL}
+                value={view}
+                onChange={setView}
+                options={VIEW_OPTIONS}
+              />
+            </div>
+          )}
           {rows === null ? (
             <p className="admin-sub">Loading…</p>
           ) : (
@@ -508,25 +598,46 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
                 opens={access.opens}
                 working={working}
                 formRef={form}
-                onRow={take}
+                onRow={formRow}
                 onRename={() => openRename(section)}
                 onDelete={() => void remove(section)}
               />
             ) : selected === PAGE_DETAILS ? (
-              <PagePanel
-                page={page}
-                formRef={form}
-                onRow={(row) =>
-                  setPage((current) => ({
-                    ...current,
-                    status: typeof row['status'] === 'string' ? row['status'] : current.status,
-                  }))
-                }
-              />
+              <PagePanel page={page} formRef={form} onRow={pageRow} />
             ) : (
               <p className="admin-sub">Loading…</p>
             )}
           </div>
+          <section className="pe__preview" aria-labelledby="pe-preview-h">
+            <div className="pe__preview-h">
+              <h2 id="pe-preview-h" className="pe__h">
+                {PREVIEW_HEADING}
+              </h2>
+              <p className="pe__tiny">{previewLead(release)}</p>
+            </div>
+            {!page.path ? (
+              <Note>{NO_PREVIEW}</Note>
+            ) : showPreview ? (
+              <Suspense
+                fallback={
+                  <p className="pv-col__loading" role="status">
+                    {PREVIEW_LOADING}
+                  </p>
+                }
+              >
+                <PreviewColumn
+                  path={page.path}
+                  title={page.title.en}
+                  lang={previewLang}
+                  onLang={setPreviewLang}
+                  selected={selected}
+                  sections={previewSections}
+                  revision={revision}
+                  onSelect={(id) => void select(id)}
+                />
+              </Suspense>
+            ) : null}
+          </section>
         </div>
       ) : (
         <div className="card pe__seo-only">
@@ -561,6 +672,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
           pageId={page.id}
           path={page.path}
           onRestored={() => {
+            changed();
             void load();
             void form.current?.reloadTheirs();
           }}
