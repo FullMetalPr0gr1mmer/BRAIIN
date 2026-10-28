@@ -276,6 +276,67 @@ as before. **Do not switch Require 2FA for everyone on until the new Worker is l
 one has no `/admin/2fa`). The residuals the owner accepts with O-25 are in
 `docs/admin-v2/deviations.md` ("Residual risks").
 
+### 2e. Google Analytics 4: the property, the notice, then the switch (Admin v2 U15, owner item O-18)
+
+Not a blocker. GA4 ships switched off: a measurement id saved on `/admin/integrations` loads
+nothing, and the tile says "Not loading yet" (`GA4_NOTICE_READY`, default `false`, absent from
+`wrangler.jsonc`'s `vars`). The privacy notice says the site's analytics are first-party, and GA4
+sends visit data to Google outside the Kingdom, so the order is fixed:
+
+1. **The property (O-18).** In Google Analytics, a GA4 property with one web stream for the site's
+   origin; note its measurement id (`G-…`). In the property's admin: **Data retention = 2 months**;
+   **Google signals off**; **ads personalisation off** in every region; the account's data-sharing
+   settings off; enhanced measurement with page views on, but in their advanced settings **page
+   changes based on browser history events OFF** (required: the site is multi-page, so every real
+   navigation is a full load and is counted anyway, while the Our Work and All projects filters
+   write their query into the address with `history.replaceState`, and a history-event page view
+   would send it, against the notice's "without anything after a ?": the loader strips the query
+   only from the address it sets at the page's start); **form interactions OFF** (required: GA4 runs
+   on Home, Services and the service pages, which carry the lead form's section, and the notice says
+   nothing typed into a form is sent); and **site search off** (the site strips query strings
+   anyway). Join and Contact, the pages of the two forms that collect personal data, never load GA4.
+   The notice drafts state these settings, so keep them (`tests/lib/ga4Switch.spec.ts` holds this
+   list).
+2. **The notice sign-off.** The owner (with legal review of the cross-border transfer) approves
+   the EN and AR texts in `docs/admin-v2/as-built/U15.md` ("The notice drafts").
+3. **The switch-on PR**, one reviewed PR carrying all of it (`tests/lib/ga4Switch.spec.ts`
+   lists whatever is missing): the approved texts in `src/lib/legal/content.ts` with new
+   `updated` dates (EN and AR; the recruitment notice version moves only if its own text
+   does); the banner's copy (`ConsentBanner.astro`); `CONSENT_VERSION` 1 → 2 (everyone is asked
+   again, and a yes given to the first-party notice never loads Google); a "Cookie settings"
+   control on every page that reopens the banner (`data-consent-open`); the `integrations`
+   guide put through H11's catalog (it must stop saying the site does not load GA4); and
+   `"GA4_NOTICE_READY": "true"` in `vars`. Re-run the banner's layout and LCP gates
+   (`consent-banner.e2e.ts`, `layout-shift.e2e.ts`, Lighthouse): the banner's text is a first
+   mobile visit's LCP element.
+4. **The id.** After that PR's deploy, an Admin or SEO saves the measurement id on
+   `/admin/integrations`: it takes effect on the next page view (immediate, never staged)
+   while nothing caches Tier A, as today (see Rollback).
+
+**What to check on production.** In a private window: before any choice, DevTools → Network
+shows nothing from `googletagmanager.com` or `google-analytics.com`, and the page's
+`Content-Security-Policy` lists those hosts. "Accept analytics": `gtag/js?id=G-…` once the page
+has loaded, then `g/collect` hits; GA4's Realtime report shows the visit. On `/portfolio`, pick
+a filter: the address gains `?service=…`, and no new `g/collect` hit follows (history events
+are off). "Cookie settings" →
+"Reject non-essential": no further hits, and the `_ga` cookies are gone. Search
+(`/search?q=…`), Contact and Join never carry the loader. Over the first release cycle:
+`select created_at, message from system_logs where source = 'ga4-csp' order by id desc limit 20;`
+must stay empty; a row names a Google address (host and path, never the query) the CSP
+refused, for a reviewed PR (CLAUDE.md §3). A row naming `www.googletagmanager.com` with a path
+outside `/gtag/` (`gtm.js`, `debug/…`) is expected to stay refused: script-src lists only
+gtag's path on purpose.
+
+**Rollback.** Remove the id on `/admin/integrations`, or a PR that takes `GA4_NOTICE_READY` out
+of `vars`. Either is immediate while nothing caches Tier A, as today: the middleware decides the
+loader and the CSP per render, so the next page view loads nothing and lists no Google host.
+Once the Tier A edge cache is on (O-3, KAN-20), a cached page keeps the loader and Google's
+hosts until it is purged: every Tier A page carries `site:identity`, so the integrations save
+must then purge that tag (R7's seam owes it, `src/pages/api/admin/integrations.ts`;
+`tests/lib/ga4Switch.spec.ts` fails a cache lookup without it), and a switch-off deploy needs
+a `tenant:default` purge. Until the save does, purge `site:identity` by hand after removing the
+id.
+
 ## 3. Create and promote the first admin  ⛔ blocker
 
 `users.manage` is Admin-only, so there is no in-product path to the first admin.
@@ -1673,20 +1734,26 @@ meets columns it ignores) but **not across a contraction** (§5a): the older Wor
 what the contraction took away, and nothing automated stops it (`wrangler rollback` bypasses
 CI, and the guard accepts a production ahead of the checkout). Never roll back past the code
 PR of the newest contraction production has applied; past that line, fix forward through a
-PR (§5b). Today the line is #106 (Admin v2 U11, merged as `1083159`) once
-`0110_integrations_contract.sql` (U11c) is applied: it drops `site_integrations`' four legacy
+PR (§5b). Today the line is #109 (Admin v2 C14a, the leads contract's code, merged as
+`5c02776`) once `0113_crm_leads_contract.sql` (C14b) is applied: it drops the lead columns
+`status`, `internal_notes`, `ip_inet` and `timeline_band`, and `crm_settings.timezone`, which
+a Worker older than #109 names (the legacy lead list and `?pii=1`, the export's `status`,
+notify-lead's and the daily index cron's `timeline_band`, the CRM settings' `timezone`), so
+the lead detail, the export, the reveal, notify-lead, the index cron and CRM settings fail
+(42703, the column does not exist); every public page and the contact form keep working (the
+form's insert names none of them). Behind it is #106 (Admin v2 U11, merged as `1083159`), the
+line since `0110_integrations_contract.sql` (U11c): it drops `site_integrations`' four legacy
 jsonb columns (`ga4`, `search_console`, `calendly`, `recaptcha`), which a Worker older than
 #106 selects and writes on the Integrations screen and its route, so that screen fails to load
-and save (42703, the column does not exist); the rest of the admin and every public page keep
-working (no public page read the table before #106). Behind it is #43 (merged as `cc8c6c4`),
-the line since `0033`: a Worker older than #43 also reads lead columns `0033` revoked from
-staff tokens, so the PII reveal, every lead update and the PII export fail (42501); the lead
-list and the plain lead view keep working. Before a rollback, check that the target contains
-the line: CI's deploys carry their commit in the version message (`ci <sha> run <id>`), so
-`git merge-base --is-ancestor 1083159 <sha>` must succeed (`cc8c6c4` is its ancestor, so the
-one check covers both lines). Versions deployed before this pipeline (#41, merged after #43)
-carry no commit; every one of them is older than #106, so none is a rollback target. A new
-contraction moves the line: its migration PR updates this paragraph.
+and save (42703); no public page read the table before #106. Behind both is #43 (merged as
+`cc8c6c4`), the line since `0033`: a Worker older than #43 also reads lead columns `0033`
+revoked from staff tokens, so the PII reveal, every lead update and the PII export fail
+(42501). Before a rollback, check that the target contains the line: CI's deploys carry their
+commit in the version message (`ci <sha> run <id>`), so
+`git merge-base --is-ancestor 5c02776 <sha>` must succeed (`1083159` and `cc8c6c4` are its
+ancestors, so the one check covers every line). Versions deployed before this pipeline (#41,
+merged after #43) carry no commit; every one of them is older than #109, so none is a
+rollback target. A new contraction moves the line: its migration PR updates this paragraph.
 
 0037 (#51) does not move the line. It revoked staff write privileges on the eight tables
 staff only read (the telemetry tables, the pageview rollup, the search, consent and
@@ -1752,14 +1819,12 @@ A Worker rollback across R11's PR is safe: the older minute cron never calls
 newer Worker is back), and the older publish route refuses `scheduleAt`
 (400). With releases off, as until R14, nothing can be scheduled at all.
 
-The leads contract (Admin v2 C14) **will** move the line. It ships as the two PRs §5a asks
-for. C14a, the code, carries no migration: from its merge on, no Worker query names
-`leads.status`, `internal_notes`, `ip_inet`, `timeline_band` or `crm_settings.timezone`, and
-the legacy `GET /api/admin/leads` list and the `?pii=1` alias are gone. Until C14b is applied
-a rollback across C14a's PR is safe (the columns are still there, and the legacy sync and
-notes mirror still run). C14b, the migration alone, drops those columns, and it is applied
-only after C14a has deployed and one release has passed with no legacy writer. **Once C14b is
-applied, never roll back past C14a's merge commit:** an older Worker names a dropped column,
-so its lead detail, export, reveal, notify-lead, index cron and CRM settings fail (42703).
-C14b's PR writes that commit into the "Today the line is" sentence above, with the
-`git merge-base --is-ancestor` check moved to it.
+The leads contract (Admin v2 C14) moved the line, as the two PRs §5a asks for. C14a (#109),
+the code, carried no migration: from its merge on, no Worker query names `leads.status`,
+`internal_notes`, `ip_inet`, `timeline_band` or `crm_settings.timezone`, and the legacy
+`GET /api/admin/leads` list and the `?pii=1` alias are gone. C14b, the migration alone, drops
+those columns; it is applied only after C14a has deployed and one release has passed with no
+legacy writer, and before C14b is applied a rollback across #109 stays safe (the columns are
+still there, and the legacy sync and notes mirror still run). **Once C14b is applied, never
+roll back past `5c02776`** (the "Today the line is" sentence above). C14b's own PR changes no
+Worker code, so a rollback across it is safe: the Worker before it is C14a's.

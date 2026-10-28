@@ -60,6 +60,13 @@ jobs:
       # application, and its CV must reach the private `applications` bucket (migration
       # 0029). imgproxy stays out — storage runs without image transformations.
       SUPABASE_EXCLUDE: studio,imgproxy,edge-runtime,logflare,vector,realtime,postgres-meta
+      # Admin v2 U15: Google Analytics 4 switched on for THIS build only, so
+      # tests/admin/ga4.e2e.ts proves the loader against the real Worker (Google itself is
+      # route-intercepted, never reached). No id is saved outside that spec, so every other
+      # page is the one production serves. The Lighthouse job below and the deploy (ci.yml)
+      # build with it off, as production does until the owner signs off the notice that names
+      # Google (launch runbook §2e; tests/lib/ga4Switch.spec.ts holds all three).
+      GA4_NOTICE_READY: 'true'
     steps:
       - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
       - uses: actions/setup-node@v4

@@ -143,6 +143,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'login.css',
       'maintenance.css',
       'media.css',
+      'pages.css',
       'personal.css',
       'projects.css',
       'search.css',

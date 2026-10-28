@@ -35,6 +35,40 @@
  */
 export const CSP_REPORT_ONLY = false;
 
+/**
+ * Google Analytics 4's hosts (Admin v2 U15), joined to a page's policy ONLY on a response whose
+ * page loads the GA4 loader: the switch on, a saved id, a public page route (src/lib/http/ga4.ts
+ * decides, src/middleware.ts asks for them). Every other response, the admin's included, never
+ * lists a Google host. Exactly what gtag.js needs WITHOUT Google's Ads features (Google's own
+ * list for GA4, developers.google.com/tag-platform/security/guides/csp): the loader keeps the
+ * Ads features off (consent mode denies ad storage, Google signals and ad personalisation off),
+ * so the Ads hosts (`*.g.doubleclick.net`, `pagead2.googlesyndication.com`, `frame-src`) are not
+ * here, and Google's `https://*.google.com` for connect-src is narrowed to the GA4 collection
+ * hosts under it (`*.analytics.google.com`). script-src names a PATH, not the host: the host
+ * also serves `gtm.js?id=GTM-<any container>`, which anyone can configure to run code (a known
+ * CSP bypass), while gtag.js and the destination scripts it loads all live under `/gtag/` (a
+ * source path ending in "/" matches by prefix, and the query never counts). A request gtag.js
+ * makes outside the list is refused by the browser, and the loader reports the directive and
+ * the address without its query to the first-party error log: that is the Report-Only cycle
+ * (U15's as-built), with nothing ever loosened to find out. A source joins only in a reviewed
+ * PR (CLAUDE.md §7, the CSP line).
+ *
+ * Residual (recorded for the owner's sign-off with the notice, U15's as-built): connect-src
+ * and img-src accept a hit for ANY GA property, so script injected into a GA4 page could send
+ * what it reads to someone else's property. It needs an injection foothold first, a public
+ * page carries no nonced element such a script could borrow, and the switch is off in
+ * production.
+ */
+export const GA4_CSP_SOURCES = Object.freeze({
+  script: Object.freeze(['https://www.googletagmanager.com/gtag/']),
+  connect: Object.freeze([
+    'https://www.googletagmanager.com',
+    'https://*.google-analytics.com',
+    'https://*.analytics.google.com',
+  ]),
+  img: Object.freeze(['https://www.googletagmanager.com', 'https://*.google-analytics.com']),
+});
+
 /** The seven non-CSP headers on every response — pages, the Worker's own answers and static files. */
 export const STATIC_SECURITY_HEADERS = Object.freeze({
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
@@ -90,6 +124,11 @@ export interface CspOptions {
    * write nothing, whether or not the bridge has replaced `fetch` yet.
    */
   connectOnly?: readonly string[];
+  /**
+   * A public page that loads the GA4 loader only (Admin v2 U15): script-src, connect-src and
+   * img-src also list GA4_CSP_SOURCES. Ignored with `connectOnly` (a preview never loads GA4).
+   */
+  ga4?: boolean;
 }
 
 interface CspExtras {
@@ -98,6 +137,7 @@ interface CspExtras {
   frameSelf?: boolean;
   noForms?: boolean;
   connectOnly?: readonly string[];
+  ga4?: boolean;
 }
 
 /** A source an exact-URL connect-src may hold: an http(s) origin and a path, nothing else. */
@@ -195,17 +235,31 @@ export function hasSandbox(csp: string): boolean {
 export function buildCsp(nonce: string, extras?: CspExtras): string {
   const stream = 'https://*.cloudflarestream.com https://iframe.videodelivery.net';
   const videoFallback = 'https://www.youtube-nocookie.com https://player.vimeo.com';
-  const scriptSrc = ["'self'", `'nonce-${nonce}'`, ...(extras?.scriptHashes ?? [])].join(' ');
+  // GA4's hosts on a page that loads it, never beside an exact connect-src list (a preview).
+  const ga4 = extras?.ga4 === true && extras.connectOnly === undefined;
+  const scriptSrc = [
+    "'self'",
+    `'nonce-${nonce}'`,
+    ...(extras?.scriptHashes ?? []),
+    ...(ga4 ? GA4_CSP_SOURCES.script : []),
+  ].join(' ');
   const styleSrc = ["'self'", `'nonce-${nonce}'`, ...(extras?.styleHashes ?? [])].join(' ');
+  const imgSrc = [
+    "'self' https://imagedelivery.net https://*.cloudflarestream.com",
+    ...(ga4 ? GA4_CSP_SOURCES.img : []),
+  ].join(' ');
+  const connect = [connectSrc(extras?.connectOnly), ...(ga4 ? GA4_CSP_SOURCES.connect : [])].join(
+    ' ',
+  );
   return [
     "default-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
     `script-src ${scriptSrc}`,
     `style-src ${styleSrc}`,
-    "img-src 'self' https://imagedelivery.net https://*.cloudflarestream.com",
+    `img-src ${imgSrc}`,
     "font-src 'self'",
-    `connect-src ${connectSrc(extras?.connectOnly)}`,
+    `connect-src ${connect}`,
     `frame-src ${extras?.frameSelf ? "'self' " : ''}${stream} ${videoFallback}`,
     `media-src 'self' ${stream}`,
     extras?.noForms ? "form-action 'none'" : "form-action 'self'",
@@ -241,6 +295,7 @@ export function applySecurityHeaders(headers: Headers, opts: CspOptions): void {
     ...(opts.frameSelf ? { frameSelf: true } : {}),
     ...(opts.noForms ? { noForms: true } : {}),
     ...(opts.connectOnly ? { connectOnly: opts.connectOnly } : {}),
+    ...(opts.ga4 ? { ga4: true } : {}),
   });
   // A response that asked for `sandbox` keeps it (the admin's CV download, Join): the rebuild
   // below may only ever ADD restrictions to what a route set, never drop one. Hashes and

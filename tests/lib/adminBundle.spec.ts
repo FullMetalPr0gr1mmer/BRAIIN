@@ -434,7 +434,6 @@ describe('the screens admin-ui leaves share one admin-screens group (Admin v2 U4
     for (const path of [
       'src/components/admin/islands/AdminSeo.tsx',
       'src/components/admin/screens/seo/SeoScreen.tsx',
-      'src/components/admin/screens/seo/SeoDrawer.tsx',
       'src/components/admin/screens/seo/RedirectsTab.tsx',
     ]) {
       expect(claim(path), path).toBe('admin-screens');
@@ -443,6 +442,9 @@ describe('the screens admin-ui leaves share one admin-screens group (Admin v2 U4
     // it, and in this group it made every editor import admin-screens.
     expect(claim('src/components/admin/screens/seo/SeoPanel.tsx')).toBe('admin-fields');
     expect(claim('src/components/admin/screens/seo/GooglePreview.tsx')).toBe('admin-fields');
+    // Its drawer too since E1: the page editor draws it, and in this group it made the page
+    // editor import admin-screens.
+    expect(claim('src/components/admin/screens/seo/SeoDrawer.tsx')).toBe('admin-fields');
   });
 
   it('leaves every other screen where it was', () => {
@@ -826,5 +828,103 @@ describe('the field kit is its own group (Admin v2 F5a)', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('the page editor has its own group (Admin v2 E1)', () => {
+  interface Group {
+    name: string;
+    test: RegExp | ((id: string) => boolean);
+    priority: number;
+  }
+  let groups: Group[] = [];
+  beforeAll(async () => {
+    const config = (await import('../../astro.config.mjs')).default as {
+      vite: { build: { rollupOptions: { output: { codeSplitting: { groups: Group[] } } } } };
+    };
+    groups = [...config.vite.build.rollupOptions.output.codeSplitting.groups].sort(
+      (a, b) => b.priority - a.priority,
+    );
+  });
+  const claim = (path: string) => {
+    const id = join(process.cwd(), path);
+    return groups.find((g) => (typeof g.test === 'function' ? g.test(id) : g.test.test(id)))?.name;
+  };
+  const priority = (name: string) => groups.find((g) => g.name === name)!.priority;
+
+  it('claims its island and every module of its screen for admin-pages', () => {
+    const dir = 'src/components/admin/screens/pageEditor';
+    const paths = [
+      'src/components/admin/islands/AdminPageEditor.tsx',
+      ...readdirSync(join(process.cwd(), dir)).map((name) => `${dir}/${name}`),
+    ];
+    for (const path of paths) expect(claim(path), path).toBe('admin-pages');
+    // What it shares with the SEO and collection screens is the field kit's, so neither family
+    // loads the other's chunk to reach it.
+    expect(claim('src/components/admin/screens/seo/SeoDrawer.tsx')).toBe('admin-fields');
+    expect(claim('src/components/admin/screens/collection/reorder.ts')).toBe('admin-fields');
+    expect(claim('src/components/admin/screens/seo/PagesTab.tsx')).toBe('admin-screens');
+  });
+
+  it('sits below the field kit and above the shared screens group', () => {
+    expect(priority('admin-pages')).toBeLessThan(priority('admin-fields'));
+    expect(priority('admin-pages')).toBeGreaterThan(priority('admin-screens'));
+  });
+
+  it('imports no module another screen family claims', () => {
+    const dir = 'src/components/admin/screens/pageEditor';
+    const offenders: string[] = [];
+    for (const name of readdirSync(join(process.cwd(), dir))) {
+      const source = readFileSync(join(process.cwd(), dir, name), 'utf8');
+      for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
+        const spec = m[1] as string;
+        const path = spec.startsWith('@/')
+          ? `src/${spec.slice(2)}`
+          : spec.startsWith('.')
+            ? join(dir, spec).split(sep).join('/')
+            : null;
+        if (!path) continue;
+        const file = ['.tsx', '.ts']
+          .map((ext) => `${path}${ext}`)
+          .find((p) => {
+            try {
+              readFileSync(join(process.cwd(), p));
+              return true;
+            } catch {
+              return false;
+            }
+          });
+        const group = file ? claim(file) : undefined;
+        if (group && /^admin-(screens|content|leads|dashboard|release)$/.test(group))
+          offenders.push(`${name} → ${spec} (${group})`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('is loaded statically by its island only, and loads no other screen family', () => {
+    const PAGES = {
+      ...GOOD,
+      'admin-fields.F1.js': 'import"./admin-ui.U1.js";export const f=1;',
+      'admin-screens.S1.js': 'import"./admin-ui.U1.js";import"./admin-fields.F1.js";',
+      'admin-pages.P1.js': 'import"./admin-ui.U1.js";import"./admin-fields.F1.js";',
+      'AdminPageEditor.I1.js': 'import"./admin-pages.P1.js";',
+    };
+    expect(check(build(PAGES)).problems).toEqual([]);
+    const problems = (files: Record<string, string>) =>
+      (check(build({ ...PAGES, ...files })).problems as string[]).join('\n');
+    expect(problems({ 'AdminSeo.M1.js': 'import"./admin-pages.P1.js";' })).toContain(
+      'AdminSeo.M1.js imports admin-pages.P1.js statically',
+    );
+    expect(
+      problems({
+        'admin-pages.P1.js': 'import"./admin-ui.U1.js";import"./admin-screens.S1.js";',
+      }),
+    ).toContain('admin-pages.P1.js imports admin-screens. statically');
+    expect(
+      problems({
+        'admin-ui.U1.js': 'import"./admin-pages.P1.js";const L=()=>import(`./admin-rich.X1.js`);',
+      }),
+    ).toContain('admin-ui imports admin-pages.P1.js statically');
   });
 });

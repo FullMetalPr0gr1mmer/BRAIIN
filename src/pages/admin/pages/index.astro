@@ -1,18 +1,175 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceTable from '@/components/admin/islands/AdminResourceTable';
-import { uiFor } from '@/lib/admin/uiSchema';
+import Badge from '@/components/admin/ui/Badge.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { mayOpenPages } from '@/lib/admin/pages/editor';
+import { loadPagesList, type PagesList } from '@/lib/admin/pages/list';
+import { studioClock } from '@/lib/admin/studioTimeZone';
+import { MODE_COPY } from '@/lib/admin/visibilityCopy';
+import { writeSystemLog } from '@/lib/data/systemLog';
 
 export const prerender = false;
 
-const ui = uiFor('pages');
+// Pages (Admin v2 E1, docs/admin-v2/ui.md "Pages list (/admin/pages; AV-25)"; the prototype's
+// route('/pages')): server-rendered, zero JavaScript. A card per page of the site, in the
+// route map's order: its icon, its status, Hidden / Link only / Password from page visibility,
+// "Unpublished changes" while releases are on and one waits, its title (a link to its editor,
+// stretched over the card), "<path> · N sections", "Edited <ago>", Open page in English and
+// Arabic, and the visibility setting for maintenance.manage. Then the two templates (the
+// service and the project page), which open the Services and Projects areas until the
+// template editors (E3). "New page" waits for E11 (custom pages).
+//
+// Who opens it: a role that edits pages or reads their SEO (Admin, Content Creator, SEO). Any
+// other role (Developer, Sales) gets the layout with the refusal and a 403, and nothing is
+// read (tests/admin/routes.ts LOCKED_SCREENS). Every read is the person's own (RLS decides).
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = Boolean(session && sb && mayOpenPages(session.role));
+if (!allowed) Astro.response.status = 403;
+const manageVisibility = Boolean(session && can(session.role, 'maintenance.manage') === 'full');
+
+let list: PagesList | null = null;
+if (allowed && session && sb) {
+  try {
+    list = await loadPagesList(sb, session);
+  } catch (err) {
+    await writeSystemLog({
+      level: 'error',
+      source: 'admin:pages.list',
+      message: err instanceof Error ? err.message : 'pages list read failed',
+      detail: { path: Astro.url.pathname },
+    });
+  }
+}
+const clock = await studioClock(Astro.locals);
+const now = Date.now();
+const arabic = (path: string) => (path === '/' ? '/ar' : `/ar${path}`);
+const TONE = { hidden: 'gray', link: 'sky', password: 'warn' } as const;
+const sections = (n: number) => `${n} ${n === 1 ? 'section' : 'sections'}`;
 ---
 
-<AdminLayout title={ui.title}>
-  <!--
-  `client:load` rather than `client:visible`: this island IS the page, so deferring it
-  to intersection just adds a blank frame. Public routes use visible/idle — /admin is
-  exempt from the CWV budgets (CLAUDE.md §6) and is gated on bundle size instead.
--->
-  <AdminResourceTable client:load resource="pages" />
+<AdminLayout
+  title="Pages"
+  subtitle="Every page of the site. Open one to edit its sections, their order, and every word in two languages."
+  styles={['pages.css']}
+>
+  {
+    !allowed ? (
+      <Refused />
+    ) : !list ? (
+      <p class="msg" data-kind="error" role="alert">
+        The pages could not be read just now. Reload the page to try again.
+      </p>
+    ) : (
+      <>
+        <ul class="pg-grid" aria-label="The site’s pages">
+          {list.pages.map((page) => (
+            <li class="card pg-card" data-hidden={page.visibility === 'public' ? undefined : ''}>
+              <div class="pg-card__top">
+                <span class="li__ico">
+                  <Icon name="pages" size={17} />
+                </span>
+                <span class="pg-card__badges">
+                  {page.visibility !== 'public' && (
+                    <Badge tone={TONE[page.visibility]}>{MODE_COPY[page.visibility].badge}</Badge>
+                  )}
+                  <Badge status={page.status} />
+                  {page.pending && <Badge tone="klein">Unpublished changes</Badge>}
+                </span>
+              </div>
+              <h2 class="pg-card__t" dir="auto">
+                <a class="pg-card__link" href={`/admin/pages/${page.id}`}>
+                  <span class="visually-hidden">Edit </span>
+                  {page.title.en}
+                </a>
+              </h2>
+              <p class="pg-card__s">
+                {page.path ?? 'Not on the site yet'} · {sections(page.sections)}
+              </p>
+              <div class="pg-card__foot">
+                <span class="pg-card__ago">
+                  {page.updatedAt ? (
+                    <time datetime={page.updatedAt} title={clock.formatDateTime(page.updatedAt)}>
+                      Edited {clock.relTime(page.updatedAt, now)}
+                    </time>
+                  ) : (
+                    'Not edited yet'
+                  )}
+                </span>
+                <span class="pg-card__acts">
+                  {manageVisibility && (
+                    <a
+                      class="icon-btn"
+                      href="/admin/visibility"
+                      aria-label={`Who can see ${page.title.en}`}
+                    >
+                      <Icon name={page.visibility === 'public' ? 'eye' : 'eyeoff'} size={15} />
+                    </a>
+                  )}
+                  {page.path && (
+                    <>
+                      <a
+                        class="icon-btn"
+                        href={page.path}
+                        target="_blank"
+                        rel="noopener"
+                        aria-label={`Open ${page.title.en} on the site`}
+                      >
+                        <Icon name="ext" size={15} />
+                      </a>
+                      <a
+                        class="icon-btn pg-card__ar"
+                        href={arabic(page.path)}
+                        target="_blank"
+                        rel="noopener"
+                        aria-label={`Open ${page.title.en} in Arabic`}
+                      >
+                        <span lang="ar" aria-hidden="true">
+                          ع
+                        </span>
+                      </a>
+                    </>
+                  )}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <section class="pg-tpl" aria-labelledby="pg-tpl-h">
+          <h2 id="pg-tpl-h" class="pg-tpl__h">
+            Templates
+          </h2>
+          <p class="pg-tpl__s">
+            Every service and every project has its own page, built from one template each. Their
+            words are edited in Services and Projects.
+          </p>
+          <ul class="pg-grid" aria-labelledby="pg-tpl-h">
+            {list.templates.map((tpl) => (
+              <li class="card pg-card" data-hidden={tpl.visibility === 'hidden' ? '' : undefined}>
+                <div class="pg-card__top">
+                  <span class="li__ico">
+                    <Icon name="copy" size={17} />
+                  </span>
+                  <span class="pg-card__badges">
+                    {tpl.visibility === 'hidden' && <Badge tone="gray">Hidden</Badge>}
+                    <Badge tone="sky">Template</Badge>
+                  </span>
+                </div>
+                <h3 class="pg-card__t">
+                  <a class="pg-card__link" href={tpl.href}>
+                    {tpl.title}
+                  </a>
+                </h3>
+                <p class="pg-card__s">{tpl.sub}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </>
+    )
+  }
 </AdminLayout>

@@ -49,5 +49,10 @@ declare namespace App {
     // consent banner and telemetry, says noindex and loads the bridge; SectionRenderer marks
     // each section. Absent on every public request.
     preview?: import('@/lib/http/preview').PreviewLocals;
+    // Google Analytics 4's measurement id (Admin v2 U15), read once by the middleware before
+    // the render, and only while the switch is on, on a public page route answered publicly
+    // (src/lib/http/ga4.ts). A promise, so the layout and the CSP share the one answer; null
+    // for no id. Absent everywhere else, the preview included: then no loader renders.
+    ga4?: Promise<string | null>;
   }
 }

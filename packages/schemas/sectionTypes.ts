@@ -47,3 +47,10 @@ export const SECTION_TYPES = [
   'joinApply',
 ] as const;
 export type SectionType = (typeof SECTION_TYPES)[number];
+
+/**
+ * A section's name in the admin (Admin v2 E1): `page_sections.label`, at most this many
+ * characters, trimmed, no control or format character (0115's CHECK). Null shows the type's own
+ * name. Set by the page editor's Rename dialog; no public page renders it.
+ */
+export const SECTION_LABEL_MAX = 60;

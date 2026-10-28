@@ -9,7 +9,7 @@ import {
   SENSITIVE_LEAD_COLUMNS,
 } from '@/lib/admin/leadFields';
 import { leadPatchValues } from '@/lib/crm/leadWrite';
-import { replayLeadGrant } from './leadGrantReplay';
+import { droppedLeadColumns, replayLeadGrant } from './leadGrantReplay';
 
 // Migration 0033: staff tokens read leads through a COLUMN grant. Two things must stay
 // true as both sides change:
@@ -39,8 +39,8 @@ describe('the leads SELECT grant (0033)', () => {
     const forbidden = [
       ...GATED_LEAD_COLUMNS.split(','),
       ...SENSITIVE_LEAD_COLUMNS,
-      // The legacy gated columns, while today's schema holds them (C14b drops them; since
-      // C14a no query names them): never granted to staff either.
+      // The legacy gated columns: never granted to staff while they existed, and dropped by
+      // the leads contract (C14b; since C14a no query names them).
       'internal_notes',
       'ip_inet',
       'timeline_band',
@@ -55,6 +55,18 @@ describe('the leads SELECT grant (0033)', () => {
       'crm_indexed_at',
     ];
     for (const column of forbidden) expect(granted, column).not.toContain(column);
+  });
+
+  it('holds none of the columns the leads contract dropped (C14b): a drop takes its grant', () => {
+    // 0033 granted the legacy status to staff and nothing revoked it: only C14b's drop took it
+    // away, so the replay must follow an ALTER TABLE ... DROP COLUMN to know that.
+    for (const column of LEGACY_LEAD_COLUMNS) expect(granted, column).not.toContain(column);
+    expect(
+      droppedLeadColumns(
+        'alter table public.leads drop column status, drop column if exists ip_inet; ' +
+          'alter table public.lead_notes drop column body; alter table public.leads add column x int;',
+      ),
+    ).toEqual(['status', 'ip_inet']);
   });
 });
 

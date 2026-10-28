@@ -12,8 +12,8 @@ import { serviceClient } from '@/lib/supabase/server';
 // A lead's notes thread (Admin v2 C2b): `leads.pii` (Admin, Developer, Sales), the capability the
 // old internal_notes column carried. lead_notes is reachable by the service role only
 // (0034), so this route is the thread's only door for reading it and for adding to it, and
-// it is audited. (Until C14 the thread also holds one mirror of the legacy internal_notes
-// field, which the 0034 trigger keeps in step with that field.)
+// it is audited. (The notes the old field's mirror wrote stay in the thread, source 'legacy';
+// the field and the mirror are gone, C14b.)
 //
 //   GET   live recheck → a slot of the thread's own limit, the reveal's numbers and the
 //         reveal's limiter (60 an hour per person, 300 per tenant, fail-closed), for every

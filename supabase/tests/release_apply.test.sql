@@ -42,8 +42,8 @@ select is(
     where n.nspname in ('public', 'graphql_public') and f.prosrc ~* 'set_config'
       and not exists (select 1 from pg_depend d
                        where d.classid = 'pg_proc'::regclass and d.objid = f.oid and d.deptype = 'e')),
-  'public.apply_release, public.crm_delete_lead_note',
-  'exposed functions calling set_config: apply_release and crm_delete_lead_note (app.acting_for) only');
+  'public.apply_release',
+  'exposed functions calling set_config: apply_release only (C14b took crm_delete_lead_note''s app.acting_for bracket)');
 select is(
   (select string_agg(n.nspname || '.' || f.proname, ', ' order by n.nspname, f.proname)
      from pg_proc f join pg_namespace n on n.oid = f.pronamespace

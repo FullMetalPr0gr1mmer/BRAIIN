@@ -383,6 +383,7 @@ describe('the locked screens the refusals e2e opens', () => {
       '/admin/leads',
       '/admin/leads/board',
       '/admin/maintenance',
+      '/admin/pages',
       '/admin/seo',
       '/admin/settings',
       '/admin/site-health',
@@ -393,7 +394,9 @@ describe('the locked screens the refusals e2e opens', () => {
         "import Refused from '@/components/admin/ui/Refused.astro'",
       );
       expect(page, screen.href).toMatch(/if \(!allowed\) Astro\.response\.status = 403;/);
-      expect(page, screen.href).toContain(`can(session.role, '${screen.cap}') === 'full'`);
+      expect(page, screen.href).toContain(
+        screen.gate ?? `can(session.role, '${screen.cap}') === 'full'`,
+      );
     }
     // An island screen loads its data on mount, so its page has no Refused of its own.
     for (const screen of LOCKED_SCREENS.filter((s) => renderOf(s) === 'island')) {

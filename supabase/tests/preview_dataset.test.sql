@@ -13,7 +13,8 @@
 --   2. the CMS roles read their tenant's pending changes (content_drafts); a `sales` claim
 --      and another tenant read none, and anon holds no privilege;
 --   3. anon's column grants on testimonials, media_assets, disciplines, service_cases,
---      faq_items (0098) and site_integrations (0105) equal the literal in _anon_columns() below,
+--      faq_items (0098) and site_integrations (0105, and 0114's GA4 id) equal the literal in
+--      _anon_columns() below,
 --      and the other 17 tables are granted to
 --      anon whole; staff also read _dataset_only_columns() (a quote's consent record);
 --   4. the column defaults a pending create starts from equal _create_defaults() below;
@@ -56,7 +57,7 @@ create function _anon_columns() returns table (tbl text, cols text) language sql
     ('faq_items', 'id,tenant_id,question,answer,status,sort_order'),
     ('media_assets', 'id,tenant_id,kind,provider,storage_path,width,height,alt,stream_uid,mime_type,updated_at'),
     ('service_cases', 'id,tenant_id,service_id,portfolio_id,title,context,problems,results,status,published_at,updated_at'),
-    ('site_integrations', 'tenant_id,search_console_token'),
+    ('site_integrations', 'tenant_id,search_console_token,ga4_measurement_id'),
     ('testimonials', 'id,tenant_id,slug,quote,author_name,author_role,client_id,portfolio_id,avatar_media_id,placements,status,sort_order,published_at,updated_at')
 $$;
 
@@ -284,7 +285,7 @@ insert into public.site_profile (tenant_id, brand_name, contact_email, location)
 values (app.default_tenant_id(), '{"en":"Fixture","ar":"تجربة"}', 'hello@example.test', '{"en":"Riyadh","ar":"الرياض"}')
 on conflict (tenant_id) do nothing;
 insert into public.seo_defaults (tenant_id) values (app.default_tenant_id()) on conflict (tenant_id) do nothing;
--- The verification code a visitor reads (0105); the GA4 id beside it is staff-only.
+-- The verification code a visitor reads (0105), and the GA4 id beside it (0114).
 insert into public.site_integrations (tenant_id, search_console_token, ga4_measurement_id)
 values (app.default_tenant_id(), 'PreviewCode_0123456', 'G-PREVIEW1')
 on conflict (tenant_id) do update
