@@ -361,7 +361,6 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
       });
       if ('draft' in created) announcePending();
       setAdding(false);
-      changed();
       await load();
       // The open form is left only as a switch leaves it: saved on the way (releases on) or
       // asked first (releases off); "Stay" keeps it open, the new section listed.
