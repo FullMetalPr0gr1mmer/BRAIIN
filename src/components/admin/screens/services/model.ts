@@ -90,6 +90,22 @@ export function eyeTarget(status: unknown): Status | null {
   return null;
 }
 
+/**
+ * What the eye says when its write is refused (R12b review). A 409 from someone else's save
+ * says so, over the list read again; every other refusal says its own words (`described`,
+ * client.ts describeError), a 409 `releases-off` included: publishing was switched off under
+ * the screen, and "someone else changed this" would be untrue.
+ */
+export function eyeRefusal(
+  noun: 'service' | 'discipline',
+  refusal: { readonly status: number; readonly error: string } | null,
+  described: string,
+): string {
+  return refusal?.status === 409 && refusal.error !== 'releases-off'
+    ? `Someone else changed this ${noun}. The list has been reloaded: try again.`
+    : `It was not changed. ${described}`;
+}
+
 /** What the eye says it does, for its accessible name: "Hide Branding", "Show Logo". */
 export function eyeLabel(row: Row, name: string): string {
   return `${isShown(row) ? 'Hide' : 'Show'} ${name}`;

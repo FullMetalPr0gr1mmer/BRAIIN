@@ -14,6 +14,7 @@ import {
   bySort,
   clipWords,
   eyeLabel,
+  eyeRefusal,
   eyeTarget,
   isShown,
   leadsCount,
@@ -174,6 +175,7 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
     const byId = new Map(before.map((row) => [row.id, row]));
     setServices(order.flatMap((rowId) => (byId.has(rowId) ? [byId.get(rowId)!] : [])));
     setError('');
+    let failure = '';
     try {
       await adminFetch(stagedUrl('/api/admin/services/reorder', staged), {
         method: 'POST',
@@ -182,9 +184,12 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
       toast('Order updated.', 'ok');
     } catch (err) {
       setServices(before);
-      setError(`The order was not saved. ${describeError(err)}`);
+      failure = `The order was not saved. ${describeError(err)}`;
     }
+    // The list is read again first (its read clears the message), then the refusal is said
+    // (R12b review: said before the read, it lasted one round trip).
     await load();
+    if (failure) setError(failure);
   }
 
   async function toggle(row: Row) {
@@ -193,6 +198,7 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
     const name = nameOf(row);
     setWorking(true);
     setError('');
+    let failure = '';
     try {
       await adminFetch(`/api/admin/services/${row.id}`, {
         method: 'PATCH',
@@ -200,15 +206,18 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
       });
       toast(next === 'draft' ? `${name} is hidden.` : `${name} is on the site.`, 'ok');
     } catch (err) {
-      setError(
-        err instanceof AdminApiError && err.info.status === 409 && err.info.error !== 'releases-off'
-          ? 'Someone else changed this service. The list has been reloaded: try again.'
-          : `It was not changed. ${describeError(err)}`,
+      failure = eyeRefusal(
+        'service',
+        err instanceof AdminApiError ? err.info : null,
+        describeError(err),
       );
     } finally {
       setWorking(false);
+      // The list is read again first (its read clears the message), then the refusal is said
+      // (R12b review: said before the read, it lasted one round trip).
       await load();
     }
+    if (failure) setError(failure);
   }
 
   const thumb =

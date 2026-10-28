@@ -336,3 +336,74 @@ describe('a create made in a drawer or a modal says so (SaveTarget `staged`)', (
     expect(checked).toBeGreaterThanOrEqual(14);
   });
 });
+
+// ---- a refused list write is said, and stays said -------------------------------------------
+
+describe('a refused list write is said after the list is read again (R12b review)', () => {
+  /** The body of `async function name(…) {…}` in `text`, its braces balanced. */
+  function handler(text: string, name: string): string {
+    const at = text.indexOf(`async function ${name}(`);
+    if (at < 0) throw new Error(`no handler ${name}`);
+    const open = text.indexOf(') {', at) + 2;
+    let depth = 0;
+    for (let i = open; i < text.length; i += 1) {
+      if (text[i] === '{') depth += 1;
+      if (text[i] === '}' && --depth === 0) return text.slice(open, i + 1);
+    }
+    throw new Error(`unbalanced handler ${name}`);
+  }
+
+  // Each list's load() clears its message once it has read, so a handler that re-reads after
+  // a write says why the write failed only after that read (said before it, the message lasted
+  // one round trip: the eye's releases-off words never showed on a discipline's page, and a
+  // refused move or copy on a collection screen was silent).
+  const HANDLERS: Record<string, string[]> = {
+    'src/components/admin/screens/services/DisciplinePage.tsx': ['commitOrder', 'toggle'],
+    'src/components/admin/screens/services/ServicesOverview.tsx': ['commitOrder', 'toggle'],
+    'src/components/admin/screens/collection/CollectionScreen.tsx': ['commitOrder', 'duplicate'],
+    'src/components/admin/screens/projects/ProjectsList.tsx': ['move'],
+    'src/components/admin/screens/resources/ResourceTable.tsx': ['move', 'remove'],
+  };
+
+  it('no message is set before the read that would clear it', () => {
+    for (const [file, names] of Object.entries(HANDLERS)) {
+      for (const name of names) {
+        const body = handler(source(file), name);
+        const read = body.lastIndexOf('await load()');
+        expect(read, `${file} ${name}`).toBeGreaterThan(-1);
+        const early = [...body.matchAll(/setError\((?!'')/g)]
+          .filter((match) => match.index! < read)
+          .map((match) => body.slice(match.index!, match.index! + 40));
+        expect(early, `${file} ${name}`).toEqual([]);
+      }
+    }
+  });
+
+  it('the eye’s refusal: publishing switched off says so, never “someone else”', async () => {
+    const { eyeRefusal } = await import('@/components/admin/screens/services/model');
+    const { AdminApiError, describeError } = await import('@/lib/admin/client');
+    const off = new AdminApiError({ status: 409, error: 'releases-off' });
+    expect(eyeRefusal('service', off.info, describeError(off))).toBe(
+      'It was not changed. Publishing was switched off. Reload to edit the live site.',
+    );
+    const conflict = new AdminApiError({ status: 409, error: 'conflict' });
+    expect(eyeRefusal('discipline', conflict.info, describeError(conflict))).toBe(
+      'Someone else changed this discipline. The list has been reloaded: try again.',
+    );
+    const forbidden = new AdminApiError({ status: 403, error: 'forbidden' });
+    expect(eyeRefusal('service', forbidden.info, describeError(forbidden))).toBe(
+      'It was not changed. Your role does not allow that.',
+    );
+    expect(eyeRefusal('service', null, describeError(new Error('Network down')))).toBe(
+      'It was not changed. Network down',
+    );
+    // Both Services screens say it through this one helper.
+    for (const file of [
+      'src/components/admin/screens/services/DisciplinePage.tsx',
+      'src/components/admin/screens/services/ServicesOverview.tsx',
+    ]) {
+      expect(source(file), file).toMatch(/failure = eyeRefusal\(/);
+      expect(source(file), file).not.toContain('Someone else changed this');
+    }
+  });
+});

@@ -182,9 +182,10 @@ export default function ResourceTable({
       } else {
         toast(`${ui.singular} deleted.`, 'ok');
       }
-      if (result.kvSynced === false) setError(EDGE_NOT_SYNCED);
       setSyncEpoch((n) => n + 1);
       await load();
+      // After the read, which clears the message (R12b review: said before it, it was gone).
+      if (result.kvSynced === false) setError(EDGE_NOT_SYNCED);
     } catch (err) {
       // Errors stay inline, never in a toast — they must not auto-dismiss.
       setError(describeError(err));

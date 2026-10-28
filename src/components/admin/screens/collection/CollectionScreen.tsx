@@ -157,6 +157,7 @@ export default function CollectionScreen({
     const byId = new Map(before.map((row) => [row.id, row]));
     setRows(order.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
     setError('');
+    let failure = '';
     try {
       const moved = await adminFetch<Record<string, unknown>>(
         stagedUrl(`/api/admin/${def.slug}/reorder`, staged),
@@ -167,15 +168,19 @@ export default function CollectionScreen({
       toast('Order updated.', 'ok');
     } catch (err) {
       setRows(before);
-      setError(`The order was not saved. ${describeError(err)}`);
+      failure = `The order was not saved. ${describeError(err)}`;
     }
+    // The list is read again first (its read clears the message), then the refusal is said
+    // (R12b review: said before the read, it lasted one round trip).
     await load();
+    if (failure) setError(failure);
   }
 
   async function duplicate(row: Row) {
     if (!def.copy?.(row) || !rows) return;
     setWorking(true);
     setError('');
+    let failure = '';
     try {
       const full = await adminFetch<Record<string, unknown>>(`/api/admin/${def.slug}/${row.id}`);
       const taken = new Set(rows.map((r) => String(r['slug'] ?? '')));
@@ -205,11 +210,14 @@ export default function CollectionScreen({
       toast(`Copied as a draft.`, 'ok');
       setFocusId(newId);
     } catch (err) {
-      setError(`It was not copied. ${describeError(err)}`);
+      failure = `It was not copied. ${describeError(err)}`;
     } finally {
       setWorking(false);
+      // The list is read again first (its read clears the message), then the refusal is said
+      // (R12b review: said before the read, it lasted one round trip).
       await load();
     }
+    if (failure) setError(failure);
   }
 
   // The title link opens the drawer in place; a modified click keeps the browser's own.

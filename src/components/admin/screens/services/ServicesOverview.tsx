@@ -15,6 +15,7 @@ import {
   ORDER_STEP,
   bySort,
   eyeLabel,
+  eyeRefusal,
   eyeTarget,
   groupServices,
   hideDisciplineQuestion,
@@ -133,6 +134,7 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
     const byId = new Map(before.map((row) => [row.id, row]));
     setDisciplines(order.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])));
     setError('');
+    let failure = '';
     try {
       await adminFetch(stagedUrl('/api/admin/disciplines/reorder', staged), {
         method: 'POST',
@@ -141,9 +143,12 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
       toast('Order updated.', 'ok');
     } catch (err) {
       setDisciplines(before);
-      setError(`The order was not saved. ${describeError(err)}`);
+      failure = `The order was not saved. ${describeError(err)}`;
     }
+    // The list is read again first (its read clears the message), then the refusal is said
+    // (R12b review: said before the read, it lasted one round trip).
     await load();
+    if (failure) setError(failure);
   }
 
   async function toggle(row: Row) {
@@ -161,6 +166,7 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
     }
     setWorking(true);
     setError('');
+    let failure = '';
     try {
       await adminFetch(`/api/admin/disciplines/${row.id}`, {
         method: 'PATCH',
@@ -168,15 +174,18 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
       });
       toast(next === 'draft' ? `${name} is hidden.` : `${name} is on the site.`, 'ok');
     } catch (err) {
-      setError(
-        err instanceof AdminApiError && err.info.status === 409 && err.info.error !== 'releases-off'
-          ? 'Someone else changed this discipline. The list has been reloaded: try again.'
-          : `It was not changed. ${describeError(err)}`,
+      failure = eyeRefusal(
+        'discipline',
+        err instanceof AdminApiError ? err.info : null,
+        describeError(err),
       );
     } finally {
       setWorking(false);
+      // The list is read again first (its read clears the message), then the refusal is said
+      // (R12b review: said before the read, it lasted one round trip).
       await load();
     }
+    if (failure) setError(failure);
   }
 
   const lastOrder = rows.reduce((max, row) => Math.max(max, Number(row['sort_order'] ?? 0)), 0);
