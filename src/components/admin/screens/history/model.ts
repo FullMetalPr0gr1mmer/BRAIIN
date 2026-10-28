@@ -1,6 +1,6 @@
 // The history drawer's words and the answer it reads (Admin v2 R13; releases.md §7 "History
-// drawer"; GET /api/admin/history, R10). Pure, so tests/lib/historyDrawer.spec.ts holds every
-// line (P-12: plain, warm, no dashes).
+// drawer"; GET /api/admin/history, R10). Pure, so tests/lib/versionsPage.spec.ts holds its
+// lines (P-12: plain, warm, no dashes) and tests/admin/backups.e2e.ts opens the drawer.
 
 interface Named {
   id: string;

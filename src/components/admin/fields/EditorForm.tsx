@@ -473,6 +473,29 @@ export default function EditorForm({
   // The stored record's address: a new record has none, and an unsaved edit moves nothing.
   const href = save.isNew ? null : (publicHref?.(save.saved) ?? null);
 
+  // R13: History, in the form's action bar; while a panel tab is current (the form hidden, as
+  // SEO's editors open on the SEO tab) it follows the panel instead, so every tab reaches it
+  // (review R13-C1). Its name says whose history it opens ("History of Logo Design").
+  const historyButton =
+    history && !save.isNew ? (
+      <button
+        type="button"
+        className="btn"
+        aria-haspopup="dialog"
+        onClick={() => {
+          // A pending change typed but not saved yet is saved first (P-5's blur rule).
+          save.flush?.();
+          setHistoryMounted(true);
+          setHistoryOpen(true);
+        }}
+      >
+        History
+        {/* Named for its record: on a service's Case study tab the case's own History sits
+            beside the service's. */}
+        <span className="visually-hidden"> of {recordWords(save.saved, noun)}</span>
+      </button>
+    ) : null;
+
   const form = (
     // noValidate: an input of the hidden language must never block a save silently (a
     // browser cannot show its bubble on a hidden input); the server validates, and its
@@ -540,21 +563,7 @@ export default function EditorForm({
             Open on site
           </a>
         )}
-        {history && !save.isNew && (
-          <button
-            type="button"
-            className="btn"
-            aria-haspopup="dialog"
-            onClick={() => {
-              // A pending change typed but not saved yet is saved first (P-5's blur rule).
-              save.flush?.();
-              setHistoryMounted(true);
-              setHistoryOpen(true);
-            }}
-          >
-            History
-          </button>
-        )}
+        {historyButton}
         {!readOnly && (
           <SaveStatus
             state={save.status}
@@ -609,6 +618,9 @@ export default function EditorForm({
           </div>
         );
       })}
+      {current?.panel && historyButton && (
+        <div className="toolbar form-actions">{historyButton}</div>
+      )}
     </div>
   ) : (
     form

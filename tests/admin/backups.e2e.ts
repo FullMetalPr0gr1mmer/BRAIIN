@@ -143,7 +143,9 @@ for (const role of ['admin', 'seo'] as const) {
       const id = await serviceId(page, 'logo');
       await page.setViewportSize({ width: 1280, height: 900 });
       await open(page, `/admin/services/${id}`);
-      const history = page.getByRole('button', { name: 'History', exact: true });
+      // Named for its record ("History of Logo Design"). As SEO the editor opens on the SEO tab,
+      // its form hidden: History follows the panel there (review R13-C1).
+      const history = page.getByRole('button', { name: /^History of / });
       await expect(history).toBeVisible();
       expect(asked).toEqual([]);
 

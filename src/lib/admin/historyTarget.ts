@@ -5,7 +5,7 @@ import type { SaveTarget } from './entitySave';
 // editors know their save target (a kernel resource's slug), not the release registry, which
 // is SERVER ONLY (it binds every type to its resource config); this is the slug → type half of
 // it, written out so the field kit can name the record without the registry.
-// tests/lib/historyTarget.spec.ts holds it equal to the registry: every release-managed
+// tests/lib/versionsPage.spec.ts holds it equal to the registry: every release-managed
 // resource is here under its own slug, and nothing else is.
 //
 // A record that is not release-managed (media, the Style-Finder, a theme's own list) has no
