@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Chips from '@/components/admin/kit/Chips';
 import DataTable, { type DataColumn } from '@/components/admin/kit/DataTable';
 import Icon from '@/components/admin/kit/Icon';
+import PendingBadge, { pendingKindOf } from '@/components/admin/kit/PendingBadge';
 import StatusBadge from '@/components/admin/kit/StatusBadge';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
@@ -10,6 +11,7 @@ import { PAGE_SIZE } from '@/lib/admin/pager';
 import { pageTimeZone, useClock } from '@/components/admin/kit/clock';
 import { clockFor, type Clock } from '@/lib/admin/relTime';
 import { toast } from '@/lib/admin/toast';
+import { announcePending, STAGED_DELETE } from '@/lib/admin/releaseEvents';
 import {
   columnOf,
   uiFor,
@@ -46,6 +48,8 @@ interface ListResponse {
   total: number;
   limit: number;
   offset: number;
+  /** Admin v2 R12: present only on a list read through the release (releases on, R3a). */
+  draftsInvalid?: string[];
 }
 
 export interface ResourceTableProps {
@@ -107,6 +111,9 @@ export default function ResourceTable({
   // Bumped after every delete so the edge status line re-reads (a delete rebuilds the
   // snapshot server-side; the line must not keep showing the old count).
   const [syncEpoch, setSyncEpoch] = useState(0);
+  // Admin v2 R12: the list came through the release (releases on): a delete stages a removal
+  // and a move a new order, so the words say so. Read from the answer, never assumed.
+  const [staged, setStaged] = useState(false);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -121,6 +128,7 @@ export default function ResourceTable({
       );
       setRows(data.rows ?? []);
       setTotal(data.total ?? 0);
+      setStaged(Array.isArray(data.draftsInvalid));
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -138,16 +146,33 @@ export default function ResourceTable({
     // confirms wholesale, at which point destructive actions silently resolve one way
     // or the other. confirmDialog puts initial focus on Cancel.
     const confirmed = await confirmDialog({
-      message: deleteMessage(ui.singular, rowName(row)),
-      confirmLabel: 'Delete',
+      message: staged
+        ? removeMessage(ui.singular, rowName(row))
+        : deleteMessage(ui.singular, rowName(row)),
+      confirmLabel: staged ? 'Remove' : 'Delete',
     });
     if (!confirmed) return;
     setError('');
     try {
-      const result = await adminFetch<{ kvSynced?: boolean }>(`/api/admin/${ui.slug}/${row.id}`, {
+      const result = await adminFetch<{
+        kvSynced?: boolean;
+        pendingRemoval?: boolean;
+        draft?: unknown;
+      }>(`/api/admin/${ui.slug}/${row.id}${staged ? STAGED_DELETE : ''}`, {
         method: 'DELETE',
       });
-      toast(`${ui.singular} deleted.`, 'ok');
+      if ('draft' in result) {
+        // R12: a staged removal (or a pending new item thrown away): nothing left the site.
+        toast(
+          result.pendingRemoval
+            ? `${ui.singular} removal saved. It comes off the site when it is published.`
+            : `${ui.singular} thrown away.`,
+          'ok',
+        );
+        announcePending();
+      } else {
+        toast(`${ui.singular} deleted.`, 'ok');
+      }
       if (result.kvSynced === false) setError(EDGE_NOT_SYNCED);
       setSyncEpoch((n) => n + 1);
       await load();
@@ -174,7 +199,7 @@ export default function ResourceTable({
       // still leave half a swap: the moved row on the archived row's number, the two sharing
       // it until either's Sort order is set (a swap never parts them). A refusal re-reads the
       // list, below.
-      await adminFetch(`/api/admin/${ui.slug}/reorder`, {
+      const moved = await adminFetch<Record<string, unknown>>(`/api/admin/${ui.slug}/reorder`, {
         method: 'POST',
         body: {
           items: [
@@ -183,6 +208,8 @@ export default function ResourceTable({
           ],
         },
       });
+      // R12: a staged reorder answers what it staged; the savebar counts the new order.
+      if ('staged' in moved) announcePending();
       await load();
     } catch (err) {
       // A refused move most often means the list went stale (an item archived or deleted since
@@ -205,8 +232,22 @@ export default function ResourceTable({
           {
             key: first.key,
             label: first.label,
-            // The link says the row's name; a bilingual title's Arabic follows it.
-            render: (row: Row) => secondLine(row[first.key], first),
+            // The link says the row's name; a bilingual title's Arabic follows it. Admin v2 R12:
+            // a row with a pending change (only a list read through the release has one)
+            // wears its badge under it.
+            render: (row: Row) => {
+              const pending = pendingKindOf(row);
+              return (
+                <>
+                  {secondLine(row[first.key], first)}
+                  {pending && (
+                    <div className="cell-secondary">
+                      <PendingBadge kind={pending} />
+                    </div>
+                  )}
+                </>
+              );
+            },
           },
         ]
       : []),
@@ -361,6 +402,14 @@ export function labelled(value: unknown, labels: ReadonlyMap<string, string> | n
 
 // The delete confirmation's words live in lib/admin/editorDelete.ts (the editors use them too).
 export { deleteMessage };
+
+/**
+ * Admin v2 R12: with releases on, Delete stages a removal that goes live with a release (and
+ * "Undo removal" takes it back), so the confirm says what happens instead of "cannot be undone".
+ */
+export function removeMessage(singular: string, name: string): string {
+  return `Remove the ${singular.toLowerCase()} “\u2068${name}\u2069” from the site? The removal is saved as an unpublished change, and nothing leaves the site until it is published.`;
+}
 
 /**
  * The maintenance panel's wording (MaintenancePanel.tsx), reused: the row is committed,

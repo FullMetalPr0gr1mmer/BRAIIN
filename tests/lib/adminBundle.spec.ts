@@ -577,6 +577,73 @@ describe('the leads screens have their own groups (Admin v2 C4b)', () => {
   });
 });
 
+describe('the savebar has its own group (Admin v2 R12)', () => {
+  interface Group {
+    name: string;
+    test: RegExp | ((id: string) => boolean);
+    priority: number;
+  }
+  let groups: Group[] = [];
+  beforeAll(async () => {
+    const config = (await import('../../astro.config.mjs')).default as {
+      vite: { build: { rollupOptions: { output: { codeSplitting: { groups: Group[] } } } } };
+    };
+    groups = [...config.vite.build.rollupOptions.output.codeSplitting.groups].sort(
+      (a, b) => b.priority - a.priority,
+    );
+  });
+  // Equal priorities keep the config's order (Rolldown takes the smaller index first): a
+  // stable sort by priority keeps it too.
+  const claim = (path: string) => {
+    const id = join(process.cwd(), path);
+    return groups.find((g) => (typeof g.test === 'function' ? g.test(id) : g.test.test(id)))?.name;
+  };
+  const priority = (name: string) => groups.find((g) => g.name === name)!.priority;
+
+  it('claims the island and its screen code, which admin-ui (every screen) never does', () => {
+    for (const path of [
+      'src/components/admin/islands/AdminSavebar.tsx',
+      'src/components/admin/screens/release/ReleaseUi.tsx',
+      'src/components/admin/screens/release/Savebar.tsx',
+      'src/components/admin/screens/release/PublishDialog.tsx',
+      'src/components/admin/screens/release/model.ts',
+      'src/components/admin/screens/release/api.ts',
+    ]) {
+      expect(claim(path), path).toBe('admin-release');
+    }
+    // The pieces the lists and editors draw stay where those already are.
+    expect(claim('src/components/admin/kit/PendingBadge.tsx')).toBe('admin-kit');
+    expect(claim('src/components/admin/fields/DraftNotice.tsx')).toBe('admin-fields');
+    expect(claim('src/lib/admin/releaseEvents.ts')).toBe('admin-ui');
+  });
+
+  it('sits below the field kit and above the shared screens group', () => {
+    expect(priority('admin-release')).toBeLessThan(priority('admin-fields'));
+    expect(priority('admin-release')).toBeGreaterThan(priority('admin-screens'));
+  });
+
+  it('no module admin-ui or the field kit claims imports it', () => {
+    const roots = ['src/components/admin', 'src/lib/admin'];
+    const walk = (d: string): string[] =>
+      readdirSync(join(process.cwd(), d), { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? walk(`${d}/${e.name}`)
+          : /\.(ts|tsx)$/.test(e.name)
+            ? [`${d}/${e.name}`]
+            : [],
+      );
+    const offenders = roots
+      .flatMap(walk)
+      .filter((path) => ['admin-ui', 'admin-fields'].includes(claim(path) ?? ''))
+      .filter((path) =>
+        /^import\s+(?!type\b)[^;]*?from\s*['"][^'"]*(screens\/release\/|islands\/AdminSavebar)/m.test(
+          readFileSync(join(process.cwd(), path), 'utf8'),
+        ),
+      );
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('the Services and Projects areas have their own group (Admin v2 U5 + U6)', () => {
   interface Group {
     name: string;

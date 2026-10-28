@@ -17,6 +17,8 @@ import type {
 } from '@/lib/admin/uiSchema';
 import { Field, FieldsReadOnly } from '../FormField';
 import { useRevealListener } from './reveal';
+import DraftNotice from './DraftNotice';
+import VisibilityField, { isItemSchedule, isLifecycleStatus } from './VisibilityField';
 import {
   ArabicGapsProvider,
   ArabicMissingBar,
@@ -55,6 +57,14 @@ import {
 //     capability): the fields inside a disabled <fieldset>, a rich text not editable
 //     (FieldsReadOnly), no Save and no Ctrl/⌘+S, and `readOnlyNote` as a note above the
 //     fields. UX only: the server refuses a write whatever this shows.
+// Admin v2 R12, release mode (`save.mode === 'draft'`, which only the server's answer sets, so
+// with releases off nothing here renders and the form is byte for byte what it was): the
+// pending change at the head of the form (DraftNotice: its badge and words, Discard changes or
+// Undo removal, a conflict's Keep mine / Use the live version / Compare); the per-item Schedule
+// field gone and the status select a "Visible on the site" switch (VisibilityField: a release
+// is scheduled, never one item); the form saving by itself when focus leaves it and on a tab
+// switch (`save.flush`, P-5); a staged removal or a scheduled change read only; "Saved as an
+// unpublished change at 14:05"; "Live version N" or "Not live yet".
 // `publicHref` adds "Open on site" to the action bar when it gives an address, read from the
 // record as saved (`save.saved`), never from unsaved edits: choosing Published, or editing a
 // published post's slug, links nowhere until it is saved. Field groups
@@ -125,6 +135,8 @@ export interface EditorFormProps {
    * the page's h1, and a line under it), for a form with no tabs that is one named card.
    */
   heading?: { title: string; sub?: string | undefined } | undefined;
+  /** Admin v2 R12: the record in words for the discard confirm ("service"). */
+  noun?: string | undefined;
 }
 
 /** The save's errors (fieldErrors.ts keys them `f-…`) under another id prefix. */
@@ -233,13 +245,19 @@ export default function EditorForm({
   panels,
   tabExtras,
   initialTab,
-  readOnly = false,
+  readOnly: readOnlyProp = false,
   readOnlyNote,
   publicHref,
   initialLanguage,
   idPrefix = 'f',
   heading,
+  noun = 'item',
 }: EditorFormProps) {
+  // R12: the server put this record in release mode (its answer carried `draft`).
+  const draftMode = save.mode === 'draft';
+  // A staged removal, or a change a scheduled release holds, is read only until undone.
+  const readOnly =
+    readOnlyProp || (draftMode && (save.pendingRemoval === true || Boolean(save.draft?.releaseId)));
   const formRef = useRef<HTMLFormElement>(null);
   // Errors found here before anything is sent (a number or a date the browser could not
   // read): shown like the server's, cleared by the next attempt.
@@ -253,6 +271,8 @@ export default function EditorForm({
   const choose = (id: string) => {
     setTab(id);
     setOpened((seen) => (seen.has(id) ? seen : new Set([...seen, id])));
+    // R12: a section switch saves a pending change (P-5); a no-op in live mode.
+    save.flush?.();
   };
   // An error link or "Next gap" asks for a field: its tab is shown first, in this turn.
   useRevealListener((id) => {
@@ -323,18 +343,30 @@ export default function EditorForm({
   // A browser-unreadable box's error is keyed by its own (already prefixed) id; the server's
   // are `f-…` and move onto the prefix.
   const errors = local ?? withIdPrefix(save.errors, idPrefix);
-  const renderField = (field: FieldDef) => (
-    <Field
-      key={field.name}
-      field={field}
-      value={save.values[field.name]}
-      values={save.values}
-      onChange={save.set}
-      errors={errors.byId}
-      canAdvanced={canAdvanced}
-      {...(idPrefix === 'f' ? {} : { idPrefix })}
-    />
-  );
+  // R12: in release mode the per-item schedule goes (a release is scheduled, never one item).
+  const shownFields = draftMode ? fields.filter((f) => !isItemSchedule(f)) : fields;
+  const renderField = (field: FieldDef) =>
+    draftMode && isLifecycleStatus(field) ? (
+      <VisibilityField
+        key={field.name}
+        field={field}
+        value={save.values[field.name]}
+        onChange={save.set}
+        idPrefix={idPrefix}
+        errors={errors.byId}
+      />
+    ) : (
+      <Field
+        key={field.name}
+        field={field}
+        value={save.values[field.name]}
+        values={save.values}
+        onChange={save.set}
+        errors={errors.byId}
+        canAdvanced={canAdvanced}
+        {...(idPrefix === 'f' ? {} : { idPrefix })}
+      />
+    );
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (!readOnly) submit();
@@ -387,14 +419,14 @@ export default function EditorForm({
             hidden={t.id !== tab}
           >
             {fieldsBlock(
-              fields.filter((f) => own.has(f.name)),
+              shownFields.filter((f) => own.has(f.name)),
               inTab(own),
             )}
             {tabExtras?.[t.id]}
           </div>
         );
       })
-    : fieldsBlock(fields, groups ?? [], heading);
+    : fieldsBlock(shownFields, groups ?? [], heading);
   if (readOnly) {
     // A disabled fieldset turns every control in it off (a rich text is told separately:
     // a contenteditable ignores it).
@@ -418,12 +450,25 @@ export default function EditorForm({
       noValidate
       onSubmit={onSubmit}
       hidden={current?.panel ? true : undefined}
+      // R12: focus leaving a control saves a pending change (P-5), after the change event
+      // has landed in the form's state. Only in release mode: live mode saves on Save alone.
+      onBlur={draftMode ? () => window.setTimeout(() => save.flush?.(), 0) : undefined}
     >
       <ErrorSummary errors={errors.summary} />
-      {save.message && (
+      {save.message && !save.releasesOff && (
         <p className="msg" data-kind="error" role="alert">
           {save.message}
         </p>
+      )}
+      {save.releasesOff && (
+        // R12: releases were switched off under the form. Nothing was saved; a reload reads
+        // the record live and the editor saves live from then on.
+        <div className="msg editor__conflict" data-kind="error" role="alert">
+          <span>{save.message}</span>
+          <button type="button" onClick={() => void save.reloadTheirs()}>
+            Reload
+          </button>
+        </div>
       )}
       {save.conflict && (
         <div className="msg editor__conflict" data-kind="error" role="alert">
@@ -433,6 +478,7 @@ export default function EditorForm({
           </button>
         </div>
       )}
+      {draftMode && <DraftNotice save={save} fields={fields} noun={noun} backHref={back?.href} />}
       {bilingual && (
         <div className="editor__lang">
           <EditorLanguageSwitch />
@@ -448,7 +494,7 @@ export default function EditorForm({
       <div className="toolbar form-actions">
         {!readOnly && (
           <button type="submit" data-variant="primary" disabled={save.status === 'saving'}>
-            {submitLabel}
+            {save.gone ? 'Save again' : submitLabel}
           </button>
         )}
         {back && (
@@ -461,10 +507,22 @@ export default function EditorForm({
             Open on site
           </a>
         )}
-        {!readOnly && <SaveStatus state={save.status} savedAt={save.savedAt} />}
+        {!readOnly && (
+          <SaveStatus
+            state={save.status}
+            savedAt={save.savedAt}
+            {...(draftMode ? { staged: true } : {})}
+          />
+        )}
         {!save.isNew && (
           <span className="admin-sub">
-            {save.version === 0 ? 'Not saved yet' : `Version ${save.version}`}
+            {draftMode
+              ? save.version === 0
+                ? 'Not live yet'
+                : `Live version ${save.version}`
+              : save.version === 0
+                ? 'Not saved yet'
+                : `Version ${save.version}`}
           </span>
         )}
       </div>

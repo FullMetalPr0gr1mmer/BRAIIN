@@ -106,6 +106,12 @@ const ADMIN_LEADS =
   /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]leads[\\/]|islands[\\/]AdminLead)/;
 const ADMIN_LEADS_LAZY =
   /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]leads[\\/](AddLeadDrawer|EraseLeadDialog)\.tsx$/;
+// The savebar and the publish dialog (Admin v2 R12): the AdminSavebar island and its screen
+// code. Their own group, never in admin-ui (every admin screen loads that, releases on or
+// off): AdminLayout renders the island only while releases are on, so with them off no page
+// downloads it. The kit's gallery (/admin/kit) draws the same pieces over made-up changes.
+const ADMIN_RELEASE =
+  /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]AdminSavebar\.tsx$|screens[\\/]release[\\/])/;
 // The Services and Projects areas (Admin v2 U5 + U6): their five islands and their screens'
 // code, a family of their own (as the leads screens are), so the shared admin-screens chunk
 // (the collections, SEO, the media library, General settings) neither carries them nor is
@@ -250,7 +256,8 @@ export default defineConfig({
                     !ADMIN_EDITOR_SCREENS.test(id) &&
                     !ADMIN_LEADS.test(id) &&
                     !ADMIN_CONTENT.test(id) &&
-                    !ADMIN_PREVIEW.test(id)),
+                    !ADMIN_PREVIEW.test(id) &&
+                    !ADMIN_RELEASE.test(id)),
                 priority: 20,
               },
               {
@@ -281,6 +288,16 @@ export default defineConfig({
                 // use. Below the field kit, so a kit piece they share with it stays there.
                 name: 'admin-leads-lazy',
                 test: ADMIN_LEADS_LAZY,
+                priority: 14,
+              },
+              {
+                // The savebar and the publish dialog (Admin v2 R12): below the field kit, so a
+                // kit piece both use stays there or in admin-ui; above admin-screens, whose path
+                // rule would otherwise take the island and its screen code. Equal to
+                // admin-leads-lazy's priority and after it in this list (Rolldown takes the
+                // smaller index first); the two share no module.
+                name: 'admin-release',
+                test: ADMIN_RELEASE,
                 priority: 14,
               },
               {

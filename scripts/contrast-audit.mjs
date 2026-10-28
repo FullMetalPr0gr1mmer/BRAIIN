@@ -348,6 +348,8 @@ const ADMIN_PAIRS = [
   ['side-label', 'midnight', 4.5, 'sidebar group titles'],
   ['on-dark', 'count', 4.5, 'a count beside a sidebar link'],
   ['on-dark', 'midnight', 4.5, 'brand, hovered link, toast, dark badge and button'],
+  ['on-dark', 'midnight', 4.5, "the savebar's first line and its ghost buttons (R12)"],
+  ['side-text', 'midnight', 4.5, "the savebar's second line (R12)"],
   // Avatar grounds behind white initials
   ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => [
     'on-primary',
@@ -381,6 +383,8 @@ const ADMIN_PAIRS = [
   ]),
   ['ok', 'midnight', 3.0, 'ok dot on a toast'],
   ['warn', 'midnight', 3.0, 'warn dot on a toast'],
+  ['warn', 'midnight', 3.0, "the savebar's dot (R12)"],
+  ['focus-dark', 'midnight', 3.0, 'a focus ring in the savebar (R12)'],
   ['err', 'midnight', 3.0, 'err dot on a toast'],
   ['focus-dark', 'midnight', 3.0, 'info dot on a toast'],
 ];

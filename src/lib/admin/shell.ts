@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AuthContext } from '@/lib/auth/types';
+import { CMS_ROLES, type AuthContext } from '@/lib/auth/types';
 import { getMaintenanceState, type MaintenanceState } from '@/lib/http/maintenance';
 import { COUNTERS } from './counters';
 import { adminEnvironment, type AdminEnvironment } from './environment';
@@ -22,6 +22,13 @@ export { initialsOf } from './initials';
 // same rule a second time. A failed read leaves its item out: the shell is decoration
 // around the page, and a count or a badge is never worth an error screen. Each count is
 // one module in ./counters, registered by the key a link's `count` names.
+//
+// Admin v2 R12: whether releases are on for the tenant (`public.releases_enabled`, 0062: false
+// for any tenant but the caller's), read for a CMS role only, never for Sales (who reads
+// nothing a release holds), in the same parallel batch: one more subrequest on a CMS
+// render. True draws the savebar (AdminLayout); false, a failed read included, draws nothing,
+// so with releases off every admin page is what it was. An editor never reads this: it
+// follows the server's answer on its own route (entitySave.ts).
 
 export interface ShellState {
   displayName: string | null;
@@ -31,6 +38,8 @@ export interface ShellState {
   environment: AdminEnvironment | null;
   /** The bell's unread items (at most the 30 it lists). */
   unread: number;
+  /** Admin v2 R12: releases are on for the tenant: the savebar is drawn (CMS roles only). */
+  releases: boolean;
 }
 
 async function settle<T>(work: () => PromiseLike<T>): Promise<T | null> {
@@ -77,7 +86,8 @@ export async function loadShellState(
     : settle(() => getMaintenanceState(env));
 
   const preloadedName = preload && preload.displayName !== undefined;
-  const [profile, maintenance, environment, feed, ...counts] = await Promise.all([
+  const readsReleases = (CMS_ROLES as readonly string[]).includes(auth.role);
+  const [profile, maintenance, environment, feed, releases, ...counts] = await Promise.all([
     preloadedName
       ? Promise.resolve({ data: { display_name: preload?.displayName ?? null } })
       : settle(() =>
@@ -97,6 +107,9 @@ export async function loadShellState(
             ...(tz ? { tz } : {}),
           }),
         ),
+    readsReleases
+      ? settle(() => sb.rpc('releases_enabled', { p_tenant: auth.tenantId }))
+      : Promise.resolve(null),
     ...wanted.map((key) => settle(() => COUNTERS[key](sb, auth.tenantId))),
   ]);
 
@@ -106,6 +119,7 @@ export async function loadShellState(
     counts: {},
     environment: environment ?? null,
     unread: feed?.unread ?? 0,
+    releases: releases?.error == null && releases?.data === true,
   };
   wanted.forEach((key, index) => {
     const count = counts[index]?.count;

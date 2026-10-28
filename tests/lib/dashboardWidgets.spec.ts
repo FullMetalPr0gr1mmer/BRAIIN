@@ -422,9 +422,11 @@ const MIDDLEWARE = 3;
  * studio's time zone (public.studio_time_zone), which the page and the layout both ask for
  * and studioTimeZone reads once per request (docs/admin-v2/as-built/U9.md). R11 added one, in
  * the shell for every role that publishes: the bell's failed scheduled releases
- * (content_releases, docs/admin-v2/as-built/R11.md).
+ * (content_releases, docs/admin-v2/as-built/R11.md). R12 added one, in the shell for the four
+ * CMS roles: whether releases are on for the tenant (public.releases_enabled), which decides
+ * whether the savebar is drawn (docs/admin-v2/as-built/R12.md); 8 short of 50.
  */
-const MEASURED = { loadDashboard: 28, total: 41 };
+const MEASURED = { loadDashboard: 28, total: 42 };
 
 describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () => {
   // A real request has one clock: the dashboard's "Going live today" and the bell both ask
@@ -535,6 +537,6 @@ describe('the subrequest budget (README P-15: 50 on the Workers Free plan)', () 
     ).join(' ')}] + middleware ${MIDDLEWARE}`;
     expect(page, reads).toBeLessThanOrEqual(MEASURED.loadDashboard);
     expect(zone + own + page + shell + MIDDLEWARE, reads).toBeLessThanOrEqual(MEASURED.total);
-    expect(MEASURED.total).toBeLessThanOrEqual(41);
+    expect(MEASURED.total).toBeLessThanOrEqual(42);
   });
 });

@@ -19,6 +19,7 @@ import {
 import { NotFoundError, ValidationError } from './errors';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import type { OverlayDb } from '@/lib/release/overlayDb';
+import { refuseStagedBody, refuseStagedQuery } from '@/lib/release/releasesOff';
 import {
   stagedCreate,
   stagedDelete,
@@ -402,6 +403,9 @@ export function itemRoutes(config: ResourceConfig): {
       if (entry && (await ctx.releasesEnabled())) {
         return stagedUpdate(config, entry, ctx, requireId(ctx.params), ctx.input);
       }
+      // Releases off: a save made in release mode (an editor open across the switch-off) is
+      // refused, never written live (R12; src/lib/release/releasesOff.ts).
+      if (entry) refuseStagedBody(ctx.input, config.entity);
       const input: unknown = config.updateSchema.parse(ctx.input);
       const { auth, sb, params, audit } = ctx;
       const id = requireId(params);
@@ -508,6 +512,8 @@ export function itemRoutes(config: ResourceConfig): {
       // Releases on (Admin v2 R3): a pending removal, or a pending create discarded.
       const entry = stagedEntry(config);
       if (entry && (await ctx.releasesEnabled())) return stagedDelete(config, entry, ctx, id);
+      // Releases off: a removal asked for in release mode is refused, never a live delete (R12).
+      if (entry) refuseStagedQuery(ctx.url, config.entity);
       // Only a resource with a hook pays the extra read; deleteRow confirms existence on
       // `id` alone for the rest.
       const row = config.afterDelete

@@ -24,6 +24,11 @@ export interface SaveStatusProps {
   savedAt?: Instant | null | undefined;
   /** Replaces "Not saved" with the reason ("Not saved: someone else changed this"). */
   error?: string | undefined;
+  /**
+   * Admin v2 R12: the save made a pending change (release mode): "Saved as an unpublished
+   * change at 14:05". Absent, the words are what they were.
+   */
+  staged?: boolean | undefined;
 }
 
 /** The words for a state. */
@@ -32,22 +37,24 @@ export function saveStatusText(
   savedAt?: Instant | null,
   error?: string,
   clock: Clock = clockFor(pageTimeZone()),
+  staged = false,
 ) {
   if (state === 'saved' && savedAt) {
     const time = clock.formatTime(savedAt);
-    if (time) return `Saved at ${time}`;
+    if (time) return staged ? `Saved as an unpublished change at ${time}` : `Saved at ${time}`;
   }
+  if (state === 'saved' && staged) return 'Saved as an unpublished change';
   if (state === 'error' && error) return error;
   return WORDS[state];
 }
 
-export default function SaveStatus({ state, savedAt, error }: SaveStatusProps) {
+export default function SaveStatus({ state, savedAt, error, staged }: SaveStatusProps) {
   const clock = useClock();
   return (
     <p className="save-status" data-state={state} role="status">
       {state === 'saving' && <Icon name="loader" size={14} className="spin" />}
       {state === 'saved' && <Icon name="check" size={14} />}
-      {saveStatusText(state, savedAt, error, clock)}
+      {saveStatusText(state, savedAt, error, clock, staged === true)}
     </p>
   );
 }

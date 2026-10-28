@@ -104,6 +104,7 @@ export default function ResourceForm({
       readOnly={readOnly}
       readOnlyNote={readOnly ? readOnlyNoteFor(ui.singular, seoAccess, hasSeoTab) : undefined}
       publicHref={ui.publicHref}
+      noun={noun}
     >
       {/* A resource with an edge snapshot (redirects) reports `kvSynced` on every write.
           False is a committed row the public request path does not see yet, said with

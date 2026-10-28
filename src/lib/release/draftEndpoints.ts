@@ -19,11 +19,13 @@ import { DraftConflictError, NotFoundError, ValidationError } from '@/lib/admin/
 import { ENTITY_SEO } from '@/lib/admin/entitySeo';
 import { RELEASE_ENTITY_META } from './areas';
 import { canPublish, requiredCaps, waitingFor, type ReleaseItemRef } from './caps';
-import { derivePatch, dropNoOps, overlayRow } from './overlay';
+import { conflicts, derivePatch, dropNoOps, overlayRow } from './overlay';
 import { RELEASE_REGISTRY, type RegistryEntry } from './registry';
 import { DRAFT_COLUMNS, draftFields, parseDraft, writeDrafts, writtenDraft } from './drafts';
 import type { StoredDraft } from './drafts';
 import { pick, stagedSelect } from './staged';
+import { fieldChanges } from './versions';
+import { columnLabel, editHref, fieldLabels } from './words';
 
 // The draft endpoints (Admin v2 R3b; docs/admin-v2/releases.md §3 "Draft endpoints", §4.5,
 // §4.8): the pending summary, throwing one / mine / selected changes away, and settling a
@@ -211,6 +213,13 @@ async function archivedLive(ctx: Ctx, rows: readonly Row[]): Promise<Set<string>
   return new Set((await Promise.all(reads)).flat());
 }
 
+/** A stored go-live flag: `payload->>visible` is text to PostgREST ('true'), a boolean as JSON. */
+function flagOf(value: unknown): boolean | null {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return null;
+}
+
 /** The pending summary: every change the caller may read, who it waits for, counts by area. */
 export async function pendingSummary(ctx: Ctx): Promise<Row> {
   const { auth, sb } = ctx;
@@ -226,7 +235,7 @@ export async function pendingSummary(ctx: Ctx): Promise<Row> {
     sb
       .from('content_drafts')
       .select(
-        'id,entity_type,entity_id,op,fields,label,version,updated_by,updated_at,release_id,status:payload->>status',
+        'id,entity_type,entity_id,op,fields,label,version,updated_by,updated_at,release_id,status:payload->>status,visible:payload->>visible',
       )
       .eq('tenant_id', auth.tenantId)
       .in('entity_type', readable)
@@ -285,6 +294,9 @@ export async function pendingSummary(ctx: Ctx): Promise<Row> {
     const area = RELEASE_ENTITY_META[entityType].area;
     const mine = updatedBy !== null && updatedBy === auth.userId;
     const label = row['label'];
+    const fields = Array.isArray(row['fields'])
+      ? (row['fields'] as unknown[]).filter((f): f is string => typeof f === 'string')
+      : [];
     items.push({
       draftId: row['id'],
       draftVersion: row['version'],
@@ -293,15 +305,19 @@ export async function pendingSummary(ctx: Ctx): Promise<Row> {
       op: op as DraftOp,
       area,
       label: label && typeof label === 'object' && !Array.isArray(label) ? (label as Row) : null,
-      fields: Array.isArray(row['fields'])
-        ? (row['fields'] as unknown[]).filter((f): f is string => typeof f === 'string')
-        : [],
+      fields,
       updatedBy,
       updatedByName: updatedBy ? (names.get(updatedBy) ?? null) : null,
       updatedAt: String(row['updated_at']),
       scheduled: row['release_id'] !== null && row['release_id'] !== undefined,
       mine,
       ...decision,
+      // R12: what it stores of the lifecycle (its badge: Published, Hidden, Archived, Shown),
+      // where it is edited, and its fields in the editor's words (static per type).
+      status,
+      visible: flagOf(row['visible']),
+      href: editHref(entityType, String(row['entity_id'])),
+      fieldLabels: fieldLabels(entityType, fields),
     });
     const tally = byArea[area];
     tally.total += 1;
@@ -631,4 +647,44 @@ export async function resolveDraft(
     detail: { keepMine: input.keepMine, useLive: input.useLive, ...detail },
   });
   return { ...(result.row ?? { [entry.key]: draft.entity_id }), draft: result.draft };
+}
+
+// ---- GET /api/admin/drafts/[id]/compare ------------------------------------------------------
+
+/**
+ * Compare (Admin v2 R12; releases.md §7 "Conflicts"): per column the live site moved since the
+ * change began (R3's base rule: live no longer equals the base), what live holds now and what
+ * the change writes, as plain or bilingual text (`fieldChanges`, R10: 300 characters at most,
+ * a consent record and anything else only "changed"). Read under the person's RLS, for a role
+ * that reads the type in the admin; nothing is written. A row gone under the change answers
+ * `removed: true` (Discard is the way out).
+ */
+export async function compareDraft(ctx: Ctx, id: string | undefined): Promise<Row | Response> {
+  const { auth } = ctx;
+  const draft = await loadDraftById(ctx, id);
+  const type = draft.entity_type;
+  const entry = RELEASE_REGISTRY[type];
+  if (!mayRead(auth.role, entry)) return refuse(entry.readCaps[0]!, [draft.id]);
+  if (draft.op !== 'update') {
+    throw new ValidationError(
+      'Only a change to something already on the site can conflict with it.',
+      'id',
+    );
+  }
+  const live = await readLiveOf(ctx, entry, draft);
+  if (!live) return { draftId: draft.id, draftVersion: draft.version, removed: true, columns: [] };
+  let patch: Row;
+  try {
+    patch = derivePatch(entry, 'update', draft.payload).patch;
+  } catch {
+    throw new ValidationError(UNREADABLE);
+  }
+  const moved = conflicts(draft.base, live, patch);
+  const columns = fieldChanges(pick(live, moved), pick(patch, moved)).map((change) => ({
+    column: change.column,
+    label: columnLabel(type, change.column),
+    kind: change.kind,
+    ...(change.kind === 'changed' ? {} : { live: change.before, yours: change.after }),
+  }));
+  return { draftId: draft.id, draftVersion: draft.version, removed: false, columns };
 }

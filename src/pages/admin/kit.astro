@@ -23,6 +23,7 @@ import { BADGE_TONES, CONTENT_STATUSES, NOTE_TONES } from '@/lib/admin/tones';
 import { offsetOf, pageInfo, pageParam, PAGE_SIZE } from '@/lib/admin/pager';
 import { KIT_TAB_IDS, KIT_TAB_PARAM } from '@/components/admin/screens/kit/samples';
 import { tabFromParam } from '@/lib/admin/roving';
+import { CMS_ROLES } from '@/lib/auth/types';
 
 export const prerender = false;
 
@@ -36,6 +37,11 @@ export const prerender = false;
 // address. Server primitives are drawn here; the stateful pieces are the AdminKit island.
 
 const url = Astro.url;
+// Admin v2 R12: the Publishing card draws the savebar and the publish dialog over made-up
+// changes, as the signed-in role would see them; Sales reads nothing a release holds, so it
+// gets no card.
+const role = Astro.locals.session?.role;
+const publishing = role && (CMS_ROLES as readonly string[]).includes(role) ? role : null;
 
 // A list of 60 made-up rows, paged by `?page=` like every server list. The page the URL
 // names is clamped to one that exists (pageInfo), as ServerTable's range and pager are:
@@ -282,5 +288,6 @@ const hour = 3_600_000;
   <AdminKit
     client:load
     tab={tabFromParam(url.searchParams.get(KIT_TAB_PARAM), KIT_TAB_IDS, 'content')}
+    publishing={publishing}
   />
 </AdminLayout>

@@ -10,6 +10,7 @@ import Sidebar from '@/components/admin/ui/Sidebar.astro';
 import Topbar from '@/components/admin/ui/Topbar.astro';
 import PageHead from '@/components/admin/ui/PageHead.astro';
 import AdminChrome from '@/components/admin/islands/AdminChrome';
+import AdminSavebar from '@/components/admin/islands/AdminSavebar';
 import { paletteGroupsFor } from '@/lib/admin/paletteSources';
 import { pageGuideFor } from '@/lib/admin/help/pageGuides';
 import type { AdminStylesheet } from '@/lib/admin/stylesheets';
@@ -27,6 +28,8 @@ import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
 // F8 adds the personal layer: the environment pill, the bell and the account chip, whose
 // drawers the chrome island opens (each a link to its no-JS page as well). U16 adds the
 // help centre: the topbar's "?" and, where the screen has one, the page head's "Guide".
+// R12 adds the savebar (and the publish dialog) after <main>, only while the shell reads
+// releases on (never for Sales): with releases off no page carries its markup or its script.
 
 interface Props {
   title: string;
@@ -75,7 +78,14 @@ const studioTz = session ? await studioTimeZone(Astro.locals) : DEFAULT_TIME_ZON
 const shell: ShellState =
   app && session && supabase
     ? await loadShellState(supabase, session, nav, env, preload, studioTz)
-    : { displayName: null, maintenance: false, counts: {}, environment: null, unread: 0 };
+    : {
+        displayName: null,
+        maintenance: false,
+        counts: {},
+        environment: null,
+        unread: 0,
+        releases: false,
+      };
 const initials = session ? initialsOf(shell.displayName, session.email) : '';
 const account = session ? accountViewFor(session, shell.displayName) : null;
 ---
@@ -154,6 +164,13 @@ const account = session ? accountViewFor(session, shell.displayName) : null;
       }
       <slot />
     </main>
+
+    {
+      /* The savebar and the publish dialog (Admin v2 R12): releases on, a CMS role. After
+         <main> in the DOM (ui.md §2.10); `client:idle`, as nothing in it is needed before
+         the page is usable, and its first state is read when it loads. */
+      app && session && shell.releases && <AdminSavebar client:idle role={session.role} />
+    }
 
     <!--
       The toast live region is server-rendered, not created on demand: a live region

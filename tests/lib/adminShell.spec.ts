@@ -193,6 +193,75 @@ describe('loadShellState', () => {
   });
 });
 
+describe('the release flag (Admin v2 R12: whether the savebar is drawn)', () => {
+  /** A client that records every rpc and answers `releases_enabled` as given. */
+  function flagClient(answer: { data?: unknown; error?: unknown }) {
+    const { sb } = fakeSupabase({});
+    const calls: { fn: string; args: unknown }[] = [];
+    (sb as unknown as { rpc: unknown }).rpc = async (fn: string, args: unknown) => {
+      calls.push({ fn, args });
+      return fn === 'releases_enabled'
+        ? { data: answer.data ?? null, error: answer.error ?? null }
+        : { data: null, error: null };
+    };
+    return { sb, calls };
+  }
+
+  it('is read once, for the caller’s tenant, by every CMS role', async () => {
+    for (const role of ['admin', 'content_creator', 'seo', 'developer'] as const) {
+      const { sb, calls } = flagClient({ data: true });
+      const state = await loadShellState(sb, auth(role), visibleNav(role), kv(null));
+      expect(state.releases, role).toBe(true);
+      expect(
+        calls.filter((c) => c.fn === 'releases_enabled'),
+        role,
+      ).toEqual([{ fn: 'releases_enabled', args: { p_tenant: 't-1' } }]);
+    }
+  });
+
+  it('is never read for Sales, who reads nothing a release holds', async () => {
+    const { sb, calls } = flagClient({ data: true });
+    const state = await loadShellState(sb, auth('sales'), visibleNav('sales'), kv(null));
+    expect(state.releases).toBe(false);
+    expect(calls.map((c) => c.fn)).not.toContain('releases_enabled');
+  });
+
+  it('draws nothing unless the database says true: off, a failure, anything else', async () => {
+    for (const answer of [
+      { data: false },
+      { data: null },
+      { data: 'true' },
+      { error: { message: 'x' } },
+    ]) {
+      const { sb } = flagClient(answer);
+      const state = await loadShellState(sb, auth('admin'), visibleNav('admin'), kv(null));
+      expect(state.releases, JSON.stringify(answer)).toBe(false);
+    }
+  });
+
+  it('the roles it reads for are exactly those that read a release-managed type', async () => {
+    const { PENDING_ANY_CAP } = await import('@/lib/release/draftEndpoints');
+    const { ROLE_CAPS } = await import('@/lib/authz/matrix');
+    const { ROLES, CMS_ROLES } = await import('@/lib/auth/types');
+    for (const role of ROLES) {
+      const reads = PENDING_ANY_CAP.some((cap) =>
+        ['full', 'view', 'meta'].includes(ROLE_CAPS[role][cap]),
+      );
+      expect((CMS_ROLES as readonly string[]).includes(role), role).toBe(reads);
+    }
+  }, 60_000);
+
+  it('the layout draws the savebar only on that flag, after <main>', async () => {
+    const { readFileSync } = await import('node:fs');
+    const layout = readFileSync('src/layouts/AdminLayout.astro', 'utf8');
+    expect(layout).toMatch(
+      /<\/main>[\s\S]*app && session && shell\.releases && <AdminSavebar client:idle role=\{session\.role\} \/>/,
+    );
+    // The import (its name and its path) and the one place it is drawn.
+    expect(layout.match(/AdminSavebar/g)).toHaveLength(3);
+  });
+});
+
 describe('the counters registry (src/lib/admin/counters)', () => {
   it('holds exactly the counts the menu shows, each shown by a link', () => {
     // Pinned, not derived: a counter dropped from the registry must fail here.

@@ -18,6 +18,7 @@ import {
   DiscardRequestSchema,
   DryRunReportSchema,
   IntakeRequestSchema,
+  CompareResultSchema,
   PendingItemSchema,
   ResolveRequestSchema,
   DRAFT_STALE_DAYS,
@@ -777,10 +778,44 @@ describe('the draft endpoints and the intake switch (R3b)', () => {
       publishableByMe: true,
       requiredCaps: ['services.write', 'content.publish'],
       waitingFor: ['admin', 'content_creator'],
+      status: null,
+      visible: null,
+      href: `/admin/services/${uuid(2)}`,
+      fieldLabels: ['Title'],
     };
     expect(PendingItemSchema.safeParse(item).success).toBe(true);
+    expect(PendingItemSchema.safeParse({ ...item, href: null }).success).toBe(true);
     expect(PendingItemSchema.safeParse({ ...item, entityType: 'lead' }).success).toBe(false);
     expect(PendingItemSchema.safeParse({ ...item, payload: {} }).success).toBe(false);
+    // R12's two additions are required: an answer without them is not the summary's.
+    const { href: _href, fieldLabels: _labels, ...without } = item;
+    expect(PendingItemSchema.safeParse(without).success).toBe(false);
+  });
+
+  it('a comparison (R12): live and yours per moved column, nothing else', () => {
+    const answer = {
+      draftId: uuid(1),
+      draftVersion: 2,
+      removed: false,
+      columns: [
+        {
+          column: 'title',
+          label: 'Title',
+          kind: 'bilingual',
+          live: { en: 'A' },
+          yours: { en: 'B' },
+        },
+        { column: 'consent_reference', label: 'Consent reference', kind: 'changed' },
+      ],
+    };
+    expect(CompareResultSchema.safeParse(answer).success).toBe(true);
+    expect(CompareResultSchema.safeParse({ ...answer, base: {} }).success).toBe(false);
+    expect(
+      CompareResultSchema.safeParse({
+        ...answer,
+        columns: [{ column: 'title', label: 'Title', kind: 'html' }],
+      }).success,
+    ).toBe(false);
   });
 });
 
