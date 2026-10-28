@@ -65,6 +65,9 @@ export interface PreviewColumnProps {
 
 type FrameState = 'loading' | 'ready' | 'failed';
 
+/** Whether the column is laid out (not inside a `display: none` box). */
+const isShown = (el: HTMLElement | null) => el !== null && el.getClientRects().length > 0;
+
 export default function PreviewColumn({
   path,
   title,
@@ -144,11 +147,17 @@ export default function PreviewColumn({
     for (const message of followUp(shown.listed, selected, onPage)) channel.current?.send(message);
   }, [state, shown, selected, onPage]);
 
-  // After a save: reload once the burst settles. Without the bridge, a new frame.
+  // After a save: reload once the burst settles. Without the bridge, a new frame. While the
+  // column is hidden (the fields shown on a narrow screen) the reload waits until it is shown
+  // again, so a save does not ask the Worker for a preview nobody sees (P-15).
   const firstRevision = useRef(revision);
+  const stale = useRef(false);
   useEffect(() => {
     if (revision === firstRevision.current) return;
-    const timer = window.setTimeout(() => reload(), RELOAD_DELAY_MS);
+    const timer = window.setTimeout(() => {
+      if (isShown(areaRef.current)) reload();
+      else stale.current = true;
+    }, RELOAD_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [revision]);
 
@@ -177,6 +186,10 @@ export default function PreviewColumn({
     const frame = frameRef.current;
     if (!area || !box || !frame) return;
     const apply = () => {
+      if (stale.current && isShown(area)) {
+        stale.current = false;
+        reload();
+      }
       const fit = fitFrame({ width: area.clientWidth, height: area.clientHeight }, device);
       box.style.width = `${fit.boxWidth}px`;
       box.style.height = `${fit.boxHeight}px`;

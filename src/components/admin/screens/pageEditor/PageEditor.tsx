@@ -449,10 +449,15 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
       ? { entityType: 'page', entityId: page.id, name: 'Page details' }
       : null;
 
-  // The live preview (E2): only for a page an address of the site shows; drawn once it is on
-  // screen (from 1280 px, or Preview chosen below).
+  // The live preview (E2): only for a page an address of the site shows; mounted the first time
+  // it is on screen (from 1280 px, or Preview chosen below), then kept: hidden by CSS while the
+  // fields are shown, so switching back does not load the page again.
   const hasPreview = Boolean(page.path);
-  const showPreview = hasPreview && wide !== null && (wide || view === 'preview');
+  const onScreen = hasPreview && wide !== null && (wide || view === 'preview');
+  const [previewMounted, setPreviewMounted] = useState(false);
+  useEffect(() => {
+    if (onScreen) setPreviewMounted(true);
+  }, [onScreen]);
   const previewSections = (rows ?? []).map((row) => ({
     id: row.id,
     name: sectionName(row),
@@ -617,7 +622,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
             </div>
             {!page.path ? (
               <Note>{NO_PREVIEW}</Note>
-            ) : showPreview ? (
+            ) : previewMounted ? (
               <Suspense
                 fallback={
                   <p className="pv-col__loading" role="status">
