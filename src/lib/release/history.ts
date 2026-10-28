@@ -22,9 +22,24 @@ import { namesOf, type Person } from './versions';
 // The person must read the entity's area (its registry read capabilities, as the editor's own
 // gate); history rows are CMS staff's under RLS (content_versions_read, 0001/0038). Team members
 // keep no history (owner item O-12): their list is empty.
+//
+// The two singletons (the identity, the SEO defaults) are keyed by the tenant: their request
+// names no entity (the schema refuses one), and the session's tenant is read instead (Admin v2
+// R14-prep), so a client never chooses whose site it reads.
 
 type Row = Record<string, unknown>;
 type Ctx = AdminRouteContext<HistoryQuery>;
+
+/** The entity a history request names: the session's tenant for a singleton (key `tenant_id`). */
+export function historyEntityId(
+  auth: AuthContext,
+  entry: { key: string },
+  entityId: string | undefined,
+): string {
+  if (entry.key === 'tenant_id') return auth.tenantId;
+  if (entityId === undefined) throw new Error('history: no entity named');
+  return entityId;
+}
 
 /** Ledger items read per query of a page's history (a page's and its sections' changes). */
 const PAGE_ITEMS_MAX = 1000;
@@ -66,6 +81,7 @@ export async function entityHistory(ctx: Ctx): Promise<unknown> {
   if (!readsEntity(auth.role, entry)) {
     throw new AuthorizationError(entry.readCaps.join('|'), `history of ${entry.entityType}`);
   }
+  const entityId = historyEntityId(auth, entry, input.entityId);
   if (input.scope === 'page') {
     if (entry.entityType !== 'page') {
       return json(
@@ -78,7 +94,7 @@ export async function entityHistory(ctx: Ctx): Promise<unknown> {
         422,
       );
     }
-    return pageHistory(ctx);
+    return pageHistory(ctx, entityId);
   }
 
   let versions = sb
@@ -86,7 +102,7 @@ export async function entityHistory(ctx: Ctx): Promise<unknown> {
     .select('seq,version,created_at,created_by,release_id')
     .eq('tenant_id', auth.tenantId)
     .eq('entity_type', entry.entityType)
-    .eq('entity_id', input.entityId);
+    .eq('entity_id', entityId);
   if (input.before !== undefined) versions = versions.lt('seq', input.before);
   const [enabled, page, live, pending, names] = await Promise.all([
     ctx.releasesEnabled(),
@@ -95,14 +111,14 @@ export async function entityHistory(ctx: Ctx): Promise<unknown> {
       .from(entry.table)
       .select(entry.key)
       .eq('tenant_id', auth.tenantId)
-      .eq(entry.key, input.entityId)
+      .eq(entry.key, entityId)
       .maybeSingle(),
     sb
       .from('content_drafts')
       .select('id,version,op,fields,updated_by,updated_at,release_id,origin_kind')
       .eq('tenant_id', auth.tenantId)
       .eq('entity_type', entry.entityType)
-      .eq('entity_id', input.entityId)
+      .eq('entity_id', entityId)
       .maybeSingle(),
     namesOf(sb, auth),
   ]);
@@ -124,7 +140,7 @@ export async function entityHistory(ctx: Ctx): Promise<unknown> {
       .select('release_id,created_at')
       .eq('tenant_id', auth.tenantId)
       .eq('entity_type', entry.entityType)
-      .eq('entity_id', input.entityId)
+      .eq('entity_id', entityId)
       .eq('op', 'delete')
       .order('id', { ascending: false })
       .limit(1)
@@ -145,7 +161,7 @@ export async function entityHistory(ctx: Ctx): Promise<unknown> {
   const named = (id: unknown): Person | null =>
     typeof id === 'string' ? { id, name: names.get(id) ?? null } : null;
   return {
-    entity: { entityType: entry.entityType, entityId: input.entityId },
+    entity: { entityType: entry.entityType, entityId },
     enabled,
     live: exists,
     removed,
@@ -179,9 +195,8 @@ export async function entityHistory(ctx: Ctx): Promise<unknown> {
 }
 
 /** The site versions that changed a page or one of its sections, newest first. */
-async function pageHistory(ctx: Ctx): Promise<unknown> {
+async function pageHistory(ctx: Ctx, page: string): Promise<unknown> {
   const { sb, auth, input } = ctx;
-  const page = input.entityId;
   // Items naming the page, and items of sections whose image before or after names it (a
   // section moved between pages counts for both); the ledger's (tenant, type, entity) index
   // serves each. Items no release made (out-of-band writes) belong to no version.

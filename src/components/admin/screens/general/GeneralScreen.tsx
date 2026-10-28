@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import { ClockProvider } from '@/components/admin/kit/clock';
+import { singletonHistory } from '@/lib/admin/historyTarget';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { profileUi } from '@/lib/admin/ui/profile';
 import { settingsUi } from '@/lib/admin/ui/settings';
@@ -19,10 +20,18 @@ import type { GeneralScreenProps } from './types';
 //   - Region and data (`site_settings`, settings.general): the studio's time zone and how long
 //     data is kept, immediate always (P-3).
 //
+// The identity's History (Admin v2 R14-prep) lists every save of it that went live, newest
+// first, and restores one once releases are on (R13's drawer; the history names the site, not
+// an id: historyTarget.ts). Region and data keeps no history (immediate, not a release's).
+//
 // Between them the job-applications switch, which saves at once through its own endpoint
 // (R3b's `PATCH /api/admin/site-profile/intake`): Admin only in both server layers, so a
 // Developer sees it switched off with the reason. The facts the screen cannot change (the
 // domain, the languages) are the page's own server-rendered card.
+
+/** The identity's history: the site's own (no id), previewed on the home page. */
+export const IDENTITY_HISTORY = singletonHistory('site_profile');
+export const IDENTITY_HISTORY_OF = { label: 'Site identity', path: '/' } as const;
 
 export default function GeneralScreen({ logoSrc, canOpenApplications, tz }: GeneralScreenProps) {
   const profileTarget = { kind: 'singleton', endpoint: profileUi.endpoint } as const;
@@ -48,6 +57,8 @@ export default function GeneralScreen({ logoSrc, canOpenApplications, tz }: Gene
           groups={profileUi.groups}
           slots={{ brand: <BrandFacts logoSrc={logoSrc} /> }}
           submitLabel="Save general settings"
+          history={IDENTITY_HISTORY}
+          historyOf={IDENTITY_HISTORY_OF}
         />
         <ApplicationsSwitch
           open={applicationsOpen}

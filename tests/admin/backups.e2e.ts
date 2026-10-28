@@ -144,8 +144,10 @@ for (const role of ['admin', 'seo'] as const) {
       await page.setViewportSize({ width: 1280, height: 900 });
       await open(page, `/admin/services/${id}`);
       // Named for its record ("History of Logo Design"). As SEO the editor opens on the SEO tab,
-      // its form hidden: History follows the panel there (review R13-C1).
-      const history = page.getByRole('button', { name: /^History of / });
+      // its form hidden: History follows the panel there (review R13-C1). The panel's own search
+      // settings have their History too once a row exists ("History of Search settings for
+      // Logo Design", R14-prep), so the service's is the one that does not name them.
+      const history = page.getByRole('button', { name: /^History of (?!Search settings for )/ });
       await expect(history).toBeVisible();
       expect(asked).toEqual([]);
 
