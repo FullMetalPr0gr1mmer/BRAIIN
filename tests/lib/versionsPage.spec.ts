@@ -402,6 +402,24 @@ describe('the history drawer’s records (the editors, historyTargetOf)', () => 
     );
     expect(form).not.toMatch(/^import .*screens\/history/m);
   });
+
+  it('the page editor shows one History, E1’s own: its panels pass EditorForm none (merge train)', () => {
+    // E1's page editor has its own History drawer in its bar (a section's or the page's
+    // saves); R13's EditorForm button would be a second one on the same screen, so the two
+    // panels that render EditorForm never pass `history`.
+    const dir = 'src/components/admin/screens/pageEditor';
+    for (const panel of ['PagePanel.tsx', 'SectionPanel.tsx']) {
+      const source = readFileSync(`${dir}/${panel}`, 'utf8');
+      expect(source, panel).toContain('<EditorForm');
+      expect(source, panel).not.toMatch(/\bhistory[=:]/);
+      expect(source, panel).not.toContain('historyTargetOf');
+    }
+    const editor = readFileSync(`${dir}/PageEditor.tsx`, 'utf8');
+    expect(editor).toContain(
+      "import HistoryDrawer, { type HistoryTarget } from './HistoryDrawer';",
+    );
+    expect(editor).not.toContain('screens/history/');
+  });
 });
 
 describe('the dashboard’s publish card while releases are off', () => {
