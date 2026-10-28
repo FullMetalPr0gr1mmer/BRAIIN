@@ -19,6 +19,10 @@ const VISIBILITY_SPEC = /[\\/]tests[\\/]admin[\\/]visibility\.e2e\.ts$/;
 // General settings (Admin v2 U9) changes the public identity every spec reads, and maintenance
 // (U9b) takes the site down: each its own project, after page visibility, in that order.
 const GENERAL_SPEC = /[\\/]tests[\\/]admin[\\/]general\.e2e\.ts$/;
+// Google Analytics 4 (Admin v2 U15) saves a measurement id, which puts the loader on every public
+// page the other specs read (the CI e2e build turns GA4_NOTICE_READY on): its own project, after
+// general settings and before maintenance.
+const GA4_SPEC = /[\\/]tests[\\/]admin[\\/]ga4\.e2e\.ts$/;
 const MAINTENANCE_SPEC = /[\\/]tests[\\/]admin[\\/]maintenance\.e2e\.ts$/;
 
 export default defineConfig({
@@ -53,7 +57,13 @@ export default defineConfig({
     {
       name: 'admin',
       testDir: './tests/admin',
-      testIgnore: [VISIBILITY_SPEC, GENERAL_SPEC, MAINTENANCE_SPEC, /maintenance\.teardown\.ts$/],
+      testIgnore: [
+        VISIBILITY_SPEC,
+        GENERAL_SPEC,
+        GA4_SPEC,
+        MAINTENANCE_SPEC,
+        /maintenance\.teardown\.ts$/,
+      ],
       use: { ...devices['Desktop Chrome'] },
       dependencies: ['admin-samples'],
     },
@@ -78,13 +88,23 @@ export default defineConfig({
       dependencies: ['visibility'],
     },
     {
+      // GA4 (Admin v2 U15) saves an id, so every public page carries the loader and lists
+      // Google's hosts while it runs: alone, after the specs that read those pages, and it
+      // clears the id when it ends.
+      name: 'ga4',
+      testDir: './tests/admin',
+      testMatch: GA4_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['general'],
+    },
+    {
       // Maintenance (Admin v2 U9b) takes the shared preview down: last of all, and its
       // teardown switches it off whatever happened.
       name: 'maintenance',
       testDir: './tests/admin',
       testMatch: MAINTENANCE_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['general'],
+      dependencies: ['ga4'],
       teardown: 'maintenance-teardown',
     },
     {

@@ -41,7 +41,7 @@ function defaultValue(expr: string): unknown {
 
 describe('the mirror against the pgTAP literals', () => {
   it('ANON_COLUMNS equals _anon_columns()', () => {
-    const rows = [...body('_anon_columns').matchAll(/\('([a-z_]+)', '([a-z_,]+)'\)/g)].map(
+    const rows = [...body('_anon_columns').matchAll(/\('([a-z_]+)', '([a-z0-9_,]+)'\)/g)].map(
       ([, table, cols]) => [table!, cols!.split(',')] as const,
     );
     expect(rows).toHaveLength(6);

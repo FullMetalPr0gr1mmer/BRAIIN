@@ -4,7 +4,7 @@ import Note from '@/components/admin/kit/Note';
 import { Badge } from '@/components/admin/kit/StatusBadge';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import {
-  INTEGRATION_TILES,
+  integrationTiles,
   tileStatus,
   type IntegrationKey,
   type IntegrationTile,
@@ -23,13 +23,20 @@ export interface IntegrationsScreenProps {
   initial: IntegrationsView;
   /** The captcha tile links to the Forms overview for settings.general holders. */
   canSeeForms: boolean;
+  /** The site loads GA4 (GA4_NOTICE_READY, read by the page on the server, Admin v2 U15). */
+  ga4Live?: boolean;
 }
 
-export default function IntegrationsScreen({ initial, canSeeForms }: IntegrationsScreenProps) {
+export default function IntegrationsScreen({
+  initial,
+  canSeeForms,
+  ga4Live = false,
+}: IntegrationsScreenProps) {
   const [view, setView] = useState(initial);
   const [open, setOpen] = useState<IntegrationKey | null>(null);
   const [refreshError, setRefreshError] = useState('');
-  const openTile = INTEGRATION_TILES.find((tile) => tile.key === open) ?? null;
+  const tiles = integrationTiles(ga4Live);
+  const openTile = tiles.find((tile) => tile.key === open) ?? null;
 
   async function refresh() {
     try {
@@ -50,7 +57,7 @@ export default function IntegrationsScreen({ initial, canSeeForms }: Integration
         </p>
       )}
       <ul className="grid grid--3 int-grid" aria-label="Integrations">
-        {INTEGRATION_TILES.map((tile) => (
+        {tiles.map((tile) => (
           <Tile
             key={tile.key}
             tile={tile}
@@ -102,6 +109,7 @@ function Tile({ tile, view, canSeeForms, onOpen }: TileProps) {
           <code dir="ltr">{value}</code>
         </p>
       )}
+      {value && tile.waiting && <Note tone={tile.waiting.tone}>{tile.waiting.text}</Note>}
       {tile.field ? (
         <button
           type="button"

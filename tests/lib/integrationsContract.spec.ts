@@ -192,6 +192,7 @@ const route = (await import('@/pages/api/admin/integrations')) as {
 };
 const { loadIntegrations } = await import('@/lib/admin/integrations/load');
 const { getSearchConsoleToken } = await import('@/lib/data/siteVerification');
+const { getGa4MeasurementId } = await import('@/lib/data/ga4');
 const { ANON_COLUMNS } = await import('@/lib/preview/visibility');
 const { DATASET_ONLY_COLUMNS } = await import('@/lib/preview/dataset');
 const { TABLE_KEYS } = await import('@/lib/preview/relations');
@@ -328,7 +329,7 @@ describe('the table the contract leaves', () => {
     expect(stated).toBe(replayed.join('; '));
   });
 
-  it('the grants it restates: staff the typed values, anon the Search Console code', () => {
+  it('the grants after it: staff the typed values, anon the Search Console code and (U15) the GA4 id', () => {
     expect([...GRANTS.authenticated.select].sort()).toEqual([
       'calendly_url',
       'ga4_measurement_id',
@@ -348,7 +349,11 @@ describe('the table the contract leaves', () => {
       'ga4_measurement_id',
       'search_console_token',
     ]);
-    expect([...GRANTS.anon.select].sort()).toEqual(['search_console_token', 'tenant_id']);
+    expect([...GRANTS.anon.select].sort()).toEqual([
+      'ga4_measurement_id',
+      'search_console_token',
+      'tenant_id',
+    ]);
     expect(GRANTS.anon.insert.size + GRANTS.anon.update.size).toBe(0);
   });
 });
@@ -398,6 +403,14 @@ describe('every reader on main names only columns the table keeps', () => {
     expectWithinGrants(calls);
   });
 
+  it('the public loader: the GA4 measurement id (U15), read as anon', async () => {
+    await getGa4MeasurementId();
+    expect(
+      calls.filter((c) => c.table === 'site_integrations').every((c) => c.who === 'anon'),
+    ).toBe(true);
+    expectWithinGrants(calls);
+  });
+
   it("the preview dataset: anon's projection, its key, nothing read as '*'", () => {
     // A preview table with no projection is read as `*`, which a column grant refuses (42501).
     const projection = [
@@ -432,6 +445,7 @@ const READERS: Record<string, string> = {
   'src/pages/api/admin/integrations.ts':
     'the singleton route, GET and both PATCH paths, driven above',
   'src/lib/data/siteVerification.ts': 'the public loader, driven above',
+  'src/lib/data/ga4.ts': 'the GA4 loader (U15), read as anon, driven above',
   'src/lib/preview/relations.ts': "the preview table's key, held above",
   'src/lib/preview/visibility.ts': "anon's projection and the mirrored policy, held above",
   'src/lib/admin/auditLabels.ts': 'the activity log names the table, never a column',

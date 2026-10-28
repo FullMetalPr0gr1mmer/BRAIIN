@@ -36,6 +36,7 @@ const blog = await import('@/lib/data/blog');
 const certifications = await import('@/lib/data/certifications');
 const disciplines = await import('@/lib/data/disciplines');
 const faq = await import('@/lib/data/faq');
+const ga4 = await import('@/lib/data/ga4');
 const navigation = await import('@/lib/data/navigation');
 const pageSections = await import('@/lib/data/pageSections');
 const portfolio = await import('@/lib/data/portfolio');
@@ -55,6 +56,7 @@ const MODULES = {
   certifications,
   disciplines,
   faq,
+  ga4,
   navigation,
   pageSections,
   portfolio,
@@ -284,9 +286,17 @@ const CASES: Record<string, () => Promise<void>> = {
     clean(report);
   },
   'siteVerification.getSearchConsoleToken': async () => {
-    // Admin v2 U11: anon's one column of the row (the GA4 id beside it is never answered).
+    // Admin v2 U11: anon's Search Console column of the row.
     const { value, report } = await inPreview(() => siteVerification.getSearchConsoleToken());
     expect(value).toBe('FixtureCode_0123456789');
+    clean(report);
+  },
+  'ga4.getGa4MeasurementId': async () => {
+    // Admin v2 U15: anon's GA4 column of the row (U15's migration). A preview never loads GA4 (the
+    // middleware's preview branch returns before the read), but the loader reads through the
+    // overlay like every other.
+    const { value, report } = await inPreview(() => ga4.getGa4MeasurementId());
+    expect(value).toBe('G-FIXTURE1');
     clean(report);
   },
   'statistics.getPublishedStatistics': async () => {
@@ -339,7 +349,7 @@ function clean(report: ReturnType<ReturnType<typeof createPreviewSource>['report
 }
 
 describe('every public loader, inside the preview scope', () => {
-  it('has a case for every exported loader function of the 17 files', () => {
+  it('has a case for every exported loader function of the 18 files', () => {
     const exported = Object.entries(MODULES).flatMap(([name, mod]) =>
       Object.entries(mod)
         .filter(([key, value]) => typeof value === 'function' && !PURE.has(key))

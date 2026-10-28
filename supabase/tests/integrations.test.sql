@@ -1,19 +1,19 @@
--- pgTAP: integrations, typed (Admin v2 U11, migration 0105_integrations.sql, and its contract
--- U11c, 0110_integrations_contract.sql; CLAUDE.md §5 "Integrations"). Run with
--- `supabase test db`.
+-- pgTAP: integrations, typed (Admin v2 U11, migration 0105_integrations.sql, its contract
+-- U11c, 0110_integrations_contract.sql, and U15's anon read of the GA4 id, 0114_ga4.sql;
+-- CLAUDE.md §5 "Integrations"). Run with `supabase test db`.
 --
 --   • the catalog: RLS forced, the exact policy set, the helper answers settings.integrations
 --     for every role, the table's columns (the four legacy jsonb boxes are gone since the
---     contract), the grants by column (anon reads the Search Console code and the tenant,
---     nothing else; staff hold the three typed values, the key, the version and updated_at,
---     never DELETE, nor UPDATE the key, the version or the stamps), and the table stays out
---     of the release registry (immediate, P-3);
+--     contract), the grants by column (anon reads the Search Console code, the GA4 id and the
+--     tenant, nothing else; staff hold the three typed values, the key, the version and
+--     updated_at, never DELETE, nor UPDATE the key, the version or the stamps), and the table
+--     stays out of the release registry (immediate, P-3);
 --   • Admin and SEO read, add and change the row (the version moves, the actor is stamped;
 --     a statement naming a legacy box is refused, 42703: there is nothing left to write);
 --   • Content Creator, Developer and Sales read nothing and change nothing (RLS: since U11
 --     the staff read is Admin + SEO, not every CMS role);
---   • anon reads the launch tenant's Search Console code and nothing else of the row (42501 on
---     any other column), never another tenant's row, and writes nothing;
+--   • anon reads the launch tenant's Search Console code and GA4 id (0114) and nothing else of
+--     the row (42501 on any other column), never another tenant's row, and writes nothing;
 --   • another tenant's Admin reads and writes none of this tenant's row;
 --   • stale tokens (a demoted SEO, a deactivated Admin, a locked SEO) read and write nothing,
 --     their own tenant's row included (the RESTRICTIVE live check);
@@ -116,7 +116,8 @@ select is(
      from pg_attribute a
     where a.attrelid = 'public.site_integrations'::regclass and a.attnum > 0 and not a.attisdropped
       and has_column_privilege('anon', a.attrelid, a.attnum, 'select')),
-  'search_console_token,tenant_id', 'anon may read the Search Console code and the tenant, no other column');
+  'ga4_measurement_id,search_console_token,tenant_id',
+  'anon may read the Search Console code, the GA4 id (0114) and the tenant, no other column');
 select is(
   (select string_agg(a.attname::text, ',' order by a.attname::text collate "C")
      from pg_attribute a
@@ -213,8 +214,8 @@ select is((select search_console_token from public.site_integrations),
   'SecondCode_abcdef012', 'anon reads the launch tenant''s Search Console code');
 select is((select count(*)::int from public.site_integrations), 1,
   'anon reads one row: never another tenant''s');
-select is(_state($$ select ga4_measurement_id from public.site_integrations $$),
-  '42501', 'anon cannot read the GA4 id');
+select is((select ga4_measurement_id from public.site_integrations), 'G-ABC123XYZ',
+  'anon reads the launch tenant''s GA4 id (0114: the page that loads GA4 carries it)');
 select is(_state($$ select calendly_url from public.site_integrations $$),
   '42501', 'anon cannot read the Calendly link');
 select is(_state($$ select version, updated_at from public.site_integrations $$),

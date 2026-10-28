@@ -136,14 +136,15 @@ select ok(not has_table_privilege('anon', 'public.audit_log', 'select'),
 select ok(not has_table_privilege('anon', 'public.profiles', 'select'),
   'anon CANNOT select public.profiles');
 -- site_integrations (Admin v2 U11): no table privilege; of its columns anon reads only the
--- Search Console code the home page's <head> carries anyway (and the tenant its row is in).
+-- Search Console code the home page's <head> carries anyway, the GA4 id a page that loads GA4
+-- carries (U15, 0114), and the tenant its row is in.
 select ok(not has_table_privilege('anon', 'public.site_integrations', 'select')
           and has_column_privilege('anon', 'public.site_integrations', 'search_console_token', 'select')
-          and not has_column_privilege('anon', 'public.site_integrations', 'ga4_measurement_id', 'select')
+          and has_column_privilege('anon', 'public.site_integrations', 'ga4_measurement_id', 'select')
           and not has_column_privilege('anon', 'public.site_integrations', 'calendly_url', 'select')
           and not has_column_privilege('anon', 'public.site_integrations', 'version', 'select')
           and not has_column_privilege('anon', 'public.site_integrations', 'updated_by', 'select'),
-  'anon CANNOT select public.site_integrations, only its Search Console code (U11)');
+  'anon CANNOT select public.site_integrations, only its Search Console code (U11) and GA4 id (U15)');
 -- And staff (U11c, the contract): every column authenticated holds any privilege on is a typed
 -- public identifier, the key, the version or updated_at. The four legacy jsonb boxes, which
 -- took anything an Admin or SEO token wrote, are dropped, so no grant can reach them again.
