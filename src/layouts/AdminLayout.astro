@@ -15,6 +15,7 @@ import { paletteGroupsFor } from '@/lib/admin/paletteSources';
 import { pageGuideFor } from '@/lib/admin/help/pageGuides';
 import type { AdminStylesheet } from '@/lib/admin/stylesheets';
 import { studioTimeZone } from '@/lib/admin/studioTimeZone';
+import { releasesEnabled } from '@/lib/admin/releasesFlag';
 import { DEFAULT_TIME_ZONE } from '@schemas/timeZones';
 
 // Tier C shell (CLAUDE.md §2): on-demand, `private, no-store` (set in middleware),
@@ -77,7 +78,15 @@ const studioTz = session ? await studioTimeZone(Astro.locals) : DEFAULT_TIME_ZON
 
 const shell: ShellState =
   app && session && supabase
-    ? await loadShellState(supabase, session, nav, env, preload, studioTz)
+    ? await loadShellState(
+        supabase,
+        session,
+        nav,
+        env,
+        preload,
+        studioTz,
+        releasesEnabled(Astro.locals),
+      )
     : {
         displayName: null,
         maintenance: false,

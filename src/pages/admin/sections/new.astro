@@ -3,6 +3,7 @@ import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
 import { uiFor } from '@/lib/admin/uiSchema';
 import { can } from '@/lib/authz/matrix';
+import { createReleaseMode } from '@/lib/admin/releasesFlag';
 
 export const prerender = false;
 
@@ -14,8 +15,17 @@ const role = Astro.locals.session?.role;
 const canAdvanced = role !== undefined && can(role, 'content.archiveDelete') === 'full';
 
 const ui = uiFor('sections');
+// R12b: in release mode the create says so (createReleaseMode: the shell's own read of
+// the flag, shared). A resource outside the release is false without asking.
+const releaseMode = await createReleaseMode(Astro.locals, 'sections');
 ---
 
 <AdminLayout title={`New ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="sections" id={null} canAdvanced={canAdvanced} />
+  <AdminResourceForm
+    client:load
+    releaseMode={releaseMode}
+    resource="sections"
+    id={null}
+    canAdvanced={canAdvanced}
+  />
 </AdminLayout>

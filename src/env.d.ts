@@ -38,6 +38,9 @@ declare namespace App {
     // The studio's time zone (Admin v2 U9, `site_settings.timezone`), read at most once per
     // request by src/lib/admin/studioTimeZone.ts. A promise, as `identity` is.
     studioTimeZone?: Promise<import('@schemas/timeZones').StudioTimeZone>;
+    // Whether releases are on for the tenant (Admin v2 R12b), read at most once per request by
+    // src/lib/admin/releasesFlag.ts: the shell's savebar and a create page's mode share it.
+    releasesEnabled?: Promise<boolean>;
     // The public site's icons (Admin v2 U9), read at most once per request by
     // src/lib/data/siteProfile.ts getSiteIcons.
     siteIcons?: Promise<import('@/lib/data/siteProfile').SiteIcons>;

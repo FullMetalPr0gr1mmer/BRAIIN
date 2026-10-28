@@ -2,12 +2,16 @@
 import AdminLayout from '@/layouts/AdminLayout.astro';
 import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
 import { uiFor } from '@/lib/admin/uiSchema';
+import { createReleaseMode } from '@/lib/admin/releasesFlag';
 
 export const prerender = false;
 
 const ui = uiFor('navigation');
+// R12b: in release mode the create says so (createReleaseMode: the shell's own read of
+// the flag, shared). A resource outside the release is false without asking.
+const releaseMode = await createReleaseMode(Astro.locals, 'navigation');
 ---
 
 <AdminLayout title={`New ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="navigation" id={null} />
+  <AdminResourceForm client:load releaseMode={releaseMode} resource="navigation" id={null} />
 </AdminLayout>

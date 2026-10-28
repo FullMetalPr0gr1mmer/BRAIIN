@@ -262,20 +262,21 @@ describe('a create made in a drawer or a modal says so (SaveTarget `staged`)', (
       /const target = \{ kind: 'resource', slug: 'service-cases', staged \} as const;/,
       /staged=\{staged\}/,
     ],
+    // The create pages (/admin/<slug>/new): the page's mode is the server page's
+    // createReleaseMode (the shell's flag), passed as `releaseMode` (checked below).
+    'src/components/admin/screens/resources/ResourceForm.tsx': [
+      /const target = \{ kind: 'resource', slug: ui\.slug, staged: releaseMode \} as const;/,
+    ],
+    'src/components/admin/screens/services/ServiceEditor.tsx': [
+      /const target = \{ kind: 'resource', slug: ui\.slug, staged: releaseMode \} as const;/,
+    ],
+    'src/components/admin/screens/projects/ProjectEditor.tsx': [
+      /const target = \{ kind: 'resource', slug: ui\.slug, staged: releaseMode \} as const;/,
+    ],
   };
 
-  /**
-   * The resource editors that create without a screen in release mode around them: a create
-   * page (/admin/<slug>/new) has had no answer from the server, so it knows no mode and draws
-   * main's form (R12: an editor's mode is only ever the server's answer). Media is not
-   * release-managed.
-   */
-  const NO_SCREEN_MODE = new Set([
-    'src/components/admin/screens/resources/ResourceForm.tsx',
-    'src/components/admin/screens/services/ServiceEditor.tsx',
-    'src/components/admin/screens/projects/ProjectEditor.tsx',
-    'src/components/admin/screens/media/MediaDrawer.tsx',
-  ]);
+  /** The resource editors that never need a mode: media is not release-managed. */
+  const NO_SCREEN_MODE = new Set(['src/components/admin/screens/media/MediaDrawer.tsx']);
 
   it('each create site carries its screen’s mode', () => {
     for (const [file, wiring] of Object.entries(CREATES)) {
@@ -297,5 +298,41 @@ describe('a create made in a drawer or a modal says so (SaveTarget `staged`)', (
       editors.includes(file),
     );
     expect(editors).toEqual([...new Set(known)].sort());
+  });
+
+  it('every create page passes its mode, read for its own resource (R12b review)', () => {
+    const ISLANDS: Record<string, (page: string) => string | undefined> = {
+      AdminResourceForm: (page) => /resource="([a-z-]+)"/.exec(page)?.[1],
+      AdminServiceEditor: () => 'services',
+      AdminProjectEditor: () => 'portfolio',
+    };
+    const pages = readdirSync('src/pages/admin', { withFileTypes: true })
+      .filter((dir) => dir.isDirectory())
+      .map((dir) => `src/pages/admin/${dir.name}/new.astro`)
+      .filter((path) => {
+        try {
+          return statSync(path).isFile();
+        } catch {
+          return false;
+        }
+      });
+    let checked = 0;
+    for (const path of pages) {
+      const page = readFileSync(path, 'utf8');
+      const island = Object.keys(ISLANDS).find((name) => page.includes(`<${name}`));
+      if (!island) continue;
+      checked += 1;
+      const slug = ISLANDS[island]!(page);
+      expect(slug, path).toBeDefined();
+      expect(page, path).toContain(
+        `const releaseMode = await createReleaseMode(Astro.locals, '${slug}');`,
+      );
+      expect(page, path).toMatch(
+        new RegExp(`<${island}\\s[^>]*\\breleaseMode=\\{releaseMode\\}[^>]*\\bid=\\{null\\}`),
+      );
+    }
+    // Every create page that hydrates a resource editor (the collection screens' /new pages
+    // open their drawer, whose mode is the screen's list answer).
+    expect(checked).toBeGreaterThanOrEqual(14);
   });
 });
