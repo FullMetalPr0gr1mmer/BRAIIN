@@ -3,16 +3,18 @@
 --
 -- Covers: who reads stages and the timeline (six principals plus a stale token); that
 -- nobody writes the timeline through the API (stages are written by CRM settings since 0091,
--- C9a: supabase/tests/crm_settings.test.sql), and nobody reaches the notes thread at all; the
--- legacy sync both ways (old status writes move the stage, new stage writes set the
--- status); the spam horizon (D2) applied to a LEGACY status='spam' write, never
--- lengthened, and given back on clearing without undoing an erasure made while flagged;
--- the legacy notes field mirrored as one note rewritten in place, and a thread note's
--- event written with it; the stamps (on a real move only), the version rule and
--- per-tenant lead numbers; the stage-set rules; and the grants. CLAUDE.md §3, §8, §9.
+-- C9a: supabase/tests/crm_settings.test.sql), and nobody reaches the notes thread at all;
+-- the stage on arrival (a lead that names none starts in its own tenant's initial stage, one
+-- that names a stage keeps it); stage moves and the spam flag, and the spam horizon (D2)
+-- applied to a spam mark, never lengthened, and given back on clearing without undoing an
+-- erasure made while flagged; a thread note's event written with it, and a note from the old
+-- field staying a note; the stamps (on a real move only), the version rule and per-tenant
+-- lead numbers; the stage-set rules; and the grants. Since the leads contract (C14b) the
+-- legacy status sync and the notes mirror are gone: the BEFORE and AFTER phases name no
+-- dropped column, and the sync's helper is dropped. CLAUDE.md §3, §8, §9.
 
 begin;
-select plan(72);
+select plan(68);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -80,10 +82,14 @@ select is((select count(*)::int from public.lead_stages
 select is((select string_agg(key, ',') from public.lead_stages
             where tenant_id = '00000000-0000-0000-0000-000000000001' and is_initial),
   'new', 'exactly one initial stage: New');
-select is(_stage('00000000-0000-0000-0000-00000000aa01'), 'new', 'a new lead starts in the initial stage');
-select is((select status || '/' || version from public.leads
-            where id = '00000000-0000-0000-0000-00000000aa01'),
-  'new/1', 'its legacy status says new, at version 1');
+select is(_stage('00000000-0000-0000-0000-00000000aa01'), 'new',
+  'a lead that names no stage starts in the initial stage (C14b: the BEFORE phase picks it)');
+select is((select s.tenant_id::text || '/' || s.key
+             from public.leads l join public.lead_stages s on s.id = l.stage_id
+            where l.id = '00000000-0000-0000-0000-00000000bb01'),
+  '00000000-0000-0000-0000-0000000000ff/new', 'and in its OWN tenant''s initial stage');
+select is((select version from public.leads where id = '00000000-0000-0000-0000-00000000aa01'),
+  1, 'a new lead is at version 1');
 select is((select array_agg(lead_number order by name) from public.leads),
   array[1, 1, 2], 'lead numbers count per tenant (First 1, Other 1 in T2, Second 2)');
 select is(_events('00000000-0000-0000-0000-00000000aa01', 'created'), 1,
@@ -148,22 +154,22 @@ select is((select count(*)::int from public.lead_stages
   0, 'another tenant''s admin reads none of T1''s stages or events');
 
 select throws_ok($$ update public.leads set status = 'in_progress'
-                   where id = '00000000-0000-0000-0000-00000000aa01' $$, '42501', null,
-  'a staff token no longer writes the legacy status (0097)');
+                   where id = '00000000-0000-0000-0000-00000000aa01' $$, '42703', null,
+  'the legacy status is gone: a write naming it is refused (0097 withdrew it, C14b dropped it)');
 reset role;
 
--- ---- Legacy writes move the pipeline (the current admin, through the sync) --------------
--- Since 0097 no API role but the service role writes status or internal_notes; the sync is
--- still the expand window's (until C14), so it is exercised as the service role, carrying
--- the admin's claim for the attribution the triggers read.
-set local role service_role;
+-- ---- Stage moves and the spam flag (a live admin, through the column grant) ------------
+set local role authenticated;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
-select is(_rows($$ update public.leads set status = 'in_progress'
+select is(_rows($$ update public.leads
+                      set stage_id = (select id from public.lead_stages
+                                       where tenant_id = '00000000-0000-0000-0000-000000000001'
+                                         and key = 'contacted')
                     where id = '00000000-0000-0000-0000-00000000aa01' $$), 1,
-  'a legacy status write still works');
+  'a stage move');
 select is(_stage('00000000-0000-0000-0000-00000000aa01') || '/' ||
           (select version from public.leads where id = '00000000-0000-0000-0000-00000000aa01'),
-  'contacted/2', 'in progress moves New to Contacted, and the version moves');
+  'contacted/2', 'New to Contacted, and the version moves');
 select ok((select first_response_at is not null from public.leads
             where id = '00000000-0000-0000-0000-00000000aa01'),
   'leaving the initial stage stamps the first response');
@@ -171,14 +177,14 @@ select is((select detail::text from public.lead_events
             where lead_id = '00000000-0000-0000-0000-00000000aa01' and kind = 'stage_changed'),
   '{"to": "contacted", "from": "new"}', 'the timeline records the move, by stage key');
 
--- Spam, written the OLD way: the flag follows, and so does the horizon (D2).
-select is(_rows($$ update public.leads set status = 'spam'
+-- Spam is a flag: the horizon follows it (D2), the stage stays.
+select is(_rows($$ update public.leads set is_spam = true
                     where id = '00000000-0000-0000-0000-00000000aa01' $$), 1,
-  'a legacy spam write');
-select is((select is_spam::text || '/' || status from public.leads
+  'a spam mark');
+select is((select is_spam::text from public.leads
             where id = '00000000-0000-0000-0000-00000000aa01')
           || '/' || _stage('00000000-0000-0000-0000-00000000aa01'),
-  'true/spam/contacted', 'spam is a flag: the stage stays where it was');
+  'true/contacted', 'spam is a flag: the stage stays where it was');
 select is(_events('00000000-0000-0000-0000-00000000aa01', 'spam_marked'), 1, 'the timeline records the spam mark');
 reset role;
 select ok(
@@ -188,18 +194,18 @@ select ok(
      from public.leads where id = '00000000-0000-0000-0000-00000000aa01'),
   'marking spam caps retention at the tenant''s spam_days (10), and saves the old horizon');
 
-set local role service_role;
+set local role authenticated;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
-select is(_rows($$ update public.leads set status = 'new'
+select is(_rows($$ update public.leads set is_spam = false
                     where id = '00000000-0000-0000-0000-00000000aa01' $$), 1,
-  'a legacy write clears spam');
+  'clearing spam');
 select is(_events('00000000-0000-0000-0000-00000000aa01', 'spam_cleared'), 1, 'the timeline records the clearing');
 reset role;
 select ok(
   (select not is_spam and retention_delete_after is null and spam_marked_at is null
-          and status = 'new'
+          and _stage(id) = 'contacted'
      from public.leads where id = '00000000-0000-0000-0000-00000000aa01'),
-  'clearing spam restores the horizon it had (the default here) and the initial stage');
+  'clearing spam restores the horizon it had (the default here), and the stage stays');
 
 -- The horizon a mark saves, the cap it applies and what clearing gives back. aa05 keeps a
 -- long explicit horizon; aa06 is three days from the end of its 24 months; aa07 is erased
@@ -214,10 +220,10 @@ insert into public.leads (id, tenant_id, name, email_enc, message, created_at, r
    now(), null);
 set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
-select is(_rows($$ update public.leads set status = 'spam'
+select is(_rows($$ update public.leads set is_spam = true
                     where id in ('00000000-0000-0000-0000-00000000aa05', '00000000-0000-0000-0000-00000000aa06',
                                  '00000000-0000-0000-0000-00000000aa07') $$), 3,
-  'three legacy spam marks');
+  'three spam marks');
 reset role;
 select ok(
   (select retention_delete_after = now() + interval '10 days'
@@ -232,9 +238,9 @@ select ok(
 update public.leads set retention_delete_after = now() + interval '1 day'
  where id = '00000000-0000-0000-0000-00000000aa07';
 set local role service_role;
-select is(_rows($$ update public.leads set status = 'new'
+select is(_rows($$ update public.leads set is_spam = false
                     where id in ('00000000-0000-0000-0000-00000000aa05', '00000000-0000-0000-0000-00000000aa07') $$), 2,
-  'two legacy writes clear spam');
+  'two spam marks cleared');
 reset role;
 select ok(
   (select retention_delete_after = now() + interval '400 days' and retention_before_spam is null
@@ -247,46 +253,19 @@ select ok(
 
 set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
-select is(_rows($$ update public.leads set status = 'done'
-                    where id = '00000000-0000-0000-0000-00000000aa02' $$), 1, 'a legacy done write');
-select is(_stage('00000000-0000-0000-0000-00000000aa02'), 'lost', 'legacy done maps to Lost (owner item O-8)');
-
--- A notes-only write: no version change, and the note joins the thread.
-select is(_rows($$ update public.leads set internal_notes = 'Call back on Sunday'
-                    where id = '00000000-0000-0000-0000-00000000aa02' $$), 1, 'a legacy notes write');
-reset role;
-select is((select version from public.leads where id = '00000000-0000-0000-0000-00000000aa02'), 2,
-  'writing a note does not move the version (no spurious 409)');
-select is((select body || '/' || source || '/' || created_by::text from public.lead_notes
-            where lead_id = '00000000-0000-0000-0000-00000000aa02'),
-  'Call back on Sunday/legacy/00000000-0000-0000-0000-0000000000a1',
-  'the note is copied into the thread, attributed to its author');
-select is((select count(*)::int from public.lead_events
-            where lead_id = '00000000-0000-0000-0000-00000000aa02' and kind = 'note_added'
-              and detail ? 'note_id' and not detail ? 'body'),
-  1, 'the timeline records the note by id, never its text');
-
--- The legacy panel saves the whole field each time: the mirror is rewritten in place, so
--- the thread holds one copy, and text taken out of the field is gone from it too.
-set local role service_role;
-select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
-select is(_rows($$ update public.leads set internal_notes = 'Call back on Sunday. ID 1234567890'
+select is(_rows($$ update public.leads
+                      set stage_id = (select id from public.lead_stages
+                                       where tenant_id = '00000000-0000-0000-0000-000000000001'
+                                         and key = 'lost')
                     where id = '00000000-0000-0000-0000-00000000aa02' $$), 1,
-  'the field saved again, with an ID number pasted in by mistake');
-select is(_rows($$ update public.leads set internal_notes = 'Call back on Sunday'
-                    where id = '00000000-0000-0000-0000-00000000aa02' $$), 1,
-  'and again, with the ID number taken out');
+  'a move from New straight to Lost');
 reset role;
-select is((select count(*)::int || '/' || max(body) from public.lead_notes
-            where lead_id = '00000000-0000-0000-0000-00000000aa02' and source = 'legacy'),
-  '1/Call back on Sunday', 'one mirror note per lead, rewritten in place');
-select is((select count(*)::int from public.lead_notes where body like '%1234567890%'), 0,
-  'text taken out of the field leaves the thread too');
-select is(_events('00000000-0000-0000-0000-00000000aa02', 'note_added'), 1,
-  'rewriting the mirror adds no timeline event');
+select ok((select _stage(id) = 'lost' and first_response_at is not null and version = 2
+             from public.leads where id = '00000000-0000-0000-0000-00000000aa02'),
+  'leaving New for Lost is a first response too, one version on');
 
 -- A thread note, as the notes route writes it (the service role): its timeline event comes
--- in the same statement, and nobody can rewrite it afterwards.
+-- in the same statement, nobody can rewrite it afterwards, and the lead is not edited.
 set local role service_role;
 select _as(null, null, null);
 insert into public.lead_notes (tenant_id, lead_id, body, source, created_by)
@@ -300,27 +279,54 @@ select is((select count(*)::int from public.lead_events e
             where n.lead_id = '00000000-0000-0000-0000-00000000aa02' and n.source = 'staff'
               and e.kind = 'note_added' and e.actor_id = '00000000-0000-0000-0000-0000000000a1'),
   1, 'a thread note writes its own timeline event, by its author');
+select is((select count(*)::int from public.lead_events
+            where lead_id = '00000000-0000-0000-0000-00000000aa02' and kind = 'note_added'
+              and detail ? 'note_id' and not detail ? 'body'),
+  1, 'the timeline records the note by id, never its text');
+select is((select version from public.leads where id = '00000000-0000-0000-0000-00000000aa02'), 2,
+  'adding a note does not move the lead''s version (no spurious 409)');
 
+-- A note copied from the old field before the contract (source 'legacy', as 0034's mirror
+-- left it) is a note like any other now: no lead write rewrites or removes it (C14b).
+insert into public.lead_notes (tenant_id, lead_id, body, source, created_by)
+values ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000aa02',
+        'Call back on Sunday', 'legacy', '00000000-0000-0000-0000-0000000000a1');
 set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
-select is(_rows($$ update public.leads set internal_notes = '  '
-                    where id = '00000000-0000-0000-0000-00000000aa02' $$), 1, 'the field cleared');
+select is(_rows($$ update public.leads set tags = array['vip'], is_starred = true
+                    where id = '00000000-0000-0000-0000-00000000aa02' $$), 1,
+  'a lead write after the contract');
 reset role;
-select is((select string_agg(source, ',') from public.lead_notes
-            where lead_id = '00000000-0000-0000-0000-00000000aa02'),
-  'staff', 'clearing the field removes its mirror; the thread note stays');
+select is((select string_agg(source || ':' || body, ',' order by source)
+             from public.lead_notes where lead_id = '00000000-0000-0000-0000-00000000aa02'),
+  'legacy:Call back on Sunday,staff:Sent the proposal',
+  'both notes stand: no mirror rewrites or removes a note from the old field (C14b)');
+select ok(
+  not exists (select 1 from pg_proc
+               where oid in ('app.tg_lead_pipeline()'::regprocedure, 'app.tg_lead_timeline()'::regprocedure)
+                 and prosrc ~* '\m(status|internal_notes|timeline_band|ip_inet|acting_for)\M')
+  and to_regprocedure('app.lead_stage_for_status(uuid, text, uuid)') is null,
+  'the BEFORE and AFTER phases name no legacy column, and the sync''s helper is gone (C14b)');
 
--- Stamps on a real move only. aa08 arrives already past New (a legacy-style insert): when
--- it was first answered is not known, and an unrelated write must not claim it was now.
-insert into public.leads (id, tenant_id, name, email_enc, message, status)
+-- Stamps on a real move only. aa08 arrives already past New (naming its stage, as a manual
+-- or imported lead may): when it was first answered is not known, and an unrelated write
+-- must not claim it was now.
+insert into public.leads (id, tenant_id, name, email_enc, message, stage_id)
 values ('00000000-0000-0000-0000-00000000aa08', '00000000-0000-0000-0000-000000000001',
-        'Old hand', 'x', 'hi', 'in_progress');
+        'Old hand', 'x', 'hi',
+        (select id from public.lead_stages
+          where tenant_id = '00000000-0000-0000-0000-000000000001' and key = 'contacted'));
+select is(_stage('00000000-0000-0000-0000-00000000aa08'), 'contacted',
+  'a lead that names its stage on arrival keeps it');
 set local role service_role;
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
-select is(_rows($$ update public.leads set internal_notes = 'Spoke last spring'
+select is(_rows($$ update public.leads set is_starred = true
                     where id = '00000000-0000-0000-0000-00000000aa08' $$), 1,
-  'a notes write on a lead past New');
-select is(_rows($$ update public.leads set status = 'done'
+  'a star on a lead past New');
+select is(_rows($$ update public.leads
+                      set stage_id = (select id from public.lead_stages
+                                       where tenant_id = '00000000-0000-0000-0000-000000000001'
+                                         and key = 'lost')
                     where id = '00000000-0000-0000-0000-00000000aa08' $$), 1,
   'and a move from Contacted to Lost');
 reset role;
@@ -328,27 +334,27 @@ select ok((select first_response_at is null and _stage(id) = 'lost' from public.
             where id = '00000000-0000-0000-0000-00000000aa08'),
   'neither stamps a first response: only leaving the initial stage does');
 
--- ---- New-style writes set the status (as the service role will, from C3) ---------------
+-- ---- Won and back (as the owner: the triggers apply to every writer) ------------------------
 update public.leads set stage_id = (select id from public.lead_stages
   where tenant_id = '00000000-0000-0000-0000-000000000001' and key = 'won')
  where id = '00000000-0000-0000-0000-00000000aa02';
-select ok((select status = 'done' and won_at is not null from public.leads
+select ok((select won_at is not null and _stage(id) = 'won' from public.leads
             where id = '00000000-0000-0000-0000-00000000aa02'),
-  'moving to Won sets status done and stamps won_at');
+  'moving to Won stamps won_at');
 update public.leads set stage_id = (select id from public.lead_stages
   where tenant_id = '00000000-0000-0000-0000-000000000001' and key = 'proposal')
  where id = '00000000-0000-0000-0000-00000000aa02';
-select ok((select status = 'in_progress' and won_at is null from public.leads
+select ok((select won_at is null and _stage(id) = 'proposal' from public.leads
             where id = '00000000-0000-0000-0000-00000000aa02'),
-  'leaving Won clears won_at; an open stage reads as in progress');
+  'leaving Won clears won_at');
 select throws_ok(
   $$ update public.leads set stage_id = (select id from public.lead_stages
        where tenant_id = '00000000-0000-0000-0000-0000000000ff' and key = 'won')
       where id = '00000000-0000-0000-0000-00000000aa02' $$,
   '23503', null, 'a lead cannot point at another tenant''s stage (composite key)');
 
--- The public form writes as the SERVICE ROLE, through every new trigger (the BEFORE phase
--- calls auth.uid() in that role). The suites above insert as the owner, so prove this one.
+-- The public form writes as the SERVICE ROLE, through every trigger (the BEFORE phase calls
+-- auth.uid() in that role). The suites above insert as the owner, so prove this one.
 set local role service_role;
 select _as(null, null, null);
 select lives_ok(
@@ -358,12 +364,13 @@ select lives_ok(
   'the service role (the public contact form) still inserts a lead');
 reset role;
 
--- A lead that arrives as spam is capped at once.
-insert into public.leads (id, tenant_id, name, email_enc, message, status)
-values ('00000000-0000-0000-0000-00000000aa03', '00000000-0000-0000-0000-000000000001', 'Junk', 'x', 'buy', 'spam');
+-- A lead that arrives as spam is capped at once, and starts in the initial stage.
+insert into public.leads (id, tenant_id, name, email_enc, message, is_spam)
+values ('00000000-0000-0000-0000-00000000aa03', '00000000-0000-0000-0000-000000000001', 'Junk', 'x', 'buy', true);
 select ok((select is_spam and retention_delete_after <= now() + interval '10 days'
+                  and spam_marked_at is not null and _stage(id) = 'new'
              from public.leads where id = '00000000-0000-0000-0000-00000000aa03'),
-  'a lead inserted as spam gets the spam horizon');
+  'a lead inserted as spam gets the spam horizon, in the initial stage');
 
 -- ---- The stage set ------------------------------------------------------------------------
 select throws_ok(

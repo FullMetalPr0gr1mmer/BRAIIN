@@ -1,15 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 // What can be checked about migration 0041 without a database (pgTAP runs only in CI,
 // supabase/tests/crm_leads_write.test.sql): the order of its statements where the order is
-// the point.
+// the point. Where a later migration restated one of its functions (the leads contract, C14b,
+// restated the lead triggers and the note door), the latest definition is the one checked.
 
-const SQL = readFileSync(
-  join(process.cwd(), 'supabase', 'migrations', '0041_crm_leads_write.sql'),
-  'utf8',
-).replace(/--[^\n]*/g, '');
+const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
+const uncommented = (file: string) =>
+  readFileSync(join(MIGRATIONS, file), 'utf8').replace(/--[^\n]*/g, '');
+
+const SQL = uncommented('0041_crm_leads_write.sql');
 
 const at = (statement: RegExp): number => {
   const match = statement.exec(SQL);
@@ -17,13 +19,27 @@ const at = (statement: RegExp): number => {
   return match!.index;
 };
 
-/** The body of one function, from its `create or replace` to the end of its `$$`. */
-function body(name: string): string {
-  const start = SQL.indexOf(`create or replace function ${name}(`);
+/** The body of one function in `sql`, from its `create or replace` to the end of its `$$`. */
+function bodyIn(sql: string, name: string): string {
+  const start = sql.indexOf(`create or replace function ${name}(`);
   expect(start, name).toBeGreaterThanOrEqual(0);
-  const open = SQL.indexOf('$$', start);
-  const close = SQL.indexOf('end $$;', open);
-  return SQL.slice(open, close);
+  const open = sql.indexOf('$$', start);
+  const close = sql.indexOf('end $$;', open);
+  return sql.slice(open, close);
+}
+
+/** The body of one function as 0041 defines it. */
+const body = (name: string): string => bodyIn(SQL, name);
+
+/** The body of one function as the LAST migration that defines it leaves it, and that file. */
+function latest(name: string): { file: string; fn: string } {
+  const file = readdirSync(MIGRATIONS)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .filter((f) => uncommented(f).includes(`create or replace function ${name}(`))
+    .pop();
+  expect(file, name).toBeDefined();
+  return { file: file!, fn: bodyIn(uncommented(file!), name) };
 }
 
 describe('leads_bulk_update judges what it did not change in a second statement', () => {
@@ -56,40 +72,42 @@ describe('leads_bulk_update judges what it did not change in a second statement'
   });
 });
 
-describe('a service-role lead write names whom it acts for in app.acting_for', () => {
-  // The note door clears a legacy field for the person deleting its mirror. Writing
-  // updated_by could not say who that is: a value equal to the lead's last editor reads as
-  // unchanged, and the deleter usually saved the field last. pgTAP proves the outcome in CI
-  // (crm_leads_write.test.sql); the shape it depends on is pinned here.
-  it('the BEFORE phase takes the session first, then the named person, and nothing written', () => {
-    expect(body('app.tg_lead_pipeline')).toMatch(
-      /elsif v_edited then\s+new\.updated_at := now\(\);\s+new\.updated_by := coalesce\(auth\.uid\(\),\s+nullif\(current_setting\('app\.acting_for', true\), ''\)::uuid\);\s+else/,
+describe('a service-role lead write is the session\u2019s, or no one\u2019s (the leads contract, C14b)', () => {
+  // 0041 let the note door name the person it acted for in app.acting_for, for the one write
+  // that cleared the legacy notes field. C14b dropped the field, restated the door without that
+  // write and the BEFORE phase without the setting: an edit's person is the session's, and a
+  // service-role edit made for no one is no one's. pgTAP proves the outcome in CI
+  // (crm_leads_write.test.sql); the shape it depends on is pinned here, on the latest
+  // definitions.
+  const pipeline = latest('app.tg_lead_pipeline');
+  const timeline = latest('app.tg_lead_timeline');
+  const door = latest('public.crm_delete_lead_note');
+
+  it('the BEFORE phase takes the session alone for an edit, and reads no setting', () => {
+    expect(pipeline.fn).toMatch(
+      /elsif v_edited then\s+new\.updated_at := now\(\);\s+new\.updated_by := auth\.uid\(\);\s+else/,
     );
+    expect(pipeline.fn).not.toMatch(/acting_for|current_setting/);
   });
 
   it('the AFTER phase takes the person the BEFORE phase recorded', () => {
-    expect(body('app.tg_lead_timeline')).toMatch(
+    expect(timeline.fn).toMatch(
       /v_actor uuid := coalesce\(auth\.uid\(\),\s+case when tg_op = 'INSERT' then new\.created_by else new\.updated_by end\);/,
     );
   });
 
-  it('the door names the deleter for its one write, then puts back what was there', () => {
-    const door = body('public.crm_delete_lead_note');
-    const name = door.indexOf("set_config('app.acting_for', p_actor::text, true)");
-    const write = door.indexOf('update public.leads l set internal_notes = null');
-    const restore = door.indexOf("set_config('app.acting_for', coalesce(v_acting, ''), true)");
-    const remove = door.indexOf('delete from public.lead_notes');
-    expect(name).toBeGreaterThan(0);
-    expect(write).toBeGreaterThan(name);
-    expect(restore).toBeGreaterThan(write);
-    expect(remove).toBeGreaterThan(restore);
-    expect(door.slice(write, restore)).not.toMatch(/updated_by/);
+  it('the note door deletes the note, then records it, and writes no lead and sets nothing', () => {
+    const remove = door.fn.indexOf('delete from public.lead_notes');
+    const record = door.fn.indexOf("'note_deleted'");
+    expect(remove).toBeGreaterThan(0);
+    expect(record).toBeGreaterThan(remove);
+    expect(door.fn).not.toMatch(/update\s+public\.leads|set_config|acting_for/);
   });
 
-  it('only ever sets it for the transaction, so a pooled connection never carries it on', () => {
-    const sets = SQL.match(/set_config\('app\.acting_for',[^\n]*/g) ?? [];
-    expect(sets).toHaveLength(2);
-    for (const set of sets) expect(set.trimEnd()).toMatch(/, true\);$/);
+  it('neither phase nor the door names a column the contract dropped', () => {
+    for (const { fn } of [pipeline, timeline, door]) {
+      expect(fn).not.toMatch(/\b(status|internal_notes|timeline_band|ip_inet)\b/);
+    }
   });
 });
 

@@ -8,20 +8,23 @@
 --     moved, or that never matched it, reads and changes nothing (app.live_role(), the
 --     RESTRICTIVE leads_live policy; CLAUDE.md §9(b));
 --   • the column half: a staff token reads only the safe columns. The gated ones
---     (ciphertext, budget, timeline, notes, address, retention) leave the database only
---     through the Worker's audited service-role paths.
+--     (ciphertext, budget, timeline, retention, the CRM's indexes and reasons) leave the
+--     database only through the Worker's audited service-role paths.
+-- Since the leads contract (C14b) the legacy status, notes field, address and plaintext band
+-- are gone from the table, and leads_safe is re-created without status: still SECURITY
+-- INVOKER, exactly the safe columns, SELECT for staff and nothing for anyone else.
 
 begin;
-select plan(42);
+select plan(45);
 
 -- Setup runs as the migration/superuser role (RLS bypassed here).
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
   ('00000000-0000-0000-0000-0000000000ff', 'T2');
 insert into public.leads (id, tenant_id, name, email_enc, message, discipline_of_interest,
-                          internal_notes, timeline_band)
+                          budget_enc, timeline_text_enc)
   values ('00000000-0000-0000-0000-0000000000aa', '00000000-0000-0000-0000-000000000001', 'Lead', '\x00', 'hi',
-          'branding', 'Called back', '1-3m');
+          'branding', 'budget-ciphertext', 'timeline-ciphertext');
 
 -- One profile per principal. The last five hold tokens their profiles no longer back.
 insert into auth.users (id, email) values
@@ -167,8 +170,8 @@ select is((select count(*) from public.leads)::int, 0, 'a token with no subject 
 -- ---- the column grant (0033) --------------------------------------------------------
 select _as('00000000-0000-0000-0000-0000000000a1', 'admin', '00000000-0000-0000-0000-000000000001');
 select is(
-  _readable(array['email_enc', 'phone_enc', 'budget_enc', 'timeline_band', 'timeline_text_enc',
-                  'internal_notes', 'ip_inet', 'retention_delete_after',
+  _readable(array['email_enc', 'phone_enc', 'budget_enc', 'timeline_text_enc',
+                  'retention_delete_after',
                   -- and what the CRM keeps from staff (0034, 0035)
                   'retention_before_spam', 'email_hmac', 'phone_hmac', 'score_signals',
                   'crm_indexed_at']),
@@ -178,19 +181,22 @@ select throws_ok(
   '42501', null, 'select * is refused: it fails loudly instead of leaking (0033)');
 select lives_ok(
   $$ select id, tenant_id, kind, locale, name, company, message, service_of_interest,
-            discipline_of_interest, status, consent_marketing, created_at, updated_at
+            discipline_of_interest, consent_marketing, created_at, updated_at, lead_number,
+            stage_id, is_spam, spam_marked_at, first_response_at, won_at, version, created_by,
+            updated_by, score, source, channel, search_text, assigned_to, value_sar, is_starred,
+            read_at, read_by, tags, last_contact_at, last_contact_channel
        from public.leads $$,
   'admin reads every safe column');
 select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0000-0000-000000000001');
 select is(
-  _readable(array['email_enc', 'phone_enc', 'budget_enc', 'timeline_band', 'timeline_text_enc',
-                  'internal_notes', 'ip_inet', 'retention_delete_after',
+  _readable(array['email_enc', 'phone_enc', 'budget_enc', 'timeline_text_enc',
+                  'retention_delete_after',
                   -- and what the CRM keeps from staff (0034, 0035)
                   'retention_before_spam', 'email_hmac', 'phone_hmac', 'score_signals',
                   'crm_indexed_at']),
   '{}'::text[], 'developer reads no gated lead column through the API (0033)');
 
--- ---- writes: status and notes only (0030) -----------------------------------------
+-- ---- writes: the pipeline's columns only (0030, 0041) --------------------------------
 -- Admin and Developer hold the update policy, so without these grants RLS alone would
 -- stand between a staff token and a forged, deleted or rewritten lead. Inserts belong to
 -- the service role (the public form), deletes to the retention job.
@@ -212,8 +218,8 @@ select throws_ok(
 select throws_ok(
   $$ update public.leads set status = 'in_progress', internal_notes = 'Sent the proposal'
      where id = '00000000-0000-0000-0000-0000000000aa' $$,
-  '42501', null,
-  'a live admin no longer writes the legacy status or notes field (0097: the stage and the notes thread are the ways)');
+  '42703', null,
+  'the legacy status and notes field are gone (C14b): the stage and the notes thread are the ways');
 select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0000-0000-000000000001');
 select throws_ok(
   $$ insert into public.leads (tenant_id, name, email_enc, message)
@@ -227,10 +233,12 @@ select throws_ok(
 reset role;
 select _as(null, null, null);
 select is(
-  (select internal_notes || ' / ' || status from public.leads
-    where id = '00000000-0000-0000-0000-0000000000aa'),
-  'Called back / new',
-  'the refused legacy write changed nothing');
+  (select array_agg(column_name::text order by column_name::text)
+     from information_schema.columns
+    where table_schema = 'public' and table_name = 'leads'
+      and column_name in ('status', 'internal_notes', 'ip_inet', 'timeline_band')),
+  null::text[],
+  'leads has no status, internal_notes, ip_inet or timeline_band any more (C14b)');
 select throws_ok(
   $$ insert into public.leads (tenant_id, name, email_enc, message, discipline_of_interest)
      values ('00000000-0000-0000-0000-000000000001', 'x', '\x00', 'y', 'Not a slug!') $$,
@@ -240,11 +248,42 @@ select throws_ok(
 -- Creator and SEO included, because a GRANT cannot tell app roles apart (they all share
 -- `authenticated`). Invoker rights make the base table's RLS decide the rows.
 -- `create or replace view` does NOT inherit reloptions, so a careless re-definition would
--- turn it into a cross-tenant leak.
+-- turn it into a cross-tenant leak; C14b dropped and re-created it, restating the option.
 select ok(
   (select reloptions::text[] @> array['security_invoker=true']
      from pg_class where relname = 'leads_safe' and relnamespace = 'public'::regnamespace),
   'leads_safe is SECURITY INVOKER (without it, every authenticated role reads all leads)');
+
+-- Its columns, exactly and in order: 0041's list less the legacy status (C14b). Nothing gated
+-- (ciphertext, retention, the indexes, the reasons, the search text) is among them.
+select is(
+  (select array_agg(attname::text order by attnum) from pg_attribute
+    where attrelid = 'public.leads_safe'::regclass and attnum > 0 and not attisdropped),
+  array['id', 'tenant_id', 'kind', 'locale', 'name', 'message', 'service_of_interest',
+        'consent_marketing', 'created_at', 'updated_at', 'company', 'discipline_of_interest',
+        'lead_number', 'stage_id', 'is_spam', 'spam_marked_at', 'first_response_at', 'won_at',
+        'version', 'created_by', 'updated_by', 'score', 'source', 'channel', 'assigned_to',
+        'value_sar', 'is_starred', 'read_at', 'read_by', 'tags', 'last_contact_at',
+        'last_contact_channel'],
+  'leads_safe carries exactly the safe columns, in order (C14b: no status)');
+
+-- Its grants, stated when it was re-created (P-14): staff SELECT and nothing else; PUBLIC,
+-- anon and the service role nothing, table-wide or on a column.
+select ok(
+  has_table_privilege('authenticated', 'public.leads_safe', 'select')
+  and not has_table_privilege('authenticated', 'public.leads_safe',
+                              'insert, update, delete, truncate, references, trigger')
+  and not has_any_column_privilege('authenticated', 'public.leads_safe', 'insert, update, references')
+  and not has_table_privilege('anon', 'public.leads_safe',
+                              'select, insert, update, delete, truncate, references, trigger')
+  and not has_any_column_privilege('anon', 'public.leads_safe', 'select, insert, update, references')
+  and not has_table_privilege('public', 'public.leads_safe',
+                              'select, insert, update, delete, truncate, references, trigger')
+  and not has_any_column_privilege('public', 'public.leads_safe', 'select, insert, update, references')
+  and not has_table_privilege('service_role', 'public.leads_safe',
+                              'select, insert, update, delete, truncate, references, trigger')
+  and not has_any_column_privilege('service_role', 'public.leads_safe', 'select, insert, update, references'),
+  'leads_safe: SELECT for staff only; nothing for PUBLIC, anon or the service role (C14b)');
 
 -- `company` is deliberately NON-sensitive: it belongs in leads_safe alongside `name`.
 select ok(
@@ -273,11 +312,15 @@ select ok(
   and not has_table_privilege('authenticated', 'public.leads', 'delete')
   and not has_table_privilege('authenticated', 'public.leads', 'truncate')
   and not has_table_privilege('authenticated', 'public.leads', 'update')
-  and not has_column_privilege('authenticated', 'public.leads', 'status', 'update')
-  and not has_column_privilege('authenticated', 'public.leads', 'internal_notes', 'update')
-  and has_column_privilege('authenticated', 'public.leads', 'stage_id', 'update')
-  and not has_column_privilege('authenticated', 'public.leads', 'internal_notes', 'select'),
-  'authenticated: column SELECT and column UPDATE (the pipeline since 0041; the legacy status and notes withdrawn by 0097), no insert/delete/truncate (0030, 0033, 0041)');
+  and not has_any_column_privilege('authenticated', 'public.leads', 'insert, references'),
+  'authenticated: column SELECT and column UPDATE only, no insert/delete/truncate (0030, 0033, 0041)');
+select is(
+  (select array_agg(a.attname::text order by a.attname::text) from pg_attribute a
+    where a.attrelid = 'public.leads'::regclass and a.attnum > 0 and not a.attisdropped
+      and has_column_privilege('authenticated', a.attrelid, a.attnum, 'update')),
+  array['assigned_to', 'is_spam', 'is_starred', 'last_contact_at', 'last_contact_channel',
+        'read_at', 'stage_id', 'tags', 'value_sar'],
+  'staff update exactly the pipeline''s columns (0041; the legacy pair withdrawn by 0097, dropped by C14b)');
 
 select ok(
   exists (select 1 from pg_policies

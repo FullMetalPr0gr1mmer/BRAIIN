@@ -9,8 +9,8 @@
 --      tables and 0098's faq_items) and the sample lock read as written;
 --   2. the CRM: a live Sales token reads and works leads (the stages, the timeline, the
 --      settings, the people it may assign to) through RLS and the pipeline's column grant,
---      and writes nothing else of a lead: no insert, no delete, no legacy status, no
---      ciphertext, no notes table;
+--      and writes nothing else of a lead: no insert, no delete, no ciphertext, no notes
+--      table (and the legacy status and notes field are gone since C14b);
 --   3. everything else, FROM THE CATALOG: for every relation in public that `authenticated`
 --      can read at all, outside the CRM and the member's own rows, a Sales token reads no
 --      more rows than anon, and wherever it reads a row it reads no column anon cannot read
@@ -171,8 +171,8 @@ insert into public.job_applications (tenant_id, name, email_enc, phone_enc, city
   ('93000000-0000-0000-0000-000000000001', 'Applicant', 'ciphertext', 'ciphertext', 'Jeddah',
    'Motion designer', '1-3', 'freelance', 'month', array['animation'], 'https://example.com/work',
    'My best piece', '2026-09-30', now() + interval '12 months');
-insert into public.leads (id, tenant_id, name, email_enc, message, internal_notes) values
-  ('93000000-0000-0000-0000-0000000000aa', '93000000-0000-0000-0000-000000000001', 'Lead', '\x00', 'hi', 'Called back'),
+insert into public.leads (id, tenant_id, name, email_enc, message, budget_enc) values
+  ('93000000-0000-0000-0000-0000000000aa', '93000000-0000-0000-0000-000000000001', 'Lead', '\x00', 'hi', 'ciphertext'),
   ('93000000-0000-0000-0000-0000000000ab', '93000000-0000-0000-0000-0000000000ff', 'Other', '\x00', 'hi', null);
 
 create function _as(p_sub text, p_role text, p_tid text) returns void language sql as $$
@@ -332,10 +332,11 @@ select is(
   'testimonials ((tenant_id = app.effective_tenant_id()) AND app.is_staff())',
   'the non-staff block: four RESTRICTIVE reads (0097''s three, the FAQ''s in 0098), the tenant first, then CMS staff');
 select ok(
-  not has_column_privilege('authenticated', 'public.leads', 'status', 'update')
-    and not has_column_privilege('authenticated', 'public.leads', 'internal_notes', 'update')
+  not exists (select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'leads'
+                 and column_name in ('status', 'internal_notes', 'ip_inet', 'timeline_band'))
     and has_column_privilege('authenticated', 'public.leads', 'stage_id', 'update'),
-  'the legacy lead writes are withdrawn; the pipeline''s stay');
+  'the legacy lead columns are gone (0097 withdrew their writes, C14b dropped them); the pipeline''s writes stay');
 select is(
   (select string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text)
      from pg_proc p
@@ -354,11 +355,12 @@ select ok((select count(*) from public.lead_events where lead_id = '93000000-000
   'and the lead''s timeline');
 select is(_val($$ select (public.leads_list('93000000-0000-0000-0000-000000000001', '{}') ->> 'total') $$), '1',
   'public.leads_list answers Sales (INVOKER: RLS decides)');
-select is(_val($$ select internal_notes from public.leads $$), '42501',
+select is(_val($$ select budget_enc from public.leads $$), '42501',
   'the gated columns stay out of reach (0033''s column grant)');
 select is(_run($$ update public.leads set is_starred = true where id = '93000000-0000-0000-0000-0000000000aa' $$),
   'ok:1', 'Sales works the pipeline through the column grant');
-select is(_run($$ update public.leads set status = 'done' $$), '42501', 'but no legacy status (0097)');
+select is(_run($$ update public.leads set status = 'done' $$), '42703',
+  'and no legacy status: gone (0097 withdrew it, C14b dropped it)');
 select is(_run($$ update public.leads set email_enc = '\x01' $$), '42501', 'nor the ciphertext');
 select is(_run($$ insert into public.leads (tenant_id, name, email_enc, message)
                   values ('93000000-0000-0000-0000-000000000001', 'x', '\x00', 'y') $$), '42501',
