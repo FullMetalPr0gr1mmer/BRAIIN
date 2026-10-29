@@ -487,6 +487,64 @@ test.describe('as admin', () => {
     await axe(page, 'a lead with its details revealed');
   });
 
+  test('a lead: the star waits for the mark-read sent on opening, and stays (C4 star race)', async ({
+    page,
+  }) => {
+    const lead = await addLead(page, 'star-detail');
+    // A lead added by hand is read at once: mark it unread, so opening its page marks it read.
+    const unread = await page.request.patch(`/api/admin/leads/${lead.id}`, {
+      headers: { 'x-csrf-token': await csrf(page) },
+      data: { read: false },
+    });
+    expect(unread.status()).toBe(200);
+    expect((await leadOf(page, lead.id))['read_at']).toBeNull();
+
+    // The mark-read runs on the server at once (its answer says the star is off) and its
+    // answer is held. Before the fix the star could be pressed meanwhile, and this late answer
+    // turned it off again on screen; now every read and write of the row is queued
+    // (src/lib/crm/lateAnswers.ts), so the page is busy until it answers.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let markSeen: () => void = () => undefined;
+    const seen = new Promise<void>((resolve) => {
+      markSeen = resolve;
+    });
+    const row = `**/api/admin/leads/${lead.id}`;
+    await page.route(row, async (route) => {
+      const request = route.request();
+      const body = request.method() === 'PATCH' ? request.postDataJSON() : null;
+      if ((body as { read?: unknown } | null)?.read !== true) return route.continue();
+      const response = await route.fetch();
+      markSeen();
+      await held;
+      await route.fulfill({ response });
+    });
+    await visit(page, `/admin/leads/${lead.id}`);
+    await seen;
+    const star = page.getByRole('switch', { name: 'Starred' });
+    await expect(star).toBeDisabled();
+    await expect(star).toHaveAttribute('aria-checked', 'false');
+
+    release();
+    await expect(star).toBeEnabled();
+    const saved = page.waitForResponse(
+      (res) =>
+        new URL(res.url()).pathname === `/api/admin/leads/${lead.id}` &&
+        res.request().method() === 'PATCH' &&
+        (res.request().postDataJSON() as { isStarred?: unknown } | null)?.isStarred === true,
+    );
+    await star.click();
+    expect((await saved).status()).toBe(200);
+    await expect(star).toBeEnabled();
+    await expect(star).toHaveAttribute('aria-checked', 'true');
+    await page.unroute(row);
+    const stored = await leadOf(page, lead.id);
+    expect(stored['is_starred']).toBe(true);
+    expect(stored['read_at']).not.toBeNull();
+  });
+
   test('a lead: an Admin erases it, and it is gone', async ({ page }) => {
     const lead = await addLead(page, 'erase');
     await visit(page, `/admin/leads/${lead.id}`, { waitUntil: 'networkidle' });
