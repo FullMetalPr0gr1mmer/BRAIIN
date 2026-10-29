@@ -43,8 +43,10 @@ jobs:
       # The rehearsal itself: playwright.config.ts adds the switch and the drill.
       E2E_RELEASES: 'on'
     steps:
-      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
-      - uses: actions/setup-node@v4
+      # Pinned to the commits the deploy job pins (ci.yml, CLAUDE.md §3 supply chain). The CLI
+      # action is still the e2e job's tag: its commit is pinned with the e2e job's (README O-26).
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm

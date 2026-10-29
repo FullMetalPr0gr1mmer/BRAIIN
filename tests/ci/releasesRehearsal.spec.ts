@@ -53,10 +53,13 @@ const ci = load('ci.yml');
 const job = rehearsal.jobs['e2e-releases-on']!;
 const e2e = gates.jobs['e2e']!;
 
+/** An action without its ref (a tag or a commit): the pins are checked on their own. */
+const actionOf = (uses: string | undefined) => (uses === undefined ? null : uses.split('@')[0]!);
+
 /** A step as it acts: what it runs or uses, with what, and its own timeout. */
 const acts = (step: Step) => ({
   name: step.name ?? null,
-  uses: step.uses ?? null,
+  uses: actionOf(step.uses),
   run: step.run ?? null,
   with: step.with ?? null,
   if: step.if ?? null,
@@ -93,6 +96,28 @@ describe('.github/workflows/releases-rehearsal.yml', () => {
       .map(acts);
     // The comments and the CLI pin's note may differ; what each step does may not.
     expect((job.steps ?? []).map(acts)).toEqual(expected);
+  });
+
+  it('pins its actions to the deploy job’s commits; only the CLI action keeps the e2e job’s tag', () => {
+    // CLAUDE.md §3 supply chain (review S4). The deploy job's pins are the ones already trusted.
+    const deployPins = new Map(
+      (ci.jobs['deploy']!.steps ?? [])
+        .filter((step) => step.uses !== undefined)
+        .map((step) => [actionOf(step.uses)!, step.uses!]),
+    );
+    const e2eUses = new Set((e2e.steps ?? []).map((step) => step.uses).filter(Boolean));
+    const unpinned: string[] = [];
+    for (const step of job.steps ?? []) {
+      if (step.uses === undefined) continue;
+      if (/@[0-9a-f]{40}$/.test(step.uses)) {
+        expect(step.uses).toBe(deployPins.get(actionOf(step.uses)!));
+      } else {
+        expect(e2eUses.has(step.uses), step.uses).toBe(true);
+        unpinned.push(step.uses);
+      }
+    }
+    // The one left (no commit of it is pinned anywhere in this repository yet: README O-26).
+    expect(unpinned).toEqual(['supabase/setup-cli@v1']);
   });
 
   it('is never a need of the deploy, nor a required check, nor called by ci.yml', () => {
