@@ -5,6 +5,7 @@ import {
   OTHER_TENANT,
   PRINCIPALS,
   makeContext,
+  observedEntityFilters,
   observedTenantFilters,
   serviceClientStub,
   statusOf,
@@ -125,6 +126,38 @@ describe('admin endpoints — {principal × capability} matrix', () => {
 
       const leaked = observedTenantFilters.filter((tenant) => tenant !== OTHER_TENANT);
       expect(leaked, `${testCase.name} scoped a query to a foreign tenant`).toEqual([]);
+    }
+  });
+
+  it('reads a singleton’s history as the caller’s own site, never a named one', async () => {
+    // The identity and the SEO defaults are keyed by the tenant, and their history requests
+    // name no entity (Admin v2 R14-prep): the snapshot read must be the caller's own site's.
+    const singletons = CASES.filter((c) =>
+      /entityType[=":' ]+(site_profile|seo_defaults)/.test(`${c.url} ${JSON.stringify(c.body)}`),
+    );
+    expect(singletons.map((c) => c.name).sort()).toEqual([
+      'history restore: the SEO defaults (no id)',
+      'history restore: the public identity (no id)',
+      'history: the SEO defaults (no id)',
+      'history: the public identity (no id)',
+    ]);
+    for (const testCase of singletons) {
+      const module = await testCase.load();
+      const route = module[testCase.method] as APIRoute;
+      const ctx = makeContext(
+        'other_tenant',
+        testCase.url,
+        testCase.body,
+        testCase.method,
+        testCase.params,
+        testCase,
+      );
+      await statusOf(route, ctx);
+      expect(observedEntityFilters.length, `${testCase.name} read no entity`).toBeGreaterThan(0);
+      expect(
+        observedEntityFilters.filter((entity) => entity !== OTHER_TENANT),
+        `${testCase.name} read another site's history`,
+      ).toEqual([]);
     }
   });
 
