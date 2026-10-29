@@ -487,7 +487,7 @@ test.describe('as admin', () => {
     await axe(page, 'a lead with its details revealed');
   });
 
-  test('a lead: the star waits for the mark-read sent on opening, and stays (C4 star race)', async ({
+  test('a lead: a star pressed while the mark-read is out stays (C4 star race)', async ({
     page,
   }) => {
     const lead = await addLead(page, 'star-detail');
@@ -500,9 +500,9 @@ test.describe('as admin', () => {
     expect((await leadOf(page, lead.id))['read_at']).toBeNull();
 
     // The mark-read runs on the server at once (its answer says the star is off) and its
-    // answer is held. Before the fix the star could be pressed meanwhile, and this late answer
-    // turned it off again on screen; now every read and write of the row is queued
-    // (src/lib/crm/lateAnswers.ts), so the page is busy until it answers.
+    // answer is held. On main this late answer turned a star pressed meanwhile off again on
+    // screen. The mark-read is not queued (it never holds the status card) and only its
+    // read_at is taken, so the star stays (src/lib/crm/lateAnswers.ts, LeadDetail.tsx).
     let release: () => void = () => undefined;
     const held = new Promise<void>((resolve) => {
       release = resolve;
@@ -512,6 +512,14 @@ test.describe('as admin', () => {
       markSeen = resolve;
     });
     const row = `**/api/admin/leads/${lead.id}`;
+    const patchOf = (res: {
+      url(): string;
+      request(): { method(): string; postDataJSON(): unknown };
+    }) =>
+      new URL(res.url()).pathname === `/api/admin/leads/${lead.id}` &&
+      res.request().method() === 'PATCH'
+        ? (res.request().postDataJSON() as { read?: unknown; isStarred?: unknown } | null)
+        : null;
     await page.route(row, async (route) => {
       const request = route.request();
       const body = request.method() === 'PATCH' ? request.postDataJSON() : null;
@@ -523,21 +531,22 @@ test.describe('as admin', () => {
     });
     await visit(page, `/admin/leads/${lead.id}`);
     await seen;
+    // The status card is not held by the mark-read: the star can be pressed at once.
     const star = page.getByRole('switch', { name: 'Starred' });
-    await expect(star).toBeDisabled();
-    await expect(star).toHaveAttribute('aria-checked', 'false');
-
-    release();
     await expect(star).toBeEnabled();
-    const saved = page.waitForResponse(
-      (res) =>
-        new URL(res.url()).pathname === `/api/admin/leads/${lead.id}` &&
-        res.request().method() === 'PATCH' &&
-        (res.request().postDataJSON() as { isStarred?: unknown } | null)?.isStarred === true,
-    );
+    await expect(star).toHaveAttribute('aria-checked', 'false');
+    const saved = page.waitForResponse((res) => patchOf(res)?.isStarred === true);
     await star.click();
     expect((await saved).status()).toBe(200);
     await expect(star).toBeEnabled();
+    await expect(star).toHaveAttribute('aria-checked', 'true');
+
+    // The mark-read's answer, read before the star was saved, lands now: the star stays.
+    const marked = page.waitForResponse((res) => patchOf(res)?.read === true);
+    release();
+    await (await marked).finished();
+    // Its JSON is parsed and drawn within a few frames; give them, then look.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 250)));
     await expect(star).toHaveAttribute('aria-checked', 'true');
     await page.unroute(row);
     const stored = await leadOf(page, lead.id);

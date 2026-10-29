@@ -11,22 +11,28 @@
 //     the PATCH audits and resolves interests after its update), a write failed (it can fail
 //     after its update committed) or a bulk action ran (it is not optimistic). That read's
 //     answer is the truth.
-//   • pressStar and rowWrite run one list write through those rules; starOutcome says what a
-//     failed press came to once the read after it lands.
+//   • pressStar and rowWrite run one list write (the board's moves too) through those rules.
+//     A failed write waits in Checks, one per row, for the read after it; verdictOf says what
+//     it came to (starOutcome, the board's moveOutcome).
 //   • Serial, for a lead's page. Every read and write of the row runs one after another, so
 //     the row's answers arrive in send order and the newest sent is the last shown; the page is
 //     busy (its versioned controls disabled) until the queue is empty, follow-up reads included,
 //     so no change can leave with an old version. writeInTurn is one PATCH in that queue.
-//   • Latest, for a reload that is not queued (a lead's timeline): a newer one aborts the older.
-//   • withDeadline bounds every row write and every queued read (ROW_WAIT_MS), so one request
-//     that never answers cannot hold the list's reads or a lead's queue for good. A timeout
-//     counts as a failure, which already reads again.
+//   • Latest, for a reload that is not queued (a lead's timeline): a newer one aborts the older,
+//     and an older page still out when a reload leaves or lands.
+//   • withDeadline bounds every row write and read (ROW_WAIT_MS; a bulk action BULK_WAIT_MS), so
+//     one request that never answers cannot hold the list's reads, the board's moves or a
+//     lead's queue for good. A timeout counts as a failure, which already reads again.
 //
 // Nothing here holds a row or a field: no contact detail, budget or note passes through
-// (CLAUDE.md §3). State is a few numbers, one controller and one promise: nothing grows.
+// (CLAUDE.md §3). State is a few numbers, controllers and one promise, and Checks holds a
+// failed write's name and words until the next read: nothing grows with use.
 
-/** How long a row write or a queued read may take before it counts as failed. */
+/** How long a row write or a read may take before it counts as failed. */
 export const ROW_WAIT_MS = 15_000;
+
+/** A bulk action changes up to a page of leads, each audited: it gets longer. */
+export const BULK_WAIT_MS = 60_000;
 
 /** What a timed-out request says (P-12: plain, true either way). */
 export const TOO_SLOW = 'The server did not answer in time.';
@@ -40,12 +46,14 @@ export class TooSlow extends Error {
 }
 
 /**
- * Runs `send` with a signal that aborts after `ms`. Past the deadline it rejects with TooSlow,
- * whatever the fetch threw on abort (browsers differ). The timer is cleared once it settles.
+ * Runs `send` with a signal that aborts after `ms`, or when `outer` aborts (a read the rule
+ * dropped). Past the deadline it rejects with TooSlow, whatever the fetch threw on abort
+ * (browsers differ). The timer is cleared once it settles.
  */
 export async function withDeadline<T>(
   send: (signal: AbortSignal) => Promise<T>,
   ms: number = ROW_WAIT_MS,
+  outer?: AbortSignal,
 ): Promise<T> {
   const controller = new AbortController();
   let late = false;
@@ -53,18 +61,23 @@ export async function withDeadline<T>(
     late = true;
     controller.abort();
   }, ms);
+  const drop = () => controller.abort(outer?.reason);
+  outer?.addEventListener('abort', drop, { once: true });
   try {
     return await Promise.race([
       send(controller.signal),
       // A send that ignores its signal still lets go at the deadline.
       new Promise<never>((_, reject) =>
-        controller.signal.addEventListener('abort', () => reject(new TooSlow()), { once: true }),
+        controller.signal.addEventListener('abort', () => reject(controller.signal.reason), {
+          once: true,
+        }),
       ),
     ]);
   } catch (err) {
     throw late ? new TooSlow() : err;
   } finally {
     clearTimeout(timer);
+    outer?.removeEventListener('abort', drop);
   }
 }
 
@@ -162,19 +175,72 @@ export async function pressStar(
   return ok;
 }
 
-/** One row write that is not optimistic (a bulk action): the list is read again after it. */
+/**
+ * One row write that is not optimistic (a bulk action, a board move): read again after it,
+ * unless `shown` (its answer is drawn as saved, a move) and nothing else asks for a read.
+ */
 export async function rowWrite<T>(
   writes: ListWrites,
   send: (signal: AbortSignal) => Promise<T>,
   reread: () => void,
   ms: number = ROW_WAIT_MS,
+  shown = false,
 ): Promise<T> {
   writes.write();
+  let ok = false;
   try {
-    return await withDeadline(send, ms);
+    const answer = await withDeadline(send, ms);
+    ok = shown;
+    return answer;
   } finally {
-    if (writes.written(false)) reread();
+    if (writes.written(ok)) reread();
   }
+}
+
+/**
+ * Failed writes waiting for the read after them, one per row: a write on one row never clears
+ * another's. The read takes them all, so it holds at most the rows written since the last read.
+ */
+export class Checks<C extends { id: string }> {
+  private open = new Map<string, C>();
+
+  /** A new write on this row: its earlier check is moot. */
+  drop(id: string): void {
+    this.open.delete(id);
+  }
+
+  add(check: C): void {
+    this.open.set(check.id, check);
+  }
+
+  /** A read landed or failed: every check waiting, each taken once. */
+  take(): C[] {
+    const all = [...this.open.values()];
+    this.open.clear();
+    return all;
+  }
+}
+
+/** A row's words set (or taken out when empty); the other rows' are kept. */
+export function sayFor(
+  words: Readonly<Record<string, string>>,
+  id: string,
+  text: string,
+): Record<string, string> {
+  const next = { ...words };
+  if (text) next[id] = text;
+  else delete next[id];
+  return next;
+}
+
+/**
+ * What a failed write came to once a read after it landed: the value it asked for is stored
+ * (it saved after all: the write can fail after its update committed), another value is, or the
+ * read could not say (it failed, or the row is not on the page read).
+ */
+export function verdictOf<V>(asked: V, stored: V | undefined): 'saved' | 'refused' | 'unknown' {
+  if (stored === undefined) return 'unknown';
+  return stored === asked ? 'saved' : 'refused';
 }
 
 /** A failed star press waiting for the read after it. */
@@ -200,11 +266,22 @@ export function starPending(check: StarCheck): string {
  */
 export function starOutcome(check: StarCheck, stored: boolean | undefined): string {
   const verb = check.next ? 'starred' : 'unstarred';
-  if (stored === check.next) return '';
-  if (stored === undefined) {
+  const verdict = verdictOf(check.next, stored);
+  if (verdict === 'saved') return '';
+  if (verdict === 'unknown') {
     return `${check.name} may not be ${verb}: the list could not confirm it. ${check.detail}`;
   }
   return `${check.name} could not be ${verb}. ${check.detail}`;
+}
+
+/** A bulk action with no answer (too slow, or the network): it may still be running. */
+export function bulkUnsure(detail: string): string {
+  return `${detail} The change may still be saving. The list will be read again, so check the rows before you try again.`;
+}
+
+/** A change on a lead's page that failed: the read after it may show it saved after all. */
+export function changeUnsure(detail: string): string {
+  return `This change may not have been saved. ${detail}`;
 }
 
 export class Serial {
@@ -261,15 +338,33 @@ export function writeInTurn<T>(
   });
 }
 
-/** The newest of a reload that is not queued: asking again aborts the one still out. */
+/**
+ * The newest of a reload that is not queued (a lead's timeline): asking again aborts the one
+ * still out. An older page (more) is read past the list on screen, so it is dropped when a
+ * reload leaves after it or lands before it: appended to a newer first page, its cursor would
+ * skip or repeat events.
+ */
 export class Latest {
   private current: AbortController | null = null;
+  private older: AbortController | null = null;
 
-  /** A new reload leaves: its controller (the one before it is aborted, its answer dropped). */
+  /** A new reload leaves: its controller (the reload and any older page out are aborted). */
   next(): AbortController {
     this.current?.abort();
-    const controller = new AbortController();
-    this.current = controller;
-    return controller;
+    this.older?.abort();
+    this.current = new AbortController();
+    return this.current;
+  }
+
+  /** An older page leaves: its controller (an older page still out is aborted). */
+  more(): AbortController {
+    this.older?.abort();
+    this.older = new AbortController();
+    return this.older;
+  }
+
+  /** A reload's answer is about to be drawn: an older page still out is dropped. */
+  drawn(): void {
+    this.older?.abort();
   }
 }

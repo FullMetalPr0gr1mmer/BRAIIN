@@ -2,16 +2,22 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { moveOutcome, type MoveCheck } from '@/components/admin/screens/leads/LeadsBoard';
 import {
+  BULK_WAIT_MS,
+  Checks,
   Latest,
   ListWrites,
   ROW_WAIT_MS,
   Serial,
   TOO_SLOW,
   TooSlow,
+  bulkUnsure,
+  changeUnsure,
   pressStar,
   rowWrite,
+  sayFor,
   starOutcome,
   starPending,
+  verdictOf,
   withDeadline,
   writeInTurn,
   type StarCheck,
@@ -208,6 +214,40 @@ describe('withDeadline (a row write or queued read never holds the screen for go
     expect(ROW_WAIT_MS).toBeGreaterThanOrEqual(10_000);
     expect(ROW_WAIT_MS).toBeLessThanOrEqual(30_000);
   });
+
+  it('a bulk action gets longer than one row, still not for ever (CR2)', () => {
+    expect(BULK_WAIT_MS).toBeGreaterThanOrEqual(4 * ROW_WAIT_MS);
+    expect(BULK_WAIT_MS).toBeLessThanOrEqual(120_000);
+  });
+
+  it('a read the rule drops (outer) aborts the request, and is not too slow (L3)', async () => {
+    vi.useFakeTimers();
+    const outer = new AbortController();
+    let seen: AbortSignal | undefined;
+    const read = withDeadline(
+      (signal) => {
+        seen = signal;
+        return new Promise<never>(() => undefined);
+      },
+      1_000,
+      outer.signal,
+    );
+    const caught = read.catch((err: unknown) => err);
+    outer.abort();
+    expect(seen!.aborted).toBe(true);
+    expect(await caught).not.toBeInstanceOf(TooSlow);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('a read that never answers lets go at the deadline with an outer signal too (L3)', async () => {
+    vi.useFakeTimers();
+    const outer = new AbortController();
+    const slow = withDeadline(() => new Promise<never>(() => undefined), 1_000, outer.signal);
+    const late = slow.catch((err: unknown) => err);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(await late).toBeInstanceOf(TooSlow);
+    expect(outer.signal.aborted).toBe(false); // the rule's own controller is left alone
+  });
 });
 
 /** The list as one island: what the screen shows and what the reads asked for. */
@@ -340,6 +380,56 @@ describe('pressStar and rowWrite (the list, as the island runs them)', () => {
     await posted;
     expect(screen.rereads).toBe(1);
   });
+
+  it('a board move (shown when saved): no read alone, a read after a read it aborted or a failure (CR5, CR7)', async () => {
+    vi.useFakeTimers();
+    const w = new ListWrites();
+    let rereads = 0;
+    const reread = () => {
+      rereads += 1;
+    };
+    await rowWrite(w, async () => 'moved', reread, ROW_WAIT_MS, true);
+    expect(rereads).toBe(0); // the card is drawn in its new column from the answer
+    const board = w.read()!; // a filter's read is out when the next move leaves
+    await rowWrite(w, async () => 'moved', reread, ROW_WAIT_MS, true);
+    expect(board.signal.aborted).toBe(true);
+    expect(rereads).toBe(1);
+    // A PATCH that never answers lets go at the deadline: the next move is not held for good.
+    const stuck = rowWrite(w, () => new Promise<never>(() => undefined), reread, 1_000, true);
+    const caught = stuck.catch((err: unknown) => err);
+    expect(w.read()).toBeNull();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(await caught).toBeInstanceOf(TooSlow);
+    expect(rereads).toBe(2);
+  });
+});
+
+describe('Checks, sayFor and verdictOf (a failed write per row, CR6, CR7)', () => {
+  it('a write on one row never clears another row’s check; the read takes them all once', () => {
+    const checks = new Checks<{ id: string; next: boolean }>();
+    checks.add({ id: 'a', next: true });
+    checks.drop('b'); // a press on another row
+    checks.add({ id: 'b', next: false });
+    checks.drop('b'); // pressed again: only its own check goes
+    expect(checks.take()).toEqual([{ id: 'a', next: true }]);
+    expect(checks.take()).toEqual([]);
+  });
+
+  it('the words are per row: set, kept for the others, taken out when empty', () => {
+    const one = sayFor({}, 'a', 'Sara may not be starred.');
+    const two = sayFor(one, 'b', 'Omar may not be starred.');
+    expect(two).toEqual({ a: 'Sara may not be starred.', b: 'Omar may not be starred.' });
+    expect(sayFor(two, 'a', '')).toEqual({ b: 'Omar may not be starred.' });
+    expect(one).toEqual({ a: 'Sara may not be starred.' }); // never changed in place
+  });
+
+  it('one verdict for a star and a move: saved, refused or unknown', () => {
+    expect(verdictOf(true, true)).toBe('saved');
+    expect(verdictOf(true, false)).toBe('refused');
+    expect(verdictOf(true, undefined)).toBe('unknown');
+    expect(verdictOf('won', 'won')).toBe('saved');
+    expect(verdictOf('won', 'new')).toBe('refused');
+  });
 });
 
 describe('what a failed press says (LS2-2, LS-R4: true either way)', () => {
@@ -376,8 +466,24 @@ describe('what a failed press says (LS2-2, LS-R4: true either way)', () => {
       starOutcome(check(true), false),
       starOutcome(check(true), undefined),
       TOO_SLOW,
+      bulkUnsure(TOO_SLOW),
+      changeUnsure(TOO_SLOW),
     ].join(' ');
     expect(words).not.toMatch(/[–—]/);
+  });
+
+  it('a bulk action with no answer is never said to have failed (CR2)', () => {
+    const words = bulkUnsure(TOO_SLOW);
+    expect(words.startsWith(TOO_SLOW)).toBe(true);
+    expect(words).toContain('may still be saving');
+    expect(words).toContain('check the rows before you try again');
+    expect(words).not.toMatch(/fail|could not/i);
+  });
+
+  it("a lead page's failed change is hedged: the read after it may show it saved (Info)", () => {
+    expect(changeUnsure('Something went wrong.')).toBe(
+      'This change may not have been saved. Something went wrong.',
+    );
   });
 });
 
@@ -562,6 +668,26 @@ describe("Latest (a lead's timeline, LS2-4)", () => {
     expect(first.signal.aborted).toBe(true);
     expect(second.signal.aborted).toBe(false);
   });
+
+  it('an older page is dropped by a reload that leaves after it (CR1)', () => {
+    const latest = new Latest();
+    const reload = latest.next();
+    const older = latest.more();
+    expect(reload.signal.aborted).toBe(false); // an older page never aborts a reload
+    latest.next();
+    expect(older.signal.aborted).toBe(true);
+  });
+
+  it('an older page is dropped when a reload out before it lands first (CR1)', () => {
+    const latest = new Latest();
+    const reload = latest.next();
+    const older = latest.more(); // its cursor is the list on screen, which the reload replaces
+    expect(reload.signal.aborted).toBe(false);
+    latest.drawn();
+    expect(older.signal.aborted).toBe(true);
+    const next = latest.more(); // the next older page, from the new list, is not
+    expect(next.signal.aborted).toBe(false);
+  });
 });
 
 describe('the islands use the rules', () => {
@@ -569,73 +695,128 @@ describe('the islands use the rules', () => {
   const list = () => read('src/components/admin/screens/leads/LeadsList.tsx');
   const detail = () => read('src/components/admin/screens/leads/LeadDetail.tsx');
   const board = () => read('src/components/admin/screens/leads/LeadsBoard.tsx');
-  const between = (src: string, from: string, to: string) =>
-    src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
+  /** The source from `from` up to `to`; both must be there (never a slice from -1). */
+  const between = (src: string, from: string, to: string) => {
+    const start = src.indexOf(from);
+    expect(start, `missing: ${from}`).toBeGreaterThanOrEqual(0);
+    const end = src.indexOf(to, start);
+    expect(end, `missing: ${to}`).toBeGreaterThan(start);
+    return src.slice(start, end);
+  };
+  /** Each marker is there, in this order (L1: a missing guard is -1, which sorts first). */
+  const inOrder = (src: string, ...markers: string[]) => {
+    let at = -1;
+    for (const marker of markers) {
+      const next = src.indexOf(marker, at + 1);
+      expect(next, `missing or out of order: ${marker}`).toBeGreaterThan(at);
+      at = next;
+    }
+  };
 
   it('the rules are built once, never as a ref argument on every render (LS-R7)', () => {
     expect(list()).toContain('const [writes] = useState(() => new ListWrites());');
+    expect(list()).toContain('const [stars] = useState(() => new Checks<StarCheck>());');
     expect(detail()).toContain('const [queue] = useState(() => new Serial(setBusy));');
     expect(detail()).toContain('const [timeline] = useState(() => new Latest());');
-    for (const src of [list(), detail()]) expect(src).not.toMatch(/useRef\(new /);
+    expect(board()).toContain('const [writes] = useState(() => new ListWrites());');
+    expect(board()).toContain('const [moves] = useState(() => new Checks<MoveCheck>());');
+    for (const src of [list(), detail(), board()]) expect(src).not.toMatch(/useRef\(new /);
   });
 
-  it('the list reads through the rule: held while a write is out, aborted answers dropped', () => {
+  it('the list reads through the rule: held, bounded, aborted answers dropped (L1, L3)', () => {
     const effect = between(list(), 'const listed = useRef', 'const summarised');
     expect(effect).not.toContain('new AbortController()'); // the read's controller is the rule's
-    const held = effect.indexOf('if (!controller) return;');
-    expect(effect.indexOf('const controller = writes.read();')).toBeLessThan(held);
-    expect(held).toBeLessThan(effect.indexOf('adminFetch<LeadPage>'));
-    expect(effect.indexOf('if (!writes.landed(controller)) return;')).toBeLessThan(
-      effect.indexOf('setRows('),
+    inOrder(
+      effect,
+      'const controller = writes.read();',
+      'if (!controller) return;',
+      'withDeadline(',
+      "adminFetch<LeadPage>('/api/admin/leads/query'",
+      'ROW_WAIT_MS,\n      controller.signal,',
+      'if (!writes.landed(controller)) return;',
+      'setRows(',
+      'settleStars(fresh);',
+      '.catch(',
+      'if (!writes.landed(controller)) return;',
+      'settleStars(null);',
+      'setError(',
     );
-    const caught = effect.slice(effect.indexOf('.catch('));
-    expect(caught.indexOf('if (!writes.landed(controller)) return;')).toBeLessThan(
-      caught.indexOf('setError('),
-    );
-    // A failed press is settled by the read after it, landed or failed.
-    expect(effect.match(/settleStar\(/g)).toHaveLength(2);
+    // The list is read on its own counter: a star's re-read never reads the KPIs (CR8).
+    expect(effect).toContain('}, [filters, q, relist]);');
+    const summary = between(list(), 'const summarised = useRef', '// The page head');
+    expect(summary).toContain('}, [filters.range, recount]);');
+    expect(list()).toContain('const reread = () => setRelist((n) => n + 1);');
   });
 
-  it('a star and a bulk action are row writes, bounded, through the rule', () => {
-    const src = list();
-    const star = between(src, 'async function toggleStar', 'function postBulk');
-    expect(star).toContain('await pressStar(writes, next, {');
+  it('a star press keeps every other row’s pending check and words (CR6)', () => {
+    const star = between(list(), 'async function toggleStar', 'function postBulk');
+    inOrder(
+      star,
+      'stars.drop(row.id);',
+      "setStarWords((words) => sayFor(words, row.id, ''));",
+      'await pressStar(writes, next, {',
+      'stars.add(check);',
+      'setStarWords((words) => sayFor(words, row.id, starPending(check)));',
+    );
+    expect(star).not.toMatch(/setStarWords\(\{\}\)|stars\.take\(\)/);
     expect(star).toMatch(/body: \{ isStarred: next \},\s*signal,/);
-    expect(star).toContain('setStarError(starPending(check));');
     expect(star).not.toContain('could not be starred'); // the words are the rule's
+    const settle = between(list(), 'function settleStars', 'async function toggleStar');
+    inOrder(settle, 'for (const check of stars.take())', 'sayFor(words, check.id, said)');
+  });
+
+  it('a bulk action is a row write with a longer deadline, never said to fail unknown (CR2, CR8)', () => {
+    const src = list();
     const bulk = between(src, 'function postBulk', 'function bulkDone');
-    expect(bulk).toContain('return rowWrite(');
-    expect(bulk).toMatch(/method: 'POST', body, signal \}/);
+    inOrder(
+      bulk,
+      'return rowWrite(',
+      "method: 'POST', body, signal }",
+      'reread,',
+      'BULK_WAIT_MS,',
+      '.finally(() => setRecount((n) => n + 1));',
+      'err instanceof AdminApiError && err.info.status < 500',
+      "{ tone: 'warn', text: bulkUnsure(detail) }",
+    );
     expect(src).toContain('post={postBulk}');
+    expect(src).toContain('onError={bulkFailed}');
     const done = between(src, 'function bulkDone', 'const counts =');
-    expect(done).not.toContain('setReload'); // the rule asks for the read, after every write
+    expect(done).not.toMatch(/setRe(load|list|count)/); // the rule asks for the read
     const bar = read('src/components/admin/screens/leads/LeadsBulkBar.tsx');
     expect(bar).toContain('onDone(await post(body))');
+    expect(bar).toContain('onError(err);'); // the list decides what a failure may mean
     expect(bar).not.toContain('adminFetch');
   });
 
-  it("a lead's page queues and bounds every read and write of the row", () => {
+  it("a lead's page queues and bounds the row's reads and writes, but not the mark-read (CR3, CR4)", () => {
     const src = detail();
     // busy belongs to the queue alone: no write clears it before a follow-up read lands.
     expect(src).not.toMatch(/setBusy\((true|false)\)/);
-    // The row's own route is fetched in three places (read, write, mark-read), each bounded.
+    // The row's own route is fetched in three places: the read and the write, both bounded
+    // and queued, and the mark-read, neither.
     const calls = src.match(/adminFetch<LeadDetailRow>\(`\/api\/admin\/leads\/\$\{lead\.id\}`/g);
     expect(calls).toHaveLength(3);
-    expect(src.match(/withDeadline\(\(signal\) =>\s*adminFetch<LeadDetailRow>/g)).toHaveLength(2);
+    expect(src.match(/withDeadline\(\(signal\) =>\s*adminFetch<LeadDetailRow>/g)).toHaveLength(1);
     expect(src).toContain('const refetch = () => queue.run(() => readLead());');
+    // Every row drawn goes through showLead, which keeps it for the next queued write.
+    expect(src.match(/setLead\(/g)).toHaveLength(1);
+    inOrder(src, 'function showLead(', 'row.current = next;', 'setLead(next);');
     const write = between(src, 'function write(', '// A confirmation');
     expect(write).toContain('return writeInTurn(queue, {');
     expect(write).toMatch(
-      /body: versioned \? \{ \.\.\.body, version: lead\.version \} : body,\s*signal,/,
+      /body: versioned \? \{ \.\.\.body, version: row\.current\.version \} : body,\s*signal,/,
     );
+    expect(write).toContain('showLead(answer);');
     const marked = between(src, 'if (marked.current', 'function openErase');
-    expect(marked).toMatch(/void queue\.run\(\(\) =>\s*withDeadline\(/);
+    expect(marked).not.toContain('queue.run');
     expect(marked).toContain('body: { read: true }');
+    expect(marked).toContain('showLead({ ...row.current, read_at: answer.read_at })');
   });
 
-  it("a lead's page reads again after a 409 (said) and after any failure (quiet)", () => {
+  it("a lead's page reads again after a 409 (said) and after any failure (quiet, hedged)", () => {
     const write = between(detail(), 'function write(', '// A confirmation');
     expect(write).toContain('return !conflict;');
+    expect(write).toContain("{ tone: 'err', text: changeUnsure(describeError(err)) }");
     expect(write).toMatch(
       /reread: async \(quiet\) => \{\s*await readLead\(quiet\);\s*void reloadEvents\(\);/,
     );
@@ -643,26 +824,65 @@ describe('the islands use the rules', () => {
     expect(detail()).toMatch(/catch \(err\) \{\s*if \(!quiet\) setMessage\(\{ tone: 'err'/);
   });
 
-  it("a lead's timeline draws only the newest reload's answer (LS2-4)", () => {
+  it("a lead's timeline draws only the newest reload, and an older page only onto its own list (LS2-4, CR1, L1)", () => {
     const reload = between(detail(), 'async function reloadEvents', 'async function olderEvents');
-    expect(reload).toContain('const controller = timeline.next();');
-    expect(reload).toContain('{ signal: controller.signal }');
-    const guard = reload.indexOf('if (controller.signal.aborted) return;');
-    expect(guard).toBeGreaterThan(-1);
-    expect(guard).toBeLessThan(reload.indexOf('setEvents('));
-    const caught = reload.slice(reload.indexOf('catch (err)'));
-    expect(caught.indexOf('if (controller.signal.aborted) return;')).toBeLessThan(
-      caught.indexOf('setEventsError('),
+    inOrder(
+      reload,
+      'const controller = timeline.next();',
+      '{ signal: controller.signal }',
+      'if (controller.signal.aborted) return;',
+      'timeline.drawn();',
+      'setEvents(',
+      'catch (err)',
+      'if (controller.signal.aborted) return;',
+      'setEventsError(',
+    );
+    const older = between(detail(), 'async function olderEvents', '/**');
+    inOrder(
+      older,
+      'const controller = timeline.more();',
+      '{ signal: controller.signal }',
+      'if (controller.signal.aborted) return;',
+      'setEvents(',
+      'catch (err)',
+      'if (controller.signal.aborted) return;',
+      'setEventsError(',
+      'setEventsBusy(false);',
     );
   });
 
-  it('the board reads again after a failed move, and says what it came to (LS-R3)', () => {
+  it('the board moves through the rule: bounded, reads held and dropped, a check per card (CR5, CR6, CR7, L3)', () => {
     const src = board();
-    const failed = between(src, '} else {\n        // The PATCH can fail', 'finally {');
-    expect(failed).toContain('moveCheck.current = { id: card.id, name, to, detail };');
-    expect(failed).toContain('setReload((n) => n + 1);');
+    expect(src).not.toContain('new AbortController()');
     const effect = between(src, 'const loaded = useRef', '// After a move');
-    expect(effect).toContain('settleMove(fresh);');
-    expect(effect).toContain('settleMove(null);');
+    inOrder(
+      effect,
+      'const controller = writes.read();',
+      'if (!controller) return;',
+      'withDeadline(',
+      'ROW_WAIT_MS,\n      controller.signal,',
+      'if (!writes.landed(controller)) return;',
+      'setColumns(fresh);',
+      'settleMoves(fresh);',
+      '.catch(',
+      'if (!writes.landed(controller)) return;',
+      'settleMoves(null);',
+    );
+    const move = between(src, 'async function move(', 'const listHref');
+    inOrder(
+      move,
+      'moves.drop(card.id);',
+      "setMoveWords((words) => sayFor(words, card.id, ''));",
+      'await rowWrite(',
+      'signal,',
+      'reread,',
+      'ROW_WAIT_MS,\n        true,',
+      'moves.add({ id: card.id, name, to, detail });',
+      'sayFor(words, card.id,',
+    );
+    expect(move).not.toMatch(/setReload|moves\.take\(\)/); // the rule asks for the read
+    expect(between(src, 'export function moveOutcome', '/**')).toContain(
+      'verdictOf(check.to.id, where?.stage.id)',
+    );
   });
 });

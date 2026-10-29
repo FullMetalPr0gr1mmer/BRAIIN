@@ -4,6 +4,15 @@ import Icon from '@/components/admin/kit/Icon';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { isoOf } from '@/lib/admin/relTime';
 import { useClock } from '@/components/admin/kit/clock';
+import {
+  Checks,
+  ListWrites,
+  ROW_WAIT_MS,
+  rowWrite,
+  sayFor,
+  verdictOf,
+  withDeadline,
+} from '@/lib/crm/lateAnswers';
 import type { LeadsFrame, StageView } from '@/lib/crm/leadPage';
 import type { BoardColumn, LeadCard } from '@/lib/crm/leadReads';
 import { boardFilters, boardQueryOf, withLeadFilters, type LeadFilters } from '@/lib/crm/leadUrl';
@@ -105,10 +114,9 @@ export function moveOutcome(
   columns: readonly { stage: { id: string }; cards: readonly { id: string }[] }[] | null,
 ): { said: string } | { error: string } {
   const where = columns?.find((column) => column.cards.some((card) => card.id === check.id));
-  if (where && where.stage.id === check.to.id) {
-    return { said: `Moved ${check.name} to ${check.to.label}.` };
-  }
-  if (where) return { error: `${check.name} could not be moved. ${check.detail}` };
+  const verdict = verdictOf(check.to.id, where?.stage.id);
+  if (verdict === 'saved') return { said: `Moved ${check.name} to ${check.to.label}.` };
+  if (verdict === 'refused') return { error: `${check.name} could not be moved. ${check.detail}` };
   return {
     error: `${check.name} may not have moved: the board could not confirm it. ${check.detail}`,
   };
@@ -161,16 +169,19 @@ export default function LeadsBoard({
     initial ? '' : 'The pipeline could not be loaded just now. Try again in a moment.',
   );
   const [searchError, setSearchError] = useState('');
+  // A failed move's words, per card (a move of one card never clears another's).
+  const [moveWords, setMoveWords] = useState<Record<string, string>>({});
   const [said, setSaid] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(() => Date.parse(renderedAt));
   const focusAfter = useRef<{ id: string; from: string } | null>(null);
-  // The board read in flight, if any: one that started before a move answers with the card
-  // where it was, so a move asks again rather than let that answer redraw it there.
-  const reading = useRef<AbortController | null>(null);
-  // A move whose PATCH failed, until the board read after it says where the card is.
-  const moveCheck = useRef<MoveCheck | null>(null);
+  // A move is a row write, as on the list (src/lib/crm/lateAnswers.ts): it aborts the board
+  // read in flight (its cards predate the move) and holds new ones until it answers; the board
+  // is read again after a failure or an overlap. Built once.
+  const [writes] = useState(() => new ListWrites());
+  // Failed moves, until the board read after them says where each card is.
+  const [moves] = useState(() => new Checks<MoveCheck>());
   const addLead = useAddLead(permissions.canSeePii, disciplines);
 
   useEffect(() => {
@@ -184,33 +195,40 @@ export default function LeadsBoard({
       loaded.current = false;
       return;
     }
-    const controller = new AbortController();
-    reading.current = controller;
-    adminFetch<{ columns: BoardColumn[] }>('/api/admin/leads/board', {
-      method: 'POST',
-      body: { ...boardQueryOf(filters, new Date(), undefined, zone), ...(q ? { q } : {}) },
-      signal: controller.signal,
-    })
+    // Held while a move is out: asked for again once it has answered.
+    const controller = writes.read();
+    if (!controller) return;
+    const body = { ...boardQueryOf(filters, new Date(), undefined, zone), ...(q ? { q } : {}) };
+    // Bounded, so a failed move's "Checking the board again" never stays up for good.
+    withDeadline(
+      (signal) =>
+        adminFetch<{ columns: BoardColumn[] }>('/api/admin/leads/board', {
+          method: 'POST',
+          body,
+          signal,
+        }),
+      ROW_WAIT_MS,
+      controller.signal,
+    )
       .then((answer) => {
+        // Aborted by a move sent meanwhile: these cards may predate it.
+        if (!writes.landed(controller)) return;
         const fresh = columnsOf(stages, answer.columns);
         setColumns(fresh);
         setError('');
         setSearchError('');
         setNow(Date.now());
-        settleMove(fresh);
+        settleMoves(fresh);
       })
       .catch((err: unknown) => {
-        if (controller.signal.aborted) return;
+        if (!writes.landed(controller)) return;
         focusAfter.current = null;
-        const unsure = settleMove(null);
+        settleMoves(null);
         if (err instanceof AdminApiError && err.info.status === 422 && q) {
           setSearchError(err.info.detail ?? describeError(err));
           return;
         }
-        setError(unsure ? `${unsure} ${describeError(err)}` : describeError(err));
-      })
-      .finally(() => {
-        if (reading.current === controller) reading.current = null;
+        setError(describeError(err));
       });
     return () => controller.abort();
   }, [filters, q, reload]);
@@ -225,52 +243,59 @@ export default function LeadsBoard({
     focusTargetAfterMove(document, after.id, after.from)?.focus();
   }, [columns]);
 
+  /** Read the board again: a move asked for it. */
+  const reread = () => setReload((n) => n + 1);
+
   /**
-   * A board read after a failed move landed (`fresh`, or null when it failed): say what the
-   * move came to. Returns the error said, if any, for a failed read to add its own to.
+   * A board read after failed moves landed (`fresh`, or null when it failed): say what each
+   * came to (moveOutcome).
    */
-  function settleMove(fresh: Column[] | null): string {
-    const check = moveCheck.current;
-    if (!check) return '';
-    moveCheck.current = null;
-    const outcome = moveOutcome(check, fresh);
-    if ('said' in outcome) {
-      setSaid(outcome.said);
-      return '';
+  function settleMoves(fresh: Column[] | null) {
+    for (const check of moves.take()) {
+      const outcome = moveOutcome(check, fresh);
+      if ('said' in outcome) setSaid(outcome.said);
+      setMoveWords((words) => sayFor(words, check.id, 'error' in outcome ? outcome.error : ''));
     }
-    setError(outcome.error);
-    return outcome.error;
   }
 
   async function move(card: Card, to: StageView) {
     const name = leadName(card);
     setBusy(card.id);
     setError('');
-    moveCheck.current = null;
+    moves.drop(card.id);
+    setMoveWords((words) => sayFor(words, card.id, ''));
     try {
-      const answer = await adminFetch<Record<string, unknown>>(`/api/admin/leads/${card.id}`, {
-        method: 'PATCH',
-        body: { version: Number(card.version) || 1, stageId: to.id },
-      });
+      // A row write, bounded: one PATCH that never answers cannot hold every move. Drawn once
+      // saved (the card moves), so the board is read again only when the rule asks.
+      const answer = await rowWrite(
+        writes,
+        (signal) =>
+          adminFetch<Record<string, unknown>>(`/api/admin/leads/${card.id}`, {
+            method: 'PATCH',
+            body: { version: Number(card.version) || 1, stageId: to.id },
+            signal,
+          }),
+        reread,
+        ROW_WAIT_MS,
+        true,
+      );
       focusAfter.current = { id: card.id, from: String(card.stage_id) };
       setColumns((list) => moved(list, card, to, answer));
       setSaid(`Moved ${name} to ${to.label}.`);
-      // A filter or search read that started before this move would redraw the card in its
-      // old column with its old version (the next move then a needless 409): read again.
-      if (reading.current) setReload((n) => n + 1);
     } catch (err) {
+      // Any failure reads the board again (the rule asks, once every move has answered).
       if (err instanceof AdminApiError && err.info.status === 409) {
         setSaid(`Someone else changed ${name}. Refreshed.`);
         // The refresh may put the card in another column, taking its focused button with it.
         focusAfter.current = { id: card.id, from: String(card.stage_id) };
-        setReload((n) => n + 1);
       } else {
-        // The PATCH can fail after its update committed (the version then moved): read the
-        // board again, and say what the move came to once that read lands (settleMove).
+        // The PATCH can fail after its update committed (the version then moved): say what
+        // the move came to once the read after it lands (settleMoves).
         const detail = describeError(err);
-        moveCheck.current = { id: card.id, name, to, detail };
-        setError(`${name} may not have moved. ${detail} Checking the board again.`);
-        setReload((n) => n + 1);
+        moves.add({ id: card.id, name, to, detail });
+        setMoveWords((words) =>
+          sayFor(words, card.id, `${name} may not have moved. ${detail} Checking the board again.`),
+        );
       }
     } finally {
       setBusy(null);
@@ -305,6 +330,11 @@ export default function LeadsBoard({
           {error}
         </p>
       )}
+      {Object.entries(moveWords).map(([id, words]) => (
+        <p key={id} className="msg" data-kind="error" role="alert">
+          {words}
+        </p>
+      ))}
       <p className="visually-hidden" role="status">
         {said}
       </p>
