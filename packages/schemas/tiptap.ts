@@ -86,9 +86,14 @@ export const SECTION_DOC_MARKS = ['bold', 'italic', 'strike', 'underline', 'code
 /** The heading levels the editor offers (the section's own heading is the h2 above them). */
 export const SECTION_DOC_HEADING_LEVELS = [2, 3, 4] as const;
 
-/** How deep a body may nest (a list in a quote in a list item is four) and how big it may be. */
+/**
+ * How deep a body may nest (a list in a quote in a list item is four) and how many nodes it may
+ * hold (a paragraph and its text are two; 300 is some fifty formatted paragraphs). The count is
+ * also a CPU bound: the allowlist renderer parses the document with zod on every render, about
+ * 0.03 to 0.06 ms a node measured, against the Workers Free plan's 10 ms a request.
+ */
 export const SECTION_DOC_MAX_DEPTH = 8;
-export const SECTION_DOC_MAX_NODES = 1500;
+export const SECTION_DOC_MAX_NODES = 300;
 
 const SAME_SITE = 'https://same-site.invalid';
 const LINK_SCHEMES: readonly string[] = ['http:', 'https:', 'mailto:', 'tel:'];
@@ -118,12 +123,30 @@ const MARKS: readonly string[] = SECTION_DOC_MARKS;
 const LEVELS: readonly unknown[] = SECTION_DOC_HEADING_LEVELS;
 const CODE_LANGUAGE = /^[a-z0-9+#-]{1,20}$/i;
 
+const NODE_KEYS: readonly string[] = ['type', 'text', 'attrs', 'marks', 'content'];
+const MARK_KEYS: readonly string[] = ['type', 'attrs'];
+
+type Raw = Record<string, unknown>;
+const isObject = (v: unknown): v is Raw => typeof v === 'object' && v !== null && !Array.isArray(v);
+const onlyKeys = (v: Raw, keys: readonly string[]): boolean =>
+  Object.keys(v).every((k) => keys.includes(k));
+
 /**
- * The first reason a node tree is not a section body, or null. Walks iteratively, bounded by
- * SECTION_DOC_MAX_NODES before it looks any deeper, so a hostile document costs little.
+ * The first reason a value is not a section body, or null. Iterative and bounded (at most
+ * SECTION_DOC_MAX_NODES nodes, SECTION_DOC_MAX_DEPTH deep), and it reads the raw JSON itself:
+ * zod's recursive TiptapNodeSchema is never run on a section body, because inside the 64 KB
+ * payload a document can nest about 1,900 deep, where that recursion overflows the stack
+ * (a RangeError, not an issue), and even 500 deep costs it tens of milliseconds. Anything this
+ * walk accepts is a TiptapDoc that TiptapDocSchema also accepts unchanged
+ * (tests/lib/sectionBlocks.spec.ts), so the renderer's own parse of it is shallow and short.
  */
-export function sectionDocProblem(doc: TiptapDoc): string | null {
-  const stack: { node: TiptapNode; depth: number }[] = (doc.content ?? []).map((node) => ({
+export function sectionDocProblem(raw: unknown): string | null {
+  if (!isObject(raw) || raw['type'] !== 'doc' || !onlyKeys(raw, ['type', 'content'])) {
+    return 'not a document';
+  }
+  const top = raw['content'];
+  if (top !== undefined && !Array.isArray(top)) return 'not a document';
+  const stack: { node: unknown; depth: number }[] = ((top ?? []) as unknown[]).map((node) => ({
     node,
     depth: 1,
   }));
@@ -134,18 +157,24 @@ export function sectionDocProblem(doc: TiptapDoc): string | null {
     seen += 1;
     if (seen > SECTION_DOC_MAX_NODES) return `at most ${SECTION_DOC_MAX_NODES} parts of text`;
     if (depth > SECTION_DOC_MAX_DEPTH) return `nested at most ${SECTION_DOC_MAX_DEPTH} deep`;
-    if (!NODES.includes(node.type)) return `a "${node.type}" cannot be part of this text`;
-    if (node.type === 'text') {
-      if (typeof node.text !== 'string' || node.content !== undefined) return 'malformed text';
-      if (node.text.trim() !== '') words = true;
-    } else if (node.text !== undefined || node.marks !== undefined) {
-      return `a "${node.type}" holds no text or marks of its own`;
+    if (!isObject(node) || !onlyKeys(node, NODE_KEYS)) return 'malformed text';
+    const { type, text, attrs, marks, content } = node;
+    if (typeof type !== 'string' || !NODES.includes(type)) {
+      return `a "${String(type).slice(0, 40)}" cannot be part of this text`;
     }
-    if (node.type === 'heading' && !LEVELS.includes(node.attrs?.['level'])) {
+    if (attrs !== undefined && !isObject(attrs)) return 'malformed text';
+    if (content !== undefined && !Array.isArray(content)) return 'malformed text';
+    if (type === 'text') {
+      if (typeof text !== 'string' || content !== undefined) return 'malformed text';
+      if (text.trim() !== '') words = true;
+    } else if (text !== undefined || marks !== undefined) {
+      return `a "${type}" holds no text or marks of its own`;
+    }
+    if (type === 'heading' && !LEVELS.includes(attrs?.['level'])) {
       return 'a heading is level 2, 3 or 4';
     }
-    if (node.type === 'codeBlock') {
-      const lang = node.attrs?.['language'];
+    if (type === 'codeBlock') {
+      const lang = attrs?.['language'];
       if (
         lang !== undefined &&
         lang !== null &&
@@ -154,22 +183,35 @@ export function sectionDocProblem(doc: TiptapDoc): string | null {
         return 'a code block’s language is a short name';
       }
     }
-    for (const mark of node.marks ?? []) {
-      if (!MARKS.includes(mark.type)) return `"${mark.type}" is not a formatting this text takes`;
-      if (mark.type === 'link' && !sectionHrefKept(mark.attrs?.['href'])) {
-        return 'a link goes to a web address (https://…), a page of this site, an email (mailto:) or a phone (tel:)';
+    if (marks !== undefined) {
+      if (!Array.isArray(marks)) return 'malformed text';
+      for (const mark of marks as unknown[]) {
+        if (!isObject(mark) || !onlyKeys(mark, MARK_KEYS)) return 'malformed text';
+        const markAttrs = mark['attrs'];
+        if (markAttrs !== undefined && !isObject(markAttrs)) return 'malformed text';
+        if (typeof mark['type'] !== 'string' || !MARKS.includes(mark['type'])) {
+          return `"${String(mark['type']).slice(0, 40)}" is not a formatting this text takes`;
+        }
+        if (mark['type'] === 'link' && !sectionHrefKept(markAttrs?.['href'])) {
+          return 'a link goes to a web address (https://…), a page of this site, an email (mailto:) or a phone (tel:)';
+        }
       }
     }
-    for (const child of node.content ?? []) stack.push({ node: child, depth: depth + 1 });
+    for (const child of (content ?? []) as unknown[]) {
+      stack.push({ node: child, depth: depth + 1 });
+    }
   }
   return words ? null : 'write some text';
 }
 
-/** One language of a section body: a document {@link sectionDocProblem} finds nothing in. */
-export const SectionDocSchema = TiptapDocSchema.superRefine((doc, ctx) => {
+/**
+ * One language of a section body: a document {@link sectionDocProblem} finds nothing in. Not
+ * built on TiptapDocSchema (see that function), but its output is a TiptapDoc.
+ */
+export const SectionDocSchema = z.unknown().superRefine((doc, ctx) => {
   const problem = sectionDocProblem(doc);
   if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
-});
+}) as unknown as z.ZodType<TiptapDoc>;
 
 /**
  * A section's rich text in both languages (the Text block's body). Both are required, as every

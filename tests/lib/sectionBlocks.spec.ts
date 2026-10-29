@@ -4,6 +4,7 @@ import {
   SECTION_DOC_MAX_NODES,
   SectionBodySchema,
   SectionDocSchema,
+  TiptapDocSchema,
   sectionHrefKept,
 } from '@schemas/tiptap';
 import {
@@ -119,6 +120,52 @@ describe('a section body (SectionDocSchema)', () => {
     const many = Array.from({ length: SECTION_DOC_MAX_NODES / 2 }, () => p(t('x')));
     expect(ok(doc(...many))).toBe(true);
     expect(ok(doc(...many, p(t('y'))))).toBe(false);
+  });
+
+  it('a nesting bomb inside the 64 KB payload is refused, not a stack overflow', () => {
+    // zod's recursive TiptapNodeSchema throws a RangeError near 1,900 levels (measured): the
+    // section walk reads the raw JSON iteratively and stops at SECTION_DOC_MAX_DEPTH.
+    let bomb: Node = t('x');
+    for (let i = 0; i < 1900; i += 1) bomb = { type: 'blockquote', content: [bomb] };
+    const d = doc(bomb);
+    expect(JSON.stringify(d).length).toBeLessThan(65_536);
+    expect(() => SectionDocSchema.safeParse(d)).not.toThrow();
+    expect(ok(d)).toBe(false);
+    expect(
+      sectionContentIssues('textBlock', { body: { en: d, ar: d } }).map((i) => i.message),
+    ).toContain(`nested at most ${SECTION_DOC_MAX_DEPTH} deep`);
+  });
+
+  it('refuses a malformed tree: a stray key, a node or mark that is not an object', () => {
+    const malformed: [string, unknown][] = [
+      ['a string', 'text'],
+      ['an array', []],
+      ['a doc with a stray key', { type: 'doc', content: [p(t('x'))], html: '<b>x</b>' }],
+      ['content that is not a list', { type: 'doc', content: { 0: p(t('x')) } }],
+      ['a node that is a string', doc(p(t('x')), 'x' as unknown as Node)],
+      ['a node with a stray key', doc({ ...p(t('x')), style: 'color:red' } as Node)],
+      [
+        'attrs that are a list',
+        doc({ type: 'heading', attrs: [2] as unknown as object, content: [t('x')] }),
+      ],
+      [
+        'a mark with a stray key',
+        doc(p({ type: 'text', text: 'x', marks: [{ type: 'bold', style: 'x' }] })),
+      ],
+      [
+        'marks that are not a list',
+        doc(p({ type: 'text', text: 'x', marks: { type: 'bold' } as unknown as object[] })),
+      ],
+      ['a type that is not a string', doc({ type: 7 as unknown as string, content: [t('x')] })],
+    ];
+    for (const [name, d] of malformed) expect(ok(d), name).toBe(false);
+  });
+
+  it('whatever it takes, the renderer’s own schema takes unchanged (so its parse is shallow)', () => {
+    const parsed = TiptapDocSchema.safeParse(EDITOR_OUTPUT);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).toEqual(EDITOR_OUTPUT);
+    expect(SectionDocSchema.parse(EDITOR_OUTPUT)).toEqual(EDITOR_OUTPUT);
   });
 
   it('a stored body renders as the editor wrote it: the renderer drops nothing it takes', () => {
