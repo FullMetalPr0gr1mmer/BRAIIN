@@ -59,6 +59,10 @@
     the order, an optional field shown or required, the button, the budget words, the Join
     consent lines), stored as differences from the built-in forms; a section's own button
     text, set in Pages, still wins over the config's (the page's words are the page's);
+  - "Required" on a field only some pages ask (the phone, the budget, the deadline) holds on
+    those pages' forms only: the server takes the form a send names (it cannot tell a real
+    home-page send from a crafted one), so a request naming a form that does not ask the field
+    is stored without it, never held to it. The editor says so under that field's switches;
   - the inquiry form's consent line ("agreed to be contacted") stays code-owned: a lead stores
     the answer, not a version, and versioning it needs a column through `crm_ingest_lead`
     (owner question in as-built/E8.md);

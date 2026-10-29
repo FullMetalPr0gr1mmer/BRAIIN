@@ -193,6 +193,12 @@
   font-size: 13px;
 }
 
+/* The note under a field's switches (a field only some forms ask) takes its own line. */
+.frm-checks .f__cue {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .frm-check {
   display: inline-flex;
   align-items: center;

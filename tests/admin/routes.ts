@@ -154,16 +154,21 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     render: 'server',
   },
   // Admin v2 U11: Integrations reads its row on the server and refuses itself (a 403 and
-  // Refused.astro) for Content Creator and Developer. The Forms overview is server-rendered
-  // from code and has no JSON twin of its own: its capability is General's (the forms config
-  // is settings.general, P-2), so the API probe asks General's read.
+  // Refused.astro) for Content Creator and Developer. Forms is server-rendered and refuses
+  // itself too; since E8 its editor reads and saves the forms config through its own JSON
+  // twin, /api/admin/form-settings (settings.general, P-2), which the API probe asks.
   {
     href: '/admin/integrations',
     api: '/api/admin/integrations',
     cap: 'settings.integrations',
     render: 'server',
   },
-  { href: '/admin/forms', api: '/api/admin/settings', cap: 'settings.general', render: 'server' },
+  {
+    href: '/admin/forms',
+    api: '/api/admin/form-settings',
+    cap: 'settings.general',
+    render: 'server',
+  },
   { href: '/admin/themes', api: '/api/admin/themes', cap: 'theme.edit' },
   // Admin v2 U10: SEO is server-rendered with in-page tabs (Pages, Redirects, Site wide); a
   // role holding none of its capabilities gets the page's own 403. The redirects list moved

@@ -203,6 +203,12 @@ export default function FormsScreen(props: FormsScreenProps) {
               />
               Required
             </label>
+            {meta.where && (
+              <p className="f__cue">
+                Required only on the forms that ask it. A send from a form that does not ask it is
+                kept without it.
+              </p>
+            )}
           </div>
         ) : (
           <p className="f__cue">Always shown and required: the site needs it to answer.</p>
