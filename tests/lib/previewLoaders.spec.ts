@@ -6,7 +6,16 @@ import { parseSelect, type SelectItem } from '@/lib/preview/select';
 import { MIRRORED_POLICIES } from '@/lib/preview/visibility';
 import { scanTree } from './sourceScan';
 import { loaderQueries } from './loaderQueries';
-import { BI, draft, fakeStaffClient, fixtureTables, ID, session } from '../fixtures/previewDataset';
+import {
+  BI,
+  draft,
+  fakeStaffClient,
+  fixtureTables,
+  ID,
+  session,
+  THEME_SETTINGS,
+  THEME_TOKENS,
+} from '../fixtures/previewDataset';
 
 // Loader conformance, the unit-level parity (Admin v2 R8): every exported loader of the 15
 // files runs inside the preview's scope over the fixture tenant and returns what a visitor
@@ -50,6 +59,7 @@ const siteVerification = await import('@/lib/data/siteVerification');
 const statistics = await import('@/lib/data/statistics');
 const taxonomy = await import('@/lib/data/taxonomy');
 const team = await import('@/lib/data/team');
+const theme = await import('@/lib/data/theme');
 
 const MODULES = {
   blog,
@@ -70,6 +80,7 @@ const MODULES = {
   statistics,
   taxonomy,
   team,
+  theme,
 };
 
 /** Exported functions that query nothing (row → model mappers, the SEO resolver). */
@@ -84,6 +95,7 @@ const PURE = new Set([
   'toServiceCase',
   'toLeader',
   'resolveSeo',
+  'themeHref',
 ]);
 
 /** Runs `fn` as a preview over the fixture tenant (with `drafts`), returning its report. */
@@ -297,6 +309,27 @@ const CASES: Record<string, () => Promise<void>> = {
     // overlay like every other.
     const { value, report } = await inPreview(() => ga4.getGa4MeasurementId());
     expect(value).toBe('G-FIXTURE1');
+    clean(report);
+  },
+  'theme.readActiveTheme': async () => {
+    // Admin v2 E4: anon's two columns of the active v1 theme (never the legacy one, active too).
+    const { value, report } = await inPreview(() => theme.readActiveTheme());
+    expect(value).toEqual({ tokens: THEME_TOKENS, version: 3 });
+    clean(report);
+  },
+  'theme.getActiveTheme': async () => {
+    // The pending theme, compiled from its settings: the preview draws what will go live.
+    const { value, report } = await inPreview(
+      () => theme.getActiveTheme({}),
+      [
+        draft('custom_theme', 'update', ID.theme, {
+          settings: { ...THEME_SETTINGS, motion: { marquee: 'slowest', reveal: true } },
+        }),
+      ],
+    );
+    expect(value?.tokens['--bs-marquee-scale']).toBe('2.5');
+    expect(value?.tokens['--bs-rv-from']).toBeUndefined();
+    expect(value?.tokens['--bs-klein']).toBe('#000000');
     clean(report);
   },
   'statistics.getPublishedStatistics': async () => {

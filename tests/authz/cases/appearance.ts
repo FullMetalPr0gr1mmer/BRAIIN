@@ -18,7 +18,16 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/themes/index'),
     method: 'POST',
     url: '/api/admin/themes',
-    body: { name: 'Neon', tokens: { '--ad-accent': '#00e5ff' } },
+    // Admin v2 E4: a theme is its settings (the brand's own here, which pass the gate).
+    body: {
+      name: 'Site theme',
+      settings: {
+        v: 1,
+        mode: 'simple',
+        colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
+        motion: { marquee: 'normal', reveal: true },
+      },
+    },
     allow: ['admin', 'developer'],
   },
   {

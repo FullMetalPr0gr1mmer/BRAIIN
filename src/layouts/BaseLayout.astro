@@ -100,11 +100,7 @@ const previewTheme = preview && theme ? themeCss(theme.tokens) : '';
     <link rel="stylesheet" href="/styles/global.css" />
     {styles.map((sheet) => <link rel="stylesheet" href={`/styles/${sheet}`} />)}
     {theme && !preview && <link rel="stylesheet" href={themeHref(theme)} />}
-    {
-      previewTheme && (
-        <style is:inline nonce={Astro.locals.cspNonce} set:html={previewTheme} />
-      )
-    }
+    {previewTheme && <style is:inline nonce={Astro.locals.cspNonce} set:html={previewTheme} />}
     {
       /*
       The preview's bridge goes in the head, before every script the page renders: module

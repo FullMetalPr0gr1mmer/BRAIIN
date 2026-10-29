@@ -62,7 +62,8 @@ function independentRatios(colors: ThemeColors) {
       if (Array.isArray(def)) return mix(value(def[0]), def[1], value(def[2]));
       return def.startsWith('#') ? def : role[def]!;
     };
-    for (const [fg, bg, min] of block.pairs) out.push({ ratio: contrast(value(fg), value(bg)), min });
+    for (const [fg, bg, min] of block.pairs)
+      out.push({ ratio: contrast(value(fg), value(bg)), min });
   }
   return out;
 }

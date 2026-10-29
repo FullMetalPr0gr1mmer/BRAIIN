@@ -44,7 +44,7 @@ describe('the mirror against the pgTAP literals', () => {
     const rows = [...body('_anon_columns').matchAll(/\('([a-z_]+)', '([a-z0-9_,]+)'\)/g)].map(
       ([, table, cols]) => [table!, cols!.split(',')] as const,
     );
-    expect(rows).toHaveLength(6);
+    expect(rows).toHaveLength(7);
     expect(Object.fromEntries(rows)).toEqual(ANON_COLUMNS);
   });
 
@@ -52,7 +52,7 @@ describe('the mirror against the pgTAP literals', () => {
     const rows = [...body('_dataset_only_columns').matchAll(/\('([a-z_]+)', '([a-z_,]+)'\)/g)].map(
       ([, table, cols]) => [table!, cols!.split(',')] as const,
     );
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
     expect(Object.fromEntries(rows)).toEqual(DATASET_ONLY_COLUMNS);
   });
 

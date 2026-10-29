@@ -368,7 +368,7 @@ select app.put_help_guide($guide$
       },
       {
         "t": "p",
-        "x": "Press Save changes, or Ctrl+S. Reset to brand defaults puts the brand's own colours and motion back after you confirm. Only an Admin or a Developer can change the theme."
+        "x": "Press Save theme, or Ctrl+S. Reset to brand defaults puts the brand's own colours and motion back after you confirm. Only an Admin or a Developer can change the theme."
       },
       {
         "t": "tip",
@@ -407,7 +407,7 @@ select app.put_help_guide($guide$
       },
       {
         "t": "p",
-        "x": "اضغط Save changes أو Ctrl+S. ويعيد Reset to brand defaults ألوان العلامة وحركتها الأصلية بعد أن تؤكد. ولا يغيّر المظهر إلا المسؤول (Admin) أو المطوّر (Developer)."
+        "x": "اضغط Save theme أو Ctrl+S. ويعيد Reset to brand defaults ألوان العلامة وحركتها الأصلية بعد أن تؤكد. ولا يغيّر المظهر إلا المسؤول (Admin) أو المطوّر (Developer)."
       },
       {
         "t": "tip",

@@ -582,14 +582,14 @@ describe('drafts left out', () => {
     expect(report.pending).toBe(1);
   });
 
-  it('reports redirects, themes and page visibility as not previewed', async () => {
+  it('reports redirects and page visibility as not previewed; a theme is previewed (E4)', async () => {
     const { db, report } = source(fixtureTables(), [
       draft('redirect', 'create', id(711), { sourcePath: '/a', targetPath: '/b', status: 301 }),
-      draft('custom_theme', 'update', id(712), { name: 'Dark' }),
+      draft('custom_theme', 'update', ID.theme, { name: 'Dark' }),
       draft('page_visibility', 'update', id(713), { mode: 'hidden' }),
     ]);
     await read(db, 'pages', 'id');
-    expect(report.notPreviewed.sort()).toEqual(['custom_theme', 'page_visibility', 'redirect']);
+    expect(report.notPreviewed.sort()).toEqual(['page_visibility', 'redirect']);
     expect(report.pending).toBe(3);
     expect(report.invalid).toEqual([]);
   });

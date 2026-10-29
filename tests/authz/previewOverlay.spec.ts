@@ -42,7 +42,8 @@ const CHANGE: Record<ReleaseEntityType, () => Record<string, unknown>> = {
   page_section: () => draft('page_section', 'delete', ID.psVis),
   nav_item: () => draft('nav_item', 'delete', ID.nVis),
   site_profile: () => draft('site_profile', 'update', TENANT, { brandName: BI('B', 'ب') }),
-  custom_theme: () => draft('custom_theme', 'delete', ID.foreign),
+  // Admin v2 E4: a theme is previewed (the active v1 theme, renamed).
+  custom_theme: () => draft('custom_theme', 'update', ID.theme, { name: 'Dark' }),
   entity_seo: () => draft('entity_seo', 'delete', ID.esSvc),
   seo_defaults: () =>
     draft('seo_defaults', 'update', TENANT, { robotsDirectives: 'noindex,follow' }),
@@ -85,7 +86,7 @@ const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Out
     page_section: O,
     nav_item: O,
     site_profile: O,
-    custom_theme: P,
+    custom_theme: O,
     entity_seo: O,
     seo_defaults: O,
     redirect: P,
@@ -157,7 +158,7 @@ const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Out
     page_section: N,
     nav_item: N,
     site_profile: O,
-    custom_theme: P,
+    custom_theme: O,
     entity_seo: N,
     seo_defaults: N,
     redirect: N,
@@ -175,13 +176,15 @@ async function outcome(role: Role, type: ReleaseEntityType): Promise<Outcome> {
   const db = preview.client();
   // Read the type's table when the preview has it; any table loads the drafts.
   await db
-    .from(['custom_themes', 'redirects', 'page_visibility'].includes(table) ? 'pages' : table)
+    .from(['redirects', 'page_visibility'].includes(table) ? 'pages' : table)
     .select(
       table === 'site_profile' || table === 'seo_defaults'
         ? 'tenant_id'
-        : table === 'portfolio_services'
-          ? 'portfolio_id'
-          : 'id',
+        : table === 'custom_themes'
+          ? 'version'
+          : table === 'portfolio_services'
+            ? 'portfolio_id'
+            : 'id',
     );
   const r = preview.report();
   expect(r.invalid, `${role} ${type}`).toEqual([]);
@@ -206,8 +209,8 @@ describe('pending changes a preview shows, per role and entity type', () => {
     });
   }
 
-  it('admin previews all 19 previewable types', () => {
-    expect(Object.values(EXPECTED.admin).filter((o) => o === O)).toHaveLength(19);
+  it('admin previews all 20 previewable types', () => {
+    expect(Object.values(EXPECTED.admin).filter((o) => o === O)).toHaveLength(20);
   });
 });
 

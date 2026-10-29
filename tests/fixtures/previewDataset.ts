@@ -78,6 +78,9 @@ export const ID = {
   bDraft: id(444),
   // the FAQ (Admin v2 U7)
   fqPub: id(461),
+  // Admin v2 E4: the active v1 theme, and a legacy theme (no settings) a visitor never reads.
+  theme: id(471),
+  themeLegacy: id(472),
   fqDraft: id(462),
   // pages, sections, menus
   pgHome: id(501),
@@ -743,6 +746,28 @@ export function fixtureTables(): Record<string, Row[]> {
         footer_show_social: false,
       },
     ],
+    // Admin v2 E4: the active v1 theme (black, warm grey; slower marquee, no reveal), and an
+    // active legacy theme a visitor never reads (0118's custom_themes_public_read).
+    custom_themes: [
+      {
+        id: ID.theme,
+        tenant_id: TENANT,
+        name: 'Site theme',
+        settings: THEME_SETTINGS,
+        tokens: THEME_TOKENS,
+        is_active: true,
+        version: 3,
+      },
+      {
+        id: ID.themeLegacy,
+        tenant_id: TENANT,
+        name: 'Legacy',
+        settings: null,
+        tokens: { '--x': 'red' },
+        is_active: true,
+        version: 1,
+      },
+    ],
     // Admin v2 U11: a visitor reads the Search Console code and the tenant; U15's migration: and
     // the GA4 id. Never the Calendly link, the version or the stamps.
     site_integrations: [
@@ -895,6 +920,27 @@ export function session(role: Role, extra: Partial<AuthContext> = {}): AuthConte
     ...extra,
   };
 }
+
+/** The fixture's v1 theme (pgTAP's theme_settings.test.sql uses the same pair). */
+export const THEME_SETTINGS = {
+  v: 1,
+  mode: 'advanced',
+  colors: { primary: '#000000', hover: '#615757', accent: '#938A8D' },
+  motion: { marquee: 'slower', reveal: false },
+};
+export const THEME_TOKENS = {
+  '--bs-klein': '#000000',
+  '--bs-cobalt': '#615757',
+  '--bs-sky': '#938a8d',
+  '--bs-sky-soft': '#c3bdbf',
+  '--bs-glow-klein': 'rgba(0, 0, 0, 0.42)',
+  '--bs-glow-sky': 'rgba(147, 138, 141, 0.45)',
+  '--bs-shadow-klein': '0 12px 38px rgba(0, 0, 0, 0.45)',
+  '--bs-shadow-cobalt': '0 18px 48px rgba(97, 87, 87, 0.45)',
+  '--bs-marquee-scale': '1.5',
+  '--bs-rv-from': '1',
+  '--bs-rv-shift': '0px',
+};
 
 let draftSeq = 0;
 /** A content_drafts row of the fixture tenant. */

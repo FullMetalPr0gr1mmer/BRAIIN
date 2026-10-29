@@ -57,9 +57,21 @@ export const ThemeTokensSchema = z
     '--bs-sky-soft': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-sky-soft']).optional(),
     '--bs-glow-klein': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-glow-klein']).optional(),
     '--bs-glow-sky': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-glow-sky']).optional(),
-    '--bs-shadow-klein': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-shadow-klein']).optional(),
-    '--bs-shadow-cobalt': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-shadow-cobalt']).optional(),
-    '--bs-marquee-scale': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-marquee-scale']).optional(),
+    '--bs-shadow-klein': z
+      .string()
+      .max(60)
+      .regex(THEME_TOKEN_PATTERNS['--bs-shadow-klein'])
+      .optional(),
+    '--bs-shadow-cobalt': z
+      .string()
+      .max(60)
+      .regex(THEME_TOKEN_PATTERNS['--bs-shadow-cobalt'])
+      .optional(),
+    '--bs-marquee-scale': z
+      .string()
+      .max(60)
+      .regex(THEME_TOKEN_PATTERNS['--bs-marquee-scale'])
+      .optional(),
     '--bs-rv-from': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-rv-from']).optional(),
     '--bs-rv-shift': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-rv-shift']).optional(),
   })

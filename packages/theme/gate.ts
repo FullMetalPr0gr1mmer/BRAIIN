@@ -71,7 +71,8 @@ function resolver(block: Block, palette: Palette) {
     const def = block.colors[name];
     if (def === undefined) throw new Error(`pairs.json: no colour ${name}`);
     let hex: string;
-    if (Array.isArray(def)) hex = mix(resolve(def[0], depth + 1), def[1], resolve(def[2], depth + 1));
+    if (Array.isArray(def))
+      hex = mix(resolve(def[0], depth + 1), def[1], resolve(def[2], depth + 1));
     else if (def.startsWith('#')) hex = def.toLowerCase();
     else if (def === 'skySoft' || (THEME_ROLES as readonly string[]).includes(def))
       hex = palette[def as keyof Palette];

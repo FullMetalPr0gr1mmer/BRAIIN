@@ -477,7 +477,9 @@ export function createMirror(data: MirrorData): Mirror {
         return flagged(row);
       // 0118 custom_themes_public_read (Admin v2 E4; anon's two columns): the active v1 theme.
       case 'custom_themes':
-        return row['is_active'] === true && row['settings'] !== null && row['settings'] !== undefined;
+        return (
+          row['is_active'] === true && row['settings'] !== null && row['settings'] !== undefined
+        );
       // 0001 categories_read, 0019 site_profile_read, 0009 seo_defaults_read, 0105
       // site_integrations_public_read (U11; anon's two columns): the tenant fence only.
       case 'categories':

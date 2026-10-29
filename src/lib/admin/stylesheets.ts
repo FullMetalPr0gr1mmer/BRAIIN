@@ -31,6 +31,8 @@ export const ADMIN_STYLESHEETS = [
   'seo.css',
   'services.css',
   'stats.css',
+  // Admin v2 E4: the theme editor.
+  'theme.css',
   'two-step.css',
   'users.css',
   // Admin v2 R13: Backups & versions (and the kit's gallery, which draws its list).

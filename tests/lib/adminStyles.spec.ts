@@ -150,6 +150,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'seo.css',
       'services.css',
       'stats.css',
+      'theme.css',
       'two-step.css',
       'users.css',
       'versions.css',
