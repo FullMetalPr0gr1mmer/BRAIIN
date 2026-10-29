@@ -11,7 +11,7 @@ import type {
   PersonView,
   StageView,
 } from '@/lib/crm/leadPage';
-import { Serial } from '@/lib/crm/lateAnswers';
+import { Latest, Serial, withDeadline, writeInTurn } from '@/lib/crm/lateAnswers';
 import LeadContactCard, { type Revealed } from './LeadContactCard';
 import LeadNotes from './LeadNotes';
 import LeadStatusCard from './LeadStatusCard';
@@ -60,11 +60,14 @@ export default function LeadDetail(props: LeadDetailProps) {
   const [eraseError, setEraseError] = useState('');
   const [now, setNow] = useState(() => Date.parse(props.now));
   const marked = useRef(false);
-  // Every read and write of the lead runs one after another (src/lib/crm/lateAnswers.ts), so
-  // answers land in send order and the newest sent is the one shown; the status card is busy
-  // until the queue is empty, follow-up reads included, so no versioned change leaves with an
-  // old version.
-  const queue = useRef(new Serial(setBusy));
+  // Every read and write of the lead's row runs one after another (src/lib/crm/lateAnswers.ts),
+  // each bounded by a deadline, so the row's answers land in send order and the newest sent is
+  // the one shown; the status card is busy until the queue is empty, follow-up reads included,
+  // so no versioned change leaves with an old version. Built once (a lazy initial state).
+  const [queue] = useState(() => new Serial(setBusy));
+  // The timeline's reloads are not queued: a newer one aborts the one still out, so an older
+  // timeline never replaces a newer one.
+  const [timeline] = useState(() => new Latest());
 
   const stagesByKey = useMemo(
     () => new Map(stages.map((stage) => [stage.key, { label: stage.label }])),
@@ -75,25 +78,32 @@ export default function LeadDetail(props: LeadDetailProps) {
     [people],
   );
 
-  /** Reads the lead; a failure is said, unless `quiet` (a write's error is already up). */
+  /** Reads the lead (bounded); a failure is said, unless `quiet` (a write's error is up). */
   async function readLead(quiet = false): Promise<void> {
     try {
-      setLead(await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`));
+      setLead(
+        await withDeadline((signal) =>
+          adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, { signal }),
+        ),
+      );
     } catch (err) {
       if (!quiet) setMessage({ tone: 'err', text: describeError(err) });
     }
   }
 
   /** Reads the lead again, after everything queued before (a logged contact changes it). */
-  const refetch = () => queue.current.run(() => readLead());
+  const refetch = () => queue.run(() => readLead());
 
   async function reloadEvents() {
+    const controller = timeline.next();
     try {
       const answer = await adminFetch<{
         events: LeadEventRow[];
         before: string | null;
         beforeId: number | null;
-      }>(`/api/admin/leads/${lead.id}/events`);
+      }>(`/api/admin/leads/${lead.id}/events`, { signal: controller.signal });
+      // A newer reload left meanwhile: its answer is the one drawn.
+      if (controller.signal.aborted) return;
       setEvents(answer.events);
       setBefore(
         answer.before && answer.beforeId ? { at: answer.before, id: answer.beforeId } : null,
@@ -101,6 +111,7 @@ export default function LeadDetail(props: LeadDetailProps) {
       setEventsError('');
       setNow(Date.now());
     } catch (err) {
+      if (controller.signal.aborted) return;
       setEventsError(describeError(err));
     }
   }
@@ -128,32 +139,35 @@ export default function LeadDetail(props: LeadDetailProps) {
   }
 
   /**
-   * One PATCH, queued: the version read with a versioned change. A 409 reads the lead again
-   * inside the same turn (busy until it lands, or its failure is said); so does any other
-   * failure, since the PATCH can fail after its update committed.
+   * One PATCH, queued and bounded (writeInTurn): the version read with a versioned change. Any
+   * failure reads the lead and its timeline again inside the same turn, since the PATCH can fail
+   * after its update committed: after a 409 a failed read is said; after any other failure the
+   * write's own error stays up.
    */
   function write(body: Record<string, unknown>, versioned: boolean): Promise<boolean> {
     setMessage(null);
-    return queue.current.run(async () => {
-      try {
-        const answer = await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
+    return writeInTurn(queue, {
+      send: (signal) =>
+        adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
           method: 'PATCH',
           body: versioned ? { ...body, version: lead.version } : body,
-        });
+          signal,
+        }),
+      saved: (answer) => {
         setLead(answer);
         void reloadEvents();
-        return true;
-      } catch (err) {
-        if (err instanceof AdminApiError && err.info.status === 409) {
-          setMessage({ tone: 'warn', text: CONFLICT });
-          await readLead();
-          void reloadEvents();
-        } else {
-          setMessage({ tone: 'err', text: describeError(err) });
-          await readLead(true);
-        }
-        return false;
-      }
+      },
+      refused: (err) => {
+        const conflict = err instanceof AdminApiError && err.info.status === 409;
+        setMessage(
+          conflict ? { tone: 'warn', text: CONFLICT } : { tone: 'err', text: describeError(err) },
+        );
+        return !conflict;
+      },
+      reread: async (quiet) => {
+        await readLead(quiet);
+        void reloadEvents();
+      },
     });
   }
 
@@ -166,11 +180,14 @@ export default function LeadDetail(props: LeadDetailProps) {
     if (marked.current || lead.read_at !== null) return;
     marked.current = true;
     // Queued like every write, so a change made meanwhile is never answered over.
-    void queue.current.run(() =>
-      adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
-        method: 'PATCH',
-        body: { read: true },
-      })
+    void queue.run(() =>
+      withDeadline((signal) =>
+        adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
+          method: 'PATCH',
+          body: { read: true },
+          signal,
+        }),
+      )
         .then(setLead)
         .catch(() => undefined),
     );

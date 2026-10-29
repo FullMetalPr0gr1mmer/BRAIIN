@@ -85,6 +85,35 @@ function moved(columns: Column[], card: Card, to: StageView, answer: Record<stri
   });
 }
 
+/** A move whose PATCH failed, waiting for the board read after it. */
+export interface MoveCheck {
+  id: string;
+  name: string;
+  to: StageView;
+  /** Why the PATCH failed, as said. */
+  detail: string;
+}
+
+/**
+ * What a failed move came to once the board read after it landed. The PATCH can fail after its
+ * update committed (it resolves interests and audits after it), so the failure alone proves
+ * nothing. `columns`: the board read, or null when that read failed. `said`: it moved after all;
+ * `error`: it did not, or the board could not confirm it.
+ */
+export function moveOutcome(
+  check: MoveCheck,
+  columns: readonly { stage: { id: string }; cards: readonly { id: string }[] }[] | null,
+): { said: string } | { error: string } {
+  const where = columns?.find((column) => column.cards.some((card) => card.id === check.id));
+  if (where && where.stage.id === check.to.id) {
+    return { said: `Moved ${check.name} to ${check.to.label}.` };
+  }
+  if (where) return { error: `${check.name} could not be moved. ${check.detail}` };
+  return {
+    error: `${check.name} may not have moved: the board could not confirm it. ${check.detail}`,
+  };
+}
+
 /**
  * Whether the moved card's link takes focus after the board is redrawn: only when focus was
  * lost (nothing, or the body: the card's "Move to…" left with it for another column). Never
@@ -140,6 +169,8 @@ export default function LeadsBoard({
   // The board read in flight, if any: one that started before a move answers with the card
   // where it was, so a move asks again rather than let that answer redraw it there.
   const reading = useRef<AbortController | null>(null);
+  // A move whose PATCH failed, until the board read after it says where the card is.
+  const moveCheck = useRef<MoveCheck | null>(null);
   const addLead = useAddLead(permissions.canSeePii, disciplines);
 
   useEffect(() => {
@@ -161,19 +192,22 @@ export default function LeadsBoard({
       signal: controller.signal,
     })
       .then((answer) => {
-        setColumns(columnsOf(stages, answer.columns));
+        const fresh = columnsOf(stages, answer.columns);
+        setColumns(fresh);
         setError('');
         setSearchError('');
         setNow(Date.now());
+        settleMove(fresh);
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         focusAfter.current = null;
+        const unsure = settleMove(null);
         if (err instanceof AdminApiError && err.info.status === 422 && q) {
           setSearchError(err.info.detail ?? describeError(err));
           return;
         }
-        setError(describeError(err));
+        setError(unsure ? `${unsure} ${describeError(err)}` : describeError(err));
       })
       .finally(() => {
         if (reading.current === controller) reading.current = null;
@@ -191,10 +225,28 @@ export default function LeadsBoard({
     focusTargetAfterMove(document, after.id, after.from)?.focus();
   }, [columns]);
 
+  /**
+   * A board read after a failed move landed (`fresh`, or null when it failed): say what the
+   * move came to. Returns the error said, if any, for a failed read to add its own to.
+   */
+  function settleMove(fresh: Column[] | null): string {
+    const check = moveCheck.current;
+    if (!check) return '';
+    moveCheck.current = null;
+    const outcome = moveOutcome(check, fresh);
+    if ('said' in outcome) {
+      setSaid(outcome.said);
+      return '';
+    }
+    setError(outcome.error);
+    return outcome.error;
+  }
+
   async function move(card: Card, to: StageView) {
     const name = leadName(card);
     setBusy(card.id);
     setError('');
+    moveCheck.current = null;
     try {
       const answer = await adminFetch<Record<string, unknown>>(`/api/admin/leads/${card.id}`, {
         method: 'PATCH',
@@ -213,7 +265,12 @@ export default function LeadsBoard({
         focusAfter.current = { id: card.id, from: String(card.stage_id) };
         setReload((n) => n + 1);
       } else {
-        setError(`${name} could not be moved. ${describeError(err)}`);
+        // The PATCH can fail after its update committed (the version then moved): read the
+        // board again, and say what the move came to once that read lands (settleMove).
+        const detail = describeError(err);
+        moveCheck.current = { id: card.id, name, to, detail };
+        setError(`${name} may not have moved. ${detail} Checking the board again.`);
+        setReload((n) => n + 1);
       }
     } finally {
       setBusy(null);

@@ -11,7 +11,14 @@ import { useClock } from '@/components/admin/kit/clock';
 import { toast } from '@/lib/admin/toast';
 import { deltaOf, MIN_RESPONSE_SAMPLE, type LeadKpis } from '@/lib/crm/leadKpis';
 import type { LeadsFrame } from '@/lib/crm/leadPage';
-import { ListWrites } from '@/lib/crm/lateAnswers';
+import {
+  ListWrites,
+  pressStar,
+  rowWrite,
+  starOutcome,
+  starPending,
+  type StarCheck,
+} from '@/lib/crm/lateAnswers';
 import type { LeadPage, LeadRow, LeadSummaryAnswer } from '@/lib/crm/leadReads';
 import type { LeadBulk } from '@schemas/crm';
 import {
@@ -178,8 +185,10 @@ export default function LeadsList({
   // A list read never overlaps a row write (the star, a bulk action): a write aborts the read
   // in flight and holds new ones, and the list is read once more after the writes when their
   // order is unknown (src/lib/crm/lateAnswers.ts). So a read that left before a star was saved
-  // never draws it back off.
-  const writes = useRef(new ListWrites());
+  // never draws it back off. Built once (a lazy initial state, not a ref's argument).
+  const [writes] = useState(() => new ListWrites());
+  // A failed star press, until a read after it says what is stored.
+  const starCheck = useRef<StarCheck | null>(null);
 
   // A confirmation the last page sent here (a lead erased): shown once, then taken out of
   // the address. First, before the address is rewritten from the filters.
@@ -205,7 +214,7 @@ export default function LeadsList({
     }
     setBusy(true);
     // Held while a row write is out: asked for again once the writes have answered.
-    const controller = writes.current.read();
+    const controller = writes.read();
     if (!controller) return;
     const body = { ...listQueryOf(filters, new Date(), zone), ...(q ? { q } : {}) };
     adminFetch<LeadPage>('/api/admin/leads/query', {
@@ -215,15 +224,19 @@ export default function LeadsList({
     })
       .then((page) => {
         // Aborted by a row write sent meanwhile: these rows may predate it.
-        if (!writes.current.landed(controller)) return;
-        setRows(asRows(page));
+        if (!writes.landed(controller)) return;
+        const fresh = asRows(page);
+        setRows(fresh);
         setTotal(page.total);
         setError('');
         setSearchError('');
         setNow(Date.now());
+        const checked = fresh.find((row) => row.id === starCheck.current?.id);
+        settleStar(checked ? checked.is_starred === true : undefined);
       })
       .catch((err: unknown) => {
-        if (!writes.current.landed(controller)) return;
+        if (!writes.landed(controller)) return;
+        settleStar(undefined);
         // A term that looks like an address or a number but is not a whole one: said under
         // the box, the list left as it was.
         if (err instanceof AdminApiError && err.info.status === 422 && q) {
@@ -270,39 +283,55 @@ export default function LeadsList({
   );
   const spamView = filters.chip.kind === 'spam';
 
-  /** A row write answered: read the list (and the KPIs) again when the writes ask for it. */
-  function written(token: number, shown: boolean) {
-    if (writes.current.written(token, shown)) setReload((n) => n + 1);
+  /** Read the list (and the KPIs) again: the writes asked for it. */
+  const reread = () => setReload((n) => n + 1);
+
+  /**
+   * A read after a failed star press landed (`stored`: the row's star in its rows, or
+   * undefined when the read failed or the row is not on the page): say what it came to.
+   */
+  function settleStar(stored: boolean | undefined) {
+    const check = starCheck.current;
+    if (!check) return;
+    starCheck.current = null;
+    setStarError(starOutcome(check, stored));
   }
 
+  /**
+   * A star press: a row write through the rule (src/lib/crm/lateAnswers.ts), shown at once and
+   * bounded by its deadline. A failure draws the star back and says it may not have saved; the
+   * read after the writes says what is stored (settleStar).
+   */
   async function toggleStar(row: Row) {
     const next = row.is_starred !== true;
     setStarError('');
-    const token = writes.current.write();
-    // Shown at once, and kept until the writes have answered and any read after them lands.
-    setRows((list) => list.map((r) => (r.id === row.id ? { ...r, is_starred: next } : r)));
-    let ok = true;
-    try {
-      await adminFetch(`/api/admin/leads/${row.id}`, {
-        method: 'PATCH',
-        body: { isStarred: next },
-      });
-    } catch (err) {
-      // The update may have committed before the failure: the read after it says.
-      ok = false;
-      setStarError(`${leadName(row)} could not be starred. ${describeError(err)}`);
-    }
-    written(token, ok);
+    starCheck.current = null;
+    await pressStar(writes, next, {
+      show: (on) =>
+        setRows((list) => list.map((r) => (r.id === row.id ? { ...r, is_starred: on } : r))),
+      send: (signal) =>
+        adminFetch(`/api/admin/leads/${row.id}`, {
+          method: 'PATCH',
+          body: { isStarred: next },
+          signal,
+        }),
+      failed: (err) => {
+        const check = { id: row.id, name: leadName(row), next, detail: describeError(err) };
+        starCheck.current = check;
+        setStarError(starPending(check));
+      },
+      reread,
+    });
   }
 
   /** The bulk bar's POST: a row write, not optimistic, so the list is read again after it. */
-  async function postBulk(body: LeadBulk): Promise<BulkOutcome> {
-    const token = writes.current.write();
-    try {
-      return await adminFetch<BulkOutcome>('/api/admin/leads/bulk', { method: 'POST', body });
-    } finally {
-      written(token, false);
-    }
+  function postBulk(body: LeadBulk): Promise<BulkOutcome> {
+    return rowWrite(
+      writes,
+      (signal) =>
+        adminFetch<BulkOutcome>('/api/admin/leads/bulk', { method: 'POST', body, signal }),
+      reread,
+    );
   }
 
   function bulkDone(outcome: BulkOutcome) {
