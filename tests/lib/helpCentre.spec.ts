@@ -1843,6 +1843,55 @@ describe('collections-and-faq (U7), a new guide put by the FAQ migration', () =>
   });
 });
 
+describe('header-and-menu (E5), a new guide put by the site_appearance migration', () => {
+  const article = () => SET.find((a) => a.slug === 'header-and-menu')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const SCREEN = 'src/components/admin/screens/header/HeaderScreen.tsx';
+
+  it('is put once, at revision 0 (new), by the migration that creates site_appearance', () => {
+    const puts = HELP.edits.filter((e) => e.slug === 'header-and-menu');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts[0]?.file).toMatch(/^\d{4}_site_appearance\.sql$/);
+    expect(HELP.revisions.get('header-and-menu')).toBe(1);
+  });
+
+  it('takes the free place 43, for the roles that open the Header screen', () => {
+    expect(article().sort_order).toBe(43);
+    expect(SET.filter((a) => a.sort_order === 43)).toHaveLength(1);
+    expect(article().screens).toEqual(['/admin/appearance/header']);
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual([
+      'admin',
+      'content_creator',
+      'developer',
+    ]);
+  });
+
+  it('says what the screen does, in the words it uses', () => {
+    const en = text('en');
+    const screen = source(SCREEN);
+    const ui = source('src/lib/admin/ui/appearance.ts');
+    expect(en).toContain('Move up and Move down');
+    expect(screen).toContain('aria-label={`Move ${row.label} up`}');
+    expect(en).toContain('Add a link');
+    expect(screen).toContain('Add a link');
+    expect(en).toContain('Show a button');
+    expect(ui).toContain("label: 'Show a button'");
+    expect(en).toContain('needs the darkest tint');
+    expect(en).toContain('The English and Arabic switch always shows');
+    for (const label of [
+      'Appearance › Header',
+      'Move up',
+      'Add a link',
+      'Show a button',
+      'History',
+    ]) {
+      expect(text('ar')).toContain(label);
+    }
+  });
+});
+
 describe('editing-pages (E1), a new guide put by the page editor migration', () => {
   const article = () => SET.find((a) => a.slug === 'editing-pages')!;
   const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
@@ -2469,6 +2518,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'collections-and-faq',
       'editing-pages',
       'finding-your-way',
+      'header-and-menu',
       'media-library',
       'previewing-changes',
       'roles-and-access',
@@ -2503,6 +2553,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'finding-your-way',
       'forms-and-spam',
       'general-settings',
+      'header-and-menu',
       'maintenance-mode',
       'media-library',
       'page-visibility',

@@ -207,6 +207,88 @@ values
    '{}', '{}', '{}', 110, false, null)
 on conflict (entity_type) do nothing;
 
+-- ═══ 7. The help guide ═══════════════════════════════════════════════════════════════════
+-- A NEW guide, so revision 0 (H11, 0069: one top-level put, held to help_articles' CHECKs,
+-- re-seeding this one slug into every tenant and touching no other guide). sort_order 43, a
+-- free place after editing-pages (41) and its neighbour (42). For the roles that open the
+-- Header screen: theme.edit (the options: Admin, Developer) and nav.edit (the menu: Admin,
+-- Content Creator), so Admin, Content Creator and Developer read it (the Worker's filter from
+-- ROLE_CAPS). Its one screen is /admin/appearance/header; PAGE_GUIDES
+-- (src/lib/admin/help/pageGuides.ts) offers it there. tests/lib/helpCentre.spec.ts reads this
+-- statement (tests/fixtures/helpSet.ts) and holds the copy to the words the screen uses.
+select app.put_help_guide($guide$
+{
+  "slug": "header-and-menu",
+  "sort_order": 43,
+  "minutes": 2,
+  "tags": ["site"],
+  "screens": ["/admin/appearance/header"],
+  "caps": ["nav.edit", "theme.edit"],
+  "title": "The header and its menu",
+  "title_ar": "الشريط العلوي وقائمته",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Appearance › Header holds the bar at the top of every page: its menu links, and how it looks and behaves. Each card is for the people who look after that part, so you may see only one of them."
+      },
+      { "t": "h", "x": "Menu items" },
+      {
+        "t": "p",
+        "x": "The links in the order the site shows them. Move up and Move down change the order, the eye hides a link or shows it again, and the star marks the key link, the one that stays in the bar on phones. There is one key link at a time. To change a link's words or address, add a link or remove one, use Edit or Add a link, which open the Menus screen."
+      },
+      { "t": "h", "x": "Layout and behaviour" },
+      {
+        "t": "p",
+        "x": "Choose where the logo sits and how big it is, where the links sit, whether the bar stays at the top, hides while scrolling down, turns solid after the hero, how dark its tint is over the hero and what the menu looks like on phones. The two small sketches follow your choices before you save."
+      },
+      {
+        "t": "p",
+        "x": "A bar that stays see-through after the hero needs the darkest tint, so its links stay readable over the light parts of the page. The English and Arabic switch always shows."
+      },
+      { "t": "h", "x": "The button" },
+      {
+        "t": "p",
+        "x": "Show a button lets you add one filled button at the end of the bar, and at the end of the menu on phones. Give it words in both languages and a link: a page of this site starting with /, or a link starting with https://."
+      },
+      {
+        "t": "tip",
+        "x": "The header is on every page, so a saved change shows on the whole site. History lists every saved version of these settings."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تضم Appearance › Header الشريط الظاهر أعلى كل صفحة: روابط قائمته، وشكله وسلوكه. كل بطاقة مخصّصة لمن يتولّى ذلك الجزء، فقد لا ترى إلا إحداها."
+      },
+      { "t": "h", "x": "عناصر القائمة" },
+      {
+        "t": "p",
+        "x": "الروابط بالترتيب الذي يعرضها به الموقع. يغيّر Move up وMove down الترتيب، وتُخفي العين الرابط أو تُظهره من جديد، وتحدّد النجمة الرابط الرئيسي، وهو الذي يبقى في الشريط على الهواتف. لا يكون إلا رابط رئيسي واحد في كل مرة. لتغيير نص الرابط أو عنوانه، أو لإضافة رابط أو حذفه، استخدم Edit أو Add a link، فهما يفتحان شاشة Menus."
+      },
+      { "t": "h", "x": "التخطيط والسلوك" },
+      {
+        "t": "p",
+        "x": "اختر موضع الشعار وحجمه، وموضع الروابط، وهل يبقى الشريط في الأعلى، وهل يختفي عند التمرير إلى الأسفل، وهل يصبح معتمًا بعد الواجهة، ومدى قتامة لونه فوق الواجهة، وشكل القائمة على الهواتف. يتبع الرسمان الصغيران اختياراتك قبل الحفظ."
+      },
+      {
+        "t": "p",
+        "x": "الشريط الذي يبقى شفافًا بعد الواجهة يحتاج إلى أغمق درجة، حتى تبقى روابطه مقروءة فوق الأجزاء الفاتحة من الصفحة. ويظهر مفتاح التبديل بين الإنجليزية والعربية دائمًا."
+      },
+      { "t": "h", "x": "الزر" },
+      {
+        "t": "p",
+        "x": "يتيح لك Show a button إضافة زر واحد ملوّن في نهاية الشريط، وفي نهاية القائمة على الهواتف. اكتب نصه باللغتين وحدّد رابطه: صفحة من هذا الموقع تبدأ بـ /، أو رابطًا يبدأ بـ https://."
+      },
+      {
+        "t": "tip",
+        "x": "الشريط العلوي موجود في كل صفحة، لذا يظهر أي تغيير محفوظ في الموقع كله. ويعرض History كل نسخة محفوظة من هذه الإعدادات."
+      }
+    ]
+  }
+}
+$guide$::jsonb, 0);
+
 -- ═══ Postconditions ═══════════════════════════════════════════════════════════════════════
 -- Each block says what it checks. Expressions are read as pg_get_expr prints them.
 do $$
@@ -414,7 +496,30 @@ begin
     raise exception 'E5: registry tables without exactly one guard firing first: %', v_bad;
   end if;
 
-  -- ---- 10. Releases are still off everywhere (0038, 0051, 0062, 0066) ----------------------
+  -- ---- 10. The guide: in the catalog at revision 1 (new), place 43, alone there; every tenant
+  -- holds it as the catalog renders it -------------------------------------------------------
+  if not exists (select 1 from app.help_guide_catalog c
+                  where c.slug = 'header-and-menu' and c.revision = 1 and c.sort_order = 43
+                    and c.screens = array['/admin/appearance/header']
+                    and c.caps = array['nav.edit', 'theme.edit'])
+     or (select count(*) from app.help_guide_catalog where sort_order = 43) <> 1 then
+    raise exception 'E5: the header-and-menu guide is not in the catalog at revision 1, place 43';
+  end if;
+  select string_agg(t.id::text, ', ') into v_bad
+    from public.tenants t
+   where not exists (
+     select 1
+       from public.help_articles h
+       join app.help_guide_catalog c on c.slug = h.slug
+      where h.tenant_id = t.id and h.slug = 'header-and-menu'
+        and h.sort_order = c.sort_order and h.minutes = c.minutes and h.tags = c.tags
+        and h.screens = c.screens and h.caps = c.caps and h.title = c.title
+        and h.title_ar = c.title_ar and h.body = c.body);
+  if v_bad is not null then
+    raise exception 'E5: tenants without the header-and-menu guide as the catalog holds it: %', v_bad;
+  end if;
+
+  -- ---- 11. Releases are still off everywhere (0038, 0051, 0062, 0066) ----------------------
   if exists (select 1 from app.release_tenants) then
     raise exception 'E5: releases must stay switched off (app.release_tenants is not empty)';
   end if;

@@ -229,7 +229,7 @@ function MenuItems() {
     );
 
   return (
-    <section className="card hdr-menu" aria-labelledby={`${base}-menu`}>
+    <section className="card" aria-labelledby={`${base}-menu`}>
       <div className="card__h">
         <div>
           <h2 className="card-title" id={`${base}-menu`}>

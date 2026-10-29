@@ -683,6 +683,16 @@ export const cases: readonly Case[] = [
     row: PROFILE_DRAFT,
   },
   {
+    // Admin v2 E5: staged like the theme, under the same capability (P-2).
+    name: 'header options write (releases on)',
+    load: () => import('@/pages/api/admin/site-appearance'),
+    method: 'PATCH',
+    url: '/api/admin/site-appearance',
+    body: { logoSize: 'l', version: 1 },
+    allow: ['admin', 'developer'],
+    releases: true,
+  },
+  {
     name: 'global SEO defaults write (releases on)',
     load: () => import('@/pages/api/admin/seo-defaults'),
     method: 'PATCH',
