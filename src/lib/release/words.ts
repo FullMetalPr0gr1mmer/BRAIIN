@@ -33,6 +33,13 @@ const SCREEN_OF: Partial<Record<ReleaseEntityType, string>> = {
   seo_defaults: '/admin/seo?tab=site',
   entity_seo: '/admin/seo',
   page_visibility: '/admin/visibility',
+  // Admin v2 E8: the Forms screen edits both forms of the one row.
+  form_settings: '/admin/forms',
+};
+
+/** Words for a type edited by its own island rather than a UI config (Admin v2 E8). */
+const OWN_WORDS: Partial<Record<ReleaseEntityType, Readonly<Record<string, string>>>> = {
+  form_settings: { inquiry: 'Inquiry form', application: 'Join form' },
 };
 
 /** Where a pending change of this entity is edited, or null when no screen edits it. */
@@ -73,7 +80,10 @@ function labelsOf(entityType: ReleaseEntityType): ReadonlyMap<string, string> {
   const known = LABELS.get(entityType);
   if (known) return known;
   const entry = RELEASE_REGISTRY[entityType];
-  const byName = new Map(uiFields(entry).map((f) => [f.name, f.label]));
+  const byName = new Map<string, string>([
+    ...uiFields(entry).map((f): [string, string] => [f.name, f.label]),
+    ...Object.entries(OWN_WORDS[entityType] ?? {}),
+  ]);
   const out = new Map<string, string>();
   for (const [key, columns] of Object.entries(entry.fields)) {
     const label = byName.get(key) ?? plainWords(key);

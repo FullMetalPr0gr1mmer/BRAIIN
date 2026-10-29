@@ -1611,6 +1611,7 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
     const SESSION = 2;
     expect(db.calls.length + SESSION).toBeLessThanOrEqual(50);
     // Pinned, so a new type, link or address shows here before it shows on the Free plan.
-    expect(db.calls.length).toBe(43);
+    // 44 since Admin v2 E8 added the forms config (one more singleton to read).
+    expect(db.calls.length).toBe(44);
   });
 });
