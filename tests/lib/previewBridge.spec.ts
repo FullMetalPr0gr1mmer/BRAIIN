@@ -11,6 +11,7 @@ import {
   previewHrefFor,
   READ_ONLY_ENDPOINTS,
   requestAllowed,
+  PAGE_CONTROLS,
   sectionOfClick,
   sectionsOf,
 } from '@/lib/admin/preview/bridge';
@@ -242,16 +243,20 @@ describe('the parent side (src/lib/admin/previewChannel.ts)', () => {
 
 describe('a click in a section opens it in the page editor (Admin v2 E2)', () => {
   const SECTION = '5eed5000-0000-4000-8000-000000000001';
-  /** A clicked element: inside a link or not, inside a marked section or not. */
-  const clicked = (opts: { link?: boolean; section?: string | null }) => ({
+  /** A clicked element: inside a link, another control of the page, a marked section, or not. */
+  const clicked = (opts: { link?: boolean; control?: boolean; section?: string | null }) => ({
     closest: (selector: string) =>
       selector === 'a[href]'
         ? opts.link
           ? { hasAttribute: () => false, getAttribute: () => '#who' }
           : null
-        : selector === '[data-pv-section]' && opts.section != null
-          ? { getAttribute: (name: string) => (name === 'data-pv-section' ? opts.section : null) }
-          : null,
+        : selector === PAGE_CONTROLS
+          ? opts.link || opts.control
+            ? {}
+            : null
+          : selector === '[data-pv-section]' && opts.section != null
+            ? { getAttribute: (name: string) => (name === 'data-pv-section' ? opts.section : null) }
+            : null,
   });
 
   it('the envelope carries `select` with a section id, and nothing else', () => {
@@ -275,10 +280,31 @@ describe('a click in a section opens it in the page editor (Admin v2 E2)', () =>
     expect(sectionOfClick(clicked({ section: SECTION }) as never)).toBe(SECTION);
     expect(sectionOfClick(clicked({ section: 'default-2' }) as never)).toBe('default-2');
     expect(sectionOfClick(clicked({ section: SECTION, link: true }) as never)).toBeNull();
+    // The page's own controls (E2-C8): the slider's arrows, a field, a disclosure.
+    expect(sectionOfClick(clicked({ section: SECTION, control: true }) as never)).toBeNull();
     expect(sectionOfClick(clicked({ section: null }) as never)).toBeNull();
     expect(sectionOfClick(clicked({ section: '"><x' }) as never)).toBeNull();
     expect(sectionOfClick(null)).toBeNull();
     expect(sectionOfClick({} as never)).toBeNull();
+  });
+
+  it('takes the page’s own controls for controls, and no focus stop for one (E2-C8)', () => {
+    const named = PAGE_CONTROLS.split(', ');
+    for (const control of [
+      'a[href]',
+      'button',
+      'input',
+      'select',
+      'textarea',
+      'label',
+      'summary',
+      '[role="button"]',
+      '[role="tab"]',
+      '[role="slider"]',
+    ])
+      expect(named, control).toContain(control);
+    // `#main` (BaseLayout) and the Leadership slider's scroll track carry a tabindex.
+    expect(PAGE_CONTROLS).not.toContain('tabindex');
   });
 
   function fakeWindow(framed: boolean) {
@@ -329,8 +355,9 @@ describe('a click in a section opens it in the page editor (Admin v2 E2)', () =>
       { v: 1, type: 'select', sectionId: SECTION },
       ORIGIN,
     );
-    // A link, a click outside every section, another button: nothing.
+    // A link, a control of the page, a click outside every section, another button: nothing.
     framed.click(clicked({ section: SECTION, link: true }));
+    framed.click(clicked({ section: SECTION, control: true }));
     framed.click(clicked({ section: null }));
     framed.click(clicked({ section: SECTION }), 2);
     expect(framed.up.postMessage).toHaveBeenCalledTimes(1);

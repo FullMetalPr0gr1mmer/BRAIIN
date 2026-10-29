@@ -209,18 +209,24 @@
   }
 }
 
+/* The fields and the preview share what is left equally, from zero: a rem minimum follows the
+   browser's default font (the admin sets 14px on its body only), and at 20px it pushed the
+   grid 116px past a 1280px window. The fields work at 288px, and the frame is fitted to its
+   column (PreviewColumn.tsx). */
 @media (min-width: 1280px) {
   .pe__cols {
-    grid-template-columns: minmax(14rem, 17rem) minmax(20rem, 1fr) minmax(20rem, 1fr);
+    grid-template-columns: minmax(14rem, 17rem) minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .pe__view {
     display: none;
   }
 
+  /* Below the sticky topbar (its measured height, --ad-top-h, set by AdminLayout; one row
+     until it runs), as maintenance.css's side column. */
   .pe__preview {
     position: sticky;
-    top: 16px;
+    top: calc(var(--ad-top-h, var(--ad-top)) + 16px);
   }
 }
 
@@ -498,7 +504,7 @@
   justify-content: center;
   align-items: flex-start;
   box-sizing: border-box;
-  block-size: clamp(22rem, calc(100vh - 16rem), 56rem);
+  block-size: clamp(22rem, calc(100vh - 16rem - var(--ad-top-h, var(--ad-top))), 56rem);
   padding: 12px;
   overflow: hidden;
   border: 1px solid var(--ad-line);

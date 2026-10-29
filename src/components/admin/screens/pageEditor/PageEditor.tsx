@@ -49,11 +49,13 @@ import {
   neighbourAfterRemoval,
   newSectionPayload,
   pageMoved,
+  reloadsPreview,
   renameBody,
   rowMoved,
   rowStamp,
   sectionRowOf,
   toggleBody,
+  type EditorWrite,
   type SectionRow,
 } from './model';
 import PagePanel from './PagePanel';
@@ -156,7 +158,10 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
   // narrow screens' Edit | Preview choice, and whether the screen is wide enough for three
   // columns (read after hydration, so the server and the first render agree).
   const [revision, setRevision] = useState(0);
-  const changed = useCallback(() => setRevision((n) => n + 1), []);
+  /** Every write this screen makes reports itself; the ones a visitor sees move `revision`. */
+  const wrote = useCallback((kind: EditorWrite) => {
+    if (reloadsPreview(kind)) setRevision((n) => n + 1);
+  }, []);
   const { lang } = useEditorLanguage();
   const [previewLang, setPreviewLang] = useState<PreviewLang>('en');
   useEffect(() => setPreviewLang((current) => previewLangAfter(lang, current)), [lang]);
@@ -265,7 +270,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     const row = sectionRowOf(answer);
     const before = row ? rowsRef.current?.find((r) => r.id === row.id) : undefined;
     take(answer);
-    if (row && rowMoved(before, row)) changed();
+    if (row && rowMoved(before, row)) wrote('field');
   }
 
   /** The page details' form read or saved its row: the same rule, for the page's own row. */
@@ -274,7 +279,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
       ...current,
       status: typeof row['status'] === 'string' ? row['status'] : current.status,
     }));
-    if (pageMoved(pageStamp.current, row)) changed();
+    if (pageMoved(pageStamp.current, row)) wrote('pageDetails');
     pageStamp.current = rowStamp(row as { version: unknown });
   }
 
@@ -288,7 +293,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
           body: stagedBody(toggleBody(row, release), columnMarks(row, release)),
         });
         take(answer);
-        changed();
+        wrote('eye');
         follow(
           row.id,
           columnWroteOn(row),
@@ -332,7 +337,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
           body: { items: changes },
         });
         if ('staged' in moved) announcePending();
-        changed();
+        wrote('move');
         toast('Section order updated.', 'ok');
       },
       {
@@ -360,6 +365,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
         body: newSectionPayload(initialPage.id, type, rows),
       });
       if ('draft' in created) announcePending();
+      wrote('add');
       setAdding(false);
       await load();
       // The open form is left only as a switch leaves it: saved on the way (releases on) or
@@ -388,6 +394,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
         body: stagedBody(renameBody(row, label, release), columnMarks(row, release)),
       });
       take(answer);
+      wrote('rename');
       follow(
         row.id,
         columnWroteOn(row),
@@ -420,7 +427,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
       const answer = await adminFetch<Row>(stagedUrl(`/api/admin/sections/${row.id}`, release), {
         method: 'DELETE',
       });
-      changed();
+      wrote('remove');
       if ('staged' in answer || 'draft' in answer) {
         announcePending();
         toast(`The removal of ${name} is saved as an unpublished change.`, 'ok');
@@ -676,7 +683,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
           pageId={page.id}
           path={page.path}
           onRestored={() => {
-            changed();
+            wrote('restore');
             void load();
             void form.current?.reloadTheirs();
           }}

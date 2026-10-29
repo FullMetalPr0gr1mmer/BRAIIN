@@ -33,8 +33,8 @@ export const FRAME_GUTTER = 12;
  * typing stops (P-5). */
 export const RELOAD_DELAY_MS = 250;
 
-/** How long after the frame's `load` the column waits for the bridge before it says the
- * preview did not answer (a page without the bridge: an error page, another site). */
+/** How long after the frame's `load` the column waits before it says the preview did not
+ * answer (a page without the bridge: an error page, another site; see bridgeMissing). */
 export const READY_GRACE_MS = 1500;
 
 /** A public path in a language: `/about` → `/ar/about`, `/` → `/ar`. */
@@ -121,6 +121,84 @@ export function mayOpen(
   onPage: boolean,
 ): boolean {
   return onPage && sectionId !== selected && rows.includes(sectionId);
+}
+
+/**
+ * What the column holds back from a hidden frame (P-15). Below 1280 px the column sits in a
+ * `display: none` box while the fields are shown, and a frame there still loads (a Worker
+ * request for a preview nobody sees) and still takes messages, but a `jump` scrolls nothing
+ * (scrollIntoView in an unrendered document is a no-op, and nothing replays it). So while the
+ * column is hidden it keeps the address it last gave the frame, and owes the newer address,
+ * the reload and the jump; once it is shown again it pays the one that covers the others: a new
+ * address loads a new page and a reload a new document, each followed on its `ready`, and only
+ * a jump alone is sent as it is.
+ */
+export interface FrameDebt {
+  /** The address the frame was given ('' until the column is first shown). */
+  src: string;
+  /** The address it should show (the language may change while the column is hidden). */
+  want: string;
+  /** A save settled while the column was hidden. */
+  reload: boolean;
+  /** The open section changed, or the frame said `ready`, while the column was hidden. */
+  jump: boolean;
+}
+
+export type FrameEvent =
+  /** The address the editor wants (its language) changed. */
+  | { type: 'address'; src: string }
+  /** A burst of saves settled. */
+  | { type: 'saved' }
+  /** The preview is ready, or another section opened: `jump` and `highlight` are due. */
+  | { type: 'follow' }
+  /** The column was laid out (or resized): pay what is owed. */
+  | { type: 'shown' };
+
+/** What the column does now: reload the frame, or send `followUp`. A new `src` loads itself. */
+export type FrameAct = 'reload' | 'follow' | null;
+
+/** The frame's first debt: nothing given yet, the editor's address owed. */
+export function frameDebt(want: string): FrameDebt {
+  return { src: '', want, reload: false, jump: false };
+}
+
+/** One event against the debt, with whether the column is laid out right now. */
+export function frameStep(
+  debt: FrameDebt,
+  event: FrameEvent,
+  shown: boolean,
+): { debt: FrameDebt; act: FrameAct } {
+  switch (event.type) {
+    case 'address':
+      if (event.src === debt.want && event.src === debt.src) return { debt, act: null };
+      return shown
+        ? { debt: { src: event.src, want: event.src, reload: false, jump: false }, act: null }
+        : { debt: { ...debt, want: event.src }, act: null };
+    case 'saved':
+      return shown ? { debt, act: 'reload' } : { debt: { ...debt, reload: true }, act: null };
+    case 'follow':
+      return shown ? { debt, act: 'follow' } : { debt: { ...debt, jump: true }, act: null };
+    case 'shown': {
+      if (!shown) return { debt, act: null };
+      const clear = { src: debt.want, want: debt.want, reload: false, jump: false };
+      // A new page: its `ready` is followed, and it is the newest anyway.
+      if (debt.want !== debt.src) return { debt: clear, act: null };
+      if (debt.reload) return { debt: clear, act: 'reload' };
+      if (debt.jump) return { debt: clear, act: 'follow' };
+      return { debt, act: null };
+    }
+  }
+}
+
+/**
+ * Whether the page the frame just loaded has no bridge, so the preview cannot follow it: no
+ * `ready` came between the frame's previous `load` and the end of this one's grace. A bridged
+ * document posts `ready` from its module script, before `load`; a page a link left for
+ * without the bridge (another site, a page the preview does not rewrite) never does, whatever
+ * the column believed before it went.
+ */
+export function bridgeMissing(readiesNow: number, readiesAtPreviousLoad: number): boolean {
+  return readiesNow <= readiesAtPreviousLoad;
 }
 
 /** The note when the open section is not in the preview, or null when it is shown. */

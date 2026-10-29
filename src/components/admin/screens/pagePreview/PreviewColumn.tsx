@@ -12,12 +12,16 @@ import {
   DEVICE_OPTIONS,
   READY_GRACE_MS,
   RELOAD_DELAY_MS,
+  bridgeMissing,
   fitFrame,
   followUp,
+  frameDebt,
+  frameStep,
   mayOpen,
   missingNote,
   previewSrc,
   showsPage,
+  type FrameEvent,
   type PreviewDevice,
   type PreviewLang,
 } from './model';
@@ -40,6 +44,9 @@ import { PREVIEW_LOADING } from './editorSide';
 //                after a save the editor reports (`revision`) it sends `reload` once, and jumps
 //                back on the next `ready`; a click in a section (`select`) opens that section
 //                through the editor's own select (which asks about unsaved work first).
+//   hidden       below 1280 px the column is in a `display: none` box while the fields show:
+//                the new address, the reload and the jump wait until it is shown again
+//                (frameStep in model.ts, P-15).
 
 export interface PreviewSection {
   id: string;
@@ -78,7 +85,11 @@ export default function PreviewColumn({
   revision,
   onSelect,
 }: PreviewColumnProps) {
-  const src = previewSrc(path, lang) ?? '';
+  // The address the editor wants, and the one the frame was given (they differ only while the
+  // column is hidden: frameStep).
+  const want = previewSrc(path, lang) ?? '';
+  const debt = useRef(frameDebt(want));
+  const [src, setSrc] = useState(debt.current.src);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const areaRef = useRef<HTMLDivElement | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
@@ -97,6 +108,9 @@ export default function PreviewColumn({
   const shownRef = useRef(shown);
   shownRef.current = shown;
   const loads = useRef(0);
+  // `ready` messages heard, and how many had been heard at the frame's previous `load`.
+  const readies = useRef(0);
+  const readiesAtLoad = useRef(0);
 
   // The channel lives as long as the column; it reads the frame's window when it posts or
   // checks a message's source, so a remounted frame needs no new channel.
@@ -110,6 +124,7 @@ export default function PreviewColumn({
       const now = latest.current;
       switch (message.type) {
         case 'ready':
+          readies.current += 1;
           setShown({ path: message.path, listed: message.sections.map((s) => s.id) });
           setState('ready');
           return;
@@ -133,7 +148,29 @@ export default function PreviewColumn({
       channel.current = null;
     };
   }, []);
-  // A new address (the language) loads a new page.
+
+  /** One event against what a hidden column owes (frameStep), then what it says to do. */
+  function step(event: FrameEvent) {
+    const next = frameStep(debt.current, event, isShown(areaRef.current));
+    debt.current = next.debt;
+    setSrc(next.debt.src);
+    if (next.act === 'reload') reload();
+    else if (next.act === 'follow') sendFollowUp();
+  }
+
+  /** `jump` and `highlight` for the open section, to a ready preview. */
+  function sendFollowUp() {
+    const now = latest.current;
+    const seen = shownRef.current;
+    if (now.state !== 'ready' || !seen) return;
+    const here = showsPage(seen.path, now.src);
+    for (const message of followUp(seen.listed, now.selected, here)) channel.current?.send(message);
+  }
+
+  // The editor's address (its language): given to the frame only while the column is shown.
+  useEffect(() => step({ type: 'address', src: want }), [want]);
+
+  // A new address loads a new page.
   useEffect(() => {
     setState('loading');
     setShown(null);
@@ -141,23 +178,19 @@ export default function PreviewColumn({
 
   const onPage = shown !== null && showsPage(shown.path, src);
 
-  // On `ready`, and whenever another section opens: jump to it and outline it.
+  // On `ready`, and whenever another section opens: jump to it and outline it (owed while the
+  // column is hidden, where a jump scrolls nothing).
   useEffect(() => {
     if (state !== 'ready' || !shown) return;
-    for (const message of followUp(shown.listed, selected, onPage)) channel.current?.send(message);
+    step({ type: 'follow' });
   }, [state, shown, selected, onPage]);
 
   // After a save: reload once the burst settles. Without the bridge, a new frame. While the
-  // column is hidden (the fields shown on a narrow screen) the reload waits until it is shown
-  // again, so a save does not ask the Worker for a preview nobody sees (P-15).
+  // column is hidden the reload is owed until it is shown again.
   const firstRevision = useRef(revision);
-  const stale = useRef(false);
   useEffect(() => {
     if (revision === firstRevision.current) return;
-    const timer = window.setTimeout(() => {
-      if (isShown(areaRef.current)) reload();
-      else stale.current = true;
-    }, RELOAD_DELAY_MS);
+    const timer = window.setTimeout(() => step({ type: 'saved' }), RELOAD_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [revision]);
 
@@ -169,12 +202,15 @@ export default function PreviewColumn({
     if (!sent) setFrameKey((key) => key + 1);
   }
 
-  // The frame loaded: if the bridge has not said `ready` shortly after, the page shown has no
-  // bridge (an error page, another site).
+  // The frame loaded: if no `ready` came since its previous load by shortly after, the page
+  // shown has no bridge (an error page, another site, a link followed out of a ready preview).
   function loaded() {
+    if (!latest.current.src) return; // the empty frame before its first address
     const load = ++loads.current;
+    const before = readiesAtLoad.current;
+    readiesAtLoad.current = readies.current;
     window.setTimeout(() => {
-      if (load === loads.current && latest.current.state === 'loading') setState('failed');
+      if (load === loads.current && bridgeMissing(readies.current, before)) setState('failed');
     }, READY_GRACE_MS);
   }
 
@@ -186,10 +222,7 @@ export default function PreviewColumn({
     const frame = frameRef.current;
     if (!area || !box || !frame) return;
     const apply = () => {
-      if (stale.current && isShown(area)) {
-        stale.current = false;
-        reload();
-      }
+      step({ type: 'shown' });
       const fit = fitFrame({ width: area.clientWidth, height: area.clientHeight }, device);
       box.style.width = `${fit.boxWidth}px`;
       box.style.height = `${fit.boxHeight}px`;
@@ -276,7 +309,7 @@ export default function PreviewColumn({
             key={frameKey}
             ref={frameRef}
             className="pv-col__frame"
-            src={src}
+            src={src || undefined}
             title={`Live preview of ${title}`}
             onLoad={loaded}
           />

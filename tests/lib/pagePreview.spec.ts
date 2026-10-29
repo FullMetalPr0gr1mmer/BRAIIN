@@ -1,17 +1,23 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ToPreviewMessageSchema } from '@schemas/previewMessage';
 import {
   DEVICE_OPTIONS,
   DEVICE_WIDTH,
   FRAME_GUTTER,
+  bridgeMissing,
   fitFrame,
   followUp,
+  frameDebt,
+  frameStep,
   localePath,
   mayOpen,
   missingNote,
   pathnameOf,
   previewSrc,
   showsPage,
+  type FrameDebt,
+  type FrameEvent,
 } from '@/components/admin/screens/pagePreview/model';
 import {
   NO_PREVIEW,
@@ -21,7 +27,14 @@ import {
   previewLangAfter,
   previewLead,
 } from '@/components/admin/screens/pagePreview/editorSide';
-import { pageMoved, rowMoved, type SectionRow } from '@/components/admin/screens/pageEditor/model';
+import {
+  PREVIEW_RELOADS,
+  pageMoved,
+  reloadsPreview,
+  rowMoved,
+  type EditorWrite,
+  type SectionRow,
+} from '@/components/admin/screens/pageEditor/model';
 import { fromPreviewPath } from '@/lib/admin/preview/paths';
 import { PAGE_PATHS } from '@/lib/visibility/routes';
 
@@ -175,6 +188,152 @@ describe('a save, not a read, reloads the preview', () => {
     expect(pageMoved('2:', { version: 2, draft: { id: OTHER, version: 1, op: 'update' } })).toBe(
       true,
     );
+  });
+});
+
+describe('a hidden column owes, and pays once it is shown (P-15)', () => {
+  const EN = '/admin/preview/about';
+  const AR = '/admin/preview/ar/about';
+  /** Runs events in order, each with whether the column is laid out; the acts and the debt. */
+  function run(start: FrameDebt, events: [FrameEvent, boolean][]) {
+    let debt = start;
+    const acts: string[] = [];
+    for (const [event, shown] of events) {
+      const next = frameStep(debt, event, shown);
+      debt = next.debt;
+      if (next.act) acts.push(next.act);
+    }
+    return { debt, acts };
+  }
+  const ready = (): FrameDebt => ({ src: EN, want: EN, reload: false, jump: false });
+
+  it('gives the first address only once the column is shown', () => {
+    const hidden = run(frameDebt(EN), [[{ type: 'shown' }, false]]);
+    expect(hidden.debt.src).toBe('');
+    const shown = run(frameDebt(EN), [[{ type: 'shown' }, true]]);
+    expect(shown.debt.src).toBe(EN);
+    expect(shown.acts).toEqual([]);
+  });
+
+  it('shown: a save reloads, a new section is followed, a language swaps the address', () => {
+    expect(run(ready(), [[{ type: 'saved' }, true]]).acts).toEqual(['reload']);
+    expect(run(ready(), [[{ type: 'follow' }, true]]).acts).toEqual(['follow']);
+    const swapped = run(ready(), [[{ type: 'address', src: AR }, true]]);
+    expect(swapped.debt).toEqual({ src: AR, want: AR, reload: false, jump: false });
+    expect(swapped.acts).toEqual([]);
+  });
+
+  it('a section opened while hidden is jumped to once the column is shown (E2-C1)', () => {
+    const hidden = run(ready(), [[{ type: 'follow' }, false]]);
+    expect(hidden.acts).toEqual([]);
+    expect(hidden.debt.jump).toBe(true);
+    const back = run(hidden.debt, [
+      [{ type: 'shown' }, true],
+      [{ type: 'shown' }, true], // a resize after: paid once
+    ]);
+    expect(back.acts).toEqual(['follow']);
+    expect(back.debt.jump).toBe(false);
+  });
+
+  it('a language changed while hidden loads nothing until the column is shown (E2-C2)', () => {
+    const hidden = run(ready(), [
+      [{ type: 'address', src: AR }, false],
+      [{ type: 'follow' }, false],
+    ]);
+    expect(hidden.debt.src).toBe(EN);
+    expect(hidden.debt.want).toBe(AR);
+    // Shown: the new address, whose `ready` is followed; nothing else is sent to the old page.
+    const back = run(hidden.debt, [[{ type: 'shown' }, true]]);
+    expect(back.debt).toEqual({ src: AR, want: AR, reload: false, jump: false });
+    expect(back.acts).toEqual([]);
+    // Away and back while hidden: the frame already shows it, nothing loads.
+    const there = run(ready(), [
+      [{ type: 'address', src: AR }, false],
+      [{ type: 'address', src: EN }, false],
+      [{ type: 'shown' }, true],
+    ]);
+    expect(there.debt.src).toBe(EN);
+    expect(there.acts).toEqual([]);
+  });
+
+  it('a save while hidden reloads once the column is shown, and not before (E2-C7)', () => {
+    const hidden = run(ready(), [
+      [{ type: 'saved' }, false],
+      [{ type: 'saved' }, false],
+      [{ type: 'follow' }, false],
+    ]);
+    expect(hidden.acts).toEqual([]);
+    expect(hidden.debt.reload).toBe(true);
+    // One reload covers the jump (its `ready` is followed).
+    expect(run(hidden.debt, [[{ type: 'shown' }, true]]).acts).toEqual(['reload']);
+  });
+});
+
+describe('a frame without the bridge (E2-C3)', () => {
+  it('is said when no `ready` came since the previous load, whatever the column believed', () => {
+    // The first page: its `ready` (before its load) counted.
+    expect(bridgeMissing(1, 0)).toBe(false);
+    // A ready preview whose link led to a page without the bridge: no `ready` since.
+    expect(bridgeMissing(1, 1)).toBe(true);
+    // A reload through the bridge: a new `ready`.
+    expect(bridgeMissing(2, 1)).toBe(false);
+    // The first load answered by nothing.
+    expect(bridgeMissing(0, 0)).toBe(true);
+  });
+});
+
+describe('which writes reload the preview (E2-C7)', () => {
+  it('every write a visitor can see; not a rename, not Add section (hidden)', () => {
+    expect(PREVIEW_RELOADS).toEqual({
+      field: true,
+      pageDetails: true,
+      eye: true,
+      move: true,
+      add: false,
+      rename: false,
+      remove: true,
+      restore: true,
+    });
+    for (const kind of Object.keys(PREVIEW_RELOADS) as EditorWrite[])
+      expect(reloadsPreview(kind)).toBe(PREVIEW_RELOADS[kind]);
+  });
+
+  // The editor is a React island whose handlers do not run in a server render, so its wiring
+  // is read from the source (as tests/lib/releaseModeWrites.spec.ts does): each write's
+  // handler reports itself, once, and nothing else moves the save signal.
+  const source = readFileSync('src/components/admin/screens/pageEditor/PageEditor.tsx', 'utf8');
+  /** A handler's body: from its start to the next handler or the end of its JSX prop. */
+  function body(start: string, end: RegExp): string {
+    const at = source.indexOf(start);
+    expect(at, start).toBeGreaterThan(-1);
+    const rest = source.slice(at + start.length);
+    const stop = rest.search(end);
+    return stop === -1 ? rest : rest.slice(0, stop);
+  }
+  const NEXT = /\n {2}(async )?function /;
+
+  it('each handler reports its own write, once', () => {
+    const handlers: Record<EditorWrite, string> = {
+      field: body('function formRow(', NEXT),
+      pageDetails: body('function pageRow(', NEXT),
+      eye: body('async function toggle(', NEXT),
+      move: body('async function commitOrder(', NEXT),
+      add: body('async function add(', NEXT),
+      rename: body('async function rename(', NEXT),
+      remove: body('async function remove(', NEXT),
+      restore: body('onRestored={', /\n {10}\}\}/),
+    };
+    for (const [kind, handler] of Object.entries(handlers)) {
+      const calls = [...handler.matchAll(/\bwrote\('(\w+)'\)/g)].map((m) => m[1]);
+      expect(calls, kind).toEqual([kind]);
+    }
+  });
+
+  it('the save signal moves only through `wrote`', () => {
+    expect(source.match(/\bsetRevision\(/g)).toHaveLength(1);
+    expect(source).toMatch(/if \(reloadsPreview\(kind\)\) setRevision\(/);
+    const all = [...source.matchAll(/\bwrote\('(\w+)'\)/g)].map((m) => m[1]).sort();
+    expect(all).toEqual(Object.keys(PREVIEW_RELOADS).sort());
   });
 });
 

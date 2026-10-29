@@ -254,6 +254,38 @@ export function rowStamp(row: { version: number | unknown; draft?: unknown }): s
 }
 
 /**
+ * The editor's writes, and which of them reload the live preview (E2): each one a visitor can
+ * see. A rename changes only the admin's name for a section, and Add section adds a hidden one,
+ * so neither reloads it. Every write the screen makes reports itself here through `wrote(kind)`
+ * (PageEditor.tsx; tests/lib/pagePreview.spec.ts reads the call sites from the source).
+ */
+export const PREVIEW_RELOADS = {
+  /** The open section's form saved (Save changes, or an autosave in release mode). */
+  field: true,
+  /** The page details' form saved. */
+  pageDetails: true,
+  /** The eye: a section shown or hidden. */
+  eye: true,
+  /** The order changed. */
+  move: true,
+  /** A section added (hidden). */
+  add: false,
+  /** A section renamed (the admin's name only). */
+  rename: false,
+  /** A section removed. */
+  remove: true,
+  /** A History restore. */
+  restore: true,
+} as const satisfies Readonly<Record<string, boolean>>;
+
+export type EditorWrite = keyof typeof PREVIEW_RELOADS;
+
+/** Whether a write of this kind reloads the live preview. */
+export function reloadsPreview(kind: EditorWrite): boolean {
+  return PREVIEW_RELOADS[kind];
+}
+
+/**
  * Whether a row a form read or saved is a save (E2: the preview then reloads): its version or
  * its pending change moved since the list held it. A read of the version the list holds (the
  * form's first load, a rebase after a column write) is not, and neither is a row the list does
