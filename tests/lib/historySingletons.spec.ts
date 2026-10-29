@@ -125,7 +125,7 @@ describe('the singletons of the release registry', () => {
         refused = err;
       }
       expect(refused, entityType).toBeInstanceOf(ValidationError);
-      expect((refused as ValidationError).field).toBe('entityId');
+      expect((refused as InstanceType<typeof ValidationError>).field).toBe('entityId');
     }
     const service = RELEASE_REGISTRY['service'];
     expect(historyEntityId(auth, service, ROW)).toBe(ROW);

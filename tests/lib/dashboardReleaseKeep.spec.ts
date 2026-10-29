@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { DashboardLayout, WidgetId } from '@schemas/dashboard';
+import type { DashboardLayout, DashboardPref, WidgetId } from '@schemas/dashboard';
 import type { AuthContext, Role } from '@/lib/auth/types';
 import {
   keepReleasePlacement,
@@ -77,7 +77,7 @@ describe('a save keeps the release widgets it names nowhere where they were', ()
 
   it('a Reset (no columns), a role without the card and an empty store change nothing', () => {
     const stored = layout([], [], [], ['publish']);
-    const reset = { quickSet: true };
+    const reset: DashboardPref = { quickSet: true };
     expect(keepReleasePlacement(reset, stored, 'admin')).toBe(reset);
     const sales = layout(['kpis'], ['quick'], []);
     expect(unnamedReleaseWidgets(sales, 'sales')).toEqual([]);
