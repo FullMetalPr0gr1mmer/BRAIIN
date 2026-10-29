@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RELEASES_SWITCH_SQL, isLoopbackDbUrl } from '../admin/releasesSwitch';
+import {
+  RELEASES_SWITCH_SQL,
+  isLoopbackDbUrl,
+  loopbackPsqlTarget,
+  psqlEnv,
+} from '../admin/releasesSwitch';
 import { releasesOn } from '../admin/staff';
 
 /*
@@ -252,5 +257,54 @@ describe('the switch the rehearsal sends', () => {
     );
     expect(isLoopbackDbUrl('http://127.0.0.1:54322')).toBe(false);
     expect(isLoopbackDbUrl('')).toBe(false);
+  });
+
+  it('refuses a loopback URL whose query or fragment could redirect libpq (review S3)', () => {
+    // libpq reads URI query parameters as connection keywords that replace the URL's host.
+    for (const tail of [
+      '?host=db.example.supabase.co',
+      '?hostaddr=203.0.113.5',
+      '?service=prod',
+      '?options=-c%20search_path%3Dx',
+      '?sslmode=disable',
+      '#x',
+    ]) {
+      const url = `postgresql://postgres:pw@127.0.0.1:54322/postgres${tail}`;
+      expect(isLoopbackDbUrl(url), url).toBe(false);
+      expect(loopbackPsqlTarget(url), url).toBeNull();
+    }
+    expect(isLoopbackDbUrl('postgresql://postgres:pw@localhost/postgres?service=prod')).toBe(false);
+    for (const url of [
+      'postgresql://postgres:pw@127.0.0.1@evil.example/postgres',
+      'postgresql://postgres:pw@localhost.evil.example/postgres',
+      'postgresql://postgres:pw@127.0.0.1.nip.io/postgres',
+    ]) {
+      expect(isLoopbackDbUrl(url), url).toBe(false);
+    }
+  });
+
+  it('hands psql the parsed loopback address, never the URL, and no PG variable but the password', () => {
+    expect(loopbackPsqlTarget('postgresql://postgres:p%40ss@127.0.0.1:54322/postgres')).toEqual({
+      conninfo: 'host=127.0.0.1 hostaddr=127.0.0.1 port=54322 user=postgres dbname=postgres',
+      password: 'p@ss',
+    });
+    expect(loopbackPsqlTarget('postgres://postgres:x@localhost/postgres')?.conninfo).toBe(
+      'host=127.0.0.1 hostaddr=127.0.0.1 port=5432 user=postgres dbname=postgres',
+    );
+    expect(loopbackPsqlTarget('postgres://postgres:x@[::1]:54322/postgres')?.conninfo).toBe(
+      'host=::1 hostaddr=::1 port=54322 user=postgres dbname=postgres',
+    );
+    // A database or user name psql would read as a connection string of its own.
+    expect(
+      loopbackPsqlTarget('postgres://postgres:x@127.0.0.1/host%3Devil.example%20dbname%3Dx'),
+    ).toBeNull();
+    expect(loopbackPsqlTarget('postgres://u%20host%3Devil:x@127.0.0.1/postgres')).toBeNull();
+    const env = psqlEnv({ PATH: '/bin', PGSERVICE: 'prod', PGHOSTADDR: '203.0.113.5' }, 'pw');
+    expect(env).toEqual({ PATH: '/bin', PGPASSWORD: 'pw' });
+    // The setup sends exactly that: the parsed target and its environment.
+    const setup = readFileSync('tests/admin/releases.setup.ts', 'utf8');
+    expect(setup).toContain("execFileSync('psql', [conninfo, ");
+    expect(setup).toContain('env: psqlEnv(process.env, password)');
+    expect(setup).not.toMatch(/execFileSync\('psql', \[url/);
   });
 });

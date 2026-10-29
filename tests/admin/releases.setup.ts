@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { expect, test as setup } from '@playwright/test';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
-import { RELEASES_SWITCH_SQL, isLoopbackDbUrl } from './releasesSwitch';
+import { RELEASES_SWITCH_SQL, loopbackPsqlTarget, psqlEnv } from './releasesSwitch';
 import { SKIP_REASON, STAFF_IDS, releasesOn, staffEnv } from './staff';
 
 /*
@@ -15,7 +15,8 @@ import { SKIP_REASON, STAFF_IDS, releasesOn, staffEnv } from './staff';
  * owner (`postgres`) on a direct session, never through an API role (no API role holds EXECUTE,
  * and the function refuses a role claim), with the e2e Admin as the operator and the fallback
  * scheduler. LOCAL STACKS ONLY: the database URL must be loopback (the e2e job's
- * `supabase status` DB_URL), and the harness's own guard (staffEnv: a loopback Supabase and
+ * `supabase status` DB_URL, with no query string), psql is given its parsed address, not the
+ * URL, and the harness's own guard (staffEnv: a loopback Supabase and
  * preview, a build that names that Supabase) must hold too. Idempotent on a local stack that
  * outlives one run: already on, it says so and changes nothing.
  */
@@ -24,12 +25,15 @@ setup.skip(!releasesOn(), 'releases stay off: the rehearsal sets E2E_RELEASES=on
 
 setup('switch releases on for the e2e tenant, as the owner', () => {
   expect(staffEnv(), `the rehearsal runs the admin harness: ${SKIP_REASON}`).not.toBeNull();
-  const url = process.env['SUPABASE_DB_POOL_URL'] ?? '';
-  expect(isLoopbackDbUrl(url), 'the rehearsal switches a LOCAL database only').toBe(true);
+  // psql gets the loopback address, port and names parsed out of the URL, never the URL itself.
+  const target = loopbackPsqlTarget(process.env['SUPABASE_DB_POOL_URL'] ?? '');
+  expect(target, 'the rehearsal switches a LOCAL database only').not.toBeNull();
+  const { conninfo, password } = target!;
 
   const psql = (sql: string) =>
-    execFileSync('psql', [url, '-X', '-v', 'ON_ERROR_STOP=1', '-At', '-c', sql], {
+    execFileSync('psql', [conninfo, '-X', '-v', 'ON_ERROR_STOP=1', '-At', '-c', sql], {
       encoding: 'utf8',
+      env: psqlEnv(process.env, password),
     }).trim();
 
   const sql = RELEASES_SWITCH_SQL(TENANT_ID, STAFF_IDS.admin);
