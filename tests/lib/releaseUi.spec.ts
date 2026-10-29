@@ -6,8 +6,8 @@ import Savebar from '@/components/admin/screens/release/Savebar';
 import PublishDialog from '@/components/admin/screens/release/PublishDialog';
 import { buildRows, savebarCounts } from '@/components/admin/screens/release/model';
 import { sampleReleaseApi } from '@/components/admin/screens/release/sampleApi';
-import { settleChange } from '@/components/admin/screens/release/api';
-import { onSettled } from '@/lib/admin/releaseEvents';
+import { discardChanges, settleChange } from '@/components/admin/screens/release/api';
+import { DISCARDED_EVENT, onSettled } from '@/lib/admin/releaseEvents';
 import type { Role } from '@/lib/auth/types';
 
 // The savebar and the publish dialog (Admin v2 R12; releases.md §7), rendered on the server
@@ -241,5 +241,49 @@ describe('settling a conflict in the dialog (R12 pre-merge review)', () => {
     const dialog = readFileSync('src/components/admin/screens/release/PublishDialog.tsx', 'utf8');
     expect(dialog).toContain('await settleChange(api, draftId, version, choice, columns);');
     expect(dialog).not.toMatch(/\bapi\.resolve\(/);
+  });
+});
+
+describe('throwing changes away in the dialog or the savebar (E2 review CR1)', () => {
+  it('tells the page editor once the discard has landed, and never when refused', async () => {
+    const target = new EventTarget();
+    vi.stubGlobal('window', target);
+    try {
+      let heard = 0;
+      target.addEventListener(DISCARDED_EVENT, () => (heard += 1));
+      const result = await discardChanges(
+        {
+          discard: async (request) => {
+            // Not before the server has thrown them away: the editor would read them again.
+            expect(heard).toBe(0);
+            expect(request).toEqual({ items: [{ draftId: 'd1', draftVersion: 2 }] });
+            return { discarded: 1 };
+          },
+        },
+        { items: [{ draftId: 'd1', draftVersion: 2 }] },
+      );
+      expect(result).toEqual({ discarded: 1 });
+      expect(heard).toBe(1);
+      const refused = discardChanges(
+        {
+          discard: async () => {
+            throw new Error('forbidden');
+          },
+        },
+        { scope: 'mine' },
+      );
+      await expect(refused).rejects.toThrow('forbidden');
+      expect(heard).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('the dialog and the savebar discard through it, never with a bare discard', () => {
+    for (const file of ['PublishDialog.tsx', 'ReleaseUi.tsx']) {
+      const source = readFileSync(`src/components/admin/screens/release/${file}`, 'utf8');
+      expect(source, file).toMatch(/await discardChanges\(api, /);
+      expect(source, file).not.toMatch(/\bapi\.discard\(/);
+    }
   });
 });

@@ -1,6 +1,13 @@
 import { AdminPrefsPutSchema } from '@schemas/adminPrefs';
-import { readMyPrefs, saveMyPrefs } from '@/lib/admin/prefs';
-import { forbiddenActions, forbiddenWidgets } from '@/lib/admin/dashboard/layout';
+import { hasColumns } from '@schemas/dashboard';
+import { readMyDashboardPrefs, readMyPrefs, saveMyPrefs } from '@/lib/admin/prefs';
+import {
+  forbiddenActions,
+  forbiddenWidgets,
+  keepReleasePlacement,
+  unnamedReleaseWidgets,
+} from '@/lib/admin/dashboard/layout';
+import { readMyRolePreset } from '@/lib/admin/dashboard/roleDefaults';
 import { ValidationError } from '@/lib/admin/errors';
 import { defineAdminRoute } from '@/lib/admin/route';
 
@@ -12,6 +19,12 @@ import { defineAdminRoute } from '@/lib/admin/route';
 // (the account drawer). A preference can mute or arrange what a role sees, never add to it:
 // a widget or a library action the role may not use is refused (422), as is an id this build
 // does not know (the schema). Not audited: nothing here changes what anyone may see or do.
+//
+// A layout that names a release widget (the publish card) nowhere keeps it where the stored
+// layout had it (R14-prep code review 1): the board never shows the card while releases are off,
+// so a save made then must not forget that the person hid or moved it. That costs a read of the
+// person's own row (and of their role's preset when they have none), only for such a save; the
+// update's version check still decides.
 
 export const prerender = false;
 
@@ -36,9 +49,17 @@ export const PUT = defineAdminRoute({
         throw new ValidationError(`Not available to your role: ${bad.join(', ')}`, 'quickActions');
       }
     }
+    let dashboard = input.dashboard;
+    if (dashboard && unnamedReleaseWidgets(dashboard, auth.role).length > 0) {
+      // What the board showed: the person's own layout, else their role's preset (a first save
+      // keeps the preset's hide too); with neither, the default place stays the card's.
+      const mine = (await readMyDashboardPrefs(sb, auth)).dashboard;
+      const shown = hasColumns(mine) ? mine : (await readMyRolePreset(sb, auth)).dashboard;
+      dashboard = keepReleasePlacement(dashboard, shown, auth.role);
+    }
     return saveMyPrefs(sb, auth, input.version, {
       notifications: input.notifications,
-      dashboard: input.dashboard,
+      dashboard,
       quickActions: input.quickActions,
     });
   },

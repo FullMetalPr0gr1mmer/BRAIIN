@@ -492,6 +492,6 @@ describe('the Free plan’s 50 subrequests (each awaited call one, a log line tw
       RELEASE_FIRE_FAILED_BUDGET,
       RELEASE_PURGE_BUDGET,
       RELEASE_MINUTE_BUDGET,
-    ]).toEqual([26, 6, 31, 37]);
+    ]).toEqual([32, 6, 31, 37]);
   });
 });

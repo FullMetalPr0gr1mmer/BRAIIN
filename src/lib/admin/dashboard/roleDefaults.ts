@@ -9,7 +9,7 @@ import {
 import { isRole, ROLES, type AuthContext, type Role } from '@/lib/auth/types';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { OptimisticLockError, ValidationError } from '../errors';
-import { forbiddenActions, forbiddenWidgets } from './layout';
+import { forbiddenActions, forbiddenWidgets, keepReleasePlacement } from './layout';
 
 // The owner's presets (Admin v2 U1, verification.md "Quick actions pre-set per role by the
 // owner"; README U1 D1 to D3): admin_role_defaults (0060), one row per tenant and role, a
@@ -114,7 +114,11 @@ export function presetValues(
     (item): item is QuickLibraryItem => !('href' in item),
   );
   const quick = input.quickActions ?? storedQuick;
-  const base = input.dashboard ?? readDashboardLayout(stored.dashboard);
+  // A release widget the saved board names nowhere keeps the preset's own placement (R14-prep
+  // code review 1): the board never shows it while releases are off.
+  const base = input.dashboard
+    ? keepReleasePlacement(input.dashboard, stored.dashboard, role)
+    : readDashboardLayout(stored.dashboard);
   const quickSet =
     input.quickActions !== undefined || readDashboardLayout(stored.dashboard).quickSet === true;
   const dashboard: DashboardLayout = {

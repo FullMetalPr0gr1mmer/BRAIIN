@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { MOVE_ARCHIVED } from '@/components/admin/screens/resources/reorder';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
-import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * Move up and Move down past an archived row (Admin v2 hotfix H12), signed in as
@@ -35,6 +35,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
+// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
+test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.use({
   contextOptions: { reducedMotion: 'reduce' },
   storageState: authFile('content_creator'),

@@ -19,6 +19,13 @@ import { ROLES } from '@/lib/auth/types';
  */
 export let observedTenantFilters: string[] = [];
 
+/**
+ * Entity values seen in `.eq('entity_id', …)` during the current request (a live binding, reset
+ * by makeContext()). A singleton's history (the identity, the SEO defaults) is keyed by the
+ * tenant, so its entity filter must be the caller's tenant too (Admin v2 R14-prep).
+ */
+export let observedEntityFilters: string[] = [];
+
 /** The principal the serviceClient stub should impersonate for live-rechecks. */
 let currentPrincipal: { role: Role; tenantId: string } = { role: 'admin', tenantId: '' };
 
@@ -75,6 +82,7 @@ export function makeStubClient(options: StubOptions = {}) {
   // endpoints.spec.ts).
   builder['eq'] = (column: string, value: unknown) => {
     if (column === 'tenant_id') observedTenantFilters.push(String(value));
+    if (column === 'entity_id') observedEntityFilters.push(String(value));
     return builder;
   };
   for (const method of ['insert', 'update', 'delete', 'upsert']) {
@@ -202,6 +210,7 @@ export function makeContext(
   stub: Pick<Case, 'releases' | 'row' | 'rpcs'> = {},
 ) {
   observedTenantFilters = [];
+  observedEntityFilters = [];
   const session = sessionFor(principal);
   currentPrincipal = {
     role: session?.role ?? 'admin',

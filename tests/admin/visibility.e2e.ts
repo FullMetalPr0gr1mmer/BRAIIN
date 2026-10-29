@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 // Page visibility (Admin v2 U14a) end to end, through the real Worker, middleware and KV:
 // an Admin sets a page through the API and the public site answers for it (a 302 to the
@@ -15,6 +15,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
 // as seeded.
 
 test.skip(!staffEnv(), SKIP_REASON);
+// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
+test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
 test.use({ storageState: authFile('admin'), contextOptions: { reducedMotion: 'reduce' } });
 

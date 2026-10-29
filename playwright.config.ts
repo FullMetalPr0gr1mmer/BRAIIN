@@ -24,6 +24,33 @@ const GENERAL_SPEC = /[\\/]tests[\\/]admin[\\/]general\.e2e\.ts$/;
 // general settings and before maintenance.
 const GA4_SPEC = /[\\/]tests[\\/]admin[\\/]ga4\.e2e\.ts$/;
 const MAINTENANCE_SPEC = /[\\/]tests[\\/]admin[\\/]maintenance\.e2e\.ts$/;
+// The release-mode rehearsal (Admin v2 R14-prep; .github/workflows/releases-rehearsal.yml, plan
+// B5): with E2E_RELEASES=on the whole suite runs with releases switched ON for the e2e tenant.
+// `releases-on` (tests/admin/releases.setup.ts) runs `app.enable_releases` as the owner after the
+// sample rows and before every public and admin spec; `releases-mode` (the publish, scheduled
+// release and rollback drill) runs alone after them, because Publish puts every selected change
+// live. Unset (the required e2e job, every PR) the projects are exactly what they were:
+// tests/ci/releasesRehearsal.spec.ts holds both shapes.
+const RELEASES = process.env['E2E_RELEASES'] === 'on';
+const RELEASES_MODE_SPEC = /[\\/]tests[\\/]admin[\\/]releases-mode\.e2e\.ts$/;
+const releaseProjects = RELEASES
+  ? [
+      {
+        name: 'releases-on',
+        testDir: './tests/admin',
+        testMatch: /releases\.setup\.ts$/,
+        use: { ...devices['Desktop Chrome'] },
+        dependencies: ['admin-samples'],
+      },
+      {
+        name: 'releases-mode',
+        testDir: './tests/admin',
+        testMatch: RELEASES_MODE_SPEC,
+        use: { ...devices['Desktop Chrome'] },
+        dependencies: ['chromium', 'admin'],
+      },
+    ]
+  : [];
 
 export default defineConfig({
   testDir: './tests',
@@ -37,7 +64,12 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: ADMIN_SPECS },
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      testIgnore: ADMIN_SPECS,
+      ...(RELEASES ? { dependencies: ['releases-on'] } : {}),
+    },
     {
       name: 'admin-setup',
       testDir: './tests/admin',
@@ -63,10 +95,12 @@ export default defineConfig({
         GA4_SPEC,
         MAINTENANCE_SPEC,
         /maintenance\.teardown\.ts$/,
+        RELEASES_MODE_SPEC,
       ],
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['admin-samples'],
+      dependencies: [RELEASES ? 'releases-on' : 'admin-samples'],
     },
+    ...releaseProjects,
     {
       // Page visibility (Admin v2 U14a) hides real pages on the one preview every spec
       // shares, so it runs alone, after the public and the admin specs (and restores every
@@ -75,7 +109,7 @@ export default defineConfig({
       testDir: './tests/admin',
       testMatch: VISIBILITY_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['chromium', 'admin'],
+      dependencies: RELEASES ? ['releases-mode'] : ['chromium', 'admin'],
     },
     {
       // General settings (Admin v2 U9) edits the public identity (a tagline, a hidden social
