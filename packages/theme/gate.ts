@@ -1,6 +1,7 @@
 import pairs from './pairs.json';
 import { contrast, fromHsl, mix, normalizeColour, toHsl } from './colour';
 import {
+  DEFAULT_COLORS,
   DEFAULT_SKY_SOFT,
   THEME_ROLES,
   generatePalette,
@@ -47,7 +48,7 @@ export interface PairFailure {
 export interface GateResult {
   ok: boolean;
   failures: PairFailure[];
-  /** Per role named by a failure: the nearest colour of its hue that makes every pair pass. */
+  /** Per role named by a failure: the nearest colour of its hue whose own pairs all pass. */
   suggestions: Partial<Record<ThemeRole, string>>;
 }
 
@@ -168,17 +169,20 @@ export function failuresFor(colors: Readonly<ThemeColors>): PairFailure[] {
 
 /**
  * The nearest colour of `role`'s hue and saturation (its lightness moved up or down, the
- * smaller move first) that makes every pair pass with the other colours as they are, upper
- * case; null when no lightness does.
+ * smaller move first) with which every pair this colour takes part in passes, the other
+ * colours as they are, upper case; null when no lightness does. A pair of two failing colours
+ * is fixed by either; one the other colour alone fails stays the other's to fix, so two
+ * suggestions taken together make the theme pass where each alone could not.
  */
 export function suggestFor(colors: Readonly<ThemeColors>, role: ThemeRole): string | null {
   const [h, s, l] = toHsl(lower(colors)[role]);
-  for (let delta = 0.5; delta <= 100; delta += 0.5) {
+  const mine = (c: Readonly<ThemeColors>) => failuresFor(c).filter((f) => f.roles.includes(role));
+  for (let delta = 1; delta <= 100; delta += 1) {
     for (const dir of [-1, 1]) {
       const light = l + dir * delta;
       if (light < 0 || light > 100) continue;
       const candidate = fromHsl(h, s, light).toUpperCase();
-      if (failuresFor({ ...colors, [role]: candidate }).length === 0) return candidate;
+      if (mine({ ...colors, [role]: candidate }).length === 0) return candidate;
     }
   }
   return null;
@@ -231,6 +235,10 @@ export function settle(
  * The result may still fail (a main colour too light for white text): gate it.
  */
 export function simplePalette(primary: string): ThemeColors {
+  // The brand's own primary makes the brand's own palette (hover and accent as designed).
+  if (normalizeColour(primary) === normalizeColour(DEFAULT_COLORS.primary)) {
+    return { ...DEFAULT_COLORS };
+  }
   return settle(generatePalette(primary), ['hover', 'accent']);
 }
 
@@ -242,7 +250,9 @@ export function suggestMain(primary: string): string | null {
   const main = normalizeColour(primary);
   if (!main) return null;
   const [h, s, l] = toHsl(main);
-  for (let delta = 1; delta <= 100; delta += 1) {
+  // Two points of lightness a step: each candidate settles a whole palette, so this is the
+  // slow one (the editor runs it only on a failure, after typing stops).
+  for (let delta = 2; delta <= 100; delta += 2) {
     for (const dir of [-1, 1]) {
       const light = l + dir * delta;
       if (light < 0 || light > 100) continue;

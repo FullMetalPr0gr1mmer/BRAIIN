@@ -139,7 +139,7 @@ describe('the theme gate', () => {
       if (result.ok) continue;
       const pick = result.suggestions.hover;
       if (!pick) continue;
-      // Accepted, and the same hue (within rounding) as what was chosen.
+      // Accepted (only hover was off the brand), and the same hue (within rounding).
       expect(gate({ ...colors, hover: pick }).ok).toBe(true);
       const [h1, s1] = toHsl(colors.hover.toLowerCase());
       const [h2] = toHsl(pick.toLowerCase());
@@ -153,9 +153,19 @@ describe('the theme gate', () => {
     expect(pick).not.toBeNull();
     const [, , lPick] = toHsl(pick!.toLowerCase());
     const [h, s, l] = toHsl('#3f7fff');
-    // Half a step closer to where it was, it fails.
-    const closer = fromHsl(h, s, lPick + (l > lPick ? 0.5 : -0.5));
-    if (Math.abs(lPick - l) > 0.5) expect(gate({ ...colors, hover: closer }).ok).toBe(false);
+    // One step closer to where it was, it fails.
+    const closer = fromHsl(h, s, lPick + (l > lPick ? 1 : -1));
+    if (Math.abs(lPick - l) > 1) expect(gate({ ...colors, hover: closer }).ok).toBe(false);
+  });
+
+  it('two failing colours: taking both suggestions makes the theme pass', () => {
+    const colors = { primary: '#0B6EB0', hover: '#0B91F8', accent: '#27E8F6' };
+    const result = gate(colors);
+    expect(result.ok).toBe(false);
+    expect(result.suggestions.primary).toBeTruthy();
+    expect(result.suggestions.hover).toBeTruthy();
+    const fixed = { ...colors, ...result.suggestions };
+    expect(gate(fixed).ok, JSON.stringify(fixed)).toBe(true);
   });
 
   it('settles generated colours and leaves the chosen one alone', () => {
