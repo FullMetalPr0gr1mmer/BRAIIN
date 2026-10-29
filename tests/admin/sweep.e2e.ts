@@ -183,7 +183,10 @@ for (const role of STAFF_ROLES) {
         const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
         expect
           .soft(
-            violations.map((v) => `${v.id} [${v.impact ?? 'n/a'}] ${v.nodes.length}x: ${v.help}`),
+            violations.map(
+              (v) =>
+                `${v.id} [${v.impact ?? 'n/a'}] ${v.nodes.length}x: ${v.help} at ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`,
+            ),
             `axe WCAG 2.2 A/AA on ${route.pattern}`,
           )
           .toEqual([]);

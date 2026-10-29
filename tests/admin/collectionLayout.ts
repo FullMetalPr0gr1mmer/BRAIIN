@@ -28,7 +28,10 @@ export async function expectCleanAtWidths(page: Page, label: string) {
     expect(sideways, `${label} at ${width}px: no sideways scroll`).toBeLessThanOrEqual(0);
     const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
     expect(
-      violations.map((v) => `${v.id} [${v.impact ?? 'n/a'}] ${v.nodes.length}x: ${v.help}`),
+      violations.map(
+        (v) =>
+          `${v.id} [${v.impact ?? 'n/a'}] ${v.nodes.length}x: ${v.help} at ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`,
+      ),
       `${label} at ${width}px`,
     ).toEqual([]);
   }

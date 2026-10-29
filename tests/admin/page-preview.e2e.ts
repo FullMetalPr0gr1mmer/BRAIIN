@@ -109,6 +109,34 @@ async function openEditor(page: Page, id: string) {
   await expect(column(page).locator('li.pe__row[aria-current="true"]')).toHaveCount(1);
 }
 
+/** Requests still open and the preview frame's navigations, so a wait that fails says why. */
+function watchNetwork(page: Page) {
+  const net = { open: new Map<object, string>(), frameLoads: 0 };
+  page.on('request', (r) => net.open.set(r, `${r.method()} ${new URL(r.url()).pathname}`));
+  page.on('requestfinished', (r) => net.open.delete(r));
+  page.on('requestfailed', (r) => net.open.delete(r));
+  page.on('framenavigated', (f) => {
+    if (f !== page.mainFrame()) net.frameLoads += 1;
+  });
+  return net;
+}
+
+/** No request open for half a second, or a failure naming what kept the network busy. */
+async function settled(page: Page, net: ReturnType<typeof watchNetwork>) {
+  const until = Date.now() + 15_000;
+  let quietSince = 0;
+  while (Date.now() < until) {
+    if (net.open.size === 0) {
+      if (quietSince === 0) quietSince = Date.now();
+      if (Date.now() - quietSince >= 500) return;
+    } else quietSince = 0;
+    await page.waitForTimeout(100);
+  }
+  throw new Error(
+    `the network never went quiet: ${net.frameLoads} preview loads; open: ${[...net.open.values()].join(', ')}`,
+  );
+}
+
 const column = (page: Page) => page.getByRole('complementary', { name: 'Sections' });
 /** A row of the sections column, by the exact text of its name (see pages.e2e.ts). */
 const rowOf = (page: Page, name: string) =>
@@ -327,6 +355,7 @@ test.describe('as admin', () => {
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 900 });
+    const net = watchNetwork(page);
     await openEditor(page, aboutId);
     // The fields first; the preview is not loaded until it is asked for.
     await expect(page.locator('form.editor')).toBeVisible();
@@ -337,7 +366,7 @@ test.describe('as admin', () => {
     await expect(previewRegion(page)).toBeVisible();
     await expect(page.locator('form.editor')).toBeHidden();
     await expect(inPreview(page, 'aboutWho')).toHaveClass(OUTLINED);
-    await page.waitForLoadState('networkidle');
+    await settled(page, net);
     await expectCleanAtWidths(page, 'the page editor with its live preview');
 
     // Back to Edit: the fields again, the preview kept but hidden.
