@@ -34,6 +34,8 @@ export const RELEASE_ENTITY_TYPES = [
   'page_visibility',
   // Admin v2 U7 (0098): the FAQ.
   'faq_item',
+  // Admin v2 E8: the forms config.
+  'form_settings',
 ] as const;
 export type ReleaseEntityType = (typeof RELEASE_ENTITY_TYPES)[number];
 export const ReleaseEntityTypeSchema = z.enum(RELEASE_ENTITY_TYPES);

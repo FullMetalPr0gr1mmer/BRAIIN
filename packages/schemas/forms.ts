@@ -130,7 +130,7 @@ const fieldsShape = <F extends string>(
       key,
       (optional.includes(key) ? OptionalFieldSchema : FixedFieldSchema).optional(),
     ]),
-  ) as Record<F, z.ZodTypeAny>;
+  ) as unknown as Record<F, z.ZodTypeAny>;
 
 /** A reordering: every one of `all`, each once. */
 const orderOf = <F extends string>(all: readonly [F, ...F[]]) =>
@@ -147,7 +147,9 @@ export const FormButtonSchema = formCopy(FORM_COPY_MAX.button);
 export const BudgetLabelSchema = formCopy(FORM_COPY_MAX.budget);
 export const BudgetLabelsSchema = z
   .object(
-    Object.fromEntries(BUDGET_BANDS.map((band) => [band, BudgetLabelSchema.optional()])) as Record<
+    Object.fromEntries(
+      BUDGET_BANDS.map((band) => [band, BudgetLabelSchema.optional()]),
+    ) as unknown as Record<
       (typeof BUDGET_BANDS)[number],
       z.ZodTypeAny
     >,

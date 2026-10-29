@@ -34,7 +34,7 @@ import type { DatasetTable, PreviewTable } from './relations';
 type Row = Readonly<Record<string, unknown>>;
 
 /**
- * Anon's column grants on the six tables granted by column (every other preview table is
+ * Anon's column grants on the seven tables granted by column (every other preview table is
  * granted to anon whole). The dataset reads these tables with exactly these columns, and
  * the emulator answers 42501 for any other, as PostgREST does for a visitor.
  */
@@ -89,6 +89,9 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
   ],
   // 0098 (Admin v2 U7): never the version, the schedule, the publish date or the actors.
   faq_items: ['id', 'tenant_id', 'question', 'answer', 'status', 'sort_order'],
+  // Admin v2 E8: the forms config's copy and its consent revision; never the version, the
+  // stamps or the actors.
+  form_settings: ['tenant_id', 'inquiry', 'application', 'consent_revision'],
   // 0105 (Admin v2 U11): the Search Console code the home page's head carries, and the
   // tenant; U15's migration: the GA4 measurement id, which a page that loads GA4 carries; never the
   // Calendly link or the legacy jsonb. (A preview never loads GA4: its branch of the middleware
@@ -141,6 +144,11 @@ export const MIRRORED_POLICIES: Readonly<
   disciplines: {
     disciplines_read: 'PERMISSIVE:a3adeda401046be963dd172ac14b795c',
     disciplines_write: 'PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060',
+  },
+  // Admin v2 E8: the anon read, the tenant fence alone; the non-staff block is TO
+  // authenticated, so it never applies to a visitor.
+  form_settings: {
+    form_settings_read: 'PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54',
   },
   faq_items: {
     faq_items_read: 'PERMISSIVE:a3adeda401046be963dd172ac14b795c',
@@ -247,6 +255,7 @@ export const VISIBILITY_DEPS: Readonly<Record<DatasetTable, readonly DatasetTabl
   disciplines: [],
   entity_seo: ['services', 'blog_posts', 'portfolio', 'pages'],
   faq_items: [],
+  form_settings: [],
   media_assets: [
     'portfolio',
     'portfolio_media',
@@ -467,11 +476,13 @@ export function createMirror(data: MirrorData): Mirror {
       case 'clients':
         return flagged(row);
       // 0001 categories_read, 0019 site_profile_read, 0009 seo_defaults_read, 0105
-      // site_integrations_public_read (U11; anon's two columns): the tenant fence only.
+      // site_integrations_public_read (U11; anon's two columns), E8 form_settings_read (anon's
+      // four columns): the tenant fence only.
       case 'categories':
       case 'site_profile':
       case 'seo_defaults':
       case 'site_integrations':
+      case 'form_settings':
         return true;
       // 0009 entity_seo_read (tenant) AND 0011 entity_seo_published_only (RESTRICTIVE: its
       // parent published, under the parent's RLS; an orphan or another entity type never).
