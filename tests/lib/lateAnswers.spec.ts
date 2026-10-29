@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AdminApiError } from '@/lib/admin/client';
 import { moveOutcome, type MoveCheck } from '@/components/admin/screens/leads/LeadsBoard';
 import {
   BULK_WAIT_MS,
@@ -7,11 +8,14 @@ import {
   Latest,
   ListWrites,
   ROW_WAIT_MS,
+  RowPresses,
+  STILL_SAVING,
   Serial,
   TOO_SLOW,
   TooSlow,
   bulkUnsure,
   changeUnsure,
+  failureOf,
   pressStar,
   rowWrite,
   sayFor,
@@ -402,6 +406,81 @@ describe('pressStar and rowWrite (the list, as the island runs them)', () => {
     expect(await caught).toBeInstanceOf(TooSlow);
     expect(rereads).toBe(2);
   });
+
+  it('presses on one row: an older one failing after a newer left is not drawn back or said (Review 4)', async () => {
+    const w = new ListWrites();
+    const presses = new RowPresses();
+    const { screen, steps } = listScreen(false);
+    const sent = [deferred<unknown>(), deferred<unknown>(), deferred<unknown>()];
+    const [first, second, third] = [true, false, true].map((next, i) =>
+      pressStar(
+        w,
+        next,
+        steps(() => sent[i]!.promise),
+        ROW_WAIT_MS,
+        { presses, id: 'a' },
+      ),
+    );
+    expect(screen.starred).toBe(true); // the newest press is what is shown
+    // A press on another row is its own: its failure is said while row a's are out.
+    const b = listScreen(false);
+    const other = pressStar(
+      w,
+      true,
+      b.steps(() => Promise.reject(new Error('offline'))),
+      ROW_WAIT_MS,
+      { presses, id: 'b' },
+    );
+    expect(await other).toBe(false);
+    expect(b.screen.failures).toHaveLength(1);
+    sent[0]!.reject(new Error('offline')); // the oldest press on row a fails, two newer out
+    expect(await first).toBe(false);
+    expect(screen.failures).toHaveLength(0); // not said: a newer press is what was asked
+    expect(screen.starred).toBe(true); // not drawn back (off) over the newest press
+    sent[1]!.reject(new Error('offline'));
+    expect(await second).toBe(false);
+    expect(screen.failures).toHaveLength(0);
+    sent[2]!.reject(new Error('offline')); // the newest press fails: said, and drawn back
+    expect(await third).toBe(false);
+    expect(screen.failures).toHaveLength(1);
+    expect(screen.starred).toBe(false);
+    expect(screen.rereads + b.screen.rereads).toBe(1); // one read once every write answered
+  });
+
+  it('a failed press is said when the newer press on its row left before it, not after', async () => {
+    const presses = new RowPresses();
+    const one = presses.press('a');
+    const two = presses.press('a');
+    expect(presses.passed('a', one)).toBe(true);
+    expect(presses.passed('a', two)).toBe(false);
+    expect(presses.passed('b', 1)).toBe(false);
+    presses.answered('a');
+    presses.answered('a');
+    // Once none is out the row is forgotten: nothing grows with use.
+    expect(presses.press('a')).toBe(1);
+    // A press that answers first is still counted against an older one out.
+    const w = new ListWrites();
+    const { screen, steps } = listScreen(false);
+    const late = deferred<unknown>();
+    const older = pressStar(
+      w,
+      true,
+      steps(() => late.promise),
+      ROW_WAIT_MS,
+      { presses, id: 'c' },
+    );
+    await pressStar(
+      w,
+      false,
+      steps(async () => ({})),
+      ROW_WAIT_MS,
+      { presses, id: 'c' },
+    );
+    late.reject(new Error('offline'));
+    await older;
+    expect(screen.failures).toHaveLength(0);
+    expect(screen.starred).toBe(false); // the newer press saved: it stays drawn
+  });
 });
 
 describe('Checks, sayFor and verdictOf (a failed write per row, CR6, CR7)', () => {
@@ -430,14 +509,34 @@ describe('Checks, sayFor and verdictOf (a failed write per row, CR6, CR7)', () =
     expect(verdictOf('won', 'won')).toBe('saved');
     expect(verdictOf('won', 'new')).toBe('refused');
   });
+
+  it('with no answer from the server, the old value proves nothing (Review 4)', () => {
+    expect(verdictOf(true, false, true)).toBe('unsure');
+    expect(verdictOf(true, true, true)).toBe('saved');
+    expect(verdictOf(true, undefined, true)).toBe('unknown');
+    expect(verdictOf('won', 'new', true)).toBe('unsure');
+  });
+
+  it('failureOf: a timeout or the network is unsure, the server’s own answer is not', () => {
+    expect(failureOf(new TooSlow())).toEqual({ detail: TOO_SLOW, unsure: true });
+    expect(failureOf(new TypeError('Failed to fetch'))).toEqual({
+      detail: 'Failed to fetch',
+      unsure: true,
+    });
+    expect(failureOf('odd')).toMatchObject({ unsure: true });
+    for (const status of [409, 422, 500, 503]) {
+      expect(failureOf(new AdminApiError({ error: 'x', status })).unsure).toBe(false);
+    }
+  });
 });
 
 describe('what a failed press says (LS2-2, LS-R4: true either way)', () => {
-  const check = (next: boolean): StarCheck => ({
+  const check = (next: boolean, unsure = false): StarCheck => ({
     id: 'a',
     name: 'Sara',
     next,
     detail: 'Something went wrong.',
+    unsure,
   });
 
   it('before the read: it may not have saved, and the list is being checked', () => {
@@ -460,12 +559,50 @@ describe('what a failed press says (LS2-2, LS-R4: true either way)', () => {
     );
   });
 
+  it('after a timeout: the old value keeps "may not be", it may still be saving (Review 4)', () => {
+    expect(starOutcome(check(true, true), false)).toBe(
+      `Sara may not be starred. Something went wrong. ${STILL_SAVING}`,
+    );
+    expect(starOutcome(check(false, true), true)).toBe(
+      `Sara may not be unstarred. Something went wrong. ${STILL_SAVING}`,
+    );
+    expect(starOutcome(check(true, true), true)).toBe(''); // it landed before the read
+    expect(starOutcome(check(true, true), false)).not.toMatch(/could not be/);
+  });
+
+  it('a press that timed out, replayed as the list builds its check (Review 4)', async () => {
+    vi.useFakeTimers();
+    const w = new ListWrites();
+    const checks = new Checks<StarCheck>();
+    const { screen, steps } = listScreen(false);
+    const press = pressStar(
+      w,
+      true,
+      {
+        ...steps(() => new Promise<never>(() => undefined)),
+        failed: (err) => checks.add({ id: 'a', name: 'Sara', next: true, ...failureOf(err) }),
+      },
+      1_000,
+    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(await press).toBe(false);
+    expect(screen.rereads).toBe(1);
+    const [waiting] = checks.take();
+    expect(waiting).toMatchObject({ unsure: true, detail: TOO_SLOW });
+    // The read after it shows the star still off: the press may yet land.
+    expect(starOutcome(waiting!, false)).toBe(
+      `Sara may not be starred. ${TOO_SLOW} ${STILL_SAVING}`,
+    );
+  });
+
   it('no em or en dash in the words (P-12)', () => {
     const words = [
       starPending(check(true)),
       starOutcome(check(true), false),
       starOutcome(check(true), undefined),
+      starOutcome(check(true, true), false),
       TOO_SLOW,
+      STILL_SAVING,
       bulkUnsure(TOO_SLOW),
       changeUnsure(TOO_SLOW),
     ].join(' ');
@@ -496,7 +633,13 @@ describe('moveOutcome (the board, a failed move, LS-R3)', () => {
     kind: 'open' as const,
     isInitial: false,
   });
-  const check: MoveCheck = { id: 'c', name: 'Sara', to: stage('won'), detail: 'Offline.' };
+  const check: MoveCheck = {
+    id: 'c',
+    name: 'Sara',
+    to: stage('won'),
+    detail: 'Offline.',
+    unsure: false,
+  };
   const board = (where: string) =>
     ['new', 'won'].map((id) => ({ stage: { id }, cards: id === where ? [{ id: 'c' }] : [] }));
 
@@ -515,6 +658,15 @@ describe('moveOutcome (the board, a failed move, LS-R3)', () => {
       error: 'Sara may not have moved: the board could not confirm it. Offline.',
     });
     expect(moveOutcome(check, board('none'))).toHaveProperty('error');
+  });
+
+  it('after a timeout, the old column keeps "may not have moved" (Review 4)', () => {
+    const slow = { ...check, detail: TOO_SLOW, unsure: true };
+    expect(moveOutcome(slow, board('new'))).toEqual({
+      error: `Sara may not have moved. ${TOO_SLOW} ${STILL_SAVING}`,
+    });
+    expect(moveOutcome(slow, board('won'))).toEqual({ said: 'Moved Sara to Won.' });
+    expect(JSON.stringify(moveOutcome(slow, board('new')))).not.toMatch(/[–—]|could not be/);
   });
 });
 
@@ -754,7 +906,7 @@ describe('the islands use the rules', () => {
       star,
       'stars.drop(row.id);',
       "setStarWords((words) => sayFor(words, row.id, ''));",
-      'await pressStar(writes, next, {',
+      'await pressStar(',
       'stars.add(check);',
       'setStarWords((words) => sayFor(words, row.id, starPending(check)));',
     );
@@ -763,6 +915,61 @@ describe('the islands use the rules', () => {
     expect(star).not.toContain('could not be starred'); // the words are the rule's
     const settle = between(list(), 'function settleStars', 'async function toggleStar');
     inOrder(settle, 'for (const check of stars.take())', 'sayFor(words, check.id, said)');
+  });
+
+  it('the list settles each check on its row’s stored star, the board on the fresh board (Review 4)', () => {
+    // The list: the row of the read that landed, its stored is_starred (not the press's).
+    const settle = between(list(), 'function settleStars', 'async function toggleStar');
+    inOrder(
+      settle,
+      'for (const check of stars.take())',
+      'const row = fresh?.find((r) => r.id === check.id);',
+      'const said = starOutcome(check, row ? row.is_starred === true : undefined);',
+      'setStarWords((words) => sayFor(words, check.id, said));',
+    );
+    // The board: the read that landed, and a move it shows saved after all is said.
+    const moved = between(board(), 'function settleMoves', 'async function move(');
+    inOrder(
+      moved,
+      'for (const check of moves.take())',
+      'const outcome = moveOutcome(check, fresh);',
+      "if ('said' in outcome) setSaid(outcome.said);",
+      "setMoveWords((words) => sayFor(words, check.id, 'error' in outcome ? outcome.error : ''));",
+    );
+  });
+
+  it('a failed star or move keeps whether the server answered (Review 4)', () => {
+    const star = between(list(), 'async function toggleStar', 'function postBulk');
+    inOrder(
+      star,
+      'failed: (err) => {',
+      'const check = { id: row.id, name: leadName(row), next, ...failureOf(err) };',
+      'stars.add(check);',
+    );
+    const move = between(board(), 'async function move(', 'const listHref');
+    inOrder(move, 'const why = failureOf(err);', 'moves.add({ id: card.id, name, to, ...why });');
+    expect(between(board(), 'export function moveOutcome', '/**')).toContain(
+      'verdictOf(check.to.id, where?.stage.id, check.unsure)',
+    );
+  });
+
+  it('a star press counts the presses on its row (Review 4)', () => {
+    expect(list()).toContain('const [presses] = useState(() => new RowPresses());');
+    const star = between(list(), 'async function toggleStar', 'function postBulk');
+    inOrder(star, 'await pressStar(', 'reread,', 'ROW_WAIT_MS,', '{ presses, id: row.id },');
+  });
+
+  it('a bulk action that failed keeps the selection; one that answered clears it (CR2, Review 4)', () => {
+    const failed = between(list(), 'function bulkFailed', 'function bulkDone');
+    expect(failed).not.toContain('setSelected');
+    const done = between(list(), 'function bulkDone', 'const counts =');
+    expect(done).toContain('setSelected(new Set());');
+    const bar = read('src/components/admin/screens/leads/LeadsBulkBar.tsx');
+    expect(bar).not.toContain('setSelected');
+  });
+
+  it('a lead page shows the read mark it drew, for the e2e to wait on (Review 4)', () => {
+    expect(detail()).toContain('<div className="lead-badges" data-read-at={lead.read_at ?? \'\'}>');
   });
 
   it('a bulk action is a row write with a longer deadline, never said to fail unknown (CR2, CR8)', () => {
@@ -877,12 +1084,12 @@ describe('the islands use the rules', () => {
       'signal,',
       'reread,',
       'ROW_WAIT_MS,\n        true,',
-      'moves.add({ id: card.id, name, to, detail });',
-      'sayFor(words, card.id,',
+      'moves.add({ id: card.id, name, to, ...why });',
+      '`${name} may not have moved. ${why.detail} Checking the board again.`',
     );
     expect(move).not.toMatch(/setReload|moves\.take\(\)/); // the rule asks for the read
     expect(between(src, 'export function moveOutcome', '/**')).toContain(
-      'verdictOf(check.to.id, where?.stage.id)',
+      'verdictOf(check.to.id, where?.stage.id, check.unsure)',
     );
   });
 });

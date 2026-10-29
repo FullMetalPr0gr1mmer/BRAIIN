@@ -8,6 +8,8 @@ import {
   Checks,
   ListWrites,
   ROW_WAIT_MS,
+  STILL_SAVING,
+  failureOf,
   rowWrite,
   sayFor,
   verdictOf,
@@ -101,22 +103,28 @@ export interface MoveCheck {
   to: StageView;
   /** Why the PATCH failed, as said. */
   detail: string;
+  /** The server never answered (failureOf): the old column after it proves nothing. */
+  unsure: boolean;
 }
 
 /**
  * What a failed move came to once the board read after it landed. The PATCH can fail after its
  * update committed (it resolves interests and audits after it), so the failure alone proves
  * nothing. `columns`: the board read, or null when that read failed. `said`: it moved after all;
- * `error`: it did not, or the board could not confirm it.
+ * `error`: it did not, it may still (the server never answered), or the board could not
+ * confirm it.
  */
 export function moveOutcome(
   check: MoveCheck,
   columns: readonly { stage: { id: string }; cards: readonly { id: string }[] }[] | null,
 ): { said: string } | { error: string } {
   const where = columns?.find((column) => column.cards.some((card) => card.id === check.id));
-  const verdict = verdictOf(check.to.id, where?.stage.id);
+  const verdict = verdictOf(check.to.id, where?.stage.id, check.unsure);
   if (verdict === 'saved') return { said: `Moved ${check.name} to ${check.to.label}.` };
   if (verdict === 'refused') return { error: `${check.name} could not be moved. ${check.detail}` };
+  if (verdict === 'unsure') {
+    return { error: `${check.name} may not have moved. ${check.detail} ${STILL_SAVING}` };
+  }
   return {
     error: `${check.name} may not have moved: the board could not confirm it. ${check.detail}`,
   };
@@ -291,10 +299,14 @@ export default function LeadsBoard({
       } else {
         // The PATCH can fail after its update committed (the version then moved): say what
         // the move came to once the read after it lands (settleMoves).
-        const detail = describeError(err);
-        moves.add({ id: card.id, name, to, detail });
+        const why = failureOf(err);
+        moves.add({ id: card.id, name, to, ...why });
         setMoveWords((words) =>
-          sayFor(words, card.id, `${name} may not have moved. ${detail} Checking the board again.`),
+          sayFor(
+            words,
+            card.id,
+            `${name} may not have moved. ${why.detail} Checking the board again.`,
+          ),
         );
       }
     } finally {

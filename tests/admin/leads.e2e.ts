@@ -503,6 +503,9 @@ test.describe('as admin', () => {
     // answer is held. On main this late answer turned a star pressed meanwhile off again on
     // screen. The mark-read is not queued (it never holds the status card) and only its
     // read_at is taken, so the star stays (src/lib/crm/lateAnswers.ts, LeadDetail.tsx).
+    // Its read_at is replaced by a date no real mark can have, so the page shows when it has
+    // drawn that answer (the badges' data-read-at): the look after it waits for no clock.
+    const SENTINEL = '2001-01-01T00:00:00.000Z';
     let release: () => void = () => undefined;
     const held = new Promise<void>((resolve) => {
       release = resolve;
@@ -525,9 +528,11 @@ test.describe('as admin', () => {
       const body = request.method() === 'PATCH' ? request.postDataJSON() : null;
       if ((body as { read?: unknown } | null)?.read !== true) return route.continue();
       const response = await route.fetch();
+      const json = (await response.json()) as { data?: Record<string, unknown> };
+      json.data = { ...json.data, read_at: SENTINEL };
       markSeen();
       await held;
-      await route.fulfill({ response });
+      await route.fulfill({ response, json });
     });
     await visit(page, `/admin/leads/${lead.id}`);
     await seen;
@@ -542,12 +547,10 @@ test.describe('as admin', () => {
     await expect(star).toHaveAttribute('aria-checked', 'true');
 
     // The mark-read's answer, read before the star was saved, lands now: the star stays.
-    const marked = page.waitForResponse((res) => patchOf(res)?.read === true);
+    // Once the page has drawn it (its read_at shows), the star is looked at once, not polled.
     release();
-    await (await marked).finished();
-    // Its JSON is parsed and drawn within a few frames; give them, then look.
-    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 250)));
-    await expect(star).toHaveAttribute('aria-checked', 'true');
+    await expect(page.locator(`.lead-badges[data-read-at="${SENTINEL}"]`)).toBeAttached();
+    expect(await star.getAttribute('aria-checked')).toBe('true');
     await page.unroute(row);
     const stored = await leadOf(page, lead.id);
     expect(stored['is_starred']).toBe(true);

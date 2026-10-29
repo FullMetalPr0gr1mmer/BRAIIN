@@ -28,6 +28,8 @@
 // (CLAUDE.md §3). State is a few numbers, controllers and one promise, and Checks holds a
 // failed write's name and words until the next read: nothing grows with use.
 
+import { AdminApiError, describeError } from '@/lib/admin/client';
+
 /** How long a row write or a read may take before it counts as failed. */
 export const ROW_WAIT_MS = 15_000;
 
@@ -150,17 +152,54 @@ export interface StarSteps {
 }
 
 /**
+ * The presses on each row of the list, so a failed press knows whether a newer press on its
+ * row left after it. A row is forgotten once none of its presses is out: it holds at most the
+ * rows with a press out.
+ */
+export class RowPresses {
+  private rows = new Map<string, { sent: number; out: number }>();
+
+  /** A press on this row leaves: its number on the row. */
+  press(id: string): number {
+    const row = this.rows.get(id) ?? { sent: 0, out: 0 };
+    row.sent += 1;
+    row.out += 1;
+    this.rows.set(id, row);
+    return row.sent;
+  }
+
+  /** Whether a newer press on this row left after press `n`. */
+  passed(id: string, n: number): boolean {
+    return (this.rows.get(id)?.sent ?? n) > n;
+  }
+
+  /** A press on this row answered. */
+  answered(id: string): void {
+    const row = this.rows.get(id);
+    if (!row) return;
+    row.out -= 1;
+    if (row.out <= 0) this.rows.delete(id);
+  }
+}
+
+/**
  * One star press, as a row write. Shown at once. A failed save is drawn back (most failures
  * never reached the database) and the list is read again, since the PATCH can fail after its
  * update committed: that read, not the guess, is what the screen ends on. Resolves to whether
  * the save answered as saved.
+ *
+ * `row`: the row's presses. A failed press that a newer press on its row left after is neither
+ * drawn back nor said: the newer press is what the person asked for last, and two presses that
+ * overlapped are read again anyway.
  */
 export async function pressStar(
   writes: ListWrites,
   next: boolean,
   steps: StarSteps,
   ms: number = ROW_WAIT_MS,
+  row?: { presses: RowPresses; id: string },
 ): Promise<boolean> {
+  const n = row ? row.presses.press(row.id) : 0;
   writes.write();
   steps.show(next);
   let ok = true;
@@ -168,8 +207,12 @@ export async function pressStar(
     await withDeadline((signal) => steps.send(signal), ms);
   } catch (err) {
     ok = false;
-    steps.show(!next);
-    steps.failed(err);
+    if (!row?.presses.passed(row.id, n)) {
+      steps.show(!next);
+      steps.failed(err);
+    }
+  } finally {
+    row?.presses.answered(row.id);
   }
   if (writes.written(ok)) steps.reread();
   return ok;
@@ -234,13 +277,31 @@ export function sayFor(
 }
 
 /**
- * What a failed write came to once a read after it landed: the value it asked for is stored
- * (it saved after all: the write can fail after its update committed), another value is, or the
- * read could not say (it failed, or the row is not on the page read).
+ * Why a write failed, as said, and whether the server answered at all. `unsure`: it did not
+ * (too slow, the network), so the write may still be running and a read after it that shows
+ * the old value proves nothing. An AdminApiError is the server's own answer: its work is done.
  */
-export function verdictOf<V>(asked: V, stored: V | undefined): 'saved' | 'refused' | 'unknown' {
+export function failureOf(err: unknown): { detail: string; unsure: boolean } {
+  return { detail: describeError(err), unsure: !(err instanceof AdminApiError) };
+}
+
+/** What a write with no answer may still be doing. */
+export const STILL_SAVING = 'It may still be saving, so check again in a moment.';
+
+/**
+ * What a failed write came to once a read after it landed: the value it asked for is stored
+ * (it saved after all: the write can fail after its update committed), another value is (or,
+ * when the server never answered, is so far: `unsure`), or the read could not say (it failed,
+ * or the row is not on the page read).
+ */
+export function verdictOf<V>(
+  asked: V,
+  stored: V | undefined,
+  unsure = false,
+): 'saved' | 'refused' | 'unsure' | 'unknown' {
   if (stored === undefined) return 'unknown';
-  return stored === asked ? 'saved' : 'refused';
+  if (stored === asked) return 'saved';
+  return unsure ? 'unsure' : 'refused';
 }
 
 /** A failed star press waiting for the read after it. */
@@ -252,6 +313,8 @@ export interface StarCheck {
   next: boolean;
   /** Why the save failed, as said. */
   detail: string;
+  /** The server never answered (failureOf): the old value after it proves nothing. */
+  unsure: boolean;
 }
 
 /** The words for a failed press, before the read after it has said what is stored. */
@@ -261,15 +324,19 @@ export function starPending(check: StarCheck): string {
 
 /**
  * What a failed press came to once a read after it landed: '' when the read shows it saved
- * after all; that it could not be saved when the read shows the old value; that it could not be
- * confirmed when the read did not answer or the row is not on the page read.
+ * after all; that it could not be saved when the read shows the old value and the server said
+ * why; that it may not be, and may still be saving, when the server never answered; that it
+ * could not be confirmed when the read did not answer or the row is not on the page read.
  */
 export function starOutcome(check: StarCheck, stored: boolean | undefined): string {
   const verb = check.next ? 'starred' : 'unstarred';
-  const verdict = verdictOf(check.next, stored);
+  const verdict = verdictOf(check.next, stored, check.unsure);
   if (verdict === 'saved') return '';
   if (verdict === 'unknown') {
     return `${check.name} may not be ${verb}: the list could not confirm it. ${check.detail}`;
+  }
+  if (verdict === 'unsure') {
+    return `${check.name} may not be ${verb}. ${check.detail} ${STILL_SAVING}`;
   }
   return `${check.name} could not be ${verb}. ${check.detail}`;
 }

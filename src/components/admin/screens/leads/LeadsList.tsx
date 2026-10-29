@@ -16,7 +16,9 @@ import {
   Checks,
   ListWrites,
   ROW_WAIT_MS,
+  RowPresses,
   bulkUnsure,
+  failureOf,
   pressStar,
   rowWrite,
   sayFor,
@@ -198,6 +200,8 @@ export default function LeadsList({
   const [writes] = useState(() => new ListWrites());
   // Failed star presses, until a read after them says what is stored.
   const [stars] = useState(() => new Checks<StarCheck>());
+  // The presses out on each row: a failed press a newer one on its row left after is not said.
+  const [presses] = useState(() => new RowPresses());
 
   // A confirmation the last page sent here (a lead erased): shown once, then taken out of
   // the address. First, before the address is rewritten from the filters.
@@ -311,28 +315,37 @@ export default function LeadsList({
   /**
    * A star press: a row write through the rule (src/lib/crm/lateAnswers.ts), shown at once and
    * bounded by its deadline. A failure draws the star back and says it may not have saved; the
-   * read after the writes says what is stored (settleStar).
+   * read after the writes says what is stored (settleStar). A failure that a newer press on the
+   * same row left after does neither: that press is what was asked for last.
    */
   async function toggleStar(row: Row) {
     const next = row.is_starred !== true;
     stars.drop(row.id);
     setStarWords((words) => sayFor(words, row.id, ''));
-    await pressStar(writes, next, {
-      show: (on) =>
-        setRows((list) => list.map((r) => (r.id === row.id ? { ...r, is_starred: on } : r))),
-      send: (signal) =>
-        adminFetch(`/api/admin/leads/${row.id}`, {
-          method: 'PATCH',
-          body: { isStarred: next },
-          signal,
-        }),
-      failed: (err) => {
-        const check = { id: row.id, name: leadName(row), next, detail: describeError(err) };
-        stars.add(check);
-        setStarWords((words) => sayFor(words, row.id, starPending(check)));
+    await pressStar(
+      writes,
+      next,
+      {
+        show: (on) =>
+          setRows((list) => list.map((r) => (r.id === row.id ? { ...r, is_starred: on } : r))),
+        send: (signal) =>
+          adminFetch(`/api/admin/leads/${row.id}`, {
+            method: 'PATCH',
+            body: { isStarred: next },
+            signal,
+          }),
+        failed: (err) => {
+          // With no answer at all (too slow, the network) it may still save: said so even
+          // when the read after it shows the old value (failureOf, starOutcome).
+          const check = { id: row.id, name: leadName(row), next, ...failureOf(err) };
+          stars.add(check);
+          setStarWords((words) => sayFor(words, row.id, starPending(check)));
+        },
+        reread,
       },
-      reread,
-    });
+      ROW_WAIT_MS,
+      { presses, id: row.id },
+    );
   }
 
   /**

@@ -233,7 +233,7 @@ export default function LeadDetail(props: LeadDetailProps) {
 
   return (
     <>
-      <div className="lead-badges">
+      <div className="lead-badges" data-read-at={lead.read_at ?? ''}>
         <StageBadge stages={stages} id={lead.stage_id} />
         <SourceBadge source={lead.source} channel={lead.channel} />
         {lead.is_starred === true && <Badge tone="warn">Starred</Badge>}
