@@ -3864,6 +3864,8 @@ html[dir='rtl'] .klein-band::before {
 .blk-wrap {
   max-width: var(--bs-maxw);
   margin-inline: auto;
+  /* Authored words: a long address or name breaks rather than scrolling a phone sideways. */
+  overflow-wrap: break-word;
 }
 .blk-head {
   margin: 0;
