@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { RELEASE_ENTITY_META } from '@/lib/release/areas';
 import { RELEASE_REGISTRY } from '@/lib/release/registry';
+import { COPY } from '@/components/admin/screens/versions/model';
 
 // The release switch-on's runbook and read-back (Admin v2 R14-prep; docs/launch-runbook.md §6p,
 // scripts/releases-switch-readback.sql). The owner runs both by hand on production, so what they
@@ -90,6 +91,27 @@ describe('scripts/releases-switch-readback.sql', () => {
 });
 
 describe('docs/launch-runbook.md §6p', () => {
+  it('rolls the drill back to the version just before its own, never to v1 (review S2, C1)', () => {
+    // Restore vN takes back every version after N (releases.md §6.2), and a converted legacy
+    // schedule can go live at any minute of the window: restoring v1 would take it back too.
+    const drill = section.slice(section.indexOf('5. **The drill**'), section.indexOf('6. **End'));
+    expect(drill).not.toMatch(/Restore\*? v1\b/);
+    expect(drill).toContain('*Restore* the version listed just below it');
+    expect(drill).toMatch(/check that vD\s+is still the newest version/);
+    // The restore must hold the drill question alone, read off the confirm the page shows.
+    expect(drill).toContain('"Its 1 change go live together"');
+    expect(COPY.publishAgainBody(1, 1)).toContain('Its 1 change go live together');
+    expect(drill).toContain('**Stop instead**');
+    expect(drill).toContain('**Wait for the converted releases.**');
+    // Every count after the switch is relative to the converted releases that fired.
+    expect(readback).not.toMatch(/published_versions\s+= [1-9][0-9]*\s*$/m);
+    expect(readback).not.toMatch(/= 3 and live_version = 3/);
+    expect(readback).toMatch(/^--   published_versions\s+= 1 \+ legacy_fired$/m);
+    expect(readback).toMatch(/^--   live_version\s+= published_versions$/m);
+    expect(aliases).toContain('legacy_fired');
+    expect(section).toContain('`legacy_fired`');
+  });
+
   it('runs 0112’s switches as the owner, with the operator and the fallback scheduler (O-5)', () => {
     expect(migration).toContain(
       'create or replace function app.enable_releases(p_tenant uuid, p_operator uuid, p_fallback_scheduler uuid)',
@@ -119,7 +141,7 @@ describe('docs/launch-runbook.md §6p', () => {
     expect(section).toContain('Releases rehearsal');
     expect(existsSync('.github/workflows/releases-rehearsal.yml')).toBe(true);
     expect(section).toContain('tests/admin/releases-mode.e2e.ts');
-    expect(section).toMatch(/\*Publish v1 again\*/);
+    expect(section).toMatch(/\*Publish vN again\*/);
     expect(section).toContain('**The discard rule**');
     expect(section).toContain('not_restored');
     // The Worker's rollback line while releases are on.

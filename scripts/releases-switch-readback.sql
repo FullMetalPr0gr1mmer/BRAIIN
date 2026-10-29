@@ -19,6 +19,7 @@
 --   applying_releases            = 0       (else enable refuses, 55P03: try again)
 --   published_versions           = 0
 --   baselines                    = 0
+--   legacy_fired                 = 0       (converted releases since published, each a version)
 --   live_version                 = null
 --   legacy_to_convert            = n       (enable's `converted`: rows scheduled with a time)
 --   left_scheduled               = m       (enable's `left_scheduled`: left as they are)
@@ -32,18 +33,24 @@
 --   and publish_scheduled_job as before, and:
 --   releases_on                  = true
 --   release_tenants              = 1
---   pending_changes              = n       (the converted rows, each claimed by its release)
---   scheduled_releases           = enable's `legacy_releases`
+--   pending_changes              = n       (the converted rows, each claimed by its release),
+--                                          less the rows of the converted releases since fired
+--   scheduled_releases           = enable's `legacy_releases`, less legacy_fired (and any
+--                                          that failed: Backups & versions lists it on top)
 --   applying_releases            = 0
---   published_versions           = 1
+--   published_versions           = 1 + legacy_fired
 --   baselines                    = 1
---   live_version                 = 1
+--   legacy_fired                 = k       (a converted release whose time has passed fires
+--                                          within a minute of the switch: each one a version)
+--   live_version                 = published_versions
 --   legacy_to_convert            = 0
 --   left_scheduled               = m
 --   enable_audits                = 1
--- After the drill: published_versions = 3 and live_version = 3 (the publish and its rollback),
--- pending_changes and scheduled_releases as right after the switch. After a switch-off:
--- releases_on = false, release_tenants = 0, pending_changes = 0, scheduled_releases = 0.
+-- After the drill: published_versions two more than right after the switch (the publish and its
+-- rollback), plus any legacy_fired added since; live_version = published_versions. The numbers
+-- are relative on purpose: a converted release can go live at any minute of the window.
+-- After a switch-off: releases_on = false, release_tenants = 0, pending_changes = 0,
+-- scheduled_releases = 0.
 
 with
 t as (
@@ -81,6 +88,9 @@ select
   (select count(*) from public.content_releases r
     where r.tenant_id = (select id from t) and r.status = 'published' and r.kind = 'baseline')
     as baselines,
+  (select count(*) from public.content_releases r
+    where r.tenant_id = (select id from t) and r.status = 'published'
+      and r.kind = 'legacy_schedule') as legacy_fired,
   (select max(r.number) from public.content_releases r
     where r.tenant_id = (select id from t) and r.status = 'published') as live_version,
   (select

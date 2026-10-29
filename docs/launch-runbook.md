@@ -1708,20 +1708,40 @@ and the fallback scheduler.
    "v1"; *Settings › Backups & versions* lists v1, "The site as it was when publishing in
    releases began"; the activity log shows "releases.enable" by the operator. Each converted
    item is now a scheduled release ("Scheduled before publishing in releases began"), which the
-   minute cron publishes at its time (one whose time has passed, within a minute).
-5. **The drill**, as the operator, on something no visitor sees:
-   1. *FAQ* (in the menu's content group): add a question, "Release drill", in both languages,
+   minute cron publishes at its time (one whose time has passed, within a minute), so the card
+   and the list may already name v2 or later: each converted release that has gone live is a
+   version of its own (the read-back counts them, `legacy_fired`).
+5. **The drill**, as the operator, on something no visitor sees. It must undo only its own
+   version: *Restore* vN brings back the site as it was at vN, so it also takes back every
+   version published after vN, a converted release that went live in between included.
+   1. **Wait for the converted releases.** On Backups & versions, *Scheduled and failed
+      releases*: start the drill only when none is due before it will end (about the next ten
+      minutes). One due sooner: wait until it is listed under *Published versions*, then start.
+   2. *FAQ* (in the menu's content group): add a question, "Release drill", in both languages,
       with *Visible on the site* left **off** (a draft, so it is never on the site), and save.
       The bar at the bottom says there is an unpublished change.
-   2. **Publish** (the bar's *Publish…*, then *Publish 1 change*). The toast names v2. Backups &
-      versions lists v2 with one change; the public FAQ (`/contact`) is unchanged.
-   3. **Roll back**: on Backups & versions, *Restore* v1, confirm, then *Publish v1 again*,
-      confirm. The page says it is published; v3 is listed as "Restored v1", and the drill
-      question is gone from the FAQ list in the admin. The public site never changed.
-   4. Optional, to see the minute cron: add the drill question again, open *Publish…*, choose
+   3. **Publish** (the bar's *Publish…*, then *Publish 1 change*). The toast names the drill's
+      version, **vD** (v2 when nothing else has been published since the switch). Backups &
+      versions lists vD at the top with one change; the public FAQ (`/contact`) is unchanged.
+   4. **Roll back to the version just before the drill's.** On Backups & versions, check that vD
+      is still the newest version. Then *Restore* the version listed just below it (vD minus 1:
+      v1 when the drill's is v2), and confirm. Before publishing, check that the restore holds
+      exactly the drill question: the bar at the bottom says **1** unpublished change, and the
+      next confirm reads "Its 1 change go live together". Only then *Publish vN again* (N being
+      the restored number), confirm. The page says it is published; the newest version is
+      listed as "Restored vN", and the drill question is gone from the FAQ list in the admin.
+      The public site never changed.
+      **Stop instead** when a version newer than vD is listed, or the restore holds more than
+      one change (a converted release went live in between): do not publish the restore. Throw
+      its changes away (the bar's *Discard*, *Choose…*, tick them), then delete the drill
+      question in FAQ and publish that one change: it was never on the site, and nothing else
+      is taken back.
+   5. Optional, to see the minute cron: add the drill question again, open *Publish…*, choose
       *Schedule for* five minutes ahead, wait, and check that it is listed as published; then
-      roll it back the same way.
-   5. Read back once more: `published_versions` and `live_version` are 3 (5 with step 4).
+      roll it back the same way (restore the version just below the scheduled one's).
+   6. Read back once more: `published_versions` is two more than right after the switch (four
+      with step 5), plus any `legacy_fired` added since, and `live_version` equals
+      `published_versions`.
 6. **End the freeze** and tell the editors: Save now keeps a change; *Publish…* puts it live;
    History on every editor and Backups & versions show and restore earlier versions.
 
