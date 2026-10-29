@@ -18,7 +18,24 @@ const state = vi.hoisted(() => ({
   reads: [] as string[],
   /** Tables whose read fails (review C4: a refresh that cannot read the settings row). */
   failing: [] as string[],
+  /**
+   * Concurrency probes (R14-prep code review 4): a read of the key's table, or the redirect
+   * sync (`redirects`), waits a while for the named read to have started too, and records
+   * whether it did (`overlaps`): only work that runs side by side sees the other begin.
+   */
+  waitFor: {} as Record<string, string>,
+  overlaps: [] as string[],
 }));
+
+/** Waits up to ~200 ms for a read to start; records whether it did. */
+async function awaitRead(who: string): Promise<void> {
+  const want = state.waitFor[who];
+  if (!want) return;
+  for (let i = 0; i < 40 && !state.reads.includes(want); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  if (state.reads.includes(want)) state.overlaps.push(who);
+}
 
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
@@ -33,6 +50,7 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (_column: string, tenant: string) => ({
           maybeSingle: async () => {
             state.reads.push(`${table}:${tenant}`);
+            await awaitRead(table);
             if (state.failing.includes(table)) return { data: null, error: { message: 'down' } };
             return { data: state.rows[table] ?? null, error: null };
           },
@@ -50,6 +68,7 @@ vi.mock('@/lib/data/systemLog', () => ({
 vi.mock('@/lib/admin/redirectSync', () => ({
   syncRedirectsOfTenant: async (_sb: unknown, tenantId: string) => {
     state.syncs.push(`redirects:${tenantId}`);
+    await awaitRead('redirects');
     return { kvSynced: true, count: 1, truncated: false };
   },
 }));
@@ -64,6 +83,7 @@ const { afterPublish, rebuildSnapshots, snapshotNeeds } =
   await import('@/lib/release/afterEffects');
 const { resetPurgeBreaker, COLLAPSE_TAG } = await import('@/lib/http/purge');
 const { MAINTENANCE_KV_KEY } = await import('@/lib/http/maintenance');
+const { CONTACT_COLUMNS, CONTACT_KEYS, contactFromRow } = await import('@/lib/maintenance/contact');
 const { __kv } = (await import('cloudflare:workers')) as unknown as { __kv: Map<string, string> };
 
 type Item = ApplyResult['items'][number];
@@ -135,6 +155,8 @@ beforeEach(() => {
   state.rows = {};
   state.reads = [];
   state.failing = [];
+  state.waitFor = {};
+  state.overlaps = [];
   __kv.delete(MAINTENANCE_KV_KEY);
   resetPurgeBreaker();
 });
@@ -248,6 +270,69 @@ describe("the maintenance page's contact buttons after a release (R14-prep, R7's
     await rebuildSnapshots(T, needs(null));
     expect(state.reads).toEqual([`site_settings:${T}`, `site_profile:${T}`]);
     expect(edgeContact()).toMatchObject({ email: 'read@studio.example' });
+  });
+
+  it('the identity read finds no row: nothing put, the edge keeps its buttons, logged (code review 5)', async () => {
+    // A missing identity row is not an identity with no buttons: putting contactFromRow(null)
+    // would empty the maintenance page's e-mail and WhatsApp buttons and call that refreshed.
+    const edge = JSON.stringify({
+      ...ON,
+      contact: { brand: BRAND, email: 'kept@studio.example', whatsappE164: '+966500000000' },
+    });
+    __kv.set(MAINTENANCE_KV_KEY, edge);
+    state.rows['site_settings'] = { maintenance: ON };
+    state.rows['site_profile'] = null;
+    expect(await rebuildSnapshots(T, needs(null))).toBeUndefined();
+    expect(state.reads).toContain(`site_profile:${T}`);
+    expect(__kv.get(MAINTENANCE_KV_KEY)).toBe(edge);
+    expect(state.logs).toEqual([
+      expect.objectContaining({ level: 'warn', source: 'release:snapshot' }),
+    ]);
+  });
+
+  it('the settings row and the identity are read side by side (code review 4)', async () => {
+    __kv.set(MAINTENANCE_KV_KEY, JSON.stringify(ON));
+    state.rows['site_settings'] = { maintenance: ON };
+    state.rows['site_profile'] = identity({ contact_email: 'read@studio.example' });
+    state.waitFor = { site_settings: `site_profile:${T}` };
+    await rebuildSnapshots(T, needs(null));
+    expect(state.overlaps).toEqual(['site_settings']);
+    expect(edgeContact()).toMatchObject({ email: 'read@studio.example' });
+  });
+
+  it('the buttons are refreshed beside the redirect map, not after it (code review 4)', async () => {
+    __kv.set(MAINTENANCE_KV_KEY, JSON.stringify(ON));
+    state.rows['site_settings'] = { maintenance: ON };
+    state.waitFor = { redirects: `site_settings:${T}` };
+    const moved = identity({ contact_email: 'new@studio.example' });
+    expect(await rebuildSnapshots(T, { ...needs(moved), redirects: true })).toBe(true);
+    expect(state.overlaps).toEqual(['redirects']);
+    expect(edgeContact()).toMatchObject({ email: 'new@studio.example' });
+  });
+
+  it('the contact columns are one list: the select, the reader and the release check (code review 3)', () => {
+    expect(CONTACT_COLUMNS).toBe(CONTACT_KEYS.join(','));
+    // contactFromRow reads these columns and no other.
+    const only = Object.fromEntries(CONTACT_KEYS.map((key) => [key, identity()[key]]));
+    expect(contactFromRow(only)).toEqual(contactFromRow(identity()));
+    expect(contactFromRow(only)).toEqual({
+      brand: BRAND,
+      email: 'hello@studio.example',
+      whatsappE164: '+966500000000',
+    });
+    // A release that moves any one of them owes the refresh.
+    const changed: Record<string, unknown> = {
+      brand_name: { en: 'S', ar: 'س' },
+      contact_email: 'new@studio.example',
+      whatsapp_e164: '+966511111111',
+    };
+    for (const key of CONTACT_KEYS) {
+      const after = identity({ [key]: changed[key] });
+      expect(
+        snapshotNeeds([item('site_profile', 'update', identity(), after)]).maintenance,
+        key,
+      ).toEqual({ row: after });
+    }
   });
 
   it('a refresh that missed is logged, never reported as the edge rules missing (review C4)', async () => {

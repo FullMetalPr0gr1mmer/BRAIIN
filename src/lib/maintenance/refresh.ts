@@ -21,7 +21,13 @@ import { readContact } from './contact';
 // (src/lib/cron/maintenanceReconcile.ts).
 //
 // Subrequests: the edge's value (1); while on, the settings row (1), the identity when not
-// handed over (1), and the put (1).
+// handed over (1), and the put (1). The settings row and the identity are read side by side (R14-
+// prep review): neither depends on the other, and the worst case stays these four. The edge's
+// value stays first, alone: while it says off nothing else is read.
+//
+// No identity row (none read, or the read failed) is not an identity with no buttons: nothing is
+// put, so the edge keeps the buttons it has, and the answer is 'not-refreshed' (the caller logs
+// it; the reconcile keeps the edge's buttons too, src/lib/cron/maintenanceReconcile.ts).
 
 /** What a refresh did: nothing to do (maintenance off), the buttons put, or not put. */
 export type ContactRefresh = 'not-needed' | 'refreshed' | 'not-refreshed';
@@ -37,15 +43,19 @@ export async function refreshMaintenanceContact(args: {
   const { sb, tenantId, env } = args;
   const edge = await readMaintenanceSnapshot(env);
   if (!edge?.active) return 'not-needed';
-  const { data, error } = await sb
-    .from('site_settings')
-    .select('maintenance')
-    .eq('tenant_id', tenantId)
-    .maybeSingle<{ maintenance: unknown }>();
-  if (error) return 'not-refreshed';
-  const stored = readMaintenance(data?.maintenance ?? null);
+  const [settings, contact] = await Promise.all([
+    Promise.resolve(
+      sb
+        .from('site_settings')
+        .select('maintenance')
+        .eq('tenant_id', tenantId)
+        .maybeSingle<{ maintenance: unknown }>(),
+    ).catch(() => null),
+    args.contact ?? readContact(sb, tenantId),
+  ]);
+  if (!settings || settings.error) return 'not-refreshed';
+  const stored = readMaintenance(settings.data?.maintenance ?? null);
   if (!stored.active) return 'not-needed';
-  const contact = args.contact ?? (await readContact(sb, tenantId));
   if (!contact) return 'not-refreshed';
   return (await putMaintenanceState(env, edgeValueOf(stored, contact)))
     ? 'refreshed'

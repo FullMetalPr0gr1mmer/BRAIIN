@@ -7,7 +7,7 @@ import { syncRedirectsOfTenant } from '@/lib/admin/redirectSync';
 import { rebuildVisibilitySnapshot } from '@/lib/admin/visibilitySync';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { COLLAPSE_TAG, purgeTags, type PurgeOptions } from '@/lib/http/purge';
-import { CONTACT_COLUMNS, contactFromRow } from '@/lib/maintenance/contact';
+import { CONTACT_KEYS, contactFromRow } from '@/lib/maintenance/contact';
 import { refreshMaintenanceContact } from '@/lib/maintenance/refresh';
 import { serviceClient } from '@/lib/supabase/server';
 import { jsonEqual } from './deepEqual';
@@ -44,9 +44,6 @@ type Item = ApplyResult['items'][number];
 
 /** Attempts at a release's purge before the cron gives up (0103's claim holds the same). */
 export const RELEASE_PURGE_MAX_ATTEMPTS = 10;
-
-/** The identity's columns the maintenance page's buttons show (src/lib/maintenance/contact.ts). */
-const CONTACT_KEYS = CONTACT_COLUMNS.split(',');
 
 /** What a release owes the edge after it goes live. */
 export interface SnapshotNeeds {
@@ -92,8 +89,24 @@ export function snapshotNeeds(items: readonly Item[] | null): SnapshotNeeds {
  * the publish answer's `kvSynced` reports, and the dialog's "Sync to edge" advice fixes). The
  * maintenance page's buttons are refreshed too but never counted there: a miss is logged and
  * the 10-minute reconcile heals it, and Sync to edge would not (R14-prep review C4).
+ *
+ * The buttons' refresh runs beside the two rebuilds (R14-prep review): it writes its own KV key
+ * from its own reads, so nothing orders it after them, and running it beside them adds no
+ * subrequest. The redirect map and the visibility rules keep R7's order, one after the other.
  */
 export async function rebuildSnapshots(
+  tenantId: string,
+  needs: SnapshotNeeds,
+): Promise<boolean | undefined> {
+  const [kvSynced] = await Promise.all([
+    rebuildEdgeRules(tenantId, needs),
+    needs.maintenance ? refreshContact(tenantId, needs.maintenance.row) : undefined,
+  ]);
+  return kvSynced;
+}
+
+/** The redirect map and the page-visibility rules the release moved: did the edge take them. */
+async function rebuildEdgeRules(
   tenantId: string,
   needs: SnapshotNeeds,
 ): Promise<boolean | undefined> {
@@ -115,25 +128,30 @@ export async function rebuildSnapshots(
     }
     kvSynced = (kvSynced ?? true) && synced;
   }
-  if (needs.maintenance) {
-    // As the system (the settings row; the identity when the release's image is not known).
-    const refreshed = await refreshMaintenanceContact({
-      sb: serviceClient(),
-      tenantId,
-      env: workerEnv,
-      contact: needs.maintenance.row ? contactFromRow(needs.maintenance.row) : undefined,
-    });
-    if (refreshed === 'not-refreshed') {
-      void writeSystemLog({
-        level: 'warn',
-        source: 'release:snapshot',
-        message:
-          "The maintenance page's contact buttons were not refreshed; the 10-minute reconcile does it.",
-        detail: { tenantId },
-      });
-    }
-  }
   return kvSynced;
+}
+
+/** The maintenance page's buttons, as the system; a miss logged, never thrown. */
+async function refreshContact(
+  tenantId: string,
+  row: Record<string, unknown> | null,
+): Promise<void> {
+  // As the system (the settings row; the identity when the release's image is not known).
+  const refreshed = await refreshMaintenanceContact({
+    sb: serviceClient(),
+    tenantId,
+    env: workerEnv,
+    contact: row ? contactFromRow(row) : undefined,
+  }).catch(() => 'not-refreshed' as const);
+  if (refreshed === 'not-refreshed') {
+    void writeSystemLog({
+      level: 'warn',
+      source: 'release:snapshot',
+      message:
+        "The maintenance page's contact buttons were not refreshed; the 10-minute reconcile does it.",
+      detail: { tenantId },
+    });
+  }
 }
 
 /**
