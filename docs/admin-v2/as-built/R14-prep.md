@@ -146,7 +146,10 @@ With them off:
   identity read as the system), the put. A miss logs a warning (`release:snapshot`); the
   10-minute reconcile heals it. It is never counted in the release's `kvSynced`, which the
   publish dialog reads as "the redirect and page visibility rules missed the edge; use Sync to
-  edge" (review C4).
+  edge" (review C4). Since the code review it runs beside the redirect and visibility rebuilds
+  (which keep R7's order), the settings row and the identity are read side by side, and an
+  identity row that is not there puts nothing (`readContact` answers null, so every caller keeps
+  the buttons it has) and is a logged miss.
 - The identity's live save (`siteProfile.ts` `afterWrite`) now calls the same helper with the row
   it saved: the same reads, writes and answers as before.
 - **Budgets.** A fire that went live, at its worst, is 32 subrequests (was 26: the edge's value,
@@ -165,6 +168,14 @@ hidden included. Every other widget keeps U1's rule (unnamed means hidden). Why:
 are off the dashboard strips the release widgets from the board, Add widget and every save
 (R13), so every layout and preset saved before the switch-on never names the card, and it would
 otherwise arrive hidden for everyone who ever arranged their dashboard. Sales never has it.
+
+**Its save half** (code review 1, `keepReleasePlacement`): a layout saved through
+`PUT /api/admin/me/preferences`, or a role preset through `PUT /api/admin/dashboard/defaults/[role]`,
+that names a release widget nowhere keeps the widget where the row it replaces had it (its column
+at its index, or hidden); a person's first save keeps their role preset's placement. So a hide
+made while releases were on outlives a save made while they were off. A save that names the card
+(releases on) is the person's choice and is stored as sent; a Reset names no column and replaces
+everything.
 
 ### 4. The release-mode rehearsal (plan B5)
 
@@ -376,3 +387,30 @@ suite with `--testTimeout=60000` (373 files, 9673 passed, 21 skipped as on main)
 `check-migrations` (no new migration); `npm run build` with the CI dummy environment, then
 `npm run size` (public route JS 26.07 KB of 100, the admin sum 394.76 KB of 400, every screen's
 eager graph as above, the chunk plan holds); `contrast-audit` passes (no admin CSS changed).
+
+## Code review (pre-PR, 2026-10-29)
+
+The medium pre-PR review at `e5ae6b76` raised seven findings. Each was checked against the code;
+each fix has a test that fails without it (the fix reverted with `git apply -R`, or the old file
+put back, run red, then green). origin/main had not moved (`42b61c6f`).
+
+| # | Finding | Verdict | Fix | Guard (red without the fix) |
+|---|---|---|---|---|
+| 1 | The publish card returns whenever a stored layout does not name it, and saves while releases are off strip it, so a hide is lost after an off period (role presets too) | Real | `keepReleasePlacement` / `unnamedReleaseWidgets` (`src/lib/admin/dashboard/layout.ts`): a whole layout saved without a release widget gets it back where the stored layout had it (column and index, or hidden). The prefs PUT reads the person's own row (and, when they have no layout yet, their role's preset) only for such a save; the update's version check still decides. `presetValues` keeps the stored preset's placement the same way. Chosen over a "seen" marker: a marker would remember that the card was seen but not where, so a moved card would come back hidden | `dashboardReleaseKeep.spec.ts`: with the route and the preset save reverted (the helper kept), 3 red: "their own layout hid it: the save made while releases are off keeps it hidden", "a first arrangement over a preset that hid it keeps the preset's hide", "a preset that hid the card keeps it hidden; one that placed it keeps it there". With `keepReleasePlacement` itself a no-op, 5 red, both directions among them: "hidden while on, a save while off, on again: still hidden" and "moved while on, a save while off, on again: in its column, at its place". Both directions are covered: hidden stays hidden and a moved card stays in its column; a layout that never named it still takes the default place; a save that names it is stored as sent with no extra read |
+| 2 | Two rules for a singleton: the schema's `SINGLETON_ENTITY_TYPES` and the server's `entry.key === 'tenant_id'`; an id sent for a singleton was silently ignored | Real | `historyEntityId` (`src/lib/release/history.ts`) keeps the registry's rule as the one the server uses and refuses what that rule does not expect: an id for a tenant-keyed type, or none for any other, is a 422 on `entityId`, never ignored or guessed. The schema list remains the client's copy (packages/schemas cannot import the server registry), held equal by the existing spec, so drift fails a request rather than reading another row | `historySingletons.spec.ts` "the server keys a singleton by the session, and refuses an id it would not use": red on the old `historyEntityId` (it returned the tenant) |
+| 3 | `CONTACT_KEYS` built by splitting the PostgREST select string | Real (maintainability) | `src/lib/maintenance/contact.ts` exports `CONTACT_KEYS` (a typed list) and builds `CONTACT_COLUMNS` from it; `afterEffects.ts` imports the list | `releaseAfterEffects.spec.ts` "the contact columns are one list": red with the old split (no exported list). It also holds that `contactFromRow` reads those columns and no other, and that moving each one owes the refresh |
+| 4 | The contact refresh runs after the redirect and visibility rebuilds though independent; `refresh.ts` reads the settings row and then the identity | Real, fixed | `rebuildSnapshots` runs the refresh beside the edge rules (the redirect map, then the visibility rules, R7's order kept); `refreshMaintenanceContact` reads the settings row and the identity side by side once the edge says on (the edge's value stays first and alone, so nothing is read while it says off). The worst case stays 4 subrequests for the refresh and 32 for a fire that went live: parallel work changes when calls run, not how many; with maintenance on and the settings row off, the identity is now read when it was not before (3 instead of 2, under the worst case). A rejected read or refresh is caught, so the parallel join never throws | `releaseAfterEffects.spec.ts` "the settings row and the identity are read side by side" (red with the old `refresh.ts`) and "the buttons are refreshed beside the redirect map, not after it" (red with the refresh awaited after the rebuilds). Each probe waits up to ~200 ms for the other read to start, so a sequential run is red, not hung |
+| 5 | A missing identity row gave `contactFromRow(null)`: empty buttons put and "refreshed" | Real | `readContact` answers null for a missing row as for a failed read; `refreshMaintenanceContact` then puts nothing and answers `not-refreshed`, which the release path logs (`release:snapshot`). Every other caller already keeps what it has on null (the reconcile the edge's buttons, the maintenance save and preview the stored ones), so they now do the same for a missing row instead of storing empty buttons | `releaseAfterEffects.spec.ts` "the identity read finds no row: nothing put, the edge keeps its buttons, logged": red with the old `readContact` |
+| 6, 7 | The rehearsal uses `supabase/setup-cli@v1` and `npx wait-on` unpinned | Out of scope (as directed) | Left as on main: the e2e and Lighthouse jobs use the same two, and a separate hardening PR pins them everywhere. The rehearsal keeps mirroring the e2e job step for step. Both are now named in owner item **O-26** (README) | None (no change) |
+
+Each red run above left the rest of its spec green (the after-effects spec 16 of 17, the history
+spec 7 of 8, the dashboard spec 6 of 9 with the route reverted), and every fix restored is green
+(the three specs, 34 passed).
+
+**Gates after the code review:** `astro check` 0 errors, 0 warnings; `tsc --noEmit` clean;
+`prettier --check .` clean; vitest, the touched specs (`releaseAfterEffects`, `historySingletons`,
+`dashboardReleaseKeep`: 3 files, 34 passed) and then the whole suite with `--testTimeout=60000`
+(373 files, 9687 passed, 21 skipped); `check-migrations origin/main` (81 files, no new migration);
+`npm run build` with the CI dummy environment, then `npm run size` (public route JS 26.07 KB of
+100, the admin sum 394.76 KB of 400, every screen's eager graph at most 208.4 KB of 300, the chunk
+plan holds); `contrast-audit` passes (no admin CSS changed).
