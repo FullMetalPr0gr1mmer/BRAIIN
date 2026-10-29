@@ -8,7 +8,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  * Admin is swept, Content Creator, SEO and Sales are refused by the server through
  * LOCKED_SCREENS): server-rendered, tabs that are links, each form's fields with Required or
  * Optional, the protections, and on Join the consent version the form stores. Axe clean and
- * no sideways scroll on both tabs at 390 px. Admin v2 E8: above the as-built list, the forms
+ * no sideways scroll on both tabs at 320, 390 and 1280 px (the editor drawn: its bilingual
+ * pairs and Move buttons are tightest at 320). Admin v2 E8: above the as-built list, the forms
  * config's editor (the AdminForms island) draws a row per field (`data-edit-field`), with the
  * switches for an optional field only, and the captcha is a switch that is off and disabled.
  * Nothing is saved here: the public forms other suites read stay as built.
@@ -64,8 +65,22 @@ test('the inquiry form and the Join form, as the code decides them', async ({ pa
   // The editor's consent card: with the lines as built, the form posts the notice's date.
   await expect(page.locator('.frm-next-version')).toHaveText(RECRUITMENT_POLICY_VERSION);
   await expect(row('cv').getByRole('checkbox', { name: 'Required' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save the Join form' })).toBeVisible();
   // Opening applications is Admin's switch: Developer reads the state, with no link to it.
   await expect(page.getByText(/^Applications are (open|closed)$/)).toBeVisible();
   await expect(page.getByRole('link', { name: 'Change it in General' })).toHaveCount(0);
   await check(page, 'join');
 });
+
+for (const width of [320, 390, 1280]) {
+  test(`both tabs clean at ${width}px, with the editor drawn`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    for (const path of ['/admin/forms', '/admin/forms?tab=join']) {
+      const res = await page.goto(path);
+      expect(res?.status(), path).toBe(200);
+      // Both forms ask the name: its editor row is the island, hydrated.
+      await expect(page.locator('li[data-edit-field="name"]')).toBeVisible();
+      await check(page, `${path} at ${width}px`);
+    }
+  });
+}

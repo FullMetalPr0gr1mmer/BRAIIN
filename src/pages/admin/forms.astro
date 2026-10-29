@@ -8,15 +8,11 @@ import LinkTabs from '@/components/admin/ui/LinkTabs.astro';
 import Note from '@/components/admin/ui/Note.astro';
 import Refused from '@/components/admin/ui/Refused.astro';
 import { can } from '@/lib/authz/matrix';
-import {
-  CONSENT_VERSION,
-  FORM_IDS,
-  formFacts,
-  formsTabHref,
-  type FormId,
-} from '@/lib/admin/forms/overview';
+import { FORM_IDS, formFacts, formsTabHref, type FormId } from '@/lib/admin/forms/overview';
 import { getIdentity } from '@/lib/identity';
 import { editorPropsFor } from '@/lib/admin/forms/editorProps';
+import { consentVersion } from '@/lib/forms/config';
+import { formSettingsFor } from '@/lib/data/forms';
 
 export const prerender = false;
 
@@ -33,9 +29,11 @@ export const prerender = false;
 // "Not set up" until O-19.
 // settings.general (Admin, Developer: the forms config is General's, P-2); a role without it
 // gets the layout with the refusal and a 403.
-// The page reads nothing of its own: the facts are code, the island loads the config from
-// /api/admin/form-settings, and the applications switch is the public identity the shell has
-// already read for the brand.
+// The facts are code, the island loads the config from /api/admin/form-settings, and the
+// applications switch is the public identity the shell has already read for the brand. On the
+// Join tab the page reads the PUBLISHED config (the public seam, as the Join form does), so the
+// consent version it says the form shows now is the one the form posts (`<notice>.r<N>` once
+// the lines are reworded), not the notice's date alone.
 
 const session = Astro.locals.session;
 const allowed = Boolean(session && can(session.role, 'settings.general') === 'full');
@@ -51,6 +49,8 @@ const mayEditPages = Boolean(session && can(session.role, 'pages.write') === 'fu
 const mayOpenApplications = Boolean(session && can(session.role, 'applications.manage') === 'full');
 const accepting =
   allowed && tab === 'join' ? (await getIdentity(Astro.locals)).acceptingApplications : false;
+const consentNow =
+  allowed && tab === 'join' ? consentVersion(await formSettingsFor(Astro.locals)) : null;
 ---
 
 <AdminLayout
@@ -127,13 +127,13 @@ const accepting =
                     connected.
                   </span>
                 </li>
-                {tab === 'join' && (
+                {consentNow && (
                   <li>
                     <Icon name="check" size={14} />
                     <span>
                       Consent: each application stores the version of the consent text the person
                       agreed to. The form shows version{' '}
-                      <span class="frm-version">{CONSENT_VERSION}</span> now.
+                      <span class="frm-version">{consentNow}</span> now.
                     </span>
                   </li>
                 )}
