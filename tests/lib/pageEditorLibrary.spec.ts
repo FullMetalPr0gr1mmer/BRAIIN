@@ -141,6 +141,30 @@ describe('Add section: what each page may take, and why not', () => {
     );
   });
 
+  it('offers the blocks (Admin v2 E10) on every routed page, as many as a page needs', () => {
+    const blocks = ['textBlock', 'gallery', 'video'] as const;
+    for (const page of PAGES) {
+      for (const type of blocks) {
+        // Every other kind already on the page, the block itself twice over: still offered.
+        const full = [...SECTION_TYPES, type, type];
+        expect(at(page, full, type), `${page} ${type}`).toEqual({ type, ok: true, reason: null });
+      }
+    }
+    for (const type of blocks) {
+      const kind = SECTION_KINDS[type];
+      expect(kind.pages, type).toBeUndefined();
+      expect(kind.once, type).toBeUndefined();
+      expect(kind.group, type).toBeUndefined();
+      // No fixed anchor (several a page would share one) and one look, the empty one.
+      expect(anchorOf(type, 'home', undefined), type).toBeNull();
+      expect(lookKey(type, { page: 'about', firstOfType: true }), type).toBe('default');
+      expect(routeNote(type, 'about', true)?.length, type).toBeGreaterThan(20);
+    }
+    expect(collectionLinks('gallery').map((l) => l.href)).toEqual(['/admin/media']);
+    expect(collectionLinks('video').map((l) => l.href)).toEqual(['/admin/media']);
+    expect(collectionLinks('textBlock')).toEqual([]);
+  });
+
   it('refuses everything on a page no route shows (custom pages are E11)', () => {
     expect(routedPage('custom-page')).toBeNull();
     expect(availability('custom-page', []).every((o) => !o.ok)).toBe(true);
