@@ -167,6 +167,7 @@ describe('playwright.config.ts', () => {
       'admin',
       'visibility',
       'general',
+      'header',
       'ga4',
       'maintenance',
       'maintenance-teardown',
@@ -216,6 +217,7 @@ describe('playwright.config.ts', () => {
         testIgnore: [
           spec('visibility'),
           spec('general'),
+          spec('header'),
           spec('ga4'),
           spec('maintenance'),
           'maintenance\\.teardown\\.ts$',
@@ -225,7 +227,9 @@ describe('playwright.config.ts', () => {
       }),
       p('visibility', { testMatch: spec('visibility'), dependencies: ['chromium', 'admin'] }),
       p('general', { testMatch: spec('general'), dependencies: ['visibility'] }),
-      p('ga4', { testMatch: spec('ga4'), dependencies: ['general'] }),
+      // Admin v2 E5: the header's options, alone after general settings.
+      p('header', { testMatch: spec('header'), dependencies: ['general'] }),
+      p('ga4', { testMatch: spec('ga4'), dependencies: ['header'] }),
       p('maintenance', {
         testMatch: spec('maintenance'),
         dependencies: ['ga4'],

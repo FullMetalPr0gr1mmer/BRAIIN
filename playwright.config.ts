@@ -19,6 +19,9 @@ const VISIBILITY_SPEC = /[\\/]tests[\\/]admin[\\/]visibility\.e2e\.ts$/;
 // General settings (Admin v2 U9) changes the public identity every spec reads, and maintenance
 // (U9b) takes the site down: each its own project, after page visibility, in that order.
 const GENERAL_SPEC = /[\\/]tests[\\/]admin[\\/]general\.e2e\.ts$/;
+// The header's options (Admin v2 E5) change the bar on every public page (its markup, its
+// height): its own project, after general settings.
+const HEADER_SPEC = /[\\/]tests[\\/]admin[\\/]header\.e2e\.ts$/;
 // Google Analytics 4 (Admin v2 U15) saves a measurement id, which puts the loader on every public
 // page the other specs read (the CI e2e build turns GA4_NOTICE_READY on): its own project, after
 // general settings and before maintenance.
@@ -92,6 +95,7 @@ export default defineConfig({
       testIgnore: [
         VISIBILITY_SPEC,
         GENERAL_SPEC,
+        HEADER_SPEC,
         GA4_SPEC,
         MAINTENANCE_SPEC,
         /maintenance\.teardown\.ts$/,
@@ -122,6 +126,16 @@ export default defineConfig({
       dependencies: ['visibility'],
     },
     {
+      // The header's options (Admin v2 E5): a large logo, the links moved and a button on every
+      // public page while it runs, then the row removed (the header as built): alone, after
+      // general settings.
+      name: 'header',
+      testDir: './tests/admin',
+      testMatch: HEADER_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['general'],
+    },
+    {
       // GA4 (Admin v2 U15) saves an id, so every public page carries the loader and lists
       // Google's hosts while it runs: alone, after the specs that read those pages, and it
       // clears the id when it ends.
@@ -129,7 +143,7 @@ export default defineConfig({
       testDir: './tests/admin',
       testMatch: GA4_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['general'],
+      dependencies: ['header'],
     },
     {
       // Maintenance (Admin v2 U9b) takes the shared preview down: last of all, and its
