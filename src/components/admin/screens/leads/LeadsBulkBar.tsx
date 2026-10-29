@@ -1,6 +1,5 @@
 import { useId, useState } from 'react';
 import type { LeadBulk } from '@schemas/crm';
-import { adminFetch, describeError } from '@/lib/admin/client';
 import type { PersonView, StageView } from '@/lib/crm/leadPage';
 
 // The list's bulk bar (Admin v2 C4b, crm.md §11): Assign to…, Move to stage…, Mark read, Star,
@@ -26,8 +25,12 @@ interface Props {
   people: readonly PersonView[];
   stages: readonly StageView[];
   spamView: boolean;
+  /** Sends one action (the list's POST to /api/admin/leads/bulk: a row write, so the list
+   * holds its reads until it answers, src/lib/crm/lateAnswers.ts). */
+  post: (body: LeadBulk) => Promise<BulkOutcome>;
   onDone: (outcome: BulkOutcome) => void;
-  onError: (message: string) => void;
+  /** The action failed, or got no answer: the list decides what that may mean. */
+  onError: (err: unknown) => void;
 }
 
 export default function LeadsBulkBar({
@@ -36,6 +39,7 @@ export default function LeadsBulkBar({
   people,
   stages,
   spamView,
+  post,
   onDone,
   onError,
 }: Props) {
@@ -48,9 +52,9 @@ export default function LeadsBulkBar({
   async function run(body: LeadBulk) {
     setBusy(true);
     try {
-      onDone(await adminFetch<BulkOutcome>('/api/admin/leads/bulk', { method: 'POST', body }));
+      onDone(await post(body));
     } catch (err) {
-      onError(describeError(err));
+      onError(err);
     } finally {
       setBusy(false);
     }
