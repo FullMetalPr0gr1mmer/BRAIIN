@@ -22,7 +22,7 @@
 -- tenant anon resolves to (app.default_tenant_id()).
 
 begin;
-select plan(37);
+select plan(39);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name, created_at) values
@@ -267,11 +267,25 @@ select ok((select pg_get_constraintdef(c.oid) like '%\.r[1-9][0-9]{0,8})?$%'
             where c.conrelid = 'public.job_applications'::regclass
               and c.conname = 'job_applications_consent_version_check'),
   'job_applications.consent_version takes a notice date with an optional .r<N>');
-select ok('2026-06-10' ~ '^\d{4}-\d{2}-\d{2}(\.r[1-9][0-9]{0,8})?$'
-          and '2026-06-10.r3' ~ '^\d{4}-\d{2}-\d{2}(\.r[1-9][0-9]{0,8})?$'
-          and '2026-06-10.r0' !~ '^\d{4}-\d{2}-\d{2}(\.r[1-9][0-9]{0,8})?$'
-          and '2026-06-10.r' !~ '^\d{4}-\d{2}-\d{2}(\.r[1-9][0-9]{0,8})?$',
-  'the pattern: a date, or a date with a revision from 1');
+-- The constraint itself, on a real insert (as the migration role, as /api/apply's service role
+-- writes): a notice date and a date with a revision from 1 are stored; `.r0` and a bare `.r` are
+-- refused (23514).
+create function _apply_with(p_version text) returns text language sql as $$
+  select _state(format($i$
+    insert into public.job_applications (tenant_id, name, email_enc, phone_enc, city, role,
+      experience, work_type, availability, skills, portfolio_url, message, consent_version,
+      retention_delete_after)
+    values ('e8000000-0000-0000-0000-000000000001', 'Applicant', 'ciphertext', 'ciphertext',
+      'Jeddah', 'Motion designer', '1-3', 'freelance', 'month', array['animation'],
+      'https://example.com/work', 'My best piece', %L, now() + interval '12 months')
+  $i$, p_version))
+$$;
+select is(_apply_with('2026-10-04') || '|' || _apply_with('2026-10-04.r3'), '|',
+  'job_applications stores a notice date, and one with a revision from 1');
+select is(_apply_with('2026-10-04.r0'), '23514',
+  'job_applications refuses a revision 0 (23514)');
+select is(_apply_with('2026-10-04.r'), '23514',
+  'job_applications refuses a bare .r (23514)');
 
 select * from finish();
 rollback;
