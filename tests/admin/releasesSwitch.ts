@@ -57,14 +57,15 @@ export function loopbackPsqlTarget(raw: string): { conninfo: string; password: s
 }
 
 /** The environment psql runs with: the password, and no libpq variable that could redirect it. */
-export function psqlEnv(
-  base: Readonly<Record<string, string | undefined>>,
+export function psqlEnv<E extends Readonly<Record<string, string | undefined>>>(
+  base: E,
   password: string,
-): Record<string, string | undefined> {
+): E {
   const env: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(base)) if (!key.startsWith('PG')) env[key] = value;
   env['PGPASSWORD'] = password;
-  return env;
+  // The same keys as the base (the process's typed environment), less the PG ones.
+  return env as E;
 }
 
 /**
