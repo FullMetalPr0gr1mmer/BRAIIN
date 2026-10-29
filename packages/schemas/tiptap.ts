@@ -81,14 +81,7 @@ export const SECTION_DOC_NODES = [
 ] as const;
 
 /** Marks a section body may carry (the renderer's own list, less its aliases). */
-export const SECTION_DOC_MARKS = [
-  'bold',
-  'italic',
-  'strike',
-  'underline',
-  'code',
-  'link',
-] as const;
+export const SECTION_DOC_MARKS = ['bold', 'italic', 'strike', 'underline', 'code', 'link'] as const;
 
 /** The heading levels the editor offers (the section's own heading is the h2 above them). */
 export const SECTION_DOC_HEADING_LEVELS = [2, 3, 4] as const;
@@ -153,7 +146,11 @@ export function sectionDocProblem(doc: TiptapDoc): string | null {
     }
     if (node.type === 'codeBlock') {
       const lang = node.attrs?.['language'];
-      if (lang !== undefined && lang !== null && !(typeof lang === 'string' && CODE_LANGUAGE.test(lang))) {
+      if (
+        lang !== undefined &&
+        lang !== null &&
+        !(typeof lang === 'string' && CODE_LANGUAGE.test(lang))
+      ) {
         return 'a code block’s language is a short name';
       }
     }
@@ -179,7 +176,5 @@ export const SectionDocSchema = TiptapDocSchema.superRefine((doc, ctx) => {
  * section text is (packages/schemas/sections.ts): the copy is indexable, and an Arabic page
  * must not render English or nothing.
  */
-export const SectionBodySchema = z
-  .object({ en: SectionDocSchema, ar: SectionDocSchema })
-  .strict();
+export const SectionBodySchema = z.object({ en: SectionDocSchema, ar: SectionDocSchema }).strict();
 export type SectionBody = z.infer<typeof SectionBodySchema>;
