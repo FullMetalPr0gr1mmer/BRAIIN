@@ -345,6 +345,18 @@ test.describe('as admin', () => {
     await showView(page, 'Edit');
     await expect(page.locator('form.editor')).toBeVisible();
     await expect(previewRegion(page)).toBeHidden();
+
+    // A section clicked in the preview opens in the column, and the fields come back in place
+    // of the preview to edit it (E2 review CR5; nothing typed, so nothing is asked).
+    await showView(page, 'Preview');
+    await expect(inPreview(page, 'aboutWho')).toHaveClass(OUTLINED);
+    await inPreview(page, 'leadership').dispatchEvent('click');
+    await expect(rowOf(page, 'Leadership')).toHaveAttribute('aria-current', 'true');
+    await expect(page.locator('form.editor')).toBeVisible();
+    await expect(previewRegion(page)).toBeHidden();
+    await expect(
+      page.getByRole('group', { name: 'Show', exact: true }).getByRole('radio', { name: 'Edit' }),
+    ).toBeChecked();
   });
 
   test('narrow screens: a save, a section and a language chosen in Edit wait for Preview', async ({
