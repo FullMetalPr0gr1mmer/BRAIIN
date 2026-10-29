@@ -188,7 +188,10 @@ export function inquiryRequired(config: InquiryConfig, field: InquiryField): boo
 }
 
 /** What a variant asks: its own fields, less the hidden ones, in the config's order. */
-export function inquiryFieldsFor(config: InquiryConfig, variant: ContactFormVariant): InquiryField[] {
+export function inquiryFieldsFor(
+  config: InquiryConfig,
+  variant: ContactFormVariant,
+): InquiryField[] {
   const own = CONTACT_FORM_FIELDS[variant] as readonly string[];
   return inquiryOrder(config).filter((f) => own.includes(f) && !inquiryHidden(config, f));
 }
@@ -227,8 +230,7 @@ const INQUIRY_LEAD_KEYS: Readonly<Record<InquiryOptionalField, readonly (keyof L
 
 const VARIANTS = Object.keys(CONTACT_FORM_FIELDS) as ContactFormVariant[];
 
-export type InquiryCheck =
-  { ok: true; data: LeadInput } | { ok: false; fields: string[] };
+export type InquiryCheck = { ok: true; data: LeadInput } | { ok: false; fields: string[] };
 
 /**
  * A parsed lead held to the published config. `variant` is the form the visitor sent
@@ -283,13 +285,12 @@ const applicationLabel = (field: ApplicationField, locale: Locale): string => {
   const copy = APPLY_FORM_COPY[locale];
   return field === 'cv' ? copy.cvTitle : copy[field];
 };
-export const APPLICATION_LABELS: Readonly<Record<ApplicationField, Bilingual>> =
-  Object.fromEntries(
-    APPLICATION_FIELDS.map((field) => [
-      field,
-      { en: applicationLabel(field, 'en'), ar: applicationLabel(field, 'ar') },
-    ]),
-  ) as Record<ApplicationField, Bilingual>;
+export const APPLICATION_LABELS: Readonly<Record<ApplicationField, Bilingual>> = Object.fromEntries(
+  APPLICATION_FIELDS.map((field) => [
+    field,
+    { en: applicationLabel(field, 'en'), ar: applicationLabel(field, 'ar') },
+  ]),
+) as Record<ApplicationField, Bilingual>;
 
 const isApplicationOptional = (field: ApplicationField): field is ApplicationOptionalField =>
   (APPLICATION_OPTIONAL_FIELDS as readonly string[]).includes(field);
@@ -310,7 +311,8 @@ export function applicationGroupFields(
   config: ApplicationConfig,
   group: ApplicationGroup,
 ): ApplicationField[] {
-  const order = (config.order?.[group] as readonly ApplicationField[] | undefined) ??
+  const order =
+    (config.order?.[group] as readonly ApplicationField[] | undefined) ??
     (APPLICATION_GROUPS[group] as readonly ApplicationField[]);
   return order.filter((field) => !applicationHidden(config, field));
 }
@@ -355,7 +357,8 @@ export function applicationView(settings: FormSettings, locale: Locale): Applica
       group,
       applicationGroupFields(config, group).map((field) => ({
         field,
-        label: overrideOf(config.fields, field).label?.[locale] ?? APPLICATION_LABELS[field][locale],
+        label:
+          overrideOf(config.fields, field).label?.[locale] ?? APPLICATION_LABELS[field][locale],
         required: applicationRequired(config, field),
       })),
     ]),
@@ -376,8 +379,7 @@ export function applicationView(settings: FormSettings, locale: Locale): Applica
 }
 
 export type ApplicationCheck =
-  | { ok: true; data: ApplicationInput; keepCv: boolean }
-  | { ok: false; fields: string[] };
+  { ok: true; data: ApplicationInput; keepCv: boolean } | { ok: false; fields: string[] };
 
 /**
  * A parsed application held to the published config: hidden controls dropped (the CV is not
@@ -395,7 +397,8 @@ export function checkApplication(
   const missing: string[] = [];
 
   if (applicationHidden(config, 'skills')) data.skills = [];
-  else if (applicationRequired(config, 'skills') && data.skills.length === 0) missing.push('skills');
+  else if (applicationRequired(config, 'skills') && data.skills.length === 0)
+    missing.push('skills');
 
   if (applicationHidden(config, 'linkedin')) delete data.linkedin;
   else if (applicationRequired(config, 'linkedin') && !data.linkedin) missing.push('linkedin');

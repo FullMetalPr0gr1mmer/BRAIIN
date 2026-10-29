@@ -19,6 +19,8 @@ import { resolveLaunchTenantId } from '@/lib/data/tenant';
 import { sniffCv } from '@/lib/applications/fileSniff';
 import { createApplication } from '@/lib/applications/create';
 import { writeSystemLog } from '@/lib/data/systemLog';
+import { checkApplication } from '@/lib/forms/config';
+import { readPublishedFormSettings } from '@/lib/forms/published';
 
 // POST /api/apply — the Join form (careers). The second public write path after the
 // contact form, and the only one that accepts a file. Built for the Workers FREE plan:
@@ -30,7 +32,10 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 //   origin → multipart → Content-Length (411/413, before reading a byte) → configured →
 //   tenant (server-side, the anon fence) → applications open (re-read, never the cached
 //   page's copy) → per-IP limit (FAILS CLOSED, EXC-004) → parse → honeypot (silent ok) →
-//   strict schema (422 + field names) → CV size and sniff → per-e-mail limit → store.
+//   strict schema (422 + field names) → the published forms config (Admin v2 E8: hidden
+//   controls dropped, the ones it requires refused when empty, a reworded consent version held
+//   to the published revision; unreadable = unavailable, failing closed like the limiter) →
+//   CV size and sniff → per-e-mail limit → store.
 //
 // Answers: `{ status }` (+ `fields` on a 422) with `Accept: application/json`, else a 303
 // to `/join?status=…#apply` (`/ar/join…` for an Arabic form) so the page works without
@@ -133,12 +138,23 @@ export const POST: APIRoute = async ({ request }) => {
     ];
     return answer('invalid', { fields });
   }
-  const input = parsed.data;
 
-  // The CV is optional; an empty file input arrives as a zero-byte File.
+  // The CV is optional unless the forms config requires it; an empty file input arrives as a
+  // zero-byte File.
   const raw = form.get(CV_FIELD);
+  const sentCv = raw instanceof Blob && raw.size > 0;
+
+  // The published forms config (Admin v2 E8), read with the service client for the tenant
+  // resolved above, never the page's copy: the schema is the floor, the config narrows it.
+  const settings = await readPublishedFormSettings(svc, tenantId);
+  if (!settings) return answer('unavailable');
+  const checked = checkApplication(parsed.data, sentCv, settings);
+  if (!checked.ok) return answer('invalid', { fields: checked.fields });
+  const input = checked.data;
+
   let cv: { file: Blob; kind: 'pdf' | 'docx' } | null = null;
-  if (raw instanceof Blob && raw.size > 0) {
+  // A CV the form does not ask for (the config hides it) is not stored.
+  if (raw instanceof Blob && sentCv && checked.keepCv) {
     if (raw.size > CV_MAX_BYTES) return answer('too_large');
     const sniff = await sniffCv(raw);
     if (!sniff.ok) return answer('bad_type');

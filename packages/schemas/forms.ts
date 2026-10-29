@@ -86,7 +86,11 @@ export const APPLICATION_GROUPS = {
   work: ['portfolio', 'linkedin', 'cv', 'message'],
 } as const;
 export type ApplicationGroup = keyof typeof APPLICATION_GROUPS;
-export const APPLICATION_GROUP_IDS = ['about', 'role', 'work'] as const satisfies readonly ApplicationGroup[];
+export const APPLICATION_GROUP_IDS = [
+  'about',
+  'role',
+  'work',
+] as const satisfies readonly ApplicationGroup[];
 
 export const APPLICATION_FIELDS = [
   ...APPLICATION_GROUPS.about,
@@ -149,10 +153,7 @@ export const BudgetLabelsSchema = z
   .object(
     Object.fromEntries(
       BUDGET_BANDS.map((band) => [band, BudgetLabelSchema.optional()]),
-    ) as unknown as Record<
-      (typeof BUDGET_BANDS)[number],
-      z.ZodTypeAny
-    >,
+    ) as unknown as Record<(typeof BUDGET_BANDS)[number], z.ZodTypeAny>,
   )
   .strict();
 

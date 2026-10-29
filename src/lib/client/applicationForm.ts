@@ -54,6 +54,8 @@ export const APPLY_FIELD_OF_KEY = {
   consentFutureRoles: 'consent_future',
   policyVersion: 'policy_version',
   locale: 'locale',
+  // Admin v2 E8: a CV the forms config requires, refused when none was sent.
+  cv: 'cv',
 } as const;
 
 /** CV_MAX_BYTES. */

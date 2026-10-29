@@ -1221,7 +1221,9 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
         { id: VIS, tenant_id: T, page_id: PAGE2, template: null, mode: 'public', version: 1 },
       ],
       faq_items: [row(FAQ)],
-      form_settings: [{ tenant_id: T, version: 1, inquiry: {}, application: {}, consent_revision: 0 }],
+      form_settings: [
+        { tenant_id: T, version: 1, inquiry: {}, application: {}, consent_revision: 0 },
+      ],
       // The version a rollback names: published, the tenant's.
       content_releases: [{ id: RESTORED, tenant_id: T, number: 1, status: 'published' }],
     };

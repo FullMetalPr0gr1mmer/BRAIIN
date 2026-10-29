@@ -15,6 +15,8 @@ let insertError = false;
 let insertThrows = false;
 let encryptThrows = false;
 let uploadError = false;
+/** The published forms config row (Admin v2 E8): null = none, 'error' = unreadable. */
+let formRow: Record<string, unknown> | null | 'error' = null;
 const inserts: Record<string, unknown>[] = [];
 const uploads: { path: string; type: string }[] = [];
 const removed: string[][] = [];
@@ -30,7 +32,11 @@ vi.mock('@/lib/supabase/server', () => ({
           ? accepting === 'error'
             ? { data: null, error: { message: 'down' } }
             : { data: { accepting_applications: accepting }, error: null }
-          : { data: null, error: null };
+          : table === 'form_settings'
+            ? formRow === 'error'
+              ? { data: null, error: { message: 'down' } }
+              : { data: formRow, error: null }
+            : { data: null, error: null };
       b['insert'] = async (row: Record<string, unknown>) => {
         if (insertThrows) throw new Error('socket closed');
         inserts.push(row);
@@ -140,6 +146,7 @@ beforeEach(() => {
   insertThrows = false;
   encryptThrows = false;
   uploadError = false;
+  formRow = null;
   inserts.length = 0;
   uploads.length = 0;
   removed.length = 0;
@@ -335,5 +342,76 @@ describe('POST /api/apply — storing', () => {
     const ar = await send(form({ locale: 'ar' }), { json: false });
     expect(ar.headers.get('location')).toBe('/ar/join?status=ok#apply');
     expect(ar.headers.get('cache-control')).toBe('no-store');
+  });
+});
+
+describe('POST /api/apply — the published forms config (Admin v2 E8)', () => {
+  const join = (application: Record<string, unknown>, revision = 0) => ({
+    inquiry: {},
+    application,
+    consent_revision: revision,
+  });
+
+  it('a CV the config requires is refused when none was sent (422 names cv), nothing stored', async () => {
+    formRow = join({ fields: { cv: { required: true } } });
+    const res = await send(form({}, null));
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ status: 'invalid', fields: ['cv'] });
+    expect(inserts).toHaveLength(0);
+    expect(rpcCalls.filter((a) => a['p_scope'] === 'apply:email')).toHaveLength(0);
+  });
+
+  it('a LinkedIn link and crafts the config requires are refused when empty', async () => {
+    formRow = join({ fields: { linkedin: { required: true }, skills: { required: true } } });
+    const fd = form();
+    fd.delete('skills');
+    const res = await send(fd);
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { fields: string[] }).fields.sort()).toEqual([
+      'linkedin',
+      'skills',
+    ]);
+  });
+
+  it('a control the config hides is dropped: the CV is not stored, the crafts not kept', async () => {
+    formRow = join({ fields: { cv: { visible: false }, skills: { visible: false } } });
+    expect(await statusOf(await send(form()))).toBe('ok');
+    expect(uploads).toHaveLength(0);
+    expect(inserts[0]!['cv_path']).toBeNull();
+    expect(inserts[0]!['skills']).toEqual([]);
+  });
+
+  it('a reworded consent version is accepted up to the published revision, never past it', async () => {
+    formRow = join({ consent: { application: { en: 'I agree', ar: 'أوافق' } } }, 3);
+    expect(
+      await statusOf(await send(form({ policy_version: `${RECRUITMENT_POLICY_VERSION}.r3` }))),
+    ).toBe('ok');
+    expect(inserts[0]!['consent_version']).toBe(`${RECRUITMENT_POLICY_VERSION}.r3`);
+    // An older revision is a wording a cached page really showed.
+    expect(
+      await statusOf(await send(form({ policy_version: `${RECRUITMENT_POLICY_VERSION}.r2` }))),
+    ).toBe('ok');
+    const ahead = await send(form({ policy_version: `${RECRUITMENT_POLICY_VERSION}.r4` }));
+    expect(ahead.status).toBe(422);
+    expect(await ahead.json()).toEqual({ status: 'invalid', fields: ['policyVersion'] });
+    expect(inserts).toHaveLength(2);
+  });
+
+  it('with no row a reworded version is refused: no wording was ever published', async () => {
+    const res = await send(form({ policy_version: `${RECRUITMENT_POLICY_VERSION}.r1` }));
+    expect(res.status).toBe(422);
+  });
+
+  it('an unreadable config fails closed (503 unavailable), as the limiter does', async () => {
+    formRow = 'error';
+    const res = await send(form());
+    expect(res.status).toBe(503);
+    expect(await statusOf(res)).toBe('unavailable');
+    expect(inserts).toHaveLength(0);
+  });
+
+  it('a config row that does not parse costs its parts, never the form (the built-in rules)', async () => {
+    formRow = join({ fields: { cv: { required: 'yes' } }, button: '<b>x</b>' });
+    expect(await statusOf(await send(form({}, null)))).toBe('ok');
   });
 });
