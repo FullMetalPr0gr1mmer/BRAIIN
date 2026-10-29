@@ -88,7 +88,10 @@ export function snapshotNeeds(items: readonly Item[] | null): SnapshotNeeds {
 
 /**
  * Rebuilds the snapshots the release moved, as the system. Undefined when none was needed;
- * otherwise whether the edge took every one.
+ * otherwise whether the edge took every one of the redirect map and the visibility rules (what
+ * the publish answer's `kvSynced` reports, and the dialog's "Sync to edge" advice fixes). The
+ * maintenance page's buttons are refreshed too but never counted there: a miss is logged and
+ * the 10-minute reconcile heals it, and Sync to edge would not (R14-prep review C4).
  */
 export async function rebuildSnapshots(
   tenantId: string,
@@ -129,7 +132,6 @@ export async function rebuildSnapshots(
         detail: { tenantId },
       });
     }
-    if (refreshed !== 'not-needed') kvSynced = (kvSynced ?? true) && refreshed === 'refreshed';
   }
   return kvSynced;
 }

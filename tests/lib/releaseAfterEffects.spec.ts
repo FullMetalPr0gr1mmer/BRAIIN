@@ -16,6 +16,8 @@ const state = vi.hoisted(() => ({
   rows: {} as Record<string, Record<string, unknown> | null>,
   /** Every table the system read, with the tenant it named. */
   reads: [] as string[],
+  /** Tables whose read fails (review C4: a refresh that cannot read the settings row). */
+  failing: [] as string[],
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -31,6 +33,7 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: (_column: string, tenant: string) => ({
           maybeSingle: async () => {
             state.reads.push(`${table}:${tenant}`);
+            if (state.failing.includes(table)) return { data: null, error: { message: 'down' } };
             return { data: state.rows[table] ?? null, error: null };
           },
         }),
@@ -131,6 +134,7 @@ beforeEach(() => {
   state.syncs = [];
   state.rows = {};
   state.reads = [];
+  state.failing = [];
   __kv.delete(MAINTENANCE_KV_KEY);
   resetPurgeBreaker();
 });
@@ -226,7 +230,8 @@ describe("the maintenance page's contact buttons after a release (R14-prep, R7's
     );
     state.rows['site_settings'] = { maintenance: ON };
     const moved = identity({ contact_email: 'new@studio.example' });
-    expect(await rebuildSnapshots(T, needs(moved))).toBe(true);
+    // Refreshed, and not the edge rules' business: no `kvSynced` (review C4).
+    expect(await rebuildSnapshots(T, needs(moved))).toBeUndefined();
     // The settings row read as the system, for this tenant; the identity taken from the image.
     expect(state.reads).toEqual([`site_settings:${T}`]);
     expect(edgeContact()).toEqual({
@@ -243,6 +248,22 @@ describe("the maintenance page's contact buttons after a release (R14-prep, R7's
     await rebuildSnapshots(T, needs(null));
     expect(state.reads).toEqual([`site_settings:${T}`, `site_profile:${T}`]);
     expect(edgeContact()).toMatchObject({ email: 'read@studio.example' });
+  });
+
+  it('a refresh that missed is logged, never reported as the edge rules missing (review C4)', async () => {
+    // The publish dialog reads `kvSynced: false` as "the redirect and page visibility rules did
+    // not reach the edge; use Sync to edge", which is untrue here and fixes nothing.
+    const edge = JSON.stringify(ON);
+    __kv.set(MAINTENANCE_KV_KEY, edge);
+    // The settings row cannot be read: the buttons are not put.
+    state.failing = ['site_settings'];
+    expect(await rebuildSnapshots(T, needs(identity()))).toBeUndefined();
+    expect(__kv.get(MAINTENANCE_KV_KEY)).toBe(edge);
+    expect(state.logs).toEqual([
+      expect.objectContaining({ level: 'warn', source: 'release:snapshot' }),
+    ]);
+    // With the redirect map rebuilt as well, the answer is the map's alone.
+    expect(await rebuildSnapshots(T, { ...needs(identity()), redirects: true })).toBe(true);
   });
 
   it('maintenance off at the edge: nothing read, nothing written, nothing owed', async () => {
