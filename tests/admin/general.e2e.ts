@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
 import { encodeMediaMeta, MEDIA_META_HEADER } from '@schemas/media';
-import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 // General settings v2 (Admin v2 U9), end to end through the real Worker, session and database:
 // Admin saves the identity through the screen (a tagline, a social account hidden, a map link)
@@ -17,6 +17,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
 // included.
 
 test.skip(!staffEnv(), SKIP_REASON);
+// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
+test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
 
 const PROFILE = '/api/admin/site-profile';

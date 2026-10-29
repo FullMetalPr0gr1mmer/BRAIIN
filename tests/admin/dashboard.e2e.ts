@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import type { Role } from '@/lib/auth/types';
 import { widgetsFor } from '@/lib/admin/dashboard/widgets';
-import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 // The dashboard (Admin v2 U1) in a real browser, signed in. Per role: the board shows only the
 // role's widgets (Content Creator and SEO no lead or application widget), with axe clean and
@@ -123,6 +123,9 @@ for (const role of ['admin', 'content_creator', 'seo', 'developer'] as Role[]) {
 
 test.describe('as admin, arranging the dashboard', () => {
   test.use({ storageState: authFile('admin') });
+  // The release-mode rehearsal (Admin v2 R14-prep): the columns below are the board without the
+  // publish card, which releases on puts first in the right column.
+  test.skip(releasesOn(), RELEASES_OFF_ONLY);
 
   test.beforeEach(async ({ page }) => {
     await open(page);

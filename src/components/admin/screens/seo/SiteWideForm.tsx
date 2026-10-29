@@ -1,6 +1,7 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import Modal from '@/components/admin/kit/Modal';
+import { singletonHistory } from '@/lib/admin/historyTarget';
 import { seoUi } from '@/lib/admin/ui/seo';
 import { useEntitySave, type EntitySave } from '@/lib/admin/useEntitySave';
 
@@ -12,6 +13,9 @@ import { useEntitySave, type EntitySave } from '@/lib/admin/useEntitySave';
 // Hiding the whole site from search engines asks for typed confirmation (D12): a save that
 // moves the robots default from indexed to a noindex value opens a dialog whose button stays
 // off until "noindex" is typed. Cancel puts the previous value back.
+//
+// History (Admin v2 R14-prep): every save of the defaults that went live, and Restore once
+// releases are on (R13's drawer; the history names the site, not an id: historyTarget.ts).
 
 export const CONFIRM_WORD = 'noindex';
 export const CONFIRM_TITLE = 'Hide the whole site from search engines?';
@@ -19,6 +23,10 @@ export const CONFIRM_TEXT = 'This hides every page of the site from search engin
 
 const ROBOTS = 'robotsDirectives';
 const LEGACY = 'defaultOgImage';
+
+/** The defaults' history: the site's own (no id), previewed on the home page. */
+export const DEFAULTS_HISTORY = singletonHistory('seo_defaults');
+export const DEFAULTS_HISTORY_OF = { label: 'Site wide SEO', path: '/' } as const;
 
 const noindex = (value: unknown) => typeof value === 'string' && value.startsWith('noindex');
 
@@ -70,7 +78,13 @@ export default function SiteWideForm() {
 
   return (
     <>
-      <EditorForm save={guarded} fields={shown} submitLabel="Save site wide settings" />
+      <EditorForm
+        save={guarded}
+        fields={shown}
+        submitLabel="Save site wide settings"
+        history={DEFAULTS_HISTORY}
+        historyOf={DEFAULTS_HISTORY_OF}
+      />
       <Modal
         open={asking}
         onClose={onClose}

@@ -292,7 +292,10 @@ describe('the loaders read only what the role sees', () => {
       now: NOW,
       siteUrl: 'https://site.example',
     });
-    expect(Object.keys(dashboard.widgets)).toEqual(['quick']);
+    // The publish card the layout never named takes its default place (R14-prep); its loader
+    // reads nothing (the browser fetches its figures), and the page strips it while releases
+    // are off.
+    expect(Object.keys(dashboard.widgets)).toEqual(['quick', 'publish']);
     // The preferences row alone: the layout and quick list are the person's own, so no preset
     // is read; no stats, lead, health or audit read; no homepage (no edit-home in the list,
     // and Developer cannot edit pages).

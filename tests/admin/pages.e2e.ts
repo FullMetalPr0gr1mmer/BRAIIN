@@ -5,7 +5,7 @@ import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import { ABOUT_WHO_COPY } from '@/lib/sections/copy/aboutWho';
 import { CTA_COPY } from '@/lib/sections/copy/cta';
 import { expectCleanAtWidths } from './collectionLayout';
-import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * Pages and the page editor (Admin v2 E1), signed in, through the real Worker, releases off:
@@ -33,6 +33,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
+// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
+test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 test.describe.configure({ mode: 'serial' });
 

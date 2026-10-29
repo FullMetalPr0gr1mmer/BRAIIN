@@ -1259,6 +1259,138 @@ describe('GET /api/admin/history', () => {
   });
 });
 
+describe("the site's own settings and a page's search settings (R14-prep)", () => {
+  const OTHER_T = '00000000-0000-4000-8000-0000000000ff';
+  const singleton = (type: string, tenant: string, seq: number, releaseId: string | null): Row => ({
+    id: id(400 + seq),
+    tenant_id: tenant,
+    entity_type: type,
+    entity_id: tenant,
+    seq,
+    version: seq,
+    created_at: `2026-10-0${seq}T09:00:00+00:00`,
+    created_by: ADMIN,
+    release_id: releaseId,
+    snapshot: { tenant_id: tenant, version: seq },
+  });
+
+  it('the identity and the SEO defaults name no id: the history is the session tenant’s', async () => {
+    const db = seed({
+      site_profile: [{ tenant_id: T, version: 2, brand_name: BI('Studio', 'استوديو') }],
+      seo_defaults: [{ tenant_id: T, version: 1 }],
+      content_versions: [
+        singleton('site_profile', T, 1, null),
+        singleton('site_profile', T, 2, V2),
+        // Another site's row never answers, and a row of this site keyed by anything but the
+        // site is not the identity's (the read is keyed by the session's tenant).
+        singleton('site_profile', OTHER_T, 3, null),
+        { ...singleton('site_profile', T, 5, null), entity_id: OTHER_T },
+        singleton('seo_defaults', T, 4, null),
+      ],
+    });
+    const res = await as(
+      'developer',
+      db,
+      HISTORY,
+      'GET',
+      '/api/admin/history?entityType=site_profile',
+    );
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.data).toMatchObject({
+      entity: { entityType: 'site_profile', entityId: T },
+      live: true,
+      // Releases on in this stand-in, but Developer publishes the identity (settings.general).
+      restorable: true,
+    });
+    expect((res.data['versions'] as Row[]).map((v) => [v['seq'], v['live']])).toEqual([
+      [2, true],
+      [1, false],
+    ]);
+
+    const seo = await as('seo', db, HISTORY, 'GET', '/api/admin/history?entityType=seo_defaults');
+    expect(seo.status).toBe(200);
+    expect((seo.data['versions'] as Row[]).map((v) => v['seq'])).toEqual([4]);
+  });
+
+  it('a singleton naming an id, or an item naming none, is refused before any read (422)', async () => {
+    const db = seed();
+    let res = await as(
+      'admin',
+      db,
+      HISTORY,
+      'GET',
+      `/api/admin/history?entityType=site_profile&entityId=${OTHER_T}`,
+    );
+    expect(res.status).toBe(422);
+    res = await as('admin', db, HISTORY, 'GET', '/api/admin/history?entityType=service');
+    expect(res.status).toBe(422);
+    res = await as('admin', db, HISTORY_RESTORE, 'POST', '/api/admin/history/restore', {
+      entityType: 'seo_defaults',
+      entityId: OTHER_T,
+      seq: 1,
+    });
+    expect(res.status).toBe(422);
+    expect(db.calls.filter((c) => c.name === 'content_versions')).toEqual([]);
+  });
+
+  it("the identity's history is its area's: Content Creator (no settings.general) is 403", async () => {
+    const res = await as(
+      'content_creator',
+      seed(),
+      HISTORY,
+      'GET',
+      '/api/admin/history?entityType=site_profile',
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('restoring a version of the identity reads the session tenant’s snapshot', async () => {
+    const db = seed({
+      site_profile: [{ tenant_id: T, version: 2, brand_name: BI('Studio', 'استوديو') }],
+      content_versions: [
+        {
+          ...singleton('site_profile', T, 1, V2),
+          snapshot: { tenant_id: T, version: 1, brand_name: BI('Old', 'قديم') },
+        },
+      ],
+    });
+    const res = await as('admin', db, HISTORY_RESTORE, 'POST', '/api/admin/history/restore', {
+      entityType: 'site_profile',
+      seq: 1,
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(auditRowsOf(db)).toMatchObject([
+      { action: 'site_profile.history_restore', entity_id: T, detail: { seq: 1 } },
+    ]);
+  });
+
+  it("a page's search settings are read by the row's own id (entity SEO)", async () => {
+    const SEO_ROW = id(450);
+    const db = seed({
+      entity_seo: [
+        { id: SEO_ROW, tenant_id: T, entity_type: 'service', entity_id: SERVICE, version: 1 },
+      ],
+      content_versions: [
+        {
+          ...singleton('entity_seo', T, 1, null),
+          entity_id: SEO_ROW,
+        },
+      ],
+    });
+    const res = await as(
+      'content_creator',
+      db,
+      HISTORY,
+      'GET',
+      `/api/admin/history?entityType=entity_seo&entityId=${SEO_ROW}`,
+    );
+    // Content Creator holds seo.entityMeta at view: it reads the history, restores none.
+    expect(res.status).toBe(200);
+    expect(res.data).toMatchObject({ live: true, restorable: false });
+    expect((res.data['versions'] as Row[]).map((v) => v['seq'])).toEqual([1]);
+  });
+});
+
 describe('POST /api/admin/history/restore', () => {
   const snapshot = (seq: number, row: Row, releaseId: string | null = V2): Row => ({
     id: id(100 + seq),
