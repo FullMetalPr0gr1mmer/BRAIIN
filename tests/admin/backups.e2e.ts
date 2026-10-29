@@ -1,5 +1,8 @@
+import { randomBytes } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
+import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import type { Role } from '@/lib/auth/types';
 import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
@@ -17,6 +20,10 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *   - the history drawer opens from a service's editor (Admin, and SEO, which reads the
  *     service), lists the saves that went live, says restoring needs releases, offers no
  *     Restore, and asks for nothing before it is opened;
+ *   - so does it for the site identity on General (Admin, Developer) and the SEO defaults on
+ *     SEO › Site wide (Admin, SEO), whose request names no id (R14-prep), and for a page's
+ *     search settings, inside the page editor's SEO drawer once they are first saved: over the
+ *     drawer, Escape closes the history alone and focus returns to its button (review C3);
  *   - the versions list and the dashboard's publish card, drawn only with releases on, are
  *     driven on the kit's Publishing card over made-up versions (src/components/admin/screens/
  *     versions/sample.ts): Restore and its toast, Change time, Unschedule, the card's rows.
@@ -177,6 +184,172 @@ for (const role of ['admin', 'seo'] as const) {
     });
   });
 }
+
+// R14-prep (review C3): the site identity, the SEO defaults and a page's search settings have a
+// History too. The two singletons name no entity (the server reads the session's site), so the
+// request carries no `entityId`; releases off, the drawer lists what went live and offers no
+// Restore, and closes back to its button.
+async function openedDrawer(page: Page, button: Locator, title: string, asked: string[]) {
+  await expect(button).toBeVisible();
+  expect(asked, 'nothing read before History is pressed').toEqual([]);
+  await button.click();
+  const drawer = page.getByRole('dialog', { name: title, exact: true });
+  await expect(drawer).toBeVisible();
+  await expect(
+    drawer.getByText('Every version of this that went live, newest first.'),
+  ).toBeVisible();
+  await expect(
+    drawer.getByText(/Publishing in releases isn’t switched on yet, so these are the saves/),
+  ).toBeVisible();
+  // Every save that went live (the seed's insert at least), or none yet; never a Restore.
+  await expect(
+    drawer.getByRole('list', { name: /^Versions of / }).or(drawer.getByText('No history yet.')),
+  ).toBeVisible();
+  await expect(drawer.getByRole('button', { name: /^Restore/ })).toHaveCount(0);
+  await expect.poll(() => asked.length).toBe(1);
+  return drawer;
+}
+
+function historyRequests(page: Page): string[] {
+  const asked: string[] = [];
+  page.on('request', (r) => {
+    if (/\/api\/admin\/history\b/.test(r.url())) asked.push(r.url());
+  });
+  return asked;
+}
+
+const SINGLETONS = [
+  {
+    what: 'the site identity on General',
+    path: '/admin/settings',
+    label: 'Site identity',
+    type: 'site_profile',
+    roles: ['admin', 'developer'],
+  },
+  {
+    what: 'the SEO defaults on SEO › Site wide',
+    path: '/admin/seo?tab=site',
+    label: 'Site wide SEO',
+    type: 'seo_defaults',
+    roles: ['admin', 'seo'],
+  },
+] as const;
+
+for (const singleton of SINGLETONS) {
+  for (const role of singleton.roles) {
+    test.describe(`the history drawer of ${singleton.what}, as ${role}`, () => {
+      test.use({ storageState: authFile(role) });
+      // The release-mode rehearsal (Admin v2 R14-prep): "no Restore while releases are off".
+      test.skip(releasesOn(), RELEASES_OFF_ONLY);
+
+      test('names no id, lists what went live, offers no Restore, closes back to its button', async ({
+        page,
+      }) => {
+        const asked = historyRequests(page);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await open(page, singleton.path);
+        const button = page.getByRole('button', {
+          name: new RegExp(`^History\\s+of\\s+${singleton.label}$`),
+        });
+        await openedDrawer(page, button, `History: ${singleton.label}`, asked);
+        const url = new URL(asked[0]!);
+        expect(url.pathname).toBe('/api/admin/history');
+        expect([...url.searchParams.keys()]).toEqual(['entityType']);
+        expect(url.searchParams.get('entityType')).toBe(singleton.type);
+        await check(page, `${singleton.what}: the history drawer open`);
+
+        await page.keyboard.press('Escape');
+        await expect(
+          page.getByRole('dialog', { name: `History: ${singleton.label}` }),
+        ).toBeHidden();
+        await expect(button).toBeFocused();
+      });
+    });
+  }
+}
+
+test.describe("a page's search settings: History inside the page editor's SEO drawer, as admin", () => {
+  test.use({ storageState: authFile('admin') });
+  test.skip(releasesOn(), RELEASES_OFF_ONLY);
+
+  // A draft page of the run's own (never on the site), so saving its search settings changes
+  // nothing any other spec reads; it and its row are removed by the service role afterwards.
+  const MARK = randomBytes(4).toString('hex');
+  const TITLE = { en: `History drill ${MARK}`, ar: `تجربة السجل ${MARK}` };
+  let pageId = '';
+
+  function service() {
+    const env = staffEnv()!;
+    return createClient(env.url, env.serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+
+  test.beforeAll(async () => {
+    if (!staffEnv() || releasesOn()) return;
+    const created = await service()
+      .from('pages')
+      .insert({ tenant_id: TENANT_ID, slug: `e2e-history-${MARK}`, title: TITLE, status: 'draft' })
+      .select('id')
+      .single();
+    expect(created.error).toBeNull();
+    pageId = String((created.data as { id: string }).id);
+  });
+
+  test.afterAll(async () => {
+    if (!staffEnv() || !pageId) return;
+    const svc = service();
+    await svc.from('entity_seo').delete().eq('entity_type', 'page').eq('entity_id', pageId);
+    await svc.from('pages').delete().eq('id', pageId);
+  });
+
+  test('a first save shows it; it opens over the drawer, Escape closes it alone, focus returns', async ({
+    page,
+  }) => {
+    const asked = historyRequests(page);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await open(page, `/admin/pages/${pageId}`);
+    await page
+      .getByRole('group', { name: 'This page' })
+      .getByRole('button', { name: 'SEO' })
+      .click();
+    const seo = page.getByRole('dialog', { name: `SEO: ${TITLE.en}`, exact: true });
+    await expect(seo.getByRole('button', { name: 'Save SEO' })).toBeVisible();
+    // No search settings saved for this page yet: no History of them.
+    const button = seo.getByRole('button', { name: /^History\s+of\s+Search settings for / });
+    await expect(button).toHaveCount(0);
+
+    await seo
+      .getByRole('group', { name: 'Editing language' })
+      .getByRole('radio', { name: 'Both' })
+      .check();
+    await seo.locator('#f-metaTitle-en').fill(`Drill ${MARK}`);
+    await seo.locator('#f-metaTitle-ar').fill(`تجربة ${MARK}`);
+    await seo.getByRole('button', { name: 'Save SEO' }).click();
+    await expect(seo.locator('.save-status')).toHaveText(/^Saved/);
+
+    // Saved for the first time: History of them at once (the row's id from the save).
+    // Named for the page's own label (its English title), as the SEO drawer is.
+    const inner = await openedDrawer(
+      page,
+      button,
+      `History: Search settings for ${TITLE.en}`,
+      asked,
+    );
+    const url = new URL(asked[0]!);
+    expect(url.searchParams.get('entityType')).toBe('entity_seo');
+    expect(url.searchParams.get('entityId')).toMatch(/^[0-9a-f-]{36}$/);
+    await check(page, 'the search settings history over the SEO drawer');
+
+    // Escape closes the history only: the SEO drawer stays, focus back on its History button.
+    await page.keyboard.press('Escape');
+    await expect(inner).toBeHidden();
+    await expect(seo).toBeVisible();
+    await expect(button).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(seo).toBeHidden();
+  });
+});
 
 for (const role of CMS) {
   test.describe(`the kit's versions list and publish card, as ${role}`, () => {
