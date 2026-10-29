@@ -20,8 +20,10 @@ import {
   mayOpen,
   missingNote,
   previewSrc,
+  reloadAct,
   showsPage,
   type FrameEvent,
+  type FrameState,
   type PreviewDevice,
   type PreviewLang,
 } from './model';
@@ -41,8 +43,9 @@ import { PREVIEW_LOADING } from './editorSide';
 //                window with this origin as the targetOrigin, takes a message only from this
 //                origin AND that window, parsed as the envelope (packages/schemas/
 //                previewMessage.ts). On `ready` it jumps to the open section and outlines it;
-//                after a save the editor reports (`revision`) it sends `reload` once, and jumps
-//                back on the next `ready`; a click in a section (`select`) opens that section
+//                after a save the editor reports (`revision`) it sends `reload` once (queued
+//                while a page is still loading, never a new frame per save), and jumps back on
+//                the next `ready`; a click in a section (`select`) opens that section
 //                through the editor's own select (which asks about unsaved work first).
 //   hidden       below 1280 px the column is in a `display: none` box while the fields show:
 //                the new address, the reload and the jump wait until it is shown again
@@ -69,8 +72,6 @@ export interface PreviewColumnProps {
   revision: number;
   onSelect: (sectionId: string) => void;
 }
-
-type FrameState = 'loading' | 'ready' | 'failed';
 
 /** Whether the column is laid out (not inside a `display: none` box). */
 const isShown = (el: HTMLElement | null) => el !== null && el.getClientRects().length > 0;
@@ -108,9 +109,19 @@ export default function PreviewColumn({
   const shownRef = useRef(shown);
   shownRef.current = shown;
   const loads = useRef(0);
-  // `ready` messages heard, and how many had been heard at the frame's previous `load`.
-  const readies = useRef(0);
-  const readiesAtLoad = useRef(0);
+  // The documents whose bridge said `ready` (bridgeMissing), and a reload a save asked for
+  // while the frame was loading, paid once it is ready (reloadAct).
+  const readied = useRef(new WeakSet<object>());
+  const queued = useRef(false);
+
+  /** The document in the frame now, or null when it is another origin's. */
+  const frameDocument = (): Document | null => {
+    try {
+      return frameRef.current?.contentDocument ?? null;
+    } catch {
+      return null;
+    }
+  };
 
   // The channel lives as long as the column; it reads the frame's window when it posts or
   // checks a message's source, so a remounted frame needs no new channel.
@@ -123,11 +134,13 @@ export default function PreviewColumn({
     const opened = createPreviewChannel(frame, window as unknown as ChannelHost, (message) => {
       const now = latest.current;
       switch (message.type) {
-        case 'ready':
-          readies.current += 1;
+        case 'ready': {
+          const shownDocument = frameDocument();
+          if (shownDocument) readied.current.add(shownDocument);
           setShown({ path: message.path, listed: message.sections.map((s) => s.id) });
           setState('ready');
           return;
+        }
         case 'navigate':
           setState('loading');
           return;
@@ -154,7 +167,7 @@ export default function PreviewColumn({
     const next = frameStep(debt.current, event, isShown(areaRef.current));
     debt.current = next.debt;
     setSrc(next.debt.src);
-    if (next.act === 'reload') reload();
+    if (next.act === 'reload') reload('save');
     else if (next.act === 'follow') sendFollowUp();
   }
 
@@ -170,18 +183,25 @@ export default function PreviewColumn({
   // The editor's address (its language): given to the frame only while the column is shown.
   useEffect(() => step({ type: 'address', src: want }), [want]);
 
-  // A new address loads a new page.
+  // A new address loads a new page (after every save so far, so a queued reload is paid).
   useEffect(() => {
     setState('loading');
     setShown(null);
+    queued.current = false;
   }, [src, frameKey]);
 
   const onPage = shown !== null && showsPage(shown.path, src);
 
   // On `ready`, and whenever another section opens: jump to it and outline it (owed while the
-  // column is hidden, where a jump scrolls nothing).
+  // column is hidden, where a jump scrolls nothing). A save that settled while the page loaded
+  // reloads it first; the new document's `ready` is followed in turn.
   useEffect(() => {
     if (state !== 'ready' || !shown) return;
+    if (queued.current) {
+      queued.current = false;
+      step({ type: 'saved' });
+      return;
+    }
     step({ type: 'follow' });
   }, [state, shown, selected, onPage]);
 
@@ -194,23 +214,29 @@ export default function PreviewColumn({
     return () => window.clearTimeout(timer);
   }, [revision]);
 
-  function reload() {
+  /** A reload, after a save or from the person's Reload: sent, queued or a new frame. */
+  function reload(by: 'save' | 'person') {
+    const act = reloadAct(latest.current.state, by);
+    if (act === 'queue') {
+      queued.current = true;
+      return;
+    }
+    queued.current = false;
     const sent =
-      latest.current.state === 'ready' &&
+      act === 'send' &&
       (channel.current?.send({ v: PREVIEW_MESSAGE_VERSION, type: 'reload' }) ?? false);
     setState('loading');
     if (!sent) setFrameKey((key) => key + 1);
   }
 
-  // The frame loaded: if no `ready` came since its previous load by shortly after, the page
-  // shown has no bridge (an error page, another site, a link followed out of a ready preview).
+  // The frame loaded: if the document it shows has not said `ready` by shortly after, it has
+  // no bridge (an error page, another site, a link followed out of a ready preview).
   function loaded() {
     if (!latest.current.src) return; // the empty frame before its first address
     const load = ++loads.current;
-    const before = readiesAtLoad.current;
-    readiesAtLoad.current = readies.current;
     window.setTimeout(() => {
-      if (load === loads.current && bridgeMissing(readies.current, before)) setState('failed');
+      if (load === loads.current && bridgeMissing(frameDocument(), readied.current))
+        setState('failed');
     }, READY_GRACE_MS);
   }
 
@@ -267,7 +293,7 @@ export default function PreviewColumn({
           className="icon-btn"
           aria-label="Reload the preview"
           title="Reload the preview"
-          onClick={() => reload()}
+          onClick={() => reload('person')}
         >
           <Icon name="refresh" size={15} />
         </button>

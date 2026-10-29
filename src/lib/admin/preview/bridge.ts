@@ -270,9 +270,12 @@ export function installBridge(win: Window): void {
   });
 
   // A click in a section opens it in the page editor that frames this preview (E2). Only
-  // when framed; the page's own handling of the click goes on unchanged.
+  // when framed; the page's own handling of the click goes on unchanged. As with a link
+  // above, a click the page already handled (a widget that called preventDefault) or one
+  // with a modifier key is the page's, never a pick of its section (E2 review CR4).
   doc.addEventListener('click', (event) => {
-    if (!parent || event.button !== 0) return;
+    if (!parent || event.defaultPrevented || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const sectionId = sectionOfClick(event.target);
     if (sectionId) {
       postToParent(parent, origin, { v: PREVIEW_MESSAGE_VERSION, type: 'select', sectionId });

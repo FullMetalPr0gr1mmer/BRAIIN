@@ -1,5 +1,6 @@
 import { PREVIEW_MESSAGE_VERSION, type ToPreviewMessage } from '@schemas/previewMessage';
 import { toPreviewPath } from '@/lib/admin/preview/paths';
+import { localizedPath } from '@/lib/i18n';
 import type { PreviewLang } from './editorSide';
 
 // The live preview column's rules (Admin v2 E2, docs/admin-v2/ui.md "Preview column (AV-26)"),
@@ -37,16 +38,14 @@ export const RELOAD_DELAY_MS = 250;
  * answer (a page without the bridge: an error page, another site; see bridgeMissing). */
 export const READY_GRACE_MS = 1500;
 
-/** A public path in a language: `/about` → `/ar/about`, `/` → `/ar`. */
-export function localePath(path: string, lang: PreviewLang): string {
-  if (lang === 'en') return path;
-  return path === '/' ? '/ar' : `/ar${path}`;
-}
-
-/** The frame's address for the page's English path in a language, or null (not previewed). */
+/**
+ * The frame's address for the page's English path in a language, or null (not previewed). The
+ * public path in a language is the site's own `localizedPath` (`/about` → `/ar/about`, `/` →
+ * `/ar`), the one every page's hreflang twins use.
+ */
 export function previewSrc(path: string | null, lang: PreviewLang): string | null {
   if (!path) return null;
-  return toPreviewPath(localePath(path, lang));
+  return toPreviewPath(localizedPath(path, lang));
 }
 
 export interface FrameFit {
@@ -190,15 +189,37 @@ export function frameStep(
   }
 }
 
+/** Where the frame stands: a page loading, a page whose bridge said `ready`, or neither. */
+export type FrameState = 'loading' | 'ready' | 'failed';
+
 /**
- * Whether the page the frame just loaded has no bridge, so the preview cannot follow it: no
- * `ready` came between the frame's previous `load` and the end of this one's grace. A bridged
- * document posts `ready` from its module script, before `load`; a page a link left for
- * without the bridge (another site, a page the preview does not rewrite) never does, whatever
- * the column believed before it went.
+ * What a reload asks of the frame now. A ready preview is sent `reload` (one new document).
+ * After a save (`by: 'save'`), a frame still loading is not torn down: the reload waits, one
+ * for any number of saves, until it is ready (E2 review CR2: remounting on every save while a
+ * slow render loaded multiplied Worker requests, and under the 800 ms autosave a frame might
+ * never reach ready). A frame that failed, or the person's own Reload while it loads, gets a
+ * new frame.
  */
-export function bridgeMissing(readiesNow: number, readiesAtPreviousLoad: number): boolean {
-  return readiesNow <= readiesAtPreviousLoad;
+export type ReloadAct = 'send' | 'queue' | 'remount';
+
+export function reloadAct(state: FrameState, by: 'save' | 'person'): ReloadAct {
+  if (state === 'ready') return 'send';
+  if (state === 'loading' && by === 'save') return 'queue';
+  return 'remount';
+}
+
+/**
+ * Whether the page the frame shows has no bridge, so the preview cannot follow it: the
+ * document in the frame now (null when it is another origin's, which the column cannot read)
+ * is not one that said `ready`. Held per document, not by counting messages against loads
+ * (E2 review CR3): a document's `ready` that reached the column after its frame's `load`
+ * would have been credited to the next load, and a page without the bridge after it missed.
+ */
+export function bridgeMissing(
+  shown: object | null,
+  readied: { has(document: object): boolean },
+): boolean {
+  return shown === null || !readied.has(shown);
 }
 
 /** The note when the open section is not in the preview, or null when it is shown. */

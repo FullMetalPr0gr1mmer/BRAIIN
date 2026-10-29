@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArabicGapsProvider,
   ArabicMissingBar,
@@ -10,6 +10,7 @@ import Icon from '@/components/admin/kit/Icon';
 import Note from '@/components/admin/kit/Note';
 import Segmented from '@/components/admin/kit/Segmented';
 import {
+  NOT_PREVIEWED,
   NO_PREVIEW,
   PREVIEW_HEADING,
   PREVIEW_LOADING,
@@ -17,6 +18,7 @@ import {
   VIEW_OPTIONS,
   previewLangAfter,
   previewLead,
+  viewAfterPreviewPick,
   type EditorView,
   type PreviewLang,
 } from '@/components/admin/screens/pagePreview/editorSide';
@@ -24,8 +26,10 @@ import StatusBadge, { Badge } from '@/components/admin/kit/StatusBadge';
 import SeoDrawer from '@/components/admin/screens/seo/SeoDrawer';
 import { adminFetch, describeError } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
+import { localizedPath } from '@/lib/i18n';
 import {
   announcePending,
+  onDraftsMoved,
   openPublishDialog,
   readsThroughRelease,
   stagedBody,
@@ -49,12 +53,14 @@ import {
   neighbourAfterRemoval,
   newSectionPayload,
   pageMoved,
+  previewSectionsOf,
   reloadsPreview,
   renameBody,
   rowMoved,
   rowStamp,
   sectionRowOf,
   toggleBody,
+  withRow,
   type EditorWrite,
   type SectionRow,
 } from './model';
@@ -116,8 +122,6 @@ const TONE: Record<string, 'gray' | 'sky' | 'warn'> = {
   link: 'sky',
   password: 'warn',
 };
-
-const arabicPath = (path: string) => (path === '/' ? '/ar' : `/ar${path}`);
 
 export interface PageEditorProps extends PageEditorSetup {
   /** The section to open first (the address's `?section=`), when it is on this page. */
@@ -201,6 +205,18 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
     }
   }, [access.sections, initialPage.id]);
 
+  // Releases on: a pending change settled or thrown away in the publish dialog or the savebar
+  // (R12's SETTLED_EVENT, and the discard's event) moved what the preview lays over the page
+  // and what the sections name. The list is read again (the open form rebases itself on a
+  // settle, R12) and the preview reloads (E2 review CR1).
+  useEffect(() => {
+    if (!release) return;
+    return onDraftsMoved(() => {
+      void load();
+      wrote('settled');
+    });
+  }, [release, load, wrote]);
+
   // The first read opens the section the address names, when it is on this page, else the
   // first one (the page details for a page with none).
   useEffect(() => {
@@ -229,10 +245,20 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
   /** Whether the open form may be left; unsaved work is never dropped silently. */
   const leaveOpen = () => mayLeave(form.current, confirmDialog);
 
-  /** Open another section (or the page details). */
-  async function select(next: string) {
-    if (next === selected) return;
-    if (await leaveOpen()) setSelected(next);
+  /** Open another section (or the page details); whether it is open now. */
+  async function select(next: string): Promise<boolean> {
+    if (next === selected) return true;
+    if (!(await leaveOpen())) return false;
+    setSelected(next);
+    return true;
+  }
+
+  /**
+   * A section picked in the live preview: opened as a pick in the column is, and below
+   * 1280 px the fields come back in place of the preview to edit it (E2 review CR5).
+   */
+  async function openFromPreview(id: string) {
+    if (await select(id)) setView((current) => viewAfterPreviewPick(current, wide));
   }
 
   /** What a column write needs around it: the reread, and where its refusal is said. */
@@ -258,7 +284,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
   function take(answer: Row) {
     const row = sectionRowOf(answer);
     if (!row) return;
-    setRows((current) => current && current.map((r) => (r.id === row.id ? { ...r, ...row } : r)));
+    setRows((current) => current && withRow(current, row));
   }
 
   /**
@@ -280,7 +306,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
       status: typeof row['status'] === 'string' ? row['status'] : current.status,
     }));
     if (pageMoved(pageStamp.current, row)) wrote('pageDetails');
-    pageStamp.current = rowStamp(row as { version: unknown });
+    pageStamp.current = rowStamp(row);
   }
 
   async function toggle(row: SectionRow) {
@@ -458,17 +484,13 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
   // The live preview (E2): only for a page an address of the site shows; mounted the first time
   // it is on screen (from 1280 px, or Preview chosen below), then kept: hidden by CSS while the
   // fields are shown, so switching back does not load the page again.
-  const hasPreview = Boolean(page.path);
+  const hasPreview = page.path !== null && page.previewable;
   const onScreen = hasPreview && wide !== null && (wide || view === 'preview');
   const [previewMounted, setPreviewMounted] = useState(false);
   useEffect(() => {
     if (onScreen) setPreviewMounted(true);
   }, [onScreen]);
-  const previewSections = (rows ?? []).map((row) => ({
-    id: row.id,
-    name: sectionName(row),
-    visible: row.visible,
-  }));
+  const previewSections = useMemo(() => previewSectionsOf(rows ?? []), [rows]);
 
   const options = rows
     ? availability(
@@ -529,7 +551,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
               <a
                 className="btn"
                 data-size="sm"
-                href={arabicPath(page.path)}
+                href={localizedPath(page.path, 'ar')}
                 target="_blank"
                 rel="noopener"
                 aria-label="Open page in Arabic"
@@ -628,6 +650,8 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
             </div>
             {!page.path ? (
               <Note>{NO_PREVIEW}</Note>
+            ) : !hasPreview ? (
+              <Note>{NOT_PREVIEWED}</Note>
             ) : previewMounted ? (
               <Suspense
                 fallback={
@@ -644,7 +668,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
                   selected={selected}
                   sections={previewSections}
                   revision={revision}
-                  onSelect={(id) => void select(id)}
+                  onSelect={(id) => void openFromPreview(id)}
                 />
               </Suspense>
             ) : null}

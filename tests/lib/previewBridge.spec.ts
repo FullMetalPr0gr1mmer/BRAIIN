@@ -329,7 +329,7 @@ describe('a click in a section opens it in the page editor (Admin v2 E2)', () =>
       },
     } as Record<string, unknown>;
     win['parent'] = framed ? up : win;
-    const click = (target: unknown, button = 0) =>
+    const click = (target: unknown, button = 0, init: Record<string, boolean> = {}) =>
       (listeners['click'] ?? []).forEach((l) =>
         l({
           target,
@@ -340,6 +340,7 @@ describe('a click in a section opens it in the page editor (Admin v2 E2)', () =>
           shiftKey: false,
           altKey: false,
           preventDefault: () => undefined,
+          ...init,
         }),
       );
     return { win: win as unknown as Window, up, click };
@@ -366,6 +367,20 @@ describe('a click in a section opens it in the page editor (Admin v2 E2)', () =>
     installBridge(alone.win);
     alone.click(clicked({ section: SECTION }));
     expect(alone.up.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('a click the page handled, or one with a modifier key, is the page’s (E2 review CR4)', () => {
+    const framed = fakeWindow(true);
+    installBridge(framed.win);
+    framed.up.postMessage.mockClear(); // the `ready` message
+    // A widget of the page (a facade with its own handler) took the click.
+    framed.click(clicked({ section: SECTION }), 0, { defaultPrevented: true });
+    for (const key of ['metaKey', 'ctrlKey', 'shiftKey', 'altKey'])
+      framed.click(clicked({ section: SECTION }), 0, { [key]: true });
+    expect(framed.up.postMessage).not.toHaveBeenCalled();
+    // A plain click still picks the section.
+    framed.click(clicked({ section: SECTION }));
+    expect(framed.up.postMessage).toHaveBeenCalledTimes(1);
   });
 
   it('the parent hears `select` only from its own frame and origin', () => {

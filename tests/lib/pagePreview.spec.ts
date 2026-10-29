@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ToPreviewMessageSchema } from '@schemas/previewMessage';
 import {
   DEVICE_OPTIONS,
@@ -10,32 +10,45 @@ import {
   followUp,
   frameDebt,
   frameStep,
-  localePath,
   mayOpen,
   missingNote,
   pathnameOf,
   previewSrc,
+  reloadAct,
   showsPage,
   type FrameDebt,
   type FrameEvent,
 } from '@/components/admin/screens/pagePreview/model';
 import {
+  NOT_PREVIEWED,
   NO_PREVIEW,
   PREVIEW_HEADING,
   PREVIEW_LOADING,
   VIEW_OPTIONS,
   previewLangAfter,
   previewLead,
+  viewAfterPreviewPick,
 } from '@/components/admin/screens/pagePreview/editorSide';
 import {
   PREVIEW_RELOADS,
   pageMoved,
+  previewSectionsOf,
   reloadsPreview,
   rowMoved,
+  rowStamp,
+  withRow,
   type EditorWrite,
   type SectionRow,
 } from '@/components/admin/screens/pageEditor/model';
 import { fromPreviewPath } from '@/lib/admin/preview/paths';
+import { previewable } from '@/lib/admin/pages/editor';
+import {
+  announceDiscarded,
+  announceSettled,
+  onDraftsMoved,
+  SETTLED_EVENT,
+} from '@/lib/admin/releaseEvents';
+import { localizedPath } from '@/lib/i18n';
 import { PAGE_PATHS } from '@/lib/visibility/routes';
 
 // The page editor's live preview column (Admin v2 E2, docs/admin-v2/ui.md "Preview column
@@ -52,7 +65,7 @@ describe('the frame’s address', () => {
     expect(previewSrc('/', 'en')).toBe('/admin/preview');
     expect(previewSrc('/', 'ar')).toBe('/admin/preview/ar');
     expect(previewSrc(null, 'en')).toBeNull();
-    expect(localePath('/contact', 'ar')).toBe('/ar/contact');
+    expect(previewSrc('/contact', 'ar')).toBe('/admin/preview/ar/contact');
   });
 
   it('exists for every page an address of the site shows, and maps back to that address', () => {
@@ -60,9 +73,26 @@ describe('the frame’s address', () => {
       for (const lang of ['en', 'ar'] as const) {
         const src = previewSrc(path, lang);
         expect(src, `${path} ${lang}`).not.toBeNull();
-        expect(fromPreviewPath(src!)).toBe(localePath(path, lang));
+        expect(fromPreviewPath(src!)).toBe(localizedPath(path, lang));
       }
     }
+  });
+
+  it('is offered only for a path the preview renders in both languages (E2 review CR6)', () => {
+    for (const path of Object.values(PAGE_PATHS)) expect(previewable(path), path).toBe(true);
+    expect(previewable(null)).toBe(false);
+    // An address R9's map does not render: the column would wait for a frame forever.
+    expect(previewSrc('/rss.xml', 'en')).toBeNull();
+    expect(previewable('/rss.xml')).toBe(false);
+  });
+
+  it('reuses the site’s own localizedPath, no copy of it (E2 review CR7)', () => {
+    const model = readFileSync('src/components/admin/screens/pagePreview/model.ts', 'utf8');
+    expect(model).toContain('toPreviewPath(localizedPath(path, lang))');
+    expect(model).not.toMatch(/`\/ar\$\{/);
+    const editor = readFileSync('src/components/admin/screens/pageEditor/PageEditor.tsx', 'utf8');
+    expect(editor).toContain("href={localizedPath(page.path, 'ar')}");
+    expect(editor).not.toMatch(/`\/ar\$\{/);
   });
 
   it('follows the editor’s language; Both keeps the one shown', () => {
@@ -181,6 +211,25 @@ describe('a save, not a read, reloads the preview', () => {
     expect(rowMoved(undefined, row())).toBe(false);
   });
 
+  it('a pending change the row read no longer names is a move (E2 review CR1)', () => {
+    const pending = row({ draft: { id: OTHER, version: 2, op: 'update' } });
+    // Thrown away or published: the row comes back without it, at the same live version.
+    expect(rowMoved(pending, row())).toBe(true);
+    expect(rowMoved(pending, row({ draft: null }))).toBe(true);
+    // The list takes the row as answered: the old pending change does not stay on it.
+    const listed = withRow([pending, row({ id: OTHER })], row());
+    expect(listed[0]).toEqual(row());
+    expect('draft' in listed[0]!).toBe(false);
+    expect(listed[1]).toEqual(row({ id: OTHER }));
+    const removal = row({ pendingRemoval: true, draft: { id: OTHER, version: 1, op: 'delete' } });
+    expect(withRow([removal], row())[0]!.pendingRemoval).toBeUndefined();
+  });
+
+  it('a section row and a server row are stamped alike (E2 review CR9)', () => {
+    expect(rowStamp(row())).toBe('3:');
+    expect(rowStamp({ version: 3, draft: { id: OTHER, version: 2, op: 'update' } })).toBe('3:2');
+  });
+
   it('the page’s own row, after its first read', () => {
     expect(pageMoved(null, { version: 2 })).toBe(false);
     expect(pageMoved('2:', { version: 2 })).toBe(false);
@@ -269,16 +318,70 @@ describe('a hidden column owes, and pays once it is shown (P-15)', () => {
   });
 });
 
-describe('a frame without the bridge (E2-C3)', () => {
-  it('is said when no `ready` came since the previous load, whatever the column believed', () => {
-    // The first page: its `ready` (before its load) counted.
-    expect(bridgeMissing(1, 0)).toBe(false);
-    // A ready preview whose link led to a page without the bridge: no `ready` since.
-    expect(bridgeMissing(1, 1)).toBe(true);
-    // A reload through the bridge: a new `ready`.
-    expect(bridgeMissing(2, 1)).toBe(false);
-    // The first load answered by nothing.
-    expect(bridgeMissing(0, 0)).toBe(true);
+describe('a frame without the bridge (E2-C3, review CR3)', () => {
+  it('is said when the document shown never said `ready`, whatever the column believed', () => {
+    const readied = new WeakSet<object>();
+    const first = {};
+    // The first page loaded, its `ready` not heard yet: missing until it is.
+    expect(bridgeMissing(first, readied)).toBe(true);
+    readied.add(first);
+    expect(bridgeMissing(first, readied)).toBe(false);
+    // A ready preview whose link led to a page without the bridge: that document said nothing.
+    expect(bridgeMissing({}, readied)).toBe(true);
+    // Another site's page: the column cannot read it.
+    expect(bridgeMissing(null, readied)).toBe(true);
+  });
+
+  it('a `ready` heard after its frame’s load is not credited to the next page (CR3)', () => {
+    // The order the counting rule got wrong: page A loads, A's `ready` lands late, then a link
+    // leads to B, a page without the bridge. Each `ready` is held against its own document.
+    const readied = new WeakSet<object>();
+    const a = {};
+    const b = {};
+    readied.add(a); // A's late `ready`, heard while A is shown
+    expect(bridgeMissing(a, readied)).toBe(false);
+    expect(bridgeMissing(b, readied)).toBe(true);
+  });
+
+  const column = readFileSync('src/components/admin/screens/pagePreview/PreviewColumn.tsx', 'utf8');
+  it('the column holds each `ready` against the document shown, and checks the one loaded', () => {
+    // On `ready`: the frame's document now is the one that said it.
+    expect(column).toMatch(
+      /case 'ready': \{\s+const shownDocument = frameDocument\(\);\s+if \(shownDocument\) readied\.current\.add\(shownDocument\);/,
+    );
+    // After the frame's load and its grace: the document shown then, never a count.
+    expect(column).toMatch(/bridgeMissing\(frameDocument\(\), readied\.current\)/);
+    expect(column).toMatch(/onLoad=\{loaded\}/);
+  });
+});
+
+describe('a save while the preview loads (E2 review CR2)', () => {
+  it('waits for the page to be ready instead of tearing the frame down', () => {
+    expect(reloadAct('ready', 'save')).toBe('send');
+    expect(reloadAct('loading', 'save')).toBe('queue');
+    expect(reloadAct('failed', 'save')).toBe('remount');
+    // The person's Reload: a page that hangs, or failed, gets a new frame.
+    expect(reloadAct('ready', 'person')).toBe('send');
+    expect(reloadAct('loading', 'person')).toBe('remount');
+    expect(reloadAct('failed', 'person')).toBe('remount');
+  });
+
+  const column = readFileSync('src/components/admin/screens/pagePreview/PreviewColumn.tsx', 'utf8');
+  it('one queued reload, paid on `ready`, dropped by a new frame or address', () => {
+    expect(column).toMatch(
+      /const act = reloadAct\(latest\.current\.state, by\);\s+if \(act === 'queue'\) \{\s+queued\.current = true;\s+return;\s+\}/,
+    );
+    // On `ready`: the queued reload first (through frameStep, so a hidden column owes it).
+    expect(column).toMatch(
+      /if \(queued\.current\) \{\s+queued\.current = false;\s+step\(\{ type: 'saved' \}\);\s+return;\s+\}\s+step\(\{ type: 'follow' \}\);/,
+    );
+    // A new document is requested after every save so far.
+    expect(column).toMatch(
+      /setShown\(null\);\s+queued\.current = false;\s+\}, \[src, frameKey\]\);/,
+    );
+    // A save's reload and the person's are told apart.
+    expect(column).toContain("if (next.act === 'reload') reload('save');");
+    expect(column).toContain("onClick={() => reload('person')}");
   });
 });
 
@@ -293,6 +396,7 @@ describe('which writes reload the preview (E2-C7)', () => {
       rename: false,
       remove: true,
       restore: true,
+      settled: true,
     });
     for (const kind of Object.keys(PREVIEW_RELOADS) as EditorWrite[])
       expect(reloadsPreview(kind)).toBe(PREVIEW_RELOADS[kind]);
@@ -322,6 +426,7 @@ describe('which writes reload the preview (E2-C7)', () => {
       rename: body('async function rename(', NEXT),
       remove: body('async function remove(', NEXT),
       restore: body('onRestored={', /\n {10}\}\}/),
+      settled: body('onDraftsMoved(', /\n {4}\}\);/),
     };
     for (const [kind, handler] of Object.entries(handlers)) {
       const calls = [...handler.matchAll(/\bwrote\('(\w+)'\)/g)].map((m) => m[1]);
@@ -334,6 +439,74 @@ describe('which writes reload the preview (E2-C7)', () => {
     expect(source).toMatch(/if \(reloadsPreview\(kind\)\) setRevision\(/);
     const all = [...source.matchAll(/\bwrote\('(\w+)'\)/g)].map((m) => m[1]).sort();
     expect(all).toEqual(Object.keys(PREVIEW_RELOADS).sort());
+  });
+});
+
+describe('a change settled or thrown away elsewhere (E2 review CR1)', () => {
+  it('is heard from the publish dialog’s settle and from a discard, until unsubscribed', () => {
+    vi.stubGlobal('window', new EventTarget());
+    try {
+      let heard = 0;
+      const off = onDraftsMoved(() => (heard += 1));
+      announceSettled('d1');
+      announceDiscarded();
+      // A settle event without its draft id is not R12's.
+      window.dispatchEvent(new CustomEvent(SETTLED_EVENT));
+      expect(heard).toBe(2);
+      off();
+      announceSettled('d1');
+      announceDiscarded();
+      expect(heard).toBe(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('the editor reads its sections again and reloads the preview, in release mode only', () => {
+    const editor = readFileSync('src/components/admin/screens/pageEditor/PageEditor.tsx', 'utf8');
+    expect(editor).toMatch(
+      /useEffect\(\(\) => \{\s+if \(!release\) return;\s+return onDraftsMoved\(\(\) => \{\s+void load\(\);\s+wrote\('settled'\);\s+\}\);\s+\}, \[release, load, wrote\]\);/,
+    );
+    // A write's answer replaces its row in the list (withRow), never merges into it.
+    expect(editor).toContain('setRows((current) => current && withRow(current, row));');
+    expect(editor).not.toMatch(/\{ \.\.\.r, \.\.\.row \}/);
+  });
+});
+
+describe('a section picked in the preview (E2 review CR5)', () => {
+  it('brings the fields back below 1280 px; the three columns stay as they are', () => {
+    expect(viewAfterPreviewPick('preview', false)).toBe('edit');
+    expect(viewAfterPreviewPick('edit', false)).toBe('edit');
+    expect(viewAfterPreviewPick('preview', true)).toBe('preview');
+    expect(viewAfterPreviewPick('edit', true)).toBe('edit');
+    expect(viewAfterPreviewPick('preview', null)).toBe('preview');
+  });
+
+  it('only once the section is open (unsaved work asked about first)', () => {
+    const editor = readFileSync('src/components/admin/screens/pageEditor/PageEditor.tsx', 'utf8');
+    expect(editor).toMatch(
+      /async function openFromPreview\(id: string\) \{\s+if \(await select\(id\)\) setView\(\(current\) => viewAfterPreviewPick\(current, wide\)\);\s+\}/,
+    );
+    expect(editor).toContain('onSelect={(id) => void openFromPreview(id)}');
+  });
+});
+
+describe('the sections the preview is told of (E2 review CR8)', () => {
+  it('in the list’s order with their names, rebuilt only when the list changes', () => {
+    const base = { type: 'cta', sortOrder: 1, version: 1, placeholder: false };
+    const rows: SectionRow[] = [
+      { ...base, id: ID, label: 'Ask', visible: false },
+      { ...base, id: OTHER, label: null, visible: true, sortOrder: 2 },
+    ];
+    const told = previewSectionsOf(rows);
+    expect(told.map((s) => s.id)).toEqual([ID, OTHER]);
+    expect(told[0]).toEqual({ id: ID, name: 'Ask', visible: false });
+    expect(told[1]!.name).not.toBe('');
+    expect(told[1]!.visible).toBe(true);
+    const editor = readFileSync('src/components/admin/screens/pageEditor/PageEditor.tsx', 'utf8');
+    expect(editor).toContain(
+      'const previewSections = useMemo(() => previewSectionsOf(rows ?? []), [rows]);',
+    );
   });
 });
 
@@ -353,6 +526,7 @@ describe('the words (P-12)', () => {
       PREVIEW_HEADING,
       PREVIEW_LOADING,
       NO_PREVIEW,
+      NOT_PREVIEWED,
       previewLead(true),
       previewLead(false),
       ...VIEW_OPTIONS.map((o) => o.label),

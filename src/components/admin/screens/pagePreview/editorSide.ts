@@ -28,6 +28,10 @@ export function previewLead(release: boolean): string {
 export const NO_PREVIEW =
   'No address of the site shows this page yet, so there is nothing to preview.';
 
+/** A page with an address the preview does not render (none today: editor.ts previewable). */
+export const NOT_PREVIEWED =
+  'The preview cannot show this page yet. Open page shows it on the site.';
+
 export const PREVIEW_LOADING = 'Loading the preview…';
 
 /** The narrow screens' switch between the fields and the preview (ui.md "Responsive"). */
@@ -37,3 +41,12 @@ export const VIEW_OPTIONS = [
   { value: 'preview', label: 'Preview' },
 ] as const;
 export type EditorView = (typeof VIEW_OPTIONS)[number]['value'];
+
+/**
+ * The view after a section picked in the preview has opened (E2 review CR5): below 1280 px
+ * (`wide` false) the preview stood where the fields go, so the fields come back to edit the
+ * section picked; from 1280 px, or before the width is known, the view stays as it is.
+ */
+export function viewAfterPreviewPick(view: EditorView, wide: boolean | null): EditorView {
+  return wide === false ? 'edit' : view;
+}

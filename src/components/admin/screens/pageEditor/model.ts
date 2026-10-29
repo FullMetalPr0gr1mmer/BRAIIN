@@ -6,7 +6,7 @@ import type { FieldDef } from '@/lib/admin/uiSchema';
 import { PLACEHOLDER_FIELD } from '@/lib/admin/ui/fields';
 import { pagesUi } from '@/lib/admin/ui/pages';
 import { ORDER_STEP } from '../collection/reorder';
-import { lookKey } from './library';
+import { lookKey, sectionName } from './library';
 import type { BuiltInLooks } from './types';
 
 // The page editor's rules (Admin v2 E1), pure so they are unit-tested without a browser
@@ -248,9 +248,16 @@ export function columnWroteOn(row: SectionRow): string {
 
 // ---- The live preview's save signal (Admin v2 E2) ---------------------------------------
 
+/**
+ * What a row's stamp reads: its version and its pending change. A section row and a server
+ * row (a page's) both are one; `Readonly<Row>` alone would refuse SectionRow, an interface
+ * with no index signature (E2 review CR9).
+ */
+export type Stamped = { readonly version?: unknown; readonly draft?: unknown };
+
 /** A row's version and its pending change's: a write to it moves one or the other. */
-export function rowStamp(row: { version: number | unknown; draft?: unknown }): string {
-  return `${String(row.version ?? '')}:${readDraft(row as unknown as Row)?.version ?? ''}`;
+export function rowStamp(row: Stamped): string {
+  return `${String(row.version ?? '')}:${readDraft(row)?.version ?? ''}`;
 }
 
 /**
@@ -276,6 +283,12 @@ export const PREVIEW_RELOADS = {
   remove: true,
   /** A History restore. */
   restore: true,
+  /**
+   * Releases on: a pending change settled (Keep my version / Use the live version) or thrown
+   * away in the publish dialog or the savebar (releaseEvents.ts onDraftsMoved). Not the
+   * editor's own write, but the preview lays the pending changes over the page, so it moved.
+   */
+  settled: true,
 } as const satisfies Readonly<Record<string, boolean>>;
 
 export type EditorWrite = keyof typeof PREVIEW_RELOADS;
@@ -289,14 +302,32 @@ export function reloadsPreview(kind: EditorWrite): boolean {
  * Whether a row a form read or saved is a save (E2: the preview then reloads): its version or
  * its pending change moved since the list held it. A read of the version the list holds (the
  * form's first load, a rebase after a column write) is not, and neither is a row the list does
- * not hold yet.
+ * not hold yet. The row read is compared as it came: a pending change it no longer names
+ * (thrown away, published) is a move, never kept from the list's copy (E2 review CR1).
  */
 export function rowMoved(before: SectionRow | undefined, after: SectionRow): boolean {
   if (!before) return false;
-  return rowStamp(before) !== rowStamp({ ...before, ...after });
+  return rowStamp(before) !== rowStamp(after);
+}
+
+/**
+ * The list with one row as a write or a read answered it: that row replaced, not merged, so a
+ * pending change or a staged removal the answer no longer names leaves the list too (E2
+ * review CR1: a merge kept the old `draft`, and the next column write named a change that
+ * was gone).
+ */
+export function withRow(rows: readonly SectionRow[], row: SectionRow): SectionRow[] {
+  return rows.map((r) => (r.id === row.id ? row : r));
 }
 
 /** The same rule for the page's own row (the page details): `null` until the first read. */
-export function pageMoved(before: string | null, row: Row): boolean {
-  return before !== null && before !== rowStamp(row as { version: unknown; draft?: unknown });
+export function pageMoved(before: string | null, row: Readonly<Row>): boolean {
+  return before !== null && before !== rowStamp(row);
+}
+
+/** What the preview column is told of the sections the editor lists, in their order. */
+export function previewSectionsOf(
+  rows: readonly SectionRow[],
+): { id: string; name: string; visible: boolean }[] {
+  return rows.map((row) => ({ id: row.id, name: sectionName(row), visible: row.visible }));
 }

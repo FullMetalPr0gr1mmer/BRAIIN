@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext, Role } from '@/lib/auth/types';
 import { can } from '@/lib/authz/matrix';
 import { SECTION_COPY } from '@/lib/sections/copy';
+import { localizedPath } from '@/lib/i18n';
+import { toPreviewPath } from '@/lib/admin/preview/paths';
 import { pagePath } from '@/lib/seo/entityPaths';
 import type {
   BuiltInLooks,
@@ -63,6 +65,19 @@ const MODES: readonly VisibilityModeKey[] = ['public', 'hidden', 'link', 'passwo
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Whether the live preview column can frame a page's path (Admin v2 E2): R9's preview route
+ * renders it in both languages, exactly the addresses the column builds (pagePreview/model.ts
+ * previewSrc). Otherwise the editor offers no preview, rather than a frame that never loads.
+ */
+export function previewable(path: string | null): boolean {
+  return (
+    path !== null &&
+    toPreviewPath(localizedPath(path, 'en')) !== null &&
+    toPreviewPath(localizedPath(path, 'ar')) !== null
+  );
+}
+
 /** The page as the editor opens on it, or null when the id names no page of the tenant. */
 export async function loadEditorPage(
   sb: SupabaseClient,
@@ -91,6 +106,7 @@ export async function loadEditorPage(
   const slug = String(row['slug'] ?? '').toLowerCase();
   const title = (row['title'] && typeof row['title'] === 'object' ? row['title'] : {}) as Row;
   const mode = (visibility.data as Row | null)?.['mode'];
+  const path = pagePath(slug);
   return {
     id: String(row['id']),
     slug,
@@ -99,7 +115,8 @@ export async function loadEditorPage(
       ar: typeof title['ar'] === 'string' ? title['ar'] : '',
     },
     status: typeof row['status'] === 'string' ? row['status'] : 'draft',
-    path: pagePath(slug),
+    path,
+    previewable: previewable(path),
     visibility: MODES.includes(mode as VisibilityModeKey) ? (mode as VisibilityModeKey) : 'public',
   };
 }

@@ -3,7 +3,7 @@ import type { Role } from '@/lib/auth/types';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { PENDING_EVENT, PUBLISH_EVENT, type PublishEventDetail } from '@/lib/admin/releaseEvents';
 import { toast } from '@/lib/admin/toast';
-import { refusalOf, type ReleaseApi } from './api';
+import { discardChanges, refusalOf, type ReleaseApi } from './api';
 import { buildRows, discardMineWords, savebarCounts, type PendingSummary } from './model';
 import PublishDialog, { type DialogMode } from './PublishDialog';
 import Savebar from './Savebar';
@@ -85,7 +85,7 @@ export default function ReleaseUi({ api, role, inline = false }: ReleaseUiProps)
     try {
       let total = 0;
       for (let round = 0; round < DISCARD_ROUNDS; round += 1) {
-        const result = await api.discard({ scope: 'mine' });
+        const result = await discardChanges(api, { scope: 'mine' });
         total += result.discarded;
         if (!result.more) break;
       }

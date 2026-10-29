@@ -13,10 +13,15 @@
 //     version) in the publish dialog, so its version moved. An editor open on it reads it again,
 //     keeping what was typed since its last save, instead of meeting a "Someone else saved"
 //     conflict on its next save (R12 pre-merge review).
+//   - `admin:drafts-discarded`: pending changes were thrown away in the publish dialog or the
+//     savebar (Admin v2 E2 review). The page editor reads its sections again and reloads its
+//     live preview, which laid them over the page. An open editor's form is not told: its next
+//     save meets R12's `draft-discarded` and says so, as before.
 
 export const PENDING_EVENT = 'admin:pending';
 export const PUBLISH_EVENT = 'admin:publish';
 export const SETTLED_EVENT = 'admin:draft-settled';
+export const DISCARDED_EVENT = 'admin:drafts-discarded';
 
 /**
  * What a write made in release mode adds to its address (R12, R12b): the server's
@@ -100,4 +105,25 @@ export function onSettled(handler: (draftId: string) => void): () => void {
   };
   window.addEventListener(SETTLED_EVENT, listener);
   return () => window.removeEventListener(SETTLED_EVENT, listener);
+}
+
+/** Tell the page editor that pending changes were thrown away (after the server did it). */
+export function announceDiscarded(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(DISCARDED_EVENT));
+}
+
+/**
+ * Listen for any pending change settled or thrown away elsewhere (the publish dialog, the
+ * savebar); returns the unsubscribe. The page editor's live preview follows both (E2).
+ */
+export function onDraftsMoved(handler: () => void): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  const offSettled = onSettled(() => handler());
+  const listener = () => handler();
+  window.addEventListener(DISCARDED_EVENT, listener);
+  return () => {
+    offSettled();
+    window.removeEventListener(DISCARDED_EVENT, listener);
+  };
 }
