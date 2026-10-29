@@ -1,0 +1,39 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminHeader from '@/components/admin/islands/AdminHeader';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+
+export const prerender = false;
+
+// Header (Admin v2 E5, docs/admin-v2/ui.md "### Header"; the prototype's
+// `route('/appearance/header')`): the header's options (theme.edit: Admin, Developer, saved to
+// `site_appearance`) and its menu links (nav.edit: Admin, Content Creator, the navigation
+// table), each part for the role that holds its capability (P-9). A role with neither gets the
+// layout with the refusal and a 403. The island loads both parts from their APIs, which
+// check the same capabilities again. `client:load`: the island IS the page (/admin is exempt
+// from the CWV budgets, CLAUDE.md §6, and gated on bundle size instead).
+
+const session = Astro.locals.session;
+const theme = Boolean(session && can(session.role, 'theme.edit') === 'full');
+const nav = Boolean(session && can(session.role, 'nav.edit') === 'full');
+const allowed = theme || nav;
+if (!allowed) Astro.response.status = 403;
+---
+
+<AdminLayout
+  title="Header"
+  subtitle="Menu items, layout and how the bar behaves over the hero and after scrolling."
+  styles={['header.css']}
+>
+  {
+    allowed && (
+      <a slot="actions" class="btn" href="/" target="_blank" rel="noopener">
+        <Icon name="ext" size={16} />
+        Open the site
+      </a>
+    )
+  }
+  {!allowed ? <Refused /> : <AdminHeader client:load theme={theme} nav={nav} />}
+</AdminLayout>

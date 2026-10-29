@@ -25,6 +25,8 @@ const SLUG_OF = new Map<ResourceConfig, string>(
 const SINGLETON_UI_OF: Partial<Record<ReleaseEntityType, string>> = {
   site_profile: 'profile',
   seo_defaults: 'seo',
+  // Admin v2 E5: the Header screen's form.
+  site_appearance: 'appearance',
 };
 
 /** Where each non-resource type is edited (its screen, which opens on the row itself). */
@@ -35,24 +37,6 @@ const SCREEN_OF: Partial<Record<ReleaseEntityType, string>> = {
   page_visibility: '/admin/visibility',
   // Admin v2 E5: the Header screen edits the header's options.
   site_appearance: '/admin/appearance/header',
-};
-
-/** Words for a type edited by its own island rather than a UI config (Admin v2 E5). */
-const OWN_WORDS: Partial<Record<ReleaseEntityType, Readonly<Record<string, string>>>> = {
-  site_appearance: {
-    logoPosition: 'Logo position',
-    logoSize: 'Logo size',
-    menuAlign: 'Menu alignment',
-    sticky: 'Sticky',
-    hideOnScroll: 'Hide when scrolling down',
-    solidAfterHero: 'Turn solid after the hero',
-    tint: 'Tint over the hero',
-    blur: 'Blur behind the bar',
-    mobileMenu: 'Small screen menu',
-    ctaShow: 'Button',
-    ctaLabel: 'Button words',
-    ctaHref: 'Button link',
-  },
 };
 
 /** Where a pending change of this entity is edited, or null when no screen edits it. */
@@ -93,10 +77,7 @@ function labelsOf(entityType: ReleaseEntityType): ReadonlyMap<string, string> {
   const known = LABELS.get(entityType);
   if (known) return known;
   const entry = RELEASE_REGISTRY[entityType];
-  const byName = new Map<string, string>([
-    ...uiFields(entry).map((f): [string, string] => [f.name, f.label]),
-    ...Object.entries(OWN_WORDS[entityType] ?? {}),
-  ]);
+  const byName = new Map(uiFields(entry).map((f) => [f.name, f.label]));
   const out = new Map<string, string>();
   for (const [key, columns] of Object.entries(entry.fields)) {
     const label = byName.get(key) ?? plainWords(key);
