@@ -503,6 +503,27 @@ under the class, a script-driven motion through `onMotionChange()` — and must 
 to `motion-pause.e2e.ts`. The header switch is the one 2.2.2 control; a surface that
 ignores it reopens this failure without any gate noticing.
 
+
+### 2026-10-29 — Admin v2 E10's Video block: compliant on its own, not under this entry
+
+E10 adds three section types an editor may put on any page, any number a page: a Text block
+and a Gallery (nothing moves) and a **Video**, a still that plays a window of a site film
+(`/media/*.mp4`, EXC-009) while it is on screen, through `MediaFrame` and `clips.ts` like the
+in-view loops above. Left at that, every Video an editor adds would be one more surface under
+this entry, added from the admin with no review. So the block carries **its own pause
+control**, the testimonials carousel's way (the "Compliant, and NOT under this exception"
+list above): a 44 px button over the frame's end corner (`.blk-video__toggle`,
+`src/components/sections/VideoBlock.astro`), named for what pressing it does next ("Pause
+the film" / "Play the film", "إيقاف الفيلم مؤقتًا" / "تشغيل الفيلم"), `hidden` in the HTML and
+shown by `clips.ts` (`wireToggle`) only where the film can play (never under reduced motion,
+with Save-Data, on touch or without JS, where nothing plays). A frame stopped with it plays no
+more, in view or not, until it is pressed again; every other clip frame behaves as before. It
+still stops under `body.motion-paused` (the retained wiring), so a header control, if it
+returns, covers it too. Held by `tests/admin/section-blocks.e2e.ts` (shown once wired, the
+name switching, the video paused and staying paused back in view, hidden under reduced
+motion) and `tests/render/sectionBlocks.spec.ts` (the served button, hidden, in both
+languages; none for a film that cannot play). The scope and expiry of this entry do not change.
+
 ---
 
 ## EXC-008 — Job-application CVs are not virus-scanned
