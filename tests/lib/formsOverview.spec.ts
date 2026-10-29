@@ -226,8 +226,10 @@ describe('the Join form', () => {
 
   it('the consent version is the one the form posts', () => {
     expect(CONSENT_VERSION).toBe(RECRUITMENT_POLICY_VERSION);
+    // Admin v2 E8: the form posts the version its config resolves (the notice's date until the
+    // consent lines are reworded, src/lib/forms/config.ts consentVersion).
     expect(source('src/components/ApplicationForm.astro')).toContain(
-      'value={RECRUITMENT_POLICY_VERSION}',
+      'value={view.policyVersion}',
     );
   });
 });

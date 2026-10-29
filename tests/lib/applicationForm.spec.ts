@@ -196,6 +196,10 @@ describe('applicationKeyToField and the client’s mirror of it', () => {
     expect(applyFieldsFor(undefined)).toEqual([]);
   });
 
+  it('a CV the forms config requires marks the file input (Admin v2 E8)', () => {
+    expect(applyFieldsFor(['cv', 'linkedin'])).toEqual(['cv', 'linkedin']);
+  });
+
   it('the client’s CV rules are the schema’s', () => {
     expect(CV_LIMIT_BYTES).toBe(CV_MAX_BYTES);
     expect([...CV_EXTENSIONS]).toEqual(Object.values(CV_KINDS).map((k) => k.extension));

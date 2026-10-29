@@ -54,9 +54,10 @@ export const APPLY_FIELD_OF_KEY = {
   consentFutureRoles: 'consent_future',
   policyVersion: 'policy_version',
   locale: 'locale',
-  // Admin v2 E8: a CV the forms config requires, refused when none was sent.
-  cv: 'cv',
 } as const;
+
+/** Keys a 422 names that are no schema key: a CV the forms config requires (Admin v2 E8). */
+const APPLY_FILE_FIELDS: Readonly<Record<string, string>> = { cv: 'cv' };
 
 /** CV_MAX_BYTES. */
 export const CV_LIMIT_BYTES = 10 * 1024 * 1024;
@@ -70,6 +71,8 @@ export function applyFieldsFor(keys: unknown): string[] {
   for (const key of keys) {
     if (typeof key === 'string' && Object.hasOwn(APPLY_FIELD_OF_KEY, key)) {
       out.add(APPLY_FIELD_OF_KEY[key as keyof typeof APPLY_FIELD_OF_KEY]);
+    } else if (typeof key === 'string' && Object.hasOwn(APPLY_FILE_FIELDS, key)) {
+      out.add(APPLY_FILE_FIELDS[key]!);
     }
   }
   return [...out];
