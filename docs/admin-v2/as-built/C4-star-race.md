@@ -20,17 +20,22 @@ order, and the last to arrive was shown, an older row (the star off, an old vers
 
 ## The design
 
-Small rules in `src/lib/crm/lateAnswers.ts` (275 lines with their comments, pure, no DOM).
-The islands pass their fetches and setters in, so the press, the bulk write and a lead page's
-write run in unit tests exactly as the islands run them. Their state is three fields (the list:
-the read in flight, a count of writes out, a flag), one promise and a count (a lead's page),
-and one controller (a lead's timeline): nothing grows with use.
+Small rules in `src/lib/crm/lateAnswers.ts` (370 lines with their comments, pure, no DOM).
+The islands pass their fetches and setters in, so the press, the bulk write, a board move and a
+lead page's write run in unit tests exactly as the islands run them. Their state is three
+fields (the list and the board each: the read in flight, a count of writes out, a flag), one
+promise and a count (a lead's page), two controllers (a lead's timeline), and the failed writes
+waiting for the read after them (`Checks`, one per row, emptied by that read): nothing grows
+with use.
 
-**Every row write and queued read has a deadline (`withDeadline`, `ROW_WAIT_MS` = 15 s).**
-`adminFetch` has no timeout of its own, and the rules below hold the list's reads and a lead's
-queue while a write is out, so one request that never answers would freeze the screen. Past the
-deadline the request is aborted and counts as a failure ("The server did not answer in time."),
-which already reads again.
+**Every row write and every list, board or queued read has a deadline (`withDeadline`,
+`ROW_WAIT_MS` = 15 s; a bulk action `BULK_WAIT_MS` = 60 s).** `adminFetch` has no timeout of
+its own, and the rules below hold the list's and the board's reads and a lead's queue while a
+write is out, so one request that never answers would freeze the screen; a read that never
+answered would leave "Checking the list again." and the table's busy state up for good. Past
+the deadline the request is aborted and counts as a failure ("The server did not answer in
+time."), which already reads again. `withDeadline` takes the rule's own signal too (`outer`),
+so a read the rule drops is still aborted.
 
 **The list: a row write never overlaps a list read (`ListWrites`, `pressStar`, `rowWrite`).**
 
@@ -52,16 +57,30 @@ which already reads again.
   the row shows the press saved after all (the PATCH can fail after its update committed);
   "{name} could not be starred. {why}" when it shows the old value; "{name} may not be
   starred: the list could not confirm it. {why}" when that read failed or the row is not on the
-  page read.
+  page read. Each failed press waits in `Checks` under its row, with its own words: a press on
+  one row never clears another row's check or words (`sayFor`), and the read after the writes
+  settles every check waiting (`verdictOf`, shared with the board).
+- The read after a star reads the list only; the KPIs are read on their own counter, which a
+  bulk action moves when it answers (a star changes no KPI).
 - The bulk bar is a row write like the star. The list owns the bulk POST (`postBulk`, passed
-  to the bar as `post`, through `rowWrite`), so the write is counted and answered in one place.
-  `bulkDone` asks for no read itself: the rule does, after every write has answered.
+  to the bar as `post`, through `rowWrite`, with `BULK_WAIT_MS`), so the write is counted and
+  answered in one place. `bulkDone` asks for no read itself: the rule does, after every write
+  has answered. A bulk action the server refused (a 4xx) says why; one with no answer (too
+  slow, the network, a 5xx) is never said to have failed: "{why} The change may still be
+  saving. The list will be read again, so check the rows before you try again." The selection
+  stays, and the read after it shows the rows.
 
 **A lead's page: one thing at a time on the row (`Serial`, `writeInTurn`).**
 
-- Every read and write of the lead's row runs one after another: the mark-read PATCH on
-  opening, the status card's writes, and the read of the row after "Log contact". The row's
-  answers therefore arrive in send order, and the newest sent is the last shown.
+- Every read and write of the lead's row runs one after another: the status card's writes and
+  the read of the row after "Log contact". The row's answers therefore arrive in send order,
+  and the newest sent is the last shown. A queued PATCH takes its version from the row last
+  drawn (a ref every drawn row goes through, `showLead`), not from the state its closure saw:
+  the task before it can answer before React renders.
+- The mark-read PATCH sent on opening is not queued, so it never holds the status card. Only
+  its `read_at` is taken from its answer (the one field it changes; it does not move the
+  version), so its late answer never draws an older row, the star off, over a change made
+  since.
 - `busy` belongs to the queue: on when the first task is queued, off when the last has settled,
   follow-up reads included. The status card's controls that write (the stage's Move to, the
   owner select, the value box, the star, a tag's remove and the tag form's Add button) are
@@ -71,17 +90,23 @@ which already reads again.
 - Any failure reads the lead and its timeline again inside the write's own turn (busy until it
   lands), since the PATCH may have committed: after a 409 the conflict is said and a failed
   read is said too, so a reload is never dropped silently; after any other failure the write's
-  own error stays up.
+  own error stays up, hedged: "This change may not have been saved. {why}" (the read after it
+  may show it saved).
 - The timeline is not on the row and is not queued: its reloads go through `Latest`, so a newer
-  reload aborts the one still out and an older timeline never replaces a newer one.
+  reload aborts the one still out and an older timeline never replaces a newer one. "Show
+  older" (`Latest.more`) is dropped when a reload leaves after it, or lands before it
+  (`Latest.drawn`): its cursor belongs to the list a reload replaces, so appended to the newer
+  first page it would skip or repeat events.
 
-**The board: a failed move reads again.** The stage move is not optimistic: the card moves when
-the PATCH answers. A board read that left before the move and is still out when the move
-answers is aborted and read again (since C4c). A move whose PATCH fails (not a 409) now reads the
-board too, since the PATCH can fail after its update committed (the version then moved, and the
-card's next move would meet a false 409): "{name} may not have moved. {why} Checking the board
-again.", then, once the read lands, "Moved {name} to {stage}." if it moved after all, "{name}
-could not be moved. {why}" if not, or that the board could not confirm it (`moveOutcome`).
+**The board: a move is a row write, as on the list (`ListWrites`, `rowWrite`, `Checks`).** The
+stage move is not optimistic: the card moves when the PATCH answers (`rowWrite`'s `shown`, so a
+saved move alone needs no read). A move aborts the board read in flight and holds the ones asked
+for meanwhile, and the PATCH is bounded, so one that never answers no longer disables every
+"Move to" for good. A move whose PATCH fails reads the board again (a 409 says so; any other
+failure, since the PATCH can fail after its update committed): "{name} may not have moved.
+{why} Checking the board again.", then, once the read lands, "Moved {name} to {stage}." if it
+moved after all, "{name} could not be moved. {why}" if not, or that the board could not confirm
+it (`moveOutcome`, through `verdictOf`). Those words are per card, like the star's.
 
 ## Why this design, not the clock and overlay engine
 
@@ -136,6 +161,53 @@ No React DOM test was added for LS-R6: the unit project has no DOM (no jsdom or 
 in the dependencies, and none is added without approval). Moving the islands' write logic into
 functions the tests drive covers the behaviour; the e2e covers the browser.
 
+## Review 3 (CR1 to CR8, L1 to L3, Info)
+
+Each finding was checked against the code at `32efa21c`. All were real; all are fixed, with no
+change of design: the board now uses the list's rules, and the shared helpers grew instead of
+the islands (`Checks`, `sayFor`, `verdictOf`, `rowWrite`'s `shown`, `withDeadline`'s `outer`,
+`Latest.more` and `drawn`, `BULK_WAIT_MS`, `bulkUnsure`, `changeUnsure`). Nothing skipped.
+
+| Finding | Verdict | Fix | Guarded by |
+| --- | --- | --- | --- |
+| CR1: "Show older" was not coordinated with the timeline's reloads | Real: an older page answering after a reload landed was appended to the new first page with a stale cursor | `Latest.more()` for the older page: `next()` aborts it (a reload left after it), `drawn()` aborts it (a reload out before it landed first); its answer and error are dropped when aborted | "an older page is dropped by a reload that leaves after it", "... when a reload out before it lands first", the timeline guard |
+| CR2: a slow bulk that committed was reported as failed under the 15 s deadline | Real | `BULK_WAIT_MS` (60 s) for the bulk POST; the bar hands the error to the list (`onError(err)`), which says a refusal (4xx) as before and anything else with `bulkUnsure`: it may still be saving, the list is read again, check the rows; the selection stays (it was only cleared on success) | "a bulk action gets longer than one row", "a bulk action with no answer is never said to have failed", the bulk guard |
+| CR3: a queued versioned PATCH took `lead.version` from its closure | Real: the task before it can answer before React renders | Every drawn row goes through `showLead`, which keeps it in a ref; `send` reads `row.current.version` | the lead page guard (one `setLead`, the version from the ref) |
+| CR4: the mark-read on opening drove `busy`, disabling the status card up to 15 s | Real | Not queued; only its `read_at` is taken from its answer, so it never draws an older row (the mark-read changes nothing else and never moves the version) | the lead page guard; e2e rewritten: the star is pressed while the mark-read is held and stays once it lands |
+| CR5, L2: a board move's PATCH was unbounded; one hung PATCH froze every move | Real | The move is a `rowWrite` (bounded), through `ListWrites` | "a board move (shown when saved) ...", the board guard |
+| CR6: a new star press cleared another row's pending check and words; the board's move check the same | Real | `Checks` keyed by row and words per row (`sayFor`) on the list and the board; a press or move drops only its own row's | "a write on one row never clears another row's check", "the words are per row", the star and board guards |
+| CR7: the board re-implemented `ListWrites` and the star's check | Real | The board reads and moves through `ListWrites` and `rowWrite` (`shown`: a saved move needs no read); one verdict helper, `verdictOf`, under `starOutcome` and `moveOutcome` | "one verdict for a star and a move", the board guard |
+| CR8: a star's re-read bumped the shared counter, so the KPIs were read again | Real | The list reads on `relist`, the KPIs on `recount`; `reread` moves `relist` only; `postBulk` moves `recount` once it answers | the list guard |
+| L1: source guards passed when the guard was missing (`indexOf` -1) | Real: mutants M24 (the list's catch unguarded) and M30 (the timeline's catch unguarded) survived | `between` and `inOrder` assert every marker is found, in order; every ordering guard uses them | see the red/green table: both mutants pass review 2's spec on review 2's head and fail this one |
+| L3: a hung re-read left "Checking the list again." and `aria-busy` up for good | Real | The list's and the board's reads go through `withDeadline` with the rule's signal as `outer`; a timeout lands as a failed read, which settles the words ("could not confirm it") and says "The server did not answer in time." | "a read the rule drops (outer) aborts the request", "a read that never answers lets go at the deadline with an outer signal too", the list and board guards |
+| Info: a lead page's non-409 failure was not hedged | Real: the read after it may show the change applied | `changeUnsure`: "This change may not have been saved. {why}" | "a lead page's failed change is hedged", the lead page guard |
+
+**Red/green, review 3** (`scratchpad/lsmut3/run.sh`, not committed: a `git archive` copy of
+the head, each variant applied there, the spec run, the file restored):
+
+| Variant | Result |
+| --- | --- |
+| this branch | 0 failed, 56 passed |
+| CR1: `next()` keeps the older page / `drawn()` does nothing / `olderEvents` off the rule | 1 failed each |
+| CR2: the bulk on the row deadline / every bulk failure said as failed / the words say "failed" | 1 failed each |
+| CR3: the version from the closure | 1 failed |
+| CR4: the mark-read's whole answer drawn / the mark-read queued again | 1 failed each |
+| CR5: `rowWrite` without its deadline | 2 failed |
+| CR5, CR6, CR7: the board as at `32efa21c` | 2 failed |
+| CR6: a press clears every row's words / `Checks.drop` clears all / a move clears every card's words | 1 failed each |
+| CR7: `rowWrite` ignores `shown` | 1 failed |
+| CR7: `verdictOf` always "refused" | 3 failed |
+| CR8: the KPIs on the list's counter / `reread` moves both counters | 1 failed each |
+| L1: M24 and M30 on review 2's head, review 2's spec | 0 failed, 44 passed each (they survived) |
+| L1: M24 and M30 on this head, this spec | 1 failed each |
+| L3: `withDeadline` ignores `outer` / the list's read unbounded | 1 failed each |
+| Info: the failure not hedged | 1 failed |
+
+C4c's board guard in `tests/lib/leadsScreens.spec.ts` ("reads again after a move when a filter
+or search read was already in flight") pinned the board's old marker (`reading.current`); it now
+checks that the board reads and moves through the rule (30 passed; with the board as at
+`32efa21c`, 1 failed).
+
 ## Departures
 
 - **A failed star is drawn back at once, and the read after it decides.** The brief's first
@@ -143,22 +215,24 @@ functions the tests drive covers the behaviour; the e2e covers the browser.
   pressed when that read fails too (often, when the cause is the network). Drawn back, the
   screen shows what most failures leave stored, the words say it may not have saved, and the
   read corrects both when it lands.
-- **A press on another row clears a failed press's words.** One line of star words, as on
-  `main`; the read after the writes still lands and the screen ends on what is stored.
+- **The star's and the board's failure words are one line per row** (review 3, CR6), not one
+  line for the screen as on `main`: a press on another row keeps them, and the read after the
+  writes settles them all.
 - **A timed-out write may still commit after the read that follows it.** The deadline aborts
   the browser's request, not the server's work. Fifteen seconds is far past a normal PATCH
   (well under a second), so this is rare; the screen then shows the last read until the next.
-- **The read after a race also reads the KPIs.** The list's one reload counter drives both
-  reads, as the bulk action already did; one extra summary POST after a race.
-- **A lead's page is busy while the mark-read is out on opening** (one PATCH, usually well
-  under a second, at most the deadline). The status card's controls are disabled for that time;
-  a press waits for them to enable, and nothing is lost.
+  A bulk action gets sixty, and its words say it may still be saving.
+- **A held list read waits at most a bulk action's deadline** (60 s) while a bulk is out; the
+  table shows busy meanwhile. A bulk action normally answers in well under a second.
 - **"Log contact" itself is not queued** (its POST belongs to the contact card and is not
   versioned: `logContact` never moves the version); the read of the row after it is queued.
+- **The mark-read is not queued** (review 3, CR4): it changes `read_at` only, and only
+  `read_at` is taken from its answer, so it needs no turn and holds no control.
 
 ## Tests
 
-`tests/lib/lateAnswers.spec.ts`, 44 tests:
+`tests/lib/lateAnswers.spec.ts`, 56 tests (44 after review 2; review 3's twelve are listed
+under "Review 3" below):
 
 - **ListWrites (14):** the R13 order (a read out when the star is pressed is aborted and read
   again after); a single press needs no read, nor two that did not overlap; two overlapping
@@ -177,22 +251,24 @@ functions the tests drive covers the behaviour; the e2e covers the browser.
   (saved, failed, timed out); a press while a bulk action is out reads once, after both.
 - **The star's words (3):** pending, then settled four ways; no em or en dash (P-12).
 - **moveOutcome (3):** moved after all, not moved, not confirmed.
-- **Serial and writeInTurn (6):** the mark-read and a star (the star leaves only after the
-  mark-read answered, answers shown in send order); a 409 (busy until its reload lands, the
+- **Serial and writeInTurn (6):** a read of the row and a star (the star leaves only after the
+  read answered, answers shown in send order); a 409 (busy until its reload lands, the
   next change leaves with the new version, the reload's failure said); any other failure reads
   again quietly; a write that never answers frees the queue at the deadline; a failed task does
   not stop the queue; busy goes off once.
 - **Latest (1):** a newer reload aborts the older.
-- **The islands (7, source guards):** the rules are built once; the list reads through the rule
-  (held before the fetch, an aborted answer dropped before rows or errors, a failed press
-  settled on both paths); the star and the bulk action go through `pressStar` and `rowWrite`
-  with their signal, the bar has no `adminFetch` and `bulkDone` asks for no read; a lead's page
-  queues and bounds the row's read, write and mark-read and never sets `busy` itself; it reads
-  again after a 409 (said) and any failure (quiet); its timeline draws only the newest reload;
-  the board reads again after a failed move.
+- **The islands (8, source guards, rewritten in review 3):** every guard now fails when its
+  marker is missing (`between` and `inOrder` assert each marker is found, in order; review 2's
+  `indexOf(a) < indexOf(b)` passed when `a` was gone, so two removed guards survived). The rules
+  are built once (the list, the board, a lead's page); the list reads through the rule, bounded,
+  on its own counter; a star press keeps the other rows' checks; a bulk action has its longer
+  deadline and hedged words; a lead's page queues the row's read and write, takes the version
+  from the row last drawn, and leaves the mark-read out of the queue taking only `read_at`; it
+  reads again after any failure, hedged; its timeline guards reloads and older pages; the board
+  moves through the rule with a check per card.
 
-**Red/green** (a local script, not committed: each variant applied, the spec run, the variant
-undone):
+**Red/green, review 2** (a local script, not committed: each variant applied, the spec run, the
+variant undone):
 
 | Variant | Result |
 | --- | --- |
@@ -221,23 +297,29 @@ their cases are all still in the spec.
   answer is then released (its `route.fulfill` meets an aborted request and is caught), the star
   stays pressed, and the database says starred. On `main` it is red because no read follows the
   star: the wait for that read times out before the held answer is released.
-- "a lead: the star waits for the mark-read sent on opening, and stays (C4 star race)". A lead
-  added by hand is read at once, so the test marks it unread through the API (`read: false`,
-  200, `read_at` null). The page's mark-read PATCH (`{ read: true }`) is fetched from the server
-  at once and its answer held; the `Starred` switch is disabled and reads `aria-checked="false"`.
-  Released, the switch enables; pressed, its PATCH (`isStarred: true`) answers 200 and the
-  switch reads `aria-checked="true"`; the database says starred and read. On `main` it is red:
-  the switch is pressable while the mark-read is out (`toBeDisabled` fails), which is the order
-  in which the mark-read's late answer turned the star off again.
+- "a lead: a star pressed while the mark-read is out stays (C4 star race)" (rewritten in
+  review 3 for CR4). A lead added by hand is read at once, so the test marks it unread through
+  the API (`read: false`, 200, `read_at` null). The page's mark-read PATCH (`{ read: true }`) is
+  fetched from the server at once and its answer held. The `Starred` switch
+  (`role="switch"`, labelled by its "Starred" span, in LeadStatusCard) is enabled and reads
+  `aria-checked="false"`; pressed, its PATCH (`isStarred: true`, not intercepted: the route
+  continues every request but the mark-read) answers 200, and the switch reads
+  `aria-checked="true"` and is enabled again. The held mark-read is then released; once its
+  response has finished in the browser and a quarter second has passed for its JSON to be
+  drawn, the switch still reads `aria-checked="true"`; the database says starred and read. On
+  `main` it is red at that last look (the late answer drew the star off); at review 2's head
+  (`32efa21c`) it is red at `toBeEnabled` (the queue held the switch).
 
 ## Sizes
 
-`npm run size` with the CI environment: public route JS 26.07 kB (limit 100); admin bundle sum
-395.51 kB (limit 400; `main` 394.4, review 1's head 394.81: the deadline, the star's words and
-the board's re-read cost 0.7 kB); the leads screens' eager graphs 160.1 kB each (limit 300;
-review 1's head 159.4); admin chunk plan holds. The sum is 4.5 kB under its tripwire; E2 raises
-it to 450 kB (owner decision of 2026-10-28). `lateAnswers.ts` is 275 lines, about half of them
-comments; the islands' diff against `main` is about 250 changed lines across four files.
+`npm run size` with the CI environment, after review 3: public route JS 26.07 kB (limit 100);
+admin bundle sum 395.97 kB (limit 400; `main` 394.4, review 1's head 394.81, review 2's head
+395.51: review 3's per-row checks, the board on the shared rules and the bounded reads cost
+0.46 kB); the leads screens' eager graphs 160.5 kB each (limit 300; review 2's head 160.1);
+admin chunk plan holds. The sum is 4.03 kB under its tripwire, so the owner's 450 kB raise was
+not needed here (E2 applies it). `lateAnswers.ts` is 370 lines, about half of them comments; the
+islands' diff against `main` is about 395 changed lines across four files (310 added, 85
+removed).
 
 ## Owner questions
 
@@ -246,6 +328,8 @@ None.
 ## PII
 
 Nothing new reaches a row or the model: the rules hold counts, a flag, controllers and one
-promise, never a row or a field. A failed press keeps the lead's id, the name the list already
-shows and the error's words until the next read. The list still reads the safe row shape only
+promise, never a row or a field. A failed press or move keeps the lead's id, the name the
+screen already shows and the error's words until the next read. A lead's page keeps the row it
+already shows in a ref as well (`showLead`), the same safe and pipeline columns, never a
+revealed contact detail. The list still reads the safe row shape only
 (`LEAD_LIST_FIELDS`); no contact detail, budget or note is read or held.

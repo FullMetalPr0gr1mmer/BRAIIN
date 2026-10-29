@@ -519,16 +519,16 @@ describe('moveOutcome (the board, a failed move, LS-R3)', () => {
 });
 
 describe("Serial and writeInTurn (a lead's page)", () => {
-  it('the mark-read on opening and a star: the star leaves only once the mark-read answered', async () => {
+  it('a read of the row and a star: the star leaves only once the read answered', async () => {
     const busy: boolean[] = [];
     const q = new Serial((on) => busy.push(on));
     const sent: string[] = [];
     const shown: string[] = [];
-    const markRead = deferred<string>();
+    const rowRead = deferred<string>();
     const star = deferred<string>();
     const a = q.run(async () => {
-      sent.push('mark-read');
-      shown.push(await markRead.promise);
+      sent.push('read');
+      shown.push(await rowRead.promise);
     });
     const b = writeInTurn(q, {
       send: () => {
@@ -540,13 +540,13 @@ describe("Serial and writeInTurn (a lead's page)", () => {
       reread: async () => undefined,
     });
     await tick();
-    expect(sent).toEqual(['mark-read']);
+    expect(sent).toEqual(['read']);
     star.resolve('starred'); // even an answer ready first is not shown first
     await tick();
     expect(shown).toEqual([]);
-    markRead.resolve('read');
+    rowRead.resolve('read');
     await Promise.all([a, b]);
-    expect(sent).toEqual(['mark-read', 'star']);
+    expect(sent).toEqual(['read', 'star']);
     expect(shown).toEqual(['read', 'starred']); // the newest sent is the last shown
     expect(busy).toEqual([true, false]);
   });
