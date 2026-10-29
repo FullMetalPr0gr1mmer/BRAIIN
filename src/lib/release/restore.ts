@@ -16,6 +16,7 @@ import { serviceClient } from '@/lib/supabase/server';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { mayRead, STAGE_ANY_CAP } from './draftEndpoints';
 import { writeDrafts } from './drafts';
+import { historyEntityId } from './history';
 import { RELEASE_REGISTRY } from './registry';
 import { asOfTargets, readAsOf } from './asOf';
 import { planRestore, type PlannedChange, type RestorePlan } from './revert';
@@ -301,12 +302,14 @@ export async function restoreSnapshot(ctx: Ctx<HistoryRestoreRequest>): Promise<
   if (entry.entityType === 'team_member') {
     return json({ ok: false, error: 'validation', detail: RESTORE_COPY.noHistory }, 422);
   }
+  // A singleton (the identity, the SEO defaults) is the session's own site (R14-prep).
+  const entityId = historyEntityId(auth, entry, input.entityId);
   const { data, error } = await sb
     .from('content_versions')
     .select('seq,snapshot,release_id')
     .eq('tenant_id', auth.tenantId)
     .eq('entity_type', entry.entityType)
-    .eq('entity_id', input.entityId)
+    .eq('entity_id', entityId)
     .eq('seq', input.seq)
     .maybeSingle();
   if (error) throw new Error(`read history: ${error.message}`);
@@ -319,7 +322,7 @@ export async function restoreSnapshot(ctx: Ctx<HistoryRestoreRequest>): Promise<
   const plan = await planRestore(
     sb,
     auth,
-    [{ entry, entityId: input.entityId, before: image as Row, existsNow: true }],
+    [{ entry, entityId, before: image as Row, existsNow: true }],
     { budget: RESTORE_PLAN_BUDGET },
   );
   const refused = restoreRefusal(plan);
@@ -338,7 +341,7 @@ export async function restoreSnapshot(ctx: Ctx<HistoryRestoreRequest>): Promise<
   ctx.audit({
     action: `${entry.entityType}.history_restore`,
     entityType: entry.entityType,
-    entityId: input.entityId,
+    entityId,
     detail: { seq: input.seq, ...(number ? { number } : {}), op: plan.changes[0]!.op },
   });
   return { release, scope: 'item', staged, kept: plan.kept, marked } satisfies RestoreResult;

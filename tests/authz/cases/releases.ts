@@ -209,8 +209,37 @@ const asOf = (entityType: string, before: Record<string, unknown>) => ({
   total: 1,
   entities: [{ entity_type: entityType, entity_id: UUID, before, exists_now: true, page_id: null }],
 });
-const staged = (entityType: string) => [
-  { action: 'put', draft_id: UUID, entity_type: entityType, entity_id: UUID, version: 1 },
+/** A row standing for a snapshot and its live row at once, the snapshot's columns differing. */
+const restorable = (live: Record<string, unknown>, before: Record<string, unknown>) => ({
+  ...VERSION_ROW,
+  ...live,
+  snapshot: { ...live, ...before },
+});
+const OLD = { en: 'Before', ar: 'قبل' };
+// R14-prep's three: the identity and the SEO defaults are keyed by the tenant (no id); entity
+// SEO by its row's own id.
+const PROFILE_VERSION = restorable(
+  { tenant_id: TENANT, version: 1, brand_name: VALID_BILINGUAL },
+  { brand_name: OLD },
+);
+const DEFAULTS_VERSION = restorable(
+  { tenant_id: TENANT, version: 1, robots_directives: 'index,follow' },
+  { robots_directives: 'noindex,nofollow' },
+);
+const ENTITY_SEO_VERSION = restorable(
+  {
+    id: UUID,
+    tenant_id: TENANT,
+    version: 1,
+    entity_type: 'service',
+    entity_id: UUID,
+    meta_title: VALID_BILINGUAL,
+    meta_description: VALID_BILINGUAL,
+  },
+  { meta_title: OLD },
+);
+const staged = (entityType: string, entityId = UUID) => [
+  { action: 'put', draft_id: UUID, entity_type: entityType, entity_id: entityId, version: 1 },
 ];
 
 const versions: readonly Case[] = [
@@ -315,6 +344,67 @@ const versions: readonly Case[] = [
     body: { entityType: 'service', entityId: UUID, seq: 1 },
     allow: ['admin', 'content_creator', 'seo'],
     row: VERSION_ROW,
+  },
+  // R14-prep: the two singletons name no entity (the session's tenant is read instead, so the
+  // other_tenant sweep below holds every query to the caller's own site), and entity SEO.
+  {
+    name: 'history: the public identity (no id)',
+    load: () => import('@/pages/api/admin/history/index'),
+    method: 'GET',
+    url: '/api/admin/history?entityType=site_profile',
+    allow: ['admin', 'developer'],
+    row: VERSION_ROW,
+  },
+  {
+    name: 'history: the SEO defaults (no id)',
+    load: () => import('@/pages/api/admin/history/index'),
+    method: 'GET',
+    url: '/api/admin/history?entityType=seo_defaults',
+    allow: ['admin', 'seo'],
+    row: VERSION_ROW,
+  },
+  {
+    name: "history: a page's search settings",
+    load: () => import('@/pages/api/admin/history/index'),
+    method: 'GET',
+    url: `/api/admin/history?entityType=entity_seo&entityId=${UUID}`,
+    allow: ['admin', 'content_creator', 'seo'],
+    row: VERSION_ROW,
+  },
+  {
+    name: 'history restore: the public identity (no id)',
+    load: () => import('@/pages/api/admin/history/restore'),
+    method: 'POST',
+    url: '/api/admin/history/restore',
+    body: { entityType: 'site_profile', seq: 1 },
+    allow: ['admin', 'developer'],
+    releases: true,
+    row: PROFILE_VERSION,
+    rpcs: { write_drafts: staged('site_profile', TENANT) },
+  },
+  {
+    name: 'history restore: the SEO defaults (no id)',
+    load: () => import('@/pages/api/admin/history/restore'),
+    method: 'POST',
+    url: '/api/admin/history/restore',
+    body: { entityType: 'seo_defaults', seq: 1 },
+    allow: ['admin', 'seo'],
+    releases: true,
+    row: DEFAULTS_VERSION,
+    rpcs: { write_drafts: staged('seo_defaults', TENANT) },
+  },
+  {
+    // A Content Creator reads a page's search settings (view) but cannot publish them: the
+    // restore's per-change gate refuses it (P-2).
+    name: "history restore: a page's search settings",
+    load: () => import('@/pages/api/admin/history/restore'),
+    method: 'POST',
+    url: '/api/admin/history/restore',
+    body: { entityType: 'entity_seo', entityId: UUID, seq: 1 },
+    allow: ['admin', 'seo'],
+    releases: true,
+    row: ENTITY_SEO_VERSION,
+    rpcs: { write_drafts: staged('entity_seo') },
   },
   {
     // A rollback publishes a restore's changes of one version, as the restore left them (its

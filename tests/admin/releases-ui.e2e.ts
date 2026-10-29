@@ -9,7 +9,14 @@ import {
   type SavebarCounts,
 } from '@/components/admin/screens/release/model';
 import { sampleReleaseApi } from '@/components/admin/screens/release/sampleApi';
-import { SKIP_REASON, STAFF_ROLES, authFile, staffEnv } from './staff';
+import {
+  RELEASES_OFF_ONLY,
+  SKIP_REASON,
+  STAFF_ROLES,
+  authFile,
+  releasesOn,
+  staffEnv,
+} from './staff';
 
 // Release UX I (Admin v2 R12) in a real browser, for every role.
 //
@@ -86,6 +93,8 @@ async function firstServiceEditor(page: Page): Promise<string> {
 for (const role of STAFF_ROLES) {
   test.describe(`releases off, as ${role}`, () => {
     test.use({ storageState: authFile(role) });
+    // The release-mode rehearsal (Admin v2 R14-prep): this half is what releases off looks like.
+    test.skip(releasesOn(), RELEASES_OFF_ONLY);
 
     test('no screen draws the savebar, asks for pending changes or marks one', async ({ page }) => {
       const asked: string[] = [];

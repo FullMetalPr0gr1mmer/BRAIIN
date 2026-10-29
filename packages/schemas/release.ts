@@ -943,25 +943,53 @@ export const VersionsQuerySchema = z
 export const RestoreVersionRequestSchema = z.object({ pageId: Uuid.optional() }).strict();
 export type RestoreVersionRequest = z.infer<typeof RestoreVersionRequestSchema>;
 
+/**
+ * The per-tenant singletons of the registry (key `tenant_id`): their history is keyed by the
+ * tenant (app.tg_snapshot_singleton, 0038), so a history read or restore names none and the
+ * server reads the session's tenant (Admin v2 R14-prep). tests/lib/historySingletons.spec.ts
+ * holds this equal to the registry's tenant-keyed entries.
+ */
+export const SINGLETON_ENTITY_TYPES = ['site_profile', 'seo_defaults'] as const;
+
+/** A singleton names no entity (the server reads the tenant); every other type names one. */
+function entityIdRule(
+  value: { entityType: ReleaseEntityType; entityId?: string | undefined },
+  ctx: z.RefinementCtx,
+) {
+  const singleton = (SINGLETON_ENTITY_TYPES as readonly string[]).includes(value.entityType);
+  if (singleton && value.entityId !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['entityId'],
+      message: 'The site’s own settings are named by the site, not by an id.',
+    });
+  }
+  if (!singleton && value.entityId === undefined) {
+    ctx.addIssue({ code: 'custom', path: ['entityId'], message: 'Which item?' });
+  }
+}
+
 /** One entity's history: its own snapshots, or (a page) every version that touched it. */
 export const HistoryQuerySchema = z
   .object({
     entityType: ReleaseEntityTypeSchema,
-    entityId: Uuid,
+    entityId: Uuid.optional(),
     scope: z.enum(['item', 'page']).default('item'),
     before: z.coerce.number().int().min(2).max(1_000_000_000).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine(entityIdRule);
 export type HistoryQuery = z.infer<typeof HistoryQuerySchema>;
 
 /** Restoring one snapshot of one entity. */
 export const HistoryRestoreRequestSchema = z
   .object({
     entityType: ReleaseEntityTypeSchema,
-    entityId: Uuid,
+    entityId: Uuid.optional(),
     seq: z.number().int().min(1).max(1_000_000_000),
   })
-  .strict();
+  .strict()
+  .superRefine(entityIdRule);
 export type HistoryRestoreRequest = z.infer<typeof HistoryRestoreRequestSchema>;
 
 /** Why one entity stops a restore, or is left as it is. */

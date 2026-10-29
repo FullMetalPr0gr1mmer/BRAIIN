@@ -122,6 +122,25 @@ export function staffEnv(
 export const SKIP_REASON =
   'needs the e2e job: a LOCAL seeded Supabase, its service key, and a loopback preview built against it';
 
+/**
+ * The release-mode rehearsal (Admin v2 R14-prep; .github/workflows/releases-rehearsal.yml): the
+ * whole suite with releases switched ON for the e2e tenant (tests/admin/releases.setup.ts runs
+ * `app.enable_releases` after the sample rows). Unset in the required e2e job, where releases
+ * stay off as in production until R14.
+ */
+export function releasesOn(env: Record<string, string | undefined> = process.env): boolean {
+  return env['E2E_RELEASES'] === 'on';
+}
+
+/**
+ * Why a spec written for releases off skips in the rehearsal: its saves go live at once, or it
+ * asserts what releases off looks like. tests/admin/releases-mode.e2e.ts drives the release
+ * path end to end instead; R14 converts each of these to release mode before the switch-on
+ * makes it the default (docs/admin-v2/as-built/R14-prep.md lists them).
+ */
+export const RELEASES_OFF_ONLY =
+  'written for releases off (a save goes live at once, or the releases-off screens); the release-mode rehearsal covers this through tests/admin/releases-mode.e2e.ts until R14 converts it';
+
 /** The service-role client of the local stack (never a hosted one: see staffEnv). */
 function adminClient(env: StaffEnv) {
   return createClient(env.url, env.serviceKey, {
