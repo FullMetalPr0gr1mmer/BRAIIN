@@ -389,3 +389,7 @@ screen already shows and the error's words until the next read. A lead's page ke
 already shows in a ref as well (`showLead`), the same safe and pipeline columns, never a
 revealed contact detail. The list still reads the safe row shape only
 (`LEAD_LIST_FIELDS`); no contact detail, budget or note is read or held.
+
+## Merge train: the admin sum tripwire
+
+Merged with `main` after E2 (#118) and R14-prep (#119), the size-limit sum of the admin bundle is 400.78 KB, 0.78 KB over the 400 KB tripwire. Per the owner's decision of 2026-10-28 (the slice whose build first crosses it raises it), this PR raises it to 450 KB in `.size-limit.json`, with the CLAUDE.md §2 F4 amendment, the README's O-15 line and the deviations register updated. The binding budget is unchanged: each admin screen's eager graph at most 300 KB (`scripts/admin-bundle.mjs`; the largest is 208.6 KB).
