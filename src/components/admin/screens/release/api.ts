@@ -1,5 +1,5 @@
 import { AdminApiError, adminFetch } from '@/lib/admin/client';
-import { announceSettled } from '@/lib/admin/releaseEvents';
+import { announceDiscarded, announceSettled } from '@/lib/admin/releaseEvents';
 import type {
   CompareResult,
   PublishResult,
@@ -66,6 +66,20 @@ export async function settleChange(
 ): Promise<void> {
   await api.resolve(draftId, { version, [choice]: [...columns] });
   announceSettled(draftId);
+}
+
+/**
+ * The dialog's Discard and the savebar's Discard my changes: throw the changes away, then tell
+ * the page editor (E2 review), whose live preview laid them over the page and whose sections
+ * still name them. Nothing is announced when the discard is refused (it throws to the caller).
+ */
+export async function discardChanges(
+  api: Pick<ReleaseApi, 'discard'>,
+  request: Parameters<ReleaseApi['discard']>[0],
+): Promise<{ discarded: number; more?: boolean }> {
+  const result = await api.discard(request);
+  announceDiscarded();
+  return result;
 }
 
 /** An AdminApiError as the dialog reads it; anything else is a refusal with no status. */

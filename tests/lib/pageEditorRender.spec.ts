@@ -24,6 +24,7 @@ const PAGE = {
   title: { en: 'About', ar: 'من نحن' },
   status: 'published',
   path: '/about',
+  previewable: true,
   visibility: 'public' as const,
 };
 const SEO: SeoPanelSetup = {
@@ -86,8 +87,41 @@ describe('the page editor’s first paint, per role', () => {
   it('a page not open to everyone says so beside its status; a page no route shows has no Open', () => {
     const hidden = editor('admin', { visibility: 'password' });
     expect(hidden).toContain('data-tone="warn">Password</span>');
-    const custom = editor('admin', { path: null, slug: 'custom' });
+    const custom = editor('admin', { path: null, previewable: false, slug: 'custom' });
     expect(custom).not.toContain('Open page');
+  });
+
+  it('Admin and Content Creator: the live preview column, its frame loaded only after hydration (E2)', () => {
+    for (const role of ['admin', 'content_creator'] as const) {
+      const html = editor(role);
+      expect(html, role).toContain('<section class="pe__preview" aria-labelledby="pe-preview-h">');
+      expect(html, role).toContain('<h2 id="pe-preview-h" class="pe__h">Live preview</h2>');
+      // Releases are off at first paint (the list answer decides): each save is live.
+      expect(html, role).toContain('This is the page as visitors see it.');
+      // The narrow screens' switch: the fields or the preview.
+      expect(html, role).toContain('<div class="pe__cols" data-view="edit">');
+      expect(html, role).toMatch(/<legend class="visually-hidden">Show<\/legend>/);
+      expect(text(html), role).toMatch(/Edit\s+Preview/);
+      // No frame in the server's HTML: it is mounted once the preview is on screen.
+      expect(html, role).not.toContain('<iframe');
+      expect(html, role).not.toContain('Loading the preview');
+    }
+  });
+
+  it('SEO: no preview column; a page no route shows: a note, no switch', () => {
+    expect(editor('seo')).not.toContain('Live preview');
+    const custom = editor('admin', { path: null, previewable: false, slug: 'custom' });
+    expect(custom).toContain('No address of the site shows this page yet');
+    expect(custom).toContain('<div class="pe__cols">');
+    expect(custom).not.toMatch(/<legend class="visually-hidden">Show<\/legend>/);
+  });
+
+  it('a page whose address the preview does not render: Open page, a note, no switch (E2 review CR6)', () => {
+    const html = editor('admin', { path: '/rss.xml', previewable: false });
+    expect(html).toContain('Open page');
+    expect(html).toContain('The preview cannot show this page yet.');
+    expect(html).toContain('<div class="pe__cols">');
+    expect(html).not.toMatch(/<legend class="visually-hidden">Show<\/legend>/);
   });
 
   it('no style attribute, no repeated id, no dash in the words (CSP, axe, P-12)', () => {

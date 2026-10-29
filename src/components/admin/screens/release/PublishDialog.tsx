@@ -11,7 +11,13 @@ import {
   type PublishResult,
   type ReleaseCheck,
 } from '@schemas/release';
-import { refusalOf, settleChange, type ReleaseApi, type ReleaseRefusal } from './api';
+import {
+  discardChanges,
+  refusalOf,
+  settleChange,
+  type ReleaseApi,
+  type ReleaseRefusal,
+} from './api';
 import { CompareRows } from './CompareRows';
 import {
   AREA_WORDS,
@@ -337,7 +343,8 @@ export default function PublishDialog({
     setWorking(true);
     setNotice('');
     try {
-      const result = await api.discard({ items: selection });
+      // The page editor then reads its sections again and reloads its preview (E2).
+      const result = await discardChanges(api, { items: selection });
       onChanged();
       toast(
         `${result.discarded} unpublished ${result.discarded === 1 ? 'change' : 'changes'} thrown away.`,

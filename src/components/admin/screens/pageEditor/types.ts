@@ -36,6 +36,11 @@ export interface PageEditorPage {
   status: string;
   /** The English public path, or null when no route renders the page. */
   path: string | null;
+  /**
+   * Whether the live preview (R9's route) renders that path in English and Arabic (E2): the
+   * server decides it with R9's own map, which the editor's first load does not carry.
+   */
+  previewable: boolean;
   visibility: VisibilityModeKey;
 }
 
