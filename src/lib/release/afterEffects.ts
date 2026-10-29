@@ -1,3 +1,4 @@
+import { env as workerEnv } from 'cloudflare:workers';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ApplyResult, PurgeStatus } from '@schemas/release';
 import type { AuthContext } from '@/lib/auth/types';
@@ -6,7 +7,10 @@ import { syncRedirectsOfTenant } from '@/lib/admin/redirectSync';
 import { rebuildVisibilitySnapshot } from '@/lib/admin/visibilitySync';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { COLLAPSE_TAG, purgeTags, type PurgeOptions } from '@/lib/http/purge';
+import { CONTACT_KEYS, contactFromRow } from '@/lib/maintenance/contact';
+import { refreshMaintenanceContact } from '@/lib/maintenance/refresh';
 import { serviceClient } from '@/lib/supabase/server';
+import { jsonEqual } from './deepEqual';
 import { liveDb } from './overlayDb';
 import { releaseTags, type SlugLookup, type SlugTable } from './tags';
 
@@ -20,7 +24,10 @@ import { releaseTags, type SlugLookup, type SlugTable } from './tags';
 //      snapshot when it changed page visibility or renamed or removed a page (the snapshot
 //      names pages by slug, so a renamed hidden page would otherwise be public at the edge
 //      until the daily re-sync). Whoever published, the rebuild reads the whole tenant: a
-//      Content Creator's rename moves a snapshot they cannot edit.
+//      Content Creator's rename moves a snapshot they cannot edit. And (R14-prep, R7's hand-off
+//      from U9) the maintenance page's contact buttons when the release changed the identity's
+//      brand, e-mail or WhatsApp number while maintenance is on, as an identity save does at once
+//      (src/lib/maintenance/refresh.ts: the edge's value first, nothing more while it says off).
 //   2. The purge (src/lib/http/purge.ts) of the release's tags (src/lib/release/tags.ts).
 //   3. The outcome on the release (`record_release_purge`, 0051): its status, its tags, and for
 //      a failure when the minute cron tries again (src/lib/cron/releases.ts).
@@ -38,17 +45,34 @@ type Item = ApplyResult['items'][number];
 /** Attempts at a release's purge before the cron gives up (0103's claim holds the same). */
 export const RELEASE_PURGE_MAX_ATTEMPTS = 10;
 
-/** Which edge snapshots a release moves; every one when its items are not known. */
-export function snapshotNeeds(items: readonly Item[] | null): {
+/** What a release owes the edge after it goes live. */
+export interface SnapshotNeeds {
   redirects: boolean;
   visibility: boolean;
-} {
-  if (items === null) return { redirects: true, visibility: true };
+  /**
+   * The release changed the identity's contact columns (or its items are not known): the
+   * maintenance page's buttons follow while maintenance is on. `row` is the identity as the
+   * release left it (its after-image), null when not known (read then).
+   */
+  maintenance?: { row: Record<string, unknown> | null };
+}
+
+/** Which edge snapshots a release moves; every one when its items are not known. */
+export function snapshotNeeds(items: readonly Item[] | null): SnapshotNeeds {
+  if (items === null) return { redirects: true, visibility: true, maintenance: { row: null } };
   let redirects = false;
   let visibility = false;
+  let maintenance: SnapshotNeeds['maintenance'];
   for (const item of items) {
     if (item.entity_type === 'redirect') redirects = true;
     if (item.entity_type === 'page_visibility') visibility = true;
+    if (item.entity_type === 'site_profile') {
+      const before = 'before' in item ? item.before : null;
+      const after = 'after' in item ? item.after : null;
+      if (CONTACT_KEYS.some((key) => !jsonEqual(before?.[key], after?.[key]))) {
+        maintenance = { row: after ?? null };
+      }
+    }
     if (item.entity_type === 'page') {
       if (item.op === 'delete') visibility = true;
       const before = 'before' in item ? item.before : null;
@@ -56,16 +80,35 @@ export function snapshotNeeds(items: readonly Item[] | null): {
       if (item.op === 'update' && before?.['slug'] !== after?.['slug']) visibility = true;
     }
   }
-  return { redirects, visibility };
+  return maintenance ? { redirects, visibility, maintenance } : { redirects, visibility };
 }
 
 /**
  * Rebuilds the snapshots the release moved, as the system. Undefined when none was needed;
- * otherwise whether the edge took every one.
+ * otherwise whether the edge took every one of the redirect map and the visibility rules (what
+ * the publish answer's `kvSynced` reports, and the dialog's "Sync to edge" advice fixes). The
+ * maintenance page's buttons are refreshed too but never counted there: a miss is logged and
+ * the 10-minute reconcile heals it, and Sync to edge would not (R14-prep review C4).
+ *
+ * The buttons' refresh runs beside the two rebuilds (R14-prep review): it writes its own KV key
+ * from its own reads, so nothing orders it after them, and running it beside them adds no
+ * subrequest. The redirect map and the visibility rules keep R7's order, one after the other.
  */
 export async function rebuildSnapshots(
   tenantId: string,
-  needs: { redirects: boolean; visibility: boolean },
+  needs: SnapshotNeeds,
+): Promise<boolean | undefined> {
+  const [kvSynced] = await Promise.all([
+    rebuildEdgeRules(tenantId, needs),
+    needs.maintenance ? refreshContact(tenantId, needs.maintenance.row) : undefined,
+  ]);
+  return kvSynced;
+}
+
+/** The redirect map and the page-visibility rules the release moved: did the edge take them. */
+async function rebuildEdgeRules(
+  tenantId: string,
+  needs: SnapshotNeeds,
 ): Promise<boolean | undefined> {
   let kvSynced: boolean | undefined;
   if (needs.redirects) {
@@ -86,6 +129,29 @@ export async function rebuildSnapshots(
     kvSynced = (kvSynced ?? true) && synced;
   }
   return kvSynced;
+}
+
+/** The maintenance page's buttons, as the system; a miss logged, never thrown. */
+async function refreshContact(
+  tenantId: string,
+  row: Record<string, unknown> | null,
+): Promise<void> {
+  // As the system (the settings row; the identity when the release's image is not known).
+  const refreshed = await refreshMaintenanceContact({
+    sb: serviceClient(),
+    tenantId,
+    env: workerEnv,
+    contact: row ? contactFromRow(row) : undefined,
+  }).catch(() => 'not-refreshed' as const);
+  if (refreshed === 'not-refreshed') {
+    void writeSystemLog({
+      level: 'warn',
+      source: 'release:snapshot',
+      message:
+        "The maintenance page's contact buttons were not refreshed; the 10-minute reconcile does it.",
+      detail: { tenantId },
+    });
+  }
 }
 
 /**

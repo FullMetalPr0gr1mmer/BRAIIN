@@ -172,6 +172,13 @@ export interface EditorFormProps {
    */
   history?: HistoryTarget | null | undefined;
   /**
+   * Admin v2 R14-prep: the record in words and its page, for a record its own values cannot
+   * name (the site identity, the SEO defaults, a page's search settings): the History button's
+   * name ("History of Site identity"), the drawer's title, and where Preview opens (null: no
+   * Preview). Without it the record's title and `publicHref` are used, as before.
+   */
+  historyOf?: { label: string; path: string | null } | undefined;
+  /**
    * Admin v2 E1: fields the save carries (loaded and sent) but the form never draws: a page
    * section's `type`, which its content field reads to know its own fields.
    */
@@ -304,6 +311,7 @@ export default function EditorForm({
   heading,
   noun = 'item',
   history,
+  historyOf,
   hidden,
   builtIn,
   languageBar = 'own',
@@ -521,7 +529,10 @@ export default function EditorForm({
         History
         {/* Named for its record: on a service's Case study tab the case's own History sits
             beside the service's. */}
-        <span className="visually-hidden"> of {recordWords(save.saved, noun)}</span>
+        <span className="visually-hidden">
+          {' '}
+          of {historyOf?.label ?? recordWords(save.saved, noun)}
+        </span>
       </button>
     ) : null;
 
@@ -666,8 +677,10 @@ export default function EditorForm({
             open={historyOpen}
             onClose={() => setHistoryOpen(false)}
             target={history}
-            label={recordWords(save.saved, noun)}
-            publicPath={href ? href.replace(/^https?:\/\/[^/]+/, '') : null}
+            label={historyOf?.label ?? recordWords(save.saved, noun)}
+            publicPath={
+              historyOf ? historyOf.path : href ? href.replace(/^https?:\/\/[^/]+/, '') : null
+            }
             onChanged={() => void save.reloadTheirs()}
           />
         </Suspense>

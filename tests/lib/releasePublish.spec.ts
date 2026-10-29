@@ -60,6 +60,8 @@ vi.mock('@/lib/admin/visibilitySync', () => ({
 }));
 
 const { POST: PUBLISH } = await import('@/pages/api/admin/releases/index');
+const { MAINTENANCE_KV_KEY } = await import('@/lib/http/maintenance');
+const { __kv } = (await import('cloudflare:workers')) as unknown as { __kv: Map<string, string> };
 const { POST: VALIDATE } = await import('@/pages/api/admin/releases/validate');
 const { RELEASE_REGISTRY } = await import('@/lib/release/registry');
 const { RELEASE_LINKS } = await import('@/lib/release/links');
@@ -1000,7 +1002,9 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
   // carry its pages' slugs adds. A cache zone's purge adds at most 4 more (the budget read, the
   // request and its one retry, the release.purge row): 31, under the Free plan's 50. A rollback
   // of the same changes (R10) adds its own two reads: 28 on the merged tree (2026-10-22).
-  const MAX_PUBLISH = 27;
+  // R14-prep: the identity's e-mail moves while maintenance is on, so the maintenance page's
+  // buttons follow (the edge's value, the settings row as the system, the put: 3): 30.
+  const MAX_PUBLISH = 30;
   const PURGE_SET_UP = 4;
   it('a 60-change release of linked services costs a handful of reads, not one per rule', async () => {
     const services: Row[] = [];
@@ -1334,17 +1338,35 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
     expect(new Set(drafts.map((d) => d['entity_type'])).size).toBe(
       Object.keys(RELEASE_REGISTRY).length,
     );
+    // Maintenance is on (R14-prep): the release moves the identity's e-mail, so the maintenance
+    // page's buttons follow at the edge, as the system.
+    const ON = { active: true, allowlist: [], changedAt: '2026-10-22T09:00:00.000Z' };
+    __kv.set(MAINTENANCE_KV_KEY, JSON.stringify(ON));
+    tables['site_settings'] = [{ tenant_id: T, version: 1, maintenance: ON }];
     const db = seed({ ...tables, content_drafts: drafts });
     // The apply answers one item per change, with images that carry what the tags read.
-    const items = drafts.map((d) =>
-      applied(
+    const items = drafts.map((d) => {
+      const identity = d['entity_type'] === 'site_profile';
+      return applied(
         String(d['entity_type']),
         String(d['entity_id']),
         d['op'] as 'update' | 'create',
-        d['op'] === 'create' ? null : { slug: 's', page_id: PAGE },
-        { slug: 's', page_id: PAGE, entity_type: 'service', entity_id: SERVICE },
-      ),
-    );
+        d['op'] === 'create'
+          ? null
+          : {
+              slug: 's',
+              page_id: PAGE,
+              ...(identity ? { contact_email: 'old@studio.example' } : {}),
+            },
+        {
+          slug: 's',
+          page_id: PAGE,
+          entity_type: 'service',
+          entity_id: SERVICE,
+          ...(identity ? { contact_email: 'new@studio.example' } : {}),
+        },
+      );
+    });
     svc.answer = (fn) =>
       fn === 'record_release_purge' ? { data: null, error: null } : published(11, items);
 
@@ -1358,9 +1380,23 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
         : { p_kind: 'publish', p_restores_release_id: null },
     );
 
+    // The buttons followed the release (R14-prep): the edge's value read and put (2 more; the
+    // settings row is the stand-in's own read, counted in db.calls).
+    const edge = JSON.parse(__kv.get(MAINTENANCE_KV_KEY) ?? '{}') as { contact?: Row };
+    expect(edge.contact).toMatchObject({ email: 'new@studio.example' });
+    __kv.delete(MAINTENANCE_KV_KEY);
+    const MAINTENANCE_KV = 2;
+
     const SESSION = 2;
     const SNAPSHOTS = 2 * syncs.redirects + 4 * syncs.visibility;
-    return SESSION + db.calls.length + svc.calls.length + 2 * svc.logs.length + SNAPSHOTS;
+    return (
+      SESSION +
+      db.calls.length +
+      svc.calls.length +
+      2 * svc.logs.length +
+      SNAPSHOTS +
+      MAINTENANCE_KV
+    );
   }
 
   it('O-16: a clean publish of one change of EVERY registry type, counted end to end, is under 50', async () => {

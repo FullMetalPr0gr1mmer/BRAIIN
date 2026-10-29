@@ -129,6 +129,9 @@ export async function runReleasePurges(
   };
   if (!tenantId || claimed.length === 0) return run;
 
+  // An orphan's items are not known: both snapshots. Not the maintenance page's buttons
+  // (R14-prep): the 10-minute reconcile refreshes them from the identity while maintenance is on,
+  // and this minute's budget stays the purge retries' (RELEASE_PURGE_BUDGET).
   const kvSynced =
     run.orphans > 0
       ? await rebuildSnapshots(tenantId, { redirects: true, visibility: true })
@@ -399,12 +402,14 @@ export async function runReleaseMinute(
 export const RELEASE_PURGE_BUDGET = 1 + 6 + 4 + 3 + RELEASE_CLAIM_LIMIT * 3 + 2;
 /**
  * A fire that went live, at its worst: the claim and the apply (2); the snapshots as the system
- * (6) and a line for each that fails (4); the slugs its items do not carry, one read per table
- * of SLUG_TABLES (4); the purge's budget read, its request and one retry (3); its record, and a
- * line if that fails (3); the purge's own line (2); the run's line (2): 26. No purge retries run
- * that minute.
+ * (6) and a line for each that fails (4); the maintenance page's buttons when it changed the
+ * identity (R14-prep: the edge's value, the settings row, the identity when its image is not
+ * known, the put: 4) and a line if that fails (2); the slugs its items do not carry, one read per
+ * table of SLUG_TABLES (4); the purge's budget read, its request and one retry (3); its record,
+ * and a line if that fails (3); the purge's own line (2); the run's line (2): 32. No purge
+ * retries run that minute.
  */
-export const RELEASE_FIRE_PUBLISHED_BUDGET = 2 + 6 + 4 + 4 + 3 + 3 + 2 + 2;
+export const RELEASE_FIRE_PUBLISHED_BUDGET = 2 + 6 + 4 + 4 + 2 + 4 + 3 + 3 + 2 + 2;
 /**
  * A fire that did not go live, at its worst: the claim and the apply (2), then either the
  * failure and its line (3) or, for an apply that never answered, the apply's own line and the
@@ -413,7 +418,7 @@ export const RELEASE_FIRE_PUBLISHED_BUDGET = 2 + 6 + 4 + 4 + 3 + 3 + 2 + 2;
 export const RELEASE_FIRE_FAILED_BUDGET = 2 + 4;
 /**
  * The minute at its worst, each awaited call one subrequest and a log line two (the tenant lookup
- * and the insert): a fire that went live (26), a fire that did not and then the purge retries (6
+ * and the insert): a fire that went live (32), a fire that did not and then the purge retries (6
  * + 31), or a fire claim that failed, its line, then the purge retries (3 + 31). 37, within the
  * Free plan's 50 (tests/lib/releaseCron.spec.ts measures each path).
  */

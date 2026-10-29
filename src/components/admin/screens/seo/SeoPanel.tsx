@@ -6,6 +6,7 @@ import EditorForm from '@/components/admin/fields/EditorForm';
 import SwitchField from '@/components/admin/fields/SwitchField';
 import Modal from '@/components/admin/kit/Modal';
 import Note from '@/components/admin/kit/Note';
+import { entitySeoHistory } from '@/lib/admin/historyTarget';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import { useEntitySave, type EntitySave } from '@/lib/admin/useEntitySave';
 import { canonicalPath } from '@/lib/seo/canonical';
@@ -33,6 +34,10 @@ import type { Bi, SeoPanelSetup } from './types';
 // /api/admin/entity-seo): a full replace, so every column the row holds is carried in the
 // form, shown or not (the legacy image link, robots, the canonical address, the schema type).
 //
+// History (Admin v2 R14-prep): the row's own (entity SEO is keyed by its id, read from the load
+// and every save), named "History of Search settings for <page>" so a host editor's own History
+// on the same tab stays apart. None until the page has a row (nothing was ever saved).
+//
 // An empty box keeps the page's default, which its placeholder and the previews show. A
 // title or a description written in one language needs the other (the pair rule, refused by
 // the server on the missing half). Index is a switch; turning it off asks first.
@@ -58,6 +63,9 @@ export const FOLLOWING_DEFAULT = 'Following the site default.';
 export const HIDE_TITLE = 'Hide this page from search engines?';
 export const HIDE_TEXT =
   'Google and other search engines stop showing it, and it leaves the sitemap. People with the link can still open it.';
+/** The History button's record: "History of Search settings for Logo Design". */
+export const seoHistoryLabel = (page: string) => `Search settings for ${page}`;
+
 export const LEGACY_IMAGE_NOTE = 'An image link set before is still used for sharing.';
 
 /** The fields the form carries: the three it shows, then the four a full replace keeps. */
@@ -159,10 +167,12 @@ export default function SeoPanel({
     [defaultTitle.en, defaultTitle.ar, defaultDescription.en, defaultDescription.ar],
   );
   const shown = useMemo(() => fields.filter((field) => SHOWN.has(field.name)), [fields]);
+  // The row's id, for History: from the load and every save (null while the page has none).
+  const [rowId, setRowId] = useState<string | null>(null);
   const save = useEntitySave(
     { kind: 'entitySeo', entityType: target.entityType, entityId: target.entityId },
     null,
-    { fields },
+    { fields, onRow: (row) => setRowId(typeof row['id'] === 'string' ? row['id'] : null) },
   );
   const [confirmHide, setConfirmHide] = useState(false);
 
@@ -335,5 +345,14 @@ export default function SeoPanel({
     </div>
   );
 
-  return <EditorForm save={tracked} fields={shown} submitLabel="Save SEO" after={after} />;
+  return (
+    <EditorForm
+      save={tracked}
+      fields={shown}
+      submitLabel="Save SEO"
+      after={after}
+      history={entitySeoHistory(rowId)}
+      historyOf={{ label: seoHistoryLabel(target.label), path: target.path }}
+    />
+  );
 }

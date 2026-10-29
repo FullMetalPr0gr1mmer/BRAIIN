@@ -17,7 +17,7 @@ import {
   shownWidgets,
 } from '@/lib/admin/dashboard/layout';
 import { presetValues } from '@/lib/admin/dashboard/roleDefaults';
-import { DEFAULT_LAYOUTS, widgetsFor } from '@/lib/admin/dashboard/widgets';
+import { DEFAULT_LAYOUTS, RELEASE_WIDGETS, widgetsFor } from '@/lib/admin/dashboard/widgets';
 import { QUICK_DEFAULTS } from '@/lib/admin/quickActions';
 
 // A person's layout (Admin v2 U1, README U1 D2, D8; ui.md §4 "Per-user layout", §10): the
@@ -147,7 +147,8 @@ describe('resolution: the person, then the preset, then the default', () => {
     const greedy = layout(['kpis'], ['leads', 'applications'], ['disciplines', 'health', 'notes']);
     for (const role of ['content_creator', 'seo'] as const) {
       const { layout: got } = resolveLayout(greedy, null, role);
-      expect(shownWidgets(got)).toEqual(['kpis', 'notes']);
+      // The publish card the layout never named takes its default place (R14-prep, below).
+      expect(shownWidgets(got)).toEqual(['kpis', 'publish', 'notes']);
       for (const id of [...got.top, ...got.left, ...got.right, ...got.hidden]) {
         expect(widgetsFor(role)).toContain(id);
       }
@@ -156,11 +157,71 @@ describe('resolution: the person, then the preset, then the default', () => {
 
   it('keeps every widget the role may have that the layout does not mention, off the board', () => {
     const { layout: got } = resolveLayout(layout(['kpis'], [], []), null, 'developer');
+    // All but the release widgets, which take their default place (R14-prep, below).
     expect(got.hidden.sort()).toEqual(
       widgetsFor('developer')
-        .filter((id) => id !== 'kpis')
+        .filter((id) => id !== 'kpis' && !RELEASE_WIDGETS.includes(id))
         .sort(),
     );
+    expect(got.right).toEqual(['publish']);
+  });
+
+  describe('the publish card in a layout saved before releases were on (R14-prep, R13 C6)', () => {
+    // While releases are off the dashboard strips the release widgets from the board, Add
+    // widget and every save, so a layout saved then never names the card. It takes its place
+    // from the role's default (first in the right column for the four CMS roles), whether the
+    // layout is the person's own or the role's preset; a layout that names it keeps it there.
+    const saved = layout(['kpis'], ['quick', 'views'], ['attention', 'pages'], ['notes']);
+
+    it('a layout that never named it: the default place, mine or the preset', () => {
+      for (const role of ['admin', 'content_creator', 'seo', 'developer'] as const) {
+        const mine = resolveLayout(saved, null, role).layout;
+        expect(mine.right[0], role).toBe('publish');
+        expect(mine.hidden, role).not.toContain('publish');
+        const preset = resolveLayout({}, saved, role);
+        expect(preset.source).toBe('preset');
+        expect(preset.layout.right[0], role).toBe('publish');
+      }
+      // The rest of the board is the person's, in their order.
+      expect(resolveLayout(saved, null, 'seo').layout).toEqual({
+        top: ['kpis'],
+        left: ['quick', 'views'],
+        right: ['publish', 'attention', 'pages'],
+        hidden: ['notes', 'realtime'],
+      });
+    });
+
+    it('a layout that hid it keeps it hidden; one that moved it keeps it where it is', () => {
+      const hid = resolveLayout({ ...saved, hidden: ['notes', 'publish'] }, null, 'admin').layout;
+      expect(shownWidgets(hid)).not.toContain('publish');
+      expect(hid.hidden).toContain('publish');
+      const moved = resolveLayout(
+        layout(['kpis'], ['quick', 'publish'], ['attention']),
+        null,
+        'admin',
+      ).layout;
+      expect(moved.left).toEqual(['quick', 'publish']);
+      expect(moved.right).toEqual(['attention']);
+    });
+
+    it('a short column: last in it; Sales never sees the card at all', () => {
+      expect(resolveLayout(layout(['kpis'], ['quick'], []), null, 'admin').layout.right).toEqual([
+        'publish',
+      ]);
+      const sales = resolveLayout(saved, null, 'sales').layout;
+      expect([...sales.top, ...sales.left, ...sales.right, ...sales.hidden]).not.toContain(
+        'publish',
+      );
+    });
+
+    it('every other widget the layout never named stays hidden (U1 rule)', () => {
+      const { layout: got } = resolveLayout(saved, null, 'admin');
+      for (const id of widgetsFor('admin')) {
+        if (RELEASE_WIDGETS.includes(id)) continue;
+        const named = [...saved.top, ...saved.left, ...saved.right, ...saved.hidden];
+        if (!named.includes(id)) expect(got.hidden, id).toContain(id);
+      }
+    });
   });
 
   it('names the forbidden ids a save carries, and the library ids a role may not use', () => {

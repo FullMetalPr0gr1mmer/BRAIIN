@@ -8,7 +8,11 @@ import type { MaintenanceContact } from '@schemas/maintenance';
 // maintenance is on. Once releases stage the identity, R7's post-publish effects must refresh
 // it too (as-built U9).
 
-export const CONTACT_COLUMNS = 'brand_name,contact_email,whatsapp_e164';
+/** The identity's columns the buttons show: what contactFromRow reads, and nothing else. */
+export const CONTACT_KEYS = ['brand_name', 'contact_email', 'whatsapp_e164'] as const;
+
+/** The PostgREST select of CONTACT_KEYS. */
+export const CONTACT_COLUMNS = CONTACT_KEYS.join(',');
 
 const bilingual = (v: unknown): { en: string; ar: string } | null => {
   if (!v || typeof v !== 'object') return null;
@@ -25,7 +29,11 @@ export function contactFromRow(row: Record<string, unknown> | null): Maintenance
   };
 }
 
-/** The tenant's identity as the buttons need it, or null when it cannot be read. */
+/**
+ * The tenant's identity as the buttons need it, or null when it cannot be read or there is no
+ * identity row (R14-prep review): every caller then keeps the buttons it already has, never
+ * empty ones put in their place.
+ */
 export async function readContact(
   sb: SupabaseClient,
   tenantId: string,
@@ -36,8 +44,8 @@ export async function readContact(
       .select(CONTACT_COLUMNS)
       .eq('tenant_id', tenantId)
       .maybeSingle<Record<string, unknown>>();
-    if (error) return null;
-    return contactFromRow(data ?? null);
+    if (error || !data) return null;
+    return contactFromRow(data);
   } catch {
     return null;
   }

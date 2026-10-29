@@ -5,7 +5,7 @@ import { Badge } from '@/components/admin/kit/StatusBadge';
 import { useClock } from '@/components/admin/kit/clock';
 import { AdminApiError, adminFetch } from '@/lib/admin/client';
 import { confirmDialog } from '@/lib/admin/confirm';
-import type { HistoryTarget } from '@/lib/admin/historyTarget';
+import { historyQuery, historyRestoreBody, type HistoryTarget } from '@/lib/admin/historyTarget';
 import { announcePending } from '@/lib/admin/releaseEvents';
 import { toast } from '@/lib/admin/toast';
 import { HISTORY_COPY as COPY, historyRowTitle, type HistoryAnswer } from './model';
@@ -57,7 +57,8 @@ export default function HistoryDrawer({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const query = `/api/admin/history?entityType=${encodeURIComponent(target.entityType)}&entityId=${encodeURIComponent(target.entityId)}`;
+  // A singleton names no entity: the server reads the site (R14-prep).
+  const query = historyQuery(target);
   const load = useCallback(
     async (before?: number) => {
       try {
@@ -101,7 +102,7 @@ export default function HistoryDrawer({
         return;
       await adminFetch('/api/admin/history/restore', {
         method: 'POST',
-        body: { entityType: target.entityType, entityId: target.entityId, seq },
+        body: historyRestoreBody(target, seq),
       });
       toast(COPY.restored(seq), 'ok');
       announcePending();

@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import { expectCleanAtWidths } from './collectionLayout';
-import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The Projects area (Admin v2 U6, AV-15), signed in, through the real Worker and this job's
@@ -30,6 +30,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
+// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
+test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 test.describe.configure({ mode: 'serial' });
 
