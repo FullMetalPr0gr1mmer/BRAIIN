@@ -372,6 +372,13 @@
   padding: 10px 12px;
 }
 
+/* The row is the link (its ::after covers it), but axe measures the link's own box: at
+   least 24px tall (WCAG 2.5.8), whatever the narrower fields column beside the preview
+   puts next to it. */
+.pe__links a.li__t {
+  min-block-size: 24px;
+}
+
 /* Add a section: the library, two across where it fits. */
 .pe__lib {
   display: grid;

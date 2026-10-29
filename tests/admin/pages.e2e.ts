@@ -201,6 +201,9 @@ test.describe('as admin', () => {
   });
 
   test('each drawer and dialog, clean at every width', async ({ page }) => {
+    // Since E2 every check at 1280 px also runs axe over the public page in the preview
+    // frame; nine width checks no longer fit the default 30 s.
+    test.slow();
     await openEditor(page, aboutId);
     const bar = page.getByRole('group', { name: 'This page' });
 
