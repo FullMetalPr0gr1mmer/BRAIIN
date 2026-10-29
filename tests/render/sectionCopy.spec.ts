@@ -89,6 +89,9 @@ const PLACES: Record<RenderedSectionType, Record<string, Place>> = {
 
 type Content = Readonly<Record<string, unknown>>;
 
+/** The types with no built-in copy at all (Admin v2 E10's blocks): see the render test. */
+const NO_COPY: ReadonlySet<string> = new Set(['textBlock', 'gallery', 'video']);
+
 const compose = (type: string, place: Place, content: object): SectionData[] => {
   const section: SectionData = {
     type,
@@ -168,6 +171,13 @@ describe('rendering with no content equals rendering the built-in copy', () => {
         test(`${type} ${look} (${locale})`, async () => {
           const render = (stored: object) => renderSections(compose(type, place, stored), locale);
           const empty = await render({});
+          // Admin v2 E10's blocks have no built-in copy: with no content they render nothing at
+          // all (never placeholder words), so there is nothing to compare.
+          if (NO_COPY.has(type)) {
+            expect(builtIn, 'a block with no copy has an empty look').toEqual({});
+            expect(empty.trim(), 'a block with nothing written renders nothing').toBe('');
+            return;
+          }
           // Something rendered, so the comparisons below compare a section.
           expect(empty.length, 'the section rendered nothing').toBeGreaterThan(100);
 

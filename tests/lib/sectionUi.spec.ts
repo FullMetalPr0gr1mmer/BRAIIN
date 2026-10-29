@@ -62,6 +62,20 @@ function sample(field: FieldDef): unknown {
       return true;
     case 'media':
       return '5eed0a00-0000-4000-8000-000000000007';
+    // E10: a body in both languages, and a gallery's pictures as the grid holds them.
+    case 'richtext':
+      return {
+        en: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hi' }] }],
+        },
+        ar: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'مرحبا' }] }],
+        },
+      };
+    case 'gallery':
+      return [{ kind: 'image', mediaId: '5eed0a00-0000-4000-8000-000000000007' }];
     case 'clip':
       return {
         source: 'path',
@@ -222,7 +236,15 @@ describe('SECTION_UI agrees with SECTION_CONTENT_SCHEMAS', () => {
         if (!declared.has(key)) extra.push(`${type}: ${key}`);
       }
     }
-    expect(extra).toEqual(['slogan: accentFromAr+accentFromEn+text']);
+    // E10's blocks have no built-in copy, so F6 declares no group for them (a group is of
+    // fields with a built-in): with nothing to omit, the editor stores what is typed, and its
+    // derived group only keeps an accent beside its heading.
+    expect(extra).toEqual([
+      'slogan: accentFromAr+accentFromEn+text',
+      'textBlock: accent+heading',
+      'gallery: accent+heading',
+      'video: accent+heading',
+    ]);
   });
 
   it('table-backed and unknown types have no editor', () => {
