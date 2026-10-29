@@ -143,8 +143,10 @@ With them off:
   (`src/lib/maintenance/refresh.ts`): the edge's value first (maintenance off at the edge:
   nothing read or written), the settings row with the service client for the release's tenant
   (off there: nothing written, the site never switched on), the buttons from the image (or the
-  identity read as the system), the put. A miss logs a warning (`release:snapshot`) and counts
-  in the release's `kvSynced`; the 10-minute reconcile heals it.
+  identity read as the system), the put. A miss logs a warning (`release:snapshot`); the
+  10-minute reconcile heals it. It is never counted in the release's `kvSynced`, which the
+  publish dialog reads as "the redirect and page visibility rules missed the edge; use Sync to
+  edge" (review C4).
 - The identity's live save (`siteProfile.ts` `afterWrite`) now calls the same helper with the row
   it saved: the same reads, writes and answers as before.
 - **Budgets.** A fire that went live, at its worst, is 32 subrequests (was 26: the edge's value,
@@ -172,8 +174,11 @@ otherwise arrive hidden for everyone who ever arranged their dashboard. Sales ne
   `releases-mode` (`tests/admin/releases-mode.e2e.ts`) runs after both, alone, and `visibility`
   (then general, GA4, maintenance) after it. The admin project never runs the drill.
 - **The switch** is `app.enable_releases(tenant, e2e admin, e2e admin)` sent with `psql` as the
-  owner to the job's `SUPABASE_DB_POOL_URL`, refused unless that URL is loopback and the
-  harness's own guard holds (`tests/admin/releasesSwitch.ts`: the two statements, uuids checked).
+  owner to the job's `SUPABASE_DB_POOL_URL`, refused unless that URL is loopback with no query
+  string or fragment and the harness's own guard holds (`tests/admin/releasesSwitch.ts`: the two
+  statements, uuids checked). psql gets the parsed address (`host` and `hostaddr`), port and
+  plain names, the password through `PGPASSWORD` and no other `PG*` variable, never the URL
+  (review S3).
   Already on (a local re-run): nothing. Replayed in PGlite with the read-back before and after:
   baseline 1, the flag, one `releases.enable` audit row.
 - **The drill**, as the Admin, on an FAQ question of the run's own (a random marker; the FAQ is
@@ -192,7 +197,8 @@ otherwise arrive hidden for everyone who ever arranged their dashboard. Sales ne
   `tests/admin/staff.ts`): whole files blog, collections, faq, fields, general, pages, projects,
   reorder, seo, services and visibility (their saves go live at once and they check the public
   site, or the screen's live-mode controls); and the describes "releases off" of releases-ui and
-  backups, backups' history drawer ("no Restore while releases are off") and dashboard's
+  backups, backups' history drawers (the service's, the identity's, the SEO defaults' and a
+  page's search settings': "no Restore while releases are off") and dashboard's
   "arranging the dashboard" (its column positions are the board without the card). Everything
   else runs in release mode: the public suites, the per-role sweep (every screen with the
   savebar), the refusals, the kit's release components, leads, users, media, uploads,
@@ -213,8 +219,10 @@ announced (about 15 minutes, every editor tab closed, the public site untouched)
 read-back before (`scripts/releases-switch-readback.sql`, one read-only row, its expected
 "before" and "after" lines), the exact `app.enable_releases` call and what each refusal means,
 the read-back after, the checks in the admin, the drill on a draft FAQ question no visitor sees
-(publish v2, Restore v1 and Publish v1 again as v3, optionally a scheduled one), the end of the
-freeze. The way back: `app.disable_releases`, refused while anything is pending or scheduled,
+(publish vD, then restore the version just below it and publish that again, once the restore is
+seen to hold the drill question alone; optionally a scheduled one), the end of the freeze. The
+drill never restores v1: a converted legacy schedule can go live during the window, and Restore
+vN takes back every version after N (review S2, C1). The way back: `app.disable_releases`, refused while anything is pending or scheduled,
 and with `p_discard_pending => true` R11's discard rule (the legacy schedule restored, every other
 scheduled release cancelled, every pending change thrown away, versions and history kept, a new
 baseline at the next switch-on). And the Worker's rollback line while releases are on (a build
@@ -256,8 +264,12 @@ status tables, and its columns to its expected lines.
 Each new rule was run red and green: one rule at a time was reverted in its source (a scripted
 mutant: the exact lines of the rule replaced, the file restored byte for byte after), its specs
 were run, and the run had to fail; with every source as built the same specs pass (the
-baseline: 10 files green). All 29 were red. Unit specs only: the e2e and the workflow are traced
-below, not run here.
+baseline: 10 files green). All 29 were red: 28 in the log of record
+(`r14p_mutants_all.log`), and M29 (row 29) in its re-run (`r14p-tools/mutants_out.json`), the log
+of record having recorded it green (exit 0, no failure: a harness glitch, since the spec's exact
+three-argument `toContain` fails on that mutant). M29 was run red once more by hand at the
+review fixes (the §6p call without its fallback, `r14p_fix_m29.log`). Unit specs only: the e2e
+and the workflow are traced below, not run here.
 
 | # | Rule reverted | Spec that fails (red) |
 |---|---|---|
@@ -339,3 +351,21 @@ and any spec it shows to need releases off joins `RELEASES_OFF_ONLY` there.
   AdminVersions 149.4 (149.2); AdminChrome 144.4 (144.3). Every entry moved by 0.1 to 0.3 KB
   (the shared history target and EditorForm's `historyOf`); the drawer stays in its lazy
   `admin-history` chunk. `admin-rich` (lazy) 122.7 KB; the chunk plan holds.
+
+## Review fixes (2026-10-29)
+
+Every finding was checked against the code first; each fix has a test that fails without it
+(run red with the fix reverted, `git apply -R`, then green). origin/main had not moved
+(`42b61c6f`), so there was nothing to merge.
+
+| Finding | Verdict | Fix | Guard (red without the fix) |
+|---|---|---|---|
+| S1, R14P-C2 (one finding, two lenses): no per-role authz rows for the id-less singleton history and restore, nor entity SEO's | Real (a missing required test; the gates themselves were right) | Matrix cases in `tests/authz/cases/releases.ts` (and their manifest lines): history of the identity (Admin, Developer), of the SEO defaults (Admin, SEO), of a page's search settings (Admin, SEO, Content Creator at view); restore of each with releases on (the identity: Admin, Developer; the defaults: Admin, SEO; entity SEO: Admin, SEO, a Content Creator refused by the per-change gate). Each restore row stands a snapshot whose columns differ from live, so an allowed role reaches the staging (200), not a 422. The harness also records `.eq('entity_id', …)`, and a new test holds every singleton read to the caller's own site as `other_tenant` | A mutant that skips `readsEntity` for a tenant-keyed entry: 4 rows red (Content Creator and SEO on the identity, Content Creator and Developer on the defaults). A mutant that answers a fixed tenant in `historyEntityId`: "never queries a tenant other than the caller's own" and the new "reads a singleton's history as the caller's own site" red |
+| S2, R14P-C1 (one finding, two lenses): the production drill restored v1 and fixed v2 and v3, so a converted legacy release that fired in the window would be taken back | Real | §6p's drill: wait until no converted release is due before the drill ends; the drill's version is vD; restore the version listed just below it (never v1), and check the restore holds exactly the drill question (the bar says 1 change, the confirm reads "Its 1 change go live together", the page's own copy) before "Publish vN again"; stop, discard and delete the question instead if a newer version appeared. Step 4 says the card may already name v2 or later. The read-back gains `legacy_fired` (published `legacy_schedule` releases) and states its after-lines relative to it (`published_versions = 1 + legacy_fired`, `live_version = published_versions`, the drill two more) | `releasesRunbook.spec.ts` "rolls the drill back to the version just before its own, never to v1" (and the `*Publish vN again*` line): red on the old runbook and read-back. Replayed in PGlite (`r14p-tools/switch_legacy.mjs`, `r14p_fix_switch_replay.log`): a scheduled FAQ row with a past time; before, `legacy_to_convert` 1 and `legacy_fired` 0; the switch converts 1; after, `scheduled_releases` 1 and `published_versions` 1; then the legacy release marked published as the cron would (a stand-in: the fire is the Worker's), `legacy_fired` 1, `published_versions` 2, `live_version` 2 |
+| S3: the loopback guard checked only the URL's host; libpq's `?host=`, `?hostaddr=`, `?service=` override it | Real (low) | `isLoopbackDbUrl` refuses any query string or fragment; `loopbackPsqlTarget` builds psql's connection from the parsed URL (`host` and `hostaddr` the loopback address, the port, user and database names that cannot read as a connection string) and `psqlEnv` passes the password and no other `PG*` variable; the setup never hands psql the URL | `releasesRehearsal.spec.ts` "refuses a loopback URL whose query or fragment could redirect libpq" (red with the query check removed) and "hands psql the parsed loopback address, never the URL" (red on the old setup) |
+| S4: the rehearsal pinned actions to tags | Real, fixed in part | `actions/checkout` and `actions/setup-node` pinned to the commits the deploy job already pins (`ci.yml`). `supabase/setup-cli@v1` stays the e2e job's tag: no commit of it is pinned anywhere in the repository, and resolving the tag needs GitHub, which this session may not reach. That pin, with the gate jobs' own `TODO: Renovate pins actions to SHAs` lines, is owner item **O-26** (README). The step-for-step equality with the e2e job now compares the action, and the pins are checked on their own | `releasesRehearsal.spec.ts` "pins its actions to the deploy job's commits; only the CLI action keeps the e2e job's tag" (red on the tag-pinned workflow) |
+| R14P-C3: no e2e opened the three new History drawers | Real | `tests/admin/backups.e2e.ts`, releases off: General's identity (Admin, Developer) and SEO › Site wide's defaults (Admin, SEO): the request names `entityType` alone, the drawer lists what went live (or "No history yet."), no Restore, axe clean, Escape closes it and focus returns. A page's search settings (Admin): a draft page of the run's own, no History before its first save in the page editor's SEO drawer, then "History of Search settings for <page>" opens over the drawer (`entity_seo` and the row's id), axe clean with both open, Escape closes the history alone (the SEO drawer stays) and focus returns to its button; the page and its row are removed by the service role. Skipped in the release-mode rehearsal (`RELEASES_OFF_ONLY`) | CI only (e2e is not run here): traced against the markup (EditorForm's "History" and its visually hidden " of <label>", the Drawer's `History: <label>` heading as the dialog's name, the drawer's sub line and releases-off note, `Versions of <label>`, SeoDrawer's `SEO: <label>` with the page's English title as the label, SeoPanel's `onRow`, the `.save-status`, the native dialog's Escape closing the topmost modal only) |
+| R14P-C4: a missed maintenance-button refresh set the release's `kvSynced` false, and the dialog then blamed the redirect and visibility rules | Real | `rebuildSnapshots` no longer counts the refresh in `kvSynced`: a miss is logged (`release:snapshot`) and left to the 10-minute reconcile | `releaseAfterEffects.spec.ts` "a refresh that missed is logged, never reported as the edge rules missing" and the updated "maintenance on" (no `kvSynced` from the buttons alone): both red with the old line back |
+| R14P-C5: the mutant log of record showed M29 green while this note said all 29 were red | Real (the record) | The Tests section names the re-run that showed M29 red, and M29 was run red again by hand | `r14p_fix_m29.log` |
+
+No finding was refuted, and the skeptics refuted none.
