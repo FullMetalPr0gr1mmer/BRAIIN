@@ -15,15 +15,20 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *                  from the column's own switch; the editor's response frames its own origin
  *                  only and the preview's may be framed by it only; zero CSP violations, page
  *                  or console errors in the editor and in the frame;
- *   a save         the open section's Save (routed: nothing is written) reloads the preview,
- *                  which points at the open section again;
+ *   a save         the open section's Save, and the eye (both routed: nothing is written),
+ *                  reload the preview, which points at the open section again;
+ *   1280           the column sticks below the topbar, and a 20 px default font does not push
+ *                  the three columns past the window;
  *   every width    320 and 390 with Preview chosen in the Edit | Preview switch, and 1280 with
  *                  three columns: zero axe WCAG 2.2 A/AA violations (the frame included) and no
  *                  sideways scroll;
+ *   while hidden   at 390 with Edit chosen: a save, another section opened and the editor's
+ *                  language wait for Preview (no reload, no request for the Arabic page), then
+ *                  the preview reloads, jumps to the open section, and loads the Arabic page;
  *   per role       a Content Creator gets the preview too; SEO opens the editor's SEO card only,
  *                  so no preview; Developer and Sales are refused by the server.
  *
- * This suite writes nothing: About is the seed's, and the one save is answered by the test.
+ * This suite writes nothing: About is the seed's, and every save is answered by the test.
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
@@ -52,14 +57,19 @@ test.beforeAll(async () => {
     .single();
   expect(about.error).toBeNull();
   aboutId = String((about.data as { id: string }).id);
+  // The visible ones only: pages.e2e.ts, in parallel, adds a hidden Call to action to About for
+  // a while (and leaves it there until its afterAll when a step of it fails).
   const sections = await svc
     .from('page_sections')
     .select('id,type')
     .eq('tenant_id', TENANT_ID)
-    .eq('page_id', aboutId);
+    .eq('page_id', aboutId)
+    .eq('visible', true);
   expect(sections.error).toBeNull();
   for (const row of (sections.data ?? []) as { id: string; type: string }[]) ids[row.type] = row.id;
-  expect(Object.keys(ids).sort()).toEqual(['aboutWho', 'leadership', 'social', 'statistics']);
+  expect(Object.keys(ids)).toEqual(
+    expect.arrayContaining(['aboutWho', 'leadership', 'social', 'statistics']),
+  );
 });
 
 /** Page and console errors, and CSP violations in the editor and in every frame. */
@@ -122,6 +132,60 @@ async function previewFrame(page: Page): Promise<Frame> {
     .toBe(true);
   return page.frames().find((f) => new URL(f.url()).pathname === '/admin/preview/about')!;
 }
+
+/**
+ * Answers the section's PATCH here (its row, `patch` applied and one version on), so About is
+ * never written; the stored version, read before, is checked unchanged by `done`.
+ */
+async function routeSave(page: Page, type: string, patch: Record<string, unknown> = {}) {
+  const path = `/api/admin/sections/${ids[type]}`;
+  const current = (await (await page.request.get(path)).json()) as {
+    data: Record<string, unknown>;
+  };
+  const version = Number(current.data['version']);
+  const answer = { ...current, data: { ...current.data, ...patch, version: version + 1 } };
+  const fake = (route: Route) =>
+    route.request().method() === 'PATCH'
+      ? route.fulfill({ status: 200, json: answer })
+      : route.fallback();
+  const match = (url: URL) => url.pathname === path;
+  await page.route(match, fake);
+  return async () => {
+    await page.unroute(match, fake);
+    const { data, error } = await service()
+      .from('page_sections')
+      .select('version')
+      .eq('id', ids[type]!)
+      .single();
+    expect(error).toBeNull();
+    expect((data as { version: number }).version).toBe(version);
+  };
+}
+
+/** Marks the frame's document, so a reload (a new document) is seen. */
+const mark = (frame: Frame) =>
+  frame.evaluate(() => {
+    (window as unknown as { __e2: boolean }).__e2 = true;
+  });
+/** Whether the marked document is still the one shown ('navigating' while it is replaced). */
+const marked = (frame: Frame) =>
+  frame
+    .evaluate(() => (window as unknown as { __e2?: boolean }).__e2 === true)
+    .catch(() => 'navigating');
+
+/** Whether a section of About is inside the frame's own viewport. */
+const inView = (frame: Frame, type: string) =>
+  frame
+    .evaluate((id) => {
+      const el = document.querySelector(`[data-pv-section="${id}"]`);
+      if (!el) return 'missing';
+      const box = el.getBoundingClientRect();
+      return box.top < window.innerHeight && box.bottom > 0;
+    }, ids[type]!)
+    .catch(() => 'navigating');
+
+const showView = (page: Page, name: 'Edit' | 'Preview') =>
+  page.getByRole('group', { name: 'Show', exact: true }).getByRole('radio', { name }).check();
 
 test.describe('as admin', () => {
   test.use({ storageState: authFile('admin') });
@@ -200,45 +264,63 @@ test.describe('as admin', () => {
     await openEditor(page, aboutId);
     await expect(inPreview(page, 'aboutWho')).toHaveClass(OUTLINED);
     const frame = await previewFrame(page);
-    await frame.evaluate(() => {
-      (window as unknown as { __e2: boolean }).__e2 = true;
-    });
+    await mark(frame);
 
     // The save is answered here (its row, one version on), so About is never written.
-    const path = `/api/admin/sections/${ids['aboutWho']}`;
-    const current = (await (await page.request.get(path)).json()) as {
-      data: Record<string, unknown>;
-    };
-    const version = Number(current.data['version']);
-    const answer = { ...current, data: { ...current.data, version: version + 1 } };
-    const fake = (route: Route) =>
-      route.request().method() === 'PATCH'
-        ? route.fulfill({ status: 200, json: answer })
-        : route.fallback();
-    const match = (url: URL) => url.pathname === path;
-    await page.route(match, fake);
+    const done = await routeSave(page, 'aboutWho');
     await page.locator('#f-content-heading-en').fill(`Preview ${MARK}`);
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page.locator('.save-status[data-state="saved"]')).toBeVisible();
 
     // The frame's document is a new one (the mark is gone), and it outlines Who we are again.
-    await expect
-      .poll(() =>
-        frame
-          .evaluate(() => (window as unknown as { __e2?: boolean }).__e2 === true)
-          .catch(() => 'navigating'),
-      )
-      .toBe(false);
+    await expect.poll(() => marked(frame)).toBe(false);
     await expect(inPreview(page, 'aboutWho')).toHaveClass(OUTLINED);
-    await page.unroute(match, fake);
+    await done();
+  });
 
-    const { data, error } = await service()
-      .from('page_sections')
-      .select('version')
-      .eq('id', ids['aboutWho']!)
-      .single();
-    expect(error).toBeNull();
-    expect((data as { version: number }).version).toBe(version);
+  test('the eye reloads the preview too', async ({ page }) => {
+    await openEditor(page, aboutId);
+    await expect(inPreview(page, 'aboutWho')).toHaveClass(OUTLINED);
+    const frame = await previewFrame(page);
+    await mark(frame);
+
+    // Social links hidden: the PATCH answered here with the row hidden, one version on.
+    const done = await routeSave(page, 'social', { visible: false });
+    const eye = page.getByRole('switch', { name: 'Show Social links on the site' });
+    await expect(eye).toHaveAttribute('aria-checked', 'true');
+    await eye.click();
+    await expect(eye).toHaveAttribute('aria-checked', 'false');
+    await expect.poll(() => marked(frame)).toBe(false);
+    await expect(inPreview(page, 'aboutWho')).toHaveClass(OUTLINED);
+    await done();
+  });
+
+  test('1280: the column sticks below the topbar; a 20 px default font fits', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openEditor(page, aboutId);
+    await expect(previewRegion(page)).toBeVisible();
+    // The column sticks below the sticky topbar, never under it (whatever the page's height,
+    // so no scroll is needed to read it).
+    const stick = await page.evaluate(() => ({
+      top: parseFloat(getComputedStyle(document.querySelector('.pe__preview')!).top),
+      bar: document.querySelector('.admin-main > .admin-topbar')!.getBoundingClientRect().height,
+    }));
+    expect(stick.bar).toBeGreaterThan(0);
+    expect(stick.top).toBeGreaterThanOrEqual(stick.bar);
+    // Chrome's "Large" font (a 20 px root): the three tracks still fit the editor's width.
+    const fit = await page.evaluate(() => {
+      const root = document.documentElement;
+      root.style.fontSize = '20px';
+      const cols = document.querySelector<HTMLElement>('.pe__cols')!;
+      const style = getComputedStyle(cols);
+      const tracks = style.gridTemplateColumns.split(' ').map(parseFloat);
+      const used = tracks.reduce((sum, n) => sum + n, 0) + 2 * parseFloat(style.columnGap);
+      const out = { tracks: tracks.length, used, width: cols.clientWidth };
+      root.style.fontSize = '';
+      return out;
+    });
+    expect(fit.tracks).toBe(3);
+    expect(fit.used).toBeLessThanOrEqual(fit.width + 0.5);
   });
 
   test('narrow screens: Edit | Preview; clean at 320, 390 and 1280 with the preview on', async ({
@@ -251,10 +333,7 @@ test.describe('as admin', () => {
     await expect(previewRegion(page)).toBeHidden();
     await expect(page.locator(FRAME)).toHaveCount(0);
 
-    await page
-      .getByRole('group', { name: 'Show', exact: true })
-      .getByRole('radio', { name: 'Preview' })
-      .check();
+    await showView(page, 'Preview');
     await expect(previewRegion(page)).toBeVisible();
     await expect(page.locator('form.editor')).toBeHidden();
     await expect(inPreview(page, 'aboutWho')).toHaveClass(OUTLINED);
@@ -263,12 +342,68 @@ test.describe('as admin', () => {
 
     // Back to Edit: the fields again, the preview kept but hidden.
     await page.setViewportSize({ width: 390, height: 900 });
-    await page
-      .getByRole('group', { name: 'Show', exact: true })
-      .getByRole('radio', { name: 'Edit' })
-      .check();
+    await showView(page, 'Edit');
     await expect(page.locator('form.editor')).toBeVisible();
     await expect(previewRegion(page)).toBeHidden();
+  });
+
+  test('narrow screens: a save, a section and a language chosen in Edit wait for Preview', async ({
+    page,
+  }) => {
+    const arabic: string[] = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.startsWith('/admin/preview/ar'))
+        arabic.push(request.url());
+    });
+    await page.setViewportSize({ width: 390, height: 900 });
+    await openEditor(page, aboutId);
+    await showView(page, 'Preview');
+    await expect(inPreview(page, 'aboutWho')).toHaveClass(OUTLINED);
+    const frame = await previewFrame(page);
+    await mark(frame);
+
+    // A save while Edit shows: the hidden preview is not reloaded (P-15)...
+    await showView(page, 'Edit');
+    await expect(previewRegion(page)).toBeHidden();
+    const done = await routeSave(page, 'aboutWho');
+    await page.locator('#f-content-heading-en').fill(`Hidden ${MARK}`);
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.locator('.save-status[data-state="saved"]')).toBeVisible();
+    await page.waitForTimeout(1000); // past the 250 ms burst delay
+    expect(await marked(frame)).toBe(true);
+    // ...until Preview is chosen again: then it is, once.
+    await showView(page, 'Preview');
+    await expect.poll(() => marked(frame)).toBe(false);
+    await expect(inPreview(page, 'aboutWho')).toHaveClass(OUTLINED);
+    await done();
+
+    // Numbers is below the phone's first screen while Who we are is shown...
+    await expect.poll(() => inView(frame, 'aboutWho')).toBe(true);
+    expect(await inView(frame, 'statistics')).toBe(false);
+    // ...opened while Edit shows, the preview jumps to it once Preview is chosen (E2-C1).
+    await showView(page, 'Edit');
+    await pick(page, 'Numbers').click();
+    await expect(rowOf(page, 'Numbers')).toHaveAttribute('aria-current', 'true');
+    await showView(page, 'Preview');
+    await expect.poll(() => inView(frame, 'statistics')).toBe(true);
+    await expect(inPreview(page, 'statistics')).toHaveClass(OUTLINED);
+
+    // The editor's Arabic while Edit shows: the hidden frame keeps its page and asks for none
+    // (E2-C2); Preview loads the Arabic page, at Numbers.
+    await showView(page, 'Edit');
+    await page
+      .getByRole('group', { name: 'This page' })
+      .getByRole('group', { name: 'Editing language' })
+      .getByRole('radio', { name: 'العربية' })
+      .check();
+    await page.waitForTimeout(1000);
+    await expect(page.locator(FRAME)).toHaveAttribute('src', '/admin/preview/about');
+    expect(arabic).toEqual([]);
+    await showView(page, 'Preview');
+    await expect(page.locator(FRAME)).toHaveAttribute('src', '/admin/preview/ar/about');
+    await expect(page.frameLocator(FRAME).locator('html')).toHaveAttribute('lang', 'ar');
+    await expect(inPreview(page, 'statistics')).toHaveClass(OUTLINED);
+    expect(arabic.length).toBeGreaterThan(0);
   });
 });
 
