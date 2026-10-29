@@ -224,7 +224,10 @@ export function applyMessage(win: Window, message: ToPreviewMessage): void {
       return;
     case 'tokens': {
       const root = doc.documentElement.style;
-      for (const [name, value] of Object.entries(message.tokens)) root.setProperty(name, value);
+      // The closed token set (Admin v2 E4): a key the message leaves out stays as it is.
+      for (const [name, value] of Object.entries(message.tokens)) {
+        if (value !== undefined) root.setProperty(name, value);
+      }
       return;
     }
   }
