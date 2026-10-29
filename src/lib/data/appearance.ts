@@ -14,9 +14,7 @@ import { contentClient } from './source';
 
 /** anon's columns (the E5 migration's column grant): the header's options. */
 export const SITE_APPEARANCE_HEADER_COLUMNS =
-  'header_logo_position,header_logo_size,header_menu_align,header_sticky,header_hide_on_scroll,' +
-  'header_solid_after_hero,header_tint,header_blur,header_mobile_menu,header_cta_show,' +
-  'header_cta_label,header_cta_href';
+  'header_logo_position,header_logo_size,header_menu_align,header_sticky,header_hide_on_scroll,header_solid_after_hero,header_tint,header_blur,header_mobile_menu,header_cta_show,header_cta_label,header_cta_href';
 
 export async function getHeaderSettings(): Promise<HeaderSettings> {
   if (!supabaseConfigured()) return { ...HEADER_DEFAULTS };

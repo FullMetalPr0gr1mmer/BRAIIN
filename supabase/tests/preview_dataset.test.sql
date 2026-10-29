@@ -34,7 +34,10 @@
 --      (item 3), a live Admin reads the row, a live content_creator, developer or sales
 --      profile reads none, and neither does another tenant (supabase/tests/integrations.test.sql
 --      holds every role, stale tokens included). No preview emits the tag anyway: a preview
---      is noindex (BaseLayout), and SeoHead reads the code only for an indexable home page.
+--      is noindex (BaseLayout), and SeoHead reads the code only for an indexable home page;
+--   8. site_appearance (Admin v2 E5) is the public header's options: anon reads its thirteen
+--      columns (item 3), every CMS role reads the launch tenant's row (the non-staff block reads
+--      the claim's role, no profile), and a sales claim and another tenant read none.
 -- The literals are held equal to ANON_COLUMNS, DATASET_ONLY_COLUMNS, CREATE_DEFAULTS and MIRRORED_POLICIES
 -- by tests/lib/previewMirror.spec.ts, which parses this file: a grant, default or policy
 -- that moves fails one side until the other follows.
@@ -48,7 +51,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
 begin;
-select plan(24);
+select plan(28);
 
 -- ── The literals (parsed by tests/lib/previewMirror.spec.ts; keep one row per line) ──────
 create function _anon_columns() returns table (tbl text, cols text) language sql immutable as $$
@@ -57,6 +60,7 @@ create function _anon_columns() returns table (tbl text, cols text) language sql
     ('faq_items', 'id,tenant_id,question,answer,status,sort_order'),
     ('media_assets', 'id,tenant_id,kind,provider,storage_path,width,height,alt,stream_uid,mime_type,updated_at'),
     ('service_cases', 'id,tenant_id,service_id,portfolio_id,title,context,problems,results,status,published_at,updated_at'),
+    ('site_appearance', 'tenant_id,header_logo_position,header_logo_size,header_menu_align,header_sticky,header_hide_on_scroll,header_solid_after_hero,header_tint,header_blur,header_mobile_menu,header_cta_show,header_cta_label,header_cta_href'),
     ('site_integrations', 'tenant_id,search_console_token,ga4_measurement_id'),
     ('testimonials', 'id,tenant_id,slug,quote,author_name,author_role,client_id,portfolio_id,avatar_media_id,placements,status,sort_order,published_at,updated_at')
 $$;
@@ -116,6 +120,16 @@ create function _create_defaults() returns table (tbl text, col text, dflt text)
     ('services', 'sort_order', $d$0$d$),
     ('services', 'status', $d$'draft'::content_status$d$),
     ('services', 'value_points', $d$'[]'::jsonb$d$),
+    ('site_appearance', 'header_blur', $d$'soft'::text$d$),
+    ('site_appearance', 'header_cta_show', $d$false$d$),
+    ('site_appearance', 'header_hide_on_scroll', $d$true$d$),
+    ('site_appearance', 'header_logo_position', $d$'start'::text$d$),
+    ('site_appearance', 'header_logo_size', $d$'m'::text$d$),
+    ('site_appearance', 'header_menu_align', $d$'center'::text$d$),
+    ('site_appearance', 'header_mobile_menu', $d$'drawer'::text$d$),
+    ('site_appearance', 'header_solid_after_hero', $d$true$d$),
+    ('site_appearance', 'header_sticky', $d$true$d$),
+    ('site_appearance', 'header_tint', $d$'none'::text$d$),
     ('site_profile', 'accepting_applications', $d$false$d$),
     ('site_profile', 'address_country', $d$'SA'::text$d$),
     ('site_profile', 'footer_show_email', $d$true$d$),
@@ -158,6 +172,7 @@ create function _anon_policies() returns table (tbl text, policies text) languag
     ('service_cases', 'service_cases_published_parent:RESTRICTIVE:5ec4bd1be2ede2fd328e9818b89a640d,service_cases_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,service_cases_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('services', 'services_discipline_in_tenant:RESTRICTIVE:b326b5062b2f0e69046810717534cb09,services_discipline_published:RESTRICTIVE:c37eff0d6d10d79117aab9034276c0fa,services_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c'),
     ('site_integrations', 'site_integrations_public_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54'),
+    ('site_appearance', 'site_appearance_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54'),
     ('site_profile', 'site_profile_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54'),
     ('statistics', 'statistics_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,statistics_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('team_members', 'team_members_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,team_members_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
@@ -429,10 +444,10 @@ select is(
             (select string_agg(x, ',' order by x collate "C") from unnest(string_to_array(a.cols, ',')) x)),
           E'\n' order by a.tbl collate "C")
      from _anon_columns() a),
-  'anon''s SELECT columns on the six column-granted tables equal ANON_COLUMNS');
+  'anon''s SELECT columns on the seven column-granted tables equal ANON_COLUMNS');
 select ok(
   (select bool_and(not has_table_privilege('anon', format('public.%I', tbl), 'SELECT')) from _anon_columns()),
-  'the six column-granted tables have no table-level anon SELECT');
+  'the seven column-granted tables have no table-level anon SELECT');
 select is(
   (select string_agg(t, ',' order by t collate "C")
      from unnest(array['blog_posts', 'categories', 'certifications', 'clients', 'disciplines',
@@ -532,6 +547,34 @@ select _as_other();
 select is((select count(*)::int from public.site_integrations
             where tenant_id::text = current_setting('pv.launch')), 0,
   'other_tenant reads no site_integrations row of the launch tenant');
+reset role;
+
+-- ── 8. site_appearance (Admin v2 E5) ───────────────────────────────────────────────────
+-- The header's options are public: anon reads its columns of the launch tenant's row (item 3),
+-- every CMS role reads the row (the registry contract), a sales claim reads none (the
+-- non-staff block) and another tenant none.
+insert into public.site_appearance (tenant_id, header_logo_size)
+values (current_setting('pv.launch')::uuid, 'l');
+create function _appearance_rows(p_role text) returns int language plpgsql as $$
+begin
+  perform _as(p_role);
+  return (select count(*)::int from public.site_appearance
+           where tenant_id::text = current_setting('pv.launch'));
+end $$;
+set local role anon;
+select _as(null);
+select is((select header_logo_size from public.site_appearance), 'l',
+  'anon reads the launch tenant''s header options, the dataset''s projection of site_appearance');
+reset role;
+set local role authenticated;
+select is(_appearance_rows('admin') + _appearance_rows('content_creator') + _appearance_rows('seo') + _appearance_rows('developer'), 4,
+  'every CMS role reads the launch tenant''s site_appearance row (registry contract #1)');
+select is(_appearance_rows('sales'), 0,
+  'a sales claim reads no site_appearance row (0097''s non-staff block)');
+select _as_other();
+select is((select count(*)::int from public.site_appearance
+            where tenant_id::text = current_setting('pv.launch')), 0,
+  'other_tenant reads no site_appearance row of the launch tenant');
 reset role;
 
 select * from finish();

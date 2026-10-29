@@ -32,7 +32,10 @@ async function visible(tables: Record<string, Row[]>, drafts: Row[] = []) {
     const key =
       table === 'portfolio_services'
         ? 'portfolio_id,service_id'
-        : table === 'site_profile' || table === 'seo_defaults' || table === 'site_integrations'
+        : table === 'site_profile' ||
+            table === 'seo_defaults' ||
+            table === 'site_integrations' ||
+            table === 'site_appearance'
           ? 'tenant_id'
           : 'id';
     const { data, error } = await db.from(table).select(key);
@@ -54,6 +57,7 @@ describe('the mirror over the fixture tenant', () => {
     expect(ids['site_profile']).toHaveLength(1);
     expect(ids['seo_defaults']).toHaveLength(1);
     expect(ids['site_integrations']).toHaveLength(1);
+    expect(ids['site_appearance']).toHaveLength(1);
     expect(report.unsupported).toEqual([]);
   });
 

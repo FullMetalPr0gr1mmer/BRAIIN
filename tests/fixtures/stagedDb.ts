@@ -348,7 +348,11 @@ function readRowsRpc(db: Db, args: Row) {
     return { data: null, error: { code: '22023', message: 'ids' } };
   }
   if (
-    reads.some((r) => r.key === 'tenant_id' && !['seo_defaults', 'site_profile'].includes(r.table))
+    reads.some(
+      (r) =>
+        r.key === 'tenant_id' &&
+        !['seo_defaults', 'site_appearance', 'site_profile'].includes(r.table),
+    )
   ) {
     return { data: null, error: { code: '22023', message: 'key' } };
   }

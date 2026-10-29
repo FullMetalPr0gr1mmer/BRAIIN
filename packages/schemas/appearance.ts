@@ -113,42 +113,50 @@ export function tintAllowed(s: Pick<HeaderSettings, 'sticky' | 'solidAfterHero' 
 }
 
 /**
- * A save from the Header screen: the whole header (the editor always sends every option) and
- * the row's version (0 before the first save, as every singleton). The two rules that span
- * options are checked here and again by the SQL CHECKs.
+ * A save of the appearance settings: any of the options (the Header screen sends them all; a
+ * release's pending change, a restore or a cut patch names only some) and the row's version (0
+ * before the first save, as every singleton). The two rules that span options are checked
+ * here when the save names every option they read, and always by the SQL CHECKs, which see the
+ * stored values too (a refusal there is a 422 on the field, src/lib/admin/singletons).
  */
 export const SiteAppearanceWriteSchema = z
   .object({
-    logoPosition: z.enum(HEADER_LOGO_POSITIONS),
-    logoSize: z.enum(HEADER_LOGO_SIZES),
-    menuAlign: z.enum(HEADER_MENU_ALIGNS),
-    sticky: z.boolean(),
-    hideOnScroll: z.boolean(),
-    solidAfterHero: z.boolean(),
-    tint: z.enum(HEADER_TINTS),
-    blur: z.enum(HEADER_BLURS),
-    mobileMenu: z.enum(HEADER_MOBILE_MENUS),
-    ctaShow: z.boolean(),
-    ctaLabel: HeaderCtaLabelSchema.nullable(),
-    ctaHref: HeaderCtaHrefSchema.nullable(),
+    logoPosition: z.enum(HEADER_LOGO_POSITIONS).optional(),
+    logoSize: z.enum(HEADER_LOGO_SIZES).optional(),
+    menuAlign: z.enum(HEADER_MENU_ALIGNS).optional(),
+    sticky: z.boolean().optional(),
+    hideOnScroll: z.boolean().optional(),
+    solidAfterHero: z.boolean().optional(),
+    tint: z.enum(HEADER_TINTS).optional(),
+    blur: z.enum(HEADER_BLURS).optional(),
+    mobileMenu: z.enum(HEADER_MOBILE_MENUS).optional(),
+    ctaShow: z.boolean().optional(),
+    ctaLabel: HeaderCtaLabelSchema.nullable().optional(),
+    ctaHref: HeaderCtaHrefSchema.nullable().optional(),
     version: z.number().int().min(0),
   })
   .superRefine((value, ctx) => {
-    if (value.ctaShow && !value.ctaLabel) {
+    if (value.ctaShow === true && value.ctaLabel === null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['ctaLabel'],
         message: 'Give the button its words in both languages.',
       });
     }
-    if (value.ctaShow && !value.ctaHref) {
+    if (value.ctaShow === true && value.ctaHref === null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['ctaHref'],
         message: 'Say where the button goes.',
       });
     }
-    if (!tintAllowed(value)) {
+    const { sticky, solidAfterHero, tint } = value;
+    if (
+      sticky !== undefined &&
+      solidAfterHero !== undefined &&
+      tint !== undefined &&
+      !tintAllowed({ sticky, solidAfterHero, tint })
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['tint'],

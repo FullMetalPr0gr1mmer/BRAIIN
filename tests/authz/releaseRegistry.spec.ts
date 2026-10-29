@@ -20,6 +20,7 @@ const ROUTE_CAPS: Record<string, Capability> = {
   seo_defaults: 'seo.globalDefaults', // src/lib/admin/singletons/seoDefaults.ts
   entity_seo: 'seo.entityMeta', // src/lib/admin/entitySeo.ts
   page_visibility: 'maintenance.manage', // src/pages/api/admin/page-visibility/index.ts
+  site_appearance: 'theme.edit', // src/lib/admin/singletons/siteAppearance.ts (Admin v2 E5)
 };
 
 /** Route-edited entities keyed by their own `id` (the rest are per-tenant singletons). */
@@ -33,9 +34,9 @@ const configOf = (row: RegistryRow) =>
 describe('the release registry (app.release_entities) equals ROLE_CAPS', () => {
   const rows = registryRows();
 
-  it('parses the twenty-two rows the migrations seed (0038, 0057 page visibility, 0098 the FAQ)', () => {
-    expect(rows).toHaveLength(22);
-    expect(new Set(rows.map((r) => r.entityType)).size).toBe(22);
+  it('parses the twenty-three rows the migrations seed (0038, 0057 page visibility, 0098 the FAQ, E5 the header)', () => {
+    expect(rows).toHaveLength(23);
+    expect(new Set(rows.map((r) => r.entityType)).size).toBe(23);
   });
 
   it('every entity type is a resource config or a route with a stated capability', () => {
@@ -79,7 +80,7 @@ describe('the release registry (app.release_entities) equals ROLE_CAPS', () => {
 
   it('singletons are keyed by the tenant; everything else by id', () => {
     const singletons = rows.filter((r) => r.keyColumn === 'tenant_id').map((r) => r.entityType);
-    expect(singletons.sort()).toEqual(['seo_defaults', 'site_profile']);
+    expect(singletons.sort()).toEqual(['seo_defaults', 'site_appearance', 'site_profile']);
   });
 
   it('the job-application intake switch stays immediate (never in a release)', () => {

@@ -1225,6 +1225,7 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
         { id: VIS, tenant_id: T, page_id: PAGE2, template: null, mode: 'public', version: 1 },
       ],
       faq_items: [row(FAQ)],
+      site_appearance: [{ tenant_id: T, version: 1, header_logo_size: 'm' }],
       // The version a rollback names: published, the tenant's.
       content_releases: [{ id: RESTORED, tenant_id: T, number: 1, status: 'published' }],
     };
@@ -1334,6 +1335,8 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
         { mode: 'public', redirect_page_id: null, hide_from: null, show_on: null },
       ),
       change(22, 'faq_item', FAQ, { question: BI('Why?', 'لماذا؟') }, { question: null }),
+      // Admin v2 E5: the header's options, a singleton keyed by the tenant like the identity.
+      change(23, 'site_appearance', T, { logoSize: 'l' }, { header_logo_size: 'm' }),
     ];
     expect(new Set(drafts.map((d) => d['entity_type'])).size).toBe(
       Object.keys(RELEASE_REGISTRY).length,

@@ -162,6 +162,8 @@ describe('waitingFor: the roles that could publish it', () => {
     redirect: { edit: ['admin', 'seo'], remove: ['admin', 'seo'] },
     // §5 "Maintenance / hidden pages / page visibility" (Admin v2 U14a); never removed.
     page_visibility: { edit: ['admin', 'developer'], remove: [] },
+    // P-2 "Theme + header/intro appearance": theme.edit (Admin v2 E5); never removed.
+    site_appearance: { edit: ['admin', 'developer'], remove: [] },
   };
 
   for (const entityType of RELEASE_ENTITY_TYPES) {

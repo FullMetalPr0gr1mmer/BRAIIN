@@ -32,6 +32,7 @@ vi.mock('@/lib/media/static', () => ({
 }));
 
 const { withContentSource } = await import('@/lib/data/source');
+const appearance = await import('@/lib/data/appearance');
 const blog = await import('@/lib/data/blog');
 const certifications = await import('@/lib/data/certifications');
 const disciplines = await import('@/lib/data/disciplines');
@@ -52,6 +53,7 @@ const taxonomy = await import('@/lib/data/taxonomy');
 const team = await import('@/lib/data/team');
 
 const MODULES = {
+  appearance,
   blog,
   certifications,
   disciplines,
@@ -123,6 +125,13 @@ const CASES: Record<string, () => Promise<void>> = {
     expect(value.map((d) => [d.slug, d.poster?.id ?? null, d.services.map((s) => s.slug)])).toEqual(
       [['branding', ID.mDiscPoster, ['logo']]],
     );
+    clean(report);
+  },
+  'appearance.getHeaderSettings': async () => {
+    // Admin v2 E5: anon's columns of the row; the fixture sets a small logo.
+    const { value, report } = await inPreview(() => appearance.getHeaderSettings());
+    expect(value.logoSize).toBe('s');
+    expect(value.ctaShow).toBe(false);
     clean(report);
   },
   'faq.getFaq': async () => {
@@ -349,7 +358,7 @@ function clean(report: ReturnType<ReturnType<typeof createPreviewSource>['report
 }
 
 describe('every public loader, inside the preview scope', () => {
-  it('has a case for every exported loader function of the 18 files', () => {
+  it('has a case for every exported loader function of the 19 files', () => {
     const exported = Object.entries(MODULES).flatMap(([name, mod]) =>
       Object.entries(mod)
         .filter(([key, value]) => typeof value === 'function' && !PURE.has(key))

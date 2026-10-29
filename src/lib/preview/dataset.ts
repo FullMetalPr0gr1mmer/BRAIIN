@@ -46,7 +46,7 @@ import { ANON_COLUMNS, createMirror, visibilityClosure } from './visibility';
 // pages with `range()` in key order and an exact count, and paging stops at the COUNT, not
 // at a short page (a project whose max_rows is lower still reads every row). A table is
 // capped (PREVIEW_ROW_CAP, media PREVIEW_MEDIA_ROW_CAP); more rows than that marks the
-// render untrusted rather than silently showing a partial table. The six tables anon
+// render untrusted rather than silently showing a partial table. The seven tables anon
 // reads by column are read with exactly anon's columns.
 //
 // Pending changes: one paged read of content_drafts per request, each row parsed. A draft is
@@ -140,6 +140,19 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row
     sort_order: 0,
     value_points: [],
     deliverables: [],
+  },
+  // Admin v2 E5: the header as built (the table's NOT NULL defaults).
+  site_appearance: {
+    header_logo_position: 'start',
+    header_logo_size: 'm',
+    header_menu_align: 'center',
+    header_sticky: true,
+    header_hide_on_scroll: true,
+    header_solid_after_hero: true,
+    header_tint: 'none',
+    header_blur: 'soft',
+    header_mobile_menu: 'drawer',
+    header_cta_show: false,
   },
   site_profile: {
     address_country: 'SA',

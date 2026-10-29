@@ -34,7 +34,7 @@ import type { DatasetTable, PreviewTable } from './relations';
 type Row = Readonly<Record<string, unknown>>;
 
 /**
- * Anon's column grants on the six tables granted by column (every other preview table is
+ * Anon's column grants on the seven tables granted by column (every other preview table is
  * granted to anon whole). The dataset reads these tables with exactly these columns, and
  * the emulator answers 42501 for any other, as PostgREST does for a visitor.
  */
@@ -94,6 +94,22 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
   // Calendly link or the legacy jsonb. (A preview never loads GA4: its branch of the middleware
   // returns before the GA4 read, and its layout renders no loader.)
   site_integrations: ['tenant_id', 'search_console_token', 'ga4_measurement_id'],
+  // Admin v2 E5: the header's options; never the version, the stamps or the actors.
+  site_appearance: [
+    'tenant_id',
+    'header_logo_position',
+    'header_logo_size',
+    'header_menu_align',
+    'header_sticky',
+    'header_hide_on_scroll',
+    'header_solid_after_hero',
+    'header_tint',
+    'header_blur',
+    'header_mobile_menu',
+    'header_cta_show',
+    'header_cta_label',
+    'header_cta_href',
+  ],
   // 0028: never is_placeholder, the schedule, version or the actors.
   service_cases: [
     'id',
@@ -202,6 +218,11 @@ export const MIRRORED_POLICIES: Readonly<
     services_discipline_published: 'RESTRICTIVE:c37eff0d6d10d79117aab9034276c0fa',
     services_read: 'PERMISSIVE:a3adeda401046be963dd172ac14b795c',
   },
+  // Admin v2 E5: the anon read, the tenant fence alone; the non-staff block and the writes are
+  // TO authenticated, so none applies to a visitor.
+  site_appearance: {
+    site_appearance_read: 'PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54',
+  },
   // 0105 (U11): the anon read, the tenant fence alone; the staff policies are TO
   // authenticated, so none applies to a visitor.
   site_integrations: {
@@ -271,6 +292,7 @@ export const VISIBILITY_DEPS: Readonly<Record<DatasetTable, readonly DatasetTabl
   seo_defaults: [],
   service_cases: ['services'],
   services: ['disciplines'],
+  site_appearance: [],
   site_integrations: [],
   site_profile: [],
   statistics: [],
@@ -467,11 +489,13 @@ export function createMirror(data: MirrorData): Mirror {
       case 'clients':
         return flagged(row);
       // 0001 categories_read, 0019 site_profile_read, 0009 seo_defaults_read, 0105
-      // site_integrations_public_read (U11; anon's two columns): the tenant fence only.
+      // site_integrations_public_read (U11; anon's two columns), E5 site_appearance_read
+      // (anon's thirteen columns): the tenant fence only.
       case 'categories':
       case 'site_profile':
       case 'seo_defaults':
       case 'site_integrations':
+      case 'site_appearance':
         return true;
       // 0009 entity_seo_read (tenant) AND 0011 entity_seo_published_only (RESTRICTIVE: its
       // parent published, under the parent's RLS; an orphan or another entity type never).
