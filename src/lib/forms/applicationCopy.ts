@@ -32,6 +32,8 @@ export interface ApplyFormCopy {
   /** The empty first option of each select. */
   pick: string;
   skills: string;
+  /** Beside the crafts' label when the forms config requires them (Admin v2 E8). */
+  skillsRequired: string;
   portfolio: string;
   portfolioPh: string;
   linkedin: string;
@@ -57,6 +59,8 @@ export interface ApplyFormCopy {
     tooLong: string;
     invalid: string;
     consent: string;
+    /** The crafts, when the forms config requires them and none is ticked. */
+    skills: string;
   };
   status: Omit<ApplyStatusCopy, 'ok'>;
 }
@@ -78,6 +82,7 @@ export const APPLY_FORM_COPY: Record<Locale, ApplyFormCopy> = {
     availability: 'When could you start?',
     pick: 'Choose one',
     skills: 'Crafts you work in',
+    skillsRequired: 'choose at least one',
     portfolio: 'Portfolio link',
     portfolioPh: 'https://behance.net/yourname',
     linkedin: 'LinkedIn',
@@ -101,6 +106,7 @@ export const APPLY_FORM_COPY: Record<Locale, ApplyFormCopy> = {
       tooLong: 'This is longer than we can accept.',
       invalid: 'Please check this field.',
       consent: 'Tick this box so we can keep and review your application.',
+      skills: 'Choose at least one craft.',
     },
     status: {
       sending: 'Sending…',
@@ -130,6 +136,7 @@ export const APPLY_FORM_COPY: Record<Locale, ApplyFormCopy> = {
     availability: 'متى تقدر تبدأ؟',
     pick: 'اختر واحداً',
     skills: 'الحِرف اللي تشتغل فيها',
+    skillsRequired: 'اختر واحدة على الأقل',
     portfolio: 'رابط أعمالك',
     portfolioPh: 'https://behance.net/yourname',
     linkedin: 'لينكدإن',
@@ -153,6 +160,7 @@ export const APPLY_FORM_COPY: Record<Locale, ApplyFormCopy> = {
       tooLong: 'النص أطول من الحد المسموح.',
       invalid: 'يرجى مراجعة هذا الحقل.',
       consent: 'يرجى تحديد هذا المربع لنحتفظ بطلبك ونراجعه.',
+      skills: 'يرجى اختيار حرفة واحدة على الأقل.',
     },
     status: {
       sending: 'جارٍ الإرسال…',

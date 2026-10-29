@@ -45,7 +45,9 @@ import Cta from '@/components/ui/Cta.astro';
 // the two consent lines, whose version (`<notice date>.r<N>` once reworded) is posted with
 // them. With no row the HTML is the built-in form to the byte (tests/render/sections.spec.ts).
 // The craft chips are real checkboxes (keyboard-operable, posted by KEY), visually the
-// design's pills, the group named by its visible label. The CV's input covers the whole zone
+// design's pills, the group named by its visible label. When the config requires them the
+// label says "choose at least one" and the group carries `data-required` and its message, so
+// the client asks for a chip before sending and marks the group on a 422 naming `skills`. The CV's input covers the whole zone
 // (transparent), so a click anywhere opens the picker and a file can be dropped on it; Remove
 // sits OUTSIDE the label, above the input, so pressing it never reopens the picker; each line
 // is a stack of every text it can show (one visible at a time), so the zone is sized for the
@@ -250,9 +252,16 @@ const regionText = answer === null ? '' : applyStatusText(STR, answer, okMessage
                 </select>
               </div>
             ) : field === 'skills' ? (
-              <div class="af-chips af-full" role="group" aria-labelledby="af-skills-label">
+              <div
+                class="af-chips af-full"
+                role="group"
+                aria-labelledby="af-skills-label"
+                data-required={required ? 'true' : undefined}
+                data-err-required={required ? STR.errors.skills : undefined}
+              >
                 <p class="af-label" id="af-skills-label">
                   {label}
+                  {required && <span class="af-opt">{STR.skillsRequired}</span>}
                 </p>
                 <div class="af-chips__row">
                   {crafts.map((c) => (
