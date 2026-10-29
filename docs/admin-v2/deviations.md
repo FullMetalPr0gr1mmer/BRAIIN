@@ -54,7 +54,16 @@
 - **Forms**:
   - closed field sets, no new fields (Zod boundary, per-column PII encryption);
   - the honeypot is always on;
-  - recruitment consent is versioned.
+  - recruitment consent is versioned;
+  - E8 makes the overview an editor of what the closed sets allow (labels in both languages,
+    the order, an optional field shown or required, the button, the budget words, the Join
+    consent lines), stored as differences from the built-in forms; a section's own button
+    text, set in Pages, still wins over the config's (the page's words are the page's);
+  - the inquiry form's consent line ("agreed to be contacted") stays code-owned: a lead stores
+    the answer, not a version, and versioning it needs a column through `crm_ingest_lead`
+    (owner question in as-built/E8.md);
+  - the captcha switch is drawn off and "Not set up" until O-19 (a §7 CSP amendment and a
+    public budget check come with it).
 - **Integrations**:
   - no secrets in staff-readable rows;
   - no API keys or outbound webhooks;
