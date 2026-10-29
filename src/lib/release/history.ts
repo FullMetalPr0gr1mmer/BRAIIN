@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { VERSIONS_PAGE, type HistoryQuery } from '@schemas/release';
 import type { AuthContext } from '@/lib/auth/types';
 import { AuthorizationError } from '@/lib/authz/errors';
+import { ValidationError } from '@/lib/admin/errors';
 import { json, type AdminRouteContext } from '@/lib/admin/route';
 import { readsEntity } from '@/lib/preview/dataset';
 import { canPublish } from './caps';
@@ -30,14 +31,29 @@ import { namesOf, type Person } from './versions';
 type Row = Record<string, unknown>;
 type Ctx = AdminRouteContext<HistoryQuery>;
 
-/** The entity a history request names: the session's tenant for a singleton (key `tenant_id`). */
+/**
+ * The entity a history read or restore names: the session's tenant for a singleton, the sent id
+ * for anything else. A singleton is what the REGISTRY keys by the tenant (`key: 'tenant_id'`), the
+ * one rule here; the schemas' SINGLETON_ENTITY_TYPES is its client-side copy, held equal to it by
+ * tests/lib/historySingletons.spec.ts. An id sent for a singleton, or none for anything else, is
+ * refused (422), never ignored or guessed (R14-prep code review 2): were the two lists ever to
+ * drift, a request would fail rather than read another row than the one it named.
+ */
 export function historyEntityId(
   auth: AuthContext,
   entry: { key: string },
   entityId: string | undefined,
 ): string {
-  if (entry.key === 'tenant_id') return auth.tenantId;
-  if (entityId === undefined) throw new Error('history: no entity named');
+  if (entry.key === 'tenant_id') {
+    if (entityId !== undefined) {
+      throw new ValidationError(
+        'The site’s own settings are named by the site, not by an id.',
+        'entityId',
+      );
+    }
+    return auth.tenantId;
+  }
+  if (entityId === undefined) throw new ValidationError('Which item?', 'entityId');
   return entityId;
 }
 

@@ -7,6 +7,7 @@ import {
   SINGLETON_ENTITY_TYPES,
 } from '@schemas/release';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
+import type { AuthContext } from '@/lib/auth/types';
 
 // History for the site's own settings and a page's search settings (Admin v2 R14-prep, owner
 // decision 2026-10-28: before R14). The identity (General) and the SEO defaults (SEO › Site
@@ -16,6 +17,7 @@ import type { EntitySave } from '@/lib/admin/useEntitySave';
 // (entity SEO, the shared SeoPanel) are keyed by the row's own id, known from the load.
 
 const ROW = '0e0e0e0e-0000-4000-8000-000000000450';
+const TENANT = '00000000-0000-4000-8000-0000000000c1';
 
 /** What each mocked editor's save hands EditorForm, and what it was asked to load. */
 const mock = vi.hoisted(() => ({
@@ -66,6 +68,8 @@ vi.mock('@/lib/admin/useEntitySave', async (importOriginal) => {
 });
 
 const { RELEASE_REGISTRY } = await import('@/lib/release/registry');
+const { historyEntityId } = await import('@/lib/release/history');
+const { ValidationError } = await import('@/lib/admin/errors');
 const { entitySeoHistory, historyQuery, historyRestoreBody, singletonHistory } =
   await import('@/lib/admin/historyTarget');
 const { default: GeneralScreen } = await import('@/components/admin/screens/general/GeneralScreen');
@@ -104,6 +108,28 @@ describe('the singletons of the release registry', () => {
       HistoryRestoreRequestSchema.safeParse({ entityType: 'seo_defaults', entityId: ROW, seq: 2 })
         .success,
     ).toBe(false);
+  });
+
+  it('the server keys a singleton by the session, and refuses an id it would not use (code review 2)', () => {
+    // The registry's rule (key `tenant_id`) and the schema's list are two copies; the test above
+    // holds them equal, and the server refuses a request the registry's rule does not expect, so
+    // a sent id is never silently ignored and a missing one never guessed.
+    const auth = { tenantId: TENANT } as AuthContext;
+    for (const entityType of SINGLETON_ENTITY_TYPES) {
+      const entry = RELEASE_REGISTRY[entityType];
+      expect(historyEntityId(auth, entry, undefined), entityType).toBe(TENANT);
+      let refused: unknown = null;
+      try {
+        historyEntityId(auth, entry, ROW);
+      } catch (err) {
+        refused = err;
+      }
+      expect(refused, entityType).toBeInstanceOf(ValidationError);
+      expect((refused as ValidationError).field).toBe('entityId');
+    }
+    const service = RELEASE_REGISTRY['service'];
+    expect(historyEntityId(auth, service, ROW)).toBe(ROW);
+    expect(() => historyEntityId(auth, service, undefined)).toThrow(ValidationError);
   });
 
   it("the drawer's request and restore body leave a singleton's id out", () => {
