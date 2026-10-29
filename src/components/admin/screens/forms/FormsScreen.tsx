@@ -3,6 +3,7 @@ import EditorForm from '@/components/admin/fields/EditorForm';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
 import type { FieldDef } from '@/lib/admin/ui';
+import { singletonHistory } from '@/lib/admin/historyTarget';
 import {
   buttonCopy,
   fieldState,
@@ -46,6 +47,9 @@ export interface FormsScreenProps {
 }
 
 const TARGET = { kind: 'singleton', endpoint: '/api/admin/form-settings' } as const;
+
+/** The forms config's history: the site's own (no id), as the identity's (R14-prep). */
+const FORMS_HISTORY = singletonHistory('form_settings');
 
 /** One bilingual line: English and Arabic inputs, each with its own label. */
 function CopyPair({
@@ -328,6 +332,8 @@ export default function FormsScreen(props: FormsScreenProps) {
       hidden={[column]}
       submitLabel={`Save the ${formName.toLowerCase()}`}
       noun="forms config"
+      history={FORMS_HISTORY}
+      historyOf={{ label: formName, path: props.form === 'inquiry' ? '/contact' : '/join' }}
       after={editor}
     />
   );

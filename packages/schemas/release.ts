@@ -949,7 +949,7 @@ export type RestoreVersionRequest = z.infer<typeof RestoreVersionRequestSchema>;
  * server reads the session's tenant (Admin v2 R14-prep). tests/lib/historySingletons.spec.ts
  * holds this equal to the registry's tenant-keyed entries.
  */
-export const SINGLETON_ENTITY_TYPES = ['site_profile', 'seo_defaults'] as const;
+export const SINGLETON_ENTITY_TYPES = ['site_profile', 'seo_defaults', 'form_settings'] as const;
 
 /** A singleton names no entity (the server reads the tenant); every other type names one. */
 function entityIdRule(
