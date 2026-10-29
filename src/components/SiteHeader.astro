@@ -8,6 +8,8 @@ import { isCurrentNav } from '@/lib/nav/current';
 import { getIdentity, brandName } from '@/lib/identity';
 import { localizedHref, localizedPath } from '@/lib/i18n';
 import { trackHref } from '@/lib/analytics/track';
+import { getHeaderSettings } from '@/lib/data/appearance';
+import { headerAttributes, LOGO_SIZES } from '@/lib/appearance/header';
 import logo from '@/assets/braiin-logo-white.png';
 
 // Sitewide header. Renders CMS-authored navigation (`public.navigation`, edited under
@@ -67,13 +69,30 @@ const otherLocale: Locale = locale === 'ar' ? 'en' : 'ar';
 // language of "this page does not exist" would otherwise link to itself, or to another 404.
 const switchHref = langHref ?? localizedPath(logical, otherLocale);
 
+// The header's options (Admin v2 E5, `public.site_appearance`, edited at
+// /admin/appearance/header): a `data-*` attribute for each option that differs from the header
+// as built, and none otherwise, so with no row this markup is byte-identical to before E5.
+// global.css maps every value to a fixed rule (no inline style: CSP), and the script below
+// reads the three that change its behaviour.
+const settings = await getHeaderSettings();
+const attrs = headerAttributes(settings);
+// The call-to-action button: shown only with its words and its link (headerFromRow drops it
+// otherwise). Its link is localized like a menu link; an https link is left as it is.
+const cta =
+  settings.ctaShow && settings.ctaLabel && settings.ctaHref
+    ? {
+        href: href(settings.ctaHref),
+        label: settings.ctaLabel[locale] ?? settings.ctaLabel.en,
+      }
+    : null;
+
 const STR = {
   en: { skip: 'Skip to content', menu: 'Menu', nav: 'Main navigation' },
   ar: { skip: 'تخطَّ إلى المحتوى', menu: 'القائمة', nav: 'التنقل الرئيسي' },
 }[locale];
 ---
 
-<header class:list={['site-header', `site-header--${variant}`]} data-header={variant}>
+<header class:list={['site-header', `site-header--${variant}`]} data-header={variant} {...attrs}>
   <a class="skip-link" href="#main">{STR.skip}</a>
 
   <div class="site-header__bar">
@@ -93,7 +112,7 @@ const STR = {
         formats={['avif', 'webp']}
         width={264}
         widths={[176, 264, 352]}
-        sizes="clamp(96px, 10vw, 132px)"
+        sizes={LOGO_SIZES[settings.logoSize]}
         decoding="async"
         loading="eager"
       />
@@ -162,18 +181,51 @@ const STR = {
             </li>
           ))
         }
+        {
+          /* E5: the call-to-action button's small-screen copy, the menu's last item (the bar's
+             copy is hidden at <=900px, global.css). */
+          cta && (
+            <li class="site-nav__cta-item">
+              <a class="site-nav__cta" href={cta.href} data-track={trackHref(cta.href)}>
+                {cta.label}
+              </a>
+            </li>
+          )
+        }
       </ul>
     </nav>
 
-    <a
-      class="site-header__lang"
-      href={switchHref}
-      hreflang={otherLocale}
-      lang={otherLocale}
-      data-track={otherLocale === 'ar' ? 'language_ar' : 'language_en'}
-    >
-      {otherLocale === 'ar' ? 'العربية' : 'English'}
-    </a>
+    {
+      /* E5: with a call-to-action button, it and the language switch share one end group (the
+         centred logo's grid puts the group in its last column). Without one, the language
+         switch stands alone, as built. The language switch always shows (O-13). */
+      cta ? (
+        <div class="site-header__end">
+          <a class="site-header__cta" href={cta.href} data-track={trackHref(cta.href)}>
+            {cta.label}
+          </a>
+          <a
+            class="site-header__lang"
+            href={switchHref}
+            hreflang={otherLocale}
+            lang={otherLocale}
+            data-track={otherLocale === 'ar' ? 'language_ar' : 'language_en'}
+          >
+            {otherLocale === 'ar' ? 'العربية' : 'English'}
+          </a>
+        </div>
+      ) : (
+        <a
+          class="site-header__lang"
+          href={switchHref}
+          hreflang={otherLocale}
+          lang={otherLocale}
+          data-track={otherLocale === 'ar' ? 'language_ar' : 'language_en'}
+        >
+          {otherLocale === 'ar' ? 'العربية' : 'English'}
+        </a>
+      )
+    }
   </div>
 </header>
 
@@ -184,6 +236,11 @@ const STR = {
   const header = document.querySelector<HTMLElement>('.site-header');
   if (header) {
     const overlay = header.dataset.header === 'overlay';
+    // E5's options (absent = as built): a bar that scrolls away with the page needs no scroll
+    // work at all; one that never hides, or never turns solid, skips that half.
+    const sticky = header.dataset.sticky !== 'off';
+    const hides = header.dataset.hide !== 'off';
+    const turnsSolid = overlay && header.dataset.solid !== 'off';
     const menu = header.querySelector('details');
     // Following a link from the small-screen menu closes it. A same-page anchor
     // (/#services, on home) does not reload, so a <details> left open would stay pinned
@@ -208,15 +265,17 @@ const STR = {
 
     const update = () => {
       ticking = false;
+      // A bar that scrolls away with the page (E5, data-sticky="off") never changes state.
+      if (!sticky) return;
       const y = window.scrollY;
       const past = y > threshold;
-      if (overlay) header.classList.toggle('is-solid', past);
+      if (turnsSolid) header.classList.toggle('is-solid', past);
       // Never hide a header the visitor is using: an open menu, or KEYBOARD focus inside
       // it (`:focus-visible`, not any focus — a mouse click on a button in the bar leaves
       // focus on it, and would otherwise stop the bar hiding for the rest of the scroll;
       // the CSS restore of a hidden bar is keyboard-only too).
       const inUse = menu?.open === true || header.querySelector(':focus-visible') !== null;
-      if (past && y - lastY > 4 && !inUse) header.classList.add('is-hidden');
+      if (hides && past && y - lastY > 4 && !inUse) header.classList.add('is-hidden');
       else if (y - lastY < -4 || y < threshold * 0.55) header.classList.remove('is-hidden');
       lastY = y;
     };
