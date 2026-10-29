@@ -124,8 +124,9 @@ test('publish: a new question waits as a pending change, then goes live as a ver
   expect(await contactQuestions(page)).not.toContain(Q1.en);
 
   await open(page, '/admin/faq');
+  // The savebar mounts when the browser is idle and then reads the pending changes.
   const bar = page.getByRole('region', { name: 'Unpublished changes' });
-  await expect(bar).toBeVisible();
+  await expect(bar).toBeVisible({ timeout: 15_000 });
   await bar.getByRole('button', { name: 'Publish…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Publish to the website' });
   await expect(dialog).toBeVisible();

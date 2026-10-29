@@ -146,6 +146,65 @@ describe('playwright.config.ts', () => {
     expect(off.get('visibility')!.dependencies).toEqual(['chromium', 'admin']);
   });
 
+  it('unset: every project is main’s, field for field, but the admin project ignoring the drill', async () => {
+    // main 42b61c6f's projects as written. The one addition while unset: the admin project
+    // ignores the drill's file, which would otherwise be one of its specs (and only skip).
+    vi.resetModules();
+    vi.stubEnv('E2E_RELEASES', '');
+    const { default: config } = await import('../../playwright.config');
+    const { devices } = await import('@playwright/test');
+    const src = (re: unknown) => (re instanceof RegExp ? re.source : re);
+    const shape = (config.projects ?? []).map((p) => ({
+      name: p.name,
+      testDir: p.testDir ?? null,
+      testMatch: src(p.testMatch) ?? null,
+      testIgnore: Array.isArray(p.testIgnore) ? p.testIgnore.map(src) : (src(p.testIgnore) ?? null),
+      dependencies: p.dependencies ?? null,
+      teardown: p.teardown ?? null,
+      chrome: JSON.stringify(p.use) === JSON.stringify(devices['Desktop Chrome']),
+    }));
+    const admin = './tests/admin';
+    const spec = (name: string) => `[\\\\/]tests[\\\\/]admin[\\\\/]${name}\\.e2e\\.ts$`;
+    const p = (
+      name: string,
+      fields: Partial<Omit<(typeof shape)[number], 'name' | 'chrome'>> = {},
+    ) => ({
+      name,
+      testDir: admin,
+      testMatch: null,
+      testIgnore: null,
+      dependencies: null,
+      teardown: null,
+      chrome: true,
+      ...fields,
+    });
+    expect(shape).toEqual([
+      p('chromium', { testDir: null, testIgnore: '[\\\\/]tests[\\\\/]admin[\\\\/]' }),
+      p('admin-setup', { testMatch: 'staff\\.setup\\.ts$' }),
+      p('admin-samples', { testMatch: 'samples\\.setup\\.ts$', dependencies: ['admin-setup'] }),
+      p('admin', {
+        testIgnore: [
+          spec('visibility'),
+          spec('general'),
+          spec('ga4'),
+          spec('maintenance'),
+          'maintenance\\.teardown\\.ts$',
+          spec('releases-mode'),
+        ],
+        dependencies: ['admin-samples'],
+      }),
+      p('visibility', { testMatch: spec('visibility'), dependencies: ['chromium', 'admin'] }),
+      p('general', { testMatch: spec('general'), dependencies: ['visibility'] }),
+      p('ga4', { testMatch: spec('ga4'), dependencies: ['general'] }),
+      p('maintenance', {
+        testMatch: spec('maintenance'),
+        dependencies: ['ga4'],
+        teardown: 'maintenance-teardown',
+      }),
+      p('maintenance-teardown', { testMatch: 'maintenance\\.teardown\\.ts$' }),
+    ]);
+  });
+
   it('on: the switch after the samples and before every spec; the drill alone after them', async () => {
     const on = await projects(true);
     expect(on.get('releases-on')!.dependencies).toEqual(['admin-samples']);
