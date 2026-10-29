@@ -11,7 +11,7 @@ import type {
   PersonView,
   StageView,
 } from '@/lib/crm/leadPage';
-import { AnswerOrder } from '@/lib/crm/lateAnswers';
+import { Serial } from '@/lib/crm/lateAnswers';
 import LeadContactCard, { type Revealed } from './LeadContactCard';
 import LeadNotes from './LeadNotes';
 import LeadStatusCard from './LeadStatusCard';
@@ -60,10 +60,11 @@ export default function LeadDetail(props: LeadDetailProps) {
   const [eraseError, setEraseError] = useState('');
   const [now, setNow] = useState(() => Date.parse(props.now));
   const marked = useRef(false);
-  // The lead's reads and writes on one clock: an answer never replaces one sent after it
-  // (the mark-read on opening, the refetch after "Log contact" or a 409), and a write's
-  // answer not shown is followed by one more read (src/lib/crm/lateAnswers.ts).
-  const order = useRef(new AnswerOrder());
+  // Every read and write of the lead runs one after another (src/lib/crm/lateAnswers.ts), so
+  // answers land in send order and the newest sent is the one shown; the status card is busy
+  // until the queue is empty, follow-up reads included, so no versioned change leaves with an
+  // old version.
+  const queue = useRef(new Serial(setBusy));
 
   const stagesByKey = useMemo(
     () => new Map(stages.map((stage) => [stage.key, { label: stage.label }])),
@@ -74,17 +75,17 @@ export default function LeadDetail(props: LeadDetailProps) {
     [people],
   );
 
-  /** Reads the lead again; a read a write overtook is read once more (at most twice). */
-  async function refetch(again = 2): Promise<void> {
-    const sent = order.current.send();
+  /** Reads the lead; a failure is said, unless `quiet` (a write's error is already up). */
+  async function readLead(quiet = false): Promise<void> {
     try {
-      const row = await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`);
-      if (order.current.accept(sent, false)) setLead(row);
-      else if (again > 0) await refetch(again - 1);
+      setLead(await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`));
     } catch (err) {
-      setMessage({ tone: 'err', text: describeError(err) });
+      if (!quiet) setMessage({ tone: 'err', text: describeError(err) });
     }
   }
+
+  /** Reads the lead again, after everything queued before (a logged contact changes it). */
+  const refetch = () => queue.current.run(() => readLead());
 
   async function reloadEvents() {
     try {
@@ -126,33 +127,34 @@ export default function LeadDetail(props: LeadDetailProps) {
     }
   }
 
-  /** One PATCH: the version read with a versioned change; a 409 reads the lead again. */
-  async function write(body: Record<string, unknown>, versioned: boolean): Promise<boolean> {
-    setBusy(true);
+  /**
+   * One PATCH, queued: the version read with a versioned change. A 409 reads the lead again
+   * inside the same turn (busy until it lands, or its failure is said); so does any other
+   * failure, since the PATCH can fail after its update committed.
+   */
+  function write(body: Record<string, unknown>, versioned: boolean): Promise<boolean> {
     setMessage(null);
-    const sent = order.current.send();
-    try {
-      const answer = await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
-        method: 'PATCH',
-        body: versioned ? { ...body, version: lead.version } : body,
-      });
-      // An answer not shown leaves the row on screen possibly older than this write: read again.
-      if (order.current.accept(sent, true)) setLead(answer);
-      else void refetch();
-      void reloadEvents();
-      return true;
-    } catch (err) {
-      if (err instanceof AdminApiError && err.info.status === 409) {
-        setMessage({ tone: 'warn', text: CONFLICT });
-        await refetch();
+    return queue.current.run(async () => {
+      try {
+        const answer = await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
+          method: 'PATCH',
+          body: versioned ? { ...body, version: lead.version } : body,
+        });
+        setLead(answer);
         void reloadEvents();
-      } else {
-        setMessage({ tone: 'err', text: describeError(err) });
+        return true;
+      } catch (err) {
+        if (err instanceof AdminApiError && err.info.status === 409) {
+          setMessage({ tone: 'warn', text: CONFLICT });
+          await readLead();
+          void reloadEvents();
+        } else {
+          setMessage({ tone: 'err', text: describeError(err) });
+          await readLead(true);
+        }
+        return false;
       }
-      return false;
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   // A confirmation the last page sent here (a lead added by hand): shown once, then taken
@@ -163,16 +165,15 @@ export default function LeadDetail(props: LeadDetailProps) {
   useEffect(() => {
     if (marked.current || lead.read_at !== null) return;
     marked.current = true;
-    const sent = order.current.send();
-    adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
-      method: 'PATCH',
-      body: { read: true },
-    })
-      .then((row) => {
-        if (order.current.accept(sent, true)) setLead(row);
-        else void refetch();
+    // Queued like every write, so a change made meanwhile is never answered over.
+    void queue.current.run(() =>
+      adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
+        method: 'PATCH',
+        body: { read: true },
       })
-      .catch(() => undefined);
+        .then(setLead)
+        .catch(() => undefined),
+    );
   }, []);
 
   function openErase() {

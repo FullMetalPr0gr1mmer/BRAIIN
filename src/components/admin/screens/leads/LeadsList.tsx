@@ -11,8 +11,9 @@ import { useClock } from '@/components/admin/kit/clock';
 import { toast } from '@/lib/admin/toast';
 import { deltaOf, MIN_RESPONSE_SAMPLE, type LeadKpis } from '@/lib/crm/leadKpis';
 import type { LeadsFrame } from '@/lib/crm/leadPage';
-import { RowToggles, withField } from '@/lib/crm/lateAnswers';
+import { ListWrites } from '@/lib/crm/lateAnswers';
 import type { LeadPage, LeadRow, LeadSummaryAnswer } from '@/lib/crm/leadReads';
+import type { LeadBulk } from '@schemas/crm';
 import {
   LEADS_PAGE_SIZE,
   exportHrefOf,
@@ -174,9 +175,11 @@ export default function LeadsList({
   const [reload, setReload] = useState(0);
   const [now, setNow] = useState(() => Date.parse(renderedAt));
   const addLead = useAddLead(permissions.canSeePii, disciplines);
-  // The row toggles (the star) and the list reads on one clock, so a read that left before a
-  // toggle was saved cannot draw it back on screen (src/lib/crm/lateAnswers.ts).
-  const toggles = useRef(new RowToggles());
+  // A list read never overlaps a row write (the star, a bulk action): a write aborts the read
+  // in flight and holds new ones, and the list is read once more after the writes when their
+  // order is unknown (src/lib/crm/lateAnswers.ts). So a read that left before a star was saved
+  // never draws it back off.
+  const writes = useRef(new ListWrites());
 
   // A confirmation the last page sent here (a lead erased): shown once, then taken out of
   // the address. First, before the address is rewritten from the filters.
@@ -200,27 +203,27 @@ export default function LeadsList({
       listed.current = false;
       return;
     }
-    const controller = new AbortController();
     setBusy(true);
+    // Held while a row write is out: asked for again once the writes have answered.
+    const controller = writes.current.read();
+    if (!controller) return;
     const body = { ...listQueryOf(filters, new Date(), zone), ...(q ? { q } : {}) };
-    const stamp = toggles.current.read();
     adminFetch<LeadPage>('/api/admin/leads/query', {
       method: 'POST',
       body,
       signal: controller.signal,
     })
       .then((page) => {
-        // A star pressed while this read was out stays as pressed: the answer may predate it.
-        const shown = toggles.current.answer(asRows(page), stamp);
-        if (!shown) return;
-        setRows(shown);
+        // Aborted by a row write sent meanwhile: these rows may predate it.
+        if (!writes.current.landed(controller)) return;
+        setRows(asRows(page));
         setTotal(page.total);
         setError('');
         setSearchError('');
         setNow(Date.now());
       })
       .catch((err: unknown) => {
-        if (controller.signal.aborted) return;
+        if (!writes.current.landed(controller)) return;
         // A term that looks like an address or a number but is not a whole one: said under
         // the box, the list left as it was.
         if (err instanceof AdminApiError && err.info.status === 422 && q) {
@@ -267,11 +270,17 @@ export default function LeadsList({
   );
   const spamView = filters.chip.kind === 'spam';
 
+  /** A row write answered: read the list (and the KPIs) again when the writes ask for it. */
+  function written(token: number, shown: boolean) {
+    if (writes.current.written(token, shown)) setReload((n) => n + 1);
+  }
+
   async function toggleStar(row: Row) {
     const next = row.is_starred !== true;
     setStarError('');
-    const token = toggles.current.begin(row.id, 'is_starred', next, row.is_starred);
-    setRows((list) => withField(list, row.id, 'is_starred', next));
+    const token = writes.current.write();
+    // Shown at once, and kept until the writes have answered and any read after them lands.
+    setRows((list) => list.map((r) => (r.id === row.id ? { ...r, is_starred: next } : r)));
     let ok = true;
     try {
       await adminFetch(`/api/admin/leads/${row.id}`, {
@@ -279,26 +288,24 @@ export default function LeadsList({
         body: { isStarred: next },
       });
     } catch (err) {
+      // The update may have committed before the failure: the read after it says.
       ok = false;
       setStarError(`${leadName(row)} could not be starred. ${describeError(err)}`);
     }
-    // Once every press of this star has answered: what the server holds (a failure puts the
-    // last saved value back, never one a later press already replaced).
-    const shown = toggles.current.settle(token, ok);
-    // A bulk Star landed while this press was out: only a read can say which ran last.
-    if (shown === 'reread') setReload((n) => n + 1);
-    else if (shown) setRows((list) => withField(list, shown.id, shown.field, shown.value));
+    written(token, ok);
   }
 
-  function bulkDone(outcome: BulkOutcome, action: string) {
-    // The bulk Star is another write of the star: a single press still out may run before or
-    // after it, so it stops overriding the read below and asks for one more when it answers.
-    if (action === 'star') {
-      toggles.current.forget(
-        outcome.applied.map((item) => item.id),
-        'is_starred',
-      );
+  /** The bulk bar's POST: a row write, not optimistic, so the list is read again after it. */
+  async function postBulk(body: LeadBulk): Promise<BulkOutcome> {
+    const token = writes.current.write();
+    try {
+      return await adminFetch<BulkOutcome>('/api/admin/leads/bulk', { method: 'POST', body });
+    } finally {
+      written(token, false);
     }
+  }
+
+  function bulkDone(outcome: BulkOutcome) {
     const next: { tone: 'warn' | 'err'; text: string }[] = [];
     const changed = outcome.applied.length;
     if (outcome.conflicts.length > 0) {
@@ -325,7 +332,6 @@ export default function LeadsList({
     if (changed > 0 && outcome.conflicts.length === 0)
       toast(`Done. ${changed} ${changed === 1 ? 'lead' : 'leads'} changed.`, 'ok');
     setSelected(new Set());
-    setReload((n) => n + 1);
   }
 
   const counts = summary?.per_stage ?? {};
@@ -499,6 +505,7 @@ export default function LeadsList({
               people={people}
               stages={stages}
               spamView={spamView}
+              post={postBulk}
               onDone={bulkDone}
               onError={(message) => setNotes([{ tone: 'err', text: message }])}
             />

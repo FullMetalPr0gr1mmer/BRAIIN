@@ -1,270 +1,313 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { AnswerOrder, RowToggles, withField } from '@/lib/crm/lateAnswers';
+import { ListWrites, Serial } from '@/lib/crm/lateAnswers';
 
 // The leads screens' late answers (C4 star race): a list read that left before a star press
 // answered after the star was saved and drew it off again while the database had it on (R13's
-// e2e met it). Each case below replays one order of events through the model the islands use.
+// e2e met it). Each case below replays one order of events through the rule the island uses;
+// the last block checks the islands are wired to it (they render with react-dom/server only).
 
-const A = 'lead-a';
-const B = 'lead-b';
-type Row = { id: string; is_starred: boolean; name: string };
-const rows = (starA = false, starB = false): Row[] => [
-  { id: A, is_starred: starA, name: 'Nora' },
-  { id: B, is_starred: starB, name: 'Omar' },
-];
-const starOf = (list: Row[] | null, id: string) => list?.find((r) => r.id === id)?.is_starred;
-
-describe('RowToggles (the leads list)', () => {
-  it('keeps a star saved while a read that left before it was out (the R13 order)', () => {
-    const t = new RowToggles();
-    const read = t.read(); // the search leaves
-    const token = t.begin(A, 'is_starred', true, false); // the star is pressed
-    expect(t.settle(token, true)).toEqual({ id: A, field: 'is_starred', value: true }); // saved
-    // The search answers with what it read before the star: off.
-    expect(starOf(t.answer(rows(false), read), A)).toBe(true);
+describe('ListWrites (the leads list)', () => {
+  it('the R13 order: a read out when the star is pressed is aborted, and read again after', () => {
+    const w = new ListWrites();
+    const search = w.read()!; // the search leaves
+    const star = w.write(); // the star is pressed: the search is aborted
+    expect(search.signal.aborted).toBe(true);
+    expect(w.landed(search)).toBe(false); // its rows (star off) are never used
+    expect(w.written(star, true)).toBe(true); // saved: read the list once more
+    const again = w.read()!;
+    expect(again.signal.aborted).toBe(false);
+    expect(w.landed(again)).toBe(true);
   });
 
-  it('keeps a star whose write is still out when a read answers', () => {
-    const t = new RowToggles();
-    const read = t.read();
-    t.begin(A, 'is_starred', true, false);
-    expect(starOf(t.answer(rows(false), read), A)).toBe(true);
+  it('a single press with no read out needs no read: the screen already shows it', () => {
+    const w = new ListWrites();
+    const star = w.write();
+    expect(w.written(star, true)).toBe(false);
+    expect(w.landed(w.read()!)).toBe(true);
   });
 
-  it('keeps it over a read that left while the write was out, then lets a later read decide', () => {
-    const t = new RowToggles();
-    const token = t.begin(A, 'is_starred', true, false);
-    const during = t.read(); // left before the write answered: it may or may not hold it
-    t.settle(token, true);
-    expect(starOf(t.answer(rows(false), during), A)).toBe(true);
-    // A read that left after the write answered holds the server's value, whatever it is
-    // (a colleague may have changed it since): the toggle no longer overrides it.
-    const after = t.read();
-    expect(starOf(t.answer(rows(false), after), A)).toBe(false);
-    expect(starOf(t.answer(rows(true), t.read()), A)).toBe(true);
+  it('two quick presses answering in send order: the last press stands, no read', () => {
+    const w = new ListWrites();
+    const on = w.write();
+    const off = w.write();
+    expect(w.written(on, true)).toBe(false);
+    expect(w.written(off, true)).toBe(false);
   });
 
-  it('drops an answer older than one already used', () => {
-    const t = new RowToggles();
-    const old = t.read();
-    const fresh = t.read();
-    expect(t.answer(rows(true), fresh)).not.toBeNull();
-    expect(t.answer(rows(false), old)).toBeNull();
+  it('two quick presses answering out of send order: the list is read again (LS-3)', () => {
+    const w = new ListWrites();
+    const on = w.write();
+    const off = w.write();
+    expect(w.written(off, true)).toBe(false); // "on" is still out
+    expect(w.written(on, true)).toBe(true); // which ran last is unknown: the server says
   });
 
-  it('touches only the toggled row and field', () => {
-    const t = new RowToggles();
-    const read = t.read();
-    t.begin(A, 'is_starred', true, false);
-    const shown = t.answer(rows(false, true), read);
-    expect(shown).toEqual([
-      { id: A, is_starred: true, name: 'Nora' },
-      { id: B, is_starred: true, name: 'Omar' },
-    ]);
+  it('a press again after the first answered out of order still reads (no state kept)', () => {
+    const w = new ListWrites();
+    const a = w.write();
+    const b = w.write();
+    expect(w.written(b, true)).toBe(false);
+    expect(w.written(a, true)).toBe(true);
+    const c = w.write(); // the next press starts clean
+    expect(w.written(c, true)).toBe(false);
   });
 
-  it('a failed write puts back what the server holds, and a late answer does not re-show it', () => {
-    const t = new RowToggles();
-    const read = t.read();
-    const token = t.begin(A, 'is_starred', true, false);
-    expect(t.settle(token, false)).toEqual({ id: A, field: 'is_starred', value: false });
-    expect(starOf(t.answer(rows(false), read), A)).toBe(false);
+  it('a failed save is read again: the PATCH may have committed before it failed (LS-4)', () => {
+    const w = new ListWrites();
+    const star = w.write();
+    expect(w.written(star, false)).toBe(true);
   });
 
-  it('two presses: the answer of each waits for the other, the last saved value wins', () => {
-    const t = new RowToggles();
-    const read = t.read();
-    const on = t.begin(A, 'is_starred', true, false);
-    const off = t.begin(A, 'is_starred', false, true);
-    expect(t.settle(on, true)).toBeNull(); // another press is out: its answer decides
-    expect(starOf(t.answer(rows(true), read), A)).toBe(false); // shows the last press
-    expect(t.settle(off, true)).toEqual({ id: A, field: 'is_starred', value: false });
+  it('a failed save while another press is out: one read, once both have answered', () => {
+    const w = new ListWrites();
+    const on = w.write();
+    const off = w.write();
+    expect(w.written(on, false)).toBe(false); // "off" still out: no read over it yet
+    expect(w.written(off, true)).toBe(true);
+    expect(w.written(w.write(), true)).toBe(false); // and the flag does not linger
   });
 
-  it('two presses, the second failing: back to what the first saved', () => {
-    const t = new RowToggles();
-    const on = t.begin(A, 'is_starred', true, false);
-    const off = t.begin(A, 'is_starred', false, true);
-    expect(t.settle(on, true)).toBeNull();
-    expect(t.settle(off, false)).toEqual({ id: A, field: 'is_starred', value: true });
+  it('a bulk action mid-press: one read after both, in either answer order', () => {
+    for (const bulkFirst of [true, false]) {
+      const w = new ListWrites();
+      const search = w.read()!;
+      const star = w.write();
+      const bulk = w.write(); // the bulk bar's POST is a row write too
+      expect(search.signal.aborted).toBe(true);
+      const [first, second] = bulkFirst
+        ? ([
+            [bulk, false],
+            [star, true],
+          ] as const)
+        : ([
+            [star, true],
+            [bulk, false],
+          ] as const);
+      expect(w.written(...first)).toBe(false); // the other is still out
+      expect(w.written(...second)).toBe(true);
+    }
   });
 
-  it('two presses, both failing: back to the value before the first', () => {
-    const t = new RowToggles();
-    const on = t.begin(A, 'is_starred', true, false);
-    const off = t.begin(A, 'is_starred', false, true);
-    expect(t.settle(off, false)).toBeNull();
-    expect(t.settle(on, false)).toEqual({ id: A, field: 'is_starred', value: false });
+  it('a bulk action alone is read again (it is not optimistic)', () => {
+    const w = new ListWrites();
+    expect(w.written(w.write(), false)).toBe(true);
   });
 
-  it('an unknown token changes nothing', () => {
-    const t = new RowToggles();
-    expect(t.settle(42, true)).toBeNull();
+  it('a press while a bulk action is out holds the bulk read until both answered', () => {
+    const w = new ListWrites();
+    const bulk = w.write();
+    const star = w.write();
+    expect(w.written(bulk, false)).toBe(false);
+    expect(w.read()).toBeNull(); // the read bulkDone asks for is held
+    expect(w.written(star, true)).toBe(true);
   });
 
-  it('a bulk Star that lands while a single unstar is out: the read after it decides (LS-2)', () => {
-    const t = new RowToggles();
-    const unstar = t.begin(A, 'is_starred', false, true); // a single press, still out
-    // The bulk Star (sent after it, run after it) answers; the list forgets its star toggles.
-    t.forget([A], 'is_starred');
-    const after = t.read(); // the read bulkDone asks for
-    expect(starOf(t.answer(rows(true), after), A)).toBe(true); // what the database holds
-    // The single press answers: which write ran last is unknown, so read the list again.
-    expect(t.settle(unstar, true)).toBe('reread');
-    expect(starOf(t.answer(rows(true), t.read()), A)).toBe(true);
+  it('a filter change while a star is out: the read is held, then read once', () => {
+    const w = new ListWrites();
+    const star = w.write();
+    expect(w.read()).toBeNull(); // the filter's read waits for the star
+    expect(w.written(star, true)).toBe(true); // ...and is asked for now, with the filters then
+    expect(w.read()).not.toBeNull();
   });
 
-  it('forget drops a settled toggle, leaves other rows and fields, and a later press counts', () => {
-    const t = new RowToggles();
-    const a = t.begin(A, 'is_starred', true, false);
-    t.settle(a, true);
-    const b = t.begin(B, 'is_starred', true, false); // B is not in the bulk
-    t.begin(A, 'other', 'x', 'y'); // another field of A
-    t.forget([A], 'is_starred');
-    const read = t.read();
-    const shown = t.answer(
-      rows(false, false).map((r) => ({ ...r, other: 'y' })),
-      read,
-    );
-    expect(starOf(shown, A)).toBe(false); // the settled toggle is gone
-    expect(starOf(shown, B)).toBe(true); // still out, not in the bulk: laid over
-    expect(shown?.find((r) => r.id === A)?.other).toBe('x');
-    expect(t.settle(b, true)).toEqual({ id: B, field: 'is_starred', value: true });
-    // A press after the bulk answered is the newest write of the star from this screen.
-    const c = t.begin(A, 'is_starred', true, false);
-    t.forget([B], 'is_starred');
-    const again = t.begin(A, 'is_starred', false, true);
-    expect(t.settle(c, true)).toBeNull();
-    expect(t.settle(again, true)).toEqual({ id: A, field: 'is_starred', value: false });
+  it('a filter change while a read is out: the newer read is the one used', () => {
+    const w = new ListWrites();
+    const old = w.read()!;
+    old.abort(); // the island's effect cleanup
+    const fresh = w.read()!;
+    expect(w.landed(old)).toBe(false);
+    expect(w.landed(fresh)).toBe(true);
+    // Both have landed: a press now finds no read out, so it needs no read after it.
+    expect(w.written(w.write(), true)).toBe(false);
   });
 
-  it('a detached press that is pressed again is laid over answers again', () => {
-    const t = new RowToggles();
-    const first = t.begin(A, 'is_starred', true, false);
-    t.forget([A], 'is_starred');
-    const second = t.begin(A, 'is_starred', false, true);
-    expect(starOf(t.answer(rows(true), t.read()), A)).toBe(false);
-    expect(t.settle(first, true)).toBeNull();
-    expect(t.settle(second, true)).toEqual({ id: A, field: 'is_starred', value: false });
+  it('a press while the read after the writes is out aborts it, and reads once more', () => {
+    const w = new ListWrites();
+    expect(w.written(w.write(), false)).toBe(true);
+    const again = w.read()!;
+    const star = w.write();
+    expect(again.signal.aborted).toBe(true);
+    expect(w.landed(again)).toBe(false);
+    expect(w.written(star, true)).toBe(true);
   });
 
-  it('withField sets one row only', () => {
-    expect(withField(rows(), B, 'is_starred', true)).toEqual(rows(false, true));
+  it('a read that answered before the press is kept and asks for nothing', () => {
+    const w = new ListWrites();
+    const read = w.read()!;
+    expect(w.landed(read)).toBe(true);
+    const star = w.write();
+    expect(read.signal.aborted).toBe(false);
+    expect(w.written(star, true)).toBe(false);
   });
 });
 
-describe('AnswerOrder (a lead page)', () => {
-  it('drops the mark-read answer that arrives after a star was saved', () => {
-    const o = new AnswerOrder();
-    const markRead = o.send(); // on opening
-    const star = o.send();
-    expect(o.accept(star, true)).toBe(true);
-    expect(o.accept(markRead, true)).toBe(false);
+/** A promise settled from outside. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe("Serial (a lead's page)", () => {
+  it('the mark-read on opening and a star: the star leaves only once the mark-read answered', async () => {
+    const busy: boolean[] = [];
+    const q = new Serial((on) => busy.push(on));
+    const sent: string[] = [];
+    const shown: string[] = [];
+    const markRead = deferred<string>();
+    const star = deferred<string>();
+    const a = q.run(async () => {
+      sent.push('mark-read');
+      shown.push(await markRead.promise);
+    });
+    const b = q.run(async () => {
+      sent.push('star');
+      shown.push(await star.promise);
+    });
+    await tick();
+    expect(sent).toEqual(['mark-read']);
+    star.resolve('starred'); // even an answer ready first is not shown first
+    await tick();
+    expect(shown).toEqual([]);
+    markRead.resolve('read');
+    await Promise.all([a, b]);
+    expect(sent).toEqual(['mark-read', 'star']);
+    expect(shown).toEqual(['read', 'starred']); // the newest sent is the last shown
+    expect(busy).toEqual([true, false]);
   });
 
-  it('keeps a star saved after the mark-read sent before it answered (either order)', () => {
-    const o = new AnswerOrder();
-    const markRead = o.send();
-    const star = o.send();
-    expect(o.accept(markRead, true)).toBe(true);
-    expect(o.accept(star, true)).toBe(true);
+  it('a 409: busy until its reload lands, and the next change leaves with the new version', async () => {
+    const busy: boolean[] = [];
+    const q = new Serial((on) => busy.push(on));
+    let version = 1; // on screen
+    const patch = deferred<number>();
+    const reload = deferred<number>();
+    const sentWith: number[] = [];
+    const move = q.run(async () => {
+      sentWith.push(version);
+      try {
+        version = await patch.promise;
+        return true;
+      } catch {
+        version = await reload.promise; // the reload, inside the write's turn
+        return false;
+      }
+    });
+    const next = q.run(async () => {
+      sentWith.push(version);
+      return true;
+    });
+    patch.reject(new Error('409'));
+    await tick();
+    expect(busy).toEqual([true]); // the reload is out: still busy
+    expect(sentWith).toEqual([1]); // nothing else has left
+    reload.resolve(2);
+    expect(await move).toBe(false);
+    expect(await next).toBe(true);
+    expect(sentWith).toEqual([1, 2]);
+    expect(busy).toEqual([true, false]);
   });
 
-  it('drops a read sent before a write that answered first, then a read sent after is kept', () => {
-    const o = new AnswerOrder();
-    const refetch = o.send(); // after Log contact
-    const star = o.send();
-    expect(o.accept(star, true)).toBe(true);
-    expect(o.accept(refetch, false)).toBe(false);
-    expect(o.accept(o.send(), false)).toBe(true); // the island's one more read
+  it('a failed task does not stop the queue, and its answer is its own', async () => {
+    const q = new Serial(() => undefined);
+    const failed = q.run(() => Promise.reject(new Error('offline')));
+    const after = q.run(async () => 'read');
+    await expect(failed).rejects.toThrow('offline');
+    await expect(after).resolves.toBe('read');
   });
 
-  it('drops a refetch sent while a write was out when the write answers first', () => {
-    const o = new AnswerOrder();
-    const write = o.send();
-    const refetch = o.send();
-    expect(o.accept(write, true)).toBe(true);
-    expect(o.accept(refetch, false)).toBe(false);
-  });
-
-  it('drops the mark-read answer once a refetch sent after it was shown (LS-1)', () => {
-    const o = new AnswerOrder();
-    const markRead = o.send(); // on opening; its answer is slow
-    // A stage move gets a 409 (the 409 answers no row), and the refetch shows v2.
-    const refetch = o.send();
-    expect(o.accept(refetch, false)).toBe(true);
-    expect(o.accept(markRead, true)).toBe(false); // v1 never comes back
-  });
-
-  it('a write whose answer arrives after a later read was shown is not shown, then read again', () => {
-    const o = new AnswerOrder();
-    const star = o.send(); // the status card
-    const refetch = o.send(); // "Log contact" meanwhile (its own card)
-    expect(o.accept(refetch, false)).toBe(true);
-    // The server may have run the star before or after that read: the island reads again.
-    expect(o.accept(star, true)).toBe(false);
-    expect(o.accept(o.send(), false)).toBe(true);
-  });
-
-  it('drops an older read once a newer read was shown', () => {
-    const o = new AnswerOrder();
-    const first = o.send();
-    const second = o.send();
-    expect(o.accept(second, false)).toBe(true);
-    expect(o.accept(first, false)).toBe(false);
-  });
-
-  it('keeps answers that arrive in order, and a read sent after a write', () => {
-    const o = new AnswerOrder();
-    const refetch = o.send();
-    expect(o.accept(refetch, false)).toBe(true);
-    const write = o.send();
-    expect(o.accept(write, true)).toBe(true);
-    const after = o.send();
-    expect(o.accept(after, false)).toBe(true);
+  it('busy goes off once, after the last task, and on again for the next', async () => {
+    const busy: boolean[] = [];
+    const q = new Serial((on) => busy.push(on));
+    await Promise.all([q.run(async () => 1), q.run(async () => 2)]);
+    await tick();
+    expect(busy).toEqual([true, false]);
+    await q.run(async () => 3);
+    await tick();
+    expect(busy).toEqual([true, false, true, false]);
   });
 });
 
-describe('the islands use the model', () => {
+describe('the islands use the rules', () => {
   const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+  const list = () => read('src/components/admin/screens/leads/LeadsList.tsx');
+  const detail = () => read('src/components/admin/screens/leads/LeadDetail.tsx');
 
-  it('the list lays its toggles over every list answer and settles its star through them', () => {
-    const src = read('src/components/admin/screens/leads/LeadsList.tsx');
-    expect(src).toContain('toggles.current.read()');
-    expect(src).toContain('toggles.current.answer(asRows(page), stamp)');
-    expect(src).toContain("toggles.current.begin(row.id, 'is_starred'");
-    expect(src).toContain('toggles.current.settle(token, ok)');
-    // No bare replacement of the rows by an answer.
-    expect(src).not.toMatch(/setRows\(asRows\(/);
+  it('the list takes its read from the rule, held while a write is out', () => {
+    const src = list();
+    expect(src).toMatch(
+      /const controller = writes\.current\.read\(\);\s*if \(!controller\) return;/,
+    );
+    const effect = src.slice(src.indexOf('const listed = useRef'), src.indexOf('const summarised'));
+    expect(effect).not.toContain('new AbortController()'); // the read's controller is the rule's
   });
 
-  it('the list forgets its star toggles on a bulk Star and reads again when asked', () => {
-    const src = read('src/components/admin/screens/leads/LeadsList.tsx');
-    expect(src).toMatch(/if \(action === 'star'\) \{\s*toggles\.current\.forget\(/);
-    expect(src).toContain("if (shown === 'reread') setReload(");
+  it('the list uses an answer only when its read was not aborted, rows and errors alike', () => {
+    const src = list();
+    expect(src).toMatch(
+      /\.then\(\(page\) => \{\s*(?:\/\/[^\n]*\n\s*)*if \(!writes\.current\.landed\(controller\)\) return;\s*setRows\(asRows\(page\)\);/,
+    );
+    expect(src).toMatch(
+      /\.catch\(\(err: unknown\) => \{\s*if \(!writes\.current\.landed\(controller\)\) return;/,
+    );
+  });
+
+  it('a star is a write: sent through the rule, kept on failure, the read decides', () => {
+    const src = list();
+    const star = src.slice(
+      src.indexOf('async function toggleStar'),
+      src.indexOf('async function postBulk'),
+    );
+    expect(star).toMatch(/const token = writes\.current\.write\(\);[\s\S]*method: 'PATCH'/);
+    expect(star).toContain('written(token, ok);');
+    expect(star).not.toContain('!next'); // no local roll back: a failed PATCH may have committed
+  });
+
+  it('a bulk action is a write: the list posts it through the rule and reads after it', () => {
+    const src = list();
+    expect(src).toMatch(
+      /async function postBulk[\s\S]*const token = writes\.current\.write\(\);\s*try \{\s*return await adminFetch<BulkOutcome>\('\/api\/admin\/leads\/bulk'[\s\S]*finally \{\s*written\(token, false\);/,
+    );
+    expect(src).toContain('post={postBulk}');
+    const done = src.slice(src.indexOf('function bulkDone'), src.indexOf('const counts ='));
+    expect(done).not.toContain('setReload'); // the rule asks for the read, after every write
     const bar = read('src/components/admin/screens/leads/LeadsBulkBar.tsx');
-    expect(bar).toContain('onDone(outcome, body.action)');
+    expect(bar).toContain('onDone(await post(body))');
+    expect(bar).not.toContain('adminFetch');
   });
 
-  it("a lead's page sends every read and write of the row through one order", () => {
-    const src = read('src/components/admin/screens/leads/LeadDetail.tsx');
-    expect(src).not.toMatch(/\.then\(setLead\)/);
-    expect(src).not.toMatch(/setLead\(await /);
-    const sets = src.match(/setLead\(/g) ?? [];
-    const guarded = src.match(/order\.current\.accept\([^)]*\)\) setLead\(/g) ?? [];
-    expect(sets.length).toBeGreaterThan(0);
-    expect(guarded.length).toBe(sets.length);
+  it("a lead's page queues every read and write of the row", () => {
+    const src = detail();
+    expect(src).toContain('const queue = useRef(new Serial(setBusy));');
+    // busy belongs to the queue alone: no write clears it before a follow-up read lands.
+    expect(src).not.toMatch(/setBusy\((true|false)\)/);
+    // The row's own route is fetched in three places: the read, the write, the mark-read.
+    const calls = src.match(/adminFetch<LeadDetailRow>\(`\/api\/admin\/leads\/\$\{lead\.id\}`/g);
+    expect(calls).toHaveLength(3);
+    expect(src).toMatch(/const refetch = \(\) => queue\.current\.run\(\(\) => readLead\(\)\);/);
+    expect(src).toMatch(
+      /return queue\.current\.run\(async \(\) => \{\s*try \{\s*const answer = await adminFetch<LeadDetailRow>/,
+    );
+    expect(src).toMatch(
+      /void queue\.current\.run\(\(\) =>\s*adminFetch<LeadDetailRow>\(`\/api\/admin\/leads\/\$\{lead\.id\}`, \{\s*method: 'PATCH',\s*body: \{ read: true \}/,
+    );
   });
 
-  it("a lead's page reads again whenever a write's answer is not shown", () => {
-    const src = read('src/components/admin/screens/leads/LeadDetail.tsx');
-    const writes = src.match(/order\.current\.accept\(sent, true\)\) setLead\(\w+\);/g) ?? [];
-    const reread =
-      src.match(
-        /order\.current\.accept\(sent, true\)\) setLead\(\w+\);\s*else void refetch\(\);/g,
-      ) ?? [];
-    expect(writes.length).toBe(2); // write() and the mark-read on opening
-    expect(reread.length).toBe(writes.length);
+  it("a lead's page reads again inside the write's turn after a 409 and after any failure", () => {
+    const src = detail();
+    expect(src).toMatch(
+      /status === 409\) \{\s*setMessage\(\{ tone: 'warn', text: CONFLICT \}\);\s*await readLead\(\);/,
+    );
+    expect(src).toMatch(
+      /\} else \{\s*setMessage\(\{ tone: 'err', text: describeError\(err\) \}\);\s*await readLead\(true\);/,
+    );
+    // A failed reload says so (never dropped silently), unless a write's error is already up.
+    expect(src).toMatch(/catch \(err\) \{\s*if \(!quiet\) setMessage\(\{ tone: 'err'/);
   });
 });
