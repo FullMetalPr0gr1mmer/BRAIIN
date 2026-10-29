@@ -11,6 +11,7 @@ import type {
   PersonView,
   StageView,
 } from '@/lib/crm/leadPage';
+import { Latest, Serial, changeUnsure, withDeadline, writeInTurn } from '@/lib/crm/lateAnswers';
 import LeadContactCard, { type Revealed } from './LeadContactCard';
 import LeadNotes from './LeadNotes';
 import LeadStatusCard from './LeadStatusCard';
@@ -59,6 +60,23 @@ export default function LeadDetail(props: LeadDetailProps) {
   const [eraseError, setEraseError] = useState('');
   const [now, setNow] = useState(() => Date.parse(props.now));
   const marked = useRef(false);
+  // Every read and write of the lead's row runs one after another (src/lib/crm/lateAnswers.ts),
+  // each bounded by a deadline, so the row's answers land in send order and the newest sent is
+  // the one shown; the status card is busy until the queue is empty, follow-up reads included,
+  // so no versioned change leaves with an old version. Built once (a lazy initial state).
+  const [queue] = useState(() => new Serial(setBusy));
+  // The timeline's reloads are not queued: a newer one aborts the one still out, so an older
+  // timeline never replaces a newer one.
+  const [timeline] = useState(() => new Latest());
+  // The row as last drawn, for a queued write to read its version when it leaves (the state
+  // its closure saw may be older: the task before it can answer before React renders).
+  const row = useRef<LeadDetailRow>(props.lead);
+
+  /** Draws the row, and keeps it for the next queued write. */
+  function showLead(next: LeadDetailRow) {
+    row.current = next;
+    setLead(next);
+  }
 
   const stagesByKey = useMemo(
     () => new Map(stages.map((stage) => [stage.key, { label: stage.label }])),
@@ -69,21 +87,33 @@ export default function LeadDetail(props: LeadDetailProps) {
     [people],
   );
 
-  async function refetch() {
+  /** Reads the lead (bounded); a failure is said, unless `quiet` (a write's error is up). */
+  async function readLead(quiet = false): Promise<void> {
     try {
-      setLead(await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`));
+      showLead(
+        await withDeadline((signal) =>
+          adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, { signal }),
+        ),
+      );
     } catch (err) {
-      setMessage({ tone: 'err', text: describeError(err) });
+      if (!quiet) setMessage({ tone: 'err', text: describeError(err) });
     }
   }
 
+  /** Reads the lead again, after everything queued before (a logged contact changes it). */
+  const refetch = () => queue.run(() => readLead());
+
   async function reloadEvents() {
+    const controller = timeline.next();
     try {
       const answer = await adminFetch<{
         events: LeadEventRow[];
         before: string | null;
         beforeId: number | null;
-      }>(`/api/admin/leads/${lead.id}/events`);
+      }>(`/api/admin/leads/${lead.id}/events`, { signal: controller.signal });
+      // A newer reload left meanwhile: its answer is the one drawn.
+      if (controller.signal.aborted) return;
+      timeline.drawn(); // an older page still out was read past the list this replaces
       setEvents(answer.events);
       setBefore(
         answer.before && answer.beforeId ? { at: answer.before, id: answer.beforeId } : null,
@@ -91,6 +121,7 @@ export default function LeadDetail(props: LeadDetailProps) {
       setEventsError('');
       setNow(Date.now());
     } catch (err) {
+      if (controller.signal.aborted) return;
       setEventsError(describeError(err));
     }
   }
@@ -98,49 +129,62 @@ export default function LeadDetail(props: LeadDetailProps) {
   async function olderEvents() {
     if (!before) return;
     setEventsBusy(true);
+    // Dropped when a reload leaves after it or lands before it (Latest.more).
+    const controller = timeline.more();
     try {
       const query = new URLSearchParams({ before: before.at, beforeId: String(before.id) });
       const answer = await adminFetch<{
         events: LeadEventRow[];
         before: string | null;
         beforeId: number | null;
-      }>(`/api/admin/leads/${lead.id}/events?${query.toString()}`);
+      }>(`/api/admin/leads/${lead.id}/events?${query.toString()}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       setEvents((list) => [...list, ...answer.events]);
       setBefore(
         answer.before && answer.beforeId ? { at: answer.before, id: answer.beforeId } : null,
       );
       setEventsError('');
     } catch (err) {
+      if (controller.signal.aborted) return;
       setEventsError(describeError(err));
     } finally {
       setEventsBusy(false);
     }
   }
 
-  /** One PATCH: the version read with a versioned change; a 409 reads the lead again. */
-  async function write(body: Record<string, unknown>, versioned: boolean): Promise<boolean> {
-    setBusy(true);
+  /**
+   * One PATCH, queued and bounded (writeInTurn): the version read with a versioned change. Any
+   * failure reads the lead and its timeline again inside the same turn, since the PATCH can fail
+   * after its update committed: after a 409 a failed read is said; after any other failure the
+   * write's own error stays up.
+   */
+  function write(body: Record<string, unknown>, versioned: boolean): Promise<boolean> {
     setMessage(null);
-    try {
-      const answer = await adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
-        method: 'PATCH',
-        body: versioned ? { ...body, version: lead.version } : body,
-      });
-      setLead(answer);
-      void reloadEvents();
-      return true;
-    } catch (err) {
-      if (err instanceof AdminApiError && err.info.status === 409) {
-        setMessage({ tone: 'warn', text: CONFLICT });
-        await refetch();
+    return writeInTurn(queue, {
+      send: (signal) =>
+        adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
+          method: 'PATCH',
+          body: versioned ? { ...body, version: row.current.version } : body,
+          signal,
+        }),
+      saved: (answer) => {
+        showLead(answer);
         void reloadEvents();
-      } else {
-        setMessage({ tone: 'err', text: describeError(err) });
-      }
-      return false;
-    } finally {
-      setBusy(false);
-    }
+      },
+      refused: (err) => {
+        const conflict = err instanceof AdminApiError && err.info.status === 409;
+        setMessage(
+          conflict
+            ? { tone: 'warn', text: CONFLICT }
+            : { tone: 'err', text: changeUnsure(describeError(err)) },
+        );
+        return !conflict;
+      },
+      reread: async (quiet) => {
+        await readLead(quiet);
+        void reloadEvents();
+      },
+    });
   }
 
   // A confirmation the last page sent here (a lead added by hand): shown once, then taken
@@ -151,11 +195,13 @@ export default function LeadDetail(props: LeadDetailProps) {
   useEffect(() => {
     if (marked.current || lead.read_at !== null) return;
     marked.current = true;
+    // Not queued, so the status card is never held by it: only read_at is taken from its
+    // answer, which therefore never draws an older row (the star off) over a change made since.
     adminFetch<LeadDetailRow>(`/api/admin/leads/${lead.id}`, {
       method: 'PATCH',
       body: { read: true },
     })
-      .then(setLead)
+      .then((answer) => showLead({ ...row.current, read_at: answer.read_at }))
       .catch(() => undefined);
   }, []);
 
@@ -187,7 +233,7 @@ export default function LeadDetail(props: LeadDetailProps) {
 
   return (
     <>
-      <div className="lead-badges">
+      <div className="lead-badges" data-read-at={lead.read_at ?? ''}>
         <StageBadge stages={stages} id={lead.stage_id} />
         <SourceBadge source={lead.source} channel={lead.channel} />
         {lead.is_starred === true && <Badge tone="warn">Starred</Badge>}

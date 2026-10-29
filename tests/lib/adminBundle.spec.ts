@@ -928,3 +928,102 @@ describe('the page editor has its own group (Admin v2 E1)', () => {
     ).toContain('admin-ui imports admin-pages.P1.js statically');
   });
 });
+
+describe('the live preview column is its own lazy group (Admin v2 E2)', () => {
+  interface Group {
+    name: string;
+    test: RegExp | ((id: string) => boolean);
+    priority: number;
+  }
+  let groups: Group[] = [];
+  beforeAll(async () => {
+    const config = (await import('../../astro.config.mjs')).default as {
+      vite: { build: { rollupOptions: { output: { codeSplitting: { groups: Group[] } } } } };
+    };
+    groups = [...config.vite.build.rollupOptions.output.codeSplitting.groups].sort(
+      (a, b) => b.priority - a.priority,
+    );
+  });
+  const claim = (path: string) => {
+    const id = join(process.cwd(), path);
+    return groups.find((g) => (typeof g.test === 'function' ? g.test(id) : g.test.test(id)))?.name;
+  };
+  const priority = (name: string) => groups.find((g) => g.name === name)!.priority;
+
+  it('claims the column and the bridge’s parent half; the editor keeps what it draws first', () => {
+    expect(claim('src/components/admin/screens/pagePreview/PreviewColumn.tsx')).toBe(
+      'admin-page-preview',
+    );
+    expect(claim('src/components/admin/screens/pagePreview/model.ts')).toBe('admin-page-preview');
+    // R9 left the parent half in admin-ui's path; it is the column's alone now.
+    expect(claim('src/lib/admin/previewChannel.ts')).toBe('admin-page-preview');
+    // The heading, the words and the Edit | Preview switch ride with the editor.
+    expect(claim('src/components/admin/screens/pagePreview/editorSide.ts')).toBe('admin-pages');
+    // The preview's own half stays the bridge's group.
+    expect(claim('src/lib/admin/preview/bridge.ts')).toBe('admin-preview');
+    for (const name of readdirSync(join(process.cwd(), 'src/components/admin/screens/pagePreview')))
+      expect(claim(`src/components/admin/screens/pagePreview/${name}`), name).toMatch(
+        /^admin-(pages|page-preview)$/,
+      );
+  });
+
+  it('sits below the editor’s group and above the shared screens group', () => {
+    expect(priority('admin-page-preview')).toBeLessThan(priority('admin-pages'));
+    expect(priority('admin-page-preview')).toBeGreaterThan(priority('admin-screens'));
+  });
+
+  it('the editor reaches the column only through import()', () => {
+    const editor = readFileSync(
+      join(process.cwd(), 'src/components/admin/screens/pageEditor/PageEditor.tsx'),
+      'utf8',
+    );
+    expect(editor).toContain(
+      "lazy(() => import('@/components/admin/screens/pagePreview/PreviewColumn'))",
+    );
+    const dir = 'src/components/admin/screens/pageEditor';
+    const eager: string[] = [];
+    for (const name of readdirSync(join(process.cwd(), dir))) {
+      const source = readFileSync(join(process.cwd(), dir, name), 'utf8');
+      for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
+        const spec = m[1] as string;
+        if (/pagePreview\/(PreviewColumn|model)|previewChannel|admin\/preview\//.test(spec))
+          eager.push(`${name} → ${spec}`);
+      }
+    }
+    expect(eager).toEqual([]);
+  });
+
+  it('fails a build that loads the column, or the preview’s bridge, with the editor', () => {
+    const PAGES = {
+      ...GOOD,
+      'admin-fields.F1.js': 'import"./admin-ui.U1.js";export const f=1;',
+      'admin-pages.P1.js':
+        'import"./admin-ui.U1.js";import"./admin-fields.F1.js";const C=()=>import("./admin-page-preview.V1.js");',
+      'admin-page-preview.V1.js':
+        'import"./admin-pages.P1.js";import"./admin-preview.B1.js";export const c=1;',
+      'admin-preview.B1.js': 'export const b=1;',
+      'AdminPageEditor.I1.js': 'import"./admin-pages.P1.js";',
+    };
+    expect(check(build(PAGES)).problems).toEqual([]);
+    const problems = (files: Record<string, string>) =>
+      (check(build({ ...PAGES, ...files })).problems as string[]).join('\n');
+    expect(
+      problems({
+        'admin-pages.P1.js':
+          'import"./admin-ui.U1.js";import"./admin-fields.F1.js";import"./admin-page-preview.V1.js";',
+      }),
+    ).toContain('admin-page-preview.V1.js statically: it is meant for import() only');
+    expect(
+      problems({
+        'admin-pages.P1.js':
+          'import"./admin-ui.U1.js";import"./admin-preview.B1.js";const C=()=>import("./admin-page-preview.V1.js");',
+      }),
+    ).toContain('admin-pages.P1.js imports admin-preview. statically');
+    expect(
+      problems({
+        'admin-ui.U1.js':
+          'import"./admin-page-preview.V1.js";const L=()=>import(`./admin-rich.X1.js`);',
+      }),
+    ).toContain('admin-ui imports admin-page-preview.V1.js statically');
+  });
+});

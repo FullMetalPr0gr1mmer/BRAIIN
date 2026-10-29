@@ -137,8 +137,15 @@ const ADMIN_CONTENT =
 // the media library, General settings) does not carry it to every screen that loads that
 // chunk (9.4 KB gz each, measured in E1), nor does the editor load theirs. What it shares
 // with them (the SEO drawer, the collections' reorder rule) is the field kit's (ADMIN_FIELDS).
+// Admin v2 E2: what the editor needs of the live preview before the column loads (its heading,
+// its words, the Edit | Preview switch) rides with the editor.
 const ADMIN_PAGES =
-  /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]AdminPageEditor\.tsx$|screens[\\/]pageEditor[\\/])/;
+  /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]AdminPageEditor\.tsx$|screens[\\/]pageEditor[\\/]|screens[\\/]pagePreview[\\/]editorSide\.ts$)/;
+// The page editor's live preview column (Admin v2 E2): the column and the bridge's parent half,
+// reached only through import() once the preview is on screen, so the editor's first load never
+// carries it and a narrow screen that never opens the preview never downloads it.
+const ADMIN_PAGE_PREVIEW =
+  /[\\/]src[\\/](components[\\/]admin[\\/]screens[\\/]pagePreview[\\/](PreviewColumn\.tsx|model\.ts)|lib[\\/]admin[\\/]previewChannel\.ts)$/;
 // The releases preview's bridge (Admin v2 R9, P-4): the code a `/admin/preview/**` render
 // loads (src/components/preview/AdminPreviewBridge.astro). Its own group, never in admin-ui,
 // which every admin screen loads.
@@ -279,6 +286,7 @@ export default defineConfig({
                     !ADMIN_LEADS.test(id) &&
                     !ADMIN_CONTENT.test(id) &&
                     !ADMIN_PAGES.test(id) &&
+                    !ADMIN_PAGE_PREVIEW.test(id) &&
                     !ADMIN_PREVIEW.test(id) &&
                     !ADMIN_RELEASE.test(id) &&
                     !ADMIN_VERSIONS.test(id) &&
@@ -355,6 +363,14 @@ export default defineConfig({
                 name: 'admin-pages',
                 test: ADMIN_PAGES,
                 priority: 13.4,
+              },
+              {
+                // The page editor's live preview column (E2), reached only through import():
+                // below the editor's group, so what both use stays there (or higher) and this
+                // chunk imports it from there; above admin-screens, whose path rule would claim it.
+                name: 'admin-page-preview',
+                test: ADMIN_PAGE_PREVIEW,
+                priority: 13.3,
               },
               {
                 // The screens admin-ui leaves (Admin v2 U4, Wave 3's chunk rule): an island
