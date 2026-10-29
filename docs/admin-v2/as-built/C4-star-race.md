@@ -14,146 +14,171 @@ answer after the star's write is saved. Its rows were read before the star, so t
 R13's e2e met it (the search answer replaced the rows after the star was saved) and now waits
 for the search before pressing the star; the product itself was not fixed.
 
-## Plan
+A lead's page has the same shape without the optimism: the mark-read PATCH sent on opening,
+the reload after "Log contact" or after a 409, and the status card's writes could answer in any
+order, and the last to arrive was shown, an older row (the star off, an old version) included.
 
-1. **A small pure model, `src/lib/crm/lateAnswers.ts`**, so the rule is unit-tested without a
-   DOM (the repo renders islands with `react-dom/server` only):
-   - `RowToggles` for the list: every read takes a stamp from one clock as it leaves; every
-     toggle (the star today; any later row toggle by field name) records the value shown and
-     the value the server is known to hold. When a list answer arrives, every toggle whose
-     writes had not all answered before that read left is laid over the answer's row; a toggle
-     whose writes all answered before the read left is dropped (the answer already holds it).
-     An answer from a read older than one already used is dropped whole. A failed write puts
-     back what the server is known to hold, and only once no other write of that field is out.
-   - `AnswerOrder` for a lead's page, which is not optimistic (it shows each write's answer):
-     a read's answer is used only if no write answered after the read was sent; a write's
-     answer only if no write sent after it has answered. So the mark-read PATCH sent on
-     opening, or the refetch after "Log contact", can no longer answer last and undo a star or
-     a stage move saved meanwhile.
-2. **`LeadsList.tsx`** routes its list answers and its star through `RowToggles`.
-3. **`LeadDetail.tsx`** routes the mark-read answer, `write()` and `refetch()` through
-   `AnswerOrder`.
-4. **The board (`LeadsBoard.tsx`)** checked for the same pattern: see "The board" below.
-5. **Tests:** `tests/lib/lateAnswers.spec.ts` (the model, each race in both orders, and a
-   source guard that the two islands use it), and an e2e step in `tests/admin/leads.e2e.ts` that
-   holds the search's answer (read on the server first, delivered after the star is saved) and
-   checks the star stays pressed.
+## The design
 
-## What was built
+Two small rules in `src/lib/crm/lateAnswers.ts` (97 lines, pure, no DOM), one per screen. Their
+state is four numbers and one controller (the list) and one promise and a count (a lead's
+page): nothing grows with use.
 
-As planned, in three places:
+**The list: a row write never overlaps a list read (`ListWrites`).**
 
-- **`src/lib/crm/lateAnswers.ts`** (new, pure): `RowToggles` (`read`, `begin`, `settle`,
-  `answer`), `AnswerOrder` (`send`, `accept`) and `withField`. One clock per island; nothing
-  async inside, so every order of events is a few lines of a unit test.
-- **`LeadsList.tsx`**: each list read takes a stamp as it leaves and its answer goes through
-  `toggles.answer(rows, stamp)` (null: a newer read already answered, the answer is dropped
-  whole, total and all); the star goes through `begin` before its PATCH and `settle` after it.
-  A failed star still says "{name} could not be starred." and now puts back the last value the
-  server confirmed, which after two quick presses is not always the value before the second.
-- **`LeadDetail.tsx`**: the mark-read PATCH on opening, `write()` (every control of the status
-  card, the stage move included) and `refetch()` (after "Log contact" and after a 409) take a
-  stamp as they leave and set the lead only if `order.accept(stamp, isWrite)`. A refetch a
-  write overtook is read once more (at most twice), so what "Log contact" changed still shows
-  when a star's row, saved from before the contact, answered in between.
+- A row write (a star press, any bulk action) aborts the list read in flight, through the
+  `AbortController` the read already had, so that read's answer is never used: the island
+  checks `writes.current.landed(controller)` before it touches rows, the total or the errors.
+- A list read asked for while a row write is out (a filter, a search, a page, the read after a
+  bulk action) is held: the table shows busy, and the read leaves once the writes answered.
+- Once every row write has answered, success or failure, the list is read once more if a read
+  was aborted or held, if an answer came back out of send order, if a write failed, or if a
+  bulk action ran. That read is the truth again; nothing is laid over it.
+- Until then the screen keeps what it shows: the pressed star stays pressed, a failed one too
+  (with "{name} could not be starred."), because the PATCH can fail after its update committed
+  (`resolveLeadInterests` runs after the update in `src/pages/api/admin/leads/[id].ts`), so a
+  failure proves nothing about what the database holds.
+- The bulk bar is a row write like the star. The list owns the bulk POST now (`postBulk`,
+  passed to the bar as `post`), so the write is counted and answered in one `try/finally`.
+  `bulkDone` no longer asks for a read itself: the rule does, after every write has answered.
 
-## Self-review
+**A lead's page: one thing at a time (`Serial`).**
 
-The first `AnswerOrder` dropped every answer sent before any write answered, writes included.
-Opening an unread lead and pressing the star at once then lost the star's own answer whenever
-the mark-read PATCH answered first: the same bug the other way round. A write's answer is now
-dropped only when a write sent after it has answered; the test "keeps a star saved after the
-mark-read sent before it answered (either order)" fails on the first rule (1 failed, 17 passed).
+- Every read and write of the row (the mark-read PATCH on opening, the status card's writes,
+  the reload after "Log contact") runs one after another. Answers therefore arrive in send
+  order, and the newest sent is always the last shown.
+- `busy` belongs to the queue: on when the first task is queued, off when the last has settled,
+  follow-up reads included. The status card's controls are all `disabled={busy}`, so no
+  versioned change can leave with an old version.
+- A 409 reads the lead inside the write's own turn (busy until it lands); if that read fails,
+  its error is said, so a reload is never dropped silently. Any other failure reads the lead
+  again too (the PATCH may have committed), keeping the write's own error on screen.
 
-## Review fixes
+## Why this design, not the clock and overlay engine
 
-Two findings, both checked against the code and both real; neither refuted, none skipped.
+The first version of this fix (head `21d59fb8`) kept a clock and an overlay per toggle: list
+answers were patched with the toggles they might predate, a lead's answers were accepted or
+dropped by stamps. It was 191 lines with several ordering holes, found by the review and the
+independent check:
 
-- **LS-1 (low), a lead's page: a write's answer shown over a newer read.** `AnswerOrder`
-  compared a write's answer only with other writes, so the mark-read PATCH sent on opening
-  could answer after a later refetch (the one after a 409, or after "Log contact") had been
-  shown and put the older row back (an old stage and version, the next versioned change a
-  needless 409). The model now keeps the send stamp of the newest answer shown, read or write:
-  no answer replaces one sent after it, and an older read is dropped once a newer read was
-  shown. The reviewer's suggested rule alone (drop the write's answer) was not enough: the
-  status card's write and "Log contact" are on separate cards, so a star can be out while a
-  refetch sent after it answers first, and the server may have run the star after that read.
-  Dropping the star's row would then show the star off while the database has it on, the bug
-  this slice fixes. So a write's answer that is not shown is followed by one more read
-  (`else void refetch()` in `write()` and in the mark-read effect): the order of the two rows
-  is unknown, only a read made after both can tell. Guarded by "drops the mark-read answer
-  once a refetch sent after it was shown (LS-1)", "a write whose answer arrives after a later
-  read was shown is not shown, then read again", "drops an older read once a newer read was
-  shown" and the source guard "a lead's page reads again whenever a write's answer is not
-  shown". With the review fix reverted under `src/` (tests kept) all eight new tests fail (8 failed,
-  18 passed).
-- **LS-2 (low), the list: a single star press laid over the bulk Star's read.** The bulk bar's
-  Star is another write of `is_starred` the model did not know about: a single unstar still out
-  was laid over the read `bulkDone` asks for, and `settle` showed it again, while the server
-  could have run the bulk Star last. The bulk bar now passes its action to `onDone`, and on a
-  bulk Star the list calls the new `RowToggles.forget(ids, 'is_starred')` before reading again:
-  a toggle whose writes have all answered is dropped, one with a write still out is detached
-  (it overrides no answer, and its `settle` returns `'reread'`, on which the list reads again,
-  since only a read made after both writes can say which ran last). A press after the bulk
-  answered reattaches the toggle (it is the newest write from this screen). Disabling the bulk
-  Star while a single write is out was the other option; it would not cover a single press
-  made while the bulk Star is out, which the detach rule handles the same way. Guarded by "a
-  bulk Star that lands while a single unstar is out: the read after it decides (LS-2)", "forget
-  drops a settled toggle, leaves other rows and fields, and a later press counts", "a detached
-  press that is pressed again is laid over answers again" and the source guard "the list
-  forgets its star toggles on a bulk Star and reads again when asked".
+- **LS-3:** two quick presses whose answers came back out of send order showed the value of
+  the last write to *answer*, not the last *sent*, with no re-read; the same after a press on a
+  toggle the bulk Star had detached.
+- **LS-4:** a failed save was treated as proof nothing was written.
+- Review 2 and 5: a bulk Star and a single press still out could lose their order.
+- Review 3 and 4: the lead page's re-read could waste reads, or drop the reload after a 409
+  silently when its retry budget ran out, leaving an old version on screen.
+- Review 6: a dropped answer dropped its error resets too.
+- Review 7 and 8: settled toggles piled up in a map until a later read; linear scans.
+- Info: a dropped write answer on a lead's page left the old version on screen while `busy`
+  was already false, so a quick versioned change got a needless 409.
+
+The review proposed the simpler design (review 10): abort the read in flight on a write and
+read once more afterwards. It was taken as proposed. Every hole above disappears because the
+rule never decides which of two answers is newer: on the list it never uses an answer that
+overlapped a write, and on a lead's page two answers never overlap.
+
+Checked for a concrete case the simpler design gets wrong, two were found and closed inside it:
+
+- **A read that leaves while a write is out.** Aborting only the read already in flight would
+  let a filter change made during the star's PATCH answer with rows read before the star was
+  saved. So a read asked for while a write is out is held, and made after the writes.
+- **A lead's page, "Log contact" during a status write.** "Apply only the newest answer by send
+  order" alone would show a reload sent after the star's PATCH, which the server may still run
+  before it. Running the reads in the same queue as the writes closes it, and makes the
+  newest-by-send-order rule hold by construction instead of by stamps.
+
+## Departures
+
+- **Answers in send order are trusted.** Two presses answered in send order are taken to have
+  run in that order, and no read follows; out of order, the list is read again. Answer order is
+  not proof of server order, but it is the best signal the screen has short of reading after
+  every double click; the cost of the rare miss is the same as before this fix (the screen
+  shows the last press until the next read).
+- **A failed star stays shown until the read after it lands.** The brief's rule (keep the
+  optimistic value until the re-read lands); if that read fails too, the table shows that
+  read's error above it, and the star's own error stays.
+- **The bulk bar's `onDone` no longer carries the action.** The type finding (review 9: type
+  `action` as `LeadBulk['action']`) is moot: with every bulk action treated as a write, the list
+  does not need to know which one ran, so the parameter was removed rather than retyped.
+- **The read after a race also reads the KPIs.** The list's one reload counter drives both
+  reads, as the bulk action already did; one extra summary POST after a race.
+- **A lead's page is busy while the mark-read is out on opening** (one PATCH, usually well
+  under a second). The status card's controls are disabled for that time; a press waits for
+  them to enable, and nothing is lost.
+- **"Log contact" itself is not queued** (its POST belongs to the contact card); the reload
+  after it is. A versioned change in the moment between the contact's save and that reload
+  leaving can still meet a 409, said and refreshed, as on `main`.
 
 ## The board
 
 `LeadsBoard.tsx` was checked and left as it is. Its one write, the stage move, is not
 optimistic: the card moves when the PATCH answers. A board read that left before the move and
 is still out when the move answers is aborted and read again (`reading` ref and `setReload`,
-since C4c), so its answer can never redraw the card in its old column; a read that answered
-before the move answered is the state before the move, and the move is applied over it. No
-toggle on a card writes anything (the card's star and unread dot are display only).
-
-## Departures
-
-- **One write per field at a time is not enforced.** Two quick presses of one star send two
-  PATCHes; the model shows the last press, waits for both answers and then shows the last value
-  the server confirmed (in answer order). If the network delivered the two writes to the
-  server out of order, the database could hold the first press while the screen shows the
-  second, until the next read. Queuing presses would close that, at the cost of a slower
-  star; the risk is the same as before this fix, so it is left and recorded here.
-- **A lead's page drops, not merges, a stale answer.** When the mark-read answer is dropped,
-  the screen keeps the later write's row, whose `read_at` may still be empty if the server ran
-  the star first. Nothing on the page shows `read_at` after opening, and the page never marks a
-  lead read twice (`marked` ref), so nothing visible changes.
-- The existing list e2e keeps its wait for the search answer (it means to press the star on the
-  searched rows); its comment now points at the new e2e test, which holds the race on purpose.
+since C4c), the same pattern the list now uses; no toggle on a card writes anything.
 
 ## Tests
 
-- `tests/lib/lateAnswers.spec.ts` (26 tests since the review fixes, see above): the R13 order (read leaves, star saved, read
-  answers with the star off: the star stays on), a star still out when a read answers, a read
-  that left during the write and one after it (the later read decides, so a colleague's change
-  shows), an older answer dropped, only the toggled row and field touched, a failed write put
-  back and not re-shown by a late answer, two presses (each order, one or both failing), an
-  unknown token; `AnswerOrder`: the mark-read answer after a saved star is dropped, a star
-  sent after the mark-read is kept in either order, a refetch overtaken by a write is dropped
-  and the read after it kept, answers in order are kept; and a source guard that both islands go through the model (no `setRows(asRows(`, no
-  bare `setLead(await`, no `.then(setLead)`).
-- **Fails without the fix:** with the two islands reverted (`git diff origin/main --
-  src/components/admin/screens/leads > p; git apply -R p`), the two source-guard tests fail
-  (2 failed, 16 passed); with the whole change reverted the spec cannot import the model.
-- **e2e** (`tests/admin/leads.e2e.ts`, CI only): "the list: a star pressed while a search is
-  out stays pressed (C4 star race)". The lead is put on screen by a first search; a second
-  search (its whole e-mail, the same row) is fetched from the server at once through
-  `page.route` + `route.fetch()`, and its answer is held; the star is pressed and its PATCH
-  answers 200; the held answer is then released, the table stops being busy, and the star must
-  still be pressed and the database must say starred. Without the fix the held rows turn it off.
+`tests/lib/lateAnswers.spec.ts`, 24 tests:
+
+- **The list (14):** the R13 order (a read out when the star is pressed is aborted and read
+  again after); a single press needs no read; two quick presses in send order (no read) and out
+  of send order (one read, LS-3), and a press after that starts clean; a failed save is read
+  again (LS-4), and with another press out only once both answered; a bulk action mid-press,
+  in both answer orders; a bulk action alone; a press while a bulk is out holds the bulk's read;
+  a filter change while a star is out (held, then read once) and while a read is out (the
+  newer read used); a press while the read after the writes is out; a read that answered
+  before the press is kept.
+- **A lead's page (4):** the mark-read and a star (the star leaves only after the mark-read
+  answered, answers shown in send order); a 409 (busy until its reload lands, the next change
+  leaves with the new version); a failed task does not stop the queue; busy goes off once.
+- **The islands (6, source guards):** the list's read comes from the rule and is held while a
+  write is out; an answer is used only when its read was not aborted (rows and errors); the star
+  is a write (no local roll back); the bulk action is a write posted through the rule and
+  `bulkDone` asks for no read itself, the bar has no `adminFetch`; a lead's page queues its read,
+  write and mark-read and never sets `busy` itself; a 409 and any failure read again inside the
+  write's turn, and a failed reload is said.
+
+**Red/green** (a local script, not committed: each variant applied to the model or the
+islands, the spec run, the variant undone):
+
+| Variant | Result |
+| --- | --- |
+| this branch | 0 failed, 24 passed |
+| M1 answer order not checked | 2 failed (LS-3, the press after it) |
+| M2 a failure trusted | 4 failed (LS-4, failure while another is out, bulk alone, press during the read after) |
+| M3 a read never held | 2 failed (filter change while a star is out, press while a bulk is out) |
+| M4 a write aborts nothing | 3 failed (R13 order, bulk mid-press, press during the read after) |
+| M5 the queue does not chain | 2 failed (mark-read and star, the 409) |
+| M6 busy off after each task | 3 failed (mark-read and star, the 409, busy once) |
+| M7 read while a write is out | 3 failed (failure while another is out, bulk mid-press, press while a bulk is out) |
+| M8 always read after writes | 6 failed (single press, in order, the press after, failure while out, filter change while a read is out, read before the press) |
+| M9 an aborted answer used | 3 failed (R13 order, filter change while a read is out, press during the read after) |
+| M10 a failed task breaks the queue | 1 failed (a failed task does not stop the queue) |
+| islands at `21d59fb8` (the old fix) | 6 failed (every source guard) |
+| islands at `main` | 6 failed (every source guard) |
+| the whole of `21d59fb8` | 24 failed (the old model has neither rule) |
+
+Every test fails under at least one variant.
+
+**e2e** (`tests/admin/leads.e2e.ts`, CI only): "the list: a star pressed while a search is out
+stays pressed (C4 star race)", traced against the markup. The lead is put on screen by a first
+search (the `Search leads` searchbox, Enter); the table (`Leads`, its `aria-busy`) settles and
+the row's `Star {name}` button reads `aria-pressed="false"`. A second search (the lead's whole
+e-mail, the same row) is fetched from the server at once by `page.route` + `route.fetch()`, and
+its answer held. The star is pressed: `aria-pressed="true"`, its PATCH answers 200, and the
+list is read again (a second query with the same term, not the held one) and answers 200; the
+table stops being busy and the star is still pressed. The held answer is then released (its
+`route.fulfill` meets an aborted request and is caught), the star stays pressed, and the
+database says starred. Without the fix no read follows the star (the wait for it fails), and the
+held rows turn the star off.
 
 ## Sizes
 
-`npm run size` after the review fixes: public route JS 26.07 kB (limit 100); admin bundle sum
-395.07 kB (limit 400, main was 394.4); the leads screens' eager graphs 159.6 kB each (limit
-300); admin chunk plan holds. Raising the sum tripwire to 450 kB is E2's (owner decision
-2026-10-28), not this fix's.
+`npm run size` with the CI environment: public route JS 26.07 kB (limit 100); admin bundle sum
+394.81 kB (limit 400; `main` 394.4, the old fix 395.07); the leads screens' eager graphs
+159.4 kB each (limit 300; the old fix 159.6); admin chunk plan holds. `lateAnswers.ts` is 97
+lines (the old one 191); the islands' diff against `main` is 122 changed lines across three files.
 
 ## Owner questions
 
@@ -161,6 +186,6 @@ None.
 
 ## PII
 
-Nothing new reaches a row: the model only copies a field the island already set on its own
-row (`is_starred`) over the same safe row shape (`LEAD_LIST_FIELDS`). No contact detail,
-budget or note is read or held.
+Nothing new reaches a row or the model: `ListWrites` and `Serial` hold counts, one
+`AbortController` and one promise, never a row or a field. The list still reads the safe row
+shape only (`LEAD_LIST_FIELDS`); no contact detail, budget or note is read or held.
