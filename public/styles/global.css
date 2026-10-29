@@ -3958,6 +3958,46 @@ html[dir='rtl'] .blk-prose {
 .blk-prose a {
   color: var(--bs-klein);
 }
+/* The film's own pause control (clips.ts wireToggle): over the frame's end corner, opaque
+   black under a white icon and ring (21:1, 1.4.11 holds over any still), 44 px. `hidden`
+   until clips.ts shows it where the film can play. */
+.blk-video__box {
+  position: relative;
+}
+.blk-video__toggle {
+  position: absolute;
+  z-index: 2;
+  inset-inline-end: clamp(12px, 2vw, 24px);
+  bottom: clamp(12px, 2vw, 24px);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--bs-paper);
+  border-radius: 50%;
+  background: var(--bs-black);
+  color: var(--bs-paper);
+  cursor: pointer;
+}
+.blk-video__toggle[hidden] {
+  display: none;
+}
+.blk-video__toggle svg {
+  width: 14px;
+  height: 14px;
+}
+.blk-video__play,
+.blk-video__toggle.is-play .blk-video__pause {
+  display: none;
+}
+.blk-video__toggle.is-play .blk-video__play {
+  display: block;
+}
+.blk-video__toggle:focus-visible {
+  outline: 2px solid var(--bs-sky);
+  outline-offset: 3px;
+}
 .blk-gal__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

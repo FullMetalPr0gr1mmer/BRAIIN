@@ -154,6 +154,18 @@ describe('Video', () => {
       expect(imgs[0]).toMatch(/\sheight="\d+"/);
       expect(imgs[0]).toContain(`alt="${POSTER.alt![locale]}"`);
       expect(html).not.toMatch(/\sstyle=/);
+      // Its own pause control (WCAG 2.2.2), named in the page's language, hidden until
+      // clips.ts wires the frame where the film can play.
+      const toggles = tags(html, 'button').filter((b) => b.includes('data-clip-toggle'));
+      expect(toggles).toHaveLength(1);
+      const pause = locale === 'en' ? 'Pause the film' : 'إيقاف الفيلم مؤقتًا';
+      const playLabel = locale === 'en' ? 'Play the film' : 'تشغيل الفيلم';
+      expect(toggles[0]).toContain(`aria-label="${pause}"`);
+      expect(toggles[0]).toContain(`data-label-pause="${pause}"`);
+      expect(toggles[0]).toContain(`data-label-play="${playLabel}"`);
+      expect(toggles[0]).toContain('type="button"');
+      expect(toggles[0]).toMatch(/\shidden(?:[\s>=])/);
+      expect(html).toContain('data-clip-box');
     });
   }
 
@@ -169,6 +181,8 @@ describe('Video', () => {
     );
     expect(html).not.toContain('data-clip-src');
     expect(tags(html, 'img')).toHaveLength(1);
+    // Nothing can play, so there is nothing to pause.
+    expect(html).not.toContain('data-clip-toggle');
   });
 
   test('with no still it renders nothing, clip or not', async () => {

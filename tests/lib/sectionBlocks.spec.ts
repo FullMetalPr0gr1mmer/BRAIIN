@@ -17,6 +17,7 @@ import { SectionWriteSchema } from '@schemas/admin';
 import { renderTiptapToHtml, sanitizeHref } from '@/lib/content/tiptap';
 import { galleryColumns } from '@/lib/sections/blocks';
 import { docHasWords } from '@/lib/admin/docWords';
+import { toggleLabel } from '@/lib/client/clips';
 
 // Admin v2 E10's three blocks, at the write boundary. The Text block's body is "sanitised on
 // write" by refusal: SectionDocSchema takes exactly what the admin's editor makes and the
@@ -248,6 +249,12 @@ describe('the three content schemas', () => {
 });
 
 describe('layout and editor helpers', () => {
+  it('the Video’s own control is named for what pressing it does next', () => {
+    const labels = { pause: 'Pause the film', play: 'Play the film' };
+    expect(toggleLabel(false, labels)).toBe('Pause the film');
+    expect(toggleLabel(true, labels)).toBe('Play the film');
+  });
+
   it('a gallery takes as many columns as fill its rows', () => {
     expect([0, 1, 2, 3, 4, 5, 6, 7, 12].map(galleryColumns)).toEqual([1, 1, 2, 3, 2, 3, 3, 3, 3]);
   });

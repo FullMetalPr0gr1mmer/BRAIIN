@@ -16,8 +16,10 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *   served HTML   /about and /ar/about: each block in its language, the body as the allowlist
  *                 renderer writes it, the gallery's pictures lazy and sized, and no <video>;
  *   video bytes   the Video's frame mounts no <video> while it is below the fold, even parked
- *                 just under it, and mounts one once it is on screen; under reduced motion the
- *                 whole page fetches no video at all, after a full scroll;
+ *                 just under it, and mounts one once it is on screen; its own pause control
+ *                 then shows and stops it (and it stays stopped back in view); under reduced
+ *                 motion the whole page fetches no video at all, after a full scroll, and the
+ *                 control stays hidden;
  *   axe           the blocks at 320, 390 and 1280 px in English and Arabic: zero WCAG 2.2 A/AA
  *                 violations and no sideways scroll;
  *   the editor    as Admin: Add section offers all three on About; each block's panel shows its
@@ -201,6 +203,23 @@ test.describe('the public page', () => {
     await expect(frame.locator('video')).toHaveCount(1, { timeout: 5000 });
     // The film is muted, hidden from assistive tech and never preloaded before it mounts.
     await expect(frame.locator('video')).toHaveAttribute('aria-hidden', 'true');
+    // Its own pause control (WCAG 2.2.2): shown once wired, named for what it does next. The
+    // test browser may not decode the film, so this reads the state, not the picture.
+    const toggle = page.locator('.blk-video__box button[data-clip-toggle]');
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAccessibleName('Pause the film');
+    await toggle.click();
+    await expect(toggle).toHaveAccessibleName('Play the film');
+    expect(await frame.locator('video').evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
+    await expect(frame).not.toHaveClass(/is-playing/);
+    // Stopped, it stays stopped when it leaves the screen and comes back.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(400);
+    await frame.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(600);
+    expect(await frame.locator('video').evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
+    await toggle.click();
+    await expect(toggle).toHaveAccessibleName('Pause the film');
   });
 
   test('reduced motion: no video bytes at all, even after a full scroll', async ({ browser }) => {
@@ -221,8 +240,9 @@ test.describe('the public page', () => {
     await page.waitForTimeout(800);
     expect(seen, 'video requested under prefers-reduced-motion').toEqual([]);
     expect(await page.locator('video').count()).toBe(0);
-    // The still stays.
+    // The still stays, and there is nothing to pause.
     await expect(page.locator('.blk-video__frame img')).toBeVisible();
+    await expect(page.locator('.blk-video__box button[data-clip-toggle]')).toBeHidden();
     await ctx.close();
   });
 
