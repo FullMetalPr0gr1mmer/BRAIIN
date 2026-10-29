@@ -60,6 +60,13 @@ so a read the rule drops is still aborted.
   page read. Each failed press waits in `Checks` under its row, with its own words: a press on
   one row never clears another row's check or words (`sayFor`), and the read after the writes
   settles every check waiting (`verdictOf`, shared with the board).
+- A press that got no answer at all (too slow, the network: anything but the server's own
+  error, `failureOf`) may still be saving, so a read after it that shows the old value proves
+  nothing: it says "{name} may not be starred. {why} It may still be saving, so check again in
+  a moment." instead of "could not be" (review 4).
+- Presses on one row are counted (`RowPresses`, forgotten once none is out): a failed press
+  that a newer press on its row left after is neither drawn back nor said, since the newer
+  press is what was asked for last and the overlap is read again anyway (review 4).
 - The read after a star reads the list only; the KPIs are read on their own counter, which a
   bulk action moves when it answers (a star changes no KPI).
 - The bulk bar is a row write like the star. The list owns the bulk POST (`postBulk`, passed
@@ -105,8 +112,10 @@ for meanwhile, and the PATCH is bounded, so one that never answers no longer dis
 "Move to" for good. A move whose PATCH fails reads the board again (a 409 says so; any other
 failure, since the PATCH can fail after its update committed): "{name} may not have moved.
 {why} Checking the board again.", then, once the read lands, "Moved {name} to {stage}." if it
-moved after all, "{name} could not be moved. {why}" if not, or that the board could not confirm
-it (`moveOutcome`, through `verdictOf`). Those words are per card, like the star's.
+moved after all, "{name} could not be moved. {why}" if not (or, when the PATCH got no answer,
+"{name} may not have moved. {why} It may still be saving, so check again in a moment."), or that
+the board could not confirm it (`moveOutcome`, through `verdictOf`). Those words are per card,
+like the star's.
 
 ## Why this design, not the clock and overlay engine
 
@@ -208,6 +217,48 @@ or search read was already in flight") pinned the board's old marker (`reading.c
 checks that the board reads and moves through the rule (30 passed; with the board as at
 `32efa21c`, 1 failed).
 
+## Review 4 (the independent check's five low items)
+
+Each item was checked against the code at `2fb1a16d`. All were real; all are fixed, with no
+change of design.
+
+| Item | Verdict | Fix | Guarded by |
+| --- | --- | --- | --- |
+| 1: the lead-page e2e waited a fixed 250 ms after the mark-read landed, so it could pass before the late answer was drawn | Real | The fixed code does apply the mark-read answer's `read_at` (only that field), so that is the signal: LeadDetail's `.lead-badges` carries an invisible `data-read-at={lead.read_at ?? ''}`; the route fulfils the held mark-read through `route.fetch()` with its JSON's `read_at` replaced by a sentinel (`2001-01-01T00:00:00.000Z`); after release the test waits for `.lead-badges[data-read-at="<sentinel>"]` to be attached, then reads the star's `aria-checked` once | the e2e (CI); the unit guard "a lead page shows the read mark it drew" keeps the signal in place |
+| 2: nothing checked that the list settles on the row's stored star, or the board on the fresh board (mutants G, G2, H, H2 survived) | Real | Guards on the wiring: `settleStars` finds the row in the read that landed and passes `row.is_starred === true` (else undefined); `settleMoves` passes `fresh` to `moveOutcome` and says a move that saved after all | "the list settles each check on its row's stored star, the board on the fresh board" |
+| 3: nothing checked that a failed bulk keeps the selection (mutant C2d survived) | Real | Guard: `bulkFailed` never touches the selection, `bulkDone` clears it, the bar never does | "a bulk action that failed keeps the selection; one that answered clears it" |
+| 4: after a timeout, a re-read showing the old value said "could not be starred" or "could not be moved", though the write may still land | Real | `failureOf(err)` keeps `unsure` (not an `AdminApiError`: too slow, the network) on the check; `verdictOf(asked, stored, unsure)` answers `unsure` instead of `refused`; `starOutcome` and `moveOutcome` then keep "may not be ..." and add `STILL_SAVING`, as `bulkUnsure` does. A 5xx is the server's own answer (its work is done), so the read after it decides | "with no answer from the server, the old value proves nothing", "failureOf", "after a timeout: the old value keeps "may not be"", "a press that timed out, replayed as the list builds its check", "after a timeout, the old column keeps "may not have moved"", "a failed star or move keeps whether the server answered" |
+| 5: two overlapping presses on one row: the older one's failure, arriving after the newer press left, drew the star back over the newer press and said the older press's words | Real | `RowPresses` counts presses per row; `pressStar` takes `{ presses, id }` and skips the draw-back and the check of a failed press that a newer press on its row left after (the draw-back too: it would draw an older value over the newer press until the read) | "presses on one row: an older one failing after a newer left is not drawn back or said", "a failed press is said when the newer press on its row left before it, not after", "a star press counts the presses on its row" |
+
+**Red/green, review 4** (`scratchpad/lsmut5`, not committed: a `git archive` copy of
+`20e22e8f`, each variant applied there with exact replacements, `lateAnswers.spec.ts` and
+`leadsScreens.spec.ts` run, the files restored; `results.txt`):
+
+| Variant | Result |
+| --- | --- |
+| this branch | 0 failed, 98 passed |
+| 1: `data-read-at` taken off the badges | 1 failed |
+| 2: G (`row ? true : undefined`) / G2 (`starOutcome(check, undefined)`) | 1 failed each |
+| 2: H (the said-after-all line dropped) / H2 (`moveOutcome(check, null)`) | 1 failed each |
+| 3: C2d (`bulkFailed` clears the selection) | 1 failed |
+| 4: `failureOf` never unsure / always unsure | 2 / 1 failed |
+| 4: `verdictOf` ignores `unsure` | 4 failed |
+| 4: `starOutcome`'s / `moveOutcome`'s unsure words dropped | 2 / 1 failed |
+| 4: the list's / the board's check built without `unsure` | 1 / 2 failed |
+| 4: the board's verdict ignores `unsure` | 3 failed |
+| 5: `pressStar` ignores newer presses / `passed` always false / a press never counted | 2 failed each |
+| 5: a row never forgotten | 1 failed |
+| 5: the list passes no presses | 1 failed |
+| 5: only the check skipped, the draw-back kept | 1 failed |
+
+G, G2, H, H2 and C2d are the independent check's mutants, applied verbatim; on `2fb1a16d` with
+its spec they survived (0 failed of 86). The e2e runs only in CI. Traced against `main`: its
+mark-read draws the whole answer (`.then(setLead)`), so with the attribute added the sentinel
+appears together with the star off and the single look reads `aria-checked="false"` (red);
+without the attribute (`main` as it is) the wait for the sentinel times out (red). On this
+branch only `read_at` is taken from that answer, over the row last drawn (the star's PATCH
+answer), so the sentinel appears with the star on (green), in the same render.
+
 ## Departures
 
 - **A failed star is drawn back at once, and the read after it decides.** The brief's first
@@ -231,8 +282,8 @@ checks that the board reads and moves through the rule (30 passed; with the boar
 
 ## Tests
 
-`tests/lib/lateAnswers.spec.ts`, 56 tests (44 after review 2; review 3's twelve are listed
-under "Review 3" below):
+`tests/lib/lateAnswers.spec.ts`, 68 tests (44 after review 2, 56 after review 3; review 3's
+twelve and review 4's twelve are named in their sections above and below):
 
 - **ListWrites (14):** the R13 order (a read out when the star is pressed is aborted and read
   again after); a single press needs no read, nor two that did not overlap; two overlapping
@@ -251,6 +302,10 @@ under "Review 3" below):
   (saved, failed, timed out); a press while a bulk action is out reads once, after both.
 - **The star's words (3):** pending, then settled four ways; no em or en dash (P-12).
 - **moveOutcome (3):** moved after all, not moved, not confirmed.
+- **Review 4 (12):** presses on one row (2); `verdictOf`'s unsure and `failureOf` (2); the
+  star's and the move's words after a timeout, and a timed-out press replayed (3); the islands
+  (5): settle wiring, `failureOf` on the checks, the row's presses, the bulk selection, the
+  badges' `data-read-at`.
 - **Serial and writeInTurn (6):** a read of the row and a star (the star leaves only after the
   read answered, answers shown in send order); a 409 (busy until its reload lands, the
   next change leaves with the new version, the reload's failure said); any other failure reads
@@ -304,22 +359,23 @@ their cases are all still in the spec.
   (`role="switch"`, labelled by its "Starred" span, in LeadStatusCard) is enabled and reads
   `aria-checked="false"`; pressed, its PATCH (`isStarred: true`, not intercepted: the route
   continues every request but the mark-read) answers 200, and the switch reads
-  `aria-checked="true"` and is enabled again. The held mark-read is then released; once its
-  response has finished in the browser and a quarter second has passed for its JSON to be
-  drawn, the switch still reads `aria-checked="true"`; the database says starred and read. On
-  `main` it is red at that last look (the late answer drew the star off); at review 2's head
-  (`32efa21c`) it is red at `toBeEnabled` (the queue held the switch).
+  `aria-checked="true"` and is enabled again. The held mark-read's JSON carries a sentinel
+  `read_at` (`2001-01-01T00:00:00.000Z`, set through `route.fetch()` and `route.fulfill({
+  response, json })`, review 4). Released, the test waits for the badges'
+  `data-read-at` to show the sentinel (the answer has been drawn), then reads the switch's
+  `aria-checked` once: `true`; the database says starred and read. On `main` it is red there
+  (the late answer drew the star off with the sentinel; without the attribute the wait times
+  out); at review 2's head (`32efa21c`) it is red at `toBeEnabled` (the queue held the switch).
 
 ## Sizes
 
-`npm run size` with the CI environment, after review 3: public route JS 26.07 kB (limit 100);
-admin bundle sum 395.97 kB (limit 400; `main` 394.4, review 1's head 394.81, review 2's head
-395.51: review 3's per-row checks, the board on the shared rules and the bounded reads cost
-0.46 kB); the leads screens' eager graphs 160.5 kB each (limit 300; review 2's head 160.1);
-admin chunk plan holds. The sum is 4.03 kB under its tripwire, so the owner's 450 kB raise was
-not needed here (E2 applies it). `lateAnswers.ts` is 370 lines, about half of them comments; the
-islands' diff against `main` is about 395 changed lines across four files (310 added, 85
-removed).
+`npm run size` with the CI environment, after review 4: public route JS 26.07 kB (limit 100);
+admin bundle sum 396.23 kB (limit 400; `main` 394.4, review 1's head 394.81, review 2's head
+395.51, review 3's head 395.97: review 4's row presses and timeout words cost 0.26 kB); the
+leads screens' eager graphs 160.8 kB each (limit 300; review 3's head 160.5); admin chunk plan
+holds. The sum is 3.77 kB under its tripwire, so the owner's 450 kB raise was not needed here
+(E2 applies it). `lateAnswers.ts` is 437 lines, about half of them comments; the islands' diff
+against `main` is about 420 changed lines across four files (336 added, 86 removed).
 
 ## Owner questions
 
