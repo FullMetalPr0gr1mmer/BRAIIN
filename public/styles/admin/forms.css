@@ -199,6 +199,10 @@
   gap: 6px;
 }
 
+.frm-next-version {
+  font-family: var(--ad-mono);
+}
+
 .frm-captcha button[role='switch'] {
   vertical-align: middle;
 }

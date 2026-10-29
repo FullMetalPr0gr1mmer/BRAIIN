@@ -141,7 +141,7 @@ export default function FormsScreen(props: FormsScreenProps) {
       set(withOrder(config, moved(order, meta.key, step), builtInOrder, group));
     const id = `${base}-${meta.key}`;
     return (
-      <li key={meta.key} className="frm-row" data-field={meta.key}>
+      <li key={meta.key} className="frm-row" data-edit-field={meta.key}>
         <div className="frm-row__h">
           <span className="frm-row__t" id={`${id}-name`}>
             {meta.label.en}
@@ -317,7 +317,8 @@ export default function FormsScreen(props: FormsScreenProps) {
           />
           {version && (
             <p className="frm-note">
-              Version the form posts after saving: <span className="frm-version">{version}</span>
+              Version the form posts after saving:{' '}
+              <span className="frm-next-version">{version}</span>
             </p>
           )}
         </section>

@@ -8,7 +8,10 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  * Admin is swept, Content Creator, SEO and Sales are refused by the server through
  * LOCKED_SCREENS): server-rendered, tabs that are links, each form's fields with Required or
  * Optional, the protections, and on Join the consent version the form stores. Axe clean and
- * no sideways scroll on both tabs at 390 px.
+ * no sideways scroll on both tabs at 390 px. Admin v2 E8: above the as-built list, the forms
+ * config's editor (the AdminForms island) draws a row per field (`data-edit-field`), with the
+ * switches for an optional field only, and the captcha is a switch that is off and disabled.
+ * Nothing is saved here: the public forms other suites read stay as built.
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
@@ -38,7 +41,18 @@ test('the inquiry form and the Join form, as the code decides them', async ({ pa
   // Every variant's fields: the phone is the services pages' alone, and says so.
   await expect(required('phone')).toHaveText('Optional');
   await expect(page.locator('li[data-field="phone"]')).toContainText('Only on the services pages');
-  await expect(page.getByText('Captcha: Not set up.')).toBeVisible();
+  const captcha = page.getByRole('switch', { name: 'Captcha' });
+  await expect(captcha).toBeDisabled();
+  await expect(captcha).toHaveAttribute('aria-checked', 'false');
+  await expect(page.locator('#frm-captcha-state')).toHaveText('Not set up.');
+  // The editor (E8): an optional field has its two switches, a field the site needs has none.
+  const row = (key: string) => page.locator(`li[data-edit-field="${key}"]`);
+  await expect(row('phone')).toContainText('Asked on the services pages');
+  await expect(row('phone').getByRole('checkbox', { name: 'Shown on the form' })).toBeChecked();
+  await expect(row('phone').getByRole('checkbox', { name: 'Required' })).not.toBeChecked();
+  await expect(row('name').getByRole('checkbox')).toHaveCount(0);
+  await expect(row('name').getByRole('button', { name: 'Move up' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save the inquiry form' })).toBeVisible();
   await expect(page.getByText(/^Rate limits: up to 10 an hour/)).toBeVisible();
   await check(page, 'inquiry');
 
@@ -47,6 +61,9 @@ test('the inquiry form and the Join form, as the code decides them', async ({ pa
   await expect(required('portfolio')).toHaveText('Required');
   await expect(required('linkedin')).toHaveText('Optional');
   await expect(page.locator('.frm-version')).toHaveText(RECRUITMENT_POLICY_VERSION);
+  // The editor's consent card: with the lines as built, the form posts the notice's date.
+  await expect(page.locator('.frm-next-version')).toHaveText(RECRUITMENT_POLICY_VERSION);
+  await expect(row('cv').getByRole('checkbox', { name: 'Required' })).toBeVisible();
   // Opening applications is Admin's switch: Developer reads the state, with no link to it.
   await expect(page.getByText(/^Applications are (open|closed)$/)).toBeVisible();
   await expect(page.getByRole('link', { name: 'Change it in General' })).toHaveCount(0);
