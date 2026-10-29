@@ -75,17 +75,18 @@ describe('ListWrites (the leads list)', () => {
       const star = w.write();
       const bulk = w.write(); // the bulk bar's POST is a row write too
       expect(search.signal.aborted).toBe(true);
-      const [first, second] = bulkFirst
-        ? ([
+      // The bulk answers "not shown" (its rows change only through a read); the star "shown".
+      const answers: [number, boolean][] = bulkFirst
+        ? [
             [bulk, false],
             [star, true],
-          ] as const)
-        : ([
+          ]
+        : [
             [star, true],
             [bulk, false],
-          ] as const);
-      expect(w.written(...first)).toBe(false); // the other is still out
-      expect(w.written(...second)).toBe(true);
+          ];
+      const results = answers.map(([token, shown]) => w.written(token, shown));
+      expect(results).toEqual([false, true]); // nothing while the other is out, then one read
     }
   });
 

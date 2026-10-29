@@ -263,8 +263,9 @@ test.describe('as admin', () => {
     await expect(star).toHaveAttribute('aria-pressed', 'false');
 
     // A second search (the lead's whole e-mail: the same one row) is read on the server at
-    // once, before the star, but its answer is held until the star is saved: the order R13's
-    // e2e met by chance. Its rows say the star is off.
+    // once, before the star, and its answer is held: the order R13's e2e met by chance. Its
+    // rows say the star is off. Pressing the star aborts that read (a row write never overlaps
+    // a list read, src/lib/crm/lateAnswers.ts), and the list is read again once it is saved.
     let release: () => void = () => undefined;
     const held = new Promise<void>((resolve) => {
       release = resolve;
@@ -273,16 +274,23 @@ test.describe('as admin', () => {
     const read = new Promise<void>((resolve) => {
       markRead = resolve;
     });
+    let markDone: () => void = () => undefined;
+    const done = new Promise<void>((resolve) => {
+      markDone = resolve;
+    });
+    let heldRequest: unknown = null;
     await page.route('**/api/admin/leads/query', async (route) => {
-      if (asked(route.request().postDataJSON()) !== lead.email) return route.continue();
+      if (heldRequest !== null || asked(route.request().postDataJSON()) !== lead.email) {
+        return route.continue();
+      }
+      heldRequest = route.request();
       const response = await route.fetch();
       markRead();
       await held;
-      await route.fulfill({ response });
+      // The page aborted this read when the star was pressed: nothing is waiting for it.
+      await route.fulfill({ response }).catch(() => undefined);
+      markDone();
     });
-    const second = page.waitForResponse(
-      (res) => isQuery(res) && asked(res.request().postDataJSON()) === lead.email,
-    );
     await search.fill(lead.email!);
     await search.press('Enter');
     await read;
@@ -292,14 +300,23 @@ test.describe('as admin', () => {
         new URL(res.url()).pathname === `/api/admin/leads/${lead.id}` &&
         res.request().method() === 'PATCH',
     );
+    const reread = page.waitForResponse(
+      (res) =>
+        isQuery(res) &&
+        res.request() !== heldRequest &&
+        asked(res.request().postDataJSON()) === lead.email,
+    );
     await star.click();
     await expect(star).toHaveAttribute('aria-pressed', 'true');
     expect((await saved).status()).toBe(200);
-
-    // The held answer lands: its rows are drawn, and the star stays pressed.
-    release();
-    expect((await second).status()).toBe(200);
+    // The search the star aborted is read again after the save, and its rows hold the star.
+    expect((await reread).status()).toBe(200);
     await expect(table).not.toHaveAttribute('aria-busy', 'true');
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+
+    // The held answer, released now, is never drawn: the star stays pressed.
+    release();
+    await done;
     await expect(star).toHaveAttribute('aria-pressed', 'true');
     await page.unroute('**/api/admin/leads/query');
     expect((await leadOf(page, lead.id))['is_starred']).toBe(true);
