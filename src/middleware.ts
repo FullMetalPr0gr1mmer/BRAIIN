@@ -2,6 +2,7 @@ import { defineMiddleware } from 'astro:middleware';
 // Astro 6+ removed `Astro.locals.runtime.env` (the getter now throws). Worker bindings
 // come from the runtime module instead — works in `astro dev` (workerd) and in prod.
 import { env } from 'cloudflare:workers';
+import { getActiveTheme } from '@/lib/data/theme';
 import {
   CSP_REPORT_ONLY,
   collectInlineHashes,
@@ -374,6 +375,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
           await next(locale === 'ar' ? '/ar/404' : '/404');
       return secured(hiddenAnswer(answer));
     }
+  }
+
+  // 1a') The active theme (Admin v2 E4): its read starts here, beside the page's own loaders,
+  //      and BaseLayout awaits the same promise (src/lib/data/theme.ts, once per request), so
+  //      the theme costs the page no round trip of its own. It never rejects (no theme is the
+  //      brand's look). A preview (an /admin path) reads it inside its scope instead.
+  if (!isAdmin && !isApi && !isHealth && !isImage && request.method === 'GET') {
+    void getActiveTheme(locals);
   }
 
   // 1b) Image transforms answer only the URLs our own markup emits. Every other

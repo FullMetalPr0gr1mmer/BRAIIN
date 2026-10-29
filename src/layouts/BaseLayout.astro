@@ -13,6 +13,8 @@ import ErrorReporter from '@/components/ErrorReporter.astro';
 import Ga4Loader from '@/components/Ga4Loader.astro';
 import AdminPreviewBridge from '@/components/preview/AdminPreviewBridge.astro';
 import { dir } from '@/lib/i18n';
+import { getActiveTheme, themeHref } from '@/lib/data/theme';
+import { themeCss } from '@theme/compile';
 
 interface Props {
   title: string;
@@ -72,6 +74,13 @@ const direction = dir(locale);
 // public request has no `preview`, so none of this changes a public page.
 const preview = Astro.locals.preview;
 const robotsValue = preview ? 'noindex,nofollow' : robots;
+// The site's theme (Admin v2 E4): a same-origin stylesheet of custom properties, linked only
+// while the active theme sets a token, so a site with no theme (or one reset to the brand's)
+// renders byte for byte as before. A preview draws the PENDING theme its scope reads, which no
+// stylesheet address serves: as the same custom properties in a nonced <style> (a preview is
+// a Tier C admin response; no public page ever carries one).
+const theme = await getActiveTheme(Astro.locals);
+const previewTheme = preview && theme ? themeCss(theme.tokens) : '';
 ---
 
 <!doctype html>
@@ -90,6 +99,12 @@ const robotsValue = preview ? 'noindex,nofollow' : robots;
     />
     <link rel="stylesheet" href="/styles/global.css" />
     {styles.map((sheet) => <link rel="stylesheet" href={`/styles/${sheet}`} />)}
+    {theme && !preview && <link rel="stylesheet" href={themeHref(theme)} />}
+    {
+      previewTheme && (
+        <style is:inline nonce={Astro.locals.cspNonce} set:html={previewTheme} />
+      )
+    }
     {
       /*
       The preview's bridge goes in the head, before every script the page renders: module

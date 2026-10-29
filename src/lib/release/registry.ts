@@ -394,9 +394,11 @@ export const RELEASE_REGISTRY: Readonly<Record<ReleaseEntityType, RegistryEntry>
     entityTags: tags('site:identity'),
   }),
   // Until the Appearance slice (E4) adds `theme:active` to every page's tags.
+  // Admin v2 E4: every Tier A page links the active theme (or would, once one is set), so a
+  // theme's publish purges the ALWAYS tag every page carries for it, `site:chrome`.
   custom_theme: fromResource('custom_theme', themeResource, {
     label: named('Theme'),
-    entityTags: tags('tenant:default'),
+    entityTags: tags('site:chrome'),
   }),
   entity_seo: fromEntitySeo({
     label: (row) => ({

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ThemeTokensSchema } from './themeTokens';
+import { ThemeSettingsSchema } from './theme';
 import {
   BilingualTextSchema,
   ContentStatusSchema,
@@ -940,10 +941,13 @@ export { IntegrationsSchema } from './integrations';
 // envelope can use them without this file (Admin v2 R9).
 export { ThemeTokensSchema };
 
+// Admin v2 E4: a theme is its settings (packages/schemas/theme.ts, contrast-gated); the
+// server compiles the tokens from them (src/lib/admin/resources/themes.ts toRow), so no
+// client writes a token. A `tokens` key sent anyway is not part of the shape and is dropped.
 export const ThemeWriteSchema = z.object({
-  name: ShortTextSchema,
-  tokens: ThemeTokensSchema.default({}),
-  isActive: z.boolean().default(false),
+  name: ShortTextSchema.default('Site theme'),
+  settings: ThemeSettingsSchema,
+  isActive: z.boolean().default(true),
 });
 export const ThemeUpdateSchema = updatable(ThemeWriteSchema);
 

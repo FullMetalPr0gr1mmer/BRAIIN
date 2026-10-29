@@ -84,6 +84,7 @@ const CONTENT_LOADERS = [
   'src/lib/data/statistics.ts',
   'src/lib/data/taxonomy.ts',
   'src/lib/data/team.ts',
+  'src/lib/data/theme.ts',
 ];
 
 /**

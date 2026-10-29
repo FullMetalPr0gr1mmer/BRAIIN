@@ -1,25 +1,41 @@
 import { ThemeUpdateSchema, ThemeWriteSchema } from '@schemas/admin';
+import type { ThemeSettings } from '@schemas/theme';
+import { compileTheme } from '@theme/compile';
 import type { ResourceConfig } from '../resource';
 import { fieldsOf, pick, type Input } from './shared';
 
-// Themes (Admin + Developer).
+// The site's theme (Admin v2 E4, AV-27; Admin + Developer, theme.edit). One v1 theme per tenant
+// (custom_themes_one_theme_v1): the editor at /admin/appearance/theme saves its settings, and
+// the TOKENS are compiled here from them on every save, staged or live, so a client never
+// writes a token and a release's publish (R6, which re-derives each item through this toRow)
+// compiles the same way. The settings are contrast-gated by their schema; the database's CHECK
+// (custom_themes_theme_v1) holds the tokens to them again.
 
-const THEME_KEYS = { name: 'name', tokens: 'tokens', isActive: 'is_active' };
+const THEME_KEYS = { name: 'name', isActive: 'is_active' };
 
 export const themeResource: ResourceConfig = {
   table: 'custom_themes',
   entity: 'custom_theme',
   writeCap: 'theme.edit',
   listColumns: 'id,name,is_active,version,updated_at',
-  columns: 'id,name,tokens,is_active,version,created_at,updated_at',
+  columns: 'id,name,settings,tokens,is_active,version,created_at,updated_at',
   orderBy: { column: 'name', ascending: true },
   searchColumn: 'name',
   createSchema: ThemeWriteSchema,
   updateSchema: ThemeUpdateSchema,
-  toRow: (input) => pick(input as Input, THEME_KEYS),
+  toRow: (input) => {
+    const row = pick(input as Input, THEME_KEYS);
+    const settings = (input as Input)['settings'];
+    if (settings !== undefined) {
+      row['settings'] = settings;
+      row['tokens'] = compileTheme(settings as ThemeSettings);
+    }
+    return row;
+  },
+  // `settings` writes two columns: itself and the tokens compiled from it.
+  fields: fieldsOf(THEME_KEYS, { settings: ['settings', 'tokens'] }),
   // Activating one theme deactivates the others in `afterWrite` (other rows, no column of
-  // this patch).
-  fields: fieldsOf(THEME_KEYS),
+  // this patch). With releases on, apply_release does the same in its transaction (0051).
   afterWrite: async ({ auth, sb, row, input }) => {
     if (input['isActive'] !== true) return;
     // Exactly one active theme. Done after the write rather than in a transaction
