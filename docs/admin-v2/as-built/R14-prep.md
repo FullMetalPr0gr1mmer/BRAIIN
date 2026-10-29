@@ -369,3 +369,10 @@ Every finding was checked against the code first; each fix has a test that fails
 | R14P-C5: the mutant log of record showed M29 green while this note said all 29 were red | Real (the record) | The Tests section names the re-run that showed M29 red, and M29 was run red again by hand | `r14p_fix_m29.log` |
 
 No finding was refuted, and the skeptics refuted none.
+
+**Gates after the review fixes:** `astro check` 0 errors, 0 warnings; `tsc --noEmit` clean;
+`prettier --check .` clean; vitest, the touched specs (23 files, 2473 passed) and then the whole
+suite with `--testTimeout=60000` (373 files, 9673 passed, 21 skipped as on main);
+`check-migrations` (no new migration); `npm run build` with the CI dummy environment, then
+`npm run size` (public route JS 26.07 KB of 100, the admin sum 394.76 KB of 400, every screen's
+eager graph as above, the chunk plan holds); `contrast-audit` passes (no admin CSS changed).
