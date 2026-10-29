@@ -11,7 +11,10 @@ import {
   type ApplicationFormField,
   type ApplyStatus,
 } from '@schemas/application';
-import { RECRUITMENT_POLICY_VERSION, recruitmentConsent } from '@consent/recruitment';
+import { APPLICATION_GROUP_IDS } from '@schemas/forms';
+import { recruitmentConsent } from '@consent/recruitment';
+import { applicationView } from '@/lib/forms/config';
+import { formSettingsFor } from '@/lib/data/forms';
 import { localizedHref } from '@/lib/i18n';
 import { APPLY_FORM_COPY, applyStatusText } from '@/lib/forms/applicationCopy';
 import Cta from '@/components/ui/Cta.astro';
@@ -35,6 +38,18 @@ import Cta from '@/components/ui/Cta.astro';
 //
 // Copy: src/lib/forms/applicationCopy.ts (the mockup's labels, verbatim; the messages ours).
 // ONE form per page: its ids are fixed (apply-form, apply-status, af-*).
+//
+// Admin v2 E8: the three groups render their controls from the published forms config
+// (src/lib/forms/config.ts applicationView): its labels, its order inside each group, the
+// optional controls (crafts, LinkedIn, CV) shown or hidden and required or not, the button and
+// the two consent lines, whose version (`<notice date>.r<N>` once reworded) is posted with
+// them. With no row the HTML is the built-in form to the byte (tests/render/sections.spec.ts).
+// The craft chips are real checkboxes (keyboard-operable, posted by KEY), visually the
+// design's pills, the group named by its visible label. The CV's input covers the whole zone
+// (transparent), so a click anywhere opens the picker and a file can be dropped on it; Remove
+// sits OUTSIDE the label, above the input, so pressing it never reopens the picker; each line
+// is a stack of every text it can show (one visible at a time), so the zone is sized for the
+// longest from first paint and a chosen, dropped or refused file moves nothing.
 
 export interface Props {
   locale: Locale;
@@ -55,7 +70,11 @@ export interface Props {
 const { locale, brand, groups, note, okMessage, answer = null, closedTarget } = Astro.props;
 
 const STR = APPLY_FORM_COPY[locale];
-const consent = recruitmentConsent(locale, brand);
+// The published forms config (Admin v2 E8, src/lib/forms/config.ts applicationView): the
+// labels, the order inside each group, the optional controls shown and required, the button
+// and the consent lines with the version they post. With no row, exactly the built-in form.
+const view = applicationView(await formSettingsFor(Astro.locals), locale);
+const consent = recruitmentConsent(locale, brand, view.consent);
 const privacyHref = localizedHref('/privacy#recruitment', locale);
 
 /** A control's name, checked against APPLICATION_FORM_FIELDS at compile time: a field
@@ -125,209 +144,223 @@ const regionText = answer === null ? '' : applyStatusText(STR, answer, okMessage
 >
   {answerAtTop && <p {...region}>{regionText}</p>}
 
-  <fieldset class="af-group">
-    <legend class="af-group__t">{groups.about}</legend>
-    <div class="af-grid">
-      <div class="field">
-        <label for="af-name">{STR.name}</label>
-        <input
-          id="af-name"
-          name={f('name')}
-          type="text"
-          required
-          maxlength="120"
-          autocomplete="name"
-          placeholder={STR.namePh}
-        />
-      </div>
-      <div class="field">
-        <label for="af-email">{STR.email}</label>
-        <input
-          id="af-email"
-          name={f('email')}
-          type="email"
-          required
-          maxlength="254"
-          autocomplete="email"
-          dir="ltr"
-          placeholder={STR.emailPh}
-        />
-      </div>
-      <div class="field">
-        <label for="af-phone">{STR.phone}</label>
-        <input
-          id="af-phone"
-          name={f('phone')}
-          type="tel"
-          required
-          minlength="6"
-          maxlength="32"
-          autocomplete="tel"
-          inputmode="tel"
-          dir="ltr"
-          placeholder={STR.phonePh}
-        />
-      </div>
-      <div class="field">
-        <label for="af-city">{STR.city}</label>
-        <input
-          id="af-city"
-          name={f('city')}
-          type="text"
-          required
-          maxlength="80"
-          autocomplete="address-level2"
-          placeholder={STR.cityPh}
-        />
-      </div>
-    </div>
-  </fieldset>
-
-  <fieldset class="af-group">
-    <legend class="af-group__t">{groups.role}</legend>
-    <div class="af-grid">
-      <div class="field">
-        <label for="af-role">{STR.role}</label>
-        <input
-          id="af-role"
-          name={f('role')}
-          type="text"
-          required
-          maxlength="120"
-          autocomplete="off"
-          placeholder={STR.rolePh}
-        />
-      </div>
-      <div class="field">
-        <label for="af-experience">{STR.experience}</label>
-        <select id="af-experience" name={f('experience')} required>
-          <option value="">{STR.pick}</option>
-          {levels.map((o) => <option value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
-      <div class="field">
-        <label for="af-work-type">{STR.workType}</label>
-        <select id="af-work-type" name={f('work_type')} required>
-          <option value="">{STR.pick}</option>
-          {workTypes.map((o) => <option value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
-      <div class="field">
-        <label for="af-availability">{STR.availability}</label>
-        <select id="af-availability" name={f('availability')} required>
-          <option value="">{STR.pick}</option>
-          {starts.map((o) => <option value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
-      {
-        /* The craft chips: real checkboxes (keyboard-operable, posted by KEY), visually the
-          design's pills. The group is named by its visible label. */
-      }
-      <div class="af-chips af-full" role="group" aria-labelledby="af-skills-label">
-        <p class="af-label" id="af-skills-label">{STR.skills}</p>
-        <div class="af-chips__row">
-          {
-            crafts.map((c) => (
-              <label class="af-chip">
-                <input type="checkbox" name={f('skills')} value={c.value} />
-                <span>{c.label}</span>
-              </label>
-            ))
-          }
+  {
+    APPLICATION_GROUP_IDS.map((group) => (
+      <fieldset class="af-group">
+        <legend class="af-group__t">{groups[group]}</legend>
+        <div class="af-grid">
+          {view.groups[group].map(({ field, label, required }) =>
+            field === 'name' ? (
+              <div class="field">
+                <label for="af-name">{label}</label>
+                <input
+                  id="af-name"
+                  name={f('name')}
+                  type="text"
+                  required
+                  maxlength="120"
+                  autocomplete="name"
+                  placeholder={STR.namePh}
+                />
+              </div>
+            ) : field === 'email' ? (
+              <div class="field">
+                <label for="af-email">{label}</label>
+                <input
+                  id="af-email"
+                  name={f('email')}
+                  type="email"
+                  required
+                  maxlength="254"
+                  autocomplete="email"
+                  dir="ltr"
+                  placeholder={STR.emailPh}
+                />
+              </div>
+            ) : field === 'phone' ? (
+              <div class="field">
+                <label for="af-phone">{label}</label>
+                <input
+                  id="af-phone"
+                  name={f('phone')}
+                  type="tel"
+                  required
+                  minlength="6"
+                  maxlength="32"
+                  autocomplete="tel"
+                  inputmode="tel"
+                  dir="ltr"
+                  placeholder={STR.phonePh}
+                />
+              </div>
+            ) : field === 'city' ? (
+              <div class="field">
+                <label for="af-city">{label}</label>
+                <input
+                  id="af-city"
+                  name={f('city')}
+                  type="text"
+                  required
+                  maxlength="80"
+                  autocomplete="address-level2"
+                  placeholder={STR.cityPh}
+                />
+              </div>
+            ) : field === 'role' ? (
+              <div class="field">
+                <label for="af-role">{label}</label>
+                <input
+                  id="af-role"
+                  name={f('role')}
+                  type="text"
+                  required
+                  maxlength="120"
+                  autocomplete="off"
+                  placeholder={STR.rolePh}
+                />
+              </div>
+            ) : field === 'experience' ? (
+              <div class="field">
+                <label for="af-experience">{label}</label>
+                <select id="af-experience" name={f('experience')} required>
+                  <option value="">{STR.pick}</option>
+                  {levels.map((o) => (
+                    <option value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            ) : field === 'workType' ? (
+              <div class="field">
+                <label for="af-work-type">{label}</label>
+                <select id="af-work-type" name={f('work_type')} required>
+                  <option value="">{STR.pick}</option>
+                  {workTypes.map((o) => (
+                    <option value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            ) : field === 'availability' ? (
+              <div class="field">
+                <label for="af-availability">{label}</label>
+                <select id="af-availability" name={f('availability')} required>
+                  <option value="">{STR.pick}</option>
+                  {starts.map((o) => (
+                    <option value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            ) : field === 'skills' ? (
+              <div class="af-chips af-full" role="group" aria-labelledby="af-skills-label">
+                <p class="af-label" id="af-skills-label">
+                  {label}
+                </p>
+                <div class="af-chips__row">
+                  {crafts.map((c) => (
+                    <label class="af-chip">
+                      <input type="checkbox" name={f('skills')} value={c.value} />
+                      <span>{c.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : field === 'portfolio' ? (
+              <div class="field">
+                <label for="af-portfolio">{label}</label>
+                <input
+                  id="af-portfolio"
+                  name={f('portfolio')}
+                  type="url"
+                  required
+                  maxlength="2048"
+                  autocomplete="url"
+                  inputmode="url"
+                  dir="ltr"
+                  placeholder={STR.portfolioPh}
+                />
+              </div>
+            ) : field === 'linkedin' ? (
+              <div class="field">
+                <label for="af-linkedin">
+                  {label}
+                  {!required && <span class="af-opt">{STR.optional}</span>}
+                </label>
+                <input
+                  id="af-linkedin"
+                  name={f('linkedin')}
+                  type="url"
+                  required={required}
+                  maxlength="2048"
+                  autocomplete="url"
+                  inputmode="url"
+                  dir="ltr"
+                  placeholder={STR.linkedinPh}
+                />
+              </div>
+            ) : field === 'cv' ? (
+              <div
+                class="af-drop af-full"
+                data-cv-drop
+                data-state="empty"
+                data-kb={STR.kb}
+                data-mb={STR.mb}
+              >
+                <input
+                  id="af-cv"
+                  class="af-drop__input"
+                  name={CV_FIELD}
+                  type="file"
+                  accept={accept}
+                  required={required}
+                  aria-describedby="af-cv-hint"
+                />
+                <span class="af-drop__ico" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path
+                      d="M12 16V4M7 9l5-5 5 5M4 20h16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </span>
+                <span class="af-drop__txt">
+                  <label for="af-cv" class="af-drop__t">
+                    <span class="af-drop__default">{label}</span>
+                    <span class="af-drop__name" data-cv-name dir="auto" />
+                  </label>
+                  <span class="af-drop__s">
+                    <span id="af-cv-hint" class="af-drop__hint" data-cv-hint>
+                      {STR.cvHint}
+                    </span>
+                    <span id="af-cv-size" class="af-drop__size" data-cv-size />
+                    <span id="af-cv-bad" class="af-drop__bad" data-cv-bad>
+                      {STR.cvBad}
+                    </span>
+                  </span>
+                </span>
+                <button type="button" class="af-drop__x" data-cv-remove>
+                  {STR.cvRemove}
+                </button>
+              </div>
+            ) : (
+              <div class="field af-full">
+                <label for="af-message">{label}</label>
+                <textarea
+                  id="af-message"
+                  name={f('message')}
+                  required
+                  maxlength="4000"
+                  placeholder={STR.messagePh}
+                />
+              </div>
+            ),
+          )}
         </div>
-      </div>
-    </div>
-  </fieldset>
-
-  <fieldset class="af-group">
-    <legend class="af-group__t">{groups.work}</legend>
-    <div class="af-grid">
-      <div class="field">
-        <label for="af-portfolio">{STR.portfolio}</label>
-        <input
-          id="af-portfolio"
-          name={f('portfolio')}
-          type="url"
-          required
-          maxlength="2048"
-          autocomplete="url"
-          inputmode="url"
-          dir="ltr"
-          placeholder={STR.portfolioPh}
-        />
-      </div>
-      <div class="field">
-        <label for="af-linkedin">
-          {STR.linkedin}<span class="af-opt">{STR.optional}</span>
-        </label>
-        <input
-          id="af-linkedin"
-          name={f('linkedin')}
-          type="url"
-          maxlength="2048"
-          autocomplete="url"
-          inputmode="url"
-          dir="ltr"
-          placeholder={STR.linkedinPh}
-        />
-      </div>
-      {
-        /* The CV. The input covers the whole zone (transparent), so a click anywhere opens
-           the picker and a file can be dropped on it; Remove sits OUTSIDE the label, above
-           the input, so pressing it never reopens the picker. Each line is a stack of
-           every text it can show (one visible at a time), so the zone is sized for the
-           longest from first paint and a chosen, dropped or refused file moves nothing. */
-      }
-      <div
-        class="af-drop af-full"
-        data-cv-drop
-        data-state="empty"
-        data-kb={STR.kb}
-        data-mb={STR.mb}
-      >
-        <input
-          id="af-cv"
-          class="af-drop__input"
-          name={CV_FIELD}
-          type="file"
-          accept={accept}
-          aria-describedby="af-cv-hint"
-        />
-        <span class="af-drop__ico" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path
-              d="M12 16V4M7 9l5-5 5 5M4 20h16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"></path>
-          </svg>
-        </span>
-        <span class="af-drop__txt">
-          <label for="af-cv" class="af-drop__t">
-            <span class="af-drop__default">{STR.cvTitle}</span>
-            <span class="af-drop__name" data-cv-name dir="auto"></span>
-          </label>
-          <span class="af-drop__s">
-            <span id="af-cv-hint" class="af-drop__hint" data-cv-hint>{STR.cvHint}</span>
-            <span id="af-cv-size" class="af-drop__size" data-cv-size></span>
-            <span id="af-cv-bad" class="af-drop__bad" data-cv-bad>{STR.cvBad}</span>
-          </span>
-        </span>
-        <button type="button" class="af-drop__x" data-cv-remove>{STR.cvRemove}</button>
-      </div>
-      <div class="field af-full">
-        <label for="af-message">{STR.message}</label>
-        <textarea
-          id="af-message"
-          name={f('message')}
-          required
-          maxlength="4000"
-          placeholder={STR.messagePh}></textarea>
-      </div>
-    </div>
-  </fieldset>
+      </fieldset>
+    ))
+  }
 
   <div class="af-consents">
     <div class="field af-consent">
@@ -358,10 +391,10 @@ const regionText = answer === null ? '' : applyStatusText(STR, answer, okMessage
     <input id="af-hp" name={HONEYPOT_FIELD} type="text" tabindex="-1" autocomplete="off" />
   </div>
   <input type="hidden" name={f('locale')} value={locale} />
-  <input type="hidden" name={f('policy_version')} value={RECRUITMENT_POLICY_VERSION} />
+  <input type="hidden" name={f('policy_version')} value={view.policyVersion} />
 
   <div class="af-foot">
-    <Cta type="submit" icon="go">{STR.submit}</Cta>
+    <Cta type="submit" icon="go">{view.button ?? STR.submit}</Cta>
     <p class="af-note">{note}</p>
   </div>
 

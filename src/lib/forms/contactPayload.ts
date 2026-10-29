@@ -36,7 +36,7 @@ export const SERVICE_LEAD_KEYS = ['serviceOfInterest', 'disciplineOfInterest'] a
 export type ContactField = keyof typeof CONTACT_FIELD_TO_LEAD;
 
 /** Keys every submission carries besides its fields. */
-export const CONTACT_FIXED_KEYS = ['kind', 'locale', 'consentMarketing', 'hp'] as const;
+export const CONTACT_FIXED_KEYS = ['kind', 'locale', 'consentMarketing', 'hp', 'form'] as const;
 
 /**
  * The fields of each ContactForm variant, in DOM order (ContactForm.astro renders from
@@ -53,6 +53,21 @@ export const CONTACT_FORM_FIELDS = {
 } as const satisfies Record<string, readonly ContactField[]>;
 export type ContactFormVariant = keyof typeof CONTACT_FORM_FIELDS;
 
+/**
+ * Which variant a rendered form is, from the class ContactForm.astro gives it
+ * (`contact-form--compact`, `--full`, `--hello`; the hello form also carries `--full`, its
+ * layout). Admin v2 E8 posts it as `form`, so the server applies the forms config to the
+ * variant the visitor saw. Read from the class rather than a new attribute so the served HTML
+ * stays byte-identical (tests/lib/formsConfig.spec.ts holds it to the rendered forms).
+ */
+export function variantOfForm(classes: Iterable<string>): ContactFormVariant | undefined {
+  const list = new Set(classes);
+  if (list.has('contact-form--hello')) return 'hello';
+  if (list.has('contact-form--compact')) return 'compact';
+  if (list.has('contact-form--full')) return 'full';
+  return undefined;
+}
+
 /** What the form posts as `kind` (LeadKindSchema). */
 export type ContactKind = 'contact' | 'project_inquiry';
 
@@ -65,7 +80,7 @@ type Get = (name: string) => FormDataEntryValue | null;
  */
 export function buildContactPayload(
   get: Get,
-  opts: { kind: ContactKind; locale: string },
+  opts: { kind: ContactKind; locale: string; form?: string | undefined },
 ): Record<string, unknown> {
   const text = (name: string) => {
     const v = get(name);
@@ -77,6 +92,9 @@ export function buildContactPayload(
     consentMarketing: get('consent') === 'on',
     hp: typeof get('hp') === 'string' ? (get('hp') as string) : '',
   };
+  // Which variant sent it (Admin v2 E8: the forms config applies per variant). Only a known
+  // one: the server's enum would refuse anything else.
+  if (opts.form && Object.hasOwn(CONTACT_FORM_FIELDS, opts.form)) payload['form'] = opts.form;
   for (const [field, key] of Object.entries(CONTACT_FIELD_TO_LEAD)) {
     if (field === 'service') {
       // `discipline:<slug>` → disciplineOfInterest, a slug → serviceOfInterest; "not sure"

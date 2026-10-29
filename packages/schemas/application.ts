@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RECRUITMENT_POLICY_VERSIONS } from '../consent/recruitment';
+import { CONSENT_VERSION_PATTERN } from './forms';
 import { LocaleSchema } from './primitives';
 
 // The Join application (careers page, `/join` + `/ar/join`) — the second public write
@@ -108,14 +109,19 @@ const HttpsUrl = z
 /**
  * The recruitment notice version the form was shown — stored on the row as the consent
  * record, so it must name a notice that was published (packages/consent/recruitment.ts),
- * never whatever date a client sends.
+ * never whatever date a client sends. Since Admin v2 E8 the consent lines can be reworded in
+ * the forms config, and a form that shows reworded lines posts `<date>.r<N>`
+ * (CONSENT_VERSION_PATTERN): the date part must still be a published notice here, and
+ * /api/apply holds N to the published revision (src/lib/forms/config.ts checkApplication).
  */
 export const RecruitmentPolicyVersionSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/)
-  .refine((v) => (RECRUITMENT_POLICY_VERSIONS as readonly string[]).includes(v), {
-    message: 'not a published recruitment notice',
-  });
+  .max(24)
+  .regex(CONSENT_VERSION_PATTERN)
+  .refine(
+    (v) => (RECRUITMENT_POLICY_VERSIONS as readonly string[]).includes(v.slice(0, 10)),
+    { message: 'not a published recruitment notice' },
+  );
 
 export const ApplicationInputSchema = z
   .object({

@@ -64,7 +64,14 @@ export const RECRUITMENT_CONSENT: Record<'en' | 'ar', RecruitmentConsentCopy> = 
  * The consent copy for a locale with the brand (or legal name) filled in, as written: a
  * function replacement, so a name is never read as a `$&`-style replacement pattern.
  */
-export function recruitmentConsent(locale: 'en' | 'ar', brand: string): RecruitmentConsentCopy {
-  const c = RECRUITMENT_CONSENT[locale];
-  return { ...c, application: c.application.replaceAll('{brand}', () => brand) };
+export function recruitmentConsent(
+  locale: 'en' | 'ar',
+  brand: string,
+  lines?: { application: string; futureRoles: string },
+): RecruitmentConsentCopy {
+  // Admin v2 E8: the two lines as the forms config words them (src/lib/forms/config.ts
+  // applicationView), versioned with the form; `{brand}` is filled in either line.
+  const c = { ...RECRUITMENT_CONSENT[locale], ...lines };
+  const fill = (text: string) => text.replaceAll('{brand}', () => brand);
+  return { ...c, application: fill(c.application), futureRoles: fill(c.futureRoles) };
 }

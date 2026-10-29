@@ -1,15 +1,12 @@
 ---
 import type { Locale } from '@schemas/primitives';
-import { BUDGET_BANDS, BUDGET_BAND_LABELS } from '@schemas/lead';
+import { BUDGET_BANDS } from '@schemas/lead';
 import { getIdentity } from '@/lib/identity';
 import { CONTACT_FORM_COPY } from '@/lib/forms/contactCopy';
 import Cta from '@/components/ui/Cta.astro';
-import {
-  CONTACT_FORM_FIELDS,
-  type ContactField,
-  type ContactFormVariant,
-  type ContactKind,
-} from '@/lib/forms/contactPayload';
+import type { ContactFormVariant, ContactKind } from '@/lib/forms/contactPayload';
+import { inquiryView } from '@/lib/forms/config';
+import { formSettingsFor } from '@/lib/data/forms';
 import {
   initialServiceValue,
   serviceOptionGroups,
@@ -45,6 +42,13 @@ import {
 // list: src/lib/forms/contactPayload.ts — tested against LeadInputSchema's keys. The
 // form's words are src/lib/forms/contactCopy.ts: the design's copy verbatim (its
 // Saudi-voice Arabic); validation and system copy stays MSA (owner decision 6).
+//
+// Admin v2 E8: the forms config (Settings › Forms, `form_settings.inquiry`) may relabel the
+// fields, reorder them, hide or require the optional ones, relabel the budget bands (their
+// KEYS stay what is posted and stored) and reword the button. The form renders the published
+// config server-side (src/lib/forms/config.ts inquiryView); /api/contact holds a submission
+// to the same config, by the variant it names (`form`, read from the form's own variant
+// class by variantOfForm, so the served HTML is the same bytes it was before E8).
 
 export interface Props {
   locale: Locale;
@@ -72,7 +76,10 @@ const {
   submitLabel,
 } = Astro.props;
 const compact = fields === 'compact';
-const has = (f: ContactField) => (CONTACT_FORM_FIELDS[fields] as readonly string[]).includes(f);
+
+// What this variant asks, in what order, with which labels, from the published forms config
+// (Admin v2 E8, src/lib/forms/config.ts): with no row, exactly the built-in form.
+const view = inquiryView((await formSettingsFor(Astro.locals)).inquiry, fields, locale);
 
 // The form's words: src/lib/forms/contactCopy.ts (two differ by layout).
 const COPY = CONTACT_FORM_COPY[locale];
@@ -84,7 +91,8 @@ const STR = {
 
 const noteText = note ?? STR.note;
 const okText = okMessage ?? STR.ok;
-const submitText = submitLabel ?? STR.submit;
+// The section's own button text, then the forms config's, then the variant's built-in one.
+const submitText = submitLabel ?? view.button ?? STR.submit;
 
 // The fallback mailbox in the 'form unavailable' message is the public identity's, so
 // the one message shown when the form is down never names a stale address.
@@ -92,7 +100,7 @@ const { contactEmail } = await getIdentity(Astro.locals);
 
 // The design's bands, in its order; "Prefer to discuss" is the empty option (no answer).
 // The legacy bands stay accepted on input (cached pages) but are never offered.
-const budgets = BUDGET_BANDS.map((k) => ({ value: k, label: BUDGET_BAND_LABELS[k][locale] }));
+const budgets = BUDGET_BANDS.map((k) => ({ value: k, label: view.budgets[k] }));
 
 const serviceGroups = serviceOptionGroups(groups, locale);
 const serviceValue = initialServiceValue(serviceGroups, selected);
@@ -114,130 +122,114 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
   novalidate
 >
   {
-    has('name') && (
-      <div class="field">
-        <label for="cf-name">{STR.name}</label>
-        <input
-          id="cf-name"
-          name="name"
-          type="text"
-          required
-          maxlength="120"
-          autocomplete="name"
-          placeholder={STR.namePh}
-        />
-      </div>
-    )
-  }
-  {
-    has('email') && (
-      <div class="field">
-        <label for="cf-email">{STR.email}</label>
-        <input
-          id="cf-email"
-          name="email"
-          type="email"
-          required
-          maxlength="254"
-          autocomplete="email"
-          placeholder={STR.emailPh}
-        />
-      </div>
-    )
-  }
-  {
-    has('company') && (
-      <div class="field">
-        <label for="cf-company">{STR.company}</label>
-        <input
-          id="cf-company"
-          name="company"
-          type="text"
-          maxlength="120"
-          autocomplete="organization"
-          placeholder={STR.companyPh}
-        />
-      </div>
-    )
-  }
-  {
-    has('phone') && (
-      <div class="field">
-        <label for="cf-phone">{STR.phone}</label>
-        <input
-          id="cf-phone"
-          name="phone"
-          type="tel"
-          dir="ltr"
-          maxlength="32"
-          autocomplete="tel"
-          inputmode="tel"
-          placeholder={STR.phonePh}
-        />
-      </div>
-    )
-  }
-  {
-    has('service') && (
-      <div class="field">
-        <label for="cf-service">{STR.service}</label>
-        <select id="cf-service" name="service">
-          <option value="" selected={serviceValue === ''}>
-            {STR.chooseService}
-          </option>
-          {serviceGroups.map((g) => (
-            <optgroup label={g.label}>
-              {g.options.map((o) => (
-                <option value={o.value} selected={o.value === serviceValue}>
-                  {o.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </div>
-    )
-  }
-  {
-    has('budget') && (
-      <div class="field">
-        <label for="cf-budget">{STR.budget}</label>
-        <select id="cf-budget" name="budget">
-          <option value="">{STR.chooseBudget}</option>
-          {budgets.map((b) => (
-            <option value={b.value}>{b.label}</option>
-          ))}
-        </select>
-      </div>
-    )
-  }
-  {
-    has('deadline') && (
-      <div class="field">
-        <label for="cf-deadline">{STR.deadline}</label>
-        <input
-          id="cf-deadline"
-          name="deadline"
-          type="text"
-          maxlength="120"
-          autocomplete="off"
-          placeholder={STR.deadlinePh}
-        />
-      </div>
-    )
-  }
-  {
-    has('message') && (
-      <div class="field field-full">
-        <label for="cf-message">{STR.message}</label>
-        <textarea
-          id="cf-message"
-          name="message"
-          required
-          maxlength="5000"
-          placeholder={STR.messagePh}
-        />
-      </div>
+    view.fields.map(({ field, label, required }) =>
+      field === 'name' ? (
+        <div class="field">
+          <label for="cf-name">{label}</label>
+          <input
+            id="cf-name"
+            name="name"
+            type="text"
+            required
+            maxlength="120"
+            autocomplete="name"
+            placeholder={STR.namePh}
+          />
+        </div>
+      ) : field === 'email' ? (
+        <div class="field">
+          <label for="cf-email">{label}</label>
+          <input
+            id="cf-email"
+            name="email"
+            type="email"
+            required
+            maxlength="254"
+            autocomplete="email"
+            placeholder={STR.emailPh}
+          />
+        </div>
+      ) : field === 'company' ? (
+        <div class="field">
+          <label for="cf-company">{label}</label>
+          <input
+            id="cf-company"
+            name="company"
+            type="text"
+            required={required}
+            maxlength="120"
+            autocomplete="organization"
+            placeholder={required ? undefined : STR.companyPh}
+          />
+        </div>
+      ) : field === 'phone' ? (
+        <div class="field">
+          <label for="cf-phone">{label}</label>
+          <input
+            id="cf-phone"
+            name="phone"
+            type="tel"
+            dir="ltr"
+            required={required}
+            maxlength="32"
+            autocomplete="tel"
+            inputmode="tel"
+            placeholder={STR.phonePh}
+          />
+        </div>
+      ) : field === 'service' ? (
+        <div class="field">
+          <label for="cf-service">{label}</label>
+          <select id="cf-service" name="service" required={required}>
+            <option value="" selected={serviceValue === ''}>
+              {STR.chooseService}
+            </option>
+            {serviceGroups.map((g) => (
+              <optgroup label={g.label}>
+                {g.options.map((o) => (
+                  <option value={o.value} selected={o.value === serviceValue}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+      ) : field === 'budget' ? (
+        <div class="field">
+          <label for="cf-budget">{label}</label>
+          <select id="cf-budget" name="budget" required={required}>
+            <option value="">{STR.chooseBudget}</option>
+            {budgets.map((b) => (
+              <option value={b.value}>{b.label}</option>
+            ))}
+          </select>
+        </div>
+      ) : field === 'deadline' ? (
+        <div class="field">
+          <label for="cf-deadline">{label}</label>
+          <input
+            id="cf-deadline"
+            name="deadline"
+            type="text"
+            required={required}
+            maxlength="120"
+            autocomplete="off"
+            placeholder={STR.deadlinePh}
+          />
+        </div>
+      ) : (
+        <div class="field field-full">
+          <label for="cf-message">{label}</label>
+          <textarea
+            id="cf-message"
+            name="message"
+            required
+            maxlength="5000"
+            placeholder={STR.messagePh}
+          />
+        </div>
+      ),
     )
   }
   <div class="field field-full field-check">
@@ -299,7 +291,11 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
     statusFromHttp,
     type FieldProblem,
   } from '@/lib/client/formErrors';
-  import { buildContactPayload, leadKeysToFields } from '@/lib/forms/contactPayload';
+  import {
+    buildContactPayload,
+    leadKeysToFields,
+    variantOfForm,
+  } from '@/lib/forms/contactPayload';
   import { preselectValue } from '@/lib/forms/serviceSelect';
 
   const form = document.getElementById('contact-form') as HTMLFormElement | null;
@@ -353,6 +349,7 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
       const payload = buildContactPayload((k) => fd.get(k), {
         kind: d['kind'] === 'project_inquiry' ? 'project_inquiry' : 'contact',
         locale: d['locale'] ?? 'en',
+        form: variantOfForm(form.classList),
       });
       busy = true;
       showStatus(form, status, 'sending');
