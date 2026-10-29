@@ -35,6 +35,17 @@ export const RECRUITMENT_POLICY_VERSIONS = ['2026-09-30', '2026-10-04'] as const
 /** The notice the form shows now. */
 export const RECRUITMENT_POLICY_VERSION: (typeof RECRUITMENT_POLICY_VERSIONS)[number] =
   RECRUITMENT_POLICY_VERSIONS[RECRUITMENT_POLICY_VERSIONS.length - 1]!;
+/**
+ * The notices a reworded consent revision (`<date>.r<N>`, Admin v2 E8) may name: the notice
+ * current when the forms config shipped, and every one after it. A page only ever posts
+ * `<the notice it showed>.r<N>` (src/lib/forms/config.ts consentVersion), so an older date
+ * with a revision was never shown and is refused. A later notice is appended to
+ * RECRUITMENT_POLICY_VERSIONS and joins this list by itself, so a cached `<previous>.rN` page
+ * still sends.
+ */
+export const RECRUITMENT_REVISABLE_VERSIONS: readonly string[] = RECRUITMENT_POLICY_VERSIONS.slice(
+  RECRUITMENT_POLICY_VERSIONS.indexOf('2026-10-04'),
+);
 
 /** `{brand}` is filled from site_profile (the brand is data — CLAUDE.md §1); see recruitmentConsent(). */
 export interface RecruitmentConsentCopy {

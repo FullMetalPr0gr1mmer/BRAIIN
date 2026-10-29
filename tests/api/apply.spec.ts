@@ -397,6 +397,17 @@ describe('POST /api/apply — the published forms config (Admin v2 E8)', () => {
     expect(inserts).toHaveLength(2);
   });
 
+  it('a revision on a notice older than the forms config is refused: no page ever showed that pair', async () => {
+    formRow = join({ consent: { application: { en: 'I agree', ar: 'أوافق' } } }, 1);
+    // 2026-09-30 is a published notice, but no reworded form ever showed it.
+    const res = await send(form({ policy_version: '2026-09-30.r1' }));
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ status: 'invalid', fields: ['policyVersion'] });
+    expect(inserts).toHaveLength(0);
+    // The bare older notice stays accepted (an edge-cached page can still show it).
+    expect(await statusOf(await send(form({ policy_version: '2026-09-30' })))).toBe('ok');
+  });
+
   it('with no row a reworded version is refused: no wording was ever published', async () => {
     const res = await send(form({ policy_version: `${RECRUITMENT_POLICY_VERSION}.r1` }));
     expect(res.status).toBe(422);

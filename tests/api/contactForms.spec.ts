@@ -142,6 +142,28 @@ describe('POST /api/contact — the published forms config (Admin v2 E8)', () =>
     expect(inserts).toHaveLength(2);
   });
 
+  it('an unreadable config still drops what the sending form does not ask (minimisation never fails open)', async () => {
+    for (const row of ['error', 'throw'] as const) {
+      formRow = row;
+      inserts.length = 0;
+      const res = await send({
+        ...BASE,
+        form: 'compact',
+        phone: '+966500000001',
+        budgetBand: 'gt_200k',
+        timelineText: 'next month',
+        company: 'Acme',
+      });
+      expect(res.status).toBe(200);
+      expect(inserts).toHaveLength(1);
+      // The home form asks the company, never the phone, budget or deadline.
+      expect(inserts[0]).toHaveProperty('company', 'Acme');
+      expect(inserts[0]).not.toHaveProperty('phone');
+      expect(inserts[0]).not.toHaveProperty('budgetBand');
+      expect(inserts[0]).not.toHaveProperty('timelineText');
+    }
+  });
+
   it('a form the schema does not know is refused (422 names form)', async () => {
     const res = await send({ ...BASE, form: 'sidebar' });
     expect(res.status).toBe(422);

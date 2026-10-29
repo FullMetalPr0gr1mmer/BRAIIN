@@ -9,6 +9,7 @@ import { supabaseConfigured } from '@/lib/supabase/client';
 import { resolveLaunchTenantId } from '@/lib/data/tenant';
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { checkInquiry } from '@/lib/forms/config';
+import type { InquiryConfig } from '@schemas/forms';
 import { readPublishedFormSettings } from '@/lib/forms/published';
 
 // Public contact / project-inquiry submission — the ONLY public write path (RLS denies
@@ -22,7 +23,7 @@ import { readPublishedFormSettings } from '@/lib/forms/published';
 // sending form does not ask (or the config hides) is dropped, one the config requires is a 422
 // when empty (src/lib/forms/config.ts checkInquiry). It is read with the service client for
 // the tenant resolved here; an unreadable config leaves the schema floor (fail open, as the
-// limiter).
+// limiter) but still drops what the sending form does not ask (minimisation never fails open).
 export const prerender = false;
 
 function json(body: unknown, status: number): Response {
@@ -60,7 +61,10 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ ok: false, error: 'validation', fields }, 422);
   }
 
-  let lead = parsed.data;
+  // The built-in forms until the published config is read: an unreadable config fails open on
+  // availability only, never on minimisation (a field the sending form does not ask is still
+  // dropped; with no config nothing optional is required).
+  let inquiry: InquiryConfig = {};
   if (supabaseConfigured()) {
     const tenantId = await resolveLaunchTenantId();
     if (tenantId) {
@@ -70,14 +74,12 @@ export const POST: APIRoute = async ({ request }) => {
       if (outcome === 'limited') return json({ ok: false, error: 'rate-limit' }, 429);
 
       const settings = await readPublishedFormSettings(serviceClient(), tenantId);
-      if (settings) {
-        const checked = checkInquiry(lead, settings.inquiry, lead.form);
-        if (!checked.ok)
-          return json({ ok: false, error: 'validation', fields: checked.fields }, 422);
-        lead = checked.data;
-      }
+      if (settings) inquiry = settings.inquiry;
     }
   }
+  const checked = checkInquiry(parsed.data, inquiry, parsed.data.form);
+  if (!checked.ok) return json({ ok: false, error: 'validation', fields: checked.fields }, 422);
+  const lead = checked.data;
 
   // TODO(KAN-20): verify the captcha token with reCAPTCHA once provisioned (O-19).
   const result = await createLead(lead);

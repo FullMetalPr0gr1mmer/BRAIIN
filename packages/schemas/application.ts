@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { RECRUITMENT_POLICY_VERSIONS } from '../consent/recruitment';
+import {
+  RECRUITMENT_POLICY_VERSIONS,
+  RECRUITMENT_REVISABLE_VERSIONS,
+} from '../consent/recruitment';
 import { CONSENT_VERSION_PATTERN } from './forms';
 import { LocaleSchema } from './primitives';
 
@@ -111,8 +114,8 @@ const HttpsUrl = z
  * record, so it must name a notice that was published (packages/consent/recruitment.ts),
  * never whatever date a client sends. Since Admin v2 E8 the consent lines can be reworded in
  * the forms config, and a form that shows reworded lines posts `<date>.r<N>`
- * (CONSENT_VERSION_PATTERN): the date part must still be a published notice here, and
- * /api/apply holds N to the published revision (src/lib/forms/config.ts checkApplication).
+ * (CONSENT_VERSION_PATTERN): the date part must still be a published notice here, one
+ * from the forms config's era when it carries a revision, and /api/apply holds N to the published revision (src/lib/forms/config.ts checkApplication).
  */
 export const RecruitmentPolicyVersionSchema = z
   .string()
@@ -120,6 +123,11 @@ export const RecruitmentPolicyVersionSchema = z
   .regex(CONSENT_VERSION_PATTERN)
   .refine((v) => (RECRUITMENT_POLICY_VERSIONS as readonly string[]).includes(v.slice(0, 10)), {
     message: 'not a published recruitment notice',
+  })
+  // A revision only on a notice from the forms config's era: no page ever showed an older
+  // notice with reworded lines (RECRUITMENT_REVISABLE_VERSIONS).
+  .refine((v) => v.length === 10 || RECRUITMENT_REVISABLE_VERSIONS.includes(v.slice(0, 10)), {
+    message: 'a revision of a notice no reworded form showed',
   });
 
 export const ApplicationInputSchema = z
