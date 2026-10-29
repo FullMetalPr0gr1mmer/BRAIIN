@@ -26,7 +26,8 @@ import ChipsField from './fields/ChipsField';
 import GalleryField from './fields/GalleryField';
 import FieldShell, { describedBy } from './fields/FieldShell';
 import LinkDialog from './fields/LinkDialog';
-import { useFieldLanguage } from './fields/editorLanguage';
+import { useArabicGap, useFieldLanguage } from './fields/editorLanguage';
+import { docHasWords } from '@/lib/admin/docWords';
 import Segmented from './kit/Segmented';
 
 // One renderer per field kind, shared by every editor (EditorForm: ResourceForm and
@@ -326,6 +327,11 @@ function RichTextField({
   const id = `${idPrefix}-${field.name}`;
   const ids = { en: `${id}-en`, ar: `${id}-ar` };
   const doc = (value ?? {}) as Record<string, TiptapDoc | undefined>;
+  // E10: a body whose two languages go together counts an English with no Arabic as a gap.
+  useArabicGap(
+    ids.ar,
+    field.bothLanguages === true && docHasWords(doc['en']) && !docHasWords(doc['ar']),
+  );
   const { shown, choose } = useFieldLanguage(ids);
   const readOnly = useContext(FieldsReadOnly);
   const both = shown === 'both';

@@ -45,6 +45,10 @@ export const SECTION_TYPES = [
   'joinWhy',
   'joinSteps',
   'joinApply',
+  // Admin v2 E10: blocks any page may take (a text block, a picture grid, a film window)
+  'textBlock',
+  'gallery',
+  'video',
 ] as const;
 export type SectionType = (typeof SECTION_TYPES)[number];
 

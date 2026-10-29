@@ -1,0 +1,53 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { TextBlockSectionContent } from '@schemas/sections';
+import { pickLocale } from '@/lib/i18n';
+import { renderTiptapToHtml } from '@/lib/content/tiptap';
+import AccentText from '@/components/ui/AccentText.astro';
+
+// A Text block (Admin v2 E10, the prototype's "Small label, headline and paragraphs"): an
+// editor's tag, heading and paragraphs on paper, wherever a page needs them, any number a
+// page. It has no built-in copy: it shows what is written in it, and with nothing written it
+// renders nothing.
+//
+// The paragraphs are rich text, rendered HERE from the stored Tiptap JSON by the allowlist
+// renderer (src/lib/content/tiptap.ts) on every render, and `set:html` receives nothing else
+// (CLAUDE.md §3: sanitised on write, SectionBodySchema, AND on render). No `style=`: the
+// renderer emits none, and the look is global.css's `.blk-text`.
+//
+// The heading is an h2 (the page's h1 is its hero's or its head's); the body's own headings
+// are h2 to h4. No id: a page may hold several text blocks, so the section names nothing by
+// id (an `aria-labelledby` would collide), and it is not a landmark.
+
+interface Props extends TextBlockSectionContent {
+  locale: Locale;
+}
+
+const { locale, tag, heading, accent, body } = Astro.props;
+
+const tagText = tag ? pickLocale(tag, locale) : '';
+const headingText = heading ? pickLocale(heading, locale) : '';
+const html = body ? renderTiptapToHtml(body[locale]) : '';
+const show = Boolean(tagText || headingText || html);
+---
+
+{
+  show && (
+    <section class="blk-text">
+      <div class="blk-wrap">
+        {tagText && (
+          <p class="tag rv">
+            <span class="dot" />
+            <span>{tagText}</span>
+          </p>
+        )}
+        {headingText && (
+          <h2 class="blk-head rv">
+            <AccentText text={headingText} locale={locale} accent={accent} />
+          </h2>
+        )}
+        {html && <div class="blk-prose rv" set:html={html} />}
+      </div>
+    </section>
+  )
+}

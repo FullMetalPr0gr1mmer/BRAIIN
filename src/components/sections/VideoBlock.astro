@@ -1,0 +1,72 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { VideoSectionContent } from '@schemas/sections';
+import { pickLocale } from '@/lib/i18n';
+import { getSectionImage } from '@/lib/data/sectionMedia';
+import MediaFrame from '@/components/media/MediaFrame.astro';
+import AccentText from '@/components/ui/AccentText.astro';
+
+// A Video (Admin v2 E10, the prototype's "Full width clip from the brand film"): on black, an
+// optional tag, heading and line, then a full-width still that plays a window of a site film
+// while it is on screen, any number a page.
+//
+// The film follows the site's clip rules through MediaFrame and src/lib/client/clips.ts, the
+// same as Our Work's intro frames and the case study's final film:
+//   - the served HTML carries the still only, never a <video> (tests/e2e/media-bytes.e2e.ts
+//     and tests/admin/section-blocks.e2e.ts): clips.ts creates the video the first time a
+//     third of the frame is on screen, so a page carries zero video bytes before that;
+//   - it never plays under reduced motion, with Save-Data or on a touch-only device: the still
+//     stays; it pauses when the frame leaves the screen or the tab is hidden, and while the
+//     sitewide motion state is paused (`body.motion-paused`; no control ships today, EXC-007);
+//   - the window is a /media/*.mp4 file (EXC-009), served through the Worker with byte ranges
+//     so the window seeks; the video is muted, looped by clips.ts, hidden from assistive tech.
+// The still is a media library image (`mediaId`) at its own width and height, lazy, with the
+// library's alt text: it is what a visitor sees first and what stays without motion. With no
+// still that resolves the section renders nothing (a frame with nothing in it until a clip
+// plays would be an empty box under reduced motion).
+
+interface Props extends VideoSectionContent {
+  locale: Locale;
+}
+
+const { locale, tag, heading, accent, lead, mediaId, clip } = Astro.props;
+
+const tagText = tag ? pickLocale(tag, locale) : '';
+const headingText = heading ? pickLocale(heading, locale) : '';
+const leadText = lead ? pickLocale(lead, locale) : '';
+const image = await getSectionImage(mediaId);
+---
+
+{
+  image && (
+    <section class="blk-video">
+      {(tagText || headingText || leadText) && (
+        <div class="blk-wrap">
+          {tagText && (
+            <p class="tag tag--sky rv">
+              <span class="dot" />
+              <span>{tagText}</span>
+            </p>
+          )}
+          {headingText && (
+            <h2 class="blk-head rv">
+              <AccentText text={headingText} locale={locale} accent={accent} />
+            </h2>
+          )}
+          {leadText && <p class="blk-lead rv">{leadText}</p>}
+        </div>
+      )}
+      <MediaFrame
+        image={image}
+        locale={locale}
+        clip={clip ?? null}
+        mode="inview"
+        threshold={0.35}
+        ratio="wide"
+        sizes="100vw"
+        widths={[480, 800, 1200, 1600, 2000]}
+        class="blk-video__frame"
+      />
+    </section>
+  )
+}

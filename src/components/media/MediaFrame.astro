@@ -5,7 +5,8 @@ import type { ImageRef } from '@/lib/media/resolve';
 import MediaImage from './MediaImage.astro';
 
 // A poster frame that may play a short clip (UI v2 — project cards, the home featured
-// project, Our Work's intro pair, About's "who we are", the case-study final film).
+// project, Our Work's intro pair, About's "who we are", the case-study final film; Admin v2
+// E10's Video block, `wide`).
 //
 // The server renders the poster only (<Picture>, real dimensions, CLS 0). The <video> is
 // created by src/lib/client/clips.ts on the first trigger — in view, or pointer/focus on
@@ -13,7 +14,7 @@ import MediaImage from './MediaImage.astro';
 // Save-Data. A clip is a WINDOW of a self-hosted /media/*.mp4 (EXC-009); a Stream UID
 // renders as the poster alone until the Stream player lands (KAN-20).
 
-type Ratio = 'feature' | 'card' | 'who' | 'film' | 'intro-a' | 'intro-b';
+type Ratio = 'feature' | 'card' | 'who' | 'film' | 'intro-a' | 'intro-b' | 'wide';
 
 interface Props {
   image: ImageRef | null;

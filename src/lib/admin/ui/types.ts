@@ -137,6 +137,12 @@ export interface FieldDef {
   /** `link` (F5b): external https links only where the target schema accepts them. */
   link?: { external?: boolean };
   /**
+   * `richtext` (Admin v2 E10): the two languages go together, as a bilingual field's do (a
+   * section's body, whose schema needs both): an English with no Arabic counts in "Arabic
+   * missing". Unset, the Arabic may lag (an article's or a service's body), as before.
+   */
+  bothLanguages?: boolean;
+  /**
    * `media` (Admin v2 U4): `upload: false` hides Upload in place in the picker (a field that
    * must only ever take a picture already in the library). Default true.
    */

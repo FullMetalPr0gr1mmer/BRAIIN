@@ -242,6 +242,22 @@ export const SECTION_KINDS: Readonly<Record<SectionType, SectionKind>> = {
     pages: ['join'],
     group: 'form',
   },
+  // Admin v2 E10: blocks for any page, as many as it needs (no page, no `once`, no group).
+  textBlock: {
+    name: 'Text block',
+    description: 'A small label, a heading and paragraphs, in both languages.',
+    icon: 'type',
+  },
+  gallery: {
+    name: 'Gallery',
+    description: 'Up to twelve pictures from the Media library, in a grid.',
+    icon: 'image',
+  },
+  video: {
+    name: 'Video',
+    description: 'A full width still that plays a moment of a film while it is on screen.',
+    icon: 'film',
+  },
 };
 
 /** The routed page a slug is, or null (a page no route renders: E11 builds those). */
@@ -421,6 +437,15 @@ export function routeNote(type: string, page: string, firstOfType: boolean): str
   if (type === 'workHero') return 'It shows the latest project unless you pin one.';
   if (type === 'pageHead')
     return 'The number of projects beside the heading is counted by the page.';
+  if (type === 'textBlock') {
+    return 'It shows only what you write in it, in both languages. Left empty, it shows nothing.';
+  }
+  if (type === 'gallery') {
+    return 'Each picture shows with its alt text from the Media library. With no picture, the section shows nothing.';
+  }
+  if (type === 'video') {
+    return 'Visitors see the still first. The film plays only while the still is on screen, never on phones, with reduced motion or Save-Data, and it never has sound. With no still, the section shows nothing.';
+  }
   return null;
 }
 
@@ -535,6 +560,8 @@ export function collectionLinks(type: string): readonly CollectionLink[] {
       ];
     case 'aboutWho':
     case 'workIntro':
+    case 'gallery':
+    case 'video':
       return [MEDIA];
     default:
       return [];

@@ -136,6 +136,12 @@ export const SECTION_COPY: Readonly<Record<RenderedSectionType, SectionCopy>> = 
   joinWhy: one(JOIN_WHY_COPY, HEADING),
   joinSteps: one(JOIN_STEPS_COPY, HEADING),
   joinApply: one(JOIN_APPLY_COPY, HEADING),
+  // Admin v2 E10: no built-in copy. A block shows what is written in it, and nothing when
+  // nothing is (tests/lib/sectionCopy.spec.ts NO_BUILT_IN says so field by field), so the
+  // page editor's fields start empty and a forgotten block puts no placeholder on a page.
+  textBlock: one({}),
+  gallery: one({}),
+  video: one({}),
 };
 
 /**

@@ -3,6 +3,7 @@ import { LocalizedTextSchema, STAT_PLACEMENTS, TestimonialPlacementSchema } from
 import { SECTION_TYPES, type SectionType } from './sectionTypes';
 import { AccentSchema, MediaRefSchema, SafeHrefSchema, VideoClipSchema } from './media';
 import { SlugSchema, UuidSchema } from './primitives';
+import { SectionBodySchema } from './tiptap';
 
 // Per-type CMS content shapes for `page_sections.content` (authored at /admin/sections,
 // rendered by src/components/SectionRenderer.astro). One schema per shape, in packages/
@@ -552,6 +553,70 @@ export const JoinApplySectionContentSchema = z
   })
   .strict();
 
+// ── Admin v2 E10: three blocks any page may take ─────────────────────────────────────
+// Generic sections an editor adds where a page needs them, any number a page. None has
+// built-in copy: a block shows what is written in it and nothing else (with nothing to show
+// it renders nothing), so a block added and forgotten never puts placeholder words on a
+// page. Strict, like the rest of UI v2. Their CSS is global.css's (shared blocks).
+
+/**
+ * A Text block: a tag, a heading with its accent, and paragraphs of rich text in both
+ * languages. The body is Tiptap JSON held to the section allowlist on write
+ * (SectionBodySchema) and rendered by the allowlist renderer on every render.
+ */
+export const TextBlockSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    /** Only read with a heading. */
+    accent: AccentSchema.optional(),
+    body: SectionBodySchema.optional(),
+  })
+  .strict();
+
+/** Most pictures a Gallery holds (the section media read's own cap is 12). */
+export const GALLERY_MAX_ITEMS = 12;
+
+/**
+ * One picture of a Gallery: a media library image, by `mediaId` (the key 0024's anon read and
+ * media_usage() find section media by). `kind` is what the admin's gallery field writes.
+ */
+export const GalleryItemSchema = z
+  .object({ kind: z.literal('image').optional(), mediaId: UuidSchema })
+  .strict();
+
+/** A Gallery: a tag, a heading with its accent, and up to twelve pictures in a grid. */
+export const GallerySectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    /** Only read with a heading. */
+    accent: AccentSchema.optional(),
+    items: z.array(GalleryItemSchema).min(1).max(GALLERY_MAX_ITEMS).optional(),
+  })
+  .strict();
+
+/**
+ * A Video: a still from the media library (`mediaId`, the poster the page shows first and
+ * keeps under reduced motion) that plays a window of a site film while it is on screen
+ * (MediaFrame + clips.ts). The clip is a /media/*.mp4 path only: Stream is not set up
+ * (KAN-20), and a Stream UID would render as the still alone (EXC-009).
+ */
+export const VideoSectionContentSchema = z
+  .object({
+    tag: Text.optional(),
+    heading: Text.optional(),
+    /** Only read with a heading. */
+    accent: AccentSchema.optional(),
+    lead: Text.optional(),
+    mediaId: UuidSchema.optional(),
+    clip: VideoClipSchema.refine((clip) => clip.streamUid === undefined, {
+      message: 'a film of this site (/media/….mp4) until Stream is set up',
+      path: ['streamUid'],
+    }).optional(),
+  })
+  .strict();
+
 export { SECTION_TYPES, type SectionType } from './sectionTypes';
 /** Zod form of the canonical list in ./sectionTypes (kept zod-free for the admin bundle). */
 export const SectionTypeSchema = z.enum(SECTION_TYPES);
@@ -590,6 +655,10 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
   joinWhy: JoinWhySectionContentSchema,
   joinSteps: JoinStepsSectionContentSchema,
   joinApply: JoinApplySectionContentSchema,
+  // Admin v2 E10
+  textBlock: TextBlockSectionContentSchema,
+  gallery: GallerySectionContentSchema,
+  video: VideoSectionContentSchema,
 };
 
 /**
@@ -666,3 +735,6 @@ export type StatRating = z.infer<typeof StatRatingSchema>;
 export type JoinWhySectionContent = z.infer<typeof JoinWhySectionContentSchema>;
 export type JoinStepsSectionContent = z.infer<typeof JoinStepsSectionContentSchema>;
 export type JoinApplySectionContent = z.infer<typeof JoinApplySectionContentSchema>;
+export type TextBlockSectionContent = z.infer<typeof TextBlockSectionContentSchema>;
+export type GallerySectionContent = z.infer<typeof GallerySectionContentSchema>;
+export type VideoSectionContent = z.infer<typeof VideoSectionContentSchema>;

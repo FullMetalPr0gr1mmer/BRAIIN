@@ -81,6 +81,10 @@ const PLACES: Record<RenderedSectionType, Record<string, Place>> = {
   joinWhy: { default: {} },
   joinSteps: { default: {} },
   joinApply: { default: {} },
+  // Admin v2 E10: no built-in copy, so the one look is empty (and renders nothing).
+  textBlock: { default: {} },
+  gallery: { default: {} },
+  video: { default: {} },
 };
 
 type Content = Readonly<Record<string, unknown>>;

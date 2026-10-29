@@ -46,6 +46,10 @@ export const RENDERED_SECTION_TYPES = [
   'joinWhy',
   'joinSteps',
   'joinApply',
+  // Admin v2 E10
+  'textBlock',
+  'gallery',
+  'video',
 ] as const satisfies readonly SectionType[];
 
 export type RenderedSectionType = (typeof RENDERED_SECTION_TYPES)[number];

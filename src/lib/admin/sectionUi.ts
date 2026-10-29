@@ -493,6 +493,58 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       help: 'A page of this site, e.g. /portfolio. Default: Our Work.',
     },
   ],
+  // Admin v2 E10: blocks any page may take. No built-in copy, so their fields start empty.
+  textBlock: [
+    tag,
+    heading,
+    accent('heading'),
+    {
+      name: 'body',
+      label: 'Text',
+      kind: 'richtext',
+      bothLanguages: true,
+      help: 'Paragraphs, headings, lists and links, in English and Arabic. Pictures go in a Gallery section.',
+    },
+  ],
+  gallery: [
+    tag,
+    heading,
+    accent('heading'),
+    {
+      name: 'items',
+      label: 'Pictures',
+      kind: 'gallery',
+      maxItems: 12,
+      itemFields: [
+        {
+          name: 'kind',
+          label: 'Kind',
+          kind: 'select',
+          options: [{ value: 'image', label: 'Image' }],
+        },
+        { name: 'mediaId', label: 'Image', kind: 'media', required: true },
+      ],
+      help: 'Each picture shows with its alt text from the Media library. The grid takes two or three a row.',
+    },
+  ],
+  video: [
+    tag,
+    heading,
+    accent('heading'),
+    { name: 'lead', label: 'Line under the heading', kind: 'bilingual' },
+    {
+      name: 'mediaId',
+      label: 'Still',
+      kind: 'media',
+      help: 'What visitors see first, and all they see with reduced motion. The section needs one.',
+    },
+    {
+      name: 'clip',
+      label: 'Film (plays while on screen)',
+      kind: 'clip',
+      pathOnly: true,
+    },
+  ],
 };
 
 /** Content keys an editor must set through "Advanced (JSON)" — see the header. */
