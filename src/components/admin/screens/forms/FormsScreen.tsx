@@ -6,6 +6,7 @@ import type { FieldDef } from '@/lib/admin/ui';
 import { singletonHistory } from '@/lib/admin/historyTarget';
 import {
   buttonCopy,
+  consentBase,
   fieldState,
   halfWritten,
   keyedCopy,
@@ -115,12 +116,15 @@ export default function FormsScreen(props: FormsScreenProps) {
   const fieldsDef: readonly FieldDef[] = [{ name: column, label: formName, kind: 'json', column }];
   // The database's count of consent rewordings, as the row last read or saved says.
   const [revision, setRevision] = useState(0);
+  // Release mode only: the live consent lines (the row read holds the pending change).
+  const [liveConsent, setLiveConsent] = useState<unknown>(undefined);
   const save = useEntitySave(TARGET, null, {
     fields: fieldsDef,
     mode: saveModeFor(TARGET),
     onRow: (row) => {
       const n = Number(row['consent_revision']);
       setRevision(Number.isInteger(n) && n >= 0 ? n : 0);
+      setLiveConsent('live_consent' in row ? (row['live_consent'] ?? null) : undefined);
     },
   });
   const base = useId();
@@ -224,7 +228,7 @@ export default function FormsScreen(props: FormsScreenProps) {
 
   const version =
     props.consent && props.notice
-      ? nextConsentVersion(props.notice, revision, saved, config)
+      ? nextConsentVersion(props.notice, revision, consentBase(saved, liveConsent), config)
       : null;
 
   const editor = (
@@ -317,7 +321,9 @@ export default function FormsScreen(props: FormsScreenProps) {
           />
           {version && (
             <p className="frm-note">
-              Version the form posts after saving:{' '}
+              {save.mode === 'draft'
+                ? 'Version the form posts after publishing:'
+                : 'Version the form posts after saving:'}{' '}
               <span className="frm-next-version">{version}</span>
             </p>
           )}
@@ -331,7 +337,7 @@ export default function FormsScreen(props: FormsScreenProps) {
       save={save}
       fields={fieldsDef}
       hidden={[column]}
-      submitLabel={`Save the ${formName.toLowerCase()}`}
+      submitLabel={`Save the ${props.form === 'inquiry' ? 'inquiry form' : 'Join form'}`}
       noun="forms config"
       history={FORMS_HISTORY}
       historyOf={{ label: formName, path: props.form === 'inquiry' ? '/contact' : '/join' }}

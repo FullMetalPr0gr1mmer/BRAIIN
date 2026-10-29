@@ -1,6 +1,7 @@
 import { FormSettingsWriteSchema } from '@schemas/forms';
 import type { SingletonConfig } from '@/lib/admin/singleton';
 import { fieldsOf } from '@/lib/admin/resources/shared';
+import { consentOf } from '@/lib/forms/revision';
 
 // The forms config (Admin v2 E8, `public.form_settings`, the E8 migration): what the inquiry
 // form and the Join form change from the built-in forms. §5 "General settings": Admin +
@@ -35,6 +36,10 @@ export const formSettingsSingleton: SingletonConfig = {
     return out;
   },
   fields: fieldsOf(FORM_SETTINGS_KEYS),
+  // Release mode: the row read carries the pending change, but `consent_revision` is live and a
+  // publish counts against the LIVE lines (the trigger runs once, on the apply), so the editor
+  // gets those lines to say which version the form posts after publishing.
+  stagedExtras: (live) => ({ live_consent: consentOf(live?.['application']) }),
   // The copy CHECKs (the E8 migration): a string with markup or a line break that got past
   // the schema, or a form over 16 KB, is a 422 on its form.
   constraintFields: {

@@ -14,6 +14,7 @@ import type { ContentSource } from '@/lib/data/source';
 import type { AsOfChange } from '@/lib/release/asOf';
 import { derivePatch, RegistryDriftError, type DerivedPatch } from '@/lib/release/overlay';
 import { RELEASE_REGISTRY, type RegistryEntry } from '@/lib/release/registry';
+import { projectedConsentRevision } from '@/lib/forms/revision';
 import { createOverlayClient, type OverlayData, type PreviewError } from './client';
 import {
   FOREIGN_KEYS,
@@ -468,6 +469,9 @@ export function createPreviewSource(opts: PreviewSourceOptions): PreviewSource {
   function stamp(table: DatasetTable, live: Row | null, next: Row, patch: Row): void {
     const at = now();
     if (!NO_UPDATED_AT.includes(table)) next['updated_at'] = at;
+    // Admin v2 E8: the consent revision is the database's count (app.tg_form_consent_revision),
+    // never a draft's; a staged rewording is previewed with the revision its publish will give.
+    if (table === 'form_settings') next['consent_revision'] = projectedConsentRevision(live, next);
     if (
       PUBLISHED_AT_TABLES.includes(table) &&
       patch['status'] === 'published' &&

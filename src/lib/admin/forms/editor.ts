@@ -202,7 +202,17 @@ export function rewordsConsent(config: Row): boolean {
 }
 
 /**
- * The consent version a reworded form will post once this config is saved: the notice's date,
+ * What the next version is counted against: the live lines in release mode (the read carries
+ * them as `live_consent`, since the row it holds is the pending change and the database counts
+ * a rewording once, when the change is published), else the saved config, which is live.
+ */
+export function consentBase(saved: Row, liveConsent: unknown): Row {
+  return liveConsent === undefined ? saved : { consent: liveConsent };
+}
+
+/**
+ * The consent version a reworded form will post once this config is saved (or, in release
+ * mode, published, with `savedConfig` from consentBase): the notice's date,
  * plus `.r<N>` (N the database's count of rewordings, one more when the saved lines change).
  */
 export function nextConsentVersion(

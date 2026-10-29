@@ -113,6 +113,11 @@ export function parseDraftSave<T extends Row>(
   };
 }
 
+/** A staged answer with the config's live extras (SingletonConfig.stagedExtras). */
+function withExtras(config: SingletonConfig, live: Row | null, row: Row): Row {
+  return config.stagedExtras ? { ...row, ...config.stagedExtras(live) } : row;
+}
+
 /** GET: live (or the defaults) with the tenant's pending change laid over it. */
 export async function stagedSingletonRead(
   config: SingletonConfig,
@@ -123,6 +128,16 @@ export async function stagedSingletonRead(
     readLive(config, entry, ctx),
     loadDraft(ctx.sb, ctx.auth, entry.entityType, ctx.auth.tenantId),
   ]);
+  return withExtras(config, live, readOver(config, entry, live, stored));
+}
+
+/** The live row (or the defaults) with the stored pending change laid over it. */
+function readOver(
+  config: SingletonConfig,
+  entry: RegistryEntry,
+  live: Row | null,
+  stored: StoredDraft | null,
+): Row {
   const draft = overLive(stored, live);
   if (!draft) return { ...(live ?? fallbackOf(config)), draft: null };
   try {
@@ -217,7 +232,7 @@ export async function stagedSingletonUpdate(
         detail: { op: stored.op, reason: 'no-op' },
       });
     }
-    return { ...(live ?? fallbackOf(config)), draft: null };
+    return withExtras(config, live, { ...(live ?? fallbackOf(config)), draft: null });
   }
   if (op === 'update') derived = derivePatch(entry, 'update', merged);
 
@@ -239,5 +254,9 @@ export async function stagedSingletonUpdate(
       detail: { op, fields: meta.fields },
     });
   }
-  return live ? { ...row, draft: meta } : { ...fallbackOf(config), ...row, draft: meta };
+  return withExtras(
+    config,
+    live,
+    live ? { ...row, draft: meta } : { ...fallbackOf(config), ...row, draft: meta },
+  );
 }

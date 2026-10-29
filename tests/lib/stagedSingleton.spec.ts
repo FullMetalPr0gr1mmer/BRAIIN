@@ -486,3 +486,58 @@ describe('singletons outside the registry never ask the flag', () => {
     expect(draftTouchesOf(db)).toEqual([]);
   });
 });
+
+// ── The forms config's live consent lines (Admin v2 E8) ─────────────────────────────────
+
+describe('the forms config: a staged read and save carry the live consent lines', () => {
+  const forms = async () => (await import('@/pages/api/admin/form-settings')) as Routes;
+  const LIVE = { application: { en: 'Live words', ar: 'كلمات' } };
+  const STAGED = { application: { en: 'New words', ar: 'كلمات جديدة' } };
+  const liveRow = (over: Row = {}): Row => ({
+    tenant_id: T,
+    inquiry: {},
+    application: { consent: LIVE },
+    consent_revision: 2,
+    version: 3,
+    updated_at: '2026-10-01T00:00:00Z',
+    ...over,
+  });
+
+  it('GET: the row holds the pending lines, live_consent the live ones, the revision stays live', async () => {
+    db.tables['form_settings'] = [liveRow()];
+    db.tables['content_drafts'] = [
+      draftRow({
+        entity_type: 'form_settings',
+        payload: { application: { consent: STAGED } },
+        base: { application: { consent: LIVE } },
+        base_version: 3,
+        fields: ['application'],
+      }),
+    ];
+    const res = await callRoute(db, (await forms()).GET, 'GET', '/api/admin/form-settings');
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.data['application']).toEqual({ consent: STAGED });
+    expect(res.data['consent_revision']).toBe(2);
+    expect(res.data['live_consent']).toEqual(LIVE);
+  });
+
+  it('GET with no row, and a staged save: live_consent is null, then still the live lines', async () => {
+    db.tables['form_settings'] = [];
+    const empty = await callRoute(db, (await forms()).GET, 'GET', '/api/admin/form-settings');
+    expect(empty.data['live_consent']).toBeNull();
+
+    db.tables['form_settings'] = [liveRow()];
+    const saved = await callRoute(db, (await forms()).PATCH, 'PATCH', '/api/admin/form-settings', {
+      body: { application: { consent: STAGED }, version: 3 },
+    });
+    expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+    expect(liveWritesOf(db, 'form_settings')).toEqual([]);
+    expect(saved.data['live_consent']).toEqual(LIVE);
+  });
+
+  it('a singleton without the hook carries no live_consent', async () => {
+    db.tables['site_profile'] = [profileRow()];
+    const res = await callRoute(db, (await profile()).GET, 'GET', '/api/admin/site-profile');
+    expect(res.data).not.toHaveProperty('live_consent');
+  });
+});

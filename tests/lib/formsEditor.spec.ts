@@ -11,6 +11,7 @@ import { BUDGET_BANDS } from '@schemas/lead';
 import { RECRUITMENT_POLICY_VERSION } from '@consent/recruitment';
 import {
   canonical,
+  consentBase,
   fieldState,
   moved,
   nextConsentVersion,
@@ -147,6 +148,22 @@ describe('the consent version the screen promises', () => {
     expect(nextConsentVersion('2026-10-04', 1, { consent: lines }, { consent: lines })).toBe(
       '2026-10-04.r1',
     );
+  });
+
+  it('in release mode counts against the live lines, not the staged ones (consentBase)', () => {
+    // A first rewording staged: the row read holds it, the live revision is 0 and live has none.
+    const staged = { consent: lines };
+    expect(nextConsentVersion('2026-10-04', 0, consentBase(staged, null), staged)).toBe(
+      '2026-10-04.r1',
+    );
+    // Against the staged config alone it would say the notice: the bug this guards.
+    expect(nextConsentVersion('2026-10-04', 0, staged, staged)).toBe('2026-10-04');
+    // Staging the live lines back: nothing changes on publish.
+    expect(nextConsentVersion('2026-10-04', 2, consentBase(staged, lines), staged)).toBe(
+      '2026-10-04.r2',
+    );
+    // Live mode (no live_consent on the row): the saved config is live.
+    expect(consentBase(staged, undefined)).toBe(staged);
   });
 
   it('compares the wording by value, as jsonb does, not by key order', () => {

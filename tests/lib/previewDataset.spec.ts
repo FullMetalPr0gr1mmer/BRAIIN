@@ -7,6 +7,8 @@ import {
   PREVIEW_ROW_CAP,
 } from '@/lib/preview/dataset';
 import { FOREIGN_KEYS } from '@/lib/preview/relations';
+import { applicationView, formSettingsFromRow } from '@/lib/forms/config';
+import { RECRUITMENT_POLICY_VERSION } from '@consent/recruitment';
 import {
   BI,
   draft,
@@ -284,6 +286,46 @@ describe('laying the drafts over', () => {
     expect(frames).toEqual([
       { role: 'hero', media_id: ID.mFrame, caption: null, sort_order: 0 },
       { role: 'gallery', media_id: ID.mPoster, caption: BI('Two', 'اثنان'), sort_order: 1 },
+    ]);
+  });
+
+  it('a staged rewording of the Join consent is previewed with the revision its publish gives (E8)', async () => {
+    const lines = { application: BI('I agree', 'أوافق') };
+    // The live row has never reworded the lines (revision 0): the publish makes it 1.
+    const { db } = source(fixtureTables(), [
+      draft('form_settings', 'update', TENANT, { application: { consent: lines } }),
+    ]);
+    const [row] = await read(db, 'form_settings', 'inquiry,application,consent_revision');
+    expect(row).toMatchObject({ application: { consent: lines }, consent_revision: 1 });
+    const settings = formSettingsFromRow(row);
+    const view = applicationView(settings, 'en');
+    expect(view.consent.application).toBe('I agree');
+    expect(view.policyVersion).toBe(`${RECRUITMENT_POLICY_VERSION}.r1`);
+
+    // A change that leaves the lines as they are counts nothing.
+    const tables = fixtureTables();
+    tables['form_settings']![0]!['application'] = { consent: lines };
+    tables['form_settings']![0]!['consent_revision'] = 3;
+    const same = source(tables, [
+      draft('form_settings', 'update', TENANT, {
+        application: {
+          consent: { application: { ar: 'أوافق', en: 'I agree' } },
+          button: BI('Go', 'اذهب'),
+        },
+      }),
+    ]);
+    expect(await read(same.db, 'form_settings', 'consent_revision')).toEqual([
+      { consent_revision: 3 },
+    ]);
+
+    // No row yet: a pending create that words the lines is revision 1, one that does not is 0.
+    const none = fixtureTables();
+    none['form_settings'] = [];
+    const created = source(none, [
+      draft('form_settings', 'create', TENANT, { application: { consent: lines } }),
+    ]);
+    expect(await read(created.db, 'form_settings', 'consent_revision')).toEqual([
+      { consent_revision: 1 },
     ]);
   });
 
