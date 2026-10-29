@@ -26,6 +26,12 @@ import { DEFAULT_LAYOUTS, RELEASE_WIDGETS, widgetsFor } from './widgets';
 // switch-on. A layout that names it (moved, or hidden by the person) keeps it where it is. Every
 // other widget keeps the rule above, and with releases off the page strips the card again, so
 // the dashboard is unchanged then.
+//
+// Its other half (R14-prep code review 1): a SAVE that names a release widget nowhere keeps the
+// widget where the stored layout had it (keepReleasePlacement, below; the person's own save and
+// an Admin's role preset). The board a save comes from never shows the card while releases are
+// off, so without this a person who hid it, saved their board while releases were off, and saw
+// releases come back on would find it on their board again, their hide forgotten.
 
 export type LayoutSource = 'mine' | 'preset' | 'default';
 
@@ -63,6 +69,53 @@ export function resolveLayout(stored: unknown, preset: unknown, role: Role): Res
   for (const id of allowed) if (!seen.has(id)) layout.hidden.push(id);
   return { layout, source };
 }
+
+/**
+ * The release widgets the role may have that a whole layout about to be saved names nowhere
+ * (none for a "Reset", which names no column): what keepReleasePlacement puts back.
+ */
+export function unnamedReleaseWidgets(next: DashboardPrefLists, role: Role): WidgetId[] {
+  if (!DASH_LISTS.every((key) => Array.isArray(next[key]))) return [];
+  const allowed = new Set(widgetsFor(role));
+  const named = new Set(DASH_LISTS.flatMap((key) => next[key] ?? []));
+  return RELEASE_WIDGETS.filter((id) => allowed.has(id) && !named.has(id));
+}
+
+/**
+ * A layout about to be saved, with each release widget it names nowhere put back where `stored`
+ * (the row it replaces) had it: the same column at the same index (or last, in a shorter column),
+ * or hidden. A widget `stored` never named either stays unnamed, so it takes its default place
+ * once releases are on (resolveLayout). Only a whole layout is touched (a "Reset" names no
+ * column and replaces everything), and only widgets the role may have; `quickSet` is the save's.
+ */
+export function keepReleasePlacement<T extends DashboardPrefLists>(
+  next: T,
+  stored: unknown,
+  role: Role,
+): T {
+  const missing = unnamedReleaseWidgets(next, role);
+  if (missing.length === 0 || !hasColumns(stored)) return next;
+  const before = readDashboardLayout(stored);
+  const out: T = { ...next };
+  for (const key of DASH_LISTS) out[key] = [...(next[key] ?? [])] as T[typeof key];
+  for (const id of missing) {
+    for (const key of DASH_LISTS) {
+      const at = before[key].indexOf(id);
+      if (at < 0) continue;
+      const list = out[key] as WidgetId[];
+      list.splice(Math.min(at, list.length), 0, id);
+      break;
+    }
+  }
+  return out;
+}
+
+const DASH_LISTS = [...DASH_COLUMNS, 'hidden'] as const;
+
+/** A layout's four lists, each present (a whole layout) or none (a "Reset"). */
+type DashboardPrefLists = {
+  [K in (typeof DASH_COLUMNS)[number] | 'hidden']?: WidgetId[] | undefined;
+};
 
 /**
  * Puts a widget the layout never named where the role's default layout has it: its column, at
