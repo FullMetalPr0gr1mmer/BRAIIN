@@ -118,10 +118,9 @@ export const RecruitmentPolicyVersionSchema = z
   .string()
   .max(24)
   .regex(CONSENT_VERSION_PATTERN)
-  .refine(
-    (v) => (RECRUITMENT_POLICY_VERSIONS as readonly string[]).includes(v.slice(0, 10)),
-    { message: 'not a published recruitment notice' },
-  );
+  .refine((v) => (RECRUITMENT_POLICY_VERSIONS as readonly string[]).includes(v.slice(0, 10)), {
+    message: 'not a published recruitment notice',
+  });
 
 export const ApplicationInputSchema = z
   .object({

@@ -291,11 +291,7 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
     statusFromHttp,
     type FieldProblem,
   } from '@/lib/client/formErrors';
-  import {
-    buildContactPayload,
-    leadKeysToFields,
-    variantOfForm,
-  } from '@/lib/forms/contactPayload';
+  import { buildContactPayload, leadKeysToFields, variantOfForm } from '@/lib/forms/contactPayload';
   import { preselectValue } from '@/lib/forms/serviceSelect';
 
   const form = document.getElementById('contact-form') as HTMLFormElement | null;
