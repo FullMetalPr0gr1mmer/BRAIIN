@@ -520,8 +520,8 @@ with Save-Data, on touch or without JS, where nothing plays). A frame stopped wi
 more, in view or not, until it is pressed again; every other clip frame behaves as before. It
 still stops under `body.motion-paused` (the retained wiring), so a header control, if it
 returns, covers it too. Held by `tests/admin/section-blocks.e2e.ts` (shown once wired, the
-name switching, the video paused and staying paused back in view, hidden under reduced
-motion) and `tests/render/sectionBlocks.spec.ts` (the served button, hidden, in both
+name switching, no `play()` reaching the film back in view once stopped and one once pressed
+again, hidden under reduced motion) and `tests/render/sectionBlocks.spec.ts` (the served button, hidden, in both
 languages; none for a film that cannot play). The scope and expiry of this entry do not change.
 
 ---
