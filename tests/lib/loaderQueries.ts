@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import { PUBLIC_MEDIA_COLUMNS } from '@schemas/content';
+import { FORM_SETTINGS_PUBLIC_COLUMNS } from '@/lib/forms/config';
 import { chainRoot, lineOf, nodesOf, scanTree } from './sourceScan';
 import { join } from 'node:path';
 
@@ -23,7 +24,11 @@ export interface LoaderQuery {
 }
 
 /** Identifiers a loader imports whose values a select list uses. */
-const IMPORTED: Readonly<Record<string, string>> = { PUBLIC_MEDIA_COLUMNS };
+const IMPORTED: Readonly<Record<string, string>> = {
+  PUBLIC_MEDIA_COLUMNS,
+  // The forms config's columns (Admin v2 E8): one list for the renderer and the endpoints.
+  FORM_SETTINGS_PUBLIC_COLUMNS,
+};
 
 function evaluate(expr: ts.Expression, env: ReadonlyMap<string, string>): string {
   if (ts.isStringLiteral(expr) || ts.isNoSubstitutionTemplateLiteral(expr)) return expr.text;

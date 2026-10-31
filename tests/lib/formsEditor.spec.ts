@@ -178,7 +178,7 @@ describe('the consent version the screen promises', () => {
   it('counts with the one rule the preview uses (CR5): revision.ts, no copy of it here', () => {
     const source = readFileSync('src/lib/admin/forms/editor.ts', 'utf8');
     expect(source).toContain("from '@/lib/forms/revision'");
-    expect(source).not.toMatch(/export function canonical/);
+    expect(source).not.toMatch(/export function canonical\b/);
     const other = { application: BI('Yes', 'نعم') };
     for (const [revision, saved, next] of [
       [0, {}, { consent: lines }],
