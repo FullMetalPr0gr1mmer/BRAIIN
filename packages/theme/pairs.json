@@ -128,6 +128,7 @@
       ["primary", "card", 4.5, "the admin's links on a card"],
       ["primary", "bg", 4.5, "the admin's links on its background"],
       ["primary", "surface-2", 4.5, "a link in a hovered table row"],
+      ["primary-hover", "surface-2", 4.5, "a hovered link in a hovered table row"],
       ["primary", "primary-soft", 4.5, "soft buttons and notes"],
       ["primary", "primary-soft-2", 4.5, "soft buttons when hovered"],
       ["ink", "primary-soft", 4.5, "a chosen table row"],

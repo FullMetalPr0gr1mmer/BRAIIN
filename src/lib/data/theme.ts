@@ -65,7 +65,10 @@ export function getActiveTheme(locals: ThemeLocals): Promise<ActiveTheme | null>
   return locals.theme;
 }
 
+/** The stylesheet's route (src/pages/styles/theme.css.ts); the middleware knows it by this. */
+export const THEME_STYLESHEET_PATH = '/styles/theme.css';
+
 /** The stylesheet's address for a theme: versioned, so a new theme is a new URL. */
 export function themeHref(theme: ActiveTheme): string {
-  return `/styles/theme.css?v=${theme.version}`;
+  return `${THEME_STYLESHEET_PATH}?v=${theme.version}`;
 }

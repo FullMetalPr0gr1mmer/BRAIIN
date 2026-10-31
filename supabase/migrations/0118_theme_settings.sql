@@ -140,6 +140,7 @@ as $$
     (p_primary, '#ffffff', 4.5::float8),
     (p_primary, '#f5f6fa', 4.5::float8),
     (p_primary, '#fafbfe', 4.5::float8),
+    (p_hover, '#fafbfe', 4.5::float8),
     (p_primary, app.theme_mix(p_primary, 8, '#ffffff'), 4.5::float8),
     (p_primary, app.theme_mix(p_primary, 14, '#ffffff'), 4.5::float8),
     ('#0b0d14', app.theme_mix(p_primary, 8, '#ffffff'), 4.5::float8),

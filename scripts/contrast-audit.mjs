@@ -321,6 +321,9 @@ const ADMIN_PAIRS = [
   ['primary', 'card', 4.5, 'links (a.data-link, search hits) on a card'],
   ['primary', 'bg', 4.5, 'links on the ground (the sign-in screens, Admin v2 F7)'],
   ['primary', 'surface-2', 4.5, 'a link in a hovered table row'],
+  // Admin v2 E4: the hover colour is a theme colour now, and it is text here (a.data-link,
+  // .cell-person a under the pointer), on the row the pointer is also over.
+  ['primary-hover', 'surface-2', 4.5, 'a hovered link in a hovered table row (E4)'],
   ['primary', 'primary-soft', 4.5, '.msg, soft button, klein badge, pressed toolbar button'],
   ['primary', 'primary-soft-2', 4.5, 'soft button on hover'],
   // Maintenance (Admin v2 U9b): the sketch's words over its scrim on a white still (its
@@ -435,8 +438,62 @@ function suite(title, tokens, pairs, source) {
   failed += bad;
 }
 
+// ---- Theme pairs — READ from packages/theme/pairs.json (Admin v2 E4) ----
+//
+// Every pair a theme colour (primary, hover, accent and the light accent tint derived from
+// them) takes part in, on the site and in the admin: the list the theme gate
+// (packages/theme/gate.ts) checks on every save and publish, and the database's CHECK holds
+// again. Scored here at the brand's own colours, so the gate can never refuse the brand;
+// tests/lib/themePairs.spec.ts holds the list equal to the PAIRS and ADMIN_PAIRS above that a
+// theme colour is in, and its colours to the ones they score. A colour in it is a hex, a role,
+// or [top, alpha, under] (top painted at alpha over under, whole channels rounded half up, as
+// packages/theme/colour.ts mix() and the database's app.theme_mix compute it).
+const THEME = JSON.parse(
+  readFileSync(new URL('../packages/theme/pairs.json', import.meta.url), 'utf8'),
+);
+
+function themeColours(block) {
+  const roles = { ...THEME.defaults };
+  const hex = (h) => parseInt(h.slice(1), 16);
+  const value = (name, depth = 0) => {
+    if (depth > 6) throw new Error(`pairs.json: ${name} nests too deep`);
+    const def = block.colors[name];
+    if (def === undefined) throw new Error(`pairs.json: no colour ${name}`);
+    if (Array.isArray(def)) {
+      const [top, alpha, under] = def;
+      const a = hex(value(top, depth + 1));
+      const b = hex(value(under, depth + 1));
+      const k = Math.round(alpha * 100);
+      return `#${[16, 8, 0]
+        .map((s) =>
+          Math.floor((((a >> s) & 255) * k + ((b >> s) & 255) * (100 - k) + 50) / 100)
+            .toString(16)
+            .padStart(2, '0'),
+        )
+        .join('')}`;
+    }
+    if (def.startsWith('#')) return def.toLowerCase();
+    if (!roles[def]) throw new Error(`pairs.json: ${name} is ${def}`);
+    return roles[def].toLowerCase();
+  };
+  return Object.fromEntries(Object.keys(block.colors).map((name) => [name, value(name)]));
+}
+
+const THEME_PAIRS = {
+  site: { tokens: themeColours(THEME.site), pairs: THEME.site.pairs },
+  admin: { tokens: themeColours(THEME.admin), pairs: THEME.admin.pairs },
+};
+
 suite('public palette', T, PAIRS, 'public/styles/global.css');
 suite('admin palette (Admin v2)', A, ADMIN_PAIRS, 'public/styles/admin.css :root');
+for (const [name, { tokens, pairs }] of Object.entries(THEME_PAIRS)) {
+  suite(
+    `theme pairs, ${name}, at the brand colours (Admin v2 E4)`,
+    tokens,
+    pairs,
+    'packages/theme/pairs.json',
+  );
+}
 
 if (failed) {
   console.log(`Contrast gate: FAIL (${failed} pair(s) below AA).`);
