@@ -22,6 +22,13 @@ export const REQUIRED_CLAIM_INPUT = 'required_fields';
 /** At most this many names are read from a claim (each form has at most five optional fields). */
 const CLAIM_MAX = 16;
 
+/**
+ * At most this much of a posted string is read: CLAIM_MAX names of at most 32 characters, each
+ * with its separator. /api/apply's body may be about 10 MB, and splitting all of it before keeping
+ * 16 names cost a second and 150 MB in Node (E8 check P1): the bound comes first.
+ */
+const CLAIM_CHARS = CLAIM_MAX * 33;
+
 /** The control's value for the fields a form shows as required. */
 export function requiredClaimValue(fields: readonly string[]): string {
   return fields.join(' ');
@@ -34,10 +41,13 @@ export function requiredClaimValue(fields: readonly string[]): string {
  */
 export function parseRequiredClaim(raw: unknown): string[] | undefined {
   if (typeof raw === 'string') {
-    return raw.split(/\s+/).filter(Boolean).slice(0, CLAIM_MAX);
+    return raw.slice(0, CLAIM_CHARS).split(/\s+/).filter(Boolean).slice(0, CLAIM_MAX);
   }
   if (Array.isArray(raw)) {
-    return raw.filter((v): v is string => typeof v === 'string').slice(0, CLAIM_MAX);
+    return raw
+      .slice(0, CLAIM_MAX * 4)
+      .filter((v): v is string => typeof v === 'string')
+      .slice(0, CLAIM_MAX);
   }
   return undefined;
 }

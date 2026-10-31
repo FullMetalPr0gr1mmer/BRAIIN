@@ -349,6 +349,11 @@ describe('what the sending page showed as required (CR1)', () => {
     expect(parseRequiredClaim(['cv', 3, 'skills'])).toEqual(['cv', 'skills']);
     expect(parseRequiredClaim(null)).toBeUndefined();
     expect(parseRequiredClaim(undefined)).toBeUndefined();
+    // Only the claim's first 528 characters are read (16 names of 32): a 10 MB value posted to
+    // /api/apply is bounded before it is split (E8 check P1), so a name past the bound is unread.
+    expect(parseRequiredClaim(`${' '.repeat(10_000)}cv`)).toEqual([]);
+    expect(parseRequiredClaim(`cv${' x'.repeat(5_000_000)}`)).toHaveLength(16);
+    expect(parseRequiredClaim([...Array<number>(100).fill(0), 'cv'])).toEqual([]);
     // The contact form posts it as requiredFields, an empty list included.
     const fields: Record<string, string> = {
       name: 'Sam',
