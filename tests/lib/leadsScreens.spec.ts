@@ -274,16 +274,14 @@ describe('the board', () => {
 
   it('reads again after a move when a filter or search read was already in flight', () => {
     // A read that started before the PATCH answers with the card in its old column and old
-    // version; let it land and the next move is a needless 409. The move asks again instead
-    // (the re-run aborts the stale read), and only the latest read clears the marker.
+    // version; let it land and the next move is a needless 409. Since the C4 star race (review
+    // 3) a move is a row write through the list's rule (src/lib/crm/lateAnswers.ts): it aborts
+    // the read in flight, whose answer is dropped, and the rule reads the board again once the
+    // move has answered. tests/lib/lateAnswers.spec.ts replays the orders.
     const source = readFileSync('src/components/admin/screens/leads/LeadsBoard.tsx', 'utf8');
-    expect(source).toMatch(
-      /const controller = new AbortController\(\);\n\s*reading\.current = controller;/,
-    );
-    expect(source).toContain('if (reading.current === controller) reading.current = null;');
-    expect(source).toMatch(
-      /setColumns\(\(list\) => moved\(list, card, to, answer\)\);\n(?:[^\n]*\n){1,4}\s*if \(reading\.current\) setReload\(\(n\) => n \+ 1\);/,
-    );
+    expect(source).toContain('const controller = writes.read();');
+    expect(source.match(/if \(!writes\.landed\(controller\)\) return;/g)).toHaveLength(2);
+    expect(source).toMatch(/await rowWrite\(\s*writes,/);
     expect(source).toContain('}, [filters, q, reload]);');
   });
 
