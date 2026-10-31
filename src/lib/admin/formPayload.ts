@@ -3,6 +3,7 @@ import { contentKeysOf, sectionFields } from '@/lib/admin/sectionUi';
 import { clampToRange, cleanChips, normalizeHex } from '@/lib/admin/fieldValues';
 import { accentWords, clampAccent } from '@/lib/admin/accentWords';
 import { isHttpsHref, isSiteHref } from '@/lib/admin/linkables';
+import { docHasWords } from '@/lib/admin/docWords';
 import type { AccentRange } from '@/lib/text/accent';
 
 // Form state <-> API payload for the admin ResourceForm / SingletonForm. Kept apart from
@@ -616,6 +617,14 @@ function overrideToPayload(value: unknown, field: FieldDef, siblings: Row): unkn
     case 'bilingual':
     case 'prose':
       return allBlank(value) ? undefined : value;
+    // Admin v2 E10 (a Text block's body). An editor typed in and emptied holds a document with
+    // one empty paragraph, which the section schema refuses ("write some text"): with no words
+    // in either language the key is omitted, so a body cleared, or touched and left empty,
+    // saves as no body rather than leaving the form unsaveable.
+    case 'richtext': {
+      const pair = (typeof value === 'object' && value !== null ? value : {}) as Row;
+      return docHasWords(pair['en']) || docHasWords(pair['ar']) ? value : undefined;
+    }
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
     case 'checkbox':
