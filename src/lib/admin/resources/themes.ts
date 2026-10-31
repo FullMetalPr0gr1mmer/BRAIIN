@@ -23,6 +23,20 @@ export const themeResource: ResourceConfig = {
   searchColumn: 'name',
   createSchema: ThemeWriteSchema,
   updateSchema: ThemeUpdateSchema,
+  // The database's two refusals, said on the settings (a 422, not a stray field name): a
+  // second theme created beside the tenant's one (two people saving the first theme at once),
+  // and the CHECK, which only a theme the gate let through but the database did not could
+  // reach (the same pairs, in SQL: tests/lib/themeSql.spec.ts).
+  constraintFields: {
+    custom_themes_one_theme_v1: {
+      field: 'settings',
+      message: 'The site already has a theme. Reload the page to edit it.',
+    },
+    custom_themes_theme_v1: {
+      field: 'settings',
+      message: 'These colours are hard to read, so the theme was not saved.',
+    },
+  },
   toRow: (input) => {
     const row = pick(input as Input, THEME_KEYS);
     const settings = (input as Input)['settings'];
