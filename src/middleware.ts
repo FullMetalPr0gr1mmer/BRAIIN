@@ -385,8 +385,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // 1a') The active theme (Admin v2 E4): its read starts here, beside the page's own loaders,
   //      and BaseLayout awaits the same promise (src/lib/data/theme.ts, once per request), so
   //      the theme costs the page no round trip of its own. It never rejects (no theme is the
-  //      brand's look). A preview (an /admin path) reads it inside its scope instead.
-  if (!isAdmin && !isApi && !isHealth && !isImage && request.method === 'GET') {
+  //      brand's look). A preview (an /admin path) reads it inside its scope instead, and a
+  //      route that is a file (the sitemap, robots.txt, llms.txt, the stylesheet itself, which
+  //      reads it on its own) renders no layout, so nothing is started for it.
+  const isFileRoute = /\.[a-z0-9]+$/i.test(matched);
+  if (!isAdmin && !isApi && !isHealth && !isImage && !isFileRoute && request.method === 'GET') {
     void getActiveTheme(locals);
   }
 

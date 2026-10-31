@@ -47,7 +47,10 @@
   - no Google/Adobe font links or raw font uploads; the curated self-hosted catalogue replaces them (CSP, PDPL, font budget);
   - no Custom CSS;
   - no smooth scroll or parallax (compositor-only; design-port #44/#79);
-  - colours must pass the contrast gate.
+  - colours must pass the contrast gate;
+  - v1 themes primary, hover and accent only: the dark ground, the light sections and white stay fixed (their pairs are every text pair of the site; E4);
+  - motion can only be reduced: the marquee at its normal speed, slower or much slower (no "faster"), and the reveal on scroll on or off (README "Appearance"; E4);
+  - the editor previews on a drawn sample of the site and on the admin itself; the framed site with the pending theme is R9's preview in draft mode, not a column on the screen (E4).
 - **Header**: the language switch always shows (owner-approved product call, O-13).
 - **Shortcuts**: the command palette opens on ⌘/Ctrl+K and from the topbar trigger, not on a bare "/". A one-character shortcut fires on a stray keypress or a dictated "slash", and WCAG 2.1.4 (Level A) requires it to be switchable off or remappable (DoD #4).
 - **Footer**: legal links are locked (PDPL); copyright is a template (brand is data, §1).
