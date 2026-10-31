@@ -168,6 +168,7 @@ describe('playwright.config.ts', () => {
       'visibility',
       'general',
       'ga4',
+      'theme',
       'maintenance',
       'maintenance-teardown',
     ]);
@@ -217,6 +218,7 @@ describe('playwright.config.ts', () => {
           spec('visibility'),
           spec('general'),
           spec('ga4'),
+          spec('theme'),
           spec('maintenance'),
           'maintenance\\.teardown\\.ts$',
           spec('releases-mode'),
@@ -226,9 +228,11 @@ describe('playwright.config.ts', () => {
       p('visibility', { testMatch: spec('visibility'), dependencies: ['chromium', 'admin'] }),
       p('general', { testMatch: spec('general'), dependencies: ['visibility'] }),
       p('ga4', { testMatch: spec('ga4'), dependencies: ['general'] }),
+      // Admin v2 E4: the theme, alone, between GA4 and maintenance.
+      p('theme', { testMatch: spec('theme'), dependencies: ['ga4'] }),
       p('maintenance', {
         testMatch: spec('maintenance'),
-        dependencies: ['ga4'],
+        dependencies: ['theme'],
         teardown: 'maintenance-teardown',
       }),
       p('maintenance-teardown', { testMatch: 'maintenance\\.teardown\\.ts$' }),

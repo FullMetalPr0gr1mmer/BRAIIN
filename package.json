@@ -21,6 +21,7 @@
     "size": "size-limit && node scripts/admin-bundle.mjs",
     "lhci": "lhci autorun",
     "lhci:desktop": "lhci autorun --config=lighthouserc.desktop.json",
+    "lhci:themed": "lhci autorun --config=lighthouserc.themed.json",
     "audit": "node scripts/audit-gate.mjs",
     "audit:all": "node scripts/audit-gate.mjs --include-dev",
     "cf:types": "wrangler types",

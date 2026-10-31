@@ -192,6 +192,16 @@ jobs:
       # class of defect that only exists on desktop widths.
       - name: Lighthouse budgets (desktop)
         run: npm run lhci:desktop
+      # Admin v2 E4 (AV-27; README "lhci (+ a themed run)"): the same budgets with a theme
+      # set, on four routes (both languages, a text-LCP service page and Contact): every page
+      # then links one more same-origin stylesheet, /styles/theme.css, so its cost to LCP, CLS
+      # and TBT is gated, and the accessibility audit (axe) reads the themed colours. Last, as
+      # the theme changes every page the runs above measure. Local stack only (the script
+      # refuses anything that is not loopback).
+      - name: Theme the site (local Supabase)
+        run: node scripts/lhci-theme.mjs
+      - name: Lighthouse budgets, themed (mobile)
+        run: npm run lhci:themed
       - name: Stop Supabase
         if: always()
         run: supabase stop
