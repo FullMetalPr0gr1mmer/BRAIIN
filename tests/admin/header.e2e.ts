@@ -6,9 +6,9 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
 // The Header screen (Admin v2 E5), end to end through the real Worker, session and database:
 // Admin saves the header's options through the screen (a large logo, the links beside the
 // language switch, a button) and the public pages render them server-side, in both
-// languages; a see-through bar with too light a tint is refused; Content Creator sees the menu
-// card and not the options (and the options API refuses it); Developer the options and not the
-// menu card. Everything is put back: the row is removed, which is the header as built, byte for
+// languages, the large logo moving nothing on a cold load; a see-through bar with too light a
+// tint is refused; Content Creator sees the menu card and not the options (and the options API
+// refuses it); Developer the options and not the menu card. Everything is put back: the row is removed, which is the header as built, byte for
 // byte (tests/render/siteChrome.spec.ts).
 //
 // Its own project (playwright.config.ts `header`), after `general`: it changes the header every
@@ -137,6 +137,35 @@ test.describe('as admin', () => {
     );
     expect(logoW).toBe('clamp(96px, 12vw, 160px)');
     await expect(page.locator('a.site-header__cta')).toBeVisible();
+  });
+
+  test('the large logo moves nothing on a cold load: its preset is in the first paint', async ({
+    page,
+  }) => {
+    // ui.md AV-28 "layout-shift with logo presets": the preset is CSS on the root
+    // (`:root:has(.site-header[data-logo])`, global.css), so the taller bar is drawn at once and
+    // nothing under it moves. All projects is the page whose header is in flow (a late bar would
+    // push the whole catalogue); layout-shift.e2e's cold load and its 0.02 allowance (a
+    // metric-mismatched font swap), at its viewport, with this context's fonts not yet cached.
+    await page.setViewportSize({ width: 1350, height: 940 });
+    await page.goto('/portfolio/all', { waitUntil: 'load' });
+    await expect(page.locator('header.site-header[data-logo="l"]')).toHaveCount(1);
+    await page.evaluate(() => document.fonts.ready);
+    const seen = await page.evaluate(
+      () =>
+        new Promise<{ value: number; recent: boolean }[]>((resolve) => {
+          const out: { value: number; recent: boolean }[] = [];
+          type Shift = PerformanceEntry & { value: number; hadRecentInput: boolean };
+          new PerformanceObserver((list) => {
+            for (const e of list.getEntries() as Shift[]) {
+              out.push({ value: e.value, recent: e.hadRecentInput });
+            }
+          }).observe({ type: 'layout-shift', buffered: true });
+          setTimeout(() => resolve(out), 1500);
+        }),
+    );
+    const counted = seen.filter((s) => !s.recent).reduce((sum, s) => sum + s.value, 0);
+    expect(counted, `layout shifts since navigation: ${JSON.stringify(seen)}`).toBeLessThan(0.02);
   });
 
   test('a sticky bar that stays see-through after the hero needs the darkest tint (422)', async ({
