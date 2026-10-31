@@ -58,11 +58,18 @@
   - E8 makes the overview an editor of what the closed sets allow (labels in both languages,
     the order, an optional field shown or required, the button, the budget words, the Join
     consent lines), stored as differences from the built-in forms; a section's own button
-    text, set in Pages, still wins over the config's (the page's words are the page's);
+    text, set in Pages, still wins over the config's (the page's words are the page's), and the
+    Forms editor names each page where it does;
   - "Required" on a field only some pages ask (the phone, the budget, the deadline) holds on
     those pages' forms only: the server takes the form a send names (it cannot tell a real
     home-page send from a crafted one), so a request naming a form that does not ask the field
     is stored without it, never held to it. The editor says so under that field's switches;
+  - "Required" also holds only where the sending page showed it: each form posts the optional
+    fields it showed as required (`required_fields`), so a page drawn before a field became
+    required, cached or left open, still sends without it instead of failing on every try.
+    That claim is the visitor's word too, so a hand-made request can skip a required optional
+    field on either form; it never widens what is stored (a hidden field is dropped whatever it
+    says), and the schema's own required fields are untouched;
   - the inquiry form's consent line ("agreed to be contacted") stays code-owned: a lead stores
     the answer, not a version, and versioning it needs a column through `crm_ingest_lead`
     (owner question in as-built/E8.md);

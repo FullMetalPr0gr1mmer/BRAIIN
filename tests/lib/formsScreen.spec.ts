@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
+import type { FormsScreenProps } from '@/components/admin/screens/forms/FormsScreen';
 
 // The Forms editor (Admin v2 E8, screens/forms/FormsScreen.tsx) rendered on the server with a
 // loaded save: what the editor says beside the fields it edits. The model is
@@ -37,8 +38,7 @@ vi.mock('@/lib/admin/useEntitySave', async (importOriginal) => ({
 const { default: FormsScreen } = await import('@/components/admin/screens/forms/FormsScreen');
 const { editorPropsFor } = await import('@/lib/admin/forms/editorProps');
 
-const render = (props: Record<string, unknown>) =>
-  renderToStaticMarkup(createElement(FormsScreen, props as never));
+const render = (props: FormsScreenProps) => renderToStaticMarkup(createElement(FormsScreen, props));
 
 describe('the Forms editor', () => {
   it('names a page whose own button text wins over this one there (CR3)', () => {
