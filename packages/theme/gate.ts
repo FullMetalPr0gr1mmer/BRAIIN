@@ -251,13 +251,18 @@ export function suggestMain(primary: string): string | null {
   const main = normalizeColour(primary);
   if (!main) return null;
   const [h, s, l] = toHsl(main);
-  // Two points of lightness a step: each candidate settles a whole palette, so this is the
-  // slow one (the editor runs it only on a failure, after typing stops).
+  // Two points of lightness a step. Settling a palette is the slow part, and it moves only
+  // Hover and Accent, so a candidate whose own pairs (the ones made of Primary alone) fail
+  // is passed over unsettled: it would fail settled too. The editor runs this only on a
+  // failure, after typing stops.
+  const ownFails = (colors: Readonly<ThemeColors>) =>
+    failuresFor(colors).some((f) => f.roles.length === 1 && f.roles[0] === 'primary');
   for (let delta = 2; delta <= 100; delta += 2) {
     for (const dir of [-1, 1]) {
       const light = l + dir * delta;
       if (light < 0 || light > 100) continue;
       const candidate = fromHsl(h, s, light).toUpperCase();
+      if (ownFails(generatePalette(candidate))) continue;
       if (failuresFor(simplePalette(candidate)).length === 0) return candidate;
     }
   }

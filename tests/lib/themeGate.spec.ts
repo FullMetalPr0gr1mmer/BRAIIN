@@ -187,6 +187,26 @@ describe('the theme gate', () => {
     }
   });
 
+  it('the main colour suggestion is the nearest passing lightness (as the full search finds)', () => {
+    // suggestMain passes over a lightness whose Primary-only pairs fail without settling it
+    // (settling moves Hover and Accent only); the answer is the unpruned search's.
+    const full = (primary: string) => {
+      const [h, s, l] = toHsl(primary.toLowerCase());
+      for (let delta = 2; delta <= 100; delta += 2) {
+        for (const dir of [-1, 1]) {
+          const light = l + dir * delta;
+          if (light < 0 || light > 100) continue;
+          const candidate = fromHsl(h, s, light).toUpperCase();
+          if (failuresFor(simplePalette(candidate)).length === 0) return candidate;
+        }
+      }
+      return null;
+    };
+    for (const main of [...THEME_SWATCHES.slice(1, 7), '#7FB2FF', '#E0E0E0']) {
+      expect(suggestMain(main), main).toBe(full(main));
+    }
+  });
+
   it('the brand primary in Simple mode passes', () => {
     expect(gate(simplePalette(DEFAULT_COLORS.primary)).ok).toBe(true);
   });

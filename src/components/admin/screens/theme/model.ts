@@ -17,8 +17,18 @@ const MARQUEE = ['normal', 'slower', 'slowest'] as const;
  * yet, or a value of another shape) the brand's own. Colours are kept as typed, so a half
  * typed hex stays in the box; the gate and the server judge them.
  */
-export function settingsOf(value: unknown): ThemeSettings {
+export function settingsOf(loaded: unknown): ThemeSettings {
   const base = DEFAULT_THEME_SETTINGS;
+  // The field kit holds a `json` field as text once a row is loaded (rowToForm), and as the
+  // object the screen sets after that: both are the same settings.
+  let value = loaded;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch {
+      value = null;
+    }
+  }
   if (!value || typeof value !== 'object' || Array.isArray(value)) return cloneSettings(base);
   const v = value as Row;
   const colors = (v['colors'] && typeof v['colors'] === 'object' ? v['colors'] : {}) as Row;
