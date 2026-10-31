@@ -53,6 +53,13 @@ const EDITOR_OUTPUT = doc(
     t('mail', link('mailto:hello@example.com')),
     t('phone', link('tel:+966500000000')),
   ),
+  // Bold over two lines: ProseMirror's addMark marks every inline node in the range, the line
+  // break included (as a pasted `<b>a<br>b</b>` does), and Tiptap's JSON keeps that mark.
+  p(
+    t('first line', [{ type: 'bold' }]),
+    { type: 'hardBreak', marks: [{ type: 'bold' }] },
+    t('second line', [{ type: 'bold' }]),
+  ),
   {
     type: 'bulletList',
     content: [{ type: 'listItem', content: [p(t('a'))] }],
@@ -100,6 +107,14 @@ describe('a section body (SectionDocSchema)', () => {
         doc({ type: 'paragraph', marks: [{ type: 'bold' }], content: [t('x')] }),
       ],
       ['a text node with children', doc(p({ type: 'text', text: 'x', content: [t('y')] }))],
+      // The renderer writes `<br />` and `<hr />` and drops whatever is inside them.
+      ['words inside a line break', doc(p(t('x'), { type: 'hardBreak', content: [t('lost')] }))],
+      ['words inside a rule', doc(p(t('x')), { type: 'horizontalRule', content: [t('lost')] })],
+      ['marks on a rule', doc(p(t('x')), { type: 'horizontalRule', marks: [{ type: 'bold' }] })],
+      [
+        'a line break carrying a link the renderer drops',
+        doc(p(t('x'), { type: 'hardBreak', marks: link('javascript:alert(1)') })),
+      ],
       ['a text node with no text', doc(p({ type: 'text' }))],
       ['no words at all', doc(p(), { type: 'horizontalRule' })],
       ['an empty document', doc()],
@@ -174,6 +189,8 @@ describe('a section body (SectionDocSchema)', () => {
     for (const word of ['Two', 'Three', 'Four', 'bold', 'site', 'web', 'mail', 'phone', 'quoted']) {
       expect(html).toContain(word);
     }
+    // The marked line break is still a line break between its two bold lines.
+    expect(html).toContain('<strong>first line</strong><br /><strong>second line</strong>');
     expect(html.match(/<a /g)).toHaveLength(4);
     expect(html).not.toMatch(/\sstyle=|<h1/);
   });

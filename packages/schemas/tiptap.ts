@@ -123,6 +123,14 @@ const MARKS: readonly string[] = SECTION_DOC_MARKS;
 const LEVELS: readonly unknown[] = SECTION_DOC_HEADING_LEVELS;
 const CODE_LANGUAGE = /^[a-z0-9+#-]{1,20}$/i;
 
+/**
+ * Nodes with no children (the renderer writes `<br />` and `<hr />` and reads nothing inside).
+ * A line break is the one that may carry marks: inside formatted words it takes theirs (Bold
+ * over two lines, a pasted `<b>a<br>b</b>`), and its `<br />` is the same either way.
+ */
+const LEAVES: readonly string[] = ['hardBreak', 'horizontalRule'];
+const MARKED_LEAVES: readonly string[] = ['hardBreak'];
+
 const NODE_KEYS: readonly string[] = ['type', 'text', 'attrs', 'marks', 'content'];
 const MARK_KEYS: readonly string[] = ['type', 'attrs'];
 
@@ -167,8 +175,11 @@ export function sectionDocProblem(raw: unknown): string | null {
     if (type === 'text') {
       if (typeof text !== 'string' || content !== undefined) return 'malformed text';
       if (text.trim() !== '') words = true;
-    } else if (text !== undefined || marks !== undefined) {
+    } else if (text !== undefined || (marks !== undefined && !MARKED_LEAVES.includes(type))) {
       return `a "${type}" holds no text or marks of its own`;
+    }
+    if (content !== undefined && LEAVES.includes(type)) {
+      return `a "${type}" holds nothing inside it`;
     }
     if (type === 'heading' && !LEVELS.includes(attrs?.['level'])) {
       return 'a heading is level 2, 3 or 4';
