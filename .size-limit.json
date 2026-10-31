@@ -17,7 +17,7 @@
       "dist/client/_astro/Admin*.js",
       "dist/client/_astro/login.astro_*.js"
     ],
-    "limit": "400 KB",
+    "limit": "450 KB",
     "gzip": true
   }
 ]

@@ -201,10 +201,9 @@ test.describe('as admin', () => {
     // A whole e-mail finds its lead (the blind index) and never reaches the address.
     const search = page.getByRole('searchbox', { name: 'Search leads' });
     await search.fill(one.email!);
-    // The search's answer replaces every row, a star pressed meanwhile included: the lead is
-    // already listed (it is the newest), so without this wait the star below could be pressed
-    // while the search is still out, and its answer (read before the star was saved) would
-    // turn it off again on screen. The test waits for the answer, as a person sees it land.
+    // The search's answer first, as a person sees it land, so the star below is pressed on
+    // the searched rows. (A star pressed while a search is out is kept since the C4 star-race
+    // fix; the next test holds that order on purpose.)
     const searched = page.waitForResponse(
       (res) =>
         res.url().endsWith('/api/admin/leads/query') &&
@@ -240,6 +239,87 @@ test.describe('as admin', () => {
     await bar.getByRole('button', { name: 'Move' }).click();
     await expect(page.locator('#admin-toasts')).toContainText('Done. 2 leads changed.');
     await axe(page, 'the leads list');
+  });
+
+  test('the list: a star pressed while a search is out stays pressed (C4 star race)', async ({
+    page,
+  }) => {
+    const lead = await addLead(page, 'star-race');
+    await visit(page, '/admin/leads');
+    const search = page.getByRole('searchbox', { name: 'Search leads' });
+    const table = page.getByRole('table', { name: 'Leads', exact: true });
+    const isQuery = (res: { url(): string }) => res.url().endsWith('/api/admin/leads/query');
+    const asked = (body: unknown) => (body as { q?: unknown } | null)?.q;
+
+    // The lead on screen first, through a search that answers as usual.
+    const first = page.waitForResponse(
+      (res) => isQuery(res) && asked(res.request().postDataJSON()) === lead.name,
+    );
+    await search.fill(lead.name);
+    await search.press('Enter');
+    expect((await first).status()).toBe(200);
+    await expect(table).not.toHaveAttribute('aria-busy', 'true');
+    const star = page.getByRole('button', { name: `Star ${lead.name}` });
+    await expect(star).toHaveAttribute('aria-pressed', 'false');
+
+    // A second search (the lead's whole e-mail: the same one row) is read on the server at
+    // once, before the star, and its answer is held: the order R13's e2e met by chance. Its
+    // rows say the star is off. Pressing the star aborts that read (a row write never overlaps
+    // a list read, src/lib/crm/lateAnswers.ts), and the list is read again once it is saved.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let markRead: () => void = () => undefined;
+    const read = new Promise<void>((resolve) => {
+      markRead = resolve;
+    });
+    let markDone: () => void = () => undefined;
+    const done = new Promise<void>((resolve) => {
+      markDone = resolve;
+    });
+    let heldRequest: unknown = null;
+    await page.route('**/api/admin/leads/query', async (route) => {
+      if (heldRequest !== null || asked(route.request().postDataJSON()) !== lead.email) {
+        return route.continue();
+      }
+      heldRequest = route.request();
+      const response = await route.fetch();
+      markRead();
+      await held;
+      // The page aborted this read when the star was pressed: nothing is waiting for it.
+      await route.fulfill({ response }).catch(() => undefined);
+      markDone();
+    });
+    await search.fill(lead.email!);
+    await search.press('Enter');
+    await read;
+
+    const saved = page.waitForResponse(
+      (res) =>
+        new URL(res.url()).pathname === `/api/admin/leads/${lead.id}` &&
+        res.request().method() === 'PATCH',
+    );
+    const reread = page.waitForResponse(
+      (res) =>
+        isQuery(res) &&
+        res.request() !== heldRequest &&
+        asked(res.request().postDataJSON()) === lead.email,
+    );
+    await star.click();
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+    expect((await saved).status()).toBe(200);
+    // The search the star aborted is read again after the save, and its rows hold the star.
+    expect((await reread).status()).toBe(200);
+    await expect(table).not.toHaveAttribute('aria-busy', 'true');
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+
+    // The held answer, released now, is never drawn: the star stays pressed.
+    release();
+    await done;
+    await expect(star).toHaveAttribute('aria-pressed', 'true');
+    await page.unroute('**/api/admin/leads/query');
+    expect((await leadOf(page, lead.id))['is_starred']).toBe(true);
   });
 
   test('the list: a lead a colleague changed meanwhile is a conflict, said and refreshed', async ({
@@ -405,6 +485,76 @@ test.describe('as admin', () => {
     await page.locator('.moveto__m button').first().click();
     await expect(page.getByText('Someone else changed this. Refreshed.')).toBeVisible();
     await axe(page, 'a lead with its details revealed');
+  });
+
+  test('a lead: a star pressed while the mark-read is out stays (C4 star race)', async ({
+    page,
+  }) => {
+    const lead = await addLead(page, 'star-detail');
+    // A lead added by hand is read at once: mark it unread, so opening its page marks it read.
+    const unread = await page.request.patch(`/api/admin/leads/${lead.id}`, {
+      headers: { 'x-csrf-token': await csrf(page) },
+      data: { read: false },
+    });
+    expect(unread.status()).toBe(200);
+    expect((await leadOf(page, lead.id))['read_at']).toBeNull();
+
+    // The mark-read runs on the server at once (its answer says the star is off) and its
+    // answer is held. On main this late answer turned a star pressed meanwhile off again on
+    // screen. The mark-read is not queued (it never holds the status card) and only its
+    // read_at is taken, so the star stays (src/lib/crm/lateAnswers.ts, LeadDetail.tsx).
+    // Its read_at is replaced by a date no real mark can have, so the page shows when it has
+    // drawn that answer (the badges' data-read-at): the look after it waits for no clock.
+    const SENTINEL = '2001-01-01T00:00:00.000Z';
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let markSeen: () => void = () => undefined;
+    const seen = new Promise<void>((resolve) => {
+      markSeen = resolve;
+    });
+    const row = `**/api/admin/leads/${lead.id}`;
+    const patchOf = (res: {
+      url(): string;
+      request(): { method(): string; postDataJSON(): unknown };
+    }) =>
+      new URL(res.url()).pathname === `/api/admin/leads/${lead.id}` &&
+      res.request().method() === 'PATCH'
+        ? (res.request().postDataJSON() as { read?: unknown; isStarred?: unknown } | null)
+        : null;
+    await page.route(row, async (route) => {
+      const request = route.request();
+      const body = request.method() === 'PATCH' ? request.postDataJSON() : null;
+      if ((body as { read?: unknown } | null)?.read !== true) return route.continue();
+      const response = await route.fetch();
+      const json = (await response.json()) as { data?: Record<string, unknown> };
+      json.data = { ...json.data, read_at: SENTINEL };
+      markSeen();
+      await held;
+      await route.fulfill({ response, json });
+    });
+    await visit(page, `/admin/leads/${lead.id}`);
+    await seen;
+    // The status card is not held by the mark-read: the star can be pressed at once.
+    const star = page.getByRole('switch', { name: 'Starred' });
+    await expect(star).toBeEnabled();
+    await expect(star).toHaveAttribute('aria-checked', 'false');
+    const saved = page.waitForResponse((res) => patchOf(res)?.isStarred === true);
+    await star.click();
+    expect((await saved).status()).toBe(200);
+    await expect(star).toBeEnabled();
+    await expect(star).toHaveAttribute('aria-checked', 'true');
+
+    // The mark-read's answer, read before the star was saved, lands now: the star stays.
+    // Once the page has drawn it (its read_at shows), the star is looked at once, not polled.
+    release();
+    await expect(page.locator(`.lead-badges[data-read-at="${SENTINEL}"]`)).toBeAttached();
+    expect(await star.getAttribute('aria-checked')).toBe('true');
+    await page.unroute(row);
+    const stored = await leadOf(page, lead.id);
+    expect(stored['is_starred']).toBe(true);
+    expect(stored['read_at']).not.toBeNull();
   });
 
   test('a lead: an Admin erases it, and it is gone', async ({ page }) => {

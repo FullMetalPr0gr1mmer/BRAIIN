@@ -11,7 +11,24 @@ import { useClock } from '@/components/admin/kit/clock';
 import { toast } from '@/lib/admin/toast';
 import { deltaOf, MIN_RESPONSE_SAMPLE, type LeadKpis } from '@/lib/crm/leadKpis';
 import type { LeadsFrame } from '@/lib/crm/leadPage';
+import {
+  BULK_WAIT_MS,
+  Checks,
+  ListWrites,
+  ROW_WAIT_MS,
+  RowPresses,
+  bulkUnsure,
+  failureOf,
+  pressStar,
+  rowWrite,
+  sayFor,
+  starOutcome,
+  starPending,
+  withDeadline,
+  type StarCheck,
+} from '@/lib/crm/lateAnswers';
 import type { LeadPage, LeadRow, LeadSummaryAnswer } from '@/lib/crm/leadReads';
+import type { LeadBulk } from '@schemas/crm';
 import {
   LEADS_PAGE_SIZE,
   exportHrefOf,
@@ -169,10 +186,22 @@ export default function LeadsList({
   const [searchError, setSearchError] = useState('');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [notes, setNotes] = useState<{ tone: 'warn' | 'err'; text: string }[]>([]);
-  const [starError, setStarError] = useState('');
-  const [reload, setReload] = useState(0);
+  // A failed star press's words, per row (a press on one row never clears another's).
+  const [starWords, setStarWords] = useState<Record<string, string>>({});
+  // The list's reads and the KPIs' are asked for apart: a star changes no KPI.
+  const [relist, setRelist] = useState(0);
+  const [recount, setRecount] = useState(0);
   const [now, setNow] = useState(() => Date.parse(renderedAt));
   const addLead = useAddLead(permissions.canSeePii, disciplines);
+  // A list read never overlaps a row write (the star, a bulk action): a write aborts the read
+  // in flight and holds new ones, and the list is read once more after the writes when their
+  // order is unknown (src/lib/crm/lateAnswers.ts). So a read that left before a star was saved
+  // never draws it back off. Built once (a lazy initial state, not a ref's argument).
+  const [writes] = useState(() => new ListWrites());
+  // Failed star presses, until a read after them says what is stored.
+  const [stars] = useState(() => new Checks<StarCheck>());
+  // The presses out on each row: a failed press a newer one on its row left after is not said.
+  const [presses] = useState(() => new RowPresses());
 
   // A confirmation the last page sent here (a lead erased): shown once, then taken out of
   // the address. First, before the address is rewritten from the filters.
@@ -196,23 +225,32 @@ export default function LeadsList({
       listed.current = false;
       return;
     }
-    const controller = new AbortController();
     setBusy(true);
+    // Held while a row write is out: asked for again once the writes have answered.
+    const controller = writes.read();
+    if (!controller) return;
     const body = { ...listQueryOf(filters, new Date(), zone), ...(q ? { q } : {}) };
-    adminFetch<LeadPage>('/api/admin/leads/query', {
-      method: 'POST',
-      body,
-      signal: controller.signal,
-    })
+    // Bounded: a read that never answers would leave the table busy and a failed press's
+    // "Checking the list again" up for good.
+    withDeadline(
+      (signal) => adminFetch<LeadPage>('/api/admin/leads/query', { method: 'POST', body, signal }),
+      ROW_WAIT_MS,
+      controller.signal,
+    )
       .then((page) => {
-        setRows(asRows(page));
+        // Aborted by a row write sent meanwhile: these rows may predate it.
+        if (!writes.landed(controller)) return;
+        const fresh = asRows(page);
+        setRows(fresh);
         setTotal(page.total);
         setError('');
         setSearchError('');
         setNow(Date.now());
+        settleStars(fresh);
       })
       .catch((err: unknown) => {
-        if (controller.signal.aborted) return;
+        if (!writes.landed(controller)) return;
+        settleStars(null);
         // A term that looks like an address or a number but is not a whole one: said under
         // the box, the list left as it was.
         if (err instanceof AdminApiError && err.info.status === 422 && q) {
@@ -225,7 +263,7 @@ export default function LeadsList({
         if (!controller.signal.aborted) setBusy(false);
       });
     return () => controller.abort();
-  }, [filters, q, reload]);
+  }, [filters, q, relist]);
 
   // The KPIs and the chips' counts follow the range only (decision D13).
   const summarised = useRef(initial.summary !== null);
@@ -245,7 +283,7 @@ export default function LeadsList({
         if (!controller.signal.aborted) setSummary(null);
       });
     return () => controller.abort();
-  }, [filters.range, reload]);
+  }, [filters.range, recount]);
 
   // The page head's sub-line counts the range the KPIs count (decision D13).
   useEffect(() => {
@@ -259,19 +297,82 @@ export default function LeadsList({
   );
   const spamView = filters.chip.kind === 'spam';
 
+  /** Read the list again (not the KPIs): the writes asked for it. */
+  const reread = () => setRelist((n) => n + 1);
+
+  /**
+   * A read after failed star presses landed (`fresh`, or null when it failed): say what each
+   * came to, from its row's star (unknown when the row is not on the page read).
+   */
+  function settleStars(fresh: Row[] | null) {
+    for (const check of stars.take()) {
+      const row = fresh?.find((r) => r.id === check.id);
+      const said = starOutcome(check, row ? row.is_starred === true : undefined);
+      setStarWords((words) => sayFor(words, check.id, said));
+    }
+  }
+
+  /**
+   * A star press: a row write through the rule (src/lib/crm/lateAnswers.ts), shown at once and
+   * bounded by its deadline. A failure draws the star back and says it may not have saved; the
+   * read after the writes says what is stored (settleStar). A failure that a newer press on the
+   * same row left after does neither: that press is what was asked for last.
+   */
   async function toggleStar(row: Row) {
     const next = row.is_starred !== true;
-    setStarError('');
-    setRows((list) => list.map((r) => (r.id === row.id ? { ...r, is_starred: next } : r)));
-    try {
-      await adminFetch(`/api/admin/leads/${row.id}`, {
-        method: 'PATCH',
-        body: { isStarred: next },
-      });
-    } catch (err) {
-      setRows((list) => list.map((r) => (r.id === row.id ? { ...r, is_starred: !next } : r)));
-      setStarError(`${leadName(row)} could not be starred. ${describeError(err)}`);
-    }
+    stars.drop(row.id);
+    setStarWords((words) => sayFor(words, row.id, ''));
+    await pressStar(
+      writes,
+      next,
+      {
+        show: (on) =>
+          setRows((list) => list.map((r) => (r.id === row.id ? { ...r, is_starred: on } : r))),
+        send: (signal) =>
+          adminFetch(`/api/admin/leads/${row.id}`, {
+            method: 'PATCH',
+            body: { isStarred: next },
+            signal,
+          }),
+        failed: (err) => {
+          // With no answer at all (too slow, the network) it may still save: said so even
+          // when the read after it shows the old value (failureOf, starOutcome).
+          const check = { id: row.id, name: leadName(row), next, ...failureOf(err) };
+          stars.add(check);
+          setStarWords((words) => sayFor(words, row.id, starPending(check)));
+        },
+        reread,
+      },
+      ROW_WAIT_MS,
+      { presses, id: row.id },
+    );
+  }
+
+  /**
+   * The bulk bar's POST: a row write, not optimistic, so the list is read again after it (with
+   * a bulk's longer deadline), and the KPIs too, saved or not.
+   */
+  function postBulk(body: LeadBulk): Promise<BulkOutcome> {
+    return rowWrite(
+      writes,
+      (signal) =>
+        adminFetch<BulkOutcome>('/api/admin/leads/bulk', { method: 'POST', body, signal }),
+      reread,
+      BULK_WAIT_MS,
+    ).finally(() => setRecount((n) => n + 1));
+  }
+
+  /**
+   * A bulk action failed. Refused by the server: said. No answer (too slow, the network, a
+   * server error): it may still have saved, so it is never said to have failed; the selection
+   * stays and the read after it shows the rows.
+   */
+  function bulkFailed(err: unknown) {
+    const detail = describeError(err);
+    const refused = err instanceof AdminApiError && err.info.status < 500;
+    setNotes([
+      refused ? { tone: 'err', text: detail } : { tone: 'warn', text: bulkUnsure(detail) },
+    ]);
   }
 
   function bulkDone(outcome: BulkOutcome) {
@@ -301,7 +402,6 @@ export default function LeadsList({
     if (changed > 0 && outcome.conflicts.length === 0)
       toast(`Done. ${changed} ${changed === 1 ? 'lead' : 'leads'} changed.`, 'ok');
     setSelected(new Set());
-    setReload((n) => n + 1);
   }
 
   const counts = summary?.per_stage ?? {};
@@ -440,11 +540,11 @@ export default function LeadsList({
           <p>{note.text}</p>
         </Note>
       ))}
-      {starError && (
-        <p className="msg" data-kind="error" role="alert">
-          {starError}
+      {Object.entries(starWords).map(([id, said]) => (
+        <p key={id} className="msg" data-kind="error" role="alert">
+          {said}
         </p>
-      )}
+      ))}
       <DataTable<Row>
         caption="Leads"
         columns={columns}
@@ -475,8 +575,9 @@ export default function LeadsList({
               people={people}
               stages={stages}
               spamView={spamView}
+              post={postBulk}
               onDone={bulkDone}
-              onError={(message) => setNotes([{ tone: 'err', text: message }])}
+              onError={bulkFailed}
             />
           ),
         }}
