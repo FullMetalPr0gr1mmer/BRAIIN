@@ -480,7 +480,7 @@ describe('a create made in a drawer or a modal says so (SaveTarget `staged`)', (
   it('the theme editor’s page passes its mode, read for the themes resource (E4)', () => {
     const page = readFileSync('src/pages/admin/appearance/theme.astro', 'utf8');
     expect(page).toContain("await createReleaseMode(Astro.locals, 'themes')");
-    expect(page).toMatch(/<AdminTheme\s[^>]*id=\{id\}[^>]*releaseMode=\{releaseMode\}/);
+    expect(page).toMatch(/<AdminTheme\s[^>]*\bid=\{id\}[^>]*\breleaseMode=\{releaseMode\}/);
   });
 });
 

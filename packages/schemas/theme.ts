@@ -61,3 +61,19 @@ export const ThemeSettingsSchema = z
 
 export type ThemeSettings = z.infer<typeof ThemeSettingsSchema>;
 export type ThemeMotion = z.infer<typeof ThemeMotionSchema>;
+
+/**
+ * A theme's save (the `themes` resource, src/lib/admin/resources/themes.ts): its settings, from
+ * which the server compiles the tokens, so no client writes a token (a `tokens` key sent anyway
+ * is not part of the shape and is dropped). Here, not in admin.ts: the browser's shared admin
+ * chunk carries that module whole, and these carry the gate (Admin v2 E4).
+ */
+export const ThemeWriteSchema = z.object({
+  name: z.string().trim().min(1).max(200).default('Site theme'),
+  settings: ThemeSettingsSchema,
+  isActive: z.boolean().default(true),
+});
+/** An update: any of them, and the version it was read at (admin.ts `updatable`). */
+export const ThemeUpdateSchema = ThemeWriteSchema.partial().extend({
+  version: z.number().int().min(1),
+});

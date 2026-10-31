@@ -1,5 +1,4 @@
-import { ThemeUpdateSchema, ThemeWriteSchema } from '@schemas/admin';
-import type { ThemeSettings } from '@schemas/theme';
+import { ThemeUpdateSchema, ThemeWriteSchema, type ThemeSettings } from '@schemas/theme';
 import { compileTheme } from '@theme/compile';
 import type { ResourceConfig } from '../resource';
 import { fieldsOf, pick, type Input } from './shared';

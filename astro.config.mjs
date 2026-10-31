@@ -144,6 +144,11 @@ const ADMIN_PAGES =
 // carries it and a narrow screen that never opens the preview never downloads it.
 const ADMIN_PAGE_PREVIEW =
   /[\\/]src[\\/](components[\\/]admin[\\/]screens[\\/]pagePreview[\\/](PreviewColumn\.tsx|model\.ts)|lib[\\/]admin[\\/]previewChannel\.ts)$/;
+// The theme editor (Admin v2 E4): its island, its screen code and the theme package (the colour
+// maths, the gate with its pairs, the compiler), a family of its own, so no other screen loads
+// the gate and the editor loads no other screen's code.
+const ADMIN_THEME =
+  /[\\/](src[\\/]components[\\/]admin[\\/](islands[\\/]AdminTheme\.tsx$|screens[\\/]theme[\\/])|packages[\\/]theme[\\/])/;
 // The releases preview's bridge (Admin v2 R9, P-4): the code a `/admin/preview/**` render
 // loads (src/components/preview/AdminPreviewBridge.astro). Its own group, never in admin-ui,
 // which every admin screen loads.
@@ -285,6 +290,7 @@ export default defineConfig({
                     !ADMIN_CONTENT.test(id) &&
                     !ADMIN_PAGES.test(id) &&
                     !ADMIN_PAGE_PREVIEW.test(id) &&
+                    !ADMIN_THEME.test(id) &&
                     !ADMIN_PREVIEW.test(id) &&
                     !ADMIN_RELEASE.test(id) &&
                     !ADMIN_VERSIONS.test(id) &&
@@ -369,6 +375,14 @@ export default defineConfig({
                 name: 'admin-page-preview',
                 test: ADMIN_PAGE_PREVIEW,
                 priority: 13.3,
+              },
+              {
+                // The theme editor (E4): below the field kit, so what both use stays in
+                // admin-fields and this chunk imports it from there; above admin-screens,
+                // whose path rule would claim it otherwise. It imports no other screen group.
+                name: 'admin-theme',
+                test: ADMIN_THEME,
+                priority: 13.2,
               },
               {
                 // The screens admin-ui leaves (Admin v2 U4, Wave 3's chunk rule): an island

@@ -18,7 +18,7 @@
 -- the token's role, as 0001 left them).
 
 begin;
-select plan(32);
+select plan(34);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values ('e4000000-0000-0000-0000-0000000000ff', 'T-E4');
@@ -75,6 +75,21 @@ select ok(exists (select 1 from information_schema.columns
                    where table_schema = 'public' and table_name = 'custom_themes'
                      and column_name = 'settings' and data_type = 'jsonb' and is_nullable = 'YES'),
   'custom_themes.settings is a nullable jsonb column');
+
+-- ---- the rule functions: the writers call them (a CHECK runs as the writer), anon never ----
+select ok((select bool_and(not has_function_privilege('anon', p.oid, 'execute')
+                           and not has_function_privilege('public', p.oid, 'execute')
+                           and has_function_privilege('authenticated', p.oid, 'execute')
+                           and has_function_privilege('service_role', p.oid, 'execute')
+                           and not p.prosecdef and p.provolatile = 'i')
+             from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'app'
+              and p.proname in ('theme_luminance', 'theme_mix', 'theme_contrast',
+                                'theme_palette_ok', 'theme_row_ok')),
+  'the five theme rule functions: invoker, immutable, executable by staff and the service role, never anon');
+select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'app' and p.proname like 'theme\_%'),
+  5, 'and there are five of them');
 
 -- ---- who writes it -------------------------------------------------------------------------
 set local role authenticated;
