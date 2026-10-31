@@ -68,16 +68,24 @@ export const POST: APIRoute = async ({ request }) => {
   if (supabaseConfigured()) {
     const tenantId = await resolveLaunchTenantId();
     if (tenantId) {
-      const outcome = await checkPublicLimits(serviceClient(), tenantId, LEAD_PII_ENC_KEY, [
-        { scope: 'contact:ip', value: ipLimitValue(clientIp(request)), ...CONTACT_LIMITS.perIp },
+      // The limiter and the config are independent reads, so they run together (review
+      // finding CR9): one round trip, not two. The order of the answers is unchanged: a
+      // limited send is a 429 whatever the config says, and neither read can fail the send
+      // (the limiter fails open, an unreadable config leaves the floor).
+      const svc = serviceClient();
+      const [outcome, settings] = await Promise.all([
+        checkPublicLimits(svc, tenantId, LEAD_PII_ENC_KEY, [
+          { scope: 'contact:ip', value: ipLimitValue(clientIp(request)), ...CONTACT_LIMITS.perIp },
+        ]),
+        readPublishedFormSettings(svc, tenantId),
       ]);
       if (outcome === 'limited') return json({ ok: false, error: 'rate-limit' }, 429);
-
-      const settings = await readPublishedFormSettings(serviceClient(), tenantId);
       if (settings) inquiry = settings.inquiry;
     }
   }
-  const checked = checkInquiry(parsed.data, inquiry, parsed.data.form);
+  // The page's claim (the optional fields it showed as required) narrows what the config
+  // requires, so a page drawn before a field became required still sends (CR1).
+  const checked = checkInquiry(parsed.data, inquiry, parsed.data.form, parsed.data.requiredFields);
   if (!checked.ok) return json({ ok: false, error: 'validation', fields: checked.fields }, 422);
   const lead = checked.data;
 

@@ -10,11 +10,22 @@ const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 let formRow: Record<string, unknown> | null | 'error' | 'throw' = null;
 const inserts: Record<string, unknown>[] = [];
 const formReads: { table: string; tenant: unknown }[] = [];
+/** When each read starts and the limiter answers (CR9: the two reads run together). */
+const events: string[] = [];
+/** The limiter's count for this address (over 10 an hour is limited). */
+let hits = 1;
 
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
-    rpc: async () => ({ data: 1, error: null }),
+    rpc: async () => {
+      events.push('limit');
+      // The limiter's round trip: a few turns of the event loop.
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+      events.push('limit-answered');
+      return { data: hits, error: null };
+    },
     from: (table: string) => {
+      events.push(`read:${table}`);
       if (formRow === 'throw') throw new Error('socket closed');
       const read = { table, tenant: undefined as unknown };
       const b: Record<string, unknown> = {
@@ -70,6 +81,8 @@ beforeEach(() => {
   formRow = null;
   inserts.length = 0;
   formReads.length = 0;
+  events.length = 0;
+  hits = 1;
 });
 
 describe('POST /api/contact — the published forms config (Admin v2 E8)', () => {
@@ -162,6 +175,38 @@ describe('POST /api/contact — the published forms config (Admin v2 E8)', () =>
       expect(inserts[0]).not.toHaveProperty('budgetBand');
       expect(inserts[0]).not.toHaveProperty('timelineText');
     }
+  });
+
+  it('a page drawn before a field became required still sends: the claim of what it showed as required narrows the config (CR1)', async () => {
+    formRow = inquiry({ fields: { budget: { required: true } } });
+    // Contact's form, drawn when the budget was optional: it showed nothing as required.
+    const stale = await send({ ...BASE, form: 'full', requiredFields: [] });
+    expect(stale.status).toBe(200);
+    expect(inserts[0]).not.toHaveProperty('requiredFields');
+    // Drawn under this config: it showed the budget as required, and the send must answer it.
+    const fresh = await send({ ...BASE, form: 'full', requiredFields: ['budget'] });
+    expect(fresh.status).toBe(422);
+    expect(((await fresh.json()) as { fields: string[] }).fields).toEqual(['budgetBand']);
+    // No claim (a page from before it, or a hand-made post): the config decides alone.
+    expect((await send({ ...BASE, form: 'full' })).status).toBe(422);
+    // A claim never requires what the config does not, and names it does not know are ignored.
+    formRow = inquiry({});
+    expect(
+      (await send({ ...BASE, form: 'full', requiredFields: ['budget', 'favourite colour'] }))
+        .status,
+    ).toBe(200);
+    expect(inserts).toHaveLength(2);
+  });
+
+  it('the config is read while the limiter answers, and a limited send is still a 429 (CR9)', async () => {
+    expect((await send({ ...BASE, form: 'full' })).status).toBe(200);
+    expect(events.indexOf('read:form_settings')).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf('read:form_settings')).toBeLessThan(events.indexOf('limit-answered'));
+    hits = 11;
+    formRow = inquiry({ fields: { budget: { required: true } } });
+    const limited = await send({ ...BASE, form: 'full' });
+    expect(limited.status).toBe(429);
+    expect(inserts).toHaveLength(1);
   });
 
   it('a form the schema does not know is refused (422 names form)', async () => {

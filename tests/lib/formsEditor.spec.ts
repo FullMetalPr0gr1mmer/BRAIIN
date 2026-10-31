@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   APPLICATION_FIELDS,
   APPLICATION_OPTIONAL_FIELDS,
   ApplicationConfigSchema,
+  FORM_COPY_FORBIDDEN,
   INQUIRY_FIELDS,
   INQUIRY_OPTIONAL_FIELDS,
   InquiryConfigSchema,
@@ -10,11 +12,11 @@ import {
 import { BUDGET_BANDS } from '@schemas/lead';
 import { RECRUITMENT_POLICY_VERSION } from '@consent/recruitment';
 import {
-  canonical,
   consentBase,
   fieldState,
   moved,
   nextConsentVersion,
+  oneLine,
   orderOf,
   parseStored,
   serialise,
@@ -26,6 +28,8 @@ import {
 } from '@/lib/admin/forms/editor';
 import { editorPropsFor } from '@/lib/admin/forms/editorProps';
 import { INQUIRY_LABELS } from '@/lib/forms/config';
+import { projectedConsentRevision } from '@/lib/forms/revision';
+import { pageButtonsFrom } from '@/lib/admin/forms/pageButtons';
 
 // The Forms editor's model (Admin v2 E8, src/lib/admin/forms/editor.ts) and its props
 // (editorProps.ts): what the island saves is the smallest difference from the built-in form,
@@ -168,7 +172,77 @@ describe('the consent version the screen promises', () => {
 
   it('compares the wording by value, as jsonb does, not by key order', () => {
     const stored = { consent: { application: { ar: 'أوافق', en: 'I agree' } } };
-    expect(canonical(stored.consent)).toBe(canonical({ application: lines.application }));
     expect(nextConsentVersion('2026-10-04', 2, stored, { consent: lines })).toBe('2026-10-04.r2');
+  });
+
+  it('counts with the one rule the preview uses (CR5): revision.ts, no copy of it here', () => {
+    const source = readFileSync('src/lib/admin/forms/editor.ts', 'utf8');
+    expect(source).toContain("from '@/lib/forms/revision'");
+    expect(source).not.toMatch(/export function canonical/);
+    const other = { application: BI('Yes', 'نعم') };
+    for (const [revision, saved, next] of [
+      [0, {}, { consent: lines }],
+      [2, { consent: lines }, { consent: lines }],
+      [2, { consent: lines }, { consent: other }],
+      [5, { consent: { application: { ar: 'أوافق', en: 'I agree' } } }, { consent: lines }],
+    ] as const) {
+      const projected = projectedConsentRevision(
+        { consent_revision: revision, application: saved },
+        { application: next },
+      );
+      expect(nextConsentVersion('2026-10-04', revision, saved, next)).toBe(
+        `2026-10-04.r${projected}`,
+      );
+    }
+  });
+});
+
+describe('a consent line stays one paragraph (CR4)', () => {
+  it('a typed or pasted line break, or any other control character, becomes a space', () => {
+    expect(oneLine('I agree\nto this')).toBe('I agree to this');
+    expect(oneLine('one\r\ntwo\r\n\nthree\tfour')).toBe('one two three four');
+    expect(oneLine('أوافق\nعلى هذا')).toBe('أوافق على هذا');
+    expect(oneLine('plain words')).toBe('plain words');
+  });
+
+  it('removes every character the schema refuses for being a control (FORM_COPY_FORBIDDEN)', () => {
+    for (let code = 0; code <= 0x9f; code += 1) {
+      const ch = String.fromCharCode(code);
+      if (ch === '<' || ch === '>' || !FORM_COPY_FORBIDDEN.test(ch)) continue;
+      expect(FORM_COPY_FORBIDDEN.test(oneLine(`a${ch}b`)), `U+${code.toString(16)}`).toBe(false);
+    }
+  });
+});
+
+describe('the pages whose own button text wins (CR3)', () => {
+  const pages = [
+    { id: 'p1', slug: 'contact', title: { en: 'Contact', ar: 'تواصل' } },
+    { id: 'p2', slug: 'campaign', title: null },
+  ];
+  it('names each page with a shown inquiry band that sets its button, in either language', () => {
+    expect(
+      pageButtonsFrom(
+        [
+          { page_id: 'p1', visible: true, submit: { en: 'Send it', ar: 'أرسلها' } },
+          { page_id: 'p2', visible: true, submit: { en: '', ar: 'أرسل' } },
+        ],
+        pages,
+      ),
+    ).toEqual([
+      { page: 'Contact', en: 'Send it', ar: 'أرسلها' },
+      { page: 'campaign', en: '', ar: 'أرسل' },
+    ]);
+  });
+  it('none for a band without its own text, a blank one, or a hidden band', () => {
+    expect(
+      pageButtonsFrom(
+        [
+          { page_id: 'p1', visible: true, submit: null },
+          { page_id: 'p2', visible: false, submit: { en: 'Go', ar: 'انطلق' } },
+          { page_id: 'p2', visible: true, submit: { en: ' ', ar: '' } },
+        ],
+        pages,
+      ),
+    ).toEqual([]);
   });
 });

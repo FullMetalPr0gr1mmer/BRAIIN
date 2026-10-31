@@ -8,6 +8,7 @@
 // every key this module can emit to the schema's own key list.
 
 import { serviceChoice } from './serviceSelect';
+import { parseRequiredClaim, REQUIRED_CLAIM_INPUT } from './requiredClaim';
 
 /**
  * Form control `name` → LeadInputSchema key. Only controls a form actually renders: the
@@ -36,7 +37,14 @@ export const SERVICE_LEAD_KEYS = ['serviceOfInterest', 'disciplineOfInterest'] a
 export type ContactField = keyof typeof CONTACT_FIELD_TO_LEAD;
 
 /** Keys every submission carries besides its fields. */
-export const CONTACT_FIXED_KEYS = ['kind', 'locale', 'consentMarketing', 'hp', 'form'] as const;
+export const CONTACT_FIXED_KEYS = [
+  'kind',
+  'locale',
+  'consentMarketing',
+  'hp',
+  'form',
+  'requiredFields',
+] as const;
 
 /**
  * The fields of each ContactForm variant, in DOM order (ContactForm.astro renders from
@@ -54,18 +62,16 @@ export const CONTACT_FORM_FIELDS = {
 export type ContactFormVariant = keyof typeof CONTACT_FORM_FIELDS;
 
 /**
- * Which variant a rendered form is, from the class ContactForm.astro gives it
- * (`contact-form--compact`, `--full`, `--hello`; the hello form also carries `--full`, its
- * layout). Admin v2 E8 posts it as `form`, so the server applies the forms config to the
- * variant the visitor saw. Read from the class rather than a new attribute so the served HTML
- * stays byte-identical (tests/lib/formsConfig.spec.ts holds it to the rendered forms).
+ * Which variant a rendered form is, from its `data-form-variant` (ContactForm.astro), or
+ * undefined for a value that names none. Admin v2 E8 posts it as `form`, so the server applies
+ * the forms config to the variant the visitor saw. An explicit attribute, not the layout's
+ * classes (review finding CR8): a class renamed for the look must not change what is posted
+ * (tests/render/formsConfig.spec.ts holds every rendered variant to it).
  */
-export function variantOfForm(classes: Iterable<string>): ContactFormVariant | undefined {
-  const list = new Set(classes);
-  if (list.has('contact-form--hello')) return 'hello';
-  if (list.has('contact-form--compact')) return 'compact';
-  if (list.has('contact-form--full')) return 'full';
-  return undefined;
+export function variantOfForm(value: string | null | undefined): ContactFormVariant | undefined {
+  return value && Object.hasOwn(CONTACT_FORM_FIELDS, value)
+    ? (value as ContactFormVariant)
+    : undefined;
 }
 
 /** What the form posts as `kind` (LeadKindSchema). */
@@ -95,6 +101,10 @@ export function buildContactPayload(
   // Which variant sent it (Admin v2 E8: the forms config applies per variant). Only a known
   // one: the server's enum would refuse anything else.
   if (opts.form && Object.hasOwn(CONTACT_FORM_FIELDS, opts.form)) payload['form'] = opts.form;
+  // The optional fields the page showed as required (./requiredClaim.ts): the server holds
+  // the send to those, so a page drawn before a field became required still sends.
+  const claim = parseRequiredClaim(get(REQUIRED_CLAIM_INPUT));
+  if (claim) payload['requiredFields'] = claim;
   for (const [field, key] of Object.entries(CONTACT_FIELD_TO_LEAD)) {
     if (field === 'service') {
       // `discipline:<slug>` → disciplineOfInterest, a slug → serviceOfInterest; "not sure"

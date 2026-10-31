@@ -21,6 +21,7 @@ import { createApplication } from '@/lib/applications/create';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { checkApplication } from '@/lib/forms/config';
 import { readPublishedFormSettings } from '@/lib/forms/published';
+import { parseRequiredClaim, REQUIRED_CLAIM_INPUT } from '@/lib/forms/requiredClaim';
 
 // POST /api/apply — the Join form (careers). The second public write path after the
 // contact form, and the only one that accepts a file. Built for the Workers FREE plan:
@@ -99,11 +100,18 @@ export const POST: APIRoute = async ({ request }) => {
   if (!tenantId) return answer('unavailable');
 
   // The page is edge-cached; the flag is not. Fail closed: unknown means closed-for-now.
-  const { data: profile, error: profileError } = await svc
-    .from('site_profile')
-    .select('accepting_applications')
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
+  // The published forms config (Admin v2 E8) is read beside it, with the service client for
+  // the tenant resolved above, never the page's copy: two independent reads, one round trip
+  // (review finding CR9). It is used only after the schema, so the order of the answers is
+  // unchanged: closed, then the limit, then invalid, then an unreadable config (unavailable).
+  const [{ data: profile, error: profileError }, settings] = await Promise.all([
+    svc
+      .from('site_profile')
+      .select('accepting_applications')
+      .eq('tenant_id', tenantId)
+      .maybeSingle(),
+    readPublishedFormSettings(svc, tenantId),
+  ]);
   if (profileError) return answer('unavailable');
   if ((profile as { accepting_applications?: unknown } | null)?.accepting_applications !== true) {
     return answer('closed');
@@ -144,11 +152,12 @@ export const POST: APIRoute = async ({ request }) => {
   const raw = form.get(CV_FIELD);
   const sentCv = raw instanceof Blob && raw.size > 0;
 
-  // The published forms config (Admin v2 E8), read with the service client for the tenant
-  // resolved above, never the page's copy: the schema is the floor, the config narrows it.
-  const settings = await readPublishedFormSettings(svc, tenantId);
+  // The schema is the floor, the published config narrows it (read above); the page's claim
+  // (the optional controls it showed as required) narrows what the config requires, so a
+  // page drawn before LinkedIn, the crafts or the CV became required still sends (CR1).
   if (!settings) return answer('unavailable');
-  const checked = checkApplication(parsed.data, sentCv, settings);
+  const claim = parseRequiredClaim(form.get(REQUIRED_CLAIM_INPUT));
+  const checked = checkApplication(parsed.data, sentCv, settings, claim);
   if (!checked.ok) return answer('invalid', { fields: checked.fields });
   const input = checked.data;
 

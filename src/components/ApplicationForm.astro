@@ -15,6 +15,7 @@ import { APPLICATION_GROUP_IDS } from '@schemas/forms';
 import { recruitmentConsent } from '@consent/recruitment';
 import { applicationView } from '@/lib/forms/config';
 import { formSettingsFor } from '@/lib/data/forms';
+import { REQUIRED_CLAIM_INPUT, requiredClaimValue } from '@/lib/forms/requiredClaim';
 import { localizedHref } from '@/lib/i18n';
 import { APPLY_FORM_COPY, applyStatusText } from '@/lib/forms/applicationCopy';
 import Cta from '@/components/ui/Cta.astro';
@@ -43,7 +44,11 @@ import Cta from '@/components/ui/Cta.astro';
 // (src/lib/forms/config.ts applicationView): its labels, its order inside each group, the
 // optional controls (crafts, LinkedIn, CV) shown or hidden and required or not, the button and
 // the two consent lines, whose version (`<notice date>.r<N>` once reworded) is posted with
-// them. With no row the HTML is the built-in form to the byte (tests/render/sections.spec.ts).
+// them, and the optional controls it shows as required in the hidden `required_fields`, so a
+// page drawn before LinkedIn, the crafts or the CV became required still sends
+// (src/lib/forms/requiredClaim.ts). A required control says so: LinkedIn loses its
+// "optional", the crafts say "choose at least one", the CV says "required" (review finding
+// CR7).
 // The craft chips are real checkboxes (keyboard-operable, posted by KEY), visually the
 // design's pills, the group named by its visible label. When the config requires them the
 // label says "choose at least one" and the group carries `data-required` and its message, so
@@ -336,7 +341,10 @@ const regionText = answer === null ? '' : applyStatusText(STR, answer, okMessage
                 </span>
                 <span class="af-drop__txt">
                   <label for="af-cv" class="af-drop__t">
-                    <span class="af-drop__default">{label}</span>
+                    <span class="af-drop__default">
+                      {label}
+                      {required && <span class="af-opt">{STR.cvRequired}</span>}
+                    </span>
                     <span class="af-drop__name" data-cv-name dir="auto" />
                   </label>
                   <span class="af-drop__s">
@@ -401,6 +409,11 @@ const regionText = answer === null ? '' : applyStatusText(STR, answer, okMessage
   </div>
   <input type="hidden" name={f('locale')} value={locale} />
   <input type="hidden" name={f('policy_version')} value={view.policyVersion} />
+  <input
+    type="hidden"
+    name={REQUIRED_CLAIM_INPUT}
+    value={requiredClaimValue(view.requiredOptional)}
+  />
 
   <div class="af-foot">
     <Cta type="submit" icon="go">{view.button ?? STR.submit}</Cta>

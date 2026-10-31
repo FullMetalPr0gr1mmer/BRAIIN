@@ -12,6 +12,7 @@ import {
   keyedCopy,
   moved,
   nextConsentVersion,
+  oneLine,
   orderOf,
   parseStored,
   serialise,
@@ -23,6 +24,7 @@ import {
   type FieldMeta,
   type FieldState,
 } from '@/lib/admin/forms/editor';
+import type { PageButton } from '@/lib/admin/forms/pageButtons';
 
 // The Forms editor (/admin/forms, Admin v2 E8): one form per tab, the inquiry form or the Join
 // form, saved through the singleton kernel (`/api/admin/form-settings`, settings.general) with
@@ -45,6 +47,8 @@ export interface FormsScreenProps {
   consent?: { application: Bilingual; futureRoles: Bilingual } | undefined;
   /** The recruitment notice's date (the version a form with its own lines posts). */
   notice?: string | undefined;
+  /** Pages whose own button text (set in Pages) wins over this button there (CR3). */
+  pageButtons?: readonly PageButton[] | undefined;
 }
 
 const TARGET = { kind: 'singleton', endpoint: '/api/admin/form-settings' } as const;
@@ -52,7 +56,11 @@ const TARGET = { kind: 'singleton', endpoint: '/api/admin/form-settings' } as co
 /** The forms config's history: the site's own (no id), as the identity's (R14-prep). */
 const FORMS_HISTORY = singletonHistory('form_settings');
 
-/** One bilingual line: English and Arabic inputs, each with its own label. */
+/**
+ * One bilingual line: English and Arabic inputs, each with its own label. Every line is one
+ * paragraph (the schema refuses a line break): a long one gets a textarea to read it in, where
+ * Enter adds nothing and a pasted break becomes a space (`oneLine`), and the textarea says so.
+ */
 function CopyPair({
   id,
   legend,
@@ -70,6 +78,7 @@ function CopyPair({
   multiline?: boolean;
   maxLength: number;
 }) {
+  const hint = `${id}-one-line`;
   const half = (lang: 'en' | 'ar') => {
     const props = {
       id: `${id}-${lang}`,
@@ -79,7 +88,7 @@ function CopyPair({
       maxLength,
       placeholder: builtIn[lang],
       onChange: (e: { target: { value: string } }) =>
-        onChange({ ...value, [lang]: e.target.value }),
+        onChange({ ...value, [lang]: oneLine(e.target.value) }),
     };
     return (
       <div className="frm-half">
@@ -90,7 +99,18 @@ function CopyPair({
         >
           {lang === 'en' ? 'English' : 'العربية'}
         </label>
-        {multiline ? <textarea rows={3} {...props} /> : <input type="text" {...props} />}
+        {multiline ? (
+          <textarea
+            rows={3}
+            aria-describedby={hint}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.preventDefault();
+            }}
+            {...props}
+          />
+        ) : (
+          <input type="text" {...props} />
+        )}
       </div>
     );
   };
@@ -101,6 +121,12 @@ function CopyPair({
         {half('en')}
         {half('ar')}
       </div>
+      {multiline && (
+        <p className="f__cue" id={hint}>
+          One paragraph, without line breaks: Enter adds nothing, and a pasted line break becomes a
+          space.
+        </p>
+      )}
       {halfWritten(value) && (
         <p className="f__cue">
           Write it in both languages, or clear both to use the built-in words.
@@ -270,6 +296,12 @@ export default function FormsScreen(props: FormsScreenProps) {
           maxLength={40}
           onChange={(v) => set(withButton(config, v, props.button))}
         />
+        {props.pageButtons?.map((p) => (
+          <p key={p.page} className="frm-note" data-page-button>
+            The {p.page} page sets its own button text in Pages ({p.en || p.ar}), and shows it there
+            instead of this one.
+          </p>
+        ))}
       </section>
       {props.budgets && (
         <section className="card" aria-labelledby={`${base}-budgets`}>

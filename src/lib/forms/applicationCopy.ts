@@ -40,6 +40,8 @@ export interface ApplyFormCopy {
   linkedinPh: string;
   optional: string;
   cvTitle: string;
+  /** Beside the CV's line when the forms config requires it (Admin v2 E8). */
+  cvRequired: string;
   cvHint: string;
   /** The dropzone's line for a file it will not send (too large, or not a PDF or .docx). */
   cvBad: string;
@@ -89,6 +91,7 @@ export const APPLY_FORM_COPY: Record<Locale, ApplyFormCopy> = {
     linkedinPh: 'https://linkedin.com/in/yourname',
     optional: 'optional',
     cvTitle: 'Drop your CV here, or click to browse',
+    cvRequired: 'required',
     cvHint: 'PDF or Word (.docx), up to 10 MB',
     cvBad: "That file won't work. Use a PDF or Word (.docx) file under 10 MB.",
     cvRemove: 'Remove',
@@ -143,6 +146,7 @@ export const APPLY_FORM_COPY: Record<Locale, ApplyFormCopy> = {
     linkedinPh: 'https://linkedin.com/in/yourname',
     optional: 'اختياري',
     cvTitle: 'اسحب سيرتك الذاتية هنا، أو اضغط للاختيار',
+    cvRequired: 'مطلوب',
     // U+200F keeps "(.docx)" on the Arabic side of "Word" (the brief's copy).
     cvHint: 'PDF أو Word ‏(.docx)، حتى ١٠ ميجابايت',
     cvBad: 'هذا الملف ما ينفع. استخدم ملف PDF أو Word ‏(.docx) أقل من ١٠ ميجابايت.',

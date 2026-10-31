@@ -35,6 +35,8 @@ export interface ContactFormCopy {
   note: string;
   chooseService: string;
   chooseBudget: string;
+  /** The empty first option of a select the forms config requires: plainly not an answer. */
+  chooseOne: string;
   consent: string;
   /** /contact and "Say hello". */
   submit: string;
@@ -73,6 +75,7 @@ export const CONTACT_FORM_COPY: Record<Locale, ContactFormCopy> = {
     note: 'We read everything and reply within one business day.',
     chooseService: "Not sure yet, let's talk",
     chooseBudget: 'Prefer to discuss',
+    chooseOne: 'Choose one',
     consent: 'I agree to be contacted about my inquiry.',
     submit: 'Send a message',
     submitCompact: 'Send message',
@@ -106,6 +109,7 @@ export const CONTACT_FORM_COPY: Record<Locale, ContactFormCopy> = {
     note: 'نقرأ كل رسالة ونرد خلال يوم عمل واحد.',
     chooseService: 'لسه ما قررت، خلّنا نتكلم',
     chooseBudget: 'أفضّل نتناقش فيها',
+    chooseOne: 'اختر واحداً',
     consent: 'أوافق على التواصل معي بخصوص طلبي.',
     submit: 'أرسل رسالتك',
     submitCompact: 'أرسل الرسالة',

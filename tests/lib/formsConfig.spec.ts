@@ -1,3 +1,4 @@
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   APPLICATION_FIELDS,
@@ -15,8 +16,10 @@ import { RECRUITMENT_CONSENT, RECRUITMENT_POLICY_VERSION } from '@consent/recrui
 import {
   APPLICATION_LABELS,
   BUILT_IN_FORMS,
+  FORM_SETTINGS_PUBLIC_COLUMNS,
   INQUIRY_LABELS,
   applicationView,
+  checkApplication,
   checkInquiry,
   consentVersion,
   formSettingsFromRow,
@@ -26,7 +29,12 @@ import {
   readInquiryConfig,
 } from '@/lib/forms/config';
 import { CONTACT_FORM_COPY } from '@/lib/forms/contactCopy';
-import { CONTACT_FORM_FIELDS, variantOfForm } from '@/lib/forms/contactPayload';
+import {
+  CONTACT_FORM_FIELDS,
+  buildContactPayload,
+  variantOfForm,
+} from '@/lib/forms/contactPayload';
+import { parseRequiredClaim, REQUIRED_CLAIM_INPUT } from '@/lib/forms/requiredClaim';
 
 // The forms config (Admin v2 E8): the closed field sets, the copy rules, the resolution over the
 // built-in forms, and the per-variant rules /api/contact applies. The endpoints' own behaviour
@@ -228,13 +236,13 @@ describe('the consent version', () => {
 });
 
 describe('which form sent it', () => {
-  it('is read from the class the form already carries (no new attribute)', () => {
-    expect(variantOfForm(['contact-form', 'contact-form--compact'])).toBe('compact');
-    expect(variantOfForm(['contact-form', 'contact-form--full'])).toBe('full');
-    expect(variantOfForm(['contact-form', 'contact-form--full', 'contact-form--hello'])).toBe(
-      'hello',
-    );
-    expect(variantOfForm(['contact-form'])).toBeUndefined();
+  it('is read from its data-form-variant, a known variant only (CR8)', () => {
+    for (const variant of Object.keys(CONTACT_FORM_FIELDS)) {
+      expect(variantOfForm(variant)).toBe(variant);
+    }
+    for (const other of [undefined, null, '', 'contact-form--hello', 'sidebar', 'toString']) {
+      expect(variantOfForm(other)).toBeUndefined();
+    }
   });
 
   it('checkInquiry never lets a submission keep a field its own form does not show', () => {
@@ -252,5 +260,128 @@ describe('which form sent it', () => {
     expect(out.ok && 'phone' in out.data).toBe(false);
     const hello = checkInquiry(lead, {}, 'hello');
     expect(hello.ok && hello.data.phone).toBe('+966500000001');
+  });
+});
+
+describe('what the sending page showed as required (CR1)', () => {
+  const lead = {
+    kind: 'contact',
+    locale: 'en',
+    name: 'Sam',
+    email: 'sam@example.com',
+    message: 'Hi there.',
+    consentMarketing: false,
+    hp: '',
+  } as Parameters<typeof checkInquiry>[0];
+  const budgetRequired = { fields: { budget: { required: true } } };
+
+  it('each view lists the optional fields it shows as required, and only those', () => {
+    expect(inquiryView({}, 'full', 'en').requiredOptional).toEqual([]);
+    expect(
+      inquiryView(
+        { fields: { budget: { required: true }, phone: { required: true } } },
+        'full',
+        'en',
+      ).requiredOptional,
+    ).toEqual(['budget']);
+    expect(applicationView(BUILT_IN_FORMS, 'en').requiredOptional).toEqual([]);
+    const join = formSettingsFromRow({
+      application: { fields: { cv: { required: true }, linkedin: { visible: false } } },
+    });
+    expect(applicationView(join, 'ar').requiredOptional).toEqual(['cv']);
+  });
+
+  it('checkInquiry requires a field only when the page showed it as required; no claim, the config alone', () => {
+    expect(checkInquiry(lead, budgetRequired, 'full', []).ok).toBe(true);
+    expect(checkInquiry(lead, budgetRequired, 'full', ['budget'])).toEqual({
+      ok: false,
+      fields: ['budgetBand'],
+    });
+    expect(checkInquiry(lead, budgetRequired, 'full')).toEqual({
+      ok: false,
+      fields: ['budgetBand'],
+    });
+    // A claim never requires what the config does not.
+    expect(checkInquiry(lead, {}, 'full', ['budget', 'company']).ok).toBe(true);
+    // The claim is not part of the lead.
+    const out = checkInquiry({ ...lead, requiredFields: [] }, {}, 'full', []);
+    expect(out.ok && 'requiredFields' in out.data).toBe(false);
+  });
+
+  it('checkApplication: the same rule for the crafts, LinkedIn and the CV', () => {
+    const input = ApplicationInputSchema.parse({
+      locale: 'en',
+      name: 'Noura',
+      email: 'noura@example.com',
+      phone: '+966500000000',
+      city: 'Jeddah',
+      role: 'Motion designer',
+      experience: '3-6',
+      workType: 'freelance',
+      availability: 'month',
+      skills: [],
+      portfolio: 'https://behance.net/noura',
+      message: 'The launch film.',
+      consentApplication: true,
+      consentFutureRoles: false,
+      policyVersion: RECRUITMENT_POLICY_VERSION,
+    });
+    const settings = formSettingsFromRow({
+      application: {
+        fields: {
+          skills: { required: true },
+          linkedin: { required: true },
+          cv: { required: true },
+        },
+      },
+    });
+    expect(checkApplication(input, false, settings, []).ok).toBe(true);
+    expect(checkApplication(input, false, settings, ['cv'])).toEqual({ ok: false, fields: ['cv'] });
+    expect(checkApplication(input, false, settings)).toEqual({
+      ok: false,
+      fields: ['skills', 'linkedin', 'cv'],
+    });
+  });
+
+  it('the claim is read from the form control or the JSON, and is absent when nothing was sent', () => {
+    expect(parseRequiredClaim('budget  service')).toEqual(['budget', 'service']);
+    expect(parseRequiredClaim('')).toEqual([]);
+    expect(parseRequiredClaim(['cv', 3, 'skills'])).toEqual(['cv', 'skills']);
+    expect(parseRequiredClaim(null)).toBeUndefined();
+    expect(parseRequiredClaim(undefined)).toBeUndefined();
+    // The contact form posts it as requiredFields, an empty list included.
+    const fields: Record<string, string> = {
+      name: 'Sam',
+      email: 'sam@example.com',
+      message: 'Hi',
+      [REQUIRED_CLAIM_INPUT]: '',
+    };
+    const get = (name: string) => fields[name] ?? null;
+    expect(buildContactPayload(get, { kind: 'contact', locale: 'en' })['requiredFields']).toEqual(
+      [],
+    );
+    delete fields[REQUIRED_CLAIM_INPUT];
+    expect(buildContactPayload(get, { kind: 'contact', locale: 'en' })).not.toHaveProperty(
+      'requiredFields',
+    );
+  });
+});
+
+describe('one list of the columns the published config is read with (CR10)', () => {
+  it('both readers select FORM_SETTINGS_PUBLIC_COLUMNS, and it is the anon grant less the tenant', () => {
+    for (const file of ['src/lib/forms/published.ts', 'src/lib/data/forms.ts']) {
+      const source = readFileSync(file, 'utf8');
+      expect(source, file).toContain('.select(FORM_SETTINGS_PUBLIC_COLUMNS)');
+      expect(source, file).not.toMatch(/'inquiry,application,consent_revision'/);
+    }
+    const migration = readdirSync('supabase/migrations').find((f) =>
+      f.endsWith('_forms_config.sql'),
+    );
+    const sql = readFileSync(`supabase/migrations/${migration}`, 'utf8');
+    const grant = /grant select \(([^)]+)\) on public\.form_settings to anon;/.exec(sql);
+    const columns = grant![1]!.split(',').map((c) => c.trim());
+    expect(columns.filter((c) => c !== 'tenant_id')).toEqual(
+      FORM_SETTINGS_PUBLIC_COLUMNS.split(','),
+    );
   });
 });

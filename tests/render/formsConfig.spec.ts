@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { RECRUITMENT_POLICY_VERSION } from '@consent/recruitment';
 import { formSettingsFromRow, type FormSettings } from '@/lib/forms/config';
 import { APPLY_FORM_COPY } from '@/lib/forms/applicationCopy';
+import { CONTACT_FORM_COPY } from '@/lib/forms/contactCopy';
 import type { SectionData } from '@/lib/sections/types';
 import type { Locale } from '@schemas/primitives';
 import { DISCIPLINES, IDENTITY } from './fixtures';
@@ -59,11 +60,33 @@ const isRequired = (html: string, id: string) => /\srequired(\s|>|=)/.test(tagOf
 const before = (html: string, a: string, b: string) =>
   html.indexOf(`id="${a}"`) < html.indexOf(`id="${b}"`);
 
-const INQUIRY_SECTIONS: Record<string, { sections: SectionData[]; asks: string[] }> = {
+/** The first <option> of a select: its words, the entities Astro escapes read back. */
+const firstOption = (html: string, id: string): string => {
+  const from = html.indexOf('<option', html.indexOf(`id="${id}"`));
+  return html
+    .slice(html.indexOf('>', from) + 1, html.indexOf('</option>', from))
+    .trim()
+    .replaceAll('&#39;', "'")
+    .replaceAll('&quot;', '"')
+    .replaceAll('&amp;', '&');
+};
+
+/** What the form claims it showed as required (an empty value renders as a bare `value`). */
+const claimOf = (html: string): string | null => {
+  const m = /<input type="hidden" name="required_fields" value(?:="([^"]*)")?>/.exec(html);
+  return m ? (m[1] ?? '') : null;
+};
+
+const INQUIRY_SECTIONS: Record<
+  string,
+  { sections: SectionData[]; asks: string[]; variant: string; claim: string }
+> = {
   // The home form (compact): name, email, company, service, message.
   contact: {
     sections: [{ type: 'contact', props: {}, data: { groups: DISCIPLINES } }],
     asks: ['cf-message', 'cf-email', 'cf-company', 'cf-service', 'cf-name'],
+    variant: 'compact',
+    claim: 'company',
   },
   // /contact (full): the same plus the budget and the deadline.
   contactInquiry: {
@@ -77,16 +100,20 @@ const INQUIRY_SECTIONS: Record<string, { sections: SectionData[]; asks: string[]
       'cf-deadline',
       'cf-name',
     ],
+    variant: 'full',
+    claim: 'company budget',
   },
   // The services pages' Say hello (hello): the phone too, which this config hides.
   hello: {
     sections: [{ type: 'hello', props: {}, data: { groups: DISCIPLINES } }],
     asks: ['cf-message', 'cf-email', 'cf-company', 'cf-service', 'cf-budget', 'cf-name'],
+    variant: 'hello',
+    claim: 'company budget',
   },
 };
 
 describe('the inquiry form follows the published config', () => {
-  for (const [type, { sections, asks }] of Object.entries(INQUIRY_SECTIONS)) {
+  for (const [type, { sections, asks, variant, claim }] of Object.entries(INQUIRY_SECTIONS)) {
     for (const locale of LOCALES) {
       test(`${type} (${locale})`, async () => {
         const html = await render(sections, locale);
@@ -110,8 +137,47 @@ describe('the inquiry form follows the published config', () => {
         // The labels and the button in the page's language.
         expect(html).toContain(locale === 'en' ? 'Your name, please' : 'اسمك لو سمحت');
         expect(html).toContain(locale === 'en' ? 'Send it over' : 'أرسلها');
+        // The variant it posts (CR8) and what it showed as required (CR1).
+        expect(tagOf(html, 'contact-form')).toContain(`data-form-variant="${variant}"`);
+        expect(claimOf(html)).toBe(claim);
+        // A required select opens on words that are no answer; an optional one keeps its own
+        // (CR2).
+        const copy = CONTACT_FORM_COPY[locale];
+        expect(firstOption(html, 'cf-service')).toBe(copy.chooseService);
+        if (asks.includes('cf-budget')) {
+          expect(firstOption(html, 'cf-budget')).toBe(copy.chooseOne);
+          expect(html).not.toContain(copy.chooseBudget);
+        }
       });
     }
+  }
+
+  test('every variant says which it is and claims nothing with no config (CR8, CR1)', async () => {
+    for (const { sections, variant } of Object.values(INQUIRY_SECTIONS)) {
+      const html = await renderSections(sections, 'en');
+      expect(tagOf(html, 'contact-form')).toContain(`data-form-variant="${variant}"`);
+      expect(claimOf(html)).toBe('');
+    }
+  });
+
+  for (const locale of LOCALES) {
+    test(`a required service opens on "Choose one", never "Not sure yet" (CR2, ${locale})`, async () => {
+      const copy = CONTACT_FORM_COPY[locale];
+      const required = formSettingsFromRow({
+        inquiry: { fields: { service: { required: true } } },
+      });
+      const html = await renderSections(
+        INQUIRY_SECTIONS['contactInquiry']!.sections,
+        locale,
+        IDENTITY,
+        { formSettings: Promise.resolve(required) },
+      );
+      expect(isRequired(html, 'cf-service')).toBe(true);
+      expect(firstOption(html, 'cf-service')).toBe(copy.chooseOne);
+      expect(html).not.toContain(copy.chooseService.replaceAll("'", '&#39;'));
+      // The budget stays optional, with its own empty answer.
+      expect(firstOption(html, 'cf-budget')).toBe(copy.chooseBudget);
+    });
   }
 
   test("a section's own button text still wins over the config's (Pages)", async () => {
@@ -141,8 +207,14 @@ describe('the Join form follows the published config', () => {
       expect(before(html, 'af-city', 'af-name')).toBe(true);
       expect(before(html, 'af-name', 'af-email')).toBe(true);
       expect(html).not.toContain('id="af-linkedin"');
-      // A required CV marks its input.
+      // A required CV marks its input, and says so where it is read (CR7).
       expect(isRequired(html, 'af-cv')).toBe(true);
+      const drop = html.slice(html.indexOf('class="af-drop__default"'));
+      expect(drop.slice(0, drop.indexOf('</label>'))).toContain(
+        `<span class="af-opt">${copy.cvRequired}</span>`,
+      );
+      // What it showed as required, posted with it (CR1).
+      expect(claimOf(html)).toBe('skills cv');
       // Required crafts: the label says so and the group carries the client's hook and words.
       const group = tagOf(html, 'af-skills-label');
       expect(group).toContain('class="af-label"');
@@ -172,6 +244,8 @@ describe('the Join form follows the published config', () => {
     const chips = html.slice(html.lastIndexOf('<div', html.indexOf('id="af-skills-label"')));
     expect(chips.slice(0, chips.indexOf('>') + 1)).not.toContain('data-required');
     expect(html).not.toContain(APPLY_FORM_COPY.en.skillsRequired);
+    expect(html).not.toContain(`<span class="af-opt">${APPLY_FORM_COPY.en.cvRequired}</span>`);
+    expect(claimOf(html)).toBe('');
     expect(html).toContain(`name="policy_version" value="${RECRUITMENT_POLICY_VERSION}"`);
   });
 });

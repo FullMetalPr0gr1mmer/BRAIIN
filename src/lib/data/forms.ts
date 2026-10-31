@@ -1,5 +1,10 @@
 import { supabaseConfigured } from '@/lib/supabase/client';
-import { BUILT_IN_FORMS, formSettingsFromRow, type FormSettings } from '@/lib/forms/config';
+import {
+  BUILT_IN_FORMS,
+  FORM_SETTINGS_PUBLIC_COLUMNS,
+  formSettingsFromRow,
+  type FormSettings,
+} from '@/lib/forms/config';
 import { reportLoadError } from './parse';
 import { contentClient } from './source';
 
@@ -10,9 +15,6 @@ import { contentClient } from './source';
 // Never throws. No row (the forms as built), an unconfigured database, a failed read or an
 // unreadable value all give the built-in forms (src/lib/forms/config.ts reads the row part by
 // part), and a failure is logged.
-
-/** The columns anon may read (0117's column grant): the copy and the consent revision. */
-export const FORM_SETTINGS_PUBLIC_COLUMNS = 'inquiry,application,consent_revision';
 
 export async function getFormSettings(): Promise<FormSettings> {
   if (!supabaseConfigured()) return BUILT_IN_FORMS;

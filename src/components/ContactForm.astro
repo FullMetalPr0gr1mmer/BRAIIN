@@ -7,6 +7,7 @@ import Cta from '@/components/ui/Cta.astro';
 import type { ContactFormVariant, ContactKind } from '@/lib/forms/contactPayload';
 import { inquiryView } from '@/lib/forms/config';
 import { formSettingsFor } from '@/lib/data/forms';
+import { REQUIRED_CLAIM_INPUT, requiredClaimValue } from '@/lib/forms/requiredClaim';
 import {
   initialServiceValue,
   serviceOptionGroups,
@@ -47,8 +48,11 @@ import {
 // fields, reorder them, hide or require the optional ones, relabel the budget bands (their
 // KEYS stay what is posted and stored) and reword the button. The form renders the published
 // config server-side (src/lib/forms/config.ts inquiryView); /api/contact holds a submission
-// to the same config, by the variant it names (`form`, read from the form's own variant
-// class by variantOfForm, so the served HTML is the same bytes it was before E8).
+// to the same config, by the variant it names (`form`, the form's `data-form-variant`) and the
+// optional fields it showed as required (the hidden `required_fields`, so a page drawn before
+// a field became required still sends: src/lib/forms/requiredClaim.ts). A required select
+// opens on "Choose one", never on the words of an answer ("Not sure yet", "Prefer to
+// discuss") that the server would refuse.
 
 export interface Props {
   locale: Locale;
@@ -102,6 +106,11 @@ const { contactEmail } = await getIdentity(Astro.locals);
 // The legacy bands stay accepted on input (cached pages) but are never offered.
 const budgets = BUDGET_BANDS.map((k) => ({ value: k, label: view.budgets[k] }));
 
+// The empty first option: an answer of its own while the field is optional ("Not sure yet,
+// let's talk"), plainly not one when the config requires it (review finding CR2).
+const emptyService = view.requiredOptional.includes('service') ? STR.chooseOne : STR.chooseService;
+const emptyBudget = view.requiredOptional.includes('budget') ? STR.chooseOne : STR.chooseBudget;
+
 const serviceGroups = serviceOptionGroups(groups, locale);
 const serviceValue = initialServiceValue(serviceGroups, selected);
 ---
@@ -115,6 +124,7 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
   ]}
   data-locale={locale}
   data-kind={kind}
+  data-form-variant={fields}
   data-err-required={STR.errRequired}
   data-err-email={STR.errEmail}
   data-err-too-long={STR.errTooLong}
@@ -182,7 +192,7 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
           <label for="cf-service">{label}</label>
           <select id="cf-service" name="service" required={required}>
             <option value="" selected={serviceValue === ''}>
-              {STR.chooseService}
+              {emptyService}
             </option>
             {serviceGroups.map((g) => (
               <optgroup label={g.label}>
@@ -199,7 +209,7 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
         <div class="field">
           <label for="cf-budget">{label}</label>
           <select id="cf-budget" name="budget" required={required}>
-            <option value="">{STR.chooseBudget}</option>
+            <option value="">{emptyBudget}</option>
             {budgets.map((b) => (
               <option value={b.value}>{b.label}</option>
             ))}
@@ -241,6 +251,11 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
     <label for="cf-hp">Leave this field empty</label>
     <input id="cf-hp" name="hp" type="text" tabindex="-1" autocomplete="off" />
   </div>
+  <input
+    type="hidden"
+    name={REQUIRED_CLAIM_INPUT}
+    value={requiredClaimValue(view.requiredOptional)}
+  />
   <div class="contact-form__foot field-full">
     {
       compact ? (
@@ -345,7 +360,7 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
       const payload = buildContactPayload((k) => fd.get(k), {
         kind: d['kind'] === 'project_inquiry' ? 'project_inquiry' : 'contact',
         locale: d['locale'] ?? 'en',
-        form: variantOfForm(form.classList),
+        form: variantOfForm(d['formVariant']),
       });
       busy = true;
       showStatus(form, status, 'sending');

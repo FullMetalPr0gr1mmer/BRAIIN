@@ -6,6 +6,8 @@
 // "required" only when on; an order equal to the built-in one is not stored. The server parses
 // the result with the strict schema (FormSettingsWriteSchema), so nothing here is trusted.
 
+import { projectedConsentRevision } from '@/lib/forms/revision';
+
 export type Bilingual = { en: string; ar: string };
 type Row = Record<string, unknown>;
 
@@ -183,16 +185,15 @@ export function halfWritten(value: Bilingual): boolean {
   return (value.en.trim() === '') !== (value.ar.trim() === '');
 }
 
-/** A JSON value as text with every object's keys sorted: equal values, equal text. */
-export function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (isRecord(value)) {
-    return `{${Object.keys(value)
-      .sort()
-      .map((k) => `${JSON.stringify(k)}:${canonical(value[k])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value ?? null);
+/**
+ * A consent line as one paragraph (review finding CR4): the schema and the copy CHECK refuse
+ * a line break (and every other control character), so a typed or pasted one becomes a space
+ * as it is entered, never a 422 on Save.
+ */
+export function oneLine(value: string): string {
+  // FORM_COPY_FORBIDDEN's controls (packages/schemas/forms.ts), a line break among them; the
+  // editor is Zod-free, so the class is repeated here and held to it by formsEditor.spec.ts.
+  return value.replace(/[\u0000-\u001F\u007F-\u009F]+/g, ' ');
 }
 
 /** Whether the config rewords either Join consent line. */
@@ -212,8 +213,9 @@ export function consentBase(saved: Row, liveConsent: unknown): Row {
 
 /**
  * The consent version a reworded form will post once this config is saved (or, in release
- * mode, published, with `savedConfig` from consentBase): the notice's date,
- * plus `.r<N>` (N the database's count of rewordings, one more when the saved lines change).
+ * mode, published, with `savedConfig` from consentBase): the notice's date, plus `.r<N>`, N
+ * counted by the one rule the releases preview uses too (src/lib/forms/revision.ts, which
+ * mirrors the database's trigger: one more when the lines change, compared by value).
  */
 export function nextConsentVersion(
   notice: string,
@@ -222,10 +224,9 @@ export function nextConsentVersion(
   config: Row,
 ): string {
   if (!rewordsConsent(config)) return notice;
-  // Compared as the database compares jsonb (`is distinct from`): by value, whatever the keys'
-  // order (jsonb stores them shortest first, so a loaded row's order is not the editor's).
-  const changed =
-    canonical(savedConfig['consent'] ?? null) !== canonical(config['consent'] ?? null);
-  const revision = savedRevision + (changed ? 1 : 0);
+  const revision = projectedConsentRevision(
+    { consent_revision: savedRevision, application: savedConfig },
+    { application: config },
+  );
   return revision > 0 ? `${notice}.r${revision}` : notice;
 }

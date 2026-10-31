@@ -123,7 +123,15 @@ export const BUILT_IN_FORMS: FormSettings = Object.freeze({
   consentRevision: 0,
 });
 
-/** A `form_settings` row (anon's three columns) → the config every reader uses. */
+/**
+ * What every reader of the published config selects: the copy and the consent revision. anon's
+ * column grant (the E8 migration) has four columns, `tenant_id` too, which a reader needs only
+ * as its filter. The public renderer (src/lib/data/forms.ts) and the two endpoints
+ * (./published.ts) both select this.
+ */
+export const FORM_SETTINGS_PUBLIC_COLUMNS = 'inquiry,application,consent_revision';
+
+/** A `form_settings` row (FORM_SETTINGS_PUBLIC_COLUMNS) → the config every reader uses. */
 export function formSettingsFromRow(row: unknown): FormSettings {
   if (!row || typeof row !== 'object') return BUILT_IN_FORMS;
   const r = row as Record<string, unknown>;
@@ -168,6 +176,8 @@ export interface InquiryView {
   button: string | null;
   /** Each budget band's label. */
   budgets: Record<(typeof BUDGET_BANDS)[number], string>;
+  /** The optional fields this form shows as required: what it posts as its claim (CR1). */
+  requiredOptional: InquiryOptionalField[];
 }
 
 /** The fields in the config's order (each once; a stored order is a whole permutation). */
@@ -201,12 +211,17 @@ export function inquiryView(
   variant: ContactFormVariant,
   locale: Locale,
 ): InquiryView {
+  const asked = inquiryFieldsFor(config, variant);
   return {
-    fields: inquiryFieldsFor(config, variant).map((field) => ({
+    fields: asked.map((field) => ({
       field,
       label: overrideOf(config.fields, field).label?.[locale] ?? INQUIRY_LABELS[field][locale],
       required: inquiryRequired(config, field),
     })),
+    requiredOptional: asked.filter(
+      (field): field is InquiryOptionalField =>
+        isInquiryOptional(field) && inquiryRequired(config, field),
+    ),
     button: config.button?.[locale] ?? null,
     budgets: Object.fromEntries(
       BUDGET_BANDS.map((band) => [
@@ -232,6 +247,10 @@ const VARIANTS = Object.keys(CONTACT_FORM_FIELDS) as ContactFormVariant[];
 
 export type InquiryCheck = { ok: true; data: LeadInput } | { ok: false; fields: string[] };
 
+/** Whether a send must answer `field`: the config requires it and the page showed it so. */
+const claimRequires = (claim: readonly string[] | undefined, field: string): boolean =>
+  claim === undefined || claim.includes(field);
+
 /**
  * A parsed lead held to the published config. `variant` is the form the visitor sent
  * (`form`); without one, what every variant asks. Every variant is public, so the least any
@@ -241,12 +260,15 @@ export type InquiryCheck = { ok: true; data: LeadInput } | { ok: false; fields: 
  *     the site said it does not collect it), never refused, so a page rendered before the
  *     change still sends;
  *   - a field the config requires and the variant asks is refused when empty (422 with the
- *     lead key: `serviceOfInterest` for the service).
+ *     lead key: `serviceOfInterest` for the service), unless the sending page did not show it
+ *     as required (`claim`, ./requiredClaim.ts: a page rendered before the config required
+ *     it); with no claim, the config decides alone.
  */
 export function checkInquiry(
   input: LeadInput,
   config: InquiryConfig,
   variant: ContactFormVariant | undefined,
+  claim?: readonly string[],
 ): InquiryCheck {
   const asked = (field: InquiryField): boolean =>
     variant
@@ -258,6 +280,8 @@ export function checkInquiry(
       : VARIANTS.every((v) => inquiryFieldsFor(config, v).includes(field));
 
   const data: Record<string, unknown> = { ...input };
+  // The claim is how the page was drawn, not part of the lead.
+  delete data['requiredFields'];
   const missing: string[] = [];
   for (const field of INQUIRY_OPTIONAL_FIELDS) {
     const keys = INQUIRY_LEAD_KEYS[field];
@@ -265,7 +289,7 @@ export function checkInquiry(
       for (const key of keys) delete data[key];
       continue;
     }
-    if (inquiryRequired(config, field) && askedByAll(field)) {
+    if (inquiryRequired(config, field) && askedByAll(field) && claimRequires(claim, field)) {
       const given = keys.some((key) => {
         const v = data[key];
         return typeof v === 'string' ? v.trim() !== '' : v !== undefined && v !== null;
@@ -330,6 +354,8 @@ export interface ApplicationView {
   consent: { application: string; futureRoles: string };
   /** What the form posts as `policy_version`, and the application stores. */
   policyVersion: string;
+  /** The optional controls this form shows as required: what it posts as its claim (CR1). */
+  requiredOptional: ApplicationOptionalField[];
 }
 
 /** Whether the config rewords either consent line. */
@@ -375,6 +401,9 @@ export function applicationView(settings: FormSettings, locale: Locale): Applica
         RECRUITMENT_CONSENT[locale].futureRoles,
     },
     policyVersion: consentVersion(settings),
+    requiredOptional: APPLICATION_OPTIONAL_FIELDS.filter((field) =>
+      applicationRequired(config, field),
+    ),
   };
 }
 
@@ -385,26 +414,31 @@ export type ApplicationCheck =
  * A parsed application held to the published config: hidden controls dropped (the CV is not
  * stored), required ones refused when empty (`skills`, `linkedin`, `cv`), and a reworded
  * consent version accepted only up to the published revision (an older revision is a notice
- * a page really showed; a newer one never existed). `hasCv` is whether a file was sent.
+ * a page really showed; a newer one never existed). `hasCv` is whether a file was sent. A
+ * control the sending page did not show as required (`claim`, ./requiredClaim.ts) is not
+ * refused for being empty; with no claim, the config decides alone.
  */
 export function checkApplication(
   input: ApplicationInput,
   hasCv: boolean,
   settings: FormSettings,
+  claim?: readonly string[],
 ): ApplicationCheck {
   const config = settings.application;
   const data: ApplicationInput = { ...input };
   const missing: string[] = [];
 
+  const requires = (field: ApplicationOptionalField) =>
+    applicationRequired(config, field) && claimRequires(claim, field);
+
   if (applicationHidden(config, 'skills')) data.skills = [];
-  else if (applicationRequired(config, 'skills') && data.skills.length === 0)
-    missing.push('skills');
+  else if (requires('skills') && data.skills.length === 0) missing.push('skills');
 
   if (applicationHidden(config, 'linkedin')) delete data.linkedin;
-  else if (applicationRequired(config, 'linkedin') && !data.linkedin) missing.push('linkedin');
+  else if (requires('linkedin') && !data.linkedin) missing.push('linkedin');
 
   const keepCv = hasCv && !applicationHidden(config, 'cv');
-  if (applicationRequired(config, 'cv') && !hasCv) missing.push('cv');
+  if (requires('cv') && !hasCv) missing.push('cv');
 
   const version = CONSENT_VERSION_PATTERN.exec(data.policyVersion);
   const revision = version?.[2] ? Number(version[2]) : 0;

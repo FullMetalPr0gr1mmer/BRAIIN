@@ -13,6 +13,7 @@ import { getIdentity } from '@/lib/identity';
 import { editorPropsFor } from '@/lib/admin/forms/editorProps';
 import { consentVersion } from '@/lib/forms/config';
 import { formSettingsFor } from '@/lib/data/forms';
+import { loadPageButtons } from '@/lib/admin/forms/pageButtons';
 
 export const prerender = false;
 
@@ -51,6 +52,11 @@ const accepting =
   allowed && tab === 'join' ? (await getIdentity(Astro.locals)).acceptingApplications : false;
 const consentNow =
   allowed && tab === 'join' ? consentVersion(await formSettingsFor(Astro.locals)) : null;
+// A page whose own button text (Pages) wins over the config's there: named under the button
+// (review finding CR3; src/lib/admin/forms/pageButtons.ts). Read under the person's RLS.
+const sb = Astro.locals.supabase;
+const pageButtons =
+  allowed && session && sb && tab === 'inquiry' ? await loadPageButtons(sb, session.tenantId) : [];
 ---
 
 <AdminLayout
@@ -71,7 +77,7 @@ const consentNow =
         <p class="frm-where">{form.where}</p>
         <div class="grid grid--2-1">
           <div class="frm-main">
-            <AdminForms client:load {...editorPropsFor(tab)} />
+            <AdminForms client:load {...editorPropsFor(tab)} pageButtons={pageButtons} />
             <Card title="As built" sub="What each field asks with nothing changed">
               <ul class="list frm-fields">
                 {form.fields.map((field) => (

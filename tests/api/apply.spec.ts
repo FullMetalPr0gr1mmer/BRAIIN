@@ -21,14 +21,21 @@ const inserts: Record<string, unknown>[] = [];
 const uploads: { path: string; type: string }[] = [];
 const removed: string[][] = [];
 const rpcCalls: Record<string, unknown>[] = [];
+/** When each read starts and the open flag is answered (CR9: the reads run together). */
+const events: string[] = [];
 
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
     from: (table: string) => {
+      events.push(`read:${table}`);
       const b: Record<string, unknown> = {};
       for (const m of ['select', 'eq']) b[m] = () => b;
-      b['maybeSingle'] = async () =>
-        table === 'site_profile'
+      b['maybeSingle'] = async () => {
+        if (table === 'site_profile') {
+          for (let i = 0; i < 5; i += 1) await Promise.resolve();
+          events.push('profile-answered');
+        }
+        return table === 'site_profile'
           ? accepting === 'error'
             ? { data: null, error: { message: 'down' } }
             : { data: { accepting_applications: accepting }, error: null }
@@ -37,6 +44,7 @@ vi.mock('@/lib/supabase/server', () => ({
               ? { data: null, error: { message: 'down' } }
               : { data: formRow, error: null }
             : { data: null, error: null };
+      };
       b['insert'] = async (row: Record<string, unknown>) => {
         if (insertThrows) throw new Error('socket closed');
         inserts.push(row);
@@ -151,6 +159,7 @@ beforeEach(() => {
   uploads.length = 0;
   removed.length = 0;
   rpcCalls.length = 0;
+  events.length = 0;
 });
 
 describe('POST /api/apply — refusals, in order', () => {
@@ -419,6 +428,45 @@ describe('POST /api/apply — the published forms config (Admin v2 E8)', () => {
     expect(res.status).toBe(503);
     expect(await statusOf(res)).toBe('unavailable');
     expect(inserts).toHaveLength(0);
+  });
+
+  it('a page drawn before a control became required still sends: its claim narrows the config (CR1)', async () => {
+    formRow = join({ fields: { cv: { required: true }, linkedin: { required: true } } });
+    // Drawn when nothing was required: the hidden control was empty.
+    const stale = await send(form({ required_fields: '' }, null));
+    expect(stale.status).toBe(200);
+    // Drawn when only LinkedIn was: the CV may still be missing, LinkedIn may not.
+    const half = await send(form({ required_fields: 'linkedin' }, null));
+    expect(half.status).toBe(422);
+    expect(await half.json()).toEqual({ status: 'invalid', fields: ['linkedin'] });
+    // Drawn under this config, or no claim at all: both are required.
+    for (const claim of ['linkedin cv', null]) {
+      const fresh = await send(form({ required_fields: claim }, null));
+      expect(fresh.status).toBe(422);
+      expect(((await fresh.json()) as { fields: string[] }).fields.sort()).toEqual([
+        'cv',
+        'linkedin',
+      ]);
+    }
+    expect(inserts).toHaveLength(1);
+  });
+
+  it('a claim never keeps what the config hides (minimisation follows the server)', async () => {
+    formRow = join({ fields: { cv: { visible: false } } });
+    expect(await statusOf(await send(form({ required_fields: 'cv' })))).toBe('ok');
+    expect(uploads).toHaveLength(0);
+  });
+
+  it('the config is read beside the open flag, and the answers keep their order (CR9)', async () => {
+    expect(await statusOf(await send(form()))).toBe('ok');
+    expect(events.indexOf('read:form_settings')).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf('read:form_settings')).toBeLessThan(events.indexOf('profile-answered'));
+    // Closed is still closed with an unreadable config, and nothing is counted.
+    accepting = false;
+    formRow = 'error';
+    rpcCalls.length = 0;
+    expect(await statusOf(await send(form()))).toBe('closed');
+    expect(rpcCalls).toHaveLength(0);
   });
 
   it('a config row that does not parse costs its parts, never the form (the built-in rules)', async () => {
