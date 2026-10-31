@@ -34,7 +34,10 @@ async function visible(tables: Record<string, Row[]>, drafts: Row[] = []) {
         ? 'portfolio_id,service_id'
         : table === 'site_profile' || table === 'seo_defaults' || table === 'site_integrations'
           ? 'tenant_id'
-          : 'id';
+          : // Admin v2 E4: a visitor reads a theme's tokens and version only, never its id.
+            table === 'custom_themes'
+            ? 'version'
+            : 'id';
     const { data, error } = await db.from(table).select(key);
     if (error) throw new Error(`${table}: ${error.code}`);
     out[table] = (data as unknown as Row[]).map((r) =>
@@ -54,6 +57,8 @@ describe('the mirror over the fixture tenant', () => {
     expect(ids['site_profile']).toHaveLength(1);
     expect(ids['seo_defaults']).toHaveLength(1);
     expect(ids['site_integrations']).toHaveLength(1);
+    // Admin v2 E4: the active v1 theme (version 3), never the active legacy one.
+    expect(ids['custom_themes']).toEqual(['3']);
     expect(report.unsupported).toEqual([]);
   });
 

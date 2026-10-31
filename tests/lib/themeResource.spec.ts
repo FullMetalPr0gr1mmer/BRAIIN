@@ -5,6 +5,7 @@ import { contrast } from '@theme/colour';
 import { ratioText } from '@theme/gate';
 import { themeResource } from '@/lib/admin/resources/themes';
 import { translateWriteError } from '@/lib/admin/crud';
+import { ValidationError } from '@/lib/admin/errors';
 import { makeContext, serviceClientStub, TENANT, UUID } from '../authz/harness';
 
 // The theme's save, past assertCap (Admin v2 E4, AV-27): the matrix (tests/authz/cases/
@@ -164,6 +165,22 @@ describe('what a save refuses, before anything is written', () => {
     const { status, writes } = await call('admin', 'POST', { settings });
     expect(status).toBe(422);
     expect(writes).toEqual([]);
+  });
+});
+
+describe('toRow takes a theme only', () => {
+  it('settings that are not a theme are a 422 on the settings, never compiled or written', () => {
+    for (const settings of [{}, null, { ...SETTINGS, colors: { primary: '#000' } }, 'x']) {
+      let thrown: unknown;
+      try {
+        themeResource.toRow({ settings });
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown, JSON.stringify(settings)).toBeInstanceOf(ValidationError);
+      expect(thrown).toMatchObject({ field: 'settings' });
+    }
+    expect(themeResource.toRow({ name: 'Autumn' })).toEqual({ name: 'Autumn' });
   });
 });
 

@@ -1,5 +1,6 @@
-import { ThemeUpdateSchema, ThemeWriteSchema, type ThemeSettings } from '@schemas/theme';
+import { ThemeSettingsSchema, ThemeUpdateSchema, ThemeWriteSchema } from '@schemas/theme';
 import { compileTheme } from '@theme/compile';
+import { ValidationError } from '../errors';
 import type { ResourceConfig } from '../resource';
 import { fieldsOf, pick, type Input } from './shared';
 
@@ -38,10 +39,14 @@ export const themeResource: ResourceConfig = {
   },
   toRow: (input) => {
     const row = pick(input as Input, THEME_KEYS);
-    const settings = (input as Input)['settings'];
-    if (settings !== undefined) {
-      row['settings'] = settings;
-      row['tokens'] = compileTheme(settings as ThemeSettings);
+    const raw = (input as Input)['settings'];
+    if (raw !== undefined) {
+      // Every route parses the settings first; a value that is not a theme anyway (a payload
+      // that skipped the schema) is refused here, never compiled into a 500 or written.
+      const settings = ThemeSettingsSchema.safeParse(raw);
+      if (!settings.success) throw new ValidationError('not a theme', 'settings');
+      row['settings'] = settings.data;
+      row['tokens'] = compileTheme(settings.data);
     }
     return row;
   },
