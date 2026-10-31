@@ -104,7 +104,8 @@ function CopyPair({
             rows={3}
             aria-describedby={hint}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') e.preventDefault();
+              // An Enter that confirms an input method's composition is not a line break.
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.preventDefault();
             }}
             {...props}
           />
