@@ -204,6 +204,43 @@ describe('ci.yml — the deploy waits for every gate', () => {
     }
   });
 
+  it('pins every action in every workflow to a commit, one commit per action (CLAUDE.md §3; O-26)', () => {
+    const pins = new Map<string, Set<string>>();
+    const files = readdirSync(DIR).filter((file) => /\.ya?ml$/.test(file));
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      for (const [id, job] of Object.entries(load(file).jobs)) {
+        for (const step of job.steps ?? []) {
+          if (step.uses === undefined) continue;
+          expect(step.uses, `${file} ${id}`).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
+          const [action, ref] = step.uses.split('@') as [string, string];
+          pins.set(action, (pins.get(action) ?? new Set()).add(ref));
+        }
+      }
+    }
+    // The same action at two commits would be a pin nobody chose on purpose.
+    for (const [action, refs] of pins) expect([...refs], action).toHaveLength(1);
+  });
+
+  it('runs no package fetched at run time: every `npx` names a dependency in the lockfile', () => {
+    const lock = JSON.parse(readFileSync('package-lock.json', 'utf8')) as {
+      packages: Record<string, unknown>;
+    };
+    const bins = new Set(['astro', 'lhci', 'playwright', 'supabase', 'wrangler', 'size-limit']);
+    for (const file of readdirSync(DIR).filter((f) => /\.ya?ml$/.test(f))) {
+      for (const match of read(file).matchAll(/\bnpx\s+(?:--[\w-]+\s+)*(@?[\w./-]+)/g)) {
+        const tool = match[1]!;
+        // A package's own name, or a bin of one of the direct dependencies above.
+        const known =
+          `node_modules/${tool}` in lock.packages ||
+          bins.has(tool) ||
+          tool.startsWith('./') ||
+          tool.startsWith('scripts/');
+        expect(known, `${file}: npx ${tool}`).toBe(true);
+      }
+    }
+  });
+
   it('builds the production origin: never the local-preview opt-out, never a local host', () => {
     const envs = [ci.env, ...Object.values(jobs).flatMap((job) => [job.env])]
       .concat(Object.values(jobs).flatMap((job) => (job.steps ?? []).map((step) => step.env)))

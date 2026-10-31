@@ -68,12 +68,12 @@ jobs:
       # Google (launch runbook §2e; tests/lib/ga4Switch.spec.ts holds all three).
       GA4_NOTICE_READY: 'true'
     steps:
-      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
         with:
           # Pinned: `latest` asks the GitHub API for the newest release on every job, and a
           # burst of parallel runs hits its rate limit ("Failed to resolve latest Supabase CLI
@@ -119,7 +119,7 @@ jobs:
       - name: Start preview (wrangler dev)
         run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env &
       - name: Wait for preview
-        run: npx wait-on http://localhost:8788 --timeout 90000
+        run: timeout 90 bash -c 'until curl -sf -o /dev/null http://localhost:8788; do sleep 2; done'
       # Includes the signed-in admin sweep (tests/admin): the `admin-setup` project creates
       # one staff account per role in THIS job's local Supabase (the hook in
       # supabase/config.toml stamps their roles) and saves each role's session; the sweep
@@ -154,12 +154,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v4 # TODO: Renovate pins actions to SHAs
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
         with:
           # Pinned: `latest` asks the GitHub API for the newest release on every job, and a
           # burst of parallel runs hits its rate limit ("Failed to resolve latest Supabase CLI
@@ -183,7 +183,7 @@ jobs:
       - name: Start preview (wrangler dev)
         run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env &
       - name: Wait for preview
-        run: npx wait-on http://localhost:8788 --timeout 90000
+        run: timeout 90 bash -c 'until curl -sf -o /dev/null http://localhost:8788; do sleep 2; done'
       - name: Lighthouse budgets (mobile — Lighthouse default emulation)
         run: npm run lhci
       # The desktop geometry is where the hero intro/headline collision lived: it was
