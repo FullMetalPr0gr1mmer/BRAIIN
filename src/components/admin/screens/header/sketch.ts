@@ -1,5 +1,5 @@
 // The Header screen's two small previews (Admin v2 E5), pure so they are unit-tested
-// (tests/lib/headerScreen.spec.ts): what each sketch of the bar shows for the form's current
+// (tests/lib/headerOptions.spec.ts): what each sketch of the bar shows for the form's current
 // values, as the closed values the CSS keys on (`data-*`, never a style: CSP).
 
 type Values = Readonly<Record<string, unknown>>;

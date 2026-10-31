@@ -1,5 +1,5 @@
 // The Header screen's Menu items card (Admin v2 E5), pure so it is unit-tested
-// (tests/lib/headerScreen.spec.ts): the header menu's top-level links in the site's order, and
+// (tests/lib/headerOptions.spec.ts): the header menu's top-level links in the site's order, and
 // the writes that move the key star. The writes themselves are the navigation API's
 // (`/api/admin/navigation`, nav.edit), one versioned PATCH per row.
 
