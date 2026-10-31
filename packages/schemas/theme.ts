@@ -16,10 +16,12 @@ import { failuresFor } from '../theme/gate';
 
 export const THEME_SETTINGS_VERSION = 1 as const;
 
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
 export const HexColourSchema = z
   .string()
   .trim()
-  .regex(/^#[0-9a-fA-F]{6}$/, 'Use a colour like #0024BC')
+  .regex(HEX, 'Use a colour like #0024BC')
   .toUpperCase();
 
 export const ThemeMotionSchema = z
@@ -42,6 +44,12 @@ export const ThemeSettingsSchema = z
   })
   .strict()
   .superRefine((settings, ctx) => {
+    // zod runs a refinement on a value whose fields already failed (a half-typed colour, a
+    // number): the gate reads only three colours, so it waits until each one is one.
+    const colors: unknown = settings?.colors;
+    if (!colors || typeof colors !== 'object') return;
+    const each = Object.values(colors as Record<string, unknown>);
+    if (each.length !== 3 || !each.every((c) => typeof c === 'string' && HEX.test(c))) return;
     for (const failure of failuresFor(settings.colors)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
