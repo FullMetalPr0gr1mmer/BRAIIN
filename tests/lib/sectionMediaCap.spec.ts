@@ -6,6 +6,8 @@ import { sectionResource } from '@/lib/admin/resources';
 import { ValidationError } from '@/lib/admin/errors';
 import type { OverlayDb } from '@/lib/release/overlayDb';
 import type { AuthContext } from '@/lib/auth/types';
+import { T as STAGED_TENANT, type Row } from '../fixtures/stagedDb';
+import { callRoute, makeDb } from '../fixtures/stagedRoute';
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 vi.mock('@/lib/admin/audit', () => ({ writeAudit: async () => undefined }));
@@ -261,5 +263,59 @@ describe('an edit that changes neither the type nor the page is never refused by
     // No count was read for a row that already was a media block on its page.
     expect(reads).toEqual([]);
     expect(updated).toHaveLength(1);
+  });
+});
+
+// E10 code review follow-up: CR4's `before` is handed to the rule by every kernel path, not
+// only the live PATCH. A staged save (src/lib/release/staged.ts, `before: op === 'create' ?
+// null : live`) is driven here through the real route over the PostgREST stand-in, releases on;
+// a release's validation (validate.ts, `before: item.live`) in tests/lib/releasePublish.spec.ts.
+describe('a staged save of a block already on a page over the cap (releases on)', () => {
+  const sectionRow = (n: number, type: string): Row => ({
+    id: id(n),
+    tenant_id: STAGED_TENANT,
+    page_id: PAGE,
+    type,
+    label: null,
+    content: {},
+    visible: true,
+    sort_order: n,
+    is_placeholder: false,
+    version: 1,
+  });
+  /** A page over the cap (ten Galleries and Videos) and one Text block on it. */
+  const overFull = () =>
+    makeDb({
+      page_sections: [
+        ...Array.from({ length: MEDIA_BLOCKS_PER_PAGE + 2 }, (_, i) =>
+          sectionRow(i, i % 2 ? 'video' : 'gallery'),
+        ),
+        sectionRow(50, 'textBlock'),
+      ],
+    });
+  const patch = (db: ReturnType<typeof makeDb>, n: number, body: Row) =>
+    callRoute(db, itemRoutes(sectionResource).PATCH, 'PATCH', `/api/admin/sections/${id(n)}`, {
+      body,
+      params: { id: id(n) },
+    });
+  const drafts = (db: ReturnType<typeof makeDb>) => db.tables['content_drafts'] ?? [];
+
+  it('a Gallery there turned into a Video is staged, not refused', async () => {
+    const db = overFull();
+    const res = await patch(db, 2, { type: 'video', version: 1 });
+    expect(res.status).toBe(200);
+    expect(drafts(db)).toEqual([
+      expect.objectContaining({ entity_type: 'page_section', entity_id: id(2), op: 'update' }),
+    ]);
+    // Nothing live was written: the change waits for its release.
+    expect(db.tables['page_sections']!.find((r) => r['id'] === id(2))!['type']).toBe('gallery');
+  });
+
+  it('a section there that becomes a media block is still refused, nothing staged', async () => {
+    const db = overFull();
+    const res = await patch(db, 50, { type: 'gallery', version: 1 });
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ field: 'type', detail: MEDIA_BLOCKS_FULL });
+    expect(drafts(db)).toEqual([]);
   });
 });

@@ -3,6 +3,7 @@ import type { APIRoute } from 'astro';
 import type { Role } from '@/lib/auth/types';
 import { client, T, type Db, type Row } from '../fixtures/stagedDb';
 import { ADMIN, callRoute, draftRow, makeDb } from '../fixtures/stagedRoute';
+import { MEDIA_BLOCKS_FULL, MEDIA_BLOCKS_PER_PAGE } from '@schemas/sectionTypes';
 
 // The publish and validate endpoints (Admin v2 R6) over the PostgREST stand-in: the selection as
 // the person saw it, the per-change capabilities, the live re-read, the check over the state the
@@ -1418,5 +1419,65 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
     expect(rollbackCost).toBe(publishCost + ROLLBACK_READS);
     expect(rollbackCost).toBeLessThanOrEqual(MAX_PUBLISH + ROLLBACK_READS);
     expect(MAX_PUBLISH + ROLLBACK_READS + PURGE_SET_UP).toBeLessThan(50);
+  });
+});
+
+// E10 code review follow-up (CR4): the media block cap counts only a row that BECOMES a
+// Gallery or Video on its page, and a release's check hands the rule the row as it stands live
+// (validate.ts, `before: item.live`), so a pending change to a block already on a page at or
+// over the cap (rows written around the API, or two saves racing) is never refused by it.
+describe('the media block cap over a release (E10)', () => {
+  const block = (n: number, type: string): Row => ({
+    id: id(200 + n),
+    tenant_id: T,
+    page_id: PAGE,
+    type,
+    label: null,
+    content: {},
+    visible: true,
+    sort_order: n,
+    is_placeholder: false,
+    version: 1,
+  });
+  /** The page over the cap (ten Galleries and Videos) and one Text block on it. */
+  const overFull = (draft: Row) =>
+    seed({
+      page_sections: [
+        ...Array.from({ length: MEDIA_BLOCKS_PER_PAGE + 2 }, (_, i) =>
+          block(i, i % 2 ? 'video' : 'gallery'),
+        ),
+        block(50, 'textBlock'),
+      ],
+      content_drafts: [draft],
+    });
+  const retype = (n: number, from: string, to: string) =>
+    draftRow({
+      id: draftId(40 + n),
+      entity_type: 'page_section',
+      entity_id: id(200 + n),
+      op: 'update',
+      payload: { type: to },
+      base: { type: from },
+      label: { en: 'Block' },
+    });
+
+  it('a Gallery there turned into a Video passes the check', async () => {
+    const draft = retype(2, 'gallery', 'video');
+    svc.answer = () => dryOk(1);
+    const res = await run(VALIDATE, overFull(draft), select(draft));
+    expect(res.status).toBe(200);
+    const [item] = res.data['items'] as Row[];
+    expect(item!['errors']).toEqual([]);
+    expect(res.data).toMatchObject({ ok: true });
+  });
+
+  it('a section there that becomes a media block is still refused', async () => {
+    const draft = retype(50, 'textBlock', 'gallery');
+    svc.answer = () => dryOk(1);
+    const res = await run(VALIDATE, overFull(draft), select(draft));
+    const [item] = res.data['items'] as Row[];
+    expect(item!['errors']).toEqual([
+      expect.objectContaining({ field: 'type', message: MEDIA_BLOCKS_FULL }),
+    ]);
   });
 });
