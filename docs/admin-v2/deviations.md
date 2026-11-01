@@ -47,7 +47,12 @@
   - no Google/Adobe font links or raw font uploads; the curated self-hosted catalogue replaces them (CSP, PDPL, font budget);
   - no Custom CSS;
   - no smooth scroll or parallax (compositor-only; design-port #44/#79);
-  - colours must pass the contrast gate.
+  - colours must pass the contrast gate;
+  - v1 themes primary, hover and accent only: the dark ground, the light sections and white stay fixed (their pairs are every text pair of the site; E4);
+  - motion can only be reduced: the marquee at its normal speed, slower or much slower (no "faster"), and the reveal on scroll on or off (README "Appearance"; E4);
+  - the editor previews on a drawn sample of the site and on the admin itself; the framed site with the pending theme is R9's preview in draft mode, not a column on the screen (E4);
+  - a theme recolours what follows a token: about 30 literal brand-blue glows, tints and borders in the public stylesheets stay brand blue (E4, Departure 14; owner question 3);
+  - Content Creator and SEO read `custom_themes` rows at PostgREST (0001's staff read), though only Admin and Developer hold theme.edit: accepted, low sensitivity (the tokens are public, the stylesheet serves them), because the releases preview reads live rows through each CMS role's own client (E4, Departure 16).
 - **Header**: the language switch always shows (owner-approved product call, O-13).
 - **Shortcuts**: the command palette opens on ⌘/Ctrl+K and from the topbar trigger, not on a bare "/". A one-character shortcut fires on a stray keypress or a dictated "slash", and WCAG 2.1.4 (Level A) requires it to be switchable off or remappable (DoD #4).
 - **Footer**: legal links are locked (PDPL); copyright is a template (brand is data, §1).
@@ -378,6 +383,11 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     `app.role_manages_integrations(app.live_role())`, so a demoted, deactivated or locked
     Admin or SEO token reads and writes nothing of it at PostgREST; the staff read is also
     narrowed from every CMS role to Admin + SEO (§5), which only the Worker enforced before.
+  - *Closed by E4 (0118, the theme migration).* `custom_themes` writes:
+    `custom_themes_live_insert`, `_update` and `_delete` (RESTRICTIVE) require
+    `app.role_edits_theme(app.live_role())`, so a demoted, deactivated or locked Admin or
+    Developer token can no longer restyle the live site and the admin at PostgREST (E4 made the
+    table public-facing). Its reads stay the token's role (the releases preview).
   - *Left after them.* The issued token's old role at PostgREST, until it expires, on the
     tables with no live check: `site_settings`, `ai_config`,
     `media_assets`, `system_logs` and the content tables (the staged ones close when R5's

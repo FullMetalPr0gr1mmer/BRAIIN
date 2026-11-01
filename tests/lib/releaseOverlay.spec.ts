@@ -520,7 +520,14 @@ describe('review fixes (R2 review M2, L3, L4)', () => {
       'alpha',
       'Zeta',
     ]);
-    expect(names([draft('custom_theme', 'create', ID(82), { name: 'beta' })])).toEqual([
+    // Admin v2 E4: a theme is its settings (the brand's own here).
+    const settings = {
+      v: 1,
+      mode: 'simple',
+      colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
+      motion: { marquee: 'normal', reveal: true },
+    };
+    expect(names([draft('custom_theme', 'create', ID(82), { name: 'beta', settings })])).toEqual([
       'alpha',
       'Zeta',
       'beta',

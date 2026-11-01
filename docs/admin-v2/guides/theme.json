@@ -1,0 +1,96 @@
+{
+  "slug": "theme",
+  "sort_order": 97,
+  "minutes": 3,
+  "tags": [
+    "site"
+  ],
+  "screens": [
+    "/admin/appearance/theme"
+  ],
+  "caps": [
+    "theme.edit"
+  ],
+  "title": "The site's theme",
+  "title_ar": "مظهر الموقع",
+  "body": {
+    "en": [
+      {
+        "t": "p",
+        "x": "Appearance › Theme sets the site's colours and how much it moves. The admin wears the same colours, so you see a change here as soon as it is live."
+      },
+      {
+        "t": "h",
+        "x": "Colours"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Simple: pick one main colour, or one of the eight swatches. Hover and Accent are made from it, and each one shows how well text reads on it.",
+          "Advanced: choose Primary, Hover and Accent one by one. Generate the rest from Primary makes Hover and Accent again from Primary.",
+          "Primary fills buttons and colours links. Hover is the button colour under the pointer and the highlighted word in a hero. Accent is the light colour on black sections.",
+          "Every colour must be easy to read against what it sits on, on the site and in the admin. If one is not, the screen says which pair fails and offers a colour of the same shade that passes. A theme that fails is never saved."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "Motion"
+      },
+      {
+        "t": "p",
+        "x": "Two settings, and both can only calm the site down: the clients marquee at its normal speed, slower or much slower, and sections that fade in as you scroll, or that are simply there. Visitors who ask their device for less motion get it anyway."
+      },
+      {
+        "t": "h",
+        "x": "Saving"
+      },
+      {
+        "t": "p",
+        "x": "Press Save theme, or Ctrl+S. Reset to brand defaults puts the brand's own colours and motion back in the form after you confirm; press Save theme to apply them. Only an Admin or a Developer can change the theme."
+      },
+      {
+        "t": "tip",
+        "x": "The dark background, the light sections, the fonts and the shapes are fixed in this version."
+      }
+    ],
+    "ar": [
+      {
+        "t": "p",
+        "x": "تحدّد شاشة Appearance › Theme ألوان الموقع ومقدار حركته. وتتبع لوحة الإدارة الألوان نفسها، فترى التغيير هنا حالما يصبح مباشرًا."
+      },
+      {
+        "t": "h",
+        "x": "الألوان"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "Simple: اختر لونًا رئيسيًا واحدًا، أو أحد الألوان الثمانية الجاهزة. يُصنع منه لونا Hover وAccent، ويُظهر كل لون مدى وضوح النص عليه.",
+          "Advanced: اختر Primary وHover وAccent كلًّا على حدة. ويعيد Generate the rest from Primary صنع Hover وAccent من Primary.",
+          "يملأ Primary الأزرار ويلوّن الروابط. وHover هو لون الزر تحت المؤشر والكلمة المميزة في الواجهة الرئيسية. وAccent هو اللون الفاتح على الأقسام السوداء.",
+          "يجب أن يكون كل لون سهل القراءة على ما يوضع عليه، في الموقع وفي لوحة الإدارة. وإن لم يكن كذلك، تذكر الشاشة الزوج الذي لا ينجح وتقترح لونًا من الدرجة نفسها ينجح. ولا يُحفظ مظهر لا ينجح أبدًا."
+        ]
+      },
+      {
+        "t": "h",
+        "x": "الحركة"
+      },
+      {
+        "t": "p",
+        "x": "خياران، وكلاهما يهدّئ الموقع فقط: شريط العملاء المتحرك بسرعته العادية أو أبطأ أو أبطأ كثيرًا، والأقسام التي تظهر تدريجيًا عند التمرير أو تظهر مباشرة. والزائر الذي يطلب من جهازه حركة أقل يحصل عليها في كل الأحوال."
+      },
+      {
+        "t": "h",
+        "x": "الحفظ"
+      },
+      {
+        "t": "p",
+        "x": "اضغط Save theme أو Ctrl+S. ويعيد Reset to brand defaults ألوان العلامة وحركتها الأصلية إلى النموذج بعد أن تؤكد، ثم اضغط Save theme لتطبيقها. ولا يغيّر المظهر إلا المسؤول (Admin) أو المطوّر (Developer)."
+      },
+      {
+        "t": "tip",
+        "x": "الخلفية الداكنة والأقسام الفاتحة والخطوط والأشكال ثابتة في هذا الإصدار."
+      }
+    ]
+  }
+}

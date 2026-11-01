@@ -388,6 +388,11 @@ describe('a create made in a drawer or a modal says so (SaveTarget `staged`)', (
     'src/components/admin/screens/projects/ProjectEditor.tsx': [
       /const target = \{ kind: 'resource', slug: ui\.slug, staged: releaseMode \} as const;/,
     ],
+    // Admin v2 E4: the theme editor creates the tenant's theme on its first save; its page
+    // (/admin/appearance/theme) reads the mode as a create page does (checked below).
+    'src/components/admin/screens/theme/ThemeScreen.tsx': [
+      /const target = \{ kind: 'resource', slug: 'themes', staged: releaseMode \} as const;/,
+    ],
   };
 
   /** The resource editors that never need a mode: media is not release-managed. */
@@ -467,8 +472,15 @@ describe('a create made in a drawer or a modal says so (SaveTarget `staged`)', (
       );
     }
     // Every create page that hydrates a resource editor (the collection screens' /new pages
-    // open their drawer, whose mode is the screen's list answer).
-    expect(checked).toBeGreaterThanOrEqual(14);
+    // open their drawer, whose mode is the screen's list answer). /admin/themes/new answers
+    // with a 302 since E4; the theme editor's page is checked below.
+    expect(checked).toBeGreaterThanOrEqual(13);
+  });
+
+  it('the theme editor’s page passes its mode, read for the themes resource (E4)', () => {
+    const page = readFileSync('src/pages/admin/appearance/theme.astro', 'utf8');
+    expect(page).toContain("await createReleaseMode(Astro.locals, 'themes')");
+    expect(page).toMatch(/<AdminTheme\s[^>]*\bid=\{id\}[^>]*\breleaseMode=\{releaseMode\}/);
   });
 });
 

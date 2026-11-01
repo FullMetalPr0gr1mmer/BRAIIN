@@ -940,12 +940,10 @@ export { IntegrationsSchema } from './integrations';
 // envelope can use them without this file (Admin v2 R9).
 export { ThemeTokensSchema };
 
-export const ThemeWriteSchema = z.object({
-  name: ShortTextSchema,
-  tokens: ThemeTokensSchema.default({}),
-  isActive: z.boolean().default(false),
-});
-export const ThemeUpdateSchema = updatable(ThemeWriteSchema);
+// Admin v2 E4: a theme's write schemas are packages/schemas/theme.ts's (ThemeWriteSchema,
+// ThemeUpdateSchema), not this module's: the browser's shared admin chunk carries this module,
+// and the theme's settings schema carries the contrast gate and its pairs, which only the theme
+// editor needs (tests/lib/adminBundle.spec.ts).
 
 export const RoleSchema = z.enum(['admin', 'content_creator', 'seo', 'developer', 'sales']);
 

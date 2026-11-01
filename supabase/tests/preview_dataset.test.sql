@@ -56,6 +56,7 @@ select plan(28);
 -- ── The literals (parsed by tests/lib/previewMirror.spec.ts; keep one row per line) ──────
 create function _anon_columns() returns table (tbl text, cols text) language sql immutable as $$
   values
+    ('custom_themes', 'tokens'),
     ('disciplines', 'id,tenant_id,slug,name,short,blurb,poster_media_id,preview_video_path,preview_start_s,preview_end_s,status,sort_order,published_at,updated_at'),
     ('faq_items', 'id,tenant_id,question,answer,status,sort_order'),
     ('form_settings', 'tenant_id,inquiry,application,consent_revision'),
@@ -69,6 +70,7 @@ $$;
 -- answered to a loader: staff read them; anon's grant (above) does not hold them.
 create function _dataset_only_columns() returns table (tbl text, cols text) language sql immutable as $$
   values
+    ('custom_themes', 'id,tenant_id,is_active,settings'),
     ('testimonials', 'consent_obtained_at,is_placeholder')
 $$;
 
@@ -81,6 +83,9 @@ create function _create_defaults() returns table (tbl text, col text, dflt text)
     ('clients', 'show_in_marquee', $d$false$d$),
     ('clients', 'sort_order', $d$0$d$),
     ('clients', 'visible', $d$false$d$),
+    ('custom_themes', 'is_active', $d$false$d$),
+    ('custom_themes', 'tokens', $d$'{}'::jsonb$d$),
+    ('custom_themes', 'version', $d$1$d$),
     ('disciplines', 'sort_order', $d$0$d$),
     ('disciplines', 'status', $d$'draft'::content_status$d$),
     ('entity_seo', 'meta_description', $d$'{}'::jsonb$d$),
@@ -150,6 +155,7 @@ create function _anon_policies() returns table (tbl text, policies text) languag
     ('categories', 'categories_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,categories_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('certifications', 'certifications_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,certifications_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('clients', 'clients_read:PERMISSIVE:db9934fa0ab3f173e346a67310b57bac,clients_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('custom_themes', 'custom_themes_public_read:PERMISSIVE:60ccfc4f7bd6ab33c791a6223fe0906a,custom_themes_read:PERMISSIVE:392446073406bce5902ebbac287245a1,custom_themes_write:PERMISSIVE:e0d36cc27f03f61781ff1feec0d5adf0'),
     ('disciplines', 'disciplines_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,disciplines_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('entity_seo', 'entity_seo_published_only:RESTRICTIVE:df5c9a7d7588fed51b9e8704523bf0a3,entity_seo_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,entity_seo_write:PERMISSIVE:763c5ebb7d12ee38b8e17d30ad1570df'),
     ('faq_items', 'faq_items_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,faq_items_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),

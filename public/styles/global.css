@@ -599,10 +599,12 @@ html[dir='rtl'] .tag {
 }
 
 /* Reveal-on-scroll: enhancement only — elements are fully visible without JS; the
-   BaseLayout reveal script adds .rv-init (arming the hidden state) then .on. */
+   BaseLayout reveal script adds .rv-init (arming the hidden state) then .on.
+   Admin v2 E4: a theme with the reveal off sets --bs-rv-from: 1 and --bs-rv-shift: 0px
+   (/styles/theme.css), so nothing starts hidden or moves; unset, these are today's values. */
 .rv-init {
-  opacity: 0;
-  transform: translateY(26px);
+  opacity: var(--bs-rv-from, 0);
+  transform: translateY(var(--bs-rv-shift, 26px));
   transition:
     opacity 0.8s ease,
     transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1717,7 +1719,9 @@ html[dir='rtl'] .clients__head h2 {
   /* fade both edges so items appear/disappear smoothly */
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 9%, #000 91%, transparent);
-  --marquee-duration: 34s;
+  /* Admin v2 E4: a theme may slow the loop (--bs-marquee-scale 1.5 or 2.5, never below 1:
+     /styles/theme.css can only reduce motion); unset, the durations are today's. */
+  --marquee-duration: calc(34s * var(--bs-marquee-scale, 1));
   /* The loop maths assume LTR (as the design does): under dir=rtl the max-content track is
      right-aligned and overflows to the LEFT, so translateX(-50%) slides it away with nothing
      entering — the row drained to empty every cycle on /ar. Each Arabic name is its own
@@ -1726,7 +1730,7 @@ html[dir='rtl'] .clients__head h2 {
 }
 .marquee + .marquee {
   margin-top: clamp(14px, 2vh, 26px);
-  --marquee-duration: 44s;
+  --marquee-duration: calc(44s * var(--bs-marquee-scale, 1));
 }
 
 .marquee-track {

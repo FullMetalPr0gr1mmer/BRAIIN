@@ -34,7 +34,7 @@ import type { DatasetTable, PreviewTable } from './relations';
 type Row = Readonly<Record<string, unknown>>;
 
 /**
- * Anon's column grants on the seven tables granted by column (every other preview table is
+ * Anon's column grants on the eight tables granted by column (every other preview table is
  * granted to anon whole). The dataset reads these tables with exactly these columns, and
  * the emulator answers 42501 for any other, as PostgREST does for a visitor.
  */
@@ -87,6 +87,9 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
     'published_at',
     'updated_at',
   ],
+  // 0118 (Admin v2 E4): the active v1 theme's tokens, nothing else (the stylesheet serves
+  // them; its address is the hash of its body, never the row's version: E4 code review CR6).
+  custom_themes: ['tokens'],
   // 0098 (Admin v2 U7): never the version, the schedule, the publish date or the actors.
   faq_items: ['id', 'tenant_id', 'question', 'answer', 'status', 'sort_order'],
   // Admin v2 E8: the forms config's copy and its consent revision; never the version, the
@@ -136,6 +139,11 @@ export const MIRRORED_POLICIES: Readonly<
   certifications: {
     certifications_read: 'PERMISSIVE:a3adeda401046be963dd172ac14b795c',
     certifications_write: 'PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060',
+  },
+  custom_themes: {
+    custom_themes_public_read: 'PERMISSIVE:60ccfc4f7bd6ab33c791a6223fe0906a',
+    custom_themes_read: 'PERMISSIVE:392446073406bce5902ebbac287245a1',
+    custom_themes_write: 'PERMISSIVE:e0d36cc27f03f61781ff1feec0d5adf0',
   },
   clients: {
     clients_read: 'PERMISSIVE:db9934fa0ab3f173e346a67310b57bac',
@@ -252,6 +260,7 @@ export const VISIBILITY_DEPS: Readonly<Record<DatasetTable, readonly DatasetTabl
   categories: [],
   certifications: [],
   clients: [],
+  custom_themes: [],
   disciplines: [],
   entity_seo: ['services', 'blog_posts', 'portfolio', 'pages'],
   faq_items: [],
@@ -475,6 +484,11 @@ export function createMirror(data: MirrorData): Mirror {
       case 'sectors':
       case 'clients':
         return flagged(row);
+      // 0118 custom_themes_public_read (Admin v2 E4; anon's one column): the active v1 theme.
+      case 'custom_themes':
+        return (
+          row['is_active'] === true && row['settings'] !== null && row['settings'] !== undefined
+        );
       // 0001 categories_read, 0019 site_profile_read, 0009 seo_defaults_read, 0105
       // site_integrations_public_read (U11; anon's two columns), E8 form_settings_read (anon's
       // four columns): the tenant fence only.

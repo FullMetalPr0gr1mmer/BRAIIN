@@ -1,0 +1,22 @@
+{
+  "$comment": "The theme CI's themed Lighthouse run sets (Admin v2 E4; scripts/lhci-theme.mjs, lighthouserc.themed.json): Simple mode from a dark green main, its Hover and Accent settled by the gate, the marquee slower and the reveal off. A far cry from Klein, with a much lighter accent than the brand's sky. The tokens are what packages/theme/compile.ts makes of the settings (tests/lib/lhciTheme.spec.ts holds them equal).",
+  "settings": {
+    "v": 1,
+    "mode": "simple",
+    "colors": { "primary": "#095A34", "hover": "#077545", "accent": "#2FEF55" },
+    "motion": { "marquee": "slower", "reveal": false }
+  },
+  "tokens": {
+    "--bs-klein": "#095a34",
+    "--bs-cobalt": "#077545",
+    "--bs-sky": "#2fef55",
+    "--bs-sky-soft": "#37f05c",
+    "--bs-glow-klein": "rgba(9, 90, 52, 0.42)",
+    "--bs-glow-sky": "rgba(47, 239, 85, 0.45)",
+    "--bs-shadow-klein": "0 12px 38px rgba(9, 90, 52, 0.45)",
+    "--bs-shadow-cobalt": "0 18px 48px rgba(7, 117, 69, 0.45)",
+    "--bs-marquee-scale": "1.5",
+    "--bs-rv-from": "1",
+    "--bs-rv-shift": "0px"
+  }
+}

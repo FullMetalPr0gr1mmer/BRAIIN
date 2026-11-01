@@ -6,6 +6,7 @@ import { initialsOf, loadShellState, type ShellPreload, type ShellState } from '
 import { accountViewFor } from '@/lib/admin/account';
 import { ROLE_LABELS } from '@/lib/authz/capLabels';
 import { getIdentity } from '@/lib/identity';
+import { getActiveTheme, themeHref } from '@/lib/data/theme';
 import Sidebar from '@/components/admin/ui/Sidebar.astro';
 import Topbar from '@/components/admin/ui/Topbar.astro';
 import PageHead from '@/components/admin/ui/PageHead.astro';
@@ -62,6 +63,11 @@ const supabase = Astro.locals.supabase;
 const nav = session ? visibleNav(session.role) : [];
 const path = Astro.url.pathname;
 const csrfToken = Astro.locals.csrfToken;
+// The admin wears the site's theme (Admin v2 E4, ui.md "Theme"): admin.css reads --bs-klein,
+// --bs-cobalt and --bs-sky first (--ad-primary, --ad-primary-hover, --ad-accent), so linking
+// the same stylesheet the site links is all it takes. The theme gate covers the admin's pairs,
+// so no accepted theme breaks its AA. Started now, awaited below with the rest.
+const themePending = getActiveTheme(Astro.locals);
 // The CMS names the studio it edits from the same identity row the public site renders.
 const brand = (await getIdentity(Astro.locals)).brandName.en;
 
@@ -96,6 +102,7 @@ const shell: ShellState =
         unread: 0,
         releases: false,
       };
+const theme = await themePending;
 const initials = session ? initialsOf(shell.displayName, session.email) : '';
 const account = session ? accountViewFor(session, shell.displayName) : null;
 ---
@@ -114,6 +121,7 @@ const account = session ? accountViewFor(session, shell.displayName) : null;
     <meta name="robots" content="noindex,nofollow,noarchive,nosnippet" />
     <link rel="stylesheet" href="/styles/admin.css" />
     {styles.map((sheet) => <link rel="stylesheet" href={`/styles/admin/${sheet}`} />)}
+    {theme && <link rel="stylesheet" href={themeHref(theme)} />}
     <!--
       The CSRF token reaches the client in a meta tag rather than an inline script:
       `script-src` carries no 'unsafe-inline', so an inline bootstrap would simply be

@@ -3,6 +3,14 @@ import { UUID, VALID_BILINGUAL, type Case } from '../harness';
 // Appearance: the theme (§5 "Theme editor", Admin + Developer) and the site menus (§5
 // "Navigation editor", Admin + Content Creator).
 
+/** The brand's own theme, which passes the contrast gate (Admin v2 E4). */
+const THEME_SETTINGS = {
+  v: 1,
+  mode: 'simple',
+  colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
+  motion: { marquee: 'normal', reveal: true },
+};
+
 export const cases: readonly Case[] = [
   {
     name: 'theme list',
@@ -18,7 +26,8 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/themes/index'),
     method: 'POST',
     url: '/api/admin/themes',
-    body: { name: 'Neon', tokens: { '--ad-accent': '#00e5ff' } },
+    // Admin v2 E4: a theme is its settings (the brand's own here, which pass the gate).
+    body: { name: 'Site theme', settings: THEME_SETTINGS },
     allow: ['admin', 'developer'],
   },
   {
@@ -35,6 +44,26 @@ export const cases: readonly Case[] = [
     url: `/api/admin/themes/${UUID}`,
     body: { name: 'Neon', version: 1 },
     allow: ['admin', 'developer'],
+  },
+  // Admin v2 E4 (P-2, P-3): with releases on a theme save is a pending change, and the gate
+  // does not move: theme.edit, Admin and Developer, staged as live.
+  {
+    name: 'theme write (releases on)',
+    load: () => import('@/pages/api/admin/themes/index'),
+    method: 'POST',
+    url: '/api/admin/themes?staged=1',
+    body: { settings: THEME_SETTINGS },
+    allow: ['admin', 'developer'],
+    releases: true,
+  },
+  {
+    name: 'theme update (releases on)',
+    load: () => import('@/pages/api/admin/themes/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/themes/${UUID}`,
+    body: { settings: THEME_SETTINGS, staged: true, version: 1 },
+    allow: ['admin', 'developer'],
+    releases: true,
   },
   {
     // The resource kernel's default delete capability, `content.archiveDelete`, is Admin

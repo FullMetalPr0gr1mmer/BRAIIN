@@ -10,6 +10,9 @@ import type { Locale } from '@schemas/primitives';
 // not by enumerating routes. And `media:all` (Admin v2 R7): every page's head renders a URL
 // built from a media row (the default share image, `seo_defaults.default_og_media`, through
 // src/lib/seo/head.ts), so a media save, whose purge is `media:all`, must reach every page.
+// And `site:chrome` (Admin v2 E4): every page's head links the active theme's stylesheet when a
+// theme is set (BaseLayout), so a theme's publish, whose purge is `site:chrome`, must reach
+// every page too, the ones that link no theme yet included (they gain the link).
 
 export const TIER_A_CACHE_CONTROL = 'public, s-maxage=31536000, stale-while-revalidate=86400';
 
@@ -17,10 +20,16 @@ export const TIER_A_CACHE_CONTROL = 'public, s-maxage=31536000, stale-while-reva
 export const MAX_TAGS = 30;
 
 /**
- * On every Tier A response: a collapsed purge (`tenant:default`), the identity, the menus, and
- * the media rows every head renders (the share image).
+ * On every Tier A response: a collapsed purge (`tenant:default`), the identity, the menus, the
+ * media rows every head renders (the share image), and the theme every head links (E4).
  */
-export const ALWAYS_TAGS = ['tenant:default', 'site:identity', 'nav:all', 'media:all'] as const;
+export const ALWAYS_TAGS = [
+  'tenant:default',
+  'site:identity',
+  'nav:all',
+  'media:all',
+  'site:chrome',
+] as const;
 const ALWAYS = ALWAYS_TAGS;
 
 type HasHeaders = { headers: Headers };

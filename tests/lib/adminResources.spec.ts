@@ -118,7 +118,9 @@ for (const [slug, ui] of Object.entries(RESOURCE_UI)) {
     it('maps every form field to a column in toRow (nothing typed is dropped on save)', () => {
       // A payload naming every field once; toRow must emit each field's column. Fields
       // the server derives (e.g. none today) would be listed here explicitly.
-      const payload = Object.fromEntries(ui.fields.map((f) => [f.name, sampleFor(f)]));
+      const payload = Object.fromEntries(
+        ui.fields.map((f) => [f.name, FIELD_SAMPLES[`${slug}.${f.name}`] ?? sampleFor(f)]),
+      );
       // The sample must PASS toRow's own validation (hrefs, redirects): a swallowed throw
       // here once made this check vacuous for exactly the resources that validate.
       let row: Record<string, unknown> = {};
@@ -143,6 +145,19 @@ for (const [slug, ui] of Object.entries(RESOURCE_UI)) {
     });
   });
 }
+
+/**
+ * A field whose value the kind's sample cannot stand for, because toRow validates it as a whole
+ * (Admin v2 E4: a theme's settings, the brand's own, which compile to its tokens).
+ */
+const FIELD_SAMPLES: Readonly<Record<string, unknown>> = {
+  'themes.settings': {
+    v: 1,
+    mode: 'simple',
+    colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
+    motion: { marquee: 'normal', reveal: true },
+  },
+};
 
 function sampleFor(field: FieldDef): unknown {
   switch (field.kind) {

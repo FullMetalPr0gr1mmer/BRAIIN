@@ -11,7 +11,8 @@
     "paths": {
       "@/*": ["src/*"],
       "@schemas/*": ["packages/schemas/*"],
-      "@consent/*": ["packages/consent/*"]
+      "@consent/*": ["packages/consent/*"],
+      "@theme/*": ["packages/theme/*"]
     }
   },
   "include": [

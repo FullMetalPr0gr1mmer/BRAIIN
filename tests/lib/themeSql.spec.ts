@@ -1,0 +1,187 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { mix } from '@theme/colour';
+import { channels } from '@theme/colour';
+import { compileTheme, DEFAULT_THEME_SETTINGS, THEME_EFFECTS } from '@theme/compile';
+import { themeSqlBlocks } from '@theme/sql';
+import { ThemeColorsSchema, ThemeMotionSchema, ThemeSettingsSchema } from '@schemas/theme';
+import { THEME_TOKEN_NAMES } from '@schemas/themeTokens';
+
+// The database's copy of the theme rules (Admin v2 E4): custom_themes_theme_v1, the CHECK the
+// E4 migration adds, calls app.theme_row_ok and app.theme_palette_ok, whose pairs, token shapes
+// and brand defaults are GENERATED from the files the editor and the Worker read
+// (packages/theme/sql.ts). If they drift, the database refuses a theme the Worker accepted, or
+// takes one it refused. pgTAP (supabase/tests/theme_settings.test.sql) proves the CHECK runs;
+// this proves it checks the same things.
+
+const DIR = 'supabase/migrations';
+const FILE = readdirSync(DIR).find((f) => /^\d{4}_theme_settings\.sql$/.test(f));
+const SQL = FILE ? readFileSync(`${DIR}/${FILE}`, 'utf8') : '';
+
+/** The lines between `-- BEGIN <name>` and `-- END <name>`, as written. */
+function block(name: string): string | null {
+  const open = SQL.indexOf(`-- BEGIN ${name}\n`);
+  const close = SQL.indexOf(`\n    -- END ${name}\n`, open);
+  if (open < 0 || close < 0) return null;
+  return SQL.slice(open + `-- BEGIN ${name}\n`.length, close);
+}
+
+/** A function's body in the migration, from its `create or replace` to the next one. */
+function fn(name: string): string {
+  const at = SQL.indexOf(`create or replace function app.${name}(`);
+  expect(at, name).toBeGreaterThan(-1);
+  const end = SQL.indexOf('create or replace function', at + 10);
+  return SQL.slice(at, end < 0 ? undefined : end);
+}
+
+describe('the E4 migration holds the generated rules', () => {
+  it('exists once', () => {
+    expect(readdirSync(DIR).filter((f) => f.endsWith('_theme_settings.sql'))).toHaveLength(1);
+  });
+
+  it.each(Object.entries(themeSqlBlocks()))('%s: verbatim between its markers', (name, body) => {
+    expect(block(name), name).toBe(body);
+    // Once: a second copy would be a block nothing holds equal.
+    expect(SQL.split(`-- BEGIN ${name}\n`)).toHaveLength(2);
+  });
+
+  it('the pairs are in app.theme_palette_ok, the shapes and defaults in app.theme_row_ok', () => {
+    expect(fn('theme_palette_ok')).toContain('-- BEGIN theme pairs');
+    expect(fn('theme_row_ok')).toContain('-- BEGIN theme token rules');
+    expect(fn('theme_row_ok')).toContain('-- BEGIN theme defaults');
+    expect(fn('theme_row_ok')).toContain('-- BEGIN theme effects');
+  });
+});
+
+describe('app.theme_row_ok checks what the schemas and the compiler say', () => {
+  const body = fn('theme_row_ok');
+  const array = (re: RegExp) => {
+    const m = re.exec(body);
+    expect(m, String(re)).not.toBeNull();
+    return [...m![1]!.matchAll(/'([^']+)'/g)].map((x) => x[1]!);
+  };
+
+  it('the settings keys, each level closed', () => {
+    const top = array(/is distinct from array\[('colors'[^\]]*)\]/);
+    expect(top).toEqual(['colors', 'mode', 'motion', 'v']);
+    expect(Object.keys(ThemeSettingsSchema.innerType().shape).sort()).toEqual(top);
+    expect(array(/is distinct from array\[('accent'[^\]]*)\]/)).toEqual(
+      Object.keys(ThemeColorsSchema.shape).sort(),
+    );
+    expect(array(/is distinct from array\[('marquee'[^\]]*)\]/)).toEqual(
+      Object.keys(ThemeMotionSchema.shape).sort(),
+    );
+  });
+
+  it('the modes and marquee speeds, and no other', () => {
+    expect(array(/\(p_settings ->> 'mode'\) not in \(([^)]*)\)/)).toEqual(['simple', 'advanced']);
+    expect(array(/\(v_motion ->> 'marquee'\) not in \(([^)]*)\)/)).toEqual([
+      ...ThemeMotionSchema.shape.marquee.options,
+    ]);
+  });
+
+  it('the colour tokens it requires are the ones the compiler writes for a theme', () => {
+    const keys = array(/v_colour_keys constant text\[\] := array\[([^\]]*)\]/);
+    const written = Object.keys(
+      compileTheme({
+        ...DEFAULT_THEME_SETTINGS,
+        colors: { primary: '#000000', hover: '#615757', accent: '#938A8D' },
+      }),
+    );
+    expect(keys).toEqual(written);
+    expect(keys).toEqual(THEME_TOKEN_NAMES.slice(0, 8));
+    expect(body).toContain('return v_present = 8');
+  });
+
+  it('each glow and shadow must be the compiler’s own string, not only of its shape', () => {
+    // E4-SEC-2: a glow is a ground under text (.klein-band::before under white paper text),
+    // so a white glow written straight to the table would defeat the contrast pairs.
+    expect(body).toMatch(
+      /and not exists \(\s*select 1\s+from \(values\s+-- BEGIN theme effects\n[\s\S]*?-- END theme effects\s+\) as e\(token, prefix, role, alpha\)\s+where \(p_tokens ->> e\.token\) is distinct from\s+e\.prefix \|\| app\.theme_rgba\(v_colors ->> e\.role, e\.alpha\)\)/,
+    );
+    // The table names every glow and shadow token, and the compiler writes each from it.
+    expect(THEME_EFFECTS.map((e) => e.token)).toEqual(THEME_TOKEN_NAMES.slice(4, 8));
+    const colors = { primary: '#000000', hover: '#615757', accent: '#938A8D' };
+    const tokens = compileTheme({ ...DEFAULT_THEME_SETTINGS, colors });
+    for (const e of THEME_EFFECTS) {
+      const [r, g, b] = channels(colors[e.role])!;
+      expect(tokens[e.token], e.token).toBe(`${e.prefix}rgba(${r}, ${g}, ${b}, ${e.alpha})`);
+    }
+  });
+
+  it('app.theme_rgba writes a colour as the compiler does', () => {
+    expect(fn('theme_rgba')).toContain(
+      [
+        "select 'rgba(' || string_agg(",
+        "           (('x' || pg_catalog.substr(p_hex, x.at, 2))::bit(8)::int)::text, ', ' order by x.at)",
+        "         || ', ' || p_alpha || ')'",
+      ].join('\n'),
+    );
+    // The postconditions assert this sample; the compiler's channels agree.
+    expect(SQL).toContain("app.theme_rgba('#0024BC', '0.42') <> 'rgba(0, 36, 188, 0.42)'");
+    expect(channels('#0024BC')).toEqual([0, 36, 188]);
+  });
+
+  it('the motion tokens are what the motion settings compile to', () => {
+    expect(body).toContain(
+      "case v_motion ->> 'marquee' when 'slower' then '1.5' when 'slowest' then '2.5' end",
+    );
+    const slower = compileTheme({
+      ...DEFAULT_THEME_SETTINGS,
+      motion: { marquee: 'slower', reveal: true },
+    });
+    const slowest = compileTheme({
+      ...DEFAULT_THEME_SETTINGS,
+      motion: { marquee: 'slowest', reveal: false },
+    });
+    expect(slower).toEqual({ '--bs-marquee-scale': '1.5' });
+    expect(slowest).toEqual({
+      '--bs-marquee-scale': '2.5',
+      '--bs-rv-from': '1',
+      '--bs-rv-shift': '0px',
+    });
+  });
+});
+
+describe('the colour maths agree with the migration’s own samples', () => {
+  it('mix(): whole channels rounded half up, as app.theme_mix', () => {
+    // The postconditions assert these two of app.theme_mix.
+    expect(SQL).toContain("app.theme_mix('#ffffff', 80, '#0024bc') <> '#ccd3f2'");
+    expect(SQL).toContain("app.theme_mix('#ffffff', 70, '#0024bc') <> '#b3bdeb'");
+    expect(mix('#ffffff', 0.8, '#0024bc')).toBe('#ccd3f2');
+    expect(mix('#ffffff', 0.7, '#0024bc')).toBe('#b3bdeb');
+    // A half: 255 × 0.7 + 0 × 0.3 = 178.5 rounds up in both (floating point would not).
+    expect(mix('#ff0000', 0.7, '#000000')).toBe('#b30000');
+    expect(fn('theme_mix')).toContain('(t.a * p_k + t.b * (100 - p_k) + 50) / 100');
+  });
+
+  it('the contrast threshold carries a tolerance of one billionth, never more', () => {
+    expect(fn('theme_palette_ok')).toContain('>= t.m - 1e-9');
+  });
+});
+
+// app.role_edits_theme (theme.edit's helper, E4-SEC-3) is created again by a later slice (E5).
+// Its definition here is the canonical one, search_path pinned (E4 code review CR8): every
+// migration that creates it repeats these three lines byte for byte, so the last definition
+// never quietly drops the pin (tests/authz/sqlHelpers.spec.ts holds its role list).
+const ROLE_EDITS_THEME_SQL = [
+  'create or replace function app.role_edits_theme(r text) returns boolean',
+  '  language sql immutable',
+  "  set search_path = ''",
+  "as $$ select coalesce(r in ('admin', 'developer'), false) $$;  -- theme.edit",
+].join('\n');
+
+describe('app.role_edits_theme: one definition, search_path pinned (CR8)', () => {
+  it('every migration that creates it writes the canonical definition', () => {
+    const found = readdirSync(DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .flatMap((f) => {
+        const sql = readFileSync(`${DIR}/${f}`, 'utf8').replace(/\r\n/g, '\n');
+        return [...sql.matchAll(/create or replace function app\.role_edits_theme\(/g)].map(
+          (m) => ({ file: f, text: sql.slice(m.index, m.index + ROLE_EDITS_THEME_SQL.length) }),
+        );
+      });
+    expect(found.length).toBeGreaterThan(0);
+    for (const { file, text } of found) expect(text, file).toBe(ROLE_EDITS_THEME_SQL);
+  });
+});

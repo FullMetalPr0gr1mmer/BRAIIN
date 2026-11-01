@@ -439,6 +439,14 @@ describe('GET /api/admin/releases/[id]: one version’s changes', () => {
 
 // ---- restoring a version -------------------------------------------------------------------
 
+/** The brand's own theme settings (Admin v2 E4), which compile to no token. */
+const BRAND_THEME = {
+  v: 1,
+  mode: 'simple',
+  colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
+  motion: { marquee: 'normal', reveal: true },
+};
+
 describe('POST /api/admin/releases/[id]/restore', () => {
   it('releases off: 409 releases-off after the flag read, and nothing else read or written', async () => {
     const db = seed({}, asOf(1, []));
@@ -658,10 +666,14 @@ describe('POST /api/admin/releases/[id]/restore', () => {
   });
 
   it('a change the person cannot publish stops it: 403 with who could (the cross-area restore)', async () => {
+    // A v1 theme (Admin v2 E4): its settings, and the tokens they compile to (none for the
+    // brand's own). A legacy theme's version (no settings) cannot come back: its tokens have
+    // no field since E4.
     const theme = {
       id: THEME,
       tenant_id: T,
       name: 'Night',
+      settings: BRAND_THEME,
       tokens: {},
       is_active: true,
       version: 2,
@@ -697,11 +709,44 @@ describe('POST /api/admin/releases/[id]/restore', () => {
     expect(writerCalls(db)).toEqual([]);
   });
 
+  it('a legacy theme (no settings, before E4) cannot come back: its tokens have no field now', async () => {
+    const legacy = {
+      id: THEME,
+      tenant_id: T,
+      name: 'Night',
+      tokens: { '--bs-klein': '#000000' },
+      is_active: false,
+      version: 2,
+    };
+    const db = seed(
+      { custom_themes: [legacy] },
+      asOf(1, [
+        {
+          entity_type: 'custom_theme',
+          entity_id: THEME,
+          before: { ...legacy, name: 'Day' },
+          exists_now: true,
+        },
+      ]),
+    );
+    const res = await restore(db, V1, {}, 'admin');
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({
+      error: 'not-restorable',
+      items: [{ entityType: 'custom_theme', reason: 'unrestorable', columns: ['tokens'] }],
+    });
+    expect(writerCalls(db)).toEqual([]);
+  });
+
   it('a refusal names every refused item under every reason at once, grouped; the status is the first reason', async () => {
+    // A v1 theme (Admin v2 E4): its settings, and the tokens they compile to (none for the
+    // brand's own). A legacy theme's version (no settings) cannot come back: its tokens have
+    // no field since E4.
     const theme = {
       id: THEME,
       tenant_id: T,
       name: 'Night',
+      settings: BRAND_THEME,
       tokens: {},
       is_active: true,
       version: 2,

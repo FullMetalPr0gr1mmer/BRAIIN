@@ -1,16 +1,8 @@
 ---
-import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
-
 export const prerender = false;
 
-// Astro resolves the static `new.astro` before this dynamic route, so /admin/themes/new
-// reaches the create form rather than being read as an id.
-const ui = uiFor('themes');
-const id = Astro.params.id ?? null;
+// The theme editor lives at /admin/appearance/theme now (Admin v2 E4, ui.md §3.1: the retired
+// /admin/themes/** routes answer there, inside the admin). A 302, not a 301: an admin route is
+// never cached, and the address may be taken back. The editor's page decides who may open it.
+return Astro.redirect('/admin/appearance/theme', 302);
 ---
-
-<AdminLayout title={`Edit ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load resource="themes" id={id} />
-</AdminLayout>

@@ -389,6 +389,7 @@ describe('the locked screens the refusals e2e opens', () => {
     const server = LOCKED_SCREENS.filter((screen) => renderOf(screen) === 'server');
     expect(server.map((s) => s.href).sort()).toEqual([
       '/admin/analytics/search',
+      '/admin/appearance/theme',
       '/admin/audit',
       '/admin/backups',
       '/admin/forms',
@@ -497,7 +498,7 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'Site health /admin/site-health',
       'Style-Finder /admin/ai-questions',
     ],
-    Appearance: ['Theme /admin/themes', 'Menus /admin/navigation'],
+    Appearance: ['Theme /admin/appearance/theme', 'Menus /admin/navigation'],
     Settings: [
       'General /admin/settings',
       'SEO /admin/seo',
@@ -555,7 +556,7 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
     Content: ['Media library /admin/media'],
     CRM: ['Leads /admin/leads'],
     Growth: ['Website stats /admin/analytics', 'Site health /admin/site-health'],
-    Appearance: ['Theme /admin/themes'],
+    Appearance: ['Theme /admin/appearance/theme'],
     Settings: [
       'General /admin/settings',
       'Forms /admin/forms',
