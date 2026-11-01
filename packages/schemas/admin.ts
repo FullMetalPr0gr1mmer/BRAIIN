@@ -25,6 +25,7 @@ import {
   ValuePointSchema,
 } from './content';
 import { LocalizedDocSchema } from './tiptap';
+import { jsonDepthWithin } from './jsonDepth';
 import {
   CANONICAL_PATH_PATTERN,
   SEO_DEFAULT_ROBOTS,
@@ -411,6 +412,16 @@ export const PageWriteSchema = z.object({
 export const PageUpdateSchema = updatable(PageWriteSchema);
 
 /**
+ * How many levels section content may nest (H15), counted as JSON (the content object is one).
+ * The deepest a section writes is a Text block's body at its 8 levels of rich text, about 22;
+ * every other type stays under 6. Past this a payload is refused before anything stringifies
+ * it.
+ */
+export const SECTION_CONTENT_MAX_DEPTH = 64;
+export const SECTION_CONTENT_TOO_DEEP =
+  'This section has too many levels inside each other. Remove some and save again.';
+
+/**
  * Section `content` and `style` stay open-shaped (`Record<string, unknown>`) because
  * each section TYPE defines its own payload and the renderer validates per-type. The
  * ceiling is what matters at this boundary — a 256 KB JSONB blob per section is a
@@ -418,7 +429,16 @@ export const PageUpdateSchema = updatable(PageWriteSchema);
  */
 const SectionPayloadSchema = z
   .record(z.string(), z.unknown())
-  .refine((v) => JSON.stringify(v).length <= 65_536, { message: 'section payload exceeds 64 KB' });
+  // The depth first (H15): JSON.stringify recurses once a level and overflowed the stack past
+  // about 4,782 levels (a 19 KB payload) with a RangeError, a 500 for every section type, where
+  // the refusal below was meant. Only a value within SECTION_CONTENT_MAX_DEPTH is stringified.
+  .superRefine((v, ctx) => {
+    if (!jsonDepthWithin(v, SECTION_CONTENT_MAX_DEPTH)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: SECTION_CONTENT_TOO_DEEP });
+    } else if (JSON.stringify(v).length > 65_536) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'section payload exceeds 64 KB' });
+    }
+  });
 
 /**
  * What a section's name refuses: a control or format character (Unicode Cc and Cf), as a
@@ -474,6 +494,8 @@ function checkSectionContent(
   // validated against the row it will produce by sectionResource.assertWritable
   // (src/lib/admin/resources/sections.ts); here we check what the payload alone can prove.
   if (v.type === undefined || v.content === undefined) return;
+  // A payload SectionPayloadSchema refused for its depth is not read any further (H15).
+  if (!jsonDepthWithin(v.content, SECTION_CONTENT_MAX_DEPTH)) return;
   for (const issue of sectionContentIssues(v.type, v.content)) ctx.addIssue(issue);
 }
 

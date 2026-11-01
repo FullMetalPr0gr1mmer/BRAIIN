@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { hasControlChars } from './search';
+import { jsonDepthWithin } from './jsonDepth';
 
 // Site-wide releases (Admin v2 track REL, docs/admin-v2/releases.md). The closed
 // vocabularies of the release ledger, migration 0038 (R1), and the shapes the release
@@ -175,8 +176,20 @@ export const RELEASE_FAILURE_CODES = [
 ] as const;
 export type ReleaseFailureCode = (typeof RELEASE_FAILURE_CODES)[number];
 
-/** UTF-8 bytes of a JSON value as sent: the Worker's early check against the DB's cap. */
+/**
+ * How deep a value `jsonBytes` measures (H15). An article body at its own bound (32 levels of
+ * rich text, packages/schemas/tiptap.ts) inside a draft's payload is under 80; past this a value
+ * is too large to measure, and it is not stringified at all.
+ */
+export const JSON_MEASURE_MAX_DEPTH = 128;
+
+/**
+ * UTF-8 bytes of a JSON value as sent: the Worker's early check against the DB's cap. A value
+ * nested past JSON_MEASURE_MAX_DEPTH is infinitely large (H15): JSON.stringify recurses once a
+ * level and overflowed the stack on a deep payload, a RangeError where a refusal was meant.
+ */
 export function jsonBytes(value: unknown): number {
+  if (!jsonDepthWithin(value, JSON_MEASURE_MAX_DEPTH)) return Number.POSITIVE_INFINITY;
   return new TextEncoder().encode(JSON.stringify(value) ?? '').length;
 }
 
