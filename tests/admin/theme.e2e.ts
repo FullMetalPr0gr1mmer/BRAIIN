@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
 import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
@@ -210,6 +211,19 @@ test.describe('as admin', () => {
       const home = await page.request.get('/');
       const sheet = await page.request.get('/styles/theme.css');
       const tokens = row['tokens'];
+      // The theme as a visitor's key reads it (the Worker's contentClient), and every row as
+      // the service role sees it: a policy or a second row would show here.
+      const env = staffEnv()!;
+      const anonKey = process.env['PUBLIC_SUPABASE_ANON_KEY'] ?? '';
+      const asAnon = anonKey
+        ? await createClient(env.url, anonKey, { auth: { persistSession: false } })
+            .from('custom_themes')
+            .select('tokens')
+            .limit(2)
+        : null;
+      const all = await createClient(env.url, env.serviceKey, { auth: { persistSession: false } })
+        .from('custom_themes')
+        .select('id,tenant_id,is_active,settings,tokens');
       throw new Error(
         `no theme link on /: ${JSON.stringify({
           isActive: row['isActive'] ?? row['is_active'],
@@ -218,6 +232,19 @@ test.describe('as admin', () => {
           sheetStatus: sheet.status(),
           sheetCache: sheet.headers()['cache-control'],
           sheetBody: (await sheet.text()).slice(0, 120),
+          anonKeySet: anonKey !== '',
+          anonRows: asAnon?.data?.length ?? null,
+          anonError: asAnon?.error?.message ?? null,
+          anonTokenKeys: (asAnon?.data ?? []).map((r) =>
+            r.tokens && typeof r.tokens === 'object' ? Object.keys(r.tokens).length : r.tokens,
+          ),
+          allRows: (all.data ?? []).map((r) => ({
+            tenant: String(r.tenant_id).slice(0, 8),
+            active: r.is_active,
+            v1: r.settings !== null,
+            tokenKeys: r.tokens && typeof r.tokens === 'object' ? Object.keys(r.tokens).length : 0,
+          })),
+          allError: all.error?.message ?? null,
         })}`,
       );
     }
