@@ -1,6 +1,8 @@
 import { SectionUpdateSchema, SectionWriteSchema } from '@schemas/admin';
 import { sectionContentIssues, type SectionType } from '@schemas/sections';
+import { MEDIA_BLOCKS_FULL, MEDIA_BLOCKS_PER_PAGE, MEDIA_BLOCK_TYPES } from '@schemas/sectionTypes';
 import { isSampleRating } from '@/lib/sections/samples';
+import { liveDb } from '@/lib/release/overlayDb';
 import { ValidationError } from '../errors';
 import type { ResourceConfig } from '../resource';
 import { fieldsOf, pick, type Input } from './shared';
@@ -19,6 +21,8 @@ const SECTION_KEYS = {
   // when a payload carries it (the Rename dialog); the legacy section form never sends it.
   label: 'label',
 };
+
+const MEDIA_TYPES: readonly unknown[] = MEDIA_BLOCK_TYPES;
 
 export const sectionResource: ResourceConfig = {
   table: 'page_sections',
@@ -40,7 +44,7 @@ export const sectionResource: ResourceConfig = {
   // The schema validates content only when a payload carries BOTH type and content. A
   // PATCH of content alone (or of type alone) is checked here, against the type the row
   // will have — otherwise it saves "fine" and the loader silently drops it.
-  assertWritable: (merged, { changed }) => {
+  assertWritable: async (merged, { changed, auth, sb, db, before }) => {
     if ('type' in changed || 'content' in changed) {
       const [issue] = sectionContentIssues(merged['type'] as SectionType, merged['content'] ?? {});
       if (issue) {
@@ -63,6 +67,30 @@ export const sectionResource: ResourceConfig = {
         'the rating line still shows the design sample (4.9 / 5 under its sample label) — give it a real, sourced rating (a real label under the same number passes) or remove it before unticking “Placeholder”',
         'is_placeholder' in changed ? 'isPlaceholder' : 'content',
       );
+    }
+    // The media block cap (Admin v2 E10 review): a Gallery or a Video joining a page (created,
+    // moved, or turned into one) finds at most MEDIA_BLOCKS_PER_PAGE - 1 others there, hidden
+    // ones included. Counted through the overlay-aware database when given (a staged save sees
+    // the pending sections of the tenant, a publish the ones its release leaves), the row
+    // itself left out by id. One indexed read, and only for a row that BECOMES a media block
+    // on this page (E10 code review, CR4): the editor's form sends `type` with every save, so
+    // a row that already was one there (`before`) is not counted again, and an edit of a block
+    // on a page already over the cap (rows written around the API, or two saves racing) still
+    // saves. The race itself stays open: the count and the insert are two statements.
+    if (
+      ('type' in changed || 'page_id' in changed) &&
+      MEDIA_TYPES.includes(merged['type']) &&
+      typeof merged['page_id'] === 'string' &&
+      !(before && MEDIA_TYPES.includes(before['type']) && before['page_id'] === merged['page_id'])
+    ) {
+      const rows = await (db ?? liveDb(sb, auth)).list('page_sections', {
+        columns: 'id,type',
+        eq: { page_id: merged['page_id'] },
+        in: { type: [...MEDIA_BLOCK_TYPES] },
+        limit: MEDIA_BLOCKS_PER_PAGE + 1,
+      });
+      const others = rows.filter((row) => row['id'] !== merged['id']).length;
+      if (others >= MEDIA_BLOCKS_PER_PAGE) throw new ValidationError(MEDIA_BLOCKS_FULL, 'type');
     }
   },
 };

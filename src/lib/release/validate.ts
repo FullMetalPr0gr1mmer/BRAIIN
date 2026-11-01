@@ -762,7 +762,7 @@ async function rulesOf(
   if (!merged) return;
   if (entry.kind === 'resource') {
     const config = entry.resource!;
-    await config.assertWritable?.(merged, { ...ctx, changed: patch });
+    await config.assertWritable?.(merged, { ...ctx, changed: patch, before: item.live });
     if (isLive(config, merged)) await config.assertPublishable?.(merged, ctx);
     return;
   }

@@ -24,6 +24,12 @@ export const POSTER: ImageRef = {
   alt: { en: 'A still from the fixture project', ar: 'لقطة من المشروع التجريبي' },
 };
 
+/** The ids of each section media read the render made, in order (tests/render/setup.ts). */
+export const SECTION_MEDIA_READS: string[][] = [];
+
+/** Set `on` to make the section media read fail (E10 code review, CR3); reset after. */
+export const SECTION_MEDIA_FAIL = { on: false };
+
 /** The fallback identity with a WhatsApp number, so the channel card renders too. */
 export const IDENTITY: Identity = {
   ...IDENTITY_FALLBACK,

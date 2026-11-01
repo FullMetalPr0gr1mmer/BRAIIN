@@ -3832,6 +3832,213 @@ html[dir='rtl'] .klein-band::before {
   display: none;
 }
 
+/* ---- Admin v2 E10 blocks: Text block, Gallery, Video (src/components/sections/TextBlock,
+   Gallery and VideoBlock). Shared blocks any page may take, any number a page, so their rules
+   live here, not in a route sheet. The text block and the gallery sit on paper, the video on
+   black; headings are capped in em, never ch (a swap-font heading, §6). ---- */
+.mf--wide {
+  aspect-ratio: 16 / 9;
+  border-radius: 0;
+}
+.blk-text,
+.blk-gal {
+  background: var(--bs-paper);
+  color: var(--bs-ink);
+  padding: clamp(64px, 10vh, 130px) var(--bs-pad-x);
+}
+.blk-gal {
+  padding-inline: 0;
+}
+.blk-gal .blk-wrap {
+  padding-inline: var(--bs-pad-x);
+}
+.blk-video {
+  background: var(--bs-black);
+  color: var(--bs-paper);
+  padding: clamp(64px, 10vh, 130px) 0 0;
+}
+.blk-video .blk-wrap {
+  padding-inline: var(--bs-pad-x);
+  margin-bottom: clamp(30px, 5vh, 56px);
+}
+.blk-wrap {
+  max-width: var(--bs-maxw);
+  margin-inline: auto;
+  /* Authored words: a long address or name breaks rather than scrolling a phone sideways. */
+  overflow-wrap: break-word;
+}
+.blk-head {
+  margin: 0;
+  max-width: 14em;
+  font-size: clamp(30px, 4.6vw, 68px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .blk-head {
+  font-size: clamp(26px, 3.8vw, 56px);
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* Klein on paper (10.6:1), sky on black (8.2:1): sky is never an accent on white. */
+.blk-head em {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+.blk-video .blk-head em {
+  color: var(--bs-sky);
+}
+.blk-lead {
+  margin: 16px 0 0;
+  max-width: 34em;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--bs-muted);
+}
+.blk-prose {
+  max-width: 44em;
+  margin-top: clamp(24px, 4vh, 40px);
+  font-size: clamp(16px, 1.3vw, 19px);
+  line-height: 1.7;
+  color: var(--bs-dim);
+}
+.blk-head + .blk-prose {
+  margin-top: clamp(28px, 4.4vh, 48px);
+}
+.tag + .blk-prose {
+  margin-top: 0;
+}
+html[dir='rtl'] .blk-prose {
+  line-height: 2;
+}
+.blk-prose > * {
+  margin: 0;
+}
+.blk-prose > * + * {
+  margin-top: 1em;
+}
+.blk-prose :where(h2, h3, h4) {
+  color: var(--bs-ink);
+  font-weight: 800;
+  line-height: 1.25;
+}
+.blk-prose * + :where(h2, h3, h4) {
+  margin-top: 1.6em;
+}
+.blk-prose h2 {
+  font-size: 1.5em;
+}
+.blk-prose h3 {
+  font-size: 1.25em;
+}
+.blk-prose h4 {
+  font-size: 1.05em;
+}
+.blk-prose :where(ul, ol) {
+  padding-inline-start: 1.3em;
+}
+.blk-prose blockquote {
+  padding-inline-start: 1em;
+  border-inline-start: 3px solid var(--bs-klein);
+  color: var(--bs-ink);
+}
+.blk-prose pre {
+  overflow-x: auto;
+  padding: 1em;
+  background: var(--bs-mist);
+  color: var(--bs-ink);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+.blk-prose hr {
+  border: 0;
+  border-top: 1px solid var(--bs-line-l);
+}
+/* Links in authored copy: Klein on paper (the site's sky link colour is 2.6:1 here). */
+.blk-prose a {
+  color: var(--bs-klein);
+}
+/* The film's own pause control (clips.ts wireToggle): over the frame's end corner, opaque
+   black under a white icon and ring (21:1, 1.4.11 holds over any still), 44 px. `hidden`
+   until clips.ts shows it where the film can play. */
+.blk-video__box {
+  position: relative;
+}
+.blk-video__toggle {
+  position: absolute;
+  z-index: 2;
+  inset-inline-end: clamp(12px, 2vw, 24px);
+  bottom: clamp(12px, 2vw, 24px);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--bs-paper);
+  border-radius: 50%;
+  background: var(--bs-black);
+  color: var(--bs-paper);
+  cursor: pointer;
+}
+.blk-video__toggle[hidden] {
+  display: none;
+}
+.blk-video__toggle svg {
+  width: 14px;
+  height: 14px;
+}
+.blk-video__play,
+.blk-video__toggle.is-play .blk-video__pause {
+  display: none;
+}
+.blk-video__toggle.is-play .blk-video__play {
+  display: block;
+}
+.blk-video__toggle:focus-visible {
+  outline: 2px solid var(--bs-sky);
+  outline-offset: 3px;
+}
+.blk-gal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.blk-gal__grid--1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 47.5rem) {
+  .blk-gal__grid--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.blk-wrap + .blk-gal__grid {
+  margin-top: clamp(30px, 5vh, 56px);
+}
+/* Every cell the same shape, the picture cropped to it: a grid of mixed sizes would leave
+   ragged rows. The box is sized by its ratio before the image paints (CLS 0). */
+.blk-gal__item {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: var(--bs-media-bg-l);
+}
+.blk-gal__grid--1 .blk-gal__item {
+  aspect-ratio: 16 / 9;
+}
+.blk-gal__item img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* ---- Project card (ProjectCard.astro) ---- */
 .pcard {
   display: block;

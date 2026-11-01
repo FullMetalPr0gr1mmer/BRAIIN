@@ -59,6 +59,21 @@ const NO_BUILT_IN: Partial<Record<RenderedSectionType, Record<string, string>>> 
   clientsMarquee: { note: 'the founding year from the public identity, or nothing' },
   // An image reference: its only text is `altOverride`, over the media library row's alt.
   workIntro: { media: 'frames are media library images, their alt text the library’s' },
+  // Admin v2 E10: blocks with no built-in copy. A block shows what is written in it and
+  // nothing else, so a block added and forgotten puts no placeholder words on a page.
+  textBlock: {
+    tag: 'a text block shows only what is written in it',
+    heading: 'a text block shows only what is written in it',
+  },
+  gallery: {
+    tag: 'a gallery shows only what is written in it, around its pictures',
+    heading: 'a gallery shows only what is written in it, around its pictures',
+  },
+  video: {
+    tag: 'a video block shows only what is written in it, around its still',
+    heading: 'a video block shows only what is written in it, around its still',
+    lead: 'a video block shows only what is written in it, around its still',
+  },
 };
 
 /** Every `{ en, ar }` pair of strings in a value, with where it is. */

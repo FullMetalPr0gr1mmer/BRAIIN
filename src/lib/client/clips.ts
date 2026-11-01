@@ -15,6 +15,10 @@
 //                      the LCP (About's "who"), so its clip's bytes never compete with it,
 //                      the rule MediaBanner and the hero apply
 //
+// A frame may carry its own pause control (`[data-clip-toggle]` in its `[data-clip-box]`,
+// Admin v2 E10's Video block, WCAG 2.2.2): a frame stopped with it plays no more until it is
+// pressed again (wireToggle below). The frames without one behave as before.
+//
 // Never plays: under prefers-reduced-motion, with Save-Data, or on a touch-only device
 // ("in-content clips never autoplay on touch" — design-port decision 1, a compensating
 // control of EXC-009); the poster stays. Pauses with the page hidden, and while the
@@ -97,6 +101,18 @@ function environment() {
 
 const wanted = new WeakMap<HTMLElement, boolean>();
 
+/**
+ * Frames a visitor stopped with the frame's own control (Admin v2 E10's Video block: a
+ * `[data-clip-toggle]` button in the frame's `[data-clip-box]`). A stopped frame never plays,
+ * in view or not, until its control starts it again; every other frame is unaffected.
+ */
+const stopped = new WeakSet<HTMLElement>();
+
+/** The words of a frame's own control: what pressing it does next. */
+export function toggleLabel(isStopped: boolean, labels: { pause: string; play: string }): string {
+  return isStopped ? labels.play : labels.pause;
+}
+
 function ensureVideo(frame: HTMLElement): HTMLVideoElement | null {
   const existing = frame.querySelector<HTMLVideoElement>('video');
   if (existing) return existing;
@@ -137,7 +153,7 @@ function ensureVideo(frame: HTMLElement): HTMLVideoElement | null {
 function play(frame: HTMLElement): void {
   wanted.set(frame, true);
   // `wanted` is recorded first, so a hidden tab or a paused visitor resumes into it.
-  if (document.hidden || isMotionPaused()) return;
+  if (document.hidden || isMotionPaused() || stopped.has(frame)) return;
   const video = ensureVideo(frame);
   void video?.play().catch(() => {});
 }
@@ -198,7 +214,7 @@ export function retargetClip(frame: HTMLElement, next: ClipTarget): void {
       // not seekable yet — timeupdate brings it into the window
     }
   }
-  if (wanted.get(frame) && !document.hidden && !isMotionPaused()) {
+  if (wanted.get(frame) && !document.hidden && !isMotionPaused() && !stopped.has(frame)) {
     void video.play().catch(() => {});
   }
 }
@@ -218,7 +234,9 @@ function bindGlobal(): void {
       const video = frame.querySelector<HTMLVideoElement>('video');
       if (!video) continue;
       if (document.hidden) video.pause();
-      else if (wanted.get(frame) && !isMotionPaused()) void video.play().catch(() => {});
+      else if (wanted.get(frame) && !isMotionPaused() && !stopped.has(frame)) {
+        void video.play().catch(() => {});
+      }
     }
   });
   onMotionChange((paused) => {
@@ -227,6 +245,37 @@ function bindGlobal(): void {
       else if (wanted.get(frame) && !document.hidden) play(frame);
     }
   });
+}
+
+/**
+ * A frame's own pause control (WCAG 2.2.2, Admin v2 E10's Video block): shown only once the
+ * frame is wired (where nothing can play, under reduced motion, with Save-Data, on touch or
+ * without JS, it stays `hidden`); its name says what pressing it does (the testimonials
+ * carousel's rule: the APG rotation control, no aria-pressed). Stopping shows the still again
+ * (the video's `pause` drops `.is-playing`); starting plays only while the frame is wanted.
+ */
+function wireToggle(frame: HTMLElement, toggle: HTMLButtonElement): void {
+  const labels = {
+    pause: toggle.dataset.labelPause ?? 'Pause',
+    play: toggle.dataset.labelPlay ?? 'Play',
+  };
+  const sync = () => {
+    const isStopped = stopped.has(frame);
+    toggle.setAttribute('aria-label', toggleLabel(isStopped, labels));
+    toggle.classList.toggle('is-play', isStopped);
+  };
+  toggle.addEventListener('click', () => {
+    if (stopped.has(frame)) {
+      stopped.delete(frame);
+      if (wanted.get(frame)) play(frame);
+    } else {
+      stopped.add(frame);
+      frame.querySelector<HTMLVideoElement>('video')?.pause();
+    }
+    sync();
+  });
+  sync();
+  toggle.hidden = false;
 }
 
 /** Wires every clip frame under `root` (idempotent per frame). */
@@ -238,6 +287,10 @@ export function initClips(root: ParentNode = document): void {
     if (frames.has(frame)) continue;
     frames.add(frame);
     frame.classList.add('can-clip');
+    const toggle = frame
+      .closest<HTMLElement>('[data-clip-box]')
+      ?.querySelector<HTMLButtonElement>('button[data-clip-toggle]');
+    if (toggle) wireToggle(frame, toggle);
     if (frame.dataset.clipMode === 'hover') {
       const trigger = frame.closest<HTMLElement>('[data-clip-trigger]') ?? frame;
       trigger.addEventListener('pointerenter', (e) => {

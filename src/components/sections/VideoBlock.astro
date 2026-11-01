@@ -1,0 +1,113 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { VideoSectionContent } from '@schemas/sections';
+import { pickLocale } from '@/lib/i18n';
+import type { SectionImages } from '@/lib/sections/blocks';
+import MediaFrame from '@/components/media/MediaFrame.astro';
+import AccentText from '@/components/ui/AccentText.astro';
+
+// A Video (Admin v2 E10, the prototype's "Full width clip from the brand film"): on black, an
+// optional tag, heading and line, then a full-width still that plays a window of a site film
+// while it is on screen; up to eight Galleries and Videos a page together
+// (MEDIA_BLOCKS_PER_PAGE).
+//
+// The film follows the site's clip rules through MediaFrame and src/lib/client/clips.ts, the
+// same as Our Work's intro frames and the case study's final film:
+//   - the served HTML carries the still only, never a <video> (tests/e2e/media-bytes.e2e.ts
+//     and tests/admin/section-blocks.e2e.ts): clips.ts creates the video the first time a
+//     third of the frame is on screen, so a page carries zero video bytes before that;
+//   - it never plays under reduced motion, with Save-Data or on a touch-only device: the still
+//     stays; it pauses when the frame leaves the screen or the tab is hidden, and while the
+//     sitewide motion state is paused (`body.motion-paused`, EXC-007's wiring);
+//   - it has its OWN pause control (WCAG 2.2.2 Pause, Stop, Hide), the testimonials carousel's
+//     way: a button over the frame's corner, `hidden` in the HTML and shown by clips.ts only
+//     where the film can play, named for what it does next ("Pause the film" / "Play the
+//     film"). So this loop is compliant and not one more surface under EXC-007;
+//   - the window is a /media/*.mp4 file (EXC-009), served through the Worker with byte ranges
+//     so the window seeks; the video is muted, looped by clips.ts, hidden from assistive tech.
+// The still is a media library image (`mediaId`) at its own width and height, lazy, with the
+// library's alt text: it is what a visitor sees first and what stays without motion. As the
+// page's first section (`data.first`: no hero above it) it is the top of the page and likely
+// its LCP element, so it is eager and high priority, and the film waits for `load`, as
+// MediaBanner's poster does (E10 code review, CR10). It is
+// resolved by SectionRenderer's one read of the page's section media and arrives as route data
+// (`data.images`), never read here. With no still that resolves the section renders nothing
+// (a frame with nothing in it until a clip plays would be an empty box under reduced motion).
+
+interface Props extends VideoSectionContent {
+  locale: Locale;
+  /** Route data (SectionRenderer): the page's section media, resolved in one read. */
+  data?: { images?: SectionImages; first?: boolean } | undefined;
+}
+
+const { locale, tag, heading, accent, lead, mediaId, clip, data } = Astro.props;
+// The page's section media (route data): SectionRenderer starts the one read, and only a
+// section with media waits for it, here.
+const images = await data?.images;
+
+const tagText = tag ? pickLocale(tag, locale) : '';
+const headingText = heading ? pickLocale(heading, locale) : '';
+const leadText = lead ? pickLocale(lead, locale) : '';
+const image = (mediaId && images?.get(mediaId)) || null;
+// Only a site file plays (MediaFrame's rule); only a film that can play gets the control.
+const playable = Boolean(clip?.path);
+const STR = {
+  en: { pause: 'Pause the film', play: 'Play the film' },
+  ar: { pause: 'إيقاف الفيلم مؤقتًا', play: 'تشغيل الفيلم' },
+}[locale];
+---
+
+{
+  image && (
+    <section class="blk-video">
+      {(tagText || headingText || leadText) && (
+        <div class="blk-wrap">
+          {tagText && (
+            <p class="tag tag--sky rv">
+              <span class="dot" />
+              <span>{tagText}</span>
+            </p>
+          )}
+          {headingText && (
+            <h2 class="blk-head rv">
+              <AccentText text={headingText} locale={locale} accent={accent} />
+            </h2>
+          )}
+          {leadText && <p class="blk-lead rv">{leadText}</p>}
+        </div>
+      )}
+      <div class="blk-video__box" data-clip-box>
+        <MediaFrame
+          image={image}
+          locale={locale}
+          clip={clip ?? null}
+          mode="inview"
+          threshold={0.35}
+          ratio="wide"
+          sizes="100vw"
+          widths={[480, 800, 1200, 1600]}
+          priority={data?.first === true}
+          class="blk-video__frame"
+        />
+        {playable && (
+          <button
+            type="button"
+            class="blk-video__toggle"
+            data-clip-toggle
+            data-label-pause={STR.pause}
+            data-label-play={STR.play}
+            aria-label={STR.pause}
+            hidden
+          >
+            <svg class="blk-video__pause" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M4 2h3v12H4zM9 2h3v12H9z" fill="currentColor" />
+            </svg>
+            <svg class="blk-video__play" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M4 2l10 6-10 6z" fill="currentColor" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}

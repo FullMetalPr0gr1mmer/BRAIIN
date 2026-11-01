@@ -24,6 +24,11 @@ const GENERAL_SPEC = /[\\/]tests[\\/]admin[\\/]general\.e2e\.ts$/;
 // general settings and before maintenance.
 const GA4_SPEC = /[\\/]tests[\\/]admin[\\/]ga4\.e2e\.ts$/;
 const MAINTENANCE_SPEC = /[\\/]tests[\\/]admin[\\/]maintenance\.e2e\.ts$/;
+// The section blocks (Admin v2 E10) put a Text block, a Gallery and a Video on About, a page
+// the public and the admin specs read (pages.e2e.ts counts its sections), and remove them when
+// they end: their own project, after the public and the admin specs, before page visibility.
+// Written for releases off, so the rehearsal (E2E_RELEASES=on) has no such project.
+const BLOCKS_SPEC = /[\\/]tests[\\/]admin[\\/]section-blocks\.e2e\.ts$/;
 // The release-mode rehearsal (Admin v2 R14-prep; .github/workflows/releases-rehearsal.yml, plan
 // B5): with E2E_RELEASES=on the whole suite runs with releases switched ON for the e2e tenant.
 // `releases-on` (tests/admin/releases.setup.ts) runs `app.enable_releases` as the owner after the
@@ -96,11 +101,23 @@ export default defineConfig({
         MAINTENANCE_SPEC,
         /maintenance\.teardown\.ts$/,
         RELEASES_MODE_SPEC,
+        BLOCKS_SPEC,
       ],
       use: { ...devices['Desktop Chrome'] },
       dependencies: [RELEASES ? 'releases-on' : 'admin-samples'],
     },
     ...releaseProjects,
+    ...(RELEASES
+      ? []
+      : [
+          {
+            name: 'blocks',
+            testDir: './tests/admin',
+            testMatch: BLOCKS_SPEC,
+            use: { ...devices['Desktop Chrome'] },
+            dependencies: ['chromium', 'admin'],
+          },
+        ]),
     {
       // Page visibility (Admin v2 U14a) hides real pages on the one preview every spec
       // shares, so it runs alone, after the public and the admin specs (and restores every
@@ -109,7 +126,7 @@ export default defineConfig({
       testDir: './tests/admin',
       testMatch: VISIBILITY_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: RELEASES ? ['releases-mode'] : ['chromium', 'admin'],
+      dependencies: RELEASES ? ['releases-mode'] : ['blocks'],
     },
     {
       // General settings (Admin v2 U9) edits the public identity (a tagline, a hidden social

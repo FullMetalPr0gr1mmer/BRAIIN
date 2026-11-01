@@ -1,4 +1,12 @@
-import { TiptapDocSchema, type TiptapMark, type TiptapNode } from '@schemas/tiptap';
+import { docHasWords } from '@schemas/docWords';
+import {
+  TiptapDocSchema,
+  keptHref,
+  sectionDocProblem,
+  type TiptapDoc,
+  type TiptapMark,
+  type TiptapNode,
+} from '@schemas/tiptap';
 
 // Tiptap document → sanitised HTML. CLAUDE.md Pillar 1: "Tiptap sanitised on write AND
 // render; never `set:html` unsanitised."
@@ -38,42 +46,15 @@ function escapeHtml(value: string): string {
 
 // ── URL policy ──────────────────────────────────────────────────────────────────
 
-const ALLOWED_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:']);
-
 /**
  * Returns a safe href, or null to drop the link entirely (the text survives).
  *
- * A relative href is resolved against a throwaway base and kept only when it stays on
- * that base's origin. The base is invented, but the answer does not depend on it: a
- * same-site reference resolves onto whatever origin it is given, while scheme-relative
- * `//evil.example` and `/\evil.example` (the URL standard reads a backslash as a slash
- * in an https URL) resolve to another host from ANY base. Both look harmless precisely
- * because they are absolute cross-origin URLs wearing a relative costume.
+ * It IS packages/schemas/tiptap.ts `keptHref` (E10 code review, CR6): one rule, which the
+ * section body's write check also holds a link to, so a link the walk accepts is one this
+ * keeps. The reasons (an allowlist of schemes; a relative href kept only while it stays on
+ * this site, so `//evil.example` and `/\evil.example` are dropped) are written there.
  */
-export function sanitizeHref(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  const href = raw.trim();
-  if (href.length === 0 || href.length > 2048) return null;
-  if (href.startsWith('/') || href.startsWith('#') || href.startsWith('?')) {
-    return staysOnSite(href) ? href : null;
-  }
-  try {
-    const parsed = new URL(href);
-    return ALLOWED_SCHEMES.has(parsed.protocol) ? href : null;
-  } catch {
-    return null;
-  }
-}
-
-const SAME_SITE_BASE = 'https://same-site.invalid';
-
-function staysOnSite(href: string): boolean {
-  try {
-    return new URL(href, SAME_SITE_BASE).origin === SAME_SITE_BASE;
-  } catch {
-    return false;
-  }
-}
+export const sanitizeHref: (raw: unknown) => string | null = keptHref;
 
 // ── Marks ───────────────────────────────────────────────────────────────────────
 
@@ -113,37 +94,59 @@ function wrapWithMarks(text: string, marks: TiptapMark[] | undefined): string {
 
 // ── Nodes ───────────────────────────────────────────────────────────────────────
 
-function renderChildren(nodes: TiptapNode[] | undefined): string {
-  return (nodes ?? []).map(renderNode).join('');
+/**
+ * How a walk renders. `section` is a section body's render (Admin v2 E10, the Text block): a
+ * heading or a list item with no words in it, and a list, quote or code block left with
+ * nothing in it, render nothing, where an article's body keeps them as before (its output is
+ * held by the snapshots unchanged).
+ */
+interface Walk {
+  section: boolean;
 }
 
-function renderNode(node: TiptapNode): string {
+const ARTICLE: Walk = { section: false };
+const SECTION: Walk = { section: true };
+
+function renderChildren(nodes: TiptapNode[] | undefined, walk: Walk): string {
+  return (nodes ?? []).map((node) => renderNode(node, walk)).join('');
+}
+
+/** A container's markup, or nothing in a section render when nothing is inside it. */
+function wrap(tag: string, inner: string, walk: Walk): string {
+  return walk.section && inner === '' ? '' : `<${tag}>${inner}</${tag}>`;
+}
+
+function renderNode(node: TiptapNode, walk: Walk): string {
   switch (node.type) {
     case 'text':
       return wrapWithMarks(escapeHtml(node.text ?? ''), node.marks);
 
     case 'paragraph': {
-      const inner = renderChildren(node.content);
+      const inner = renderChildren(node.content, walk);
       return inner.length > 0 ? `<p>${inner}</p>` : '';
     }
 
     case 'heading': {
+      // An empty heading (H2 pressed on an empty line) is no heading: a section render skips
+      // it, as it skips an empty list item below.
+      if (walk.section && !docHasWords(node)) return '';
       // Clamped to h2–h6. The page's <h1> is the entity title rendered by the layout;
       // a body that can emit its own <h1> produces two document headings, which is an
       // outline defect for screen readers (WCAG 2.2) before it is an SEO one.
       const raw = node.attrs?.['level'];
       const level = typeof raw === 'number' && raw >= 2 && raw <= 6 ? Math.floor(raw) : 2;
-      return `<h${level}>${renderChildren(node.content)}</h${level}>`;
+      return `<h${level}>${renderChildren(node.content, walk)}</h${level}>`;
     }
 
     case 'bulletList':
-      return `<ul>${renderChildren(node.content)}</ul>`;
+      return wrap('ul', renderChildren(node.content, walk), walk);
     case 'orderedList':
-      return `<ol>${renderChildren(node.content)}</ol>`;
+      return wrap('ol', renderChildren(node.content, walk), walk);
     case 'listItem':
-      return `<li>${renderChildren(node.content)}</li>`;
+      if (walk.section && !docHasWords(node)) return '';
+      return `<li>${renderChildren(node.content, walk)}</li>`;
     case 'blockquote':
-      return `<blockquote>${renderChildren(node.content)}</blockquote>`;
+      return wrap('blockquote', renderChildren(node.content, walk), walk);
 
     case 'codeBlock': {
       const lang = node.attrs?.['language'];
@@ -154,7 +157,9 @@ function renderNode(node: TiptapNode): string {
         typeof lang === 'string' && /^[a-z0-9+#-]{1,20}$/i.test(lang)
           ? ` class="language-${lang.toLowerCase()}"`
           : '';
-      return `<pre><code${cls}>${renderChildren(node.content)}</code></pre>`;
+      const inner = renderChildren(node.content, walk);
+      if (walk.section && inner === '') return '';
+      return `<pre><code${cls}>${inner}</code></pre>`;
     }
 
     case 'horizontalRule':
@@ -178,12 +183,12 @@ function renderNode(node: TiptapNode): string {
     }
 
     case 'doc':
-      return renderChildren(node.content);
+      return renderChildren(node.content, walk);
 
     default:
       // Unknown node: render its children, drop the wrapper. Content survives an
       // editor-extension upgrade; unrecognised markup never reaches the page.
-      return renderChildren(node.content);
+      return renderChildren(node.content, walk);
   }
 }
 
@@ -191,7 +196,24 @@ function renderNode(node: TiptapNode): string {
 export function renderTiptapToHtml(doc: unknown): string {
   const parsed = TiptapDocSchema.safeParse(doc);
   if (!parsed.success) return '';
-  return renderChildren(parsed.data.content);
+  return renderChildren(parsed.data.content, ARTICLE);
+}
+
+/**
+ * A section body (Admin v2 E10, the Text block's): checked by the section walk
+ * (`sectionDocProblem`, packages/schemas/tiptap.ts: iterative, at most 300 nodes and 8 levels,
+ * the editor's content model and attributes), then rendered by the same allowlist walk on the
+ * JSON as stored. zod's recursive TiptapDocSchema is not run: it rebuilds its object schema
+ * for every node, so one body at the cap cost 6 to 26 ms warm to parse, where the walk and this
+ * render together cost 0.3 to 1.4 ms warm (Node 24, 2026-10-31 and 2026-11-01; the figures are
+ * in SECTION_DOC_MAX_NODES's note). Anything the walk accepts has only the keys
+ * TiptapDocSchema keeps, so the JSON as stored is what that parse would have handed the
+ * renderer. A body the walk refuses renders nothing; a heading or a list item with no words
+ * renders nothing either (Walk above).
+ */
+export function renderSectionDocToHtml(doc: unknown): string {
+  if (sectionDocProblem(doc) !== null) return '';
+  return renderChildren((doc as TiptapDoc).content, SECTION);
 }
 
 /** Plain text of a document — used for excerpts and reading time. */

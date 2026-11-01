@@ -165,6 +165,7 @@ describe('playwright.config.ts', () => {
       'admin-setup',
       'admin-samples',
       'admin',
+      'blocks',
       'visibility',
       'general',
       'ga4',
@@ -173,12 +174,16 @@ describe('playwright.config.ts', () => {
     ]);
     expect(off.get('chromium')!.dependencies).toEqual([]);
     expect(off.get('admin')!.dependencies).toEqual(['admin-samples']);
-    expect(off.get('visibility')!.dependencies).toEqual(['chromium', 'admin']);
+    // Admin v2 E10: the section blocks run alone after the public and admin specs.
+    expect(off.get('blocks')!.dependencies).toEqual(['chromium', 'admin']);
+    expect(off.get('visibility')!.dependencies).toEqual(['blocks']);
   });
 
   it('unset: every project is main’s, field for field, but the admin project ignoring the drill', async () => {
     // main 42b61c6f's projects as written. The one addition while unset: the admin project
     // ignores the drill's file, which would otherwise be one of its specs (and only skip).
+    // Since Admin v2 E10 (in both modes, not a rehearsal change): the section blocks' own
+    // project between the admin specs and page visibility, its spec ignored by the admin one.
     vi.resetModules();
     vi.stubEnv('E2E_RELEASES', '');
     const { default: config } = await import('../../playwright.config');
@@ -220,10 +225,12 @@ describe('playwright.config.ts', () => {
           spec('maintenance'),
           'maintenance\\.teardown\\.ts$',
           spec('releases-mode'),
+          spec('section-blocks'),
         ],
         dependencies: ['admin-samples'],
       }),
-      p('visibility', { testMatch: spec('visibility'), dependencies: ['chromium', 'admin'] }),
+      p('blocks', { testMatch: spec('section-blocks'), dependencies: ['chromium', 'admin'] }),
+      p('visibility', { testMatch: spec('visibility'), dependencies: ['blocks'] }),
       p('general', { testMatch: spec('general'), dependencies: ['visibility'] }),
       p('ga4', { testMatch: spec('ga4'), dependencies: ['general'] }),
       p('maintenance', {
@@ -243,6 +250,8 @@ describe('playwright.config.ts', () => {
     expect(on.get('releases-mode')!.dependencies).toEqual(['chromium', 'admin']);
     // The projects that change the whole site wait for the drill.
     expect(on.get('visibility')!.dependencies).toEqual(['releases-mode']);
+    // The section blocks (Admin v2 E10) are written for releases off: no project here.
+    expect(on.has('blocks')).toBe(false);
   });
 
   it('the drill is never one of the admin project’s specs', async () => {
