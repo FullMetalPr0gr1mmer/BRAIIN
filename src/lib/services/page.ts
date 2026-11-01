@@ -1,5 +1,6 @@
 import type { Locale } from '@schemas/primitives';
 import { getServiceBySlug, toServiceDetail, type ServiceDetail } from '@/lib/data/services';
+import { mapRows } from '@/lib/data/parse';
 import { getPublishedDisciplines, type Discipline } from '@/lib/data/disciplines';
 import { getServiceCase, type ServiceCase } from '@/lib/data/serviceCases';
 import { loadHead, type Head } from '@/lib/seo/head';
@@ -104,7 +105,12 @@ export async function loadServicePage(
   locals: Locals,
   locale: Locale,
 ): Promise<ServicePage | null> {
-  const serviceQuery = getServiceBySlug(slug).then((row) => (row ? toServiceDetail(row) : null));
+  // The row is mapped inside its own guard (H15, `mapRows`): a row that cannot be mapped is a
+  // logged 404, never a rejected promise that every request of the page would answer with a
+  // 500 (a stored body that threw in toServiceDetail did exactly that).
+  const serviceQuery = getServiceBySlug(slug).then((row) =>
+    row ? (mapRows([row], toServiceDetail, 'service')[0] ?? null) : null,
+  );
   const [service, disciplines, serviceCase, head] = await Promise.all([
     serviceQuery,
     getPublishedDisciplines(),

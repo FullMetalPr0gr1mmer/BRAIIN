@@ -1,6 +1,6 @@
 import { docHasWords } from '@schemas/docWords';
 import {
-  TiptapDocSchema,
+  articleDocProblem,
   keptHref,
   sectionDocProblem,
   type TiptapDoc,
@@ -192,11 +192,27 @@ function renderNode(node: TiptapNode, walk: Walk): string {
   }
 }
 
-/** Validates then renders. Invalid input yields '' rather than throwing. */
+/**
+ * An article body (a blog post's, a service's, a project's): checked, then rendered. Invalid input
+ * yields '' rather than throwing, whatever it holds (H15).
+ *
+ * The check is `articleDocProblem` (packages/schemas/tiptap.ts): one iterative, bounded walk of
+ * the raw JSON that accepts exactly what TiptapDocSchema accepts, up to 5,000 nodes and 32
+ * levels. zod's recursive parse is not run: it overflowed the stack on a deep body (a RangeError
+ * at about 1,250 levels, so a 500 on every request of the page), and on a long real article it
+ * cost several times the Workers Free plan's 10 ms of CPU. The renderer then walks the JSON as
+ * stored, which it reads exactly as it read zod's parse of it (only `type`, `text`, `attrs`,
+ * `marks` and `content`), so the bytes are the same (tests/lib/articleRender.spec.ts holds the
+ * renders from before H15). Past the check the renderer's own recursion is at most 32 deep; the
+ * try is the promise that nothing in a stored body can make a page fail.
+ */
 export function renderTiptapToHtml(doc: unknown): string {
-  const parsed = TiptapDocSchema.safeParse(doc);
-  if (!parsed.success) return '';
-  return renderChildren(parsed.data.content, ARTICLE);
+  try {
+    if (articleDocProblem(doc) !== null) return '';
+    return renderChildren((doc as TiptapDoc).content, ARTICLE);
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -212,23 +228,33 @@ export function renderTiptapToHtml(doc: unknown): string {
  * renders nothing either (Walk above).
  */
 export function renderSectionDocToHtml(doc: unknown): string {
-  if (sectionDocProblem(doc) !== null) return '';
-  return renderChildren((doc as TiptapDoc).content, SECTION);
+  try {
+    if (sectionDocProblem(doc) !== null) return '';
+    return renderChildren((doc as TiptapDoc).content, SECTION);
+  } catch {
+    return '';
+  }
 }
 
-/** Plain text of a document — used for excerpts and reading time. */
+/**
+ * Plain text of a document — used for excerpts and reading time. The same check as the
+ * renderer's, then the text in document order, read without recursion ('' when refused).
+ */
 export function tiptapToPlainText(doc: unknown): string {
-  const parsed = TiptapDocSchema.safeParse(doc);
-  if (!parsed.success) return '';
-  const parts: string[] = [];
-  const walk = (nodes: TiptapNode[] | undefined): void => {
-    for (const node of nodes ?? []) {
+  try {
+    if (articleDocProblem(doc) !== null) return '';
+    const parts: string[] = [];
+    const stack: TiptapNode[] = [...((doc as TiptapDoc).content ?? [])].reverse();
+    while (stack.length > 0) {
+      const node = stack.pop()!;
       if (node.type === 'text' && typeof node.text === 'string') parts.push(node.text);
-      walk(node.content);
+      const children = node.content ?? [];
+      for (let i = children.length - 1; i >= 0; i -= 1) stack.push(children[i]!);
     }
-  };
-  walk(parsed.data.content);
-  return parts.join(' ').replace(/\s+/g, ' ').trim();
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  } catch {
+    return '';
+  }
 }
 
 /** Reading time in whole minutes, floor 1. 200 wpm is the usual editorial figure. */

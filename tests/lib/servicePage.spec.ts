@@ -336,6 +336,38 @@ describe('loadServicePage', () => {
     expect(html).not.toContain('<script');
   });
 
+  // H15 (PRE-1): before it, toServiceDetail ran zod's recursive parse in a `.then` outside the
+  // loader's try, so a body stored around the API nested ~1,250 deep threw a RangeError and
+  // the page answered 500 on every request.
+  it('a body stored nested 20,000 deep: the page renders, without the body', async () => {
+    let node: unknown = { type: 'text', text: 'x' };
+    for (let i = 0; i < 20_000; i += 1) node = { type: 'blockquote', content: [node] };
+    rows.logo = { ...rows.logo!, body: { en: { type: 'doc', content: [node] } } };
+    const page = await loadServicePage('logo', {}, 'en');
+    expect(page?.service.slug).toBe('logo');
+    expect(page?.service.bodyHtml).toBeNull();
+    expect((await resolveServiceRoute('logo', {}, 'ar')).kind).toBe('page');
+  });
+
+  it('a row that cannot be mapped is a logged 404, never a rejected promise (a 500)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    rows.logo = Object.defineProperty({ ...rows.logo! }, 'value_points', {
+      get() {
+        throw new RangeError('Maximum call stack size exceeded');
+      },
+    });
+    await expect(loadServicePage('logo', {}, 'en')).resolves.toBeNull();
+    expect((await resolveServiceRoute('logo', {}, 'en')).kind).toBe('missing');
+    expect(warn).toHaveBeenCalledWith(
+      '[content] dropped service row (slug=logo): unreadable (RangeError)',
+    );
+    // The siblings still render.
+    expect((await loadServicePage('business-cards', {}, 'en'))?.service.slug).toBe(
+      'business-cards',
+    );
+    warn.mockRestore();
+  });
+
   it('no case: the page renders without one (the band hides, the CTA skips to the form)', async () => {
     cases = {};
     const page = await loadServicePage('logo', {}, 'en');

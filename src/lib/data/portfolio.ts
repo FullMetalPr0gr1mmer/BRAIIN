@@ -14,7 +14,7 @@ import { supabaseConfigured } from '@/lib/supabase/client';
 import { renderTiptapToHtml } from '@/lib/content/tiptap';
 import { clipOf, imageRef, type ImageRef } from '@/lib/media/resolve';
 import { describable } from '@/lib/portfolio/caseStudy';
-import { parseRows, reportLoadError } from './parse';
+import { mapRows, parseRows, reportLoadError } from './parse';
 import { contentClient } from './source';
 
 // Runtime data access for the public portfolio / case studies (Tier A SSR). Tenant +
@@ -181,15 +181,29 @@ function toCaseMedia(row: PortfolioMediaRow): CaseMedia {
  * or rpc/save_portfolio), skipping the admin API that derives it, and the edge would then
  * cache whatever markup they wrote. The renderer can only emit the tags and attributes
  * written literally in it. The cost lands on an edge-cache miss only (Security > Perf).
+ *
+ * Never throws (H15): the renderer answers '' for anything it cannot read, and anything
+ * else that went wrong here is no body, never a page that fails.
  */
 export function renderBody(body: CaseStudyRow['body']): LocalizedProse | null {
-  const en = renderTiptapToHtml(body?.en);
-  const ar = renderTiptapToHtml(body?.ar);
-  if (!en && !ar) return null;
-  return ar ? { en, ar } : { en };
+  try {
+    const en = renderTiptapToHtml(body?.en);
+    const ar = renderTiptapToHtml(body?.ar);
+    if (!en && !ar) return null;
+    return ar ? { en, ar } : { en };
+  } catch {
+    return null;
+  }
 }
 
-export function toCaseStudy(row: CaseStudyRow): CaseStudy {
+/** What a case study is mapped for: the page renders its body; the discovery index does not. */
+interface CaseStudyUse {
+  body: boolean;
+}
+
+const FOR_PAGE: CaseStudyUse = { body: true };
+
+export function toCaseStudy(row: CaseStudyRow, use: CaseStudyUse = FOR_PAGE): CaseStudy {
   const byRole = (role: PortfolioMediaRow['role']) =>
     row.media
       .filter((m) => m.role === role)
@@ -203,7 +217,7 @@ export function toCaseStudy(row: CaseStudyRow): CaseStudy {
   return {
     ...toCard(row),
     summary: row.summary,
-    bodyHtml: renderBody(row.body),
+    bodyHtml: use.body ? renderBody(row.body) : null,
     lead: row.lead,
     goal: row.goal,
     result: row.result,
@@ -246,9 +260,19 @@ export async function getPortfolioCards(
 /**
  * THE row → case-study path, shared by the page and the discovery index: whatever it
  * rejects (and logs) is a 404 on the page AND absent from the sitemap and llms.txt.
+ *
+ * Each row is mapped inside its own guard (H15, `mapRows`): a row that cannot be mapped is
+ * dropped and logged, never the whole list (a stored body that threw used to empty the index,
+ * so every case study left the sitemap and llms.txt). The index maps without the body
+ * (`use.body` false): it never shows it, and rendering every project's body cost CPU on each
+ * sitemap miss. Which rows survive does not depend on it, since renderBody never throws.
  */
-export function parseCaseStudies(rows: unknown[]): CaseStudy[] {
-  return parseRows(CaseStudyRowSchema, rows, 'portfolio').map(toCaseStudy);
+export function parseCaseStudies(rows: unknown[], use: CaseStudyUse = FOR_PAGE): CaseStudy[] {
+  return mapRows(
+    parseRows(CaseStudyRowSchema, rows, 'portfolio'),
+    (row) => toCaseStudy(row, use),
+    'portfolio',
+  );
 }
 
 export interface CaseStudyEntry {
@@ -278,7 +302,7 @@ export async function getCaseStudyIndex(): Promise<CaseStudyEntry[]> {
       reportLoadError('case_study_index', error);
       return [];
     }
-    return parseCaseStudies(data ?? []).map((study) => ({
+    return parseCaseStudies(data ?? [], { body: false }).map((study) => ({
       id: study.id,
       slug: study.slug,
       title: study.title,

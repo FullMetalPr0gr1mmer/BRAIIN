@@ -63,6 +63,24 @@ export function parseRows<S extends z.ZodTypeAny>(
   });
 }
 
+/**
+ * Maps validated rows to what a page renders, each row inside its own guard (H15): a row whose
+ * mapping throws is dropped and logged (its slug and the error's name, never a value), so one
+ * bad row is a 404 or a missing entry, never a 500 or an empty list. The page and its discovery
+ * index map through the same call, so they still agree on which rows exist.
+ */
+export function mapRows<T, U>(rows: readonly T[], map: (row: T) => U, entity: string): U[] {
+  return rows.flatMap((row) => {
+    try {
+      return [map(row)];
+    } catch (err) {
+      const name = err instanceof Error ? err.name : 'unknown';
+      console.warn(`[content] dropped ${entity} row (slug=${rowSlug(row)}): unreadable (${name})`);
+      return [];
+    }
+  });
+}
+
 /** Validate a single row; log + return null when it fails. */
 export function parseRow<S extends z.ZodTypeAny>(
   schema: S,
