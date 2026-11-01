@@ -94,11 +94,14 @@ create table if not exists public.site_appearance (
   constraint site_appearance_cta_label check (
     header_cta_label is null or app.faq_text_ok(header_cta_label, 40)),
   -- A path on this site ("/contact#inquiry": never "//", never a backslash) or an https link;
-  -- no space, quote or angle bracket. The Worker also runs the nav's scheme allowlist.
+  -- no space, quote or angle bracket. Never the Arabic prefix: an Arabic page adds "/ar" to a
+  -- site path itself (localizedHref), so "/ar/…" would render "/ar/ar/…". The Worker also runs
+  -- the nav's scheme allowlist.
   constraint site_appearance_cta_href check (
     header_cta_href is null
     or (char_length(header_cta_href) <= 300
-        and header_cta_href ~ '^(/([^/\\[:space:]<>"''][^\\[:space:]<>"'']*)?|https://[^/\\[:space:]<>"''][^\\[:space:]<>"'']*)$')),
+        and header_cta_href ~ '^(/([^/\\[:space:]<>"''][^\\[:space:]<>"'']*)?|https://[^/\\[:space:]<>"''][^\\[:space:]<>"'']*)$'
+        and header_cta_href !~ '^/ar([/?#]|$)')),
   -- A button that shows has words and a destination.
   constraint site_appearance_cta_complete check (
     not header_cta_show or (header_cta_label is not null and header_cta_href is not null)),

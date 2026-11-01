@@ -56,7 +56,8 @@ export const siteAppearanceSingleton: SingletonConfig = {
   constraintFields: {
     site_appearance_cta_href: {
       field: 'ctaHref',
-      message: 'Use a page of this site, starting with /, or a link starting with https://',
+      message:
+        'Use a page of this site, starting with / and without /ar, or a link starting with https://',
     },
     site_appearance_cta_label: {
       field: 'ctaLabel',

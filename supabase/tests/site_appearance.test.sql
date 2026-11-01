@@ -5,15 +5,15 @@
 --     and the tenant, staff select, insert and update, never DELETE; nobody TRUNCATEs), the
 --     registry row, the guard first among the BEFORE triggers;
 --   • Admin and Developer add and change the row (theme.edit); Content Creator, SEO and Sales
---     change nothing; every CMS role reads it (registry contract #1), Sales none;
+--     add and change nothing; every CMS role reads it (registry contract #1), Sales none;
 --   • anon reads the launch tenant's options and nothing else of the row, never another
 --     tenant's, and writes nothing;
 --   • another tenant's Admin reads and writes none of this tenant's row;
---   • stale tokens (a demoted Developer, a deactivated Admin, a locked Admin) change nothing
---     (the RESTRICTIVE live check);
+--   • stale tokens (a demoted Developer, a deactivated Admin, a locked Admin) add and change
+--     nothing (the RESTRICTIVE live checks, INSERT and UPDATE);
 --   • the CHECKs: every bucket is a closed set; the button needs its words and its link; its
---     link is a site path or an https link; its words are plain bilingual text; a bar that
---     stays see-through after the hero takes the darkest tint (23514 each);
+--     link is a site path (never under /ar) or an https link; its words are plain bilingual
+--     text; a bar that stays see-through after the hero takes the darkest tint (23514 each);
 --   • history: every save is a content_versions row under 'site_appearance';
 --   • releases on: a direct write is refused by the release guard.
 --
@@ -21,12 +21,14 @@
 -- tenant anon resolves to (app.default_tenant_id()).
 
 begin;
-select plan(45);
+select plan(53);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
+-- T3 ('…ee') has no row: a live Developer's first save there is an INSERT.
 insert into public.tenants (id, name, created_at) values
   ('e5000000-0000-0000-0000-000000000001', 'E5 one', '2000-01-01T00:00:00Z'),
-  ('e5000000-0000-0000-0000-0000000000ff', 'E5 two', '2000-01-02T00:00:00Z');
+  ('e5000000-0000-0000-0000-0000000000ff', 'E5 two', '2000-01-02T00:00:00Z'),
+  ('e5000000-0000-0000-0000-0000000000ee', 'E5 three', '2000-01-03T00:00:00Z');
 insert into auth.users (id, email) values
   ('e5000000-0000-0000-0000-0000000000a1', 'e5-admin@example.test'),
   ('e5000000-0000-0000-0000-0000000000c1', 'e5-creator@example.test'),
@@ -36,7 +38,8 @@ insert into auth.users (id, email) values
   ('e5000000-0000-0000-0000-0000000000d2', 'e5-demoted@example.test'),
   ('e5000000-0000-0000-0000-0000000000a3', 'e5-inactive@example.test'),
   ('e5000000-0000-0000-0000-0000000000a4', 'e5-locked@example.test'),
-  ('e5000000-0000-0000-0000-0000000000f1', 'e5-other@example.test');
+  ('e5000000-0000-0000-0000-0000000000f1', 'e5-other@example.test'),
+  ('e5000000-0000-0000-0000-0000000000d3', 'e5-developer-three@example.test');
 insert into public.profiles (id, tenant_id, role, is_active, locked_until) values
   ('e5000000-0000-0000-0000-0000000000a1', 'e5000000-0000-0000-0000-000000000001', 'admin', true, null),
   ('e5000000-0000-0000-0000-0000000000c1', 'e5000000-0000-0000-0000-000000000001', 'content_creator', true, null),
@@ -48,7 +51,8 @@ insert into public.profiles (id, tenant_id, role, is_active, locked_until) value
   ('e5000000-0000-0000-0000-0000000000a3', 'e5000000-0000-0000-0000-000000000001', 'admin', false, null),
   ('e5000000-0000-0000-0000-0000000000a4', 'e5000000-0000-0000-0000-000000000001', 'admin', true,
    now() + interval '10 minutes'),
-  ('e5000000-0000-0000-0000-0000000000f1', 'e5000000-0000-0000-0000-0000000000ff', 'admin', true, null);
+  ('e5000000-0000-0000-0000-0000000000f1', 'e5000000-0000-0000-0000-0000000000ff', 'admin', true, null),
+  ('e5000000-0000-0000-0000-0000000000d3', 'e5000000-0000-0000-0000-0000000000ee', 'developer', true, null);
 -- The other tenant's row, with a setting anon must never see.
 insert into public.site_appearance (tenant_id, header_logo_size)
   values ('e5000000-0000-0000-0000-0000000000ff', 's');
@@ -208,6 +212,20 @@ select is(_state($$ insert into public.site_appearance (tenant_id)
 select is(_rows($$ update public.site_appearance set header_logo_size = 'm'
                    where tenant_id = 'e5000000-0000-0000-0000-0000000000ff' $$), 0,
   'admin CANNOT change another tenant''s row');
+-- INSERT is the first save of every site (no row until then). T1's row exists, so an RLS
+-- refusal (42501) is told apart from the key's (23505): the policies run first.
+select _as('e5000000-0000-0000-0000-0000000000e1', 'seo', 'e5000000-0000-0000-0000-000000000001');
+select is(_state($$ insert into public.site_appearance (tenant_id)
+                    values ('e5000000-0000-0000-0000-000000000001') $$), '42501',
+  'seo CANNOT add a row (refused by RLS before the key)');
+select _as('e5000000-0000-0000-0000-0000000000b1', 'sales', 'e5000000-0000-0000-0000-000000000001');
+select is(_state($$ insert into public.site_appearance (tenant_id)
+                    values ('e5000000-0000-0000-0000-000000000001') $$), '42501',
+  'sales CANNOT add a row (refused by RLS before the key)');
+select _as('e5000000-0000-0000-0000-0000000000d3', 'developer', 'e5000000-0000-0000-0000-0000000000ee');
+select is(_rows($$ insert into public.site_appearance (tenant_id)
+                   values ('e5000000-0000-0000-0000-0000000000ee') $$), 1,
+  'a live developer adds its own tenant''s first row (theme.edit, by the token and live)');
 
 -- ── 3. Stale tokens and another tenant ───────────────────────────────────────
 select _as('e5000000-0000-0000-0000-0000000000d2', 'developer', 'e5000000-0000-0000-0000-000000000001');
@@ -222,6 +240,21 @@ select _as('e5000000-0000-0000-0000-0000000000a4', 'admin', 'e5000000-0000-0000-
 select is(_rows($$ update public.site_appearance set header_logo_size = 's'
                    where tenant_id = 'e5000000-0000-0000-0000-000000000001' $$), 0,
   'a locked admin''s token changes nothing (live check)');
+-- The same three stale tokens on a first save (the RESTRICTIVE live INSERT policy). T1's row
+-- exists, so a refusal by RLS (42501) comes before the key's (23505): a live insert policy that
+-- read the token's role instead of the profile would let each through to the key.
+select _as('e5000000-0000-0000-0000-0000000000d2', 'developer', 'e5000000-0000-0000-0000-000000000001');
+select is(_state($$ insert into public.site_appearance (tenant_id)
+                    values ('e5000000-0000-0000-0000-000000000001') $$), '42501',
+  'a demoted developer''s token adds no row (live insert check)');
+select _as('e5000000-0000-0000-0000-0000000000a3', 'admin', 'e5000000-0000-0000-0000-000000000001');
+select is(_state($$ insert into public.site_appearance (tenant_id)
+                    values ('e5000000-0000-0000-0000-000000000001') $$), '42501',
+  'a deactivated admin''s token adds no row (live insert check)');
+select _as('e5000000-0000-0000-0000-0000000000a4', 'admin', 'e5000000-0000-0000-0000-000000000001');
+select is(_state($$ insert into public.site_appearance (tenant_id)
+                    values ('e5000000-0000-0000-0000-000000000001') $$), '42501',
+  'a locked admin''s token adds no row (live insert check)');
 select _as('e5000000-0000-0000-0000-0000000000f1', 'admin', 'e5000000-0000-0000-0000-0000000000ff');
 select is(_seen() + _rows($$ update public.site_appearance set header_logo_size = 's'
                              where tenant_id = 'e5000000-0000-0000-0000-000000000001' $$), 0,
@@ -247,6 +280,11 @@ select is(_set($$ header_cta_href = '/\evil.example' $$) || _set($$ header_cta_h
   '235142351423514', 'a backslash, a space or a quote in the link is refused');
 select is(_set($$ header_cta_href = 'https://calendly.example/studio' $$), '',
   'an https link is taken');
+select is(_set($$ header_cta_href = '/ar/contact' $$) || _set($$ header_cta_href = '/ar' $$)
+          || _set($$ header_cta_href = '/ar#inquiry' $$) || _set($$ header_cta_href = '/ar?x=1' $$),
+  '23514235142351423514', 'a link that starts with the Arabic prefix is refused (Arabic pages add it)');
+select is(_set($$ header_cta_href = '/arabic-calligraphy' $$), '',
+  'a path that only begins with the letters ar is a page of its own');
 select is(_set($$ header_cta_label = '{"en":"Only English"}' $$)
           || _set($$ header_cta_label = '{"en":" Padded","ar":"ب"}' $$)
           || _set(format('header_cta_label = %L', jsonb_build_object('en', repeat('a', 41), 'ar', 'ب'))),

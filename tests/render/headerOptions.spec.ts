@@ -11,14 +11,42 @@ import { normalise } from './harness';
 // header as built, the logo's `sizes` following its preset, and the call-to-action button in
 // the bar and in the small-screen menu, as text, with its link localized.
 
-const state = vi.hoisted(() => ({ settings: null as HeaderSettings | null }));
+const state = vi.hoisted(() => ({
+  settings: null as HeaderSettings | null,
+  /** The settings read has been started. */
+  settingsAsked: false,
+  /** The header menu's read waits (a few ticks) for the settings read to start first. */
+  navWaits: false,
+}));
 vi.mock('@/lib/data/appearance', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  getHeaderSettings: async () => state.settings,
+  getHeaderSettings: async () => {
+    state.settingsAsked = true;
+    return state.settings;
+  },
 }));
+vi.mock('@/lib/data/navigation', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/lib/data/navigation')>();
+  return {
+    ...real,
+    getNavigation: async (location: 'header' | 'footer') => {
+      if (state.navWaits && location === 'header') {
+        for (let i = 0; i < 20 && !state.settingsAsked; i += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1));
+        }
+        if (!state.settingsAsked) {
+          throw new Error('the header read its options only after its menu (two round trips)');
+        }
+      }
+      return real.getNavigation(location);
+    },
+  };
+});
 
 beforeEach(() => {
   state.settings = { ...HEADER_DEFAULTS };
+  state.settingsAsked = false;
+  state.navWaits = false;
 });
 
 async function render(locale: 'en' | 'ar', variant: 'overlay' | 'solid' = 'overlay') {
@@ -111,6 +139,14 @@ describe('the header options', () => {
       ctaHref: 'https://calendly.example/studio',
     };
     expect(await render('ar')).toContain('href="https://calendly.example/studio"');
+  });
+
+  test('the menu and the options are read together: one round trip, not two in a row', async () => {
+    // The menu's read resolves only once the options' read has started; a header that awaited
+    // the menu before asking for its options would never start it, and the render throws.
+    state.navWaits = true;
+    state.settings = { ...HEADER_DEFAULTS, logoSize: 'l' };
+    expect(headerTag(await render('en'))).toContain('data-logo="l"');
   });
 
   test('the solid variant takes the same attributes', async () => {

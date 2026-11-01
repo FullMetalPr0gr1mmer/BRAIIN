@@ -1010,14 +1010,64 @@ html[dir='rtl'] .site-nav__cta {
 .site-nav__cta-item {
   display: none;
 }
+/* The small-screen copy is also a link of the menu's list, whose rules (.site-nav__list a:
+   the padding, size, spacing and underline, and their Arabic and full-screen forms) outrank
+   one class. The pill is restated here at a weight above each of them. */
+.site-nav__list a.site-nav__cta,
+.site-header[data-mobile] .site-nav__list a.site-nav__cta {
+  color: #fff;
+  padding: 7px 15px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .site-nav__list a.site-nav__cta,
+html[dir='rtl'] .site-header[data-mobile] .site-nav__list a.site-nav__cta {
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.site-nav__list a.site-nav__cta::after {
+  content: none;
+}
 
-/* Wide screens: where the logo and the links sit. */
+/* Wide screens: where the logo and the links sit. The bar stays ONE row, so it is exactly
+   --bs-header-h tall and every offset built on that variable holds (services.css, the
+   case study, About): the options below are sized so the six links of the seeded menu fit
+   at every width they apply to (tests/admin/header.e2e.ts measures each one). */
 @media (min-width: 56.3125rem) {
-  /* The logo centred: the links take the first column, the language switch (and the
-     button) the last, and the two columns share the free space evenly. */
+  /* The links beside the logo, or beside the language switch (the logo at the start). */
+  .site-header[data-align='start'] .site-header__bar {
+    justify-content: flex-start;
+  }
+  .site-header[data-align='start'] .site-nav__panel {
+    margin-inline-end: auto;
+  }
+  .site-header[data-align='end'] .site-header__brand {
+    margin-inline-end: auto;
+  }
+}
+/* With the button, the narrowest wide screens (901 to 1023 px) close the spaces a little,
+   so the links, the button and the language switch keep one row beside a large logo. */
+@media (min-width: 56.3125rem) and (max-width: 63.9375rem) {
+  .site-header__bar:has(> .site-header__end) {
+    gap: 1rem;
+  }
+  .site-header__bar:has(> .site-header__end) .site-nav__list {
+    gap: clamp(12px, 1.4vw, 36px);
+  }
+}
+/* The logo centred, from 1280 px: each side of it then has room for the links on one row.
+   Narrower, the bar keeps the logo at the start (half the bar cannot hold six links there:
+   they wrapped onto a second row and the bar outgrew --bs-header-h). The links take the first
+   column, the language switch (and the button) the last, the two sharing the free space
+   evenly. */
+@media (min-width: 80rem) {
   .site-header[data-logo-pos='center'] .site-header__bar {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    column-gap: 1rem;
   }
   .site-header[data-logo-pos='center'] .site-header__brand {
     grid-column: 2;
@@ -1028,21 +1078,14 @@ html[dir='rtl'] .site-nav__cta {
     grid-row: 1;
     justify-self: start;
   }
+  .site-header[data-logo-pos='center'] .site-nav__list {
+    gap: clamp(12px, 1.4vw, 28px);
+  }
   .site-header[data-logo-pos='center'] .site-header__bar > .site-header__lang,
   .site-header[data-logo-pos='center'] .site-header__end {
     grid-column: 3;
     grid-row: 1;
     justify-self: end;
-  }
-  /* The links beside the logo, or beside the language switch (the logo at the start). */
-  .site-header[data-align='start'] .site-header__bar {
-    justify-content: flex-start;
-  }
-  .site-header[data-align='start'] .site-nav__panel {
-    margin-inline-end: auto;
-  }
-  .site-header[data-align='end'] .site-header__brand {
-    margin-inline-end: auto;
   }
 }
 

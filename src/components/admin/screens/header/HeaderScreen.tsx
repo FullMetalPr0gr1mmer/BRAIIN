@@ -52,28 +52,30 @@ function Sketch({ sketch, title, line }: { sketch: BarSketch; title: string; lin
         <span className="hdr-pv__t">{title}</span>
         <span className="hdr-pv__s">{line}</span>
       </figcaption>
-      <div className="hdr-pv__stage" data-stage={sketch.backdrop === 'solid' ? 'page' : 'hero'}>
-        <div
-          className="hdr-pv__bar"
-          aria-hidden="true"
-          data-backdrop={sketch.backdrop}
-          data-blur={sketch.blur}
-          data-logo={sketch.logo}
-          data-logo-pos={sketch.logoPosition}
-          data-align={sketch.align}
-        >
-          <span className="hdr-pv__logo" />
-          <span className="hdr-pv__links">
-            <span />
-            <span />
-            <span />
-            <span />
-          </span>
-          <span className="hdr-pv__end">
-            {sketch.button && <span className="hdr-pv__cta">{sketch.button}</span>}
-            <span className="hdr-pv__lang" />
-          </span>
-        </div>
+      <div className="hdr-pv__stage" data-stage={sketch.ground}>
+        {sketch.shown ? (
+          <div
+            className="hdr-pv__bar"
+            aria-hidden="true"
+            data-backdrop={sketch.backdrop}
+            data-blur={sketch.blur}
+            data-logo={sketch.logo}
+            data-logo-pos={sketch.logoPosition}
+            data-align={sketch.align}
+          >
+            <span className="hdr-pv__logo" />
+            <span className="hdr-pv__links">
+              <span />
+              <span />
+              <span />
+              <span />
+            </span>
+            <span className="hdr-pv__end">
+              {sketch.button && <span className="hdr-pv__cta">{sketch.button}</span>}
+              <span className="hdr-pv__lang" />
+            </span>
+          </div>
+        ) : null}
       </div>
     </figure>
   );

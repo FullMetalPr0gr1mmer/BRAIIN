@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   HEADER_BLURS,
   HEADER_COLUMNS,
+  HEADER_CTA_HREF_LOCALIZED,
   HEADER_CTA_HREF_PATTERN,
   HEADER_DEFAULTS,
   HEADER_LOGO_POSITIONS,
@@ -14,6 +15,7 @@ import {
 } from '@schemas/appearance';
 import { headerAttributes, headerFromRow, LOGO_SIZES } from '@/lib/appearance/header';
 import { siteAppearanceSingleton } from '@/lib/admin/singletons/siteAppearance';
+import { ValidationError } from '@/lib/admin/errors';
 import { appearanceUi } from '@/lib/admin/ui/appearance';
 import { barSketch, afterLine } from '@/components/admin/screens/header/sketch';
 import { keyChanges, menuRows, movedOrder } from '@/components/admin/screens/header/menu';
@@ -124,7 +126,7 @@ describe('the write schema', () => {
   });
 
   it('the button link: a page of this site or an https link, nothing else', () => {
-    for (const good of ['/', '/contact#inquiry', '/ar/services?x=1', 'https://cal.example/a']) {
+    for (const good of ['/', '/contact#inquiry', '/services?x=1', 'https://cal.example/a']) {
       expect(ok({ ctaHref: good }), good).toBe(true);
       expect(HEADER_CTA_HREF_PATTERN.test(good), good).toBe(true);
     }
@@ -149,6 +151,26 @@ describe('the write schema', () => {
     expect(SQL).toContain(
       `header_cta_href ~ '^(/([^/\\\\[:space:]<>"''][^\\\\[:space:]<>"'']*)?|https://[^/\\\\[:space:]<>"''][^\\\\[:space:]<>"'']*)$'`,
     );
+    // ...and refuses the Arabic prefix with the same pattern as HEADER_CTA_HREF_LOCALIZED.
+    expect(SQL).toContain(`header_cta_href !~ '^/ar([/?#]|$)'`);
+    expect(HEADER_CTA_HREF_LOCALIZED.source).toBe(String.raw`^\/ar(?:[/?#]|$)`);
+  });
+
+  it('the button link never carries the Arabic prefix: an Arabic page adds it (no /ar/ar/…)', () => {
+    for (const bad of [
+      '/ar',
+      '/ar/',
+      '/ar/services?x=1',
+      '/ar#inquiry',
+      '/ar?x=1',
+      ' /ar/contact ',
+    ]) {
+      expect(ok({ ctaHref: bad }), bad).toBe(false);
+    }
+    // A path that only begins with the letters is a page of its own.
+    for (const good of ['/arabic-calligraphy', '/art', '/services/ar']) {
+      expect(ok({ ctaHref: good }), good).toBe(true);
+    }
   });
 
   it('a sticky bar that stays see-through after the hero takes the darkest tint', () => {
@@ -161,6 +183,12 @@ describe('the write schema', () => {
 
   it('the singleton refuses a link the menus’ scheme allowlist refuses', () => {
     expect(() => siteAppearanceSingleton.toRow({ ctaHref: 'https://ok.example/x' })).not.toThrow();
+    // Each of these passes the schema's pattern (and the SQL CHECK) but is no URL at all:
+    // `new URL()` throws, so sanitizeHref refuses it, and only toRow stands in the way.
+    for (const bad of ['https://a:b', 'https://%zz', 'https://[::1']) {
+      expect(HEADER_CTA_HREF_PATTERN.test(bad), bad).toBe(true);
+      expect(() => siteAppearanceSingleton.toRow({ ctaHref: bad }), bad).toThrow(ValidationError);
+    }
     expect(siteAppearanceSingleton.toRow({ logoSize: 'l', ctaShow: true })).toEqual({
       header_logo_size: 'l',
       header_cta_show: true,
@@ -197,6 +225,25 @@ describe('the public reader', () => {
       headerFromRow({
         header_cta_show: true,
         header_cta_href: 'javascript:alert(1)',
+        header_cta_label: BI('Go', 'اذهب'),
+      }).ctaShow,
+    ).toBe(false);
+  });
+
+  it('a link that is no URL, written around the Worker, is no button (the scheme allowlist)', () => {
+    for (const href of ['https://a:b', 'https://%zz', 'https://[::1']) {
+      const s = headerFromRow({
+        header_cta_show: true,
+        header_cta_href: href,
+        header_cta_label: BI('Go', 'اذهب'),
+      });
+      expect(s.ctaHref, href).toBeNull();
+      expect(s.ctaShow, href).toBe(false);
+    }
+    expect(
+      headerFromRow({
+        header_cta_show: true,
+        header_cta_href: '/ar/contact',
         header_cta_label: BI('Go', 'اذهب'),
       }).ctaShow,
     ).toBe(false);
@@ -272,6 +319,25 @@ describe('the screen’s sketches', () => {
     expect(afterLine({})).toBe('Turns solid');
   });
 
+  it('after scrolling the ground is the page, whatever the bar does; a bar that is not sticky is gone', () => {
+    // Over the hero: the hero's ground, the bar drawn.
+    expect(barSketch({}, false)).toMatchObject({ ground: 'hero', shown: true });
+    expect(barSketch({ sticky: false }, false)).toMatchObject({ ground: 'hero', shown: true });
+    // After scrolling: the page's light sections under a solid bar...
+    expect(barSketch({}, true)).toMatchObject({ ground: 'page', shown: true, backdrop: 'solid' });
+    // ...and under a bar that stays as it is: the tint over the page, the case its minimum is for.
+    expect(barSketch({ sticky: true, solidAfterHero: false, tint: 'dark' }, true)).toMatchObject({
+      ground: 'page',
+      shown: true,
+      backdrop: 'dark',
+    });
+    // A bar that scrolls away with the page is not drawn there at all.
+    expect(barSketch({ sticky: false, solidAfterHero: true }, true)).toMatchObject({
+      ground: 'page',
+      shown: false,
+    });
+  });
+
   it('the button shows its English words only while it is on', () => {
     expect(barSketch({ ctaShow: true, ctaLabel: BI(' Go ', 'اذهب') }, false).button).toBe('Go');
     expect(barSketch({ ctaShow: false, ctaLabel: BI('Go', 'اذهب') }, false).button).toBeNull();
@@ -280,6 +346,8 @@ describe('the screen’s sketches', () => {
 
   it('an unknown value draws the header as built', () => {
     expect(barSketch({ logoSize: 'xl', tint: 'red', menuAlign: 1 }, false)).toEqual({
+      ground: 'hero',
+      shown: true,
       backdrop: 'none',
       blur: 'none',
       logo: 'm',

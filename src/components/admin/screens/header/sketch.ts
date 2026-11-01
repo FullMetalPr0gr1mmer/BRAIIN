@@ -5,6 +5,13 @@
 type Values = Readonly<Record<string, unknown>>;
 
 export interface BarSketch {
+  /**
+   * What lies under the bar: the hero as the page opens, the page's own light sections once it
+   * has scrolled past the hero (where the tint's minimum matters).
+   */
+  ground: 'hero' | 'page';
+  /** False once a bar that is not sticky has scrolled away with the page. */
+  shown: boolean;
   /** The backdrop: see-through, one of the tints, or the solid bar. */
   backdrop: 'none' | 'light' | 'medium' | 'dark' | 'solid';
   /** The blur behind it, drawn only on the solid bar. */
@@ -34,12 +41,15 @@ function buttonOf(values: Values): string | null {
 
 /**
  * The bar as it looks over the hero (`after: false`) or once the page has scrolled past it
- * (`after: true`): solid when it turns solid, else as it was over the hero.
+ * (`after: true`), over the page's light sections: solid when it turns solid, else as it was
+ * over the hero, and gone when it is not sticky (it scrolled away with the page).
  */
 export function barSketch(values: Values, after: boolean): BarSketch {
   const tint = pick(values['tint'], ['none', 'light', 'medium', 'dark'] as const, 'none');
   const solid = after && values['solidAfterHero'] !== false;
   return {
+    ground: after ? 'page' : 'hero',
+    shown: !(after && values['sticky'] === false),
     backdrop: solid ? 'solid' : tint,
     blur: solid ? pick(values['blur'], ['none', 'soft', 'strong'] as const, 'soft') : 'none',
     logo: pick(values['logoSize'], ['s', 'm', 'l'] as const, 'm'),

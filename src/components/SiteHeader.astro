@@ -45,7 +45,9 @@ const { locale, variant = 'solid', langHref } = Astro.props;
 const identity = await getIdentity(Astro.locals);
 const brand = brandName(identity, locale);
 
-const authored = await getNavigation('header');
+// The menu and the header's options (Admin v2 E5, below) are two independent reads: started
+// together, so on an uncached render the header waits for one round trip, not two in a row.
+const [authored, settings] = await Promise.all([getNavigation('header'), getHeaderSettings()]);
 // A page that is not public (page visibility, Admin v2 U14a) leaves the menu; with nothing
 // hidden the list is returned as it came, so the markup is byte-identical.
 const items: NavNode[] = filterNavForVisibility(
@@ -73,8 +75,7 @@ const switchHref = langHref ?? localizedPath(logical, otherLocale);
 // /admin/appearance/header): a `data-*` attribute for each option that differs from the header
 // as built, and none otherwise, so with no row this markup is byte-identical to before E5.
 // global.css maps every value to a fixed rule (no inline style: CSP), and the script below
-// reads the three that change its behaviour.
-const settings = await getHeaderSettings();
+// reads the three that change its behaviour. `settings` is read with the menu, above.
 const attrs = headerAttributes(settings);
 // The call-to-action button: shown only with its words and its link (headerFromRow drops it
 // otherwise). Its link is localized like a menu link; an https link is left as it is.

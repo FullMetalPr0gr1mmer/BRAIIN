@@ -8,7 +8,8 @@ import { z } from 'zod';
 //
 // The CTA's words are plain text (rendered as text, never markup): trimmed, no control
 // character, English and Arabic both required, at most 40 characters each (the SQL CHECK
-// reuses 0098's app.faq_text_ok). Its link is a path on this site or an https link.
+// reuses 0098's app.faq_text_ok). Its link is a path on this site (never under /ar: Arabic
+// pages add the prefix) or an https link.
 
 export const HEADER_LOGO_POSITIONS = ['start', 'center'] as const;
 export const HEADER_LOGO_SIZES = ['s', 'm', 'l'] as const;
@@ -38,6 +39,13 @@ export const HEADER_CTA_HREF_MAX = 300;
 export const HEADER_CTA_HREF_PATTERN =
   /^(\/([^/\\\s<>"'][^\\\s<>"']*)?|https:\/\/[^/\\\s<>"'][^\\\s<>"']*)$/;
 
+/**
+ * A site path under the Arabic prefix ("/ar", "/ar/…", "/ar?…", "/ar#…"), which the link must
+ * not carry: an Arabic page adds the prefix itself (localizedHref), so "/ar/services" would
+ * render "/ar/ar/services". The SQL CHECK refuses the same.
+ */
+export const HEADER_CTA_HREF_LOCALIZED = /^\/ar(?:[/?#]|$)/;
+
 const CONTROL = /[\u0000-\u001F\u007F-\u009F]/;
 
 const ctaHalf = z
@@ -57,6 +65,9 @@ export const HeaderCtaHrefSchema = z
   .max(HEADER_CTA_HREF_MAX)
   .regex(HEADER_CTA_HREF_PATTERN, {
     message: 'Use a page of this site, starting with /, or a link starting with https://',
+  })
+  .refine((v) => !HEADER_CTA_HREF_LOCALIZED.test(v), {
+    message: 'Leave out /ar: Arabic pages add it on their own.',
   });
 
 /** The header's settings as the site reads them (every option known). */

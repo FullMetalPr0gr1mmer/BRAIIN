@@ -13,6 +13,7 @@ import {
   type HeaderLogoSize,
   type HeaderSettings,
 } from '@schemas/appearance';
+import { sanitizeHref } from '@/lib/content/tiptap';
 
 // The header's settings as the public site reads them (Admin v2 E5, `public.site_appearance`).
 // Pure: no request state, no database. src/lib/data/appearance.ts reads the row; SiteHeader
@@ -37,7 +38,11 @@ export function headerFromRow(row: Row | null | undefined): HeaderSettings {
   const c = HEADER_COLUMNS;
   const d = HEADER_DEFAULTS;
   const label = HeaderCtaLabelSchema.safeParse(row[c.ctaLabel]);
+  // The link renders into `<a href>` on every page: the write's two checks again (the
+  // pattern, then the menus' scheme allowlist, which also refuses a URL that does not parse,
+  // such as "https://a:b"), so a row written around the Worker renders no stranger a link.
   const href = HeaderCtaHrefSchema.safeParse(row[c.ctaHref]);
+  const ctaHref = href.success && sanitizeHref(href.data) !== null ? href.data : null;
   const out: HeaderSettings = {
     logoPosition: oneOf(HEADER_LOGO_POSITIONS, row[c.logoPosition], d.logoPosition),
     logoSize: oneOf(HEADER_LOGO_SIZES, row[c.logoSize], d.logoSize),
@@ -50,7 +55,7 @@ export function headerFromRow(row: Row | null | undefined): HeaderSettings {
     mobileMenu: oneOf(HEADER_MOBILE_MENUS, row[c.mobileMenu], d.mobileMenu),
     ctaShow: flag(row[c.ctaShow], d.ctaShow),
     ctaLabel: label.success ? label.data : null,
-    ctaHref: href.success ? href.data : null,
+    ctaHref,
   };
   // A button with no words or no destination is no button.
   if (!out.ctaLabel || !out.ctaHref) out.ctaShow = false;

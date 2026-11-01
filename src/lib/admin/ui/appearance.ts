@@ -23,7 +23,7 @@ export const appearanceUi: SingletonUi = {
         { value: 'start', label: 'At the start' },
         { value: 'center', label: 'In the centre' },
       ],
-      help: 'On wide screens. Phones always show the logo at the start.',
+      help: 'Centred from 1280 pixels wide, where the menu fits beside it. Narrower screens and phones show the logo at the start.',
     },
     {
       name: 'logoSize',
@@ -123,6 +123,7 @@ export const appearanceUi: SingletonUi = {
       column: 'header_cta_label',
       nullable: true,
       maxLength: 40,
+      help: 'Two or three words keep the bar on one line beside the menu.',
     },
     {
       name: 'ctaHref',
@@ -130,7 +131,7 @@ export const appearanceUi: SingletonUi = {
       kind: 'text',
       column: 'header_cta_href',
       maxLength: 300,
-      help: 'A page of this site, starting with / (for example /contact#inquiry), or a link starting with https://',
+      help: 'A page of this site, starting with / (for example /contact#inquiry; leave out /ar, Arabic pages add it), or a link starting with https://',
     },
   ],
   groups: [
