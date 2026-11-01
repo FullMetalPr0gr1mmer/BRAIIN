@@ -415,6 +415,59 @@ describe('a section body (SectionDocSchema)', () => {
     }
   });
 
+  // E10 check: the attrs allowlist read inherited Object.prototype members. `constructor` and
+  // `toString` found a function and were accepted (a hidden mediaId rode in that way), and
+  // `__proto__`, `hasOwnProperty` and `valueOf` made the walk throw. Parsed with JSON.parse, as a
+  // request body is, so `__proto__` is an own key.
+  it('an attribute named after an Object.prototype member is refused, never accepted or thrown', () => {
+    const MEDIA = '{"mediaId":"5eed0a00-0000-4000-8000-0000000000aa"}';
+    const fine = doc(p(t('س')));
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf']) {
+      const bodies: [string, unknown][] = [
+        [
+          `${name} on a paragraph`,
+          JSON.parse(
+            `{"type":"doc","content":[{"type":"paragraph","attrs":{"${name}":${MEDIA}},"content":[{"type":"text","text":"x"}]}]}`,
+          ),
+        ],
+        [
+          `${name} on a heading`,
+          JSON.parse(
+            `{"type":"doc","content":[{"type":"heading","attrs":{"level":2,"${name}":${MEDIA}},"content":[{"type":"text","text":"x"}]}]}`,
+          ),
+        ],
+        [
+          `${name} on a bold mark`,
+          JSON.parse(
+            `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"x","marks":[{"type":"bold","attrs":{"${name}":${MEDIA}}}]}]}]}`,
+          ),
+        ],
+        [
+          `${name} on a link`,
+          JSON.parse(
+            `{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"x","marks":[{"type":"link","attrs":{"href":"/about","${name}":${MEDIA}}}]}]}]}`,
+          ),
+        ],
+      ];
+      for (const [label, d] of bodies) {
+        expect(() => sectionDocProblem(d), label).not.toThrow();
+        expect(sectionDocProblem(d), label).toBe(
+          'This text carries settings the editor does not make.',
+        );
+        const content = { body: { en: d, ar: fine } };
+        expect(() => sectionContentIssues('textBlock', content), label).not.toThrow();
+        expect(SECTION_CONTENT_SCHEMAS.textBlock!.safeParse(content).success, label).toBe(false);
+        const write = SectionWriteSchema.safeParse({
+          pageId: '5eed0a00-0000-4000-8000-000000000007',
+          type: 'textBlock',
+          content,
+        });
+        expect(write.success, label).toBe(false);
+        expect(() => renderSectionDocToHtml(d), label).not.toThrow();
+      }
+    }
+  });
+
   it('refuses a malformed tree: a stray key, a node or mark that is not an object', () => {
     const malformed: [string, unknown][] = [
       ['a string', 'text'],

@@ -257,6 +257,16 @@ const READ_ATTR: Readonly<Record<string, string>> = {
   href: LINK,
 };
 
+/**
+ * A record's OWN entry for a key the input chose, or undefined. A plain object literal inherits
+ * Object.prototype, so `allowed['constructor']` or `allowed['toString']` would find a function
+ * and accept any value, and `__proto__` or `hasOwnProperty` would make the check throw (E10
+ * check: a hidden mediaId rode in through `constructor`, and a 500).
+ */
+function own<T>(record: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
 /** Why a node's or a mark's `attrs` is not the editor's, or null. */
 function attrsProblem(type: string, attrs: unknown): string | null {
   const required = REQUIRED[type];
@@ -264,9 +274,9 @@ function attrsProblem(type: string, attrs: unknown): string | null {
   if (!isObject(attrs)) return UNREADABLE;
   const allowed = ATTRS[type] ?? {};
   for (const [name, value] of Object.entries(attrs)) {
-    const rule = allowed[name];
+    const rule = own(allowed, name);
     if (rule === undefined) return SETTINGS;
-    if (!rule(value)) return READ_ATTR[name] ?? SETTINGS;
+    if (!rule(value)) return own(READ_ATTR, name) ?? SETTINGS;
   }
   if (required !== undefined && !(required in attrs)) return READ_ATTR[required] ?? SETTINGS;
   return null;

@@ -554,7 +554,8 @@ export const JoinApplySectionContentSchema = z
   .strict();
 
 // ── Admin v2 E10: three blocks any page may take ─────────────────────────────────────
-// Generic sections an editor adds where a page needs them, any number a page. None has
+// Generic sections an editor adds where a page needs them: Text blocks any number a page,
+// Galleries and Videos at most eight together (MEDIA_BLOCKS_PER_PAGE). None has
 // built-in copy: a block shows what is written in it and nothing else (with nothing to show
 // it renders nothing), so a block added and forgotten never puts placeholder words on a
 // page. Strict, like the rest of UI v2. Their CSS is global.css's (shared blocks).
