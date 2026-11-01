@@ -3,32 +3,71 @@
 --   • custom_themes.settings and its CHECK: a v1 row holds the closed settings shape and the
 --     tokens the Worker compiles from them (the closed key set, each value of its key's shape,
 --     the colour tokens equal to the colours and present only when they are not the brand's,
---     every contrast pair of packages/theme/pairs.json passing; the motion tokens what the
---     motion settings say). A legacy row (no settings) is left alone.
+--     each glow and shadow the compiler's own string, every contrast pair of
+--     packages/theme/pairs.json passing; the motion tokens what the motion settings say). A
+--     legacy row (no settings) is left alone.
 --   • One v1 theme per tenant (a partial unique index).
 --   • Who writes it (CLAUDE.md §5 "Theme editor"): Admin and Developer of the tenant; Content
 --     Creator, SEO, a Sales token and another tenant's Admin change no row; anon has no write
 --     at all (42501). Removal is Admin's only (0038's RESTRICTIVE delete gate).
+--   • Stale tokens (E4 review, E4-SEC-3): the writes read the profile live
+--     (custom_themes_live_*), so an Admin token whose profile was since demoted, deactivated or
+--     locked changes, adds and removes no theme.
 --   • Who reads it: staff of the tenant; anon reads the ACTIVE v1 theme of the launch tenant,
 --     and of it only `tokens` and `version` (42501 on any other column); never a legacy row,
 --     an inactive theme, or another tenant's.
 --   • The release registry stages `settings`; a save is history (the snapshot keeps it).
 --   • The guides: theme (new) and roles-and-access without "do not change the site yet".
--- No stale-token rows: no definer function or live check guards custom_themes (its writes are
--- the token's role, as 0001 left them).
+-- Reads stay the token's role (0001): the releases preview reads live rows through each CMS
+-- role's own client (preview_dataset.test.sql item 1). Every write claim below names a profile
+-- (the live check); the Sales claim has none, and is refused by the role either way.
 
 begin;
-select plan(34);
+select plan(42);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values ('e4000000-0000-0000-0000-0000000000ff', 'T-E4');
 
-create function _as(p_role text, p_tid text) returns void language sql as $$
+-- People: each claim below names its own profile, so the live check (app.live_role()) agrees
+-- with the token unless the row is one of the three stale ones.
+insert into auth.users (id, email) values
+  ('e4000000-0000-0000-0000-0000000000a1', 'e4-admin@example.test'),
+  ('e4000000-0000-0000-0000-0000000000d1', 'e4-developer@example.test'),
+  ('e4000000-0000-0000-0000-0000000000c1', 'e4-creator@example.test'),
+  ('e4000000-0000-0000-0000-0000000000e1', 'e4-seo@example.test'),
+  ('e4000000-0000-0000-0000-0000000000b1', 'e4-other-admin@example.test'),
+  ('e4000000-0000-0000-0000-0000000000a7', 'e4-locked@example.test'),
+  ('e4000000-0000-0000-0000-0000000000a8', 'e4-deactivated@example.test'),
+  ('e4000000-0000-0000-0000-0000000000a9', 'e4-demoted@example.test');
+insert into public.profiles (id, tenant_id, role, is_active, locked_until) values
+  ('e4000000-0000-0000-0000-0000000000a1', app.default_tenant_id(), 'admin', true, null),
+  ('e4000000-0000-0000-0000-0000000000d1', app.default_tenant_id(), 'developer', true, null),
+  ('e4000000-0000-0000-0000-0000000000c1', app.default_tenant_id(), 'content_creator', true, null),
+  ('e4000000-0000-0000-0000-0000000000e1', app.default_tenant_id(), 'seo', true, null),
+  ('e4000000-0000-0000-0000-0000000000b1', 'e4000000-0000-0000-0000-0000000000ff', 'admin', true, null),
+  -- Stale: each carries an admin token below, which the profile no longer stands behind.
+  ('e4000000-0000-0000-0000-0000000000a7', app.default_tenant_id(), 'admin', true, now() + interval '1 hour'),
+  ('e4000000-0000-0000-0000-0000000000a8', app.default_tenant_id(), 'admin', false, null),
+  ('e4000000-0000-0000-0000-0000000000a9', app.default_tenant_id(), 'seo', true, null);
+
+-- The person each role's claim names (a sales claim names nobody).
+create function _sub(p_role text, p_tid text) returns text language sql as $$
+  select case
+           when p_tid <> app.default_tenant_id()::text then 'e4000000-0000-0000-0000-0000000000b1'
+           when p_role = 'admin' then 'e4000000-0000-0000-0000-0000000000a1'
+           when p_role = 'developer' then 'e4000000-0000-0000-0000-0000000000d1'
+           when p_role = 'content_creator' then 'e4000000-0000-0000-0000-0000000000c1'
+           when p_role = 'seo' then 'e4000000-0000-0000-0000-0000000000e1'
+           else 'e4000000-0000-0000-0000-0000000000f0'
+         end
+$$;
+
+create function _as(p_role text, p_tid text, p_sub text default null) returns void language sql as $$
   select set_config(
     'request.jwt.claims',
     case when p_role is null then ''
          else jsonb_build_object(
-                'sub', 'e4000000-0000-0000-0000-0000000000a1',
+                'sub', coalesce(p_sub, _sub(p_role, p_tid)),
                 'app_metadata', jsonb_build_object('role', p_role, 'tenant_id', p_tid))::text end,
     true
   )
@@ -84,12 +123,12 @@ select ok((select bool_and(not has_function_privilege('anon', p.oid, 'execute')
                            and not p.prosecdef and p.provolatile = 'i')
              from pg_proc p join pg_namespace n on n.oid = p.pronamespace
             where n.nspname = 'app'
-              and p.proname in ('theme_luminance', 'theme_mix', 'theme_contrast',
+              and p.proname in ('theme_luminance', 'theme_mix', 'theme_contrast', 'theme_rgba',
                                 'theme_palette_ok', 'theme_row_ok')),
-  'the five theme rule functions: invoker, immutable, executable by staff and the service role, never anon');
+  'the six theme rule functions: invoker, immutable, executable by staff and the service role, never anon');
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
             where n.nspname = 'app' and p.proname like 'theme\_%'),
-  5, 'and there are five of them');
+  6, 'and there are six of them');
 
 -- ---- who writes it -------------------------------------------------------------------------
 set local role authenticated;
@@ -119,6 +158,21 @@ select _as('developer', app.default_tenant_id()::text);
 select is(_remove('e4000000-0000-0000-0000-00000000c001'), 0,
   'developer removes no theme (removal is Admin''s, 0038)');
 
+-- ---- stale tokens: an admin token the profile no longer stands behind (E4-SEC-3) ------------
+select _as('admin', app.default_tenant_id()::text, 'e4000000-0000-0000-0000-0000000000a9');
+select is(_rename('e4000000-0000-0000-0000-00000000c002', 'By a demoted admin'), 0,
+  'a demoted admin''s token (the profile now says seo) changes no theme');
+select throws_ok($$ insert into public.custom_themes (name, tokens) values ('Stale', '{}') $$,
+  '42501', null, 'nor adds one');
+select _as('admin', app.default_tenant_id()::text, 'e4000000-0000-0000-0000-0000000000a8');
+select is(_rename('e4000000-0000-0000-0000-00000000c002', 'By a deactivated admin'), 0,
+  'a deactivated admin''s token changes no theme');
+select is(_remove('e4000000-0000-0000-0000-00000000c001'), 0,
+  'nor removes one');
+select _as('admin', app.default_tenant_id()::text, 'e4000000-0000-0000-0000-0000000000a7');
+select is(_rename('e4000000-0000-0000-0000-00000000c002', 'By a locked admin'), 0,
+  'a locked admin''s token changes no theme');
+
 -- ---- the rule (the CHECK), as the admin ------------------------------------------------------
 select _as('admin', app.default_tenant_id()::text);
 select throws_ok($$ update public.custom_themes
@@ -138,6 +192,18 @@ select throws_ok($$ update public.custom_themes
                       set tokens = jsonb_set(_tokens(), '{--bs-glow-sky}', '"red; } body { display:none"')
                     where id = 'e4000000-0000-0000-0000-00000000c002' $$,
   '23514', null, 'a token value that could break out of its declaration is refused');
+select throws_ok($$ update public.custom_themes
+                      set tokens = jsonb_set(_tokens(), '{--bs-glow-sky}', '"rgba(255, 255, 255, 0.99)"')
+                    where id = 'e4000000-0000-0000-0000-00000000c002' $$,
+  '23514', null, 'a white glow behind white text is refused (each glow is the compiler''s own)');
+select throws_ok($$ update public.custom_themes
+                      set tokens = jsonb_set(_tokens(), '{--bs-glow-klein}', '"rgba(147, 138, 141, 0.42)"')
+                    where id = 'e4000000-0000-0000-0000-00000000c002' $$,
+  '23514', null, 'a glow of another of the theme''s colours is refused');
+select throws_ok($$ update public.custom_themes
+                      set tokens = jsonb_set(_tokens(), '{--bs-shadow-cobalt}', '"0 18px 99px rgba(97, 87, 87, 0.45)"')
+                    where id = 'e4000000-0000-0000-0000-00000000c002' $$,
+  '23514', null, 'a shadow of another blur is refused');
 select throws_ok($$ update public.custom_themes
                       set tokens = _tokens() - '--bs-marquee-scale'
                     where id = 'e4000000-0000-0000-0000-00000000c002' $$,

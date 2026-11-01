@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { mix } from '@theme/colour';
-import { compileTheme, DEFAULT_THEME_SETTINGS } from '@theme/compile';
+import { channels } from '@theme/colour';
+import { compileTheme, DEFAULT_THEME_SETTINGS, THEME_EFFECTS } from '@theme/compile';
 import { themeSqlBlocks } from '@theme/sql';
 import { ThemeColorsSchema, ThemeMotionSchema, ThemeSettingsSchema } from '@schemas/theme';
 import { THEME_TOKEN_NAMES } from '@schemas/themeTokens';
@@ -48,6 +49,7 @@ describe('the E4 migration holds the generated rules', () => {
     expect(fn('theme_palette_ok')).toContain('-- BEGIN theme pairs');
     expect(fn('theme_row_ok')).toContain('-- BEGIN theme token rules');
     expect(fn('theme_row_ok')).toContain('-- BEGIN theme defaults');
+    expect(fn('theme_row_ok')).toContain('-- BEGIN theme effects');
   });
 });
 
@@ -89,6 +91,35 @@ describe('app.theme_row_ok checks what the schemas and the compiler say', () => 
     expect(keys).toEqual(written);
     expect(keys).toEqual(THEME_TOKEN_NAMES.slice(0, 8));
     expect(body).toContain('return v_present = 8');
+  });
+
+  it('each glow and shadow must be the compiler’s own string, not only of its shape', () => {
+    // E4-SEC-2: a glow is a ground under text (.klein-band::before under white paper text),
+    // so a white glow written straight to the table would defeat the contrast pairs.
+    expect(body).toMatch(
+      /and not exists \(\s*select 1\s+from \(values\s+-- BEGIN theme effects\n[\s\S]*?-- END theme effects\s+\) as e\(token, prefix, role, alpha\)\s+where \(p_tokens ->> e\.token\) is distinct from\s+e\.prefix \|\| app\.theme_rgba\(v_colors ->> e\.role, e\.alpha\)\)/,
+    );
+    // The table names every glow and shadow token, and the compiler writes each from it.
+    expect(THEME_EFFECTS.map((e) => e.token)).toEqual(THEME_TOKEN_NAMES.slice(4, 8));
+    const colors = { primary: '#000000', hover: '#615757', accent: '#938A8D' };
+    const tokens = compileTheme({ ...DEFAULT_THEME_SETTINGS, colors });
+    for (const e of THEME_EFFECTS) {
+      const [r, g, b] = channels(colors[e.role])!;
+      expect(tokens[e.token], e.token).toBe(`${e.prefix}rgba(${r}, ${g}, ${b}, ${e.alpha})`);
+    }
+  });
+
+  it('app.theme_rgba writes a colour as the compiler does', () => {
+    expect(fn('theme_rgba')).toContain(
+      [
+        "select 'rgba(' || string_agg(",
+        "           (('x' || pg_catalog.substr(p_hex, x.at, 2))::bit(8)::int)::text, ', ' order by x.at)",
+        "         || ', ' || p_alpha || ')'",
+      ].join('\n'),
+    );
+    // The postconditions assert this sample; the compiler's channels agree.
+    expect(SQL).toContain("app.theme_rgba('#0024BC', '0.42') <> 'rgba(0, 36, 188, 0.42)'");
+    expect(channels('#0024BC')).toEqual([0, 36, 188]);
   });
 
   it('the motion tokens are what the motion settings compile to', () => {

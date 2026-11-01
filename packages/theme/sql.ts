@@ -1,5 +1,6 @@
 import pairs from './pairs.json';
 import { THEME_TOKEN_NAMES, THEME_TOKEN_PATTERNS } from '../schemas/themeTokens';
+import { THEME_EFFECTS } from './compile';
 
 // The database's copy of the theme rules (Admin v2 E4), generated from the one source the
 // editor and the Worker read: the pairs (pairs.json) and the token shapes
@@ -63,11 +64,19 @@ export function defaultsValuesSql(): string {
     .join(',\n');
 }
 
+/** The glow and shadow tokens as `(token, prefix, role, alpha)` rows (THEME_EFFECTS). */
+export function effectsValuesSql(): string {
+  return THEME_EFFECTS.map(
+    (e) => `    (${quote(e.token)}, ${quote(e.prefix)}, ${quote(e.role)}, ${quote(e.alpha)})`,
+  ).join(',\n');
+}
+
 /** Every generated block, by the name its markers carry in the migration. */
 export function themeSqlBlocks(): Record<string, string> {
   return {
     'theme pairs': pairsValuesSql(),
     'theme token rules': tokenRulesValuesSql(),
     'theme defaults': defaultsValuesSql(),
+    'theme effects': effectsValuesSql(),
   };
 }

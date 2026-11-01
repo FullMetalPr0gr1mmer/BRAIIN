@@ -53,9 +53,11 @@ describe('scripts/lhci-theme.mjs', () => {
 
   it('finds the theme links a page carries', () => {
     const html =
-      '<link rel="stylesheet" href="/styles/global.css"><link rel="stylesheet" href="/styles/theme.css?v=12">';
-    expect(themeLinks(html)).toEqual(['/styles/theme.css?v=12']);
+      '<link rel="stylesheet" href="/styles/global.css"><link rel="stylesheet" href="/styles/theme.css?v=0123456789abcdef">';
+    expect(themeLinks(html)).toEqual(['/styles/theme.css?v=0123456789abcdef']);
     expect(themeLinks('<link rel="stylesheet" href="/styles/admin/theme.css">')).toEqual([]);
+    // The address names the body's hash, never a row's version (E4-SEC-1).
+    expect(themeLinks('<link rel="stylesheet" href="/styles/theme.css?v=12">')).toEqual([]);
   });
 });
 

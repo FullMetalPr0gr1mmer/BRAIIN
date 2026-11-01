@@ -90,7 +90,7 @@ describe('the theme read the middleware starts', () => {
     ['/sitemap.xml', '/sitemap.xml', 'GET'],
     ['/robots.txt', '/robots.txt', 'GET'],
     ['/llms.txt', '/llms.txt', 'GET'],
-    ['/styles/theme.css?v=2', '/styles/theme.css', 'GET'],
+    ['/styles/theme.css?v=0123456789abcdef', '/styles/theme.css', 'GET'],
     ['/contact', '/contact', 'POST'],
   ])('%s (%s, %s): nothing', async (path, route, method) => {
     await run(context(path, route, method), page).catch(() => undefined);

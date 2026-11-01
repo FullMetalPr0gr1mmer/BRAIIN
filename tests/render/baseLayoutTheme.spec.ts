@@ -20,8 +20,9 @@ const TOKENS = {
   '--bs-shadow-klein': '0 12px 38px rgba(0, 0, 0, 0.45)',
   '--bs-shadow-cobalt': '0 18px 48px rgba(97, 87, 87, 0.45)',
 };
-const THEME = { tokens: TOKENS, version: 7 };
-const LINK = '<link rel="stylesheet" href="/styles/theme.css?v=7">';
+// The address names the hash of the body (getActiveTheme's), never the row's version.
+const THEME = { tokens: TOKENS, version: 7, css: themeCss(TOKENS), hash: '0123456789abcdef' };
+const LINK = '<link rel="stylesheet" href="/styles/theme.css?v=0123456789abcdef">';
 
 const cases = Object.keys(LAYOUT_CASES) as (keyof typeof LAYOUT_CASES)[];
 
@@ -38,7 +39,7 @@ describe('the theme in the public layout', () => {
     const head = themed.slice(0, themed.indexOf('</head>'));
     expect(head).toContain(LINK);
     const sheets = [...head.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((m) => m[1]);
-    expect(sheets.at(-1)).toBe('/styles/theme.css?v=7');
+    expect(sheets.at(-1)).toBe('/styles/theme.css?v=0123456789abcdef');
     expect(themed).not.toMatch(/<style\b/);
   });
 
@@ -47,7 +48,11 @@ describe('the theme in the public layout', () => {
     const html = await renderLayout(props, { theme: Promise.resolve(THEME) });
     const head = html.slice(0, html.indexOf('</head>'));
     const sheets = [...head.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((m) => m[1]);
-    expect(sheets).toEqual(['/styles/global.css', '/styles/about.css', '/styles/theme.css?v=7']);
+    expect(sheets).toEqual([
+      '/styles/global.css',
+      '/styles/about.css',
+      '/styles/theme.css?v=0123456789abcdef',
+    ]);
   });
 
   test('a preview draws the pending theme in one nonced <style>, and links no stylesheet', async () => {

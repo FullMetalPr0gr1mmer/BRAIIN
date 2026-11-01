@@ -37,11 +37,11 @@ export function themedRunRow() {
   };
 }
 
-/** The theme links a page's markup carries. */
+/** The theme links a page's markup carries (the address names the body's hash, 16 hex). */
 export function themeLinks(html) {
-  return [...html.matchAll(/<link rel="stylesheet" href="(\/styles\/theme\.css\?v=\d+)">/g)].map(
-    (m) => m[1],
-  );
+  return [
+    ...html.matchAll(/<link rel="stylesheet" href="(\/styles\/theme\.css\?v=[0-9a-f]{16})">/g),
+  ].map((m) => m[1]);
 }
 
 async function main(env = process.env) {

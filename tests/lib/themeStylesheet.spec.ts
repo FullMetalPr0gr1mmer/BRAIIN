@@ -3,10 +3,12 @@ import type { APIRoute } from 'astro';
 
 // The site's theme as a visitor gets it (Admin v2 E4, AV-27): the loader (src/lib/data/
 // theme.ts), read once per request through the content seam with anon's two columns, and
-// `GET /styles/theme.css?v=<version>` (src/pages/styles/theme.css.ts). The address names the
-// version, so the live one is immutable for a year and any other answers the CURRENT theme for
-// a minute; every answer carries `site:chrome`, the tag a theme's publish purges; the body is
-// one :root rule, or empty. No read ever fails a page: no theme is the brand's own look.
+// `GET /styles/theme.css?v=<hash>` (src/pages/styles/theme.css.ts). The address names the hash
+// of the body (never the row's version, which comes back: E4-SEC-1), so the live one is
+// immutable for a year and any other well-formed one answers the CURRENT theme for a minute;
+// those answers carry `site:chrome`, the tag a theme's publish purges; the body is one :root
+// rule, or empty. An address no page links is answered empty and `no-store` with no read
+// (E4-SEC-4). No read ever fails a page: no theme is the brand's own look.
 
 const state = vi.hoisted(() => ({
   configured: true,
@@ -34,12 +36,20 @@ vi.mock('@/lib/data/source', () => ({
   }),
 }));
 
-const { getActiveTheme, readActiveTheme, themeHref, THEME_COLUMNS, THEME_STYLESHEET_PATH } =
-  await import('@/lib/data/theme');
+const {
+  getActiveTheme,
+  readActiveTheme,
+  themeHash,
+  themeHref,
+  THEME_COLUMNS,
+  THEME_STYLESHEET_PATH,
+} = await import('@/lib/data/theme');
+const { themeCss } = await import('@theme/compile');
 const route = (await import('@/pages/styles/theme.css')) as unknown as {
   GET: APIRoute;
   IMMUTABLE: string;
   SHORT: string;
+  NOT_LINKED: string;
   prerender: boolean;
 };
 
@@ -53,6 +63,9 @@ const TOKENS = {
   '--bs-shadow-klein': '0 12px 38px rgba(0, 0, 0, 0.45)',
   '--bs-shadow-cobalt': '0 18px 48px rgba(97, 87, 87, 0.45)',
 };
+
+const CSS = themeCss(TOKENS);
+const HASH = await themeHash(CSS);
 
 let warn: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
@@ -123,7 +136,7 @@ describe('getActiveTheme: once per request; a theme that sets nothing is no them
       getActiveTheme(locals as never),
       getActiveTheme(locals as never),
     ]);
-    expect(a).toEqual({ tokens: TOKENS, version: 3 });
+    expect(a).toEqual({ tokens: TOKENS, version: 3, css: CSS, hash: HASH });
     expect(b).toBe(a);
     expect(state.calls.filter((c) => c.startsWith('from'))).toHaveLength(1);
   });
@@ -133,9 +146,26 @@ describe('getActiveTheme: once per request; a theme that sets nothing is no them
     expect(await getActiveTheme({} as never)).toBeNull();
   });
 
-  it('the address names the version', () => {
+  it('the address names the hash of the body: 16 hex digits of its SHA-256', async () => {
     expect(THEME_STYLESHEET_PATH).toBe('/styles/theme.css');
-    expect(themeHref({ tokens: TOKENS, version: 12 })).toBe('/styles/theme.css?v=12');
+    expect(HASH).toMatch(/^[0-9a-f]{16}$/);
+    const { createHash } = await import('node:crypto');
+    expect(HASH).toBe(createHash('sha256').update(CSS).digest('hex').slice(0, 16));
+    expect(themeHref({ hash: HASH })).toBe(`/styles/theme.css?v=${HASH}`);
+  });
+
+  it('other colours at the same version get another address (E4-SEC-1)', async () => {
+    // A theme deleted and created again starts at version 1 again: the address must still
+    // change with the colours, or a browser's immutable copy would draw the old ones.
+    state.rows = [{ tokens: TOKENS, version: 1 }];
+    const first = await getActiveTheme({} as never);
+    state.rows = [{ tokens: { ...TOKENS, '--bs-marquee-scale': '1.5' }, version: 1 }];
+    const again = await getActiveTheme({} as never);
+    expect(first && again).toBeTruthy();
+    expect(themeHref(again!)).not.toBe(themeHref(first!));
+    // And the same colours at another version keep their address (nothing to fetch again).
+    state.rows = [{ tokens: TOKENS, version: 9 }];
+    expect(themeHref((await getActiveTheme({} as never))!)).toBe(themeHref(first!));
   });
 });
 
@@ -150,9 +180,9 @@ describe('GET /styles/theme.css', () => {
     expect(route.prerender).toBe(false);
   });
 
-  it('the live version: one :root rule, CSS, immutable for a year, tagged site:chrome', async () => {
+  it('the live address: one :root rule, CSS, immutable for a year, tagged site:chrome', async () => {
     state.rows = [{ tokens: TOKENS, version: 4 }];
-    const { res, body } = await get('?v=4');
+    const { res, body } = await get(`?v=${HASH}`);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('text/css; charset=utf-8');
     expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
@@ -165,8 +195,14 @@ describe('GET /styles/theme.css', () => {
     );
   });
 
-  it.each(['?v=3', '?v=5', '', '?v=4x', '?v=04&v=4'])(
-    'any other address (%s) answers today’s theme for a minute only',
+  it('the version is not the address: ?v=<the live version> is not immutable', async () => {
+    state.rows = [{ tokens: TOKENS, version: 4 }];
+    const { res } = await get('?v=4');
+    expect(res.headers.get('cache-control')).not.toBe(route.IMMUTABLE);
+  });
+
+  it.each(['?v=0000000000000000', '?v=ffffffffffffffff'])(
+    'another theme’s address (%s) answers today’s theme for a minute only',
     async (search) => {
       state.rows = [{ tokens: TOKENS, version: 4 }];
       const { res, body } = await get(search);
@@ -177,12 +213,34 @@ describe('GET /styles/theme.css', () => {
   );
 
   it.each([
+    '',
+    '?v=',
+    '?v=4',
+    '?v=04&v=4',
+    `?v=${'A'.repeat(16)}`,
+    `?v=${'a'.repeat(17)}`,
+    `?v=${'a'.repeat(16)}&x=1`,
+    `?x=1&v=${'a'.repeat(16)}`,
+    `?v=${'a'.repeat(16)}%0a`,
+  ])('an address no page links (%s): empty, no-store, no database read', async (search) => {
+    state.rows = [{ tokens: TOKENS, version: 4 }];
+    const { res, body } = await get(search);
+    expect(res.status).toBe(200);
+    expect(body).toBe('');
+    expect(res.headers.get('content-type')).toBe('text/css; charset=utf-8');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(route.NOT_LINKED).toBe('no-store');
+    expect(res.headers.get('cache-tag')).toBeNull();
+    expect(state.calls).toEqual([]);
+  });
+
+  it.each([
     ['no theme', () => undefined],
     ['the brand’s own (no token)', () => (state.rows = [{ tokens: {}, version: 2 }])],
     ['a failed read', () => (state.throws = true)],
   ])('%s: an empty stylesheet, briefly cached, still tagged', async (_name, arrange) => {
     arrange();
-    const { res, body } = await get('?v=2');
+    const { res, body } = await get(`?v=${HASH}`);
     expect(res.status).toBe(200);
     expect(body).toBe('');
     expect(res.headers.get('content-type')).toBe('text/css; charset=utf-8');

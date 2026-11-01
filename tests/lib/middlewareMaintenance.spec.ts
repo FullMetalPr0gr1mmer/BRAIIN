@@ -199,7 +199,7 @@ describe('never gated', () => {
     ['/healthz', '/healthz'],
     ['/_image?href=x&w=1&h=1&f=webp', '/_image'],
     // Admin v2 E4: the theme's custom properties, which every admin screen links.
-    ['/styles/theme.css?v=3', '/styles/theme.css'],
+    ['/styles/theme.css?v=0123456789abcdef', '/styles/theme.css'],
   ])('%s', async (path, route) => {
     set({ active: true, staffBypass: false });
     const res = await run(context(path, route), page().next);

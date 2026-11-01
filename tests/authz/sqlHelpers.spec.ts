@@ -23,6 +23,8 @@ const HELPER_CAPABILITY: Record<string, Capability> = {
   role_analytics_goals: 'analytics.goals',
   role_general_settings: 'settings.general',
   role_manages_integrations: 'settings.integrations',
+  // Admin v2 E4 (E4-SEC-3): the live check on every staff write to custom_themes.
+  role_edits_theme: 'theme.edit',
 };
 
 const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');

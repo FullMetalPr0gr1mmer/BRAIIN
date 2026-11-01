@@ -1,5 +1,5 @@
 import { ThemeTokensSchema, type ThemeTokens } from '@schemas/themeTokens';
-import { hasTokens } from '@theme/compile';
+import { hasTokens, themeCss } from '@theme/compile';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import { reportLoadError } from './parse';
 import { contentClient } from './source';
@@ -19,6 +19,17 @@ import { contentClient } from './source';
 export interface ActiveTheme {
   tokens: ThemeTokens;
   version: number;
+}
+
+/**
+ * The theme a page links: the row, its stylesheet's body, and that body's hash. The hash, not
+ * the row's version, names the stylesheet's address: a version is not unique over time (a
+ * theme deleted and created again starts at 1 again, and a writer may send any version), and
+ * an address answered `immutable` must never stand for other colours (E4 review, E4-SEC-1).
+ */
+export interface LiveTheme extends ActiveTheme {
+  css: string;
+  hash: string;
 }
 
 /** The columns a visitor may read of a theme, and the only ones this asks for. */
@@ -57,18 +68,40 @@ export async function readActiveTheme(): Promise<ActiveTheme | null> {
 
 type ThemeLocals = Pick<App.Locals, 'theme'>;
 
+/** The first 16 hex digits of the SHA-256 of a stylesheet's body: its address's `v`. */
+export async function themeHash(css: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(css));
+  return [...new Uint8Array(digest).slice(0, 8)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** What a stylesheet address's `v` must be: a hash of themeHash's shape, nothing else. */
+export const THEME_HASH_PATTERN = /^[0-9a-f]{16}$/;
+
+async function liveTheme(): Promise<LiveTheme | null> {
+  const theme = await readActiveTheme();
+  if (!theme || !hasTokens(theme.tokens)) return null;
+  const css = themeCss(theme.tokens);
+  if (!css) return null;
+  try {
+    return { ...theme, css, hash: await themeHash(css) };
+  } catch (err) {
+    reportLoadError('custom_themes', err);
+    return null;
+  }
+}
+
 /** The active theme, once per request; null for none or the brand's own (no token set). */
-export function getActiveTheme(locals: ThemeLocals): Promise<ActiveTheme | null> {
-  locals.theme ??= readActiveTheme().then((theme) =>
-    theme && hasTokens(theme.tokens) ? theme : null,
-  );
+export function getActiveTheme(locals: ThemeLocals): Promise<LiveTheme | null> {
+  locals.theme ??= liveTheme();
   return locals.theme;
 }
 
 /** The stylesheet's route (src/pages/styles/theme.css.ts); the middleware knows it by this. */
 export const THEME_STYLESHEET_PATH = '/styles/theme.css';
 
-/** The stylesheet's address for a theme: versioned, so a new theme is a new URL. */
-export function themeHref(theme: ActiveTheme): string {
-  return `${THEME_STYLESHEET_PATH}?v=${theme.version}`;
+/** The stylesheet's address for a theme: keyed on its body, so other colours are a new URL. */
+export function themeHref(theme: Pick<LiveTheme, 'hash'>): string {
+  return `${THEME_STYLESHEET_PATH}?v=${theme.hash}`;
 }

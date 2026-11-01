@@ -10,7 +10,7 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *     on screen included;
  *   - Simple mode: a swatch whose palette fails, the darker main colour the screen offers,
  *     calmer motion; the admin previews it on itself (the CSSOM) and saves it;
- *   - the site wears it: every page links /styles/theme.css?v=<version> (immutable, tagged
+ *   - the site wears it: every page links /styles/theme.css?v=<hash> (immutable, tagged
  *     site:chrome, custom properties only), a visitor's page draws the colour, with zero axe
  *     and CSP violations in either language; the admin wears it too;
  *   - Reset to brand defaults (a danger confirm) puts the brand back and no page links it;
@@ -206,7 +206,8 @@ test.describe('as admin', () => {
     const [en] = await linksOn(page, '/');
     expect(await linksOn(page, '/')).toHaveLength(1);
     expect(await linksOn(page, '/ar/')).toEqual([en]);
-    expect(en).toBe(`/styles/theme.css?v=${row.version}`);
+    // The address names the hash of the body, never the row's version (E4-SEC-1).
+    expect(en).toMatch(/^\/styles\/theme\.css\?v=[0-9a-f]{16}$/);
     const sheet = await page.request.get(en!);
     expect(sheet.status()).toBe(200);
     expect(sheet.headers()['content-type']).toBe('text/css; charset=utf-8');
@@ -285,8 +286,12 @@ test.describe('as admin', () => {
     expect((await theme(page))?.['settings']).toEqual(BRAND);
     expect(await linksOn(page, '/')).toEqual([]);
     expect(await linksOn(page, '/ar/')).toEqual([]);
-    const sheet = await page.request.get('/styles/theme.css');
+    // A theme's address answers the (empty) current theme; a bare one is no address at all.
+    const sheet = await page.request.get('/styles/theme.css?v=0000000000000000');
     expect(await sheet.text()).toBe('');
+    const bare = await page.request.get('/styles/theme.css');
+    expect(await bare.text()).toBe('');
+    expect(bare.headers()['cache-control']).toBe('no-store');
     await page.goto(SCREEN, { waitUntil: 'networkidle' });
     await expect(page.locator('link[href^="/styles/theme.css"]')).toHaveCount(0);
   });

@@ -26,6 +26,25 @@ export const DEFAULT_THEME_SETTINGS: ThemeSettings = Object.freeze({
   motion: { marquee: 'normal', reveal: true },
 }) as ThemeSettings;
 
+/**
+ * The glow and shadow tokens: each one of the three named colours at a fixed alpha, behind a
+ * fixed offset and blur (global.css's own, recoloured). One table for the compiler and the
+ * database: packages/theme/sql.ts writes it into app.theme_row_ok, which then requires each
+ * token to be exactly this string, so a direct write cannot put another colour or alpha
+ * behind text (E4 review, E4-SEC-2: a white glow under .klein-band's white text).
+ */
+export const THEME_EFFECTS = [
+  { token: '--bs-glow-klein', prefix: '', role: 'primary', alpha: '0.42' },
+  { token: '--bs-glow-sky', prefix: '', role: 'accent', alpha: '0.45' },
+  { token: '--bs-shadow-klein', prefix: '0 12px 38px ', role: 'primary', alpha: '0.45' },
+  { token: '--bs-shadow-cobalt', prefix: '0 18px 48px ', role: 'hover', alpha: '0.45' },
+] as const satisfies readonly {
+  token: keyof ThemeTokens;
+  prefix: string;
+  role: 'primary' | 'hover' | 'accent';
+  alpha: string;
+}[];
+
 const rgba = (hex: string, alpha: string) => {
   const rgb = channels(hex);
   if (!rgb) throw new Error(`not a colour: ${hex}`);
@@ -41,10 +60,7 @@ export function compileTheme(settings: ThemeSettings): ThemeTokens {
     out['--bs-cobalt'] = p.hover;
     out['--bs-sky'] = p.accent;
     out['--bs-sky-soft'] = p.skySoft;
-    out['--bs-glow-klein'] = rgba(p.primary, '0.42');
-    out['--bs-glow-sky'] = rgba(p.accent, '0.45');
-    out['--bs-shadow-klein'] = `0 12px 38px ${rgba(p.primary, '0.45')}`;
-    out['--bs-shadow-cobalt'] = `0 18px 48px ${rgba(p.hover, '0.45')}`;
+    for (const e of THEME_EFFECTS) out[e.token] = `${e.prefix}${rgba(p[e.role], e.alpha)}`;
   }
   if (settings.motion.marquee === 'slower') out['--bs-marquee-scale'] = '1.5';
   if (settings.motion.marquee === 'slowest') out['--bs-marquee-scale'] = '2.5';

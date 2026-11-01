@@ -10,8 +10,14 @@ import { normalise } from './harness';
 // renders exactly as before. Rendered without a session (the bare shell), which is all the
 // head needs.
 
-const THEME = { tokens: { '--bs-klein': '#000000' }, version: 5 };
-const LINK = '<link rel="stylesheet" href="/styles/theme.css?v=5">';
+// The address names the hash of the body (getActiveTheme's), never the row's version.
+const THEME = {
+  tokens: { '--bs-klein': '#000000' },
+  version: 5,
+  css: ':root{--bs-klein:#000000;}',
+  hash: 'fedcba9876543210',
+};
+const LINK = '<link rel="stylesheet" href="/styles/theme.css?v=fedcba9876543210">';
 
 async function render(theme: unknown): Promise<string> {
   const container = await AstroContainer.create();
@@ -46,7 +52,7 @@ describe('AdminLayout and the theme', () => {
     expect(sheets).toEqual([
       '/styles/admin.css',
       '/styles/admin/theme.css',
-      '/styles/theme.css?v=5',
+      '/styles/theme.css?v=fedcba9876543210',
     ]);
   });
 });

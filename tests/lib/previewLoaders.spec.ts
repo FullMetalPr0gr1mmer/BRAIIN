@@ -96,6 +96,7 @@ const PURE = new Set([
   'toLeader',
   'resolveSeo',
   'themeHref',
+  'themeHash',
 ]);
 
 /** Runs `fn` as a preview over the fixture tenant (with `drafts`), returning its report. */
