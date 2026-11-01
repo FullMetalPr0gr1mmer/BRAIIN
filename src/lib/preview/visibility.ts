@@ -1,3 +1,4 @@
+import { HEADER_COLUMNS } from '@schemas/appearance';
 import type { DatasetTable, PreviewTable } from './relations';
 
 // The anon RLS a visitor reads through, mirrored in TypeScript for the preview (Admin v2
@@ -98,21 +99,7 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
   // returns before the GA4 read, and its layout renders no loader.)
   site_integrations: ['tenant_id', 'search_console_token', 'ga4_measurement_id'],
   // Admin v2 E5: the header's options; never the version, the stamps or the actors.
-  site_appearance: [
-    'tenant_id',
-    'header_logo_position',
-    'header_logo_size',
-    'header_menu_align',
-    'header_sticky',
-    'header_hide_on_scroll',
-    'header_solid_after_hero',
-    'header_tint',
-    'header_blur',
-    'header_mobile_menu',
-    'header_cta_show',
-    'header_cta_label',
-    'header_cta_href',
-  ],
+  site_appearance: ['tenant_id', ...Object.values(HEADER_COLUMNS)],
   // 0028: never is_placeholder, the schedule, version or the actors.
   service_cases: [
     'id',

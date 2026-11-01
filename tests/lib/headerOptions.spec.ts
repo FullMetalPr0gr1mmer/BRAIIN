@@ -18,7 +18,20 @@ import { siteAppearanceSingleton } from '@/lib/admin/singletons/siteAppearance';
 import { ValidationError } from '@/lib/admin/errors';
 import { appearanceUi } from '@/lib/admin/ui/appearance';
 import { barSketch, afterLine } from '@/components/admin/screens/header/sketch';
-import { keyChanges, menuRows, movedOrder } from '@/components/admin/screens/header/menu';
+import {
+  afterChange,
+  keyChanges,
+  KeyMoveError,
+  MENU_PAGE,
+  MENU_PAGES_MAX,
+  menuKey,
+  menuRows,
+  movedOrder,
+  moveKey,
+  readMenu,
+  type RowWrite,
+} from '@/components/admin/screens/header/menu';
+import { readsThroughRelease } from '@/lib/admin/releaseEvents';
 
 // The header's options (Admin v2 E5, `public.site_appearance`): the Worker's schema, the
 // public reader and the screen's pure parts, each held to the SQL the E5 migration writes, so
@@ -359,7 +372,7 @@ describe('the screen’s sketches', () => {
 });
 
 describe('the menu card', () => {
-  const rows = menuRows([
+  const RAW: Record<string, unknown>[] = [
     {
       id: 'c',
       location: 'header',
@@ -415,7 +428,8 @@ describe('the menu card', () => {
       sort_order: 1,
       version: 1,
     },
-  ]);
+  ];
+  const rows = menuRows(RAW);
 
   it('lists the header’s top-level links in order, with their sub-link counts', () => {
     expect(rows.map((r) => [r.id, r.label, r.visible, r.isKey, r.children])).toEqual([
@@ -426,12 +440,177 @@ describe('the menu card', () => {
   });
 
   it('moving the star clears the old key link first; pressing the key clears it', () => {
-    expect(keyChanges(rows, 'w')).toEqual([
-      { id: 'c', version: 2, isKey: false },
-      { id: 'w', version: 5, isKey: true },
+    const key = menuKey(RAW);
+    expect(key).toMatchObject({ id: 'c', sub: false, label: 'Contact' });
+    expect(keyChanges(rows, 'w', key)).toEqual([
+      { id: 'c', version: 2, isKey: false, pending: null },
+      { id: 'w', version: 5, isKey: true, pending: null },
     ]);
-    expect(keyChanges(rows, 'c')).toEqual([{ id: 'c', version: 2, isKey: false }]);
-    expect(keyChanges(rows, 'nope')).toEqual([]);
+    expect(keyChanges(rows, 'c', key)).toEqual([
+      { id: 'c', version: 2, isKey: false, pending: null },
+    ]);
+    expect(keyChanges(rows, 'nope', key)).toEqual([]);
+    expect(keyChanges(rows, 'w', null)).toEqual([
+      { id: 'w', version: 5, isKey: true, pending: null },
+    ]);
+  });
+
+  // E5 code review CR2: the unique index holds one key per MENU, sub-links included.
+  it('a sub-link that holds the key is found and cleared first (no 23505)', () => {
+    const raw = RAW.map((r) =>
+      r['id'] === 'c' ? { ...r, is_key: false } : r['id'] === 'w1' ? { ...r, is_key: true } : r,
+    );
+    const key = menuKey(raw);
+    expect(key).toMatchObject({ id: 'w1', label: 'All', sub: true, version: 1 });
+    expect(keyChanges(menuRows(raw), 'a', key)).toEqual([
+      { id: 'w1', version: 1, isKey: false, pending: null },
+      { id: 'a', version: 1, isKey: true, pending: null },
+    ]);
+    // The footer's key is another menu's.
+    expect(menuKey([{ id: 'f', location: 'footer', is_key: true }])).toBeNull();
+  });
+
+  // E5 code review CR1: the two PATCHes of a move cannot be one write, so a failed second one
+  // puts the old key back, and says whether that worked.
+  describe('moving the key', () => {
+    const ok = (id: string, version: number): Record<string, unknown> => ({ id, version });
+    const changes = () => keyChanges(rows, 'w', menuKey(RAW));
+
+    it('sends the clear, then the set, each with its own version', async () => {
+      const sent: [string, RowWrite][] = [];
+      const pending = await moveKey(
+        changes(),
+        async (id, write) => {
+          sent.push([id, write]);
+          return ok(id, 9);
+        },
+        false,
+      );
+      expect(pending).toBe(false);
+      expect(sent).toEqual([
+        ['c', { body: { isKey: false, version: 2 }, mark: false }],
+        ['w', { body: { isKey: true, version: 5 }, mark: false }],
+      ]);
+    });
+
+    it('a failed second write sets the old key again, at the version the clear answered', async () => {
+      const sent: [string, RowWrite][] = [];
+      const refusal = new Error('409');
+      const run = moveKey(
+        changes(),
+        async (id, write) => {
+          sent.push([id, write]);
+          if (id === 'w') throw refusal;
+          return ok(id, 3);
+        },
+        false,
+      );
+      await expect(run).rejects.toBeInstanceOf(KeyMoveError);
+      await run.catch((err: KeyMoveError) => {
+        expect(err.restored).toBe(true);
+        expect(err.reason).toBe(refusal);
+      });
+      expect(sent.map(([id, w]) => [id, w.body])).toEqual([
+        ['c', { isKey: false, version: 2 }],
+        ['w', { isKey: true, version: 5 }],
+        ['c', { isKey: true, version: 3 }],
+      ]);
+    });
+
+    it('says so when the old key could not be put back either', async () => {
+      const run = moveKey(
+        changes(),
+        async (id, write) => {
+          if (id === 'w' || write.body['isKey'] === true) throw new Error('down');
+          return ok(id, 3);
+        },
+        false,
+      );
+      await run.catch(() => undefined);
+      await expect(run).rejects.toMatchObject({ restored: false });
+    });
+
+    it('a failed first write changes nothing and is thrown as it is', async () => {
+      const refusal = new Error('409');
+      const sent: string[] = [];
+      await expect(
+        moveKey(
+          changes(),
+          async (id) => {
+            sent.push(id);
+            throw refusal;
+          },
+          false,
+        ),
+      ).rejects.toBe(refusal);
+      expect(sent).toEqual(['c']);
+    });
+
+    it('in release mode: names a pending change, else carries the marker; the undo names the clear’s', async () => {
+      const raw = RAW.map((r) =>
+        r['id'] === 'w' ? { ...r, draft: { id: 'd-w', version: 4, op: 'update' } } : r,
+      );
+      const moves = keyChanges(menuRows(raw), 'w', menuKey(raw));
+      const sent: [string, RowWrite][] = [];
+      const run = moveKey(
+        moves,
+        async (id, write) => {
+          sent.push([id, write]);
+          if (id === 'w') throw new Error('409');
+          return { id, version: 2, draft: { id: 'd-c', version: 1, op: 'update' } };
+        },
+        true,
+      );
+      await run.catch(() => undefined);
+      expect(sent).toEqual([
+        ['c', { body: { isKey: false, version: 2 }, mark: true }],
+        ['w', { body: { isKey: true, version: 5, draftId: 'd-w', draftVersion: 4 }, mark: false }],
+        ['c', { body: { isKey: true, version: 2, draftId: 'd-c', draftVersion: 1 }, mark: false }],
+      ]);
+    });
+  });
+
+  // E5 code review CR4: the API answers at most 100 rows; a move renumbers from the list read.
+  it('reads the whole menu page by page, and says when it could not', async () => {
+    const all = Array.from({ length: 230 }, (_, i) => ({ id: `n${i}`, location: 'header' }));
+    const offsets: number[] = [];
+    const read = await readMenu(async (offset) => {
+      offsets.push(offset);
+      return {
+        rows: all.slice(offset, offset + MENU_PAGE),
+        total: all.length,
+        draftsInvalid: [],
+      };
+    }, readsThroughRelease);
+    expect(offsets).toEqual([0, 100, 200]);
+    expect(read).toMatchObject({ staged: true, complete: true });
+    expect(read.rows).toHaveLength(230);
+
+    const endless = await readMenu(
+      async () => ({ rows: all.slice(0, MENU_PAGE), total: 1e6 }),
+      readsThroughRelease,
+    );
+    expect(endless).toMatchObject({ staged: false, complete: false });
+    expect(endless.rows).toHaveLength(MENU_PAGE * MENU_PAGES_MAX);
+  });
+
+  // E5 code review CR5: a move that changes nothing says nothing.
+  it('a change that wrote nothing is not announced', () => {
+    expect(afterChange('none', 'Menu order updated.')).toEqual({ toast: null, announce: false });
+    expect(afterChange('live', 'Menu order updated.')).toEqual({
+      toast: 'Menu order updated.',
+      announce: false,
+    });
+    expect(afterChange('pending', 'Done.')).toEqual({ toast: 'Done.', announce: true });
+  });
+
+  it('the card reads, moves, stars and hides through these helpers', () => {
+    const screen = readFileSync('src/components/admin/screens/header/HeaderScreen.tsx', 'utf8');
+    expect(screen).toContain('readMenu(');
+    expect(screen).toContain('moveKey(');
+    expect(screen).toContain('afterChange(');
+    expect(screen).not.toContain('limit=100');
+    expect(screen).toMatch(/disabled=\{working \|\| !complete \|\| index === 0\}/);
   });
 
   it('moves one place, and stays put at either end', () => {

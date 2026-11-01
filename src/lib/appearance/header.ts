@@ -9,6 +9,7 @@ import {
   HEADER_TINTS,
   HeaderCtaHrefSchema,
   HeaderCtaLabelSchema,
+  inBucket,
   tintAllowed,
   type HeaderLogoSize,
   type HeaderSettings,
@@ -23,11 +24,6 @@ import { sanitizeHref } from '@/lib/content/tiptap';
 // or a column a later slice widened) costs that option its built-in value, never the page.
 
 type Row = Readonly<Record<string, unknown>>;
-
-const oneOf = <T extends string>(list: readonly T[], value: unknown, fallback: T): T =>
-  typeof value === 'string' && (list as readonly string[]).includes(value)
-    ? (value as T)
-    : fallback;
 
 const flag = (value: unknown, fallback: boolean): boolean =>
   typeof value === 'boolean' ? value : fallback;
@@ -44,15 +40,15 @@ export function headerFromRow(row: Row | null | undefined): HeaderSettings {
   const href = HeaderCtaHrefSchema.safeParse(row[c.ctaHref]);
   const ctaHref = href.success && sanitizeHref(href.data) !== null ? href.data : null;
   const out: HeaderSettings = {
-    logoPosition: oneOf(HEADER_LOGO_POSITIONS, row[c.logoPosition], d.logoPosition),
-    logoSize: oneOf(HEADER_LOGO_SIZES, row[c.logoSize], d.logoSize),
-    menuAlign: oneOf(HEADER_MENU_ALIGNS, row[c.menuAlign], d.menuAlign),
+    logoPosition: inBucket(HEADER_LOGO_POSITIONS, row[c.logoPosition], d.logoPosition),
+    logoSize: inBucket(HEADER_LOGO_SIZES, row[c.logoSize], d.logoSize),
+    menuAlign: inBucket(HEADER_MENU_ALIGNS, row[c.menuAlign], d.menuAlign),
     sticky: flag(row[c.sticky], d.sticky),
     hideOnScroll: flag(row[c.hideOnScroll], d.hideOnScroll),
     solidAfterHero: flag(row[c.solidAfterHero], d.solidAfterHero),
-    tint: oneOf(HEADER_TINTS, row[c.tint], d.tint),
-    blur: oneOf(HEADER_BLURS, row[c.blur], d.blur),
-    mobileMenu: oneOf(HEADER_MOBILE_MENUS, row[c.mobileMenu], d.mobileMenu),
+    tint: inBucket(HEADER_TINTS, row[c.tint], d.tint),
+    blur: inBucket(HEADER_BLURS, row[c.blur], d.blur),
+    mobileMenu: inBucket(HEADER_MOBILE_MENUS, row[c.mobileMenu], d.mobileMenu),
     ctaShow: flag(row[c.ctaShow], d.ctaShow),
     ctaLabel: label.success ? label.data : null,
     ctaHref,

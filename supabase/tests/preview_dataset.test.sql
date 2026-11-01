@@ -452,10 +452,10 @@ select is(
             (select string_agg(x, ',' order by x collate "C") from unnest(string_to_array(a.cols, ',')) x)),
           E'\n' order by a.tbl collate "C")
      from _anon_columns() a),
-  'anon''s SELECT columns on the seven column-granted tables equal ANON_COLUMNS');
+  'anon''s SELECT columns on the eight column-granted tables equal ANON_COLUMNS');
 select ok(
   (select bool_and(not has_table_privilege('anon', format('public.%I', tbl), 'SELECT')) from _anon_columns()),
-  'the seven column-granted tables have no table-level anon SELECT');
+  'the eight column-granted tables have no table-level anon SELECT');
 select is(
   (select string_agg(t, ',' order by t collate "C")
      from unnest(array['blog_posts', 'categories', 'certifications', 'clients', 'disciplines',

@@ -1,4 +1,8 @@
-import { HEADER_COLUMNS, SiteAppearanceWriteSchema } from '@schemas/appearance';
+import {
+  HEADER_COLUMNS,
+  headerColumnDefaults,
+  SiteAppearanceWriteSchema,
+} from '@schemas/appearance';
 import type { SingletonConfig } from '@/lib/admin/singleton';
 import { fieldsOf } from '@/lib/admin/resources/shared';
 import { ValidationError } from '@/lib/admin/errors';
@@ -24,20 +28,7 @@ export const siteAppearanceSingleton: SingletonConfig = {
   columns: `tenant_id,${Object.values(HEADER_COLUMNS).join(',')},version,updated_at`,
   schema: SiteAppearanceWriteSchema,
   // The header as built (the table's own defaults), what GET answers before the first save.
-  defaults: {
-    header_logo_position: 'start',
-    header_logo_size: 'm',
-    header_menu_align: 'center',
-    header_sticky: true,
-    header_hide_on_scroll: true,
-    header_solid_after_hero: true,
-    header_tint: 'none',
-    header_blur: 'soft',
-    header_mobile_menu: 'drawer',
-    header_cta_show: false,
-    header_cta_label: null,
-    header_cta_href: null,
-  },
+  defaults: headerColumnDefaults(),
   toRow: (input) => {
     const out: Record<string, unknown> = {};
     for (const [key, column] of Object.entries(HEADER_COLUMNS)) {
@@ -45,7 +36,7 @@ export const siteAppearanceSingleton: SingletonConfig = {
     }
     // The button's link renders into `<a href>` on every public page: the menus' scheme
     // allowlist too, beside the schema's pattern (a third check is the SQL CHECK).
-    const href = out['header_cta_href'];
+    const href = out[HEADER_COLUMNS.ctaHref];
     if (typeof href === 'string' && sanitizeHref(href) === null) {
       throw new ValidationError('unsupported link', 'ctaHref');
     }

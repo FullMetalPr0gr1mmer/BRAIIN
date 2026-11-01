@@ -16,7 +16,21 @@ import { toast } from '@/lib/admin/toast';
 import { singletonFor } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
 import { orderChanges } from '../collection/reorder';
-import { keyChanges, menuRows, movedOrder, type MenuRow } from './menu';
+import {
+  afterChange,
+  keyChanges,
+  KeyMoveError,
+  MENU_PAGE,
+  menuKey,
+  menuRows,
+  movedOrder,
+  moveKey,
+  readMenu,
+  rowWrite,
+  type KeyHolder,
+  type MenuRow,
+  type Wrote,
+} from './menu';
 import { afterLine, barSketch, type BarSketch } from './sketch';
 
 // The Header screen (/admin/appearance/header, Admin v2 E5; ui.md "### Header", the
@@ -28,9 +42,12 @@ import { afterLine, barSketch, type BarSketch } from './sketch';
 //     small sketches of the bar (over the hero, after scrolling) drawn from the form as it is,
 //     and what is always true;
 //   - the Menu items card (nav.edit: Admin, Content Creator): the header menu's top-level links
-//     in order, with Move up and Move down, the key star and the eye, each one write of the
-//     navigation API (versioned; in release mode marked, R12b), and Edit and Add on the Menus
-//     screen, which keeps the full form (labels, links, sub-links, removal for an Admin).
+//     in order (every row read, page by page), with Move up and Move down, the key star and the
+//     eye, each a write of the navigation API (versioned; in release mode it names the row's
+//     pending change or carries the marker, R12b; a star that moves the key from another link
+//     is two writes, and a failed second one puts the old key back: menu.ts moveKey), and Edit
+//     and Add on the Menus screen, which keeps the full form (labels, links, sub-links, removal
+//     for an Admin).
 
 export interface HeaderScreenProps {
   /** theme.edit: the options. */
@@ -139,22 +156,28 @@ function HeaderOptions() {
   );
 }
 
-interface ListAnswer {
-  rows?: Record<string, unknown>[];
-}
+/** One page of the header menu's rows (the navigation list, MENU_PAGE at a time). */
+const menuPage = (offset: number) =>
+  adminFetch<Record<string, unknown>>(
+    `/api/admin/navigation?location=header&limit=${MENU_PAGE}&offset=${offset}`,
+  );
 
 function MenuItems() {
   const base = useId();
   const [rows, setRows] = useState<MenuRow[] | null>(null);
+  const [key, setKey] = useState<KeyHolder | null>(null);
   const [staged, setStaged] = useState(false);
+  const [complete, setComplete] = useState(true);
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const data = await adminFetch<ListAnswer>('/api/admin/navigation?location=header&limit=100');
-      setRows(menuRows(data.rows ?? []));
-      setStaged(readsThroughRelease(data));
+      const menu = await readMenu(menuPage, readsThroughRelease);
+      setRows(menuRows(menu.rows));
+      setKey(menuKey(menu.rows));
+      setStaged(menu.staged);
+      setComplete(menu.complete);
       setError('');
     } catch (err) {
       setError(describeError(err));
@@ -167,13 +190,13 @@ function MenuItems() {
   }, [load]);
 
   /** Runs one change, then reads the menu again; a refusal is said after the read. */
-  async function run(change: () => Promise<boolean>, done: string) {
+  async function run(change: () => Promise<Wrote>, done: string) {
     setWorking(true);
     let failure = '';
     try {
-      const pending = await change();
-      if (pending) announcePending();
-      toast(done, 'ok');
+      const said = afterChange(await change(), done);
+      if (said.announce) announcePending();
+      if (said.toast) toast(said.toast, 'ok');
     } catch (err) {
       failure = `That was not saved. ${describeError(err)}`;
     }
@@ -184,33 +207,46 @@ function MenuItems() {
 
   const move = (row: MenuRow, step: -1 | 1) =>
     run(async () => {
+      // A move renumbers the whole list: never from part of it.
+      if (!complete) return 'none';
       const changes = orderChanges(
         (rows ?? []).map((r) => ({ id: r.id, sort_order: r.sortOrder })),
         movedOrder(rows ?? [], row.id, step),
       );
-      if (changes.length === 0) return false;
+      if (changes.length === 0) return 'none';
       const moved = await adminFetch<Record<string, unknown>>(
         stagedUrl('/api/admin/navigation/reorder', staged),
         { method: 'POST', body: { items: changes } },
       );
-      return 'staged' in moved;
+      return 'staged' in moved ? 'pending' : 'live';
     }, 'Menu order updated.');
 
   const star = (row: MenuRow) =>
     run(
       async () => {
-        let pending = false;
-        for (const change of keyChanges(rows ?? [], row.id)) {
-          const answer = await adminFetch<Record<string, unknown>>(
-            `/api/admin/navigation/${change.id}`,
-            {
-              method: 'PATCH',
-              body: stagedBody({ isKey: change.isKey, version: change.version }, staged),
-            },
+        try {
+          const pending = await moveKey(
+            keyChanges(rows ?? [], row.id, key),
+            (id, write) =>
+              adminFetch<Record<string, unknown>>(`/api/admin/navigation/${id}`, {
+                method: 'PATCH',
+                body: stagedBody(write.body, write.mark),
+              }),
+            staged,
           );
-          pending ||= Boolean(answer['draft']);
+          return pending ? 'pending' : 'live';
+        } catch (err) {
+          if (!(err instanceof KeyMoveError)) throw err;
+          // The old key was cleared and the new one refused: say where the key is now.
+          const holder = key?.label ?? 'The old key link';
+          throw new Error(
+            `${describeError(err.reason)} ${
+              err.restored
+                ? `${holder} is still the key link.`
+                : 'The menu has no key link now: press a star to choose one.'
+            }`,
+          );
         }
-        return pending;
       },
       row.isKey ? `${row.label} is no longer the key link.` : `${row.label} is the key link.`,
     );
@@ -218,14 +254,15 @@ function MenuItems() {
   const eye = (row: MenuRow) =>
     run(
       async () => {
+        const write = rowWrite({ visible: !row.visible }, row, staged);
         const answer = await adminFetch<Record<string, unknown>>(
           `/api/admin/navigation/${row.id}`,
           {
             method: 'PATCH',
-            body: stagedBody({ visible: !row.visible, version: row.version }, staged),
+            body: stagedBody(write.body, write.mark),
           },
         );
-        return Boolean(answer['draft']);
+        return answer['draft'] ? 'pending' : 'live';
       },
       row.visible ? `${row.label} is hidden from the menu.` : `${row.label} shows in the menu.`,
     );
@@ -250,6 +287,17 @@ function MenuItems() {
         <Note tone="err" role="alert">
           {error}
         </Note>
+      )}
+      {!complete && (
+        <Note tone="warn">
+          This menu has more links than this card reads at once, so moving them is off here. The
+          Menus screen orders them all.
+        </Note>
+      )}
+      {key?.sub && (
+        <p className="hdr-menu__hint">
+          The key link is {key.label}, a link under another one. A star here moves the key from it.
+        </p>
       )}
       {rows && rows.length === 0 && !error && (
         <p className="hdr-menu__empty">
@@ -281,7 +329,7 @@ function MenuItems() {
                   type="button"
                   className="icon-btn"
                   aria-label={`Move ${row.label} up`}
-                  disabled={working || index === 0}
+                  disabled={working || !complete || index === 0}
                   onClick={() => void move(row, -1)}
                 >
                   <Icon name="chevd" size={15} className="ic--flip" />
@@ -290,7 +338,7 @@ function MenuItems() {
                   type="button"
                   className="icon-btn"
                   aria-label={`Move ${row.label} down`}
-                  disabled={working || index === rows.length - 1}
+                  disabled={working || !complete || index === rows.length - 1}
                   onClick={() => void move(row, 1)}
                 >
                   <Icon name="chevd" size={15} />

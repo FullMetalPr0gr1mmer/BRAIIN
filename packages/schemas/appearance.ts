@@ -118,6 +118,26 @@ export const HEADER_COLUMNS: Readonly<Record<keyof HeaderSettings, string>> = {
   ctaHref: 'header_cta_href',
 };
 
+/**
+ * The header as built by column (HEADER_DEFAULTS through HEADER_COLUMNS): the singleton's
+ * answer before the first save and, less the nullable button columns, the table's own
+ * defaults. One source for every copy (tests/lib/headerSource.spec.ts).
+ */
+export function headerColumnDefaults(): Record<string, string | boolean | HeaderCtaLabel | null> {
+  const out: Record<string, string | boolean | HeaderCtaLabel | null> = {};
+  for (const [key, column] of Object.entries(HEADER_COLUMNS)) {
+    out[column] = HEADER_DEFAULTS[key as keyof HeaderSettings];
+  }
+  return out;
+}
+
+/** A stored or sent value inside its closed set (one of the lists above), else the fallback. */
+export function inBucket<T extends string>(list: readonly T[], value: unknown, fallback: T): T {
+  return typeof value === 'string' && (list as readonly string[]).includes(value)
+    ? (value as T)
+    : fallback;
+}
+
 /** A tint that leaves the bar readable over the page (the SQL CHECK site_appearance_tint_minimum). */
 export function tintAllowed(s: Pick<HeaderSettings, 'sticky' | 'solidAfterHero' | 'tint'>) {
   return !s.sticky || s.solidAfterHero || s.tint === HEADER_TINT_MINIMUM;

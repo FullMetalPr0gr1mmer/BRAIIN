@@ -1,3 +1,4 @@
+import { HEADER_COLUMNS } from '@schemas/appearance';
 import type { SingletonUi } from './types';
 
 // The header's options, `site_appearance` (Admin v2 E5, /admin/appearance/header, the
@@ -17,7 +18,7 @@ export const appearanceUi: SingletonUi = {
       name: 'logoPosition',
       label: 'Logo position',
       kind: 'select',
-      column: 'header_logo_position',
+      column: HEADER_COLUMNS.logoPosition,
       required: true,
       options: [
         { value: 'start', label: 'At the start' },
@@ -29,7 +30,7 @@ export const appearanceUi: SingletonUi = {
       name: 'logoSize',
       label: 'Logo size',
       kind: 'select',
-      column: 'header_logo_size',
+      column: HEADER_COLUMNS.logoSize,
       required: true,
       options: [
         { value: 's', label: 'Small' },
@@ -42,7 +43,7 @@ export const appearanceUi: SingletonUi = {
       name: 'menuAlign',
       label: 'Menu alignment',
       kind: 'select',
-      column: 'header_menu_align',
+      column: HEADER_COLUMNS.menuAlign,
       required: true,
       options: [
         { value: 'start', label: 'Next to the logo' },
@@ -55,28 +56,28 @@ export const appearanceUi: SingletonUi = {
       name: 'sticky',
       label: 'Sticky (stays at the top)',
       kind: 'checkbox',
-      column: 'header_sticky',
+      column: HEADER_COLUMNS.sticky,
       help: 'Off: the bar scrolls away with the page.',
     },
     {
       name: 'hideOnScroll',
       label: 'Hide when scrolling down',
       kind: 'checkbox',
-      column: 'header_hide_on_scroll',
+      column: HEADER_COLUMNS.hideOnScroll,
       help: 'Shows again on the first scroll up.',
     },
     {
       name: 'solidAfterHero',
       label: 'Turn solid after the hero',
       kind: 'checkbox',
-      column: 'header_solid_after_hero',
+      column: HEADER_COLUMNS.solidAfterHero,
       help: 'Off: the bar keeps its tint over the rest of the page, so it needs the darkest tint.',
     },
     {
       name: 'tint',
       label: 'Tint over the hero',
       kind: 'select',
-      column: 'header_tint',
+      column: HEADER_COLUMNS.tint,
       required: true,
       options: [
         { value: 'none', label: 'None (see-through)' },
@@ -89,7 +90,7 @@ export const appearanceUi: SingletonUi = {
       name: 'blur',
       label: 'Blur behind the bar',
       kind: 'select',
-      column: 'header_blur',
+      column: HEADER_COLUMNS.blur,
       required: true,
       options: [
         { value: 'none', label: 'None' },
@@ -102,7 +103,7 @@ export const appearanceUi: SingletonUi = {
       name: 'mobileMenu',
       label: 'Menu on phones',
       kind: 'select',
-      column: 'header_mobile_menu',
+      column: HEADER_COLUMNS.mobileMenu,
       required: true,
       options: [
         { value: 'drawer', label: 'A panel under the bar' },
@@ -113,14 +114,14 @@ export const appearanceUi: SingletonUi = {
       name: 'ctaShow',
       label: 'Show a button',
       kind: 'checkbox',
-      column: 'header_cta_show',
+      column: HEADER_COLUMNS.ctaShow,
       help: 'A filled button at the end of the bar, and at the end of the menu on phones.',
     },
     {
       name: 'ctaLabel',
       label: 'Button words',
       kind: 'bilingual',
-      column: 'header_cta_label',
+      column: HEADER_COLUMNS.ctaLabel,
       nullable: true,
       maxLength: 40,
       help: 'Two or three words keep the bar on one line beside the menu.',
@@ -129,7 +130,7 @@ export const appearanceUi: SingletonUi = {
       name: 'ctaHref',
       label: 'Button link',
       kind: 'text',
-      column: 'header_cta_href',
+      column: HEADER_COLUMNS.ctaHref,
       maxLength: 300,
       help: 'A page of this site, starting with / (for example /contact#inquiry; leave out /ar, Arabic pages add it), or a link starting with https://',
     },

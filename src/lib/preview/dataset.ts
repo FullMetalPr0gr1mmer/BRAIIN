@@ -6,6 +6,7 @@ import {
   RELEASE_ENTITY_TYPES,
   type ReleaseEntityType,
 } from '@schemas/release';
+import { headerColumnDefaults } from '@schemas/appearance';
 import { mediaItemToRow } from '@/lib/admin/resources/portfolio';
 import type { AuthContext, Role } from '@/lib/auth/types';
 import { AuthorizationError } from '@/lib/authz/errors';
@@ -144,19 +145,11 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row
     value_points: [],
     deliverables: [],
   },
-  // Admin v2 E5: the header as built (the table's NOT NULL defaults).
-  site_appearance: {
-    header_logo_position: 'start',
-    header_logo_size: 'm',
-    header_menu_align: 'center',
-    header_sticky: true,
-    header_hide_on_scroll: true,
-    header_solid_after_hero: true,
-    header_tint: 'none',
-    header_blur: 'soft',
-    header_mobile_menu: 'drawer',
-    header_cta_show: false,
-  },
+  // Admin v2 E5: the header as built (the table's NOT NULL defaults: every option but the
+  // button's words and link, which have none).
+  site_appearance: Object.fromEntries(
+    Object.entries(headerColumnDefaults()).filter(([, value]) => value !== null),
+  ),
   site_profile: {
     address_country: 'SA',
     socials: [],

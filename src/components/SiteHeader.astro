@@ -87,6 +87,11 @@ const cta =
       }
     : null;
 
+// The end group exists only with the button (below): a Fragment otherwise, so the header as
+// built keeps its bytes.
+const EndGroup = cta ? 'div' : Fragment;
+const endAttrs = cta ? { class: 'site-header__end' } : {};
+
 const STR = {
   en: { skip: 'Skip to content', menu: 'Menu', nav: 'Main navigation' },
   ar: { skip: 'تخطَّ إلى المحتوى', menu: 'القائمة', nav: 'التنقل الرئيسي' },
@@ -199,34 +204,27 @@ const STR = {
     {
       /* E5: with a call-to-action button, it and the language switch share one end group (the
          centred logo's grid puts the group in its last column). Without one, the language
-         switch stands alone, as built. The language switch always shows (O-13). */
-      cta ? (
-        <div class="site-header__end">
+         switch stands alone, as built: the group's tag is then a Fragment, which renders
+         nothing of its own. The language switch always shows (O-13). */
+    }
+    <EndGroup {...endAttrs}>
+      {
+        cta && (
           <a class="site-header__cta" href={cta.href} data-track={trackHref(cta.href)}>
             {cta.label}
           </a>
-          <a
-            class="site-header__lang"
-            href={switchHref}
-            hreflang={otherLocale}
-            lang={otherLocale}
-            data-track={otherLocale === 'ar' ? 'language_ar' : 'language_en'}
-          >
-            {otherLocale === 'ar' ? 'العربية' : 'English'}
-          </a>
-        </div>
-      ) : (
-        <a
-          class="site-header__lang"
-          href={switchHref}
-          hreflang={otherLocale}
-          lang={otherLocale}
-          data-track={otherLocale === 'ar' ? 'language_ar' : 'language_en'}
-        >
-          {otherLocale === 'ar' ? 'العربية' : 'English'}
-        </a>
-      )
-    }
+        )
+      }
+      <a
+        class="site-header__lang"
+        href={switchHref}
+        hreflang={otherLocale}
+        lang={otherLocale}
+        data-track={otherLocale === 'ar' ? 'language_ar' : 'language_en'}
+      >
+        {otherLocale === 'ar' ? 'العربية' : 'English'}
+      </a>
+    </EndGroup>
   </div>
 </header>
 
@@ -236,12 +234,9 @@ const STR = {
   // and passive; everything here is enhancement.
   const header = document.querySelector<HTMLElement>('.site-header');
   if (header) {
-    const overlay = header.dataset.header === 'overlay';
     // E5's options (absent = as built): a bar that scrolls away with the page needs no scroll
-    // work at all; one that never hides, or never turns solid, skips that half.
+    // work at all (below); one that never hides, or never turns solid, skips that half.
     const sticky = header.dataset.sticky !== 'off';
-    const hides = header.dataset.hide !== 'off';
-    const turnsSolid = overlay && header.dataset.solid !== 'off';
     const menu = header.querySelector('details');
     // Following a link from the small-screen menu closes it. A same-page anchor
     // (/#services, on home) does not reload, so a <details> left open would stay pinned
@@ -250,6 +245,17 @@ const STR = {
     header.querySelector('.site-nav__panel')?.addEventListener('click', (event) => {
       if (menu?.open && (event.target as Element | null)?.closest('a')) menu.open = false;
     });
+    // A bar that scrolls away with the page (E5, data-sticky="off") never changes state: it
+    // adds no listener and asks for no frame.
+    if (sticky) watchScroll(header);
+  }
+
+  /** A sticky bar's scroll and resize work: rAF-throttled and passive. */
+  function watchScroll(header: HTMLElement) {
+    const overlay = header.dataset.header === 'overlay';
+    const hides = header.dataset.hide !== 'off';
+    const turnsSolid = overlay && header.dataset.solid !== 'off';
+    const menu = header.querySelector('details');
     let lastY = 0;
     let ticking = false;
 
@@ -266,8 +272,6 @@ const STR = {
 
     const update = () => {
       ticking = false;
-      // A bar that scrolls away with the page (E5, data-sticky="off") never changes state.
-      if (!sticky) return;
       const y = window.scrollY;
       const past = y > threshold;
       if (turnsSolid) header.classList.toggle('is-solid', past);

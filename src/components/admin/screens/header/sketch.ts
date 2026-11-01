@@ -1,6 +1,23 @@
+import {
+  HEADER_BLURS,
+  HEADER_DEFAULTS,
+  HEADER_LOGO_POSITIONS,
+  HEADER_LOGO_SIZES,
+  HEADER_MENU_ALIGNS,
+  HEADER_TINTS,
+  inBucket,
+  type HeaderBlur,
+  type HeaderLogoPosition,
+  type HeaderLogoSize,
+  type HeaderMenuAlign,
+  type HeaderTint,
+} from '@schemas/appearance';
+
 // The Header screen's two small previews (Admin v2 E5), pure so they are unit-tested
 // (tests/lib/headerOptions.spec.ts): what each sketch of the bar shows for the form's current
-// values, as the closed values the CSS keys on (`data-*`, never a style: CSP).
+// values, as the closed values the CSS keys on (`data-*`, never a style: CSP). The buckets and
+// the header as built are the schema's (packages/schemas/appearance.ts), so a value the site
+// would not render draws the bar as built.
 
 type Values = Readonly<Record<string, unknown>>;
 
@@ -13,20 +30,15 @@ export interface BarSketch {
   /** False once a bar that is not sticky has scrolled away with the page. */
   shown: boolean;
   /** The backdrop: see-through, one of the tints, or the solid bar. */
-  backdrop: 'none' | 'light' | 'medium' | 'dark' | 'solid';
+  backdrop: HeaderTint | 'solid';
   /** The blur behind it, drawn only on the solid bar. */
-  blur: 'none' | 'soft' | 'strong';
-  logo: 's' | 'm' | 'l';
-  logoPosition: 'start' | 'center';
-  align: 'start' | 'center' | 'end';
+  blur: HeaderBlur;
+  logo: HeaderLogoSize;
+  logoPosition: HeaderLogoPosition;
+  align: HeaderMenuAlign;
   /** The button's English words, or null when it is not shown. */
   button: string | null;
 }
-
-const pick = <T extends string>(value: unknown, list: readonly T[], fallback: T): T =>
-  typeof value === 'string' && (list as readonly string[]).includes(value)
-    ? (value as T)
-    : fallback;
 
 /** The button's English words, when it shows and has them. */
 function buttonOf(values: Values): string | null {
@@ -45,16 +57,17 @@ function buttonOf(values: Values): string | null {
  * over the hero, and gone when it is not sticky (it scrolled away with the page).
  */
 export function barSketch(values: Values, after: boolean): BarSketch {
-  const tint = pick(values['tint'], ['none', 'light', 'medium', 'dark'] as const, 'none');
+  const d = HEADER_DEFAULTS;
+  const tint = inBucket(HEADER_TINTS, values['tint'], d.tint);
   const solid = after && values['solidAfterHero'] !== false;
   return {
     ground: after ? 'page' : 'hero',
     shown: !(after && values['sticky'] === false),
     backdrop: solid ? 'solid' : tint,
-    blur: solid ? pick(values['blur'], ['none', 'soft', 'strong'] as const, 'soft') : 'none',
-    logo: pick(values['logoSize'], ['s', 'm', 'l'] as const, 'm'),
-    logoPosition: pick(values['logoPosition'], ['start', 'center'] as const, 'start'),
-    align: pick(values['menuAlign'], ['start', 'center', 'end'] as const, 'center'),
+    blur: solid ? inBucket(HEADER_BLURS, values['blur'], d.blur) : 'none',
+    logo: inBucket(HEADER_LOGO_SIZES, values['logoSize'], d.logoSize),
+    logoPosition: inBucket(HEADER_LOGO_POSITIONS, values['logoPosition'], d.logoPosition),
+    align: inBucket(HEADER_MENU_ALIGNS, values['menuAlign'], d.menuAlign),
     button: buttonOf(values),
   };
 }
