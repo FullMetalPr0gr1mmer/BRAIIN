@@ -383,7 +383,7 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     `app.role_manages_integrations(app.live_role())`, so a demoted, deactivated or locked
     Admin or SEO token reads and writes nothing of it at PostgREST; the staff read is also
     narrowed from every CMS role to Admin + SEO (§5), which only the Worker enforced before.
-  - *Closed by E4 (0118, the theme migration).* `custom_themes` writes:
+  - *Closed by E4 (0120, the theme migration).* `custom_themes` writes:
     `custom_themes_live_insert`, `_update` and `_delete` (RESTRICTIVE) require
     `app.role_edits_theme(app.live_role())`, so a demoted, deactivated or locked Admin or
     Developer token can no longer restyle the live site and the admin at PostgREST (E4 made the

@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
--- 0118 — Theme v1 (Admin v2 E4, AV-27). Forward-only and EXPAND only. The number is a
+-- 0120 — Theme v1 (Admin v2 E4, AV-27). Forward-only and EXPAND only. The number is a
 -- placeholder: it is assigned at merge (scripts/renumber-migration.mjs). Depends on 0001
 -- (public.custom_themes), 0009 (its version and actor triggers), 0011 (its table grants to
 -- authenticated; anon held nothing), 0038 (app.release_entities, its custom_theme row and the
@@ -60,8 +60,9 @@
 --
 -- The Sales boundary (C10a, U7, H13) is untouched: Sales reads no row of custom_themes (the
 -- staff read is app.is_staff(), the four CMS roles). Releases stay off (app.release_tenants
--- empty). Production as of 2026-10-29: PostgreSQL 17.6, one tenant; main holds every
--- migration through 0116; E8 holds 0117 and touches neither this table nor these guides.
+-- empty). Production as of 2026-11-01: PostgreSQL 17.6, one tenant; main and production hold
+-- every migration through 0119. E8 (0117) touches neither this table nor these guides; E5
+-- (0119) creates app.role_edits_theme byte for byte as section 6 does, and nothing else here.
 -- CLAUDE.md §3 (Pillar 1: CSP, tokens as custom properties only), §5 (Theme editor), §8
 -- (Admin v2 lanes, UI), §9.
 -- ─────────────────────────────────────────────────────────────────────────────────────────
@@ -605,8 +606,8 @@ $guide$::jsonb, 3);
 -- Not FOR ALL: reads stay open to every CMS role (the releases preview, see the header). The
 -- service role and the definer functions (apply_release) are not `authenticated`, so none of
 -- these applies to them. `(select ...)` makes the profile read one InitPlan per statement.
--- The helper's canonical definition, search_path pinned (E4 code review CR8): any later
--- migration that creates it again (E5 does) repeats these three lines byte for byte, which
+-- The helper's canonical definition, search_path pinned (E4 code review CR8): any other
+-- migration that creates it (E5's, before this one) repeats these lines byte for byte, which
 -- tests/lib/themeSql.spec.ts holds.
 create or replace function app.role_edits_theme(r text) returns boolean
   language sql immutable

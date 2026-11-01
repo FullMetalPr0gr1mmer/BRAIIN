@@ -7,7 +7,7 @@
 //
 // LOCAL ONLY. It writes with the service role key the CI job exports for its own stack, and
 // refuses any Supabase or preview that is not loopback, so it can never write to a hosted
-// project. The row goes in through PostgREST, so the 0118 CHECK (custom_themes_theme_v1) judges
+// project. The row goes in through PostgREST, so the 0120 CHECK (custom_themes_theme_v1) judges
 // it as it judges every save: a fixture that drifted from the compiler is refused here.
 //
 //   node scripts/lhci-theme.mjs        (PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,

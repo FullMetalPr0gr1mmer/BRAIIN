@@ -160,7 +160,7 @@ describe('the colour maths agree with the migration’s own samples', () => {
   });
 });
 
-// app.role_edits_theme (theme.edit's helper, E4-SEC-3) is created again by a later slice (E5).
+// app.role_edits_theme (theme.edit's helper, E4-SEC-3) is created by E5's 0119 too.
 // Its definition here is the canonical one, search_path pinned (E4 code review CR8): every
 // migration that creates it repeats these three lines byte for byte, so the last definition
 // never quietly drops the pin (tests/authz/sqlHelpers.spec.ts holds its role list).

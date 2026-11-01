@@ -747,7 +747,7 @@ export function fixtureTables(): Record<string, Row[]> {
       },
     ],
     // Admin v2 E4: the active v1 theme (black, warm grey; slower marquee, no reveal), and an
-    // active legacy theme a visitor never reads (0118's custom_themes_public_read).
+    // active legacy theme a visitor never reads (0120's custom_themes_public_read).
     custom_themes: [
       {
         id: ID.theme,

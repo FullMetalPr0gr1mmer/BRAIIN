@@ -1,4 +1,4 @@
--- pgTAP: Theme v1 (Admin v2 E4, 0118). Run with `supabase test db`.
+-- pgTAP: Theme v1 (Admin v2 E4, 0120). Run with `supabase test db`.
 --
 --   • custom_themes.settings and its CHECK: a v1 row holds the closed settings shape and the
 --     tokens the Worker compiles from them (the closed key set, each value of its key's shape,
