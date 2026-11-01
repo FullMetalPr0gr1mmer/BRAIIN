@@ -436,6 +436,8 @@ describe('serviceTitle / serviceDescription / disciplineOf / cache tags', () => 
       'clients:all',
       'sectors:all',
       'media:all',
+      // Admin v2 E8: the "Say hello" form, as the forms config words it.
+      'forms:all',
     ]);
   });
 });

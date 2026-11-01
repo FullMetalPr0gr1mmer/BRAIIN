@@ -35,6 +35,7 @@ import {
   cvProblem,
   fileSizeLabel,
   openFromStatusBody,
+  skillsMissing,
 } from '@/lib/client/applicationForm';
 import { APPLY_FORM_COPY, applyStatusText } from '@/lib/forms/applicationCopy';
 
@@ -194,6 +195,24 @@ describe('applicationKeyToField and the client’s mirror of it', () => {
     ]);
     expect(applyFieldsFor('workType')).toEqual([]);
     expect(applyFieldsFor(undefined)).toEqual([]);
+  });
+
+  it('a CV the forms config requires marks the file input (Admin v2 E8)', () => {
+    expect(applyFieldsFor(['cv', 'linkedin'])).toEqual(['cv', 'linkedin']);
+  });
+
+  it('required crafts block a send with none ticked, and a 422 on skills marks the group (Admin v2 E8)', () => {
+    expect(skillsMissing({ required: true, ticked: 0 })).toBe(true);
+    expect(skillsMissing({ required: true, ticked: 2 })).toBe(false);
+    expect(skillsMissing({ required: false, ticked: 0 })).toBe(false);
+    // formErrors marks no checkbox, so the 422's `skills` is handled by the form's own code.
+    expect(applyFieldsFor(['skills'])).toEqual(['skills']);
+    const client = readFileSync(join(process.cwd(), 'src/lib/client/applicationForm.ts'), 'utf8');
+    expect(client).toMatch(/named\.has\('skills'\)\) markChips\(/);
+    expect(client).toMatch(/dataset\['required'\] === 'true'/);
+    // The group's hooks are written by the server, only when the config requires the crafts.
+    expect(FORM).toMatch(/data-required=\{required \? 'true' : undefined\}/);
+    expect(FORM).toMatch(/data-err-required=\{required \? STR\.errors\.skills : undefined\}/);
   });
 
   it('the client’s CV rules are the schema’s', () => {

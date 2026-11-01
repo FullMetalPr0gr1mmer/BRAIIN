@@ -47,6 +47,9 @@ declare namespace App {
     // The active theme (Admin v2 E4), read at most once per request by src/lib/data/theme.ts
     // getActiveTheme: the layouts' stylesheet link and /styles/theme.css share it.
     theme?: Promise<import('@/lib/data/theme').LiveTheme | null>;
+    // The published forms config (Admin v2 E8), read at most once per request by
+    // src/lib/data/forms.ts formSettingsFor. A promise, as `identity` is.
+    formSettings?: Promise<import('@/lib/forms/config').FormSettings>;
     // The releases preview (Admin v2 R9), set by its middleware branch
     // (src/lib/http/preview.ts) on a `/admin/preview/**` render only: BaseLayout drops the
     // consent banner and telemetry, says noindex and loads the bridge; SectionRenderer marks

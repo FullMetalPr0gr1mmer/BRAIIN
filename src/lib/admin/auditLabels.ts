@@ -178,6 +178,9 @@ const SINGLETONS: Readonly<Record<string, { noun: string; ui: string }>> = {
   seo_defaults: { noun: 'the global SEO defaults', ui: 'seo' },
   site_profile: { noun: 'the public identity', ui: 'profile' },
   ai_config: { noun: 'the Style-Finder results and logic', ui: 'ai-config' },
+  // Admin v2 E8: edited by its own island (no SINGLETON_UI entry): its two fields read as
+  // their keys in plain words, "Inquiry" and "Application".
+  form_settings: { noun: 'the forms', ui: 'forms' },
 };
 export const SINGLETON_ENTITIES: readonly string[] = Object.keys(SINGLETONS);
 

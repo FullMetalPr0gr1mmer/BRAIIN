@@ -77,7 +77,11 @@ export const RELEASE_READ_TOTAL_IDS_MAX = 2_000;
  * `key: 'tenant_id'`; tests/lib/overlayDb.spec.ts holds them equal). 0103 refuses a
  * `tenant_id` read of any other table, which would be the whole table in one read.
  */
-export const RELEASE_SINGLETON_TABLES: readonly string[] = ['seo_defaults', 'site_profile'];
+export const RELEASE_SINGLETON_TABLES: readonly string[] = [
+  'form_settings',
+  'seo_defaults',
+  'site_profile',
+];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const COLUMN = /^[a-z_][a-z0-9_]{0,62}$/;

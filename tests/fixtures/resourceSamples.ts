@@ -181,6 +181,9 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   defaultOgMediaId: UUID_B,
   organization: { name: 'Sample' },
   robotsDirectives: 'index,follow',
+  // singletons: form_settings (Admin v2 E8)
+  inquiry: { button: BI('Send it', 'أرسل') },
+  application: { consent: { futureRoles: BI('Keep me in mind', 'تذكّروني') } },
   // entity SEO
   entityType: 'service',
   entityId: UUID_A,

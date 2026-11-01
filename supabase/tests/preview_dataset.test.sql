@@ -34,7 +34,10 @@
 --      (item 3), a live Admin reads the row, a live content_creator, developer or sales
 --      profile reads none, and neither does another tenant (supabase/tests/integrations.test.sql
 --      holds every role, stale tokens included). No preview emits the tag anyway: a preview
---      is noindex (BaseLayout), and SeoHead reads the code only for an indexable home page.
+--      is noindex (BaseLayout), and SeoHead reads the code only for an indexable home page;
+--   8. form_settings (Admin v2 E8) is public copy: anon reads its four columns (item 3), every
+--      CMS role reads the launch tenant's row (the non-staff block reads the claim's role, no
+--      profile), and a sales claim and another tenant read none.
 -- The literals are held equal to ANON_COLUMNS, DATASET_ONLY_COLUMNS, CREATE_DEFAULTS and MIRRORED_POLICIES
 -- by tests/lib/previewMirror.spec.ts, which parses this file: a grant, default or policy
 -- that moves fails one side until the other follows.
@@ -48,7 +51,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
 begin;
-select plan(24);
+select plan(28);
 
 -- ── The literals (parsed by tests/lib/previewMirror.spec.ts; keep one row per line) ──────
 create function _anon_columns() returns table (tbl text, cols text) language sql immutable as $$
@@ -56,6 +59,7 @@ create function _anon_columns() returns table (tbl text, cols text) language sql
     ('custom_themes', 'tokens,version'),
     ('disciplines', 'id,tenant_id,slug,name,short,blurb,poster_media_id,preview_video_path,preview_start_s,preview_end_s,status,sort_order,published_at,updated_at'),
     ('faq_items', 'id,tenant_id,question,answer,status,sort_order'),
+    ('form_settings', 'tenant_id,inquiry,application,consent_revision'),
     ('media_assets', 'id,tenant_id,kind,provider,storage_path,width,height,alt,stream_uid,mime_type,updated_at'),
     ('service_cases', 'id,tenant_id,service_id,portfolio_id,title,context,problems,results,status,published_at,updated_at'),
     ('site_integrations', 'tenant_id,search_console_token,ga4_measurement_id'),
@@ -88,6 +92,9 @@ create function _create_defaults() returns table (tbl text, col text, dflt text)
     ('entity_seo', 'meta_title', $d$'{}'::jsonb$d$),
     ('faq_items', 'sort_order', $d$0$d$),
     ('faq_items', 'status', $d$'draft'::content_status$d$),
+    ('form_settings', 'application', $d$'{}'::jsonb$d$),
+    ('form_settings', 'consent_revision', $d$0$d$),
+    ('form_settings', 'inquiry', $d$'{}'::jsonb$d$),
     ('navigation', 'is_key', $d$false$d$),
     ('navigation', 'sort_order', $d$0$d$),
     ('navigation', 'visible', $d$true$d$),
@@ -152,6 +159,7 @@ create function _anon_policies() returns table (tbl text, policies text) languag
     ('disciplines', 'disciplines_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,disciplines_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('entity_seo', 'entity_seo_published_only:RESTRICTIVE:df5c9a7d7588fed51b9e8704523bf0a3,entity_seo_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,entity_seo_write:PERMISSIVE:763c5ebb7d12ee38b8e17d30ad1570df'),
     ('faq_items', 'faq_items_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,faq_items_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('form_settings', 'form_settings_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54'),
     ('media_assets', 'media_assets_public_read:PERMISSIVE:f7fb1e5779de752edd5116394a0286de,media_read:PERMISSIVE:392446073406bce5902ebbac287245a1,media_write:PERMISSIVE:4f9223ffe3d088ba7a0a4098c7d190d6'),
     ('navigation', 'navigation_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,navigation_visible_only:RESTRICTIVE:d3e6a42adad1d6a81062627de227ba33,navigation_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('page_sections', 'page_sections_password_fence:RESTRICTIVE:288466d0b0045b81ef63d2e215c90e8e,page_sections_published_only:RESTRICTIVE:1f97d3d1084c993ca178204580b8d11d,page_sections_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54,page_sections_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
@@ -538,6 +546,34 @@ select _as_other();
 select is((select count(*)::int from public.site_integrations
             where tenant_id::text = current_setting('pv.launch')), 0,
   'other_tenant reads no site_integrations row of the launch tenant');
+reset role;
+
+-- ── 8. form_settings (Admin v2 E8) ─────────────────────────────────────────────────────
+-- The forms config is public copy: anon reads its four columns of the launch tenant's row
+-- (item 3), every CMS role reads the row (the registry contract), a sales claim reads none
+-- (the non-staff block) and another tenant none.
+insert into public.form_settings (tenant_id, inquiry)
+values (current_setting('pv.launch')::uuid, '{"button":{"en":"Send it","ar":"أرسل"}}');
+create function _form_rows(p_role text) returns int language plpgsql as $$
+begin
+  perform _as(p_role);
+  return (select count(*)::int from public.form_settings
+           where tenant_id::text = current_setting('pv.launch'));
+end $$;
+set local role anon;
+select _as(null);
+select is((select inquiry #>> '{button,en}' from public.form_settings), 'Send it',
+  'anon reads the launch tenant''s forms config, the dataset''s projection of form_settings');
+reset role;
+set local role authenticated;
+select is(_form_rows('admin') + _form_rows('content_creator') + _form_rows('seo') + _form_rows('developer'), 4,
+  'every CMS role reads the launch tenant''s form_settings row (registry contract #1)');
+select is(_form_rows('sales'), 0,
+  'a sales claim reads no form_settings row (0097''s non-staff block)');
+select _as_other();
+select is((select count(*)::int from public.form_settings
+            where tenant_id::text = current_setting('pv.launch')), 0,
+  'other_tenant reads no form_settings row of the launch tenant');
 reset role;
 
 select * from finish();

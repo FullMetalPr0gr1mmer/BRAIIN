@@ -292,7 +292,7 @@ Who may publish a pending change once releases are on (docs/admin-v2/releases.md
 |---|:-:|:-:|:-:|:-:|:-:|
 | Release — content (pages, sections, services, disciplines, cases, Our work, collections, blog, navigation) | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Release — removals and archives (every area but redirects) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Release — public identity | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Release — public identity and forms config | ✅ | ❌ | ❌ | ✅ | ❌ |
 | Release — theme and appearance | ✅ | ❌ | ❌ | ✅ | ❌ |
 | Release — per-entity SEO | ✅ | ❌ | ✅ | ❌ | ❌ |
 | Release — global SEO defaults | ✅ | ❌ | ✅ | ❌ | ❌ |

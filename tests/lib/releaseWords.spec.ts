@@ -36,6 +36,14 @@ describe('where a pending change is edited', () => {
     expect(editHref('site_profile', ID)).toBe('/admin/settings');
     expect(editHref('seo_defaults', ID)).toBe('/admin/seo?tab=site');
     expect(editHref('page_visibility', ID)).toBe('/admin/visibility');
+    expect(editHref('form_settings', ID)).toBe('/admin/forms');
+  });
+
+  it('the forms config names its two forms (Admin v2 E8)', () => {
+    expect(fieldLabels('form_settings', ['inquiry', 'application'])).toEqual([
+      'Inquiry form',
+      'Join form',
+    ]);
   });
 });
 

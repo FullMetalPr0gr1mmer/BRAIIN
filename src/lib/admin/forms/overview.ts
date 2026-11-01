@@ -1,5 +1,4 @@
 import type { ZodTypeAny } from 'zod';
-import { RECRUITMENT_POLICY_VERSION } from '@consent/recruitment';
 import { ApplicationInputSchema, CV_MAX_BYTES } from '@schemas/application';
 import { LeadInputSchema } from '@schemas/lead';
 import { APPLY_FORM_COPY } from '@/lib/forms/applicationCopy';
@@ -267,6 +266,3 @@ export function formFacts(): Record<FormId, FormFacts> {
     },
   };
 }
-
-/** The consent text version the Join form shows now (stored with each application). */
-export const CONSENT_VERSION = RECRUITMENT_POLICY_VERSION;
