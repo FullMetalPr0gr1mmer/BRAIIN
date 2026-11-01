@@ -209,7 +209,8 @@ test.describe('as admin', () => {
     const logoW = await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue('--bs-logo-w').trim(),
     );
-    expect(logoW).toBe('clamp(96px, 12vw, 160px)');
+    // The built global.css is minified (no spaces inside clamp()), so compare without them.
+    expect(logoW.replace(/\s+/g, '')).toBe('clamp(96px,12vw,160px)');
     await expect(page.locator('a.site-header__cta')).toBeVisible();
   });
 
