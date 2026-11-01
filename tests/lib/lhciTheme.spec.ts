@@ -13,7 +13,8 @@ import { isLoopback, themeLinks, themedRunRow } from '../../scripts/lhci-theme.m
 // theme (scripts/lhci-theme.mjs) and measures four routes again with the same budgets
 // (lighthouserc.themed.json). The fixture must be a theme the gate and the database accept, or
 // the run would measure nothing themed; the script must never write anywhere but the job's own
-// stack; and the run must keep every budget of the main one.
+// stack; and the run must keep every budget of the main one, with one exception: on the two
+// image-LCP routes, LCP and the performance score warn (E4-C1, below).
 
 describe('the theme the run sets', () => {
   it('is a valid v1 theme that passes the gate, its tokens the compiler’s', () => {
@@ -65,11 +66,56 @@ describe('the run', () => {
   const main = JSON.parse(readFileSync('lighthouserc.json', 'utf8'));
   const themed = JSON.parse(readFileSync('lighthouserc.themed.json', 'utf8'));
 
+  type Matrix = {
+    matchingUrlPattern: string;
+    aggregationMethod: string;
+    assertions: Record<string, unknown>;
+  }[];
+  const matrix = (themed.ci.assert.assertMatrix ?? []) as Matrix;
+  const groupOf = (url: string) => matrix.filter((m) => new RegExp(m.matchingUrlPattern).test(url));
+  // The image-LCP routes (/ and /ar: the intro logo). Over wrangler dev's cleartext HTTP/1.1
+  // the extra render-blocking stylesheet costs about 75 ms of simulated LCP that HTTP/2 and 3
+  // never pay (as-built E4, "LCP, CLS and the extra stylesheet"), so these two budgets warn
+  // there; everything a theme can break (axe on the themed colours, CLS, TBT, SEO, fonts,
+  // images) stays an error (E4 review, E4-C1).
+  const WARN_ON_IMAGE_LCP = ['categories:performance', 'largest-contentful-paint'];
+
   it('keeps every budget of the main run, on routes the main run measures', () => {
-    expect(themed.ci.assert).toEqual(main.ci.assert);
+    expect(Object.keys(themed.ci.assert)).toEqual(['assertMatrix']);
     expect(themed.ci.collect.numberOfRuns).toBe(main.ci.collect.numberOfRuns);
     expect(themed.ci.collect.url).toHaveLength(4);
     for (const url of themed.ci.collect.url) expect(main.ci.collect.url).toContain(url);
+    expect(matrix).toHaveLength(2);
+    for (const entry of matrix) {
+      expect(entry.aggregationMethod).toBe(main.ci.assert.aggregationMethod);
+      expect(Object.keys(entry.assertions).sort()).toEqual(
+        Object.keys(main.ci.assert.assertions).sort(),
+      );
+    }
+  });
+
+  it('each route is in one group; text LCP keeps every budget an error, image LCP warns on two', () => {
+    for (const url of themed.ci.collect.url as string[]) {
+      // Lighthouse matches the final URL: a trailing slash after a redirect is the same route.
+      for (const u of [url, url.endsWith('/') ? url : `${url}/`])
+        expect(groupOf(u), u).toHaveLength(1);
+    }
+    const [image] = groupOf('http://localhost:8788/');
+    expect(groupOf('http://localhost:8788/ar')[0]).toBe(image);
+    const [text] = groupOf('http://localhost:8788/services/logo');
+    expect(groupOf('http://localhost:8788/contact')[0]).toBe(text);
+    expect(text).not.toBe(image);
+    expect(text!.assertions).toEqual(main.ci.assert.assertions);
+    for (const [key, value] of Object.entries(main.ci.assert.assertions)) {
+      const mine = image!.assertions[key];
+      if (WARN_ON_IMAGE_LCP.includes(key)) {
+        const [level, options] = value as [string, unknown];
+        expect(level).toBe('error');
+        expect(mine, key).toEqual(['warn', options]);
+      } else {
+        expect(mine, key).toEqual(value);
+      }
+    }
   });
 
   it('runs last in the lighthouse job: the theme, then the themed budgets', () => {

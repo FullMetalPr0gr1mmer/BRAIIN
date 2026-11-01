@@ -197,7 +197,10 @@ jobs:
       # then links one more same-origin stylesheet, /styles/theme.css, so its cost to LCP, CLS
       # and TBT is gated, and the accessibility audit (axe) reads the themed colours. Last, as
       # the theme changes every page the runs above measure. Local stack only (the script
-      # refuses anything that is not loopback).
+      # refuses anything that is not loopback). On / and /ar (image LCP) LCP and the
+      # performance score only warn: wrangler dev serves cleartext HTTP/1.1, where the extra
+      # stylesheet costs about 75 ms of simulated LCP that production's HTTP/2 and 3 never pay
+      # (as-built E4, E4-C1); every other budget, axe on the themed colours included, fails.
       - name: Theme the site (local Supabase)
         run: node scripts/lhci-theme.mjs
       - name: Lighthouse budgets, themed (mobile)

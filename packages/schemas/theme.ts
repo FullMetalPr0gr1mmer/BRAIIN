@@ -3,7 +3,7 @@ import { failuresFor } from '../theme/gate';
 
 // The theme's settings (Admin v2 E4, AV-27; ui.md "Theme"): what the editor saves in
 // custom_themes.settings, and the only input the server compiles the theme's tokens from
-// (src/lib/theme/compile.ts). Strict at every level: a key this version does not know is
+// (packages/theme/compile.ts). Strict at every level: a key this version does not know is
 // refused, never carried into a release or the site.
 //
 //   colors   the three colours that follow the theme, `#RRGGBB` (stored upper case), and that

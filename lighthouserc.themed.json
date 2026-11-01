@@ -10,54 +10,110 @@
       "numberOfRuns": 3
     },
     "assert": {
-      "assertions": {
-        "categories:performance": [
-          "error",
-          {
-            "minScore": 0.95
+      "assertMatrix": [
+        {
+          "matchingUrlPattern": "^http://localhost:8788/(ar/?)?$",
+          "aggregationMethod": "median",
+          "assertions": {
+            "categories:performance": [
+              "warn",
+              {
+                "minScore": 0.95
+              }
+            ],
+            "categories:accessibility": [
+              "error",
+              {
+                "minScore": 0.95
+              }
+            ],
+            "categories:seo": [
+              "error",
+              {
+                "minScore": 0.95
+              }
+            ],
+            "largest-contentful-paint": [
+              "warn",
+              {
+                "maxNumericValue": 2500
+              }
+            ],
+            "cumulative-layout-shift": [
+              "error",
+              {
+                "maxNumericValue": 0.1
+              }
+            ],
+            "total-blocking-time": [
+              "error",
+              {
+                "maxNumericValue": 200
+              }
+            ],
+            "unsized-images": "error",
+            "modern-image-formats": "error",
+            "font-display": "error",
+            "resource-summary:font:size": [
+              "error",
+              {
+                "maxNumericValue": 184320
+              }
+            ]
           }
-        ],
-        "categories:accessibility": [
-          "error",
-          {
-            "minScore": 0.95
+        },
+        {
+          "matchingUrlPattern": "^http://localhost:8788/(services/logo|contact)/?$",
+          "aggregationMethod": "median",
+          "assertions": {
+            "categories:performance": [
+              "error",
+              {
+                "minScore": 0.95
+              }
+            ],
+            "categories:accessibility": [
+              "error",
+              {
+                "minScore": 0.95
+              }
+            ],
+            "categories:seo": [
+              "error",
+              {
+                "minScore": 0.95
+              }
+            ],
+            "largest-contentful-paint": [
+              "error",
+              {
+                "maxNumericValue": 2500
+              }
+            ],
+            "cumulative-layout-shift": [
+              "error",
+              {
+                "maxNumericValue": 0.1
+              }
+            ],
+            "total-blocking-time": [
+              "error",
+              {
+                "maxNumericValue": 200
+              }
+            ],
+            "unsized-images": "error",
+            "modern-image-formats": "error",
+            "font-display": "error",
+            "resource-summary:font:size": [
+              "error",
+              {
+                "maxNumericValue": 184320
+              }
+            ]
           }
-        ],
-        "categories:seo": [
-          "error",
-          {
-            "minScore": 0.95
-          }
-        ],
-        "largest-contentful-paint": [
-          "error",
-          {
-            "maxNumericValue": 2500
-          }
-        ],
-        "cumulative-layout-shift": [
-          "error",
-          {
-            "maxNumericValue": 0.1
-          }
-        ],
-        "total-blocking-time": [
-          "error",
-          {
-            "maxNumericValue": 200
-          }
-        ],
-        "unsized-images": "error",
-        "modern-image-formats": "error",
-        "font-display": "error",
-        "resource-summary:font:size": [
-          "error",
-          {
-            "maxNumericValue": 184320
-          }
-        ]
-      },
-      "aggregationMethod": "median"
+        }
+      ]
     }
   }
 }

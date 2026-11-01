@@ -12,7 +12,7 @@ import { z } from 'zod';
  *   motion     the marquee's duration scale (slower 1.5, slowest 2.5) and reveal off (the
  *              starting opacity 1 and no shift): they can only reduce motion (README E4)
  *
- * The database holds the same patterns (the E4 migration's app.theme_tokens_ok; tests/lib/
+ * The database holds the same patterns (the E4 migration's app.theme_row_ok; tests/lib/
  * themeSql.spec.ts holds them equal). The module keeps to zod alone: the preview bridge's
  * chunk (admin-zod) carries it.
  */
