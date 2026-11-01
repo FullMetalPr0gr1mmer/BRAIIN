@@ -97,6 +97,19 @@ export const LeadInputSchema = z.object({
   timelineText: z.string().trim().min(1).max(120).optional(),
   timelineBand: TimelineBandSchema.optional(),
   consentMarketing: z.boolean().default(false),
+  /**
+   * Which variant of the form sent it (Admin v2 E8): the home form (`compact`), Contact's
+   * (`full`) or the services pages' (`hello`). The forms config is applied per variant
+   * (src/lib/forms/config.ts checkInquiry); a page rendered before E8 sends none.
+   */
+  form: z.enum(['compact', 'full', 'hello']).optional(),
+  /**
+   * The optional fields the sending form showed as required (Admin v2 E8, CR1;
+   * src/lib/forms/requiredClaim.ts): the server requires a field only when the published
+   * config does AND the page showed it so. Names it does not know are ignored; a page from
+   * before the claim sends none, and is held to the config.
+   */
+  requiredFields: z.array(z.string().max(32)).max(16).optional(),
   // Anti-spam: honeypot must be empty; captcha token verified server-side once
   // reCAPTCHA is provisioned (KAN-20) — optional in v1 so the form works pre-launch
   // (honeypot + edge rate-limit cover spam until then).

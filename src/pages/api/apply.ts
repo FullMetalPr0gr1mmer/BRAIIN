@@ -19,6 +19,9 @@ import { resolveLaunchTenantId } from '@/lib/data/tenant';
 import { sniffCv } from '@/lib/applications/fileSniff';
 import { createApplication } from '@/lib/applications/create';
 import { writeSystemLog } from '@/lib/data/systemLog';
+import { checkApplication } from '@/lib/forms/config';
+import { readPublishedFormSettings } from '@/lib/forms/published';
+import { parseRequiredClaim, REQUIRED_CLAIM_INPUT } from '@/lib/forms/requiredClaim';
 
 // POST /api/apply — the Join form (careers). The second public write path after the
 // contact form, and the only one that accepts a file. Built for the Workers FREE plan:
@@ -30,7 +33,10 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 //   origin → multipart → Content-Length (411/413, before reading a byte) → configured →
 //   tenant (server-side, the anon fence) → applications open (re-read, never the cached
 //   page's copy) → per-IP limit (FAILS CLOSED, EXC-004) → parse → honeypot (silent ok) →
-//   strict schema (422 + field names) → CV size and sniff → per-e-mail limit → store.
+//   strict schema (422 + field names) → the published forms config (Admin v2 E8: hidden
+//   controls dropped, the ones it requires refused when empty, a reworded consent version held
+//   to the published revision; unreadable = unavailable, failing closed like the limiter) →
+//   CV size and sniff → per-e-mail limit → store.
 //
 // Answers: `{ status }` (+ `fields` on a 422) with `Accept: application/json`, else a 303
 // to `/join?status=…#apply` (`/ar/join…` for an Arabic form) so the page works without
@@ -94,11 +100,18 @@ export const POST: APIRoute = async ({ request }) => {
   if (!tenantId) return answer('unavailable');
 
   // The page is edge-cached; the flag is not. Fail closed: unknown means closed-for-now.
-  const { data: profile, error: profileError } = await svc
-    .from('site_profile')
-    .select('accepting_applications')
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
+  // The published forms config (Admin v2 E8) is read beside it, with the service client for
+  // the tenant resolved above, never the page's copy: two independent reads, one round trip
+  // (review finding CR9). It is used only after the schema, so the order of the answers is
+  // unchanged: closed, then the limit, then invalid, then an unreadable config (unavailable).
+  const [{ data: profile, error: profileError }, settings] = await Promise.all([
+    svc
+      .from('site_profile')
+      .select('accepting_applications')
+      .eq('tenant_id', tenantId)
+      .maybeSingle(),
+    readPublishedFormSettings(svc, tenantId),
+  ]);
   if (profileError) return answer('unavailable');
   if ((profile as { accepting_applications?: unknown } | null)?.accepting_applications !== true) {
     return answer('closed');
@@ -133,12 +146,24 @@ export const POST: APIRoute = async ({ request }) => {
     ];
     return answer('invalid', { fields });
   }
-  const input = parsed.data;
 
-  // The CV is optional; an empty file input arrives as a zero-byte File.
+  // The CV is optional unless the forms config requires it; an empty file input arrives as a
+  // zero-byte File.
   const raw = form.get(CV_FIELD);
+  const sentCv = raw instanceof Blob && raw.size > 0;
+
+  // The schema is the floor, the published config narrows it (read above); the page's claim
+  // (the optional controls it showed as required) narrows what the config requires, so a
+  // page drawn before LinkedIn, the crafts or the CV became required still sends (CR1).
+  if (!settings) return answer('unavailable');
+  const claim = parseRequiredClaim(form.get(REQUIRED_CLAIM_INPUT));
+  const checked = checkApplication(parsed.data, sentCv, settings, claim);
+  if (!checked.ok) return answer('invalid', { fields: checked.fields });
+  const input = checked.data;
+
   let cv: { file: Blob; kind: 'pdf' | 'docx' } | null = null;
-  if (raw instanceof Blob && raw.size > 0) {
+  // A CV the form does not ask for (the config hides it) is not stored.
+  if (raw instanceof Blob && sentCv && checked.keepCv) {
     if (raw.size > CV_MAX_BYTES) return answer('too_large');
     const sniff = await sniffCv(raw);
     if (!sniff.ok) return answer('bad_type');

@@ -267,6 +267,10 @@ const SCHEMA_KEYS = [
   'timelineText',
   'consentMarketing',
   'hp',
+  // Admin v2 E8: the variant that sent it, and the optional fields it showed as required
+  // (src/lib/forms/requiredClaim.ts), both read by /api/contact, neither stored.
+  'form',
+  'requiredFields',
 ];
 
 for (const route of ROUTES) {
@@ -344,6 +348,8 @@ for (const route of ROUTES) {
         'message',
         'consent',
         'hp',
+        // The hidden claim of what it shows as required (Admin v2 E8): nothing, as built.
+        'required_fields',
       ]);
       await expect(page.locator('#cf-phone')).toHaveCount(0);
       const deadline = page.locator('#cf-deadline');
@@ -381,6 +387,8 @@ for (const route of ROUTES) {
         budgetBand: '25k_75k',
         timelineText: 'Before Ramadan',
         consentMarketing: true,
+        form: 'full',
+        requiredFields: [],
       });
       for (const key of Object.keys(body)) expect(SCHEMA_KEYS, key).toContain(key);
     });

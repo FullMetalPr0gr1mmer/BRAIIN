@@ -409,6 +409,12 @@ html[dir='rtl'] .af-grid select {
   color: var(--bs-err-soft);
 }
 
+/* The crafts when the forms config requires them and none is ticked (Admin v2 E8): the note
+   after the row carries the words, the pills' border the colour. */
+.af-chips.is-invalid .af-chip span {
+  border-color: var(--bs-err);
+}
+
 /* ---- The craft chips: checkboxes drawn as the design's pills ---- */
 .af-chips {
   display: flex;

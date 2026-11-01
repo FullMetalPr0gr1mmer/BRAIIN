@@ -1,5 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminForms from '@/components/admin/islands/AdminForms';
 import Badge from '@/components/admin/ui/Badge.astro';
 import Card from '@/components/admin/ui/Card.astro';
 import Icon from '@/components/admin/ui/Icon.astro';
@@ -7,28 +8,33 @@ import LinkTabs from '@/components/admin/ui/LinkTabs.astro';
 import Note from '@/components/admin/ui/Note.astro';
 import Refused from '@/components/admin/ui/Refused.astro';
 import { can } from '@/lib/authz/matrix';
-import {
-  CONSENT_VERSION,
-  FORM_IDS,
-  formFacts,
-  formsTabHref,
-  type FormId,
-} from '@/lib/admin/forms/overview';
+import { FORM_IDS, formFacts, formsTabHref, type FormId } from '@/lib/admin/forms/overview';
 import { getIdentity } from '@/lib/identity';
+import { editorPropsFor } from '@/lib/admin/forms/editorProps';
+import { consentVersion } from '@/lib/forms/config';
+import { formSettingsFor } from '@/lib/data/forms';
+import { loadPageButtons } from '@/lib/admin/forms/pageButtons';
 
 export const prerender = false;
 
-// Forms (Admin v2 U11, docs/admin-v2/ui.md "Integrations, Forms, Notifications (AV-20)"): a
-// read-only overview of the site's two forms, the inquiry form (on the home page, Contact and
+// Forms (Admin v2 U11, docs/admin-v2/ui.md "Integrations, Forms, Notifications (AV-20)";
+// editable since E8): the site's two forms, the inquiry form (on the home page, Contact and
 // the services pages, each asking some of its fields) and the application form on Join, as the
 // code decides them (src/lib/admin/forms/overview.ts): the fields, which are required and where
 // each is asked, the protections (the hidden field, the EXC-004 limits, no
 // captcha yet), the consent version Join stores, and where the words around each form are
-// edited, place by place (a service page's are fixed). Zero JS: tabs are links (`?tab=join`).
+// edited, place by place (a service page's are fixed). Tabs are links (`?tab=join`). Since
+// Admin v2 E8 the first card is the forms config's editor (AdminForms, the island): labels, order, the optional fields shown and required, the button,
+// the budget words and the Join consent lines, saved to `form_settings` (staged once releases
+// are on); the protections stay this page's zero-JS card, the captcha switched off and
+// "Not set up" until O-19.
 // settings.general (Admin, Developer: the forms config is General's, P-2); a role without it
 // gets the layout with the refusal and a 403.
-// It reads nothing of its own: the facts are code, and the applications switch is the public
-// identity the shell has already read for the brand.
+// The facts are code, the island loads the config from /api/admin/form-settings, and the
+// applications switch is the public identity the shell has already read for the brand. On the
+// Join tab the page reads the PUBLISHED config (the public seam, as the Join form does), so the
+// consent version it says the form shows now is the one the form posts (`<notice>.r<N>` once
+// the lines are reworded), not the notice's date alone.
 
 const session = Astro.locals.session;
 const allowed = Boolean(session && can(session.role, 'settings.general') === 'full');
@@ -44,6 +50,13 @@ const mayEditPages = Boolean(session && can(session.role, 'pages.write') === 'fu
 const mayOpenApplications = Boolean(session && can(session.role, 'applications.manage') === 'full');
 const accepting =
   allowed && tab === 'join' ? (await getIdentity(Astro.locals)).acceptingApplications : false;
+const consentNow =
+  allowed && tab === 'join' ? consentVersion(await formSettingsFor(Astro.locals)) : null;
+// A page whose own button text (Pages) wins over the config's there: named under the button
+// (review finding CR3; src/lib/admin/forms/pageButtons.ts). Read under the person's RLS.
+const sb = Astro.locals.supabase;
+const pageButtons =
+  allowed && session && sb && tab === 'inquiry' ? await loadPageButtons(sb, session.tenantId) : [];
 ---
 
 <AdminLayout
@@ -63,27 +76,30 @@ const accepting =
         />
         <p class="frm-where">{form.where}</p>
         <div class="grid grid--2-1">
-          <Card title="Fields" sub="What the form asks for">
-            <ul class="list frm-fields">
-              {form.fields.map((field) => (
-                <li class="li" data-field={field.key}>
-                  <span class="li__main">
-                    <span class="li__t">{field.label}</span>
-                    {field.hint && <span class="li__s">{field.hint}</span>}
-                  </span>
-                  <Badge tone={field.required ? 'klein' : 'gray'} plain>
-                    {field.required ? 'Required' : 'Optional'}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
-            <Note>
-              <p>
-                The fields are fixed. Each one is checked on the server, and contact details are
-                stored encrypted.
-              </p>
-            </Note>
-          </Card>
+          <div class="frm-main">
+            <AdminForms client:load {...editorPropsFor(tab)} pageButtons={pageButtons} />
+            <Card title="As built" sub="What each field asks with nothing changed">
+              <ul class="list frm-fields">
+                {form.fields.map((field) => (
+                  <li class="li" data-field={field.key}>
+                    <span class="li__main">
+                      <span class="li__t">{field.label}</span>
+                      {field.hint && <span class="li__s">{field.hint}</span>}
+                    </span>
+                    <Badge tone={field.required ? 'klein' : 'gray'} plain>
+                      {field.required ? 'Required' : 'Optional'}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+              <Note>
+                <p>
+                  Each field is checked on the server, against what is published, and contact
+                  details are stored encrypted.
+                </p>
+              </Note>
+            </Card>
+          </div>
           <div class="frm-side">
             <Card title="Protection" sub="How the form keeps spam out">
               <ul class="frm-facts">
@@ -100,17 +116,30 @@ const accepting =
                     Rate limits: up to {form.limits.join(', and ')}. {form.unchecked}
                   </span>
                 </li>
-                <li>
+                <li class="frm-captcha">
                   <Icon name="info" size={14} />
-                  <span>Captcha: Not set up.</span>
+                  <span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked="false"
+                      aria-disabled="true"
+                      disabled
+                      aria-labelledby="frm-captcha-label"
+                      aria-describedby="frm-captcha-state"
+                    />{' '}
+                    <span id="frm-captcha-label">Captcha</span>:{' '}
+                    <span id="frm-captcha-state">Not set up.</span> It stays off until an account is
+                    connected.
+                  </span>
                 </li>
-                {tab === 'join' && (
+                {consentNow && (
                   <li>
                     <Icon name="check" size={14} />
                     <span>
                       Consent: each application stores the version of the consent text the person
                       agreed to. The form shows version{' '}
-                      <span class="frm-version">{CONSENT_VERSION}</span> now.
+                      <span class="frm-version">{consentNow}</span> now.
                     </span>
                   </li>
                 )}
