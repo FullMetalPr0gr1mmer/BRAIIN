@@ -1,5 +1,6 @@
 import { columnOf, type FieldDef } from '@/lib/admin/uiSchema';
-import { contentKeysOf, sectionFields } from '@/lib/admin/sectionUi';
+import { SECTION_ADVANCED_ONLY, contentKeysOf, sectionFields } from '@/lib/admin/sectionUi';
+import type { SectionType } from '@schemas/sectionTypes';
 import { clampToRange, cleanChips, normalizeHex } from '@/lib/admin/fieldValues';
 import { accentWords, clampAccent } from '@/lib/admin/accentWords';
 import { isHttpsHref, isSiteHref } from '@/lib/admin/linkables';
@@ -354,8 +355,8 @@ const noChips = (value: unknown): boolean => {
 
 /**
  * Stored section content → editor state for a section of `type`.
- *   typed editor  the typed values, plus the stored keys it has no field for (`extra`,
- *                 e.g. hero.intro) so a typed save does not delete them;
+ *   typed editor  the typed values, plus the stored keys of the type it has no field for
+ *                 (`extra`, e.g. hero.intro) so a typed save does not delete them;
  *   no editor     (a table-backed type, or none chosen) — nothing stored shows the
  *                 "nothing to override" note (json null); leftover non-empty content
  *                 stays visible as JSON so it can be seen and cleared.
@@ -376,10 +377,17 @@ export function sectionStateFromObject(obj: unknown, type: unknown): SectionCont
         : [f.name],
     ),
   );
+  // Only a key the type HAS rides along (H15): its schema's keys are its fields' and the ones
+  // left to Advanced (JSON), tests/lib/sectionUi.spec.ts. The server refuses a key the type
+  // does not have, at any level, so a stored one (written before H15, or around the API) is
+  // dropped by a typed save instead of making the section unsaveable; the page never read it.
+  const advanced: readonly string[] = SECTION_ADVANCED_ONLY[type as SectionType] ?? [];
   return {
     values: objectToForm(stored, typed),
     json: null,
-    extra: Object.fromEntries(Object.entries(stored).filter(([k]) => !edited.has(k))),
+    extra: Object.fromEntries(
+      Object.entries(stored).filter(([k]) => !edited.has(k) && advanced.includes(k)),
+    ),
     extraType: String(type),
   };
 }
