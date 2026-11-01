@@ -21,7 +21,7 @@
 -- tenant anon resolves to (app.default_tenant_id()).
 
 begin;
-select plan(53);
+select plan(54);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- T3 ('…ee') has no row: a live Developer's first save there is an INSERT.
@@ -155,6 +155,9 @@ select ok(app.role_edits_theme('admin') and app.role_edits_theme('developer')
           and not app.role_edits_theme('content_creator') and not app.role_edits_theme('seo')
           and not app.role_edits_theme('sales'),
   'app.role_edits_theme answers the holders of theme.edit: Admin and Developer');
+select is((select proconfig from pg_proc where oid = 'app.role_edits_theme(text)'::regprocedure),
+  array['search_path=""'],
+  'app.role_edits_theme keeps its search_path pin (E4 0118 CR8): 0119 restates it, never drops it');
 
 -- ── 2. Admin and Developer write; every CMS role reads ───────────────────────
 set local role authenticated;

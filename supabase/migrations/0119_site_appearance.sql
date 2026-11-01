@@ -55,6 +55,7 @@ set local lock_timeout = '5s';
 -- ═══ 1. The capability helper ═══════════════════════════════════════════════════════════════
 create or replace function app.role_edits_theme(r text) returns boolean
   language sql immutable
+  set search_path = ''
 as $$ select coalesce(r in ('admin', 'developer'), false) $$;  -- theme.edit
 revoke all on function app.role_edits_theme(text) from public, anon, authenticated, service_role;
 grant execute on function app.role_edits_theme(text) to authenticated, service_role;
