@@ -67,6 +67,11 @@ export const SECTION_READS: Readonly<Record<SectionType, readonly string[]>> = {
   joinSteps: [],
   // The Join form, as the forms config words it.
   joinApply: ['forms:all'],
+  // Admin v2 E10: a text block is its own copy; a gallery's pictures and a video's still are
+  // media rows by id.
+  textBlock: [],
+  gallery: ['media:all'],
+  video: ['media:all'],
 };
 
 /** The tags of the sections a page renders (a hidden section renders nothing), each once. */

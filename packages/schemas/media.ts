@@ -43,44 +43,52 @@ export const MAX_CLIP_SECONDS = 30;
 
 const Seconds = z.number().min(0).max(600);
 
+const VideoClipShape = z.object({
+  streamUid: StreamUidSchema.optional(),
+  path: StaticVideoPathSchema.optional(),
+  startS: Seconds.optional(),
+  endS: Seconds.optional(),
+});
+
+function clipRules(v: z.infer<typeof VideoClipShape>, ctx: z.RefinementCtx): void {
+  if ((v.streamUid === undefined) === (v.path === undefined)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'exactly one of streamUid or path' });
+  }
+  if ((v.startS === undefined) !== (v.endS === undefined)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['endS'],
+      message: 'startS and endS come together',
+    });
+  } else if (v.startS !== undefined && v.endS !== undefined) {
+    if (!(v.endS > v.startS)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endS'],
+        message: 'endS must be after startS',
+      });
+    } else if (v.endS - v.startS > MAX_CLIP_SECONDS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endS'],
+        message: `a clip window is at most ${MAX_CLIP_SECONDS} s`,
+      });
+    }
+  }
+}
+
 /**
  * One background clip: exactly ONE source (a Stream UID or a static path), optionally
  * narrowed to a [startS, endS) window of it — the design plays short windows of one
  * showreel on different pages ("so this page doesn't replay the homepage opening").
  */
-export const VideoClipSchema = z
-  .object({
-    streamUid: StreamUidSchema.optional(),
-    path: StaticVideoPathSchema.optional(),
-    startS: Seconds.optional(),
-    endS: Seconds.optional(),
-  })
-  .superRefine((v, ctx) => {
-    if ((v.streamUid === undefined) === (v.path === undefined)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'exactly one of streamUid or path' });
-    }
-    if ((v.startS === undefined) !== (v.endS === undefined)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['endS'],
-        message: 'startS and endS come together',
-      });
-    } else if (v.startS !== undefined && v.endS !== undefined) {
-      if (!(v.endS > v.startS)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['endS'],
-          message: 'endS must be after startS',
-        });
-      } else if (v.endS - v.startS > MAX_CLIP_SECONDS) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['endS'],
-          message: `a clip window is at most ${MAX_CLIP_SECONDS} s`,
-        });
-      }
-    }
-  });
+export const VideoClipSchema = VideoClipShape.superRefine(clipRules);
+/**
+ * The same clip with no key besides its own (Admin v2 E10's Video block). Section content is
+ * stored as sent, so a key the schema strips would still be saved, and a `mediaId` riding in it
+ * would make that asset anon-readable (0024's and 0102's `$.**.mediaId`).
+ */
+export const StrictVideoClipSchema = VideoClipShape.strict().superRefine(clipRules);
 export type VideoClip = z.infer<typeof VideoClipSchema>;
 
 // ── Images ──────────────────────────────────────────────────────────────────────
@@ -322,14 +330,18 @@ export const ObjectPositionSchema = z.enum(['center', 'center-42', 'top', 'botto
 
 // ── Accent ranges ───────────────────────────────────────────────────────────────
 
-const AccentRange = z
-  .object({
-    /** 0-based index of the first accented word. */
-    from: z.number().int().min(0).max(30),
-    /** Exclusive end; omitted = accent runs to the end of the line. */
-    to: z.number().int().min(1).max(31).optional(),
-  })
-  .refine((r) => r.to === undefined || r.to > r.from, { message: 'to must be after from' });
+const AccentRangeShape = z.object({
+  /** 0-based index of the first accented word. */
+  from: z.number().int().min(0).max(30),
+  /** Exclusive end; omitted = accent runs to the end of the line. */
+  to: z.number().int().min(1).max(31).optional(),
+});
+const rangeInOrder = (r: z.infer<typeof AccentRangeShape>): boolean =>
+  r.to === undefined || r.to > r.from;
+const AccentRange = AccentRangeShape.refine(rangeInOrder, { message: 'to must be after from' });
+const StrictAccentRange = AccentRangeShape.strict().refine(rangeInOrder, {
+  message: 'to must be after from',
+});
 
 /**
  * Which words of a heading carry the accent colour, per locale. A word RANGE, not a
@@ -337,4 +349,8 @@ const AccentRange = z
  * brain</em> and land in the world"), which a from-here-to-the-end index cannot say.
  */
 export const AccentSchema = z.object({ en: AccentRange.optional(), ar: AccentRange.optional() });
+/** The same, with no key besides its own at either level (Admin v2 E10; see StrictVideoClipSchema). */
+export const StrictAccentSchema = z
+  .object({ en: StrictAccentRange.optional(), ar: StrictAccentRange.optional() })
+  .strict();
 export type Accent = z.infer<typeof AccentSchema>;

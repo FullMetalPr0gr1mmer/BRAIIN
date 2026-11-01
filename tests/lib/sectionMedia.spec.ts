@@ -10,12 +10,26 @@ vi.mock('@/lib/media/static', () => ({
     key === 'stills/work/ia.jpg' ? { src: '/_astro/ia.jpg', width: 1280, height: 720 } : null,
 }));
 
+// E10 code review (CR3): the page scope's read and the configuration check sit inside the
+// read's try, so a throw from either is an empty map, never a rejected promise (the page's
+// media sections share this one read).
+const fails = vi.hoisted(() => ({ scope: false, configured: false }));
+vi.mock('@/lib/visibility/scope', () => ({
+  pageAccess: () => {
+    if (fails.scope) throw new Error('the page scope could not be read');
+    return undefined;
+  },
+}));
+
 let rows: unknown[] = [];
 let error: unknown = null;
 const asked: string[][] = [];
 
 vi.mock('@/lib/supabase/client', () => ({
-  supabaseConfigured: () => true,
+  supabaseConfigured: () => {
+    if (fails.configured) throw new Error('the configuration could not be read');
+    return true;
+  },
   anonClient: () => ({
     from: () => {
       const q: Record<string, unknown> = {};
@@ -51,6 +65,8 @@ beforeEach(() => {
   rows = [];
   error = null;
   asked.length = 0;
+  fails.scope = false;
+  fails.configured = false;
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 
@@ -80,5 +96,23 @@ describe('getSectionImages', () => {
     error = { code: '42501' };
     rows = [row(IA)];
     expect((await getSectionImages([IA])).size).toBe(0);
+  });
+
+  it('a page scope that throws is an empty map, never a throw (CR3)', async () => {
+    fails.scope = true;
+    rows = [row(IA)];
+    const images = getSectionImages([IA]);
+    await expect(images).resolves.toBeInstanceOf(Map);
+    expect((await images).size).toBe(0);
+    expect(asked).toEqual([]);
+  });
+
+  it('a configuration check that throws is an empty map too (CR3)', async () => {
+    fails.configured = true;
+    rows = [row(IA)];
+    const images = getSectionImages([IA]);
+    await expect(images).resolves.toBeInstanceOf(Map);
+    expect((await images).size).toBe(0);
+    expect(asked).toEqual([]);
   });
 });

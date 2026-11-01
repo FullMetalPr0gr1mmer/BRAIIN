@@ -67,6 +67,7 @@ const FACTORY_NAMES = [
  */
 const CONTENT_LOADERS = [
   'src/lib/data/blog.ts',
+  'src/lib/data/appearance.ts',
   'src/lib/data/certifications.ts',
   'src/lib/data/disciplines.ts',
   'src/lib/data/faq.ts',

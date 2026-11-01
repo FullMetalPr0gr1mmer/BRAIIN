@@ -123,10 +123,16 @@ export interface ResourceConfig {
    * src/lib/release/overlayDb.ts): a staged save passes live with the pending changes laid
    * over it, a publish the state its release leaves. Absent (a save while releases are off),
    * the rule reads live, with the queries it always sent.
+   *
+   * `before` is the row as it stands before this write (the stored row, or a staged save's and
+   * a publish's live row; null on a create), so a rule can tell a value the write CHANGES from
+   * one it only restates: `changed` holds every column the payload sent, equal or not (E10
+   * code review, CR4: the media block cap). Absent, a rule judges as if every sent column
+   * changed.
    */
   assertWritable?: (
     merged: Row,
-    ctx: { auth: AuthContext; sb: Db; changed: Row; db?: OverlayDb },
+    ctx: { auth: AuthContext; sb: Db; changed: Row; db?: OverlayDb; before?: Row | null },
   ) => void | Promise<void>;
   /**
    * Named constraints of this table and what they mean to an editor — turns a raw
@@ -329,7 +335,7 @@ export function collectionRoutes(config: ResourceConfig): { GET: APIRoute; POST:
       assertTransition(auth, config, payload);
 
       const values = config.toRow(payload);
-      await config.assertWritable?.(values, { auth, sb, changed: values });
+      await config.assertWritable?.(values, { auth, sb, changed: values, before: null });
       if (isLive(config, values)) await config.assertPublishable?.(values, { auth, sb });
 
       const row = config.persist
@@ -440,7 +446,7 @@ export function itemRoutes(config: ResourceConfig): {
         // scheduled/published row must not strip them either.
         stored ??= await getRow<Row>(sb, config.table, auth, id, config.columns);
         const merged = { ...stored, ...values };
-        await config.assertWritable?.(merged, { auth, sb, changed: values });
+        await config.assertWritable?.(merged, { auth, sb, changed: values, before: stored });
         if (config.assertPublishable && isLive(config, merged)) {
           await config.assertPublishable(merged, { auth, sb });
         }

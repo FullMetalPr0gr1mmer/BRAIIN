@@ -50,6 +50,7 @@ const CHANGE: Record<ReleaseEntityType, () => Record<string, unknown>> = {
   redirect: () => draft('redirect', 'delete', ID.foreign),
   page_visibility: () => draft('page_visibility', 'delete', ID.foreign),
   faq_item: () => draft('faq_item', 'delete', ID.fqPub),
+  site_appearance: () => draft('site_appearance', 'update', TENANT, { logoSize: 'l' }),
   form_settings: () =>
     draft('form_settings', 'update', TENANT, { inquiry: { button: BI('Go', 'اذهب') } }),
 };
@@ -68,7 +69,8 @@ const N: Outcome = 'not shown';
  * are readable but not previewed. A page-visibility change stays "not previewed" even
  * though the dataset reads the live rows for 0061's password fence (the fence follows the
  * live mode; docs/admin-v2/as-built/R8.md says why). The FAQ (Admin v2 U7) is Contact-page
- * content: Admin and Content Creator (pages.write) only. The forms config (Admin v2 E8) is
+ * content: Admin and Content Creator (pages.write) only. The header's options (Admin v2 E5)
+ * are the theme's: Admin and Developer (theme.edit). The forms config (Admin v2 E8) is
  * General's: Admin and Developer (settings.general).
  */
 const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Outcome>> = {
@@ -95,6 +97,7 @@ const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Out
     redirect: P,
     page_visibility: P,
     faq_item: O,
+    site_appearance: O,
     form_settings: O,
   },
   content_creator: {
@@ -120,6 +123,7 @@ const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Out
     redirect: N,
     page_visibility: N,
     faq_item: O,
+    site_appearance: N,
     form_settings: N,
   },
   seo: {
@@ -145,6 +149,7 @@ const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Out
     redirect: P,
     page_visibility: N,
     faq_item: N,
+    site_appearance: N,
     form_settings: N,
   },
   developer: {
@@ -170,6 +175,7 @@ const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Out
     redirect: N,
     page_visibility: P,
     faq_item: N,
+    site_appearance: O,
     form_settings: O,
   },
 };
@@ -185,7 +191,10 @@ async function outcome(role: Role, type: ReleaseEntityType): Promise<Outcome> {
   await db
     .from(['redirects', 'page_visibility'].includes(table) ? 'pages' : table)
     .select(
-      table === 'site_profile' || table === 'seo_defaults' || table === 'form_settings'
+      table === 'site_profile' ||
+        table === 'seo_defaults' ||
+        table === 'site_appearance' ||
+        table === 'form_settings'
         ? 'tenant_id'
         : table === 'custom_themes'
           ? 'version'
@@ -216,9 +225,9 @@ describe('pending changes a preview shows, per role and entity type', () => {
     });
   }
 
-  // 21 since E8 (form_settings) and E4 (custom_theme) each made one more type previewable.
-  it('admin previews all 21 previewable types', () => {
-    expect(Object.values(EXPECTED.admin).filter((o) => o === O)).toHaveLength(21);
+  // 22: E5 (site_appearance) and E4 (custom_theme) each made one more type previewable.
+  it('admin previews all 22 previewable types', () => {
+    expect(Object.values(EXPECTED.admin).filter((o) => o === O)).toHaveLength(22);
   });
 });
 

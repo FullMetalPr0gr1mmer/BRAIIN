@@ -915,6 +915,207 @@ html[dir='rtl'] .site-header__key::after {
 }
 
 /* ============================================================
+   The header's options (Admin v2 E5, site_appearance, edited at
+   /admin/appearance/header). SiteHeader.astro sets a data-*
+   attribute only for an option that differs from the header as
+   built, so with none set every rule below is inert. Closed sets
+   only: each value maps to a fixed rule (no inline style, CSP).
+   ============================================================ */
+
+/* Logo size. On the root, so --bs-header-h (and every offset built on it) follows the
+   preset; the logo's <Picture sizes> is the same preset (src/lib/appearance/header.ts
+   LOGO_SIZES). Without :has() (Firefox before 121) every size renders as M, consistently. */
+:root:has(.site-header[data-logo='s']) {
+  --bs-logo-w: clamp(80px, 8vw, 108px);
+}
+:root:has(.site-header[data-logo='l']) {
+  --bs-logo-w: clamp(96px, 12vw, 160px);
+}
+
+/* Not sticky: the bar stays at the top of the page and scrolls away with it (the script
+   then does nothing). The overlay keeps its place over the hero. */
+.site-header[data-sticky='off'] {
+  position: relative;
+}
+.site-header--overlay[data-sticky='off'] {
+  position: absolute;
+}
+
+/* Tint over the hero: its own layer under the links (::after; ::before is the solid
+   state's), black at 25, 45 or 62%. It fades out as the solid state fades in, so both
+   changes are opacity alone (compositor-only). No blur over the hero: the backdrop-filter
+   rule above (the intro plate) stands. */
+.site-header--overlay[data-tint]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.25);
+  transition: opacity 0.45s ease;
+}
+.site-header--overlay[data-tint='medium']::after {
+  background: rgba(0, 0, 0, 0.45);
+}
+.site-header--overlay[data-tint='dark']::after {
+  background: rgba(0, 0, 0, 0.62);
+}
+.site-header--overlay[data-tint].is-solid::after {
+  opacity: 0;
+}
+
+/* Blur behind the solid bar: none, or stronger than the built 14px. */
+.site-header--overlay[data-blur='none'].is-solid::before {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.site-header--overlay[data-blur='strong'].is-solid::before {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* The call-to-action button: a filled pill beside the language switch on wide screens, the
+   menu's last item on small ones. White on Klein and on Cobalt are both above 4.5:1. */
+.site-header__end {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.site-header__cta,
+.site-nav__cta {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--bs-klein);
+  border: 1px solid var(--bs-klein);
+  padding: 7px 15px;
+  border-radius: 999px;
+  text-decoration: none;
+  transition:
+    background 0.25s,
+    border-color 0.25s;
+}
+html[dir='rtl'] .site-header__cta,
+html[dir='rtl'] .site-nav__cta {
+  letter-spacing: 0;
+  text-transform: none;
+}
+.site-header__cta:hover,
+.site-nav__cta:hover {
+  background: var(--bs-cobalt);
+  border-color: var(--bs-cobalt);
+}
+.site-nav__cta-item {
+  display: none;
+}
+/* The small-screen copy is also a link of the menu's list, whose rules (.site-nav__list a:
+   the padding, size, spacing and underline, and their Arabic and full-screen forms) outrank
+   one class. The pill is restated here at a weight above each of them. */
+.site-nav__list a.site-nav__cta,
+.site-header[data-mobile] .site-nav__list a.site-nav__cta {
+  color: #fff;
+  padding: 7px 15px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .site-nav__list a.site-nav__cta,
+html[dir='rtl'] .site-header[data-mobile] .site-nav__list a.site-nav__cta {
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.site-nav__list a.site-nav__cta::after {
+  content: none;
+}
+
+/* Wide screens: where the logo and the links sit. The bar stays ONE row, so it is exactly
+   --bs-header-h tall and every offset built on that variable holds (services.css, the
+   case study, About): the options below are sized so the six links of the seeded menu fit
+   at every width they apply to (tests/admin/header.e2e.ts measures each one). */
+@media (min-width: 56.3125rem) {
+  /* The links beside the logo, or beside the language switch (the logo at the start). */
+  .site-header[data-align='start'] .site-header__bar {
+    justify-content: flex-start;
+  }
+  .site-header[data-align='start'] .site-nav__panel {
+    margin-inline-end: auto;
+  }
+  .site-header[data-align='end'] .site-header__brand {
+    margin-inline-end: auto;
+  }
+}
+/* With the button, the narrowest wide screens (901 to 1023 px) close the spaces a little,
+   so the links, the button and the language switch keep one row beside a large logo. */
+@media (min-width: 56.3125rem) and (max-width: 63.9375rem) {
+  .site-header__bar:has(> .site-header__end) {
+    gap: 1rem;
+  }
+  .site-header__bar:has(> .site-header__end) .site-nav__list {
+    gap: clamp(12px, 1.4vw, 36px);
+  }
+}
+/* The logo centred, from 1280 px: each side of it then has room for the links on one row.
+   Narrower, the bar keeps the logo at the start (half the bar cannot hold six links there:
+   they wrapped onto a second row and the bar outgrew --bs-header-h). The links take the first
+   column, the language switch (and the button) the last, the two sharing the free space
+   evenly. */
+@media (min-width: 80rem) {
+  .site-header[data-logo-pos='center'] .site-header__bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    column-gap: 1rem;
+  }
+  .site-header[data-logo-pos='center'] .site-header__brand {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .site-header[data-logo-pos='center'] .site-nav__panel {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
+  .site-header[data-logo-pos='center'] .site-nav__list {
+    gap: clamp(12px, 1.4vw, 28px);
+  }
+  .site-header[data-logo-pos='center'] .site-header__bar > .site-header__lang,
+  .site-header[data-logo-pos='center'] .site-header__end {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+}
+
+@media (max-width: 56.25rem) {
+  .site-header__cta {
+    display: none;
+  }
+  .site-nav__cta-item {
+    display: list-item;
+    list-style: none;
+  }
+  /* Full screen: the open menu covers the screen below the bar, with larger links. The
+     same zero-JS disclosure as the drawer. */
+  .site-header[data-mobile='full'] .site-nav[open] ~ .site-nav__panel {
+    height: calc(100svh - var(--bs-header-h));
+    max-height: none;
+    background: rgba(0, 0, 0, 0.96);
+    padding-block: 2rem;
+  }
+  .site-header[data-mobile='full'] .site-nav__list {
+    gap: 1.4rem;
+  }
+  .site-header[data-mobile='full'] .site-nav__list a {
+    font-size: 20px;
+  }
+}
+
+/* ============================================================
    Intro — the brand logo holds an OPAQUE plate, then the plate
    and logo leave together and hand over to the hero. Pure CSS
    timeline; the Hero script only handles skip-on-intent and
@@ -3834,6 +4035,213 @@ html[dir='rtl'] .klein-band::before {
    (touch, reduced motion, Save-Data, no JS). Absolutely positioned — showing it is CLS 0. */
 .mf:not(.can-clip) .mf__play {
   display: none;
+}
+
+/* ---- Admin v2 E10 blocks: Text block, Gallery, Video (src/components/sections/TextBlock,
+   Gallery and VideoBlock). Shared blocks any page may take, any number a page, so their rules
+   live here, not in a route sheet. The text block and the gallery sit on paper, the video on
+   black; headings are capped in em, never ch (a swap-font heading, §6). ---- */
+.mf--wide {
+  aspect-ratio: 16 / 9;
+  border-radius: 0;
+}
+.blk-text,
+.blk-gal {
+  background: var(--bs-paper);
+  color: var(--bs-ink);
+  padding: clamp(64px, 10vh, 130px) var(--bs-pad-x);
+}
+.blk-gal {
+  padding-inline: 0;
+}
+.blk-gal .blk-wrap {
+  padding-inline: var(--bs-pad-x);
+}
+.blk-video {
+  background: var(--bs-black);
+  color: var(--bs-paper);
+  padding: clamp(64px, 10vh, 130px) 0 0;
+}
+.blk-video .blk-wrap {
+  padding-inline: var(--bs-pad-x);
+  margin-bottom: clamp(30px, 5vh, 56px);
+}
+.blk-wrap {
+  max-width: var(--bs-maxw);
+  margin-inline: auto;
+  /* Authored words: a long address or name breaks rather than scrolling a phone sideways. */
+  overflow-wrap: break-word;
+}
+.blk-head {
+  margin: 0;
+  max-width: 14em;
+  font-size: clamp(30px, 4.6vw, 68px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .blk-head {
+  font-size: clamp(26px, 3.8vw, 56px);
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* Klein on paper (10.6:1), sky on black (8.2:1): sky is never an accent on white. */
+.blk-head em {
+  font-style: normal;
+  color: var(--bs-klein);
+}
+.blk-video .blk-head em {
+  color: var(--bs-sky);
+}
+.blk-lead {
+  margin: 16px 0 0;
+  max-width: 34em;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--bs-muted);
+}
+.blk-prose {
+  max-width: 44em;
+  margin-top: clamp(24px, 4vh, 40px);
+  font-size: clamp(16px, 1.3vw, 19px);
+  line-height: 1.7;
+  color: var(--bs-dim);
+}
+.blk-head + .blk-prose {
+  margin-top: clamp(28px, 4.4vh, 48px);
+}
+.tag + .blk-prose {
+  margin-top: 0;
+}
+html[dir='rtl'] .blk-prose {
+  line-height: 2;
+}
+.blk-prose > * {
+  margin: 0;
+}
+.blk-prose > * + * {
+  margin-top: 1em;
+}
+.blk-prose :where(h2, h3, h4) {
+  color: var(--bs-ink);
+  font-weight: 800;
+  line-height: 1.25;
+}
+.blk-prose * + :where(h2, h3, h4) {
+  margin-top: 1.6em;
+}
+.blk-prose h2 {
+  font-size: 1.5em;
+}
+.blk-prose h3 {
+  font-size: 1.25em;
+}
+.blk-prose h4 {
+  font-size: 1.05em;
+}
+.blk-prose :where(ul, ol) {
+  padding-inline-start: 1.3em;
+}
+.blk-prose blockquote {
+  padding-inline-start: 1em;
+  border-inline-start: 3px solid var(--bs-klein);
+  color: var(--bs-ink);
+}
+.blk-prose pre {
+  overflow-x: auto;
+  padding: 1em;
+  background: var(--bs-mist);
+  color: var(--bs-ink);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+.blk-prose hr {
+  border: 0;
+  border-top: 1px solid var(--bs-line-l);
+}
+/* Links in authored copy: Klein on paper (the site's sky link colour is 2.6:1 here). */
+.blk-prose a {
+  color: var(--bs-klein);
+}
+/* The film's own pause control (clips.ts wireToggle): over the frame's end corner, opaque
+   black under a white icon and ring (21:1, 1.4.11 holds over any still), 44 px. `hidden`
+   until clips.ts shows it where the film can play. */
+.blk-video__box {
+  position: relative;
+}
+.blk-video__toggle {
+  position: absolute;
+  z-index: 2;
+  inset-inline-end: clamp(12px, 2vw, 24px);
+  bottom: clamp(12px, 2vw, 24px);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--bs-paper);
+  border-radius: 50%;
+  background: var(--bs-black);
+  color: var(--bs-paper);
+  cursor: pointer;
+}
+.blk-video__toggle[hidden] {
+  display: none;
+}
+.blk-video__toggle svg {
+  width: 14px;
+  height: 14px;
+}
+.blk-video__play,
+.blk-video__toggle.is-play .blk-video__pause {
+  display: none;
+}
+.blk-video__toggle.is-play .blk-video__play {
+  display: block;
+}
+.blk-video__toggle:focus-visible {
+  outline: 2px solid var(--bs-sky);
+  outline-offset: 3px;
+}
+.blk-gal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.blk-gal__grid--1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 47.5rem) {
+  .blk-gal__grid--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.blk-wrap + .blk-gal__grid {
+  margin-top: clamp(30px, 5vh, 56px);
+}
+/* Every cell the same shape, the picture cropped to it: a grid of mixed sizes would leave
+   ragged rows. The box is sized by its ratio before the image paints (CLS 0). */
+.blk-gal__item {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: var(--bs-media-bg-l);
+}
+.blk-gal__grid--1 .blk-gal__item {
+  aspect-ratio: 16 / 9;
+}
+.blk-gal__item img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* ---- Project card (ProjectCard.astro) ---- */

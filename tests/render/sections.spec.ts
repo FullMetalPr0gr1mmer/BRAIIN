@@ -460,6 +460,91 @@ const AUTHORED: Record<string, SectionData[]> = {
       data: { answer: 'ok' },
     },
   ],
+  // Admin v2 E10: the three blocks, every field authored. The body is rendered from its
+  // Tiptap JSON by the allowlist renderer; the gallery's last id resolves to no picture.
+  textBlock: [
+    {
+      type: 'textBlock',
+      props: {
+        tag: t('Authored tag', 'وسم مكتوب'),
+        heading: t('Authored text block', 'نص مكتوب هنا'),
+        accent: { en: { from: 1 }, ar: { from: 1 } },
+        body: {
+          en: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: 'A paragraph with ' },
+                  { type: 'text', text: 'bold', marks: [{ type: 'bold' }] },
+                  { type: 'text', text: ' and ' },
+                  {
+                    type: 'text',
+                    text: 'a link',
+                    marks: [{ type: 'link', attrs: { href: '/contact#inquiry' } }],
+                  },
+                  { type: 'text', text: '.' },
+                ],
+              },
+              { type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: 'More' }] },
+              {
+                type: 'bulletList',
+                content: [
+                  {
+                    type: 'listItem',
+                    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'One' }] }],
+                  },
+                ],
+              },
+            ],
+          },
+          ar: {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: 'فقرة فيها ' },
+                  { type: 'text', text: 'خط عريض', marks: [{ type: 'bold' }] },
+                  { type: 'text', text: ' ١٢٣.' },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    },
+  ],
+  gallery: [
+    {
+      type: 'gallery',
+      props: {
+        tag: t('Authored tag', 'وسم مكتوب'),
+        heading: t('Authored gallery', 'معرض مكتوب'),
+        accent: { en: { from: 1 }, ar: { from: 1 } },
+        items: [
+          { kind: 'image', mediaId: POSTER.id },
+          { kind: 'image', mediaId: POSTER.id },
+          { kind: 'image', mediaId: POSTER.id },
+          { kind: 'image', mediaId: '00000000-0000-4000-8000-0000000000ff' },
+        ],
+      },
+    },
+  ],
+  video: [
+    {
+      type: 'video',
+      props: {
+        tag: t('Authored tag', 'وسم مكتوب'),
+        heading: t('Authored video', 'فيديو مكتوب'),
+        accent: { en: { from: 1 }, ar: { from: 1 } },
+        lead: t('Authored lead.', 'مقدمة مكتوبة.'),
+        mediaId: POSTER.id,
+        clip: { path: '/media/showreel.mp4', startS: 14, endS: 15.4 },
+      },
+    },
+  ],
 };
 
 /** Built-in copy the default compositions do not reach: other variants, modes, route data. */
@@ -549,6 +634,26 @@ const VARIANTS: Record<string, SectionData[]> = {
   // the FAQ) renders no band at all; the route omits the FAQPage with it (faqShown).
   'faq with no questions': [{ type: 'faq', data: { items: [] } }],
   'faq on a route that loads none': [{ type: 'faq' }],
+  // Admin v2 E10: a block with nothing to show renders nothing; two pictures are halves, one is
+  // the full width; a video with only its still and a Stream clip is the still alone.
+  'blocks with nothing to show': [
+    { type: 'textBlock' },
+    { type: 'gallery' },
+    { type: 'gallery', props: { items: [{ mediaId: '00000000-0000-4000-8000-0000000000ff' }] } },
+    { type: 'video' },
+    { type: 'video', props: { clip: { path: '/media/showreel.mp4' } } },
+  ],
+  'gallery of two, gallery of one': [
+    { type: 'gallery', props: { items: [{ mediaId: POSTER.id }, { mediaId: POSTER.id }] } },
+    { type: 'gallery', props: { items: [{ mediaId: POSTER.id }] } },
+  ],
+  'video still only, and a Stream clip': [
+    { type: 'video', props: { mediaId: POSTER.id } },
+    {
+      type: 'video',
+      props: { mediaId: POSTER.id, clip: { streamUid: '0123456789abcdef0123456789abcdef' } },
+    },
+  ],
 };
 
 describe('pages, as their routes compose them', () => {

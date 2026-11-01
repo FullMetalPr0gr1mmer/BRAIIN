@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { SECTION_TYPES } from '@schemas/sectionTypes';
+import { MEDIA_BLOCKS_FULL, MEDIA_BLOCKS_PER_PAGE, SECTION_TYPES } from '@schemas/sectionTypes';
 import { STAT_BAND_VARIANTS } from '@schemas/sections';
 import { ICON_NAMES } from '@/lib/admin/icons';
 import { RENDERED_SECTION_TYPES } from '@/lib/sections/registry';
@@ -139,6 +139,60 @@ describe('Add section: what each page may take, and why not', () => {
     expect(at('portfolio', ['projectGrid'], 'projectGrid').reason).toBe(
       'This page already lists the projects, in Featured projects.',
     );
+  });
+
+  it('offers the blocks (Admin v2 E10) on every routed page, beside one of each', () => {
+    const blocks = ['textBlock', 'gallery', 'video'] as const;
+    for (const page of PAGES) {
+      for (const type of blocks) {
+        // Every other kind already on the page, the block itself twice over: still offered.
+        const full = [...SECTION_TYPES, type, type];
+        expect(at(page, full, type), `${page} ${type}`).toEqual({ type, ok: true, reason: null });
+      }
+    }
+    for (const type of blocks) {
+      const kind = SECTION_KINDS[type];
+      expect(kind.pages, type).toBeUndefined();
+      expect(kind.once, type).toBeUndefined();
+      expect(kind.group, type).toBeUndefined();
+      // No fixed anchor (several a page would share one) and one look, the empty one.
+      expect(anchorOf(type, 'home', undefined), type).toBeNull();
+      expect(lookKey(type, { page: 'about', firstOfType: true }), type).toBe('default');
+      expect(routeNote(type, 'about', true)?.length, type).toBeGreaterThan(20);
+    }
+    expect(collectionLinks('gallery').map((l) => l.href)).toEqual(['/admin/media']);
+    expect(collectionLinks('video').map((l) => l.href)).toEqual(['/admin/media']);
+    expect(collectionLinks('textBlock')).toEqual([]);
+  });
+
+  it('takes up to eight Galleries and Videos a page, together, and says so (E10 review)', () => {
+    expect(MEDIA_BLOCKS_FULL).toContain(String(MEDIA_BLOCKS_PER_PAGE));
+    expect(MEDIA_BLOCKS_FULL).not.toMatch(/[–—]/);
+    for (const page of PAGES) {
+      // Seven of them (hidden ones count: `present` lists every section): one more is fine.
+      const seven = [
+        ...SECTION_TYPES,
+        'gallery',
+        'gallery',
+        'video',
+        'gallery',
+        'video',
+        'gallery',
+      ];
+      expect(seven.filter((t) => t === 'gallery' || t === 'video')).toHaveLength(8);
+      const below = seven.slice(0, -1);
+      expect(at(page, below, 'gallery'), page).toEqual({ type: 'gallery', ok: true, reason: null });
+      expect(at(page, below, 'video'), page).toEqual({ type: 'video', ok: true, reason: null });
+      // Eight: neither is offered, with the words the API's 422 uses; a Text block still is.
+      for (const type of ['gallery', 'video'] as const) {
+        expect(at(page, seven, type), `${page} ${type}`).toEqual({
+          type,
+          ok: false,
+          reason: MEDIA_BLOCKS_FULL,
+        });
+      }
+      expect(at(page, seven, 'textBlock').ok, page).toBe(true);
+    }
   });
 
   it('refuses everything on a page no route shows (custom pages are E11)', () => {

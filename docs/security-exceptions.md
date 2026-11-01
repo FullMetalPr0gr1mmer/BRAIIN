@@ -503,6 +503,27 @@ under the class, a script-driven motion through `onMotionChange()` — and must 
 to `motion-pause.e2e.ts`. The header switch is the one 2.2.2 control; a surface that
 ignores it reopens this failure without any gate noticing.
 
+
+### 2026-10-29 — Admin v2 E10's Video block: compliant on its own, not under this entry
+
+E10 adds three section types an editor may put on any page (Text blocks any number a page,
+Galleries and Videos at most eight together): a Text block and a Gallery (nothing moves) and a **Video**, a still that plays a window of a site film
+(`/media/*.mp4`, EXC-009) while it is on screen, through `MediaFrame` and `clips.ts` like the
+in-view loops above. Left at that, every Video an editor adds would be one more surface under
+this entry, added from the admin with no review. So the block carries **its own pause
+control**, the testimonials carousel's way (the "Compliant, and NOT under this exception"
+list above): a 44 px button over the frame's end corner (`.blk-video__toggle`,
+`src/components/sections/VideoBlock.astro`), named for what pressing it does next ("Pause
+the film" / "Play the film", "إيقاف الفيلم مؤقتًا" / "تشغيل الفيلم"), `hidden` in the HTML and
+shown by `clips.ts` (`wireToggle`) only where the film can play (never under reduced motion,
+with Save-Data, on touch or without JS, where nothing plays). A frame stopped with it plays no
+more, in view or not, until it is pressed again; every other clip frame behaves as before. It
+still stops under `body.motion-paused` (the retained wiring), so a header control, if it
+returns, covers it too. Held by `tests/admin/section-blocks.e2e.ts` (shown once wired, the
+name switching, no `play()` reaching the film back in view once stopped and one once pressed
+again, hidden under reduced motion) and `tests/render/sectionBlocks.spec.ts` (the served button, hidden, in both
+languages; none for a film that cannot play). The scope and expiry of this entry do not change.
+
 ---
 
 ## EXC-008 — Job-application CVs are not virus-scanned
@@ -661,6 +682,30 @@ downloads **no video bytes at all** — the background loops defer their mount a
 clips never create their `<video>` while `body.motion-paused` is set, and
 `tests/e2e/media-bytes.e2e.ts` ("paused visitor: no clip/banner bytes after a full
 scroll") asserts it on every route it covers.
+
+### Widened 2026-10-31: Admin v2 E10's Video block, a surface an editor adds
+
+E10 adds the **Video** section block: a still from the media library that plays a window of a
+site film while it is on screen (`clip.path`, a `/media/*.mp4` path only; a Stream UID is
+refused by `VideoSectionContentSchema` until KAN-20), through `MediaFrame` in view and
+`clips.ts`, the same machinery as the in-view clips above. Unlike every surface above, it is
+not placed by code: an editor adds it from the page editor's Add section, on any routed page,
+up to eight Galleries and Videos a page together (`MEDIA_BLOCKS_PER_PAGE`, refused past that by
+`sectionResource.assertWritable` and not offered by Add section). Its fence is the Worker's,
+not a CHECK: `page_sections.content` is free JSON, held to `VideoClipSchema`'s path pattern by
+`SectionWriteSchema` on write and again by the public loader on read (`toSection`), so a row
+written around the API with another path renders the still alone.
+
+Every compensating control above holds for it unchanged: the served HTML carries the still
+only; zero video bytes before intersection, and none under reduced motion, with Save-Data or
+on touch (`tests/admin/section-blocks.e2e.ts` runs `tests/e2e/videoBytes.ts`'s battery on
+`/about` and `/ar/about` with the block on them, the mount-on-intersection check on its frame,
+and a touch run on both); every Video is a window of the same file, so a visitor still
+downloads ranges of one asset; the mp4 goes through the Worker with byte ranges. It also has
+its own pause control (EXC-007, 2026-10-29). Closing this entry covers it too: a Stream UID
+allowed in the block's clip and used by every Video, then the path branch dropped from its
+schema. The scope widens by one editor surface; the owner, the expiry and the close
+conditions are unchanged.
 
 ---
 

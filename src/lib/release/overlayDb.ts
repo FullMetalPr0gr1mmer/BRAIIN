@@ -80,6 +80,7 @@ export const RELEASE_READ_TOTAL_IDS_MAX = 2_000;
 export const RELEASE_SINGLETON_TABLES: readonly string[] = [
   'form_settings',
   'seo_defaults',
+  'site_appearance',
   'site_profile',
 ];
 

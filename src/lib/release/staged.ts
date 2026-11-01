@@ -293,6 +293,7 @@ export async function stagedCreate(
     sb,
     changed: derived.patch,
     db: pendingDb(sb, auth),
+    before: null,
   });
 
   // Never the client's: a create's key is the Worker's, so other drafts can link to it.
@@ -432,6 +433,7 @@ export async function stagedUpdate(
     sb,
     changed: derived.patch,
     db: pendingDb(sb, auth, { table: entry.table, id }),
+    before: op === 'create' ? null : live,
   });
 
   // The base: each patched column's live value when it was first patched, never overwritten,

@@ -39,6 +39,8 @@ const SLUGS = [
 ];
 const SINGLETONS = [
   'ai-config',
+  // Admin v2 E5: the Header screen's options form (site_appearance).
+  'appearance',
   'integrations',
   'maintenance',
   'profile',

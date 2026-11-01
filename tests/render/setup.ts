@@ -55,8 +55,12 @@ vi.mock('@/lib/data/sectionMedia', async (importOriginal) => {
   const f = await import('./fixtures');
   return {
     ...(await importOriginal<object>()),
-    getSectionImage: async (id: string | undefined) => (id === f.POSTER.id ? f.POSTER : null),
-    getSectionImages: async (ids: readonly string[]) =>
-      new Map(ids.filter((id) => id === f.POSTER.id).map((id) => [id, f.POSTER])),
+    // Each call is recorded (SECTION_MEDIA_READS): SectionRenderer reads a page's section
+    // media once, and tests/render/sectionBlocks.spec.ts holds it to that.
+    getSectionImages: async (ids: readonly string[]) => {
+      f.SECTION_MEDIA_READS.push([...ids]);
+      if (f.SECTION_MEDIA_FAIL.on) throw new Error('section media read failed (fixture)');
+      return new Map(ids.filter((id) => id === f.POSTER.id).map((id) => [id, f.POSTER]));
+    },
   };
 });

@@ -16,6 +16,8 @@ export const ADMIN_STYLESHEETS = [
   'dashboard.css',
   'forms.css',
   'general.css',
+  // Admin v2 E5: the Header screen (its sketches of the bar and the menu card).
+  'header.css',
   'health.css',
   'help.css',
   'integrations.css',

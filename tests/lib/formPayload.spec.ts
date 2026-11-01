@@ -12,6 +12,7 @@ import {
 } from '@/lib/admin/formPayload';
 import { sectionFields } from '@/lib/admin/sectionUi';
 import { SeoDefaultsSchema } from '@schemas/admin';
+import { sectionContentIssues } from '@schemas/sections';
 import { SiteProfileSchema } from '@schemas/siteProfile';
 
 // The admin forms round-trip a stored row through the form and back to a PATCH body. A
@@ -195,6 +196,37 @@ describe('formToPayload — composite kinds', () => {
     const payload = formToPayload(rowToForm(stored, fields), fields);
     expect(payload['content']).toEqual(stored.content);
     expect(payload['pageId']).toBe('p1');
+  });
+
+  it('a Text block body with no words is left out, so a cleared editor still saves (E10)', () => {
+    const fields = RESOURCE_UI['sections']!.fields;
+    // What Tiptap's getJSON() holds once the words are typed and deleted again.
+    const emptied = { type: 'doc', content: [{ type: 'paragraph' }] };
+    const words = (text: string) => ({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+    });
+    const heading = { en: 'Notes', ar: 'ملاحظات' };
+    const save = (body: unknown) =>
+      formToPayload(
+        { type: 'textBlock', content: { values: { heading, body }, json: null } },
+        fields,
+      )['content'] as Record<string, unknown>;
+
+    for (const body of [{ en: emptied }, { en: emptied, ar: emptied }, { ar: emptied }, {}]) {
+      const content = save(body);
+      expect(content).toEqual({ heading });
+      expect(sectionContentIssues('textBlock', content)).toEqual([]);
+    }
+    // Words in either language: the body is sent as written (the server names a missing half).
+    const both = { en: words('Hello'), ar: words('مرحبا ١٢٣') };
+    expect(save(both)).toEqual({ heading, body: both });
+    expect(sectionContentIssues('textBlock', save(both))).toEqual([]);
+    const half = { en: words('Hello'), ar: emptied };
+    expect(save(half)).toEqual({ heading, body: half });
+    expect(sectionContentIssues('textBlock', save(half)).map((i) => i.path.join('.'))).toEqual([
+      'content.body.ar',
+    ]);
   });
 
   it('a table-backed section type saves empty content', () => {

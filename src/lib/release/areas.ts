@@ -132,6 +132,17 @@ export const RELEASE_ENTITY_META: Readonly<Record<ReleaseEntityType, ReleaseEnti
     hasStatus: false,
     publishFlag: null,
   },
+  // The site's appearance settings (Admin v2 E5): "Theme + header/intro appearance" publish
+  // under theme.edit (P-2); a singleton, never removed by a release.
+  site_appearance: {
+    area: 'appearance',
+    authorCaps: ['theme.edit'],
+    removeCap: null,
+    key: 'tenant_id',
+    applyOrder: 110,
+    hasStatus: false,
+    publishFlag: null,
+  },
 };
 
 /** The areas whose changes are content (write capability + `content.publish`). */

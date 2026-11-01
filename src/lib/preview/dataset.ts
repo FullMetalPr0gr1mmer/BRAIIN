@@ -6,6 +6,7 @@ import {
   RELEASE_ENTITY_TYPES,
   type ReleaseEntityType,
 } from '@schemas/release';
+import { headerColumnDefaults } from '@schemas/appearance';
 import { mediaItemToRow } from '@/lib/admin/resources/portfolio';
 import type { AuthContext, Role } from '@/lib/auth/types';
 import { AuthorizationError } from '@/lib/authz/errors';
@@ -47,7 +48,7 @@ import { ANON_COLUMNS, createMirror, visibilityClosure } from './visibility';
 // pages with `range()` in key order and an exact count, and paging stops at the COUNT, not
 // at a short page (a project whose max_rows is lower still reads every row). A table is
 // capped (PREVIEW_ROW_CAP, media PREVIEW_MEDIA_ROW_CAP); more rows than that marks the
-// render untrusted rather than silently showing a partial table. The eight tables anon
+// render untrusted rather than silently showing a partial table. The nine tables anon
 // reads by column are read with exactly anon's columns (and DATASET_ONLY_COLUMNS).
 //
 // Pending changes: one paged read of content_drafts per request, each row parsed. A draft is
@@ -57,8 +58,8 @@ import { ANON_COLUMNS, createMirror, visibilityClosure } from './visibility';
 // edge case 16); the others are counted, never listed. A kept draft is parsed again through
 // its registry entry (`derivePatch`: the entity's schema and toRow, as a save is) the
 // first time its table is read, and one that fails is reported and not shown (edge case
-// 13). Redirects, custom themes and page visibility change the edge or the stylesheet, not
-// a loader's rows: they are reported as not previewed.
+// 13). Redirects and page visibility change the edge, not a loader's rows: they are reported
+// as not previewed (a theme, since Admin v2 E4, is previewed: the pending one's tokens).
 //
 // A version (Admin v2 R10, `?v=N`): in place of the drafts read, the changes that take the site
 // from now back to version N (src/lib/release/asOf.ts, read from the ledger by the caller), each
@@ -141,6 +142,11 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row
     value_points: [],
     deliverables: [],
   },
+  // Admin v2 E5: the header as built (the table's NOT NULL defaults: every option but the
+  // button's words and link, which have none).
+  site_appearance: Object.fromEntries(
+    Object.entries(headerColumnDefaults()).filter(([, value]) => value !== null),
+  ),
   site_profile: {
     address_country: 'SA',
     socials: [],
