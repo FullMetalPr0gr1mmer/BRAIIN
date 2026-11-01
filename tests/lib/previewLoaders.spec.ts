@@ -83,6 +83,8 @@ const PURE = new Set([
   'toDiscipline',
   'toServiceSummary',
   'toServiceDetail',
+  'postBodyHtml',
+  'toPostDetail',
   'toServiceCase',
   'toLeader',
   'resolveSeo',

@@ -250,6 +250,16 @@ export const PostRowSchema = z.object({
 });
 export type PostRow = z.infer<typeof PostRowSchema>;
 
+/**
+ * One post for its own page: the row plus its body's Tiptap SOURCE (H15, PRE-2). The page renders
+ * the body from it through the allowlist renderer (the portfolio renderBody rule), never the
+ * stored `body_html` cache. Read as it is (`unknown`): null is a post saved before it had a
+ * source (the seed's), whose cache is read back into a document first (src/lib/data/blog.ts);
+ * a value the renderer cannot read is no body, never a missing post.
+ */
+export const PostDetailRowSchema = PostRowSchema.extend({ body: z.unknown() });
+export type PostDetailRow = z.infer<typeof PostDetailRowSchema>;
+
 // ── UI v2 content model (0021–0022) ───────────────────────────────────────────────
 
 export const SectorRowSchema = z.object({
