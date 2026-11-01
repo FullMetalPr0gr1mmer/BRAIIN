@@ -45,12 +45,14 @@ import { pageAccess } from '@/lib/visibility/scope';
 export const SECTION_MEDIA_MAX_IDS = 100;
 
 export async function getSectionImages(ids: readonly string[]): Promise<Map<string, ImageRef>> {
-  // Read first, before any query is awaited (see the note above).
-  const access = pageAccess();
-  const wanted = [...new Set(ids)].filter((id) => UuidSchema.safeParse(id).success);
-  if (wanted.length === 0 || !supabaseConfigured()) return new Map();
-  const unlocked = access !== undefined && access.tenantId.length > 0 ? access : null;
+  // Everything inside the try (E10 code review, CR3): the page's sections share this one
+  // read, so nothing in it may throw past it; a failure is an empty map.
   try {
+    // Read first, before any query is awaited (see the note above).
+    const access = pageAccess();
+    const wanted = [...new Set(ids)].filter((id) => UuidSchema.safeParse(id).success);
+    if (wanted.length === 0 || !supabaseConfigured()) return new Map();
+    const unlocked = access !== undefined && access.tenantId.length > 0 ? access : null;
     const { data, error } =
       unlocked === null
         ? await contentClient()

@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import type { Locale } from '@schemas/primitives';
 import { MEDIA_BLOCKS_PER_PAGE } from '@schemas/sectionTypes';
 import type { SectionData } from '@/lib/sections/types';
-import { POSTER, SECTION_MEDIA_READS } from './fixtures';
+import { POSTER, SECTION_MEDIA_FAIL, SECTION_MEDIA_READS } from './fixtures';
 import { LOCALES, renderSections } from './harness';
 
 // Admin v2 E10's blocks as a visitor's browser receives them, in both languages: what the
@@ -184,6 +184,8 @@ describe('Video', () => {
     test(`ships the still only, an in-view clip surface (${locale})`, async () => {
       const html = await render(
         [
+          // Not the first section: the first is the top of the page (CR10 below).
+          { type: 'textBlock', props: { heading: text('Above', 'فوق') } },
           {
             type: 'video',
             props: {
@@ -305,5 +307,85 @@ describe('a page reads its section media once', () => {
       'en',
     );
     expect(tags(html, 'img')).toHaveLength(0);
+  });
+});
+
+// E10 code review (docs/admin-v2/as-built/E10.md "Code review").
+describe('CR3: the section media read is isolated per section', () => {
+  afterEach(() => {
+    SECTION_MEDIA_FAIL.on = false;
+  });
+
+  for (const locale of LOCALES) {
+    test(`a failing read leaves the sections without media rendered (${locale})`, async () => {
+      SECTION_MEDIA_FAIL.on = true;
+      // renderSections fails on any section-error placeholder, so this also holds that the
+      // media sections render empty rather than broken.
+      const html = await render(
+        [
+          { type: 'textBlock', props: { heading: text('Still here', 'ما زال هنا') } },
+          { type: 'gallery', props: { items: [{ mediaId: POSTER.id }] } },
+          { type: 'video', props: { mediaId: POSTER.id, clip: { path: '/media/showreel.mp4' } } },
+          { type: 'aboutWho', props: { mediaId: POSTER.id } },
+        ],
+        locale,
+      );
+      expect(html).toContain(locale === 'en' ? 'Still here' : 'ما زال هنا');
+      expect(html).not.toContain('blk-gal');
+      expect(html).not.toContain('blk-video');
+      // About's "who we are" keeps its words, without the poster.
+      expect(html).toContain('about-who--text');
+      expect(tags(html, 'img')).toHaveLength(0);
+    });
+  }
+});
+
+describe('CR10: a Video at the top of the page is its LCP still', () => {
+  const video = {
+    type: 'video',
+    props: { mediaId: POSTER.id, clip: { path: '/media/showreel.mp4', startS: 1, endS: 2 } },
+  };
+
+  for (const locale of LOCALES) {
+    test(`the first section's still is eager and high priority, its film after load (${locale})`, async () => {
+      // A hidden section above it is not on the page, so the Video is still the first.
+      const html = await render(
+        [{ type: 'textBlock', visible: false, props: { heading: text('x', 'س') } }, video],
+        locale,
+      );
+      const [img] = tags(html, 'img');
+      expect(img).toContain('loading="eager"');
+      expect(img).toContain('fetchpriority="high"');
+      const frame = tags(html, 'div').find((d) => d.includes('data-clip-src'));
+      expect(frame).toContain('data-clip-after-load');
+      // Still never a <video> in the HTML.
+      expect(tags(html, 'video')).toHaveLength(0);
+    });
+  }
+
+  test('below another section it stays lazy', async () => {
+    const html = await render(
+      [{ type: 'textBlock', props: { heading: text('Above', 'فوق') } }, video],
+      'en',
+    );
+    const [img] = tags(html, 'img');
+    expect(img).toContain('loading="lazy"');
+    expect(img).not.toContain('fetchpriority="high"');
+  });
+});
+
+describe('CR9: one picture fills the width with a wide source', () => {
+  test('a one-picture Gallery asks up to 1600w; in columns it stops at 1200w', async () => {
+    const html = await render(
+      [
+        { type: 'gallery', props: { items: [{ mediaId: POSTER.id }] } },
+        { type: 'gallery', props: { items: [{ mediaId: POSTER.id }, { mediaId: POSTER.id }] } },
+      ],
+      'en',
+    );
+    const [solo, pair] = html.split('<section class="blk-gal">').slice(1);
+    expect(solo).toContain(' 1600w');
+    expect(pair).toContain(' 1200w');
+    expect(pair).not.toContain(' 1600w');
   });
 });

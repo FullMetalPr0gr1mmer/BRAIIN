@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isWordText } from './docWords';
 
 // The stored rich-text shape. Lives here because CLAUDE.md §8 puts one Zod schema per
 // shape in `packages/schemas`, imported by site, admin and Edge Functions alike — the
@@ -111,23 +112,35 @@ const SAME_SITE = 'https://same-site.invalid';
 const LINK_SCHEMES: readonly string[] = ['http:', 'https:', 'mailto:', 'tel:'];
 
 /**
- * Whether the renderer keeps this href (src/lib/content/tiptap.ts `sanitizeHref`): an http,
- * https, mailto or tel URL, or a reference that stays on this site. Restated here because the
- * schema module may not import the app; tests/lib/sectionBlocks.spec.ts holds the two equal
- * over a table of hostile and ordinary hrefs.
+ * The href a link may carry, trimmed, or null to drop the link (its words stay): an http, https,
+ * mailto or tel URL, or a reference that stays on this site. The ONE rule, here because the
+ * schema module may not import the app: the renderer's `sanitizeHref` (src/lib/content/tiptap.ts)
+ * IS this function (E10 code review, CR6), and the section walk refuses a link it would drop.
+ *
+ * A relative href is resolved against a throwaway base and kept only when it stays on that
+ * base's origin. The base is invented, but the answer does not depend on it: a same-site
+ * reference resolves onto whatever origin it is given, while scheme-relative `//evil.example`
+ * and `/\evil.example` (the URL standard reads a backslash as a slash in an https URL) resolve
+ * to another host from ANY base. Both look harmless precisely because they are absolute
+ * cross-origin URLs wearing a relative costume.
  */
-export function sectionHrefKept(raw: unknown): boolean {
-  if (typeof raw !== 'string') return false;
+export function keptHref(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
   const href = raw.trim();
-  if (href.length === 0 || href.length > 2048) return false;
+  if (href.length === 0 || href.length > 2048) return null;
   try {
     if (href.startsWith('/') || href.startsWith('#') || href.startsWith('?')) {
-      return new URL(href, SAME_SITE).origin === SAME_SITE;
+      return new URL(href, SAME_SITE).origin === SAME_SITE ? href : null;
     }
-    return LINK_SCHEMES.includes(new URL(href).protocol);
+    return LINK_SCHEMES.includes(new URL(href).protocol) ? href : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** Whether the renderer keeps this href (keptHref answers with it). */
+export function sectionHrefKept(raw: unknown): boolean {
+  return keptHref(raw) !== null;
 }
 
 const NODES: readonly string[] = SECTION_DOC_NODES;
@@ -319,6 +332,10 @@ export function sectionDocProblem(raw: unknown): string | null {
   }
   const top = raw['content'];
   if (top !== undefined && !Array.isArray(top)) return UNREADABLE;
+  // The node budget is checked before a list is read (E10 code review, CR8): a 64 KB payload
+  // can hold a content array of some 16,000 entries, and copying it onto the stack first would
+  // allocate for every one before TOO_LONG.
+  if ((top ?? []).length > SECTION_DOC_MAX_NODES) return TOO_LONG;
   const stack: { node: unknown; depth: number; parent: string }[] = ((top ?? []) as unknown[]).map(
     (node) => ({ node, depth: 1, parent: 'doc' }),
   );
@@ -342,7 +359,7 @@ export function sectionDocProblem(raw: unknown): string | null {
     if (content !== undefined && !Array.isArray(content)) return UNREADABLE;
     if (type === 'text') {
       if (typeof text !== 'string' || content !== undefined) return UNREADABLE;
-      if (text.trim() !== '') words = true;
+      if (isWordText(node)) words = true;
     } else if (text !== undefined) {
       return UNREADABLE;
     }
@@ -361,6 +378,9 @@ export function sectionDocProblem(raw: unknown): string | null {
     if (type === 'listItem' && !(isObject(children[0]) && children[0]['type'] === 'paragraph')) {
       return 'A list item starts with a paragraph.';
     }
+    // Every node already on the stack is counted later, so this is the same budget, checked
+    // before the children are copied (CR8).
+    if (seen + stack.length + children.length > SECTION_DOC_MAX_NODES) return TOO_LONG;
     for (const child of children) stack.push({ node: child, depth: depth + 1, parent: type });
   }
   return words ? null : NO_WORDS;
@@ -375,10 +395,25 @@ export const SectionDocSchema = z.unknown().superRefine((doc, ctx) => {
   if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
 }) as unknown as z.ZodType<TiptapDoc>;
 
+/** What an editor is told when a language's text is missing altogether (P-12, E10 CR2). */
+export const SECTION_BODY_MISSING = {
+  en: 'Write the English text.',
+  ar: 'Write the Arabic text.',
+} as const;
+
+/** One language of a section body, by name: a missing one says which (not UNREADABLE). */
+const sectionDocIn = (lang: 'en' | 'ar') =>
+  z.unknown().superRefine((doc, ctx) => {
+    const problem = doc === undefined ? SECTION_BODY_MISSING[lang] : sectionDocProblem(doc);
+    if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+  }) as unknown as z.ZodType<TiptapDoc>;
+
 /**
  * A section's rich text in both languages (the Text block's body). Both are required, as every
  * section text is (packages/schemas/sections.ts): the copy is indexable, and an Arabic page
- * must not render English or nothing.
+ * must not render English or nothing. A language left out is named ("Write the Arabic text.").
  */
-export const SectionBodySchema = z.object({ en: SectionDocSchema, ar: SectionDocSchema }).strict();
+export const SectionBodySchema = z
+  .object({ en: sectionDocIn('en'), ar: sectionDocIn('ar') })
+  .strict();
 export type SectionBody = z.infer<typeof SectionBodySchema>;

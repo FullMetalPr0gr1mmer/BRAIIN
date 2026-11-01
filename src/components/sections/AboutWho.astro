@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { AboutWhoSectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
-import type { ImageRef } from '@/lib/media/resolve';
+import type { SectionImages } from '@/lib/sections/blocks';
 import SplitHeading from '@/components/ui/SplitHeading.astro';
 import MediaFrame from '@/components/media/MediaFrame.astro';
 import { ABOUT_WHO_COPY as COPY } from '@/lib/sections/copy/aboutWho';
@@ -24,10 +24,13 @@ interface Props extends AboutWhoSectionContent {
    * Route data (SectionRenderer): the page's section media, resolved in one read with the
    * other sections' (src/lib/data/sectionMedia.ts), never read here.
    */
-  data?: { images?: ReadonlyMap<string, ImageRef> } | undefined;
+  data?: { images?: SectionImages } | undefined;
 }
 
 const { locale, tag, heading, accent, lead, paragraphs, mediaId, clip, data } = Astro.props;
+// The page's section media (route data): SectionRenderer starts the one read, and only a
+// section with media waits for it, here.
+const images = await data?.images;
 
 const headingText = heading ? pickLocale(heading, locale) : COPY.heading[locale];
 // An authored heading keeps only an authored accent (the default's range would land on the
@@ -39,7 +42,7 @@ const paras = paragraphs?.length
       body: pickLocale(p.body, locale),
     }))
   : COPY.paragraphs.map((p) => ({ title: p.title[locale], body: p.body[locale] }));
-const image = (mediaId && data?.images?.get(mediaId)) || null;
+const image = (mediaId && images?.get(mediaId)) || null;
 ---
 
 <section class:list={['about-who', { 'about-who--text': !image }]} id="who">

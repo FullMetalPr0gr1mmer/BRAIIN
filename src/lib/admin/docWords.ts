@@ -1,24 +1,11 @@
-// Whether a rich-text document holds any words (Admin v2 E10): what "Arabic missing" asks of
-// a body whose two languages go together (FormField's rich-text field, `bothLanguages`). Pure
-// and type-only on the schema, so it adds nothing to the field kit but this walk.
+// Whether a rich-text value is an Arabic gap (Admin v2 E10): what "Arabic missing" asks of
+// a body whose two languages go together (FormField's rich-text field, `bothLanguages`). What
+// "has words" means is packages/schemas/docWords.ts, the one definition the section schema and
+// renderer use too; it is zod-free, so it adds nothing to the field kit but its walk.
 
-interface DocNode {
-  text?: unknown;
-  content?: unknown;
-}
+import { docHasWords } from '@schemas/docWords';
 
-/** True when some text node of `doc` has a character that is not white space. */
-export function docHasWords(doc: unknown): boolean {
-  const stack: unknown[] = [doc];
-  while (stack.length > 0) {
-    const node = stack.pop();
-    if (!node || typeof node !== 'object') continue;
-    const { text, content } = node as DocNode;
-    if (typeof text === 'string' && text.trim() !== '') return true;
-    if (Array.isArray(content)) stack.push(...(content as unknown[]));
-  }
-  return false;
-}
+export { docHasWords };
 
 /**
  * Whether a rich-text field's value is an Arabic gap ("Arabic missing"): its two languages go

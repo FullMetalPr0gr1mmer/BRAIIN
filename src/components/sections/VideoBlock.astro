@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { VideoSectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
-import type { ImageRef } from '@/lib/media/resolve';
+import type { SectionImages } from '@/lib/sections/blocks';
 import MediaFrame from '@/components/media/MediaFrame.astro';
 import AccentText from '@/components/ui/AccentText.astro';
 
@@ -26,7 +26,10 @@ import AccentText from '@/components/ui/AccentText.astro';
 //   - the window is a /media/*.mp4 file (EXC-009), served through the Worker with byte ranges
 //     so the window seeks; the video is muted, looped by clips.ts, hidden from assistive tech.
 // The still is a media library image (`mediaId`) at its own width and height, lazy, with the
-// library's alt text: it is what a visitor sees first and what stays without motion. It is
+// library's alt text: it is what a visitor sees first and what stays without motion. As the
+// page's first section (`data.first`: no hero above it) it is the top of the page and likely
+// its LCP element, so it is eager and high priority, and the film waits for `load`, as
+// MediaBanner's poster does (E10 code review, CR10). It is
 // resolved by SectionRenderer's one read of the page's section media and arrives as route data
 // (`data.images`), never read here. With no still that resolves the section renders nothing
 // (a frame with nothing in it until a clip plays would be an empty box under reduced motion).
@@ -34,15 +37,18 @@ import AccentText from '@/components/ui/AccentText.astro';
 interface Props extends VideoSectionContent {
   locale: Locale;
   /** Route data (SectionRenderer): the page's section media, resolved in one read. */
-  data?: { images?: ReadonlyMap<string, ImageRef> } | undefined;
+  data?: { images?: SectionImages; first?: boolean } | undefined;
 }
 
 const { locale, tag, heading, accent, lead, mediaId, clip, data } = Astro.props;
+// The page's section media (route data): SectionRenderer starts the one read, and only a
+// section with media waits for it, here.
+const images = await data?.images;
 
 const tagText = tag ? pickLocale(tag, locale) : '';
 const headingText = heading ? pickLocale(heading, locale) : '';
 const leadText = lead ? pickLocale(lead, locale) : '';
-const image = (mediaId && data?.images?.get(mediaId)) || null;
+const image = (mediaId && images?.get(mediaId)) || null;
 // Only a site file plays (MediaFrame's rule); only a film that can play gets the control.
 const playable = Boolean(clip?.path);
 const STR = {
@@ -80,6 +86,7 @@ const STR = {
           ratio="wide"
           sizes="100vw"
           widths={[480, 800, 1200, 1600]}
+          priority={data?.first === true}
           class="blk-video__frame"
         />
         {playable && (

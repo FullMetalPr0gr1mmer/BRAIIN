@@ -1,5 +1,7 @@
+import { docHasWords } from '@schemas/docWords';
 import {
   TiptapDocSchema,
+  keptHref,
   sectionDocProblem,
   type TiptapDoc,
   type TiptapMark,
@@ -44,42 +46,15 @@ function escapeHtml(value: string): string {
 
 // ── URL policy ──────────────────────────────────────────────────────────────────
 
-const ALLOWED_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:']);
-
 /**
  * Returns a safe href, or null to drop the link entirely (the text survives).
  *
- * A relative href is resolved against a throwaway base and kept only when it stays on
- * that base's origin. The base is invented, but the answer does not depend on it: a
- * same-site reference resolves onto whatever origin it is given, while scheme-relative
- * `//evil.example` and `/\evil.example` (the URL standard reads a backslash as a slash
- * in an https URL) resolve to another host from ANY base. Both look harmless precisely
- * because they are absolute cross-origin URLs wearing a relative costume.
+ * It IS packages/schemas/tiptap.ts `keptHref` (E10 code review, CR6): one rule, which the
+ * section body's write check also holds a link to, so a link the walk accepts is one this
+ * keeps. The reasons (an allowlist of schemes; a relative href kept only while it stays on
+ * this site, so `//evil.example` and `/\evil.example` are dropped) are written there.
  */
-export function sanitizeHref(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  const href = raw.trim();
-  if (href.length === 0 || href.length > 2048) return null;
-  if (href.startsWith('/') || href.startsWith('#') || href.startsWith('?')) {
-    return staysOnSite(href) ? href : null;
-  }
-  try {
-    const parsed = new URL(href);
-    return ALLOWED_SCHEMES.has(parsed.protocol) ? href : null;
-  } catch {
-    return null;
-  }
-}
-
-const SAME_SITE_BASE = 'https://same-site.invalid';
-
-function staysOnSite(href: string): boolean {
-  try {
-    return new URL(href, SAME_SITE_BASE).origin === SAME_SITE_BASE;
-  } catch {
-    return false;
-  }
-}
+export const sanitizeHref: (raw: unknown) => string | null = keptHref;
 
 // ── Marks ───────────────────────────────────────────────────────────────────────
 
@@ -132,12 +107,6 @@ interface Walk {
 const ARTICLE: Walk = { section: false };
 const SECTION: Walk = { section: true };
 
-/** Whether some text under `node` is more than white space (a section body, so bounded). */
-function hasWords(node: TiptapNode): boolean {
-  if (node.type === 'text') return (node.text ?? '').trim() !== '';
-  return (node.content ?? []).some(hasWords);
-}
-
 function renderChildren(nodes: TiptapNode[] | undefined, walk: Walk): string {
   return (nodes ?? []).map((node) => renderNode(node, walk)).join('');
 }
@@ -160,7 +129,7 @@ function renderNode(node: TiptapNode, walk: Walk): string {
     case 'heading': {
       // An empty heading (H2 pressed on an empty line) is no heading: a section render skips
       // it, as it skips an empty list item below.
-      if (walk.section && !hasWords(node)) return '';
+      if (walk.section && !docHasWords(node)) return '';
       // Clamped to h2–h6. The page's <h1> is the entity title rendered by the layout;
       // a body that can emit its own <h1> produces two document headings, which is an
       // outline defect for screen readers (WCAG 2.2) before it is an SEO one.
@@ -174,7 +143,7 @@ function renderNode(node: TiptapNode, walk: Walk): string {
     case 'orderedList':
       return wrap('ol', renderChildren(node.content, walk), walk);
     case 'listItem':
-      if (walk.section && !hasWords(node)) return '';
+      if (walk.section && !docHasWords(node)) return '';
       return `<li>${renderChildren(node.content, walk)}</li>`;
     case 'blockquote':
       return wrap('blockquote', renderChildren(node.content, walk), walk);

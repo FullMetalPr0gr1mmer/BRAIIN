@@ -59,6 +59,7 @@ vi.mock('@/lib/data/sectionMedia', async (importOriginal) => {
     // media once, and tests/render/sectionBlocks.spec.ts holds it to that.
     getSectionImages: async (ids: readonly string[]) => {
       f.SECTION_MEDIA_READS.push([...ids]);
+      if (f.SECTION_MEDIA_FAIL.on) throw new Error('section media read failed (fixture)');
       return new Map(ids.filter((id) => id === f.POSTER.id).map((id) => [id, f.POSTER]));
     },
   };

@@ -7,11 +7,14 @@ import {
   SECTION_DOC_MAX_NODES,
   SECTION_DOC_NODES,
   SectionBodySchema,
+  SECTION_BODY_MISSING,
   SectionDocSchema,
   TiptapDocSchema,
+  keptHref,
   sectionDocProblem,
   sectionHrefKept,
 } from '@schemas/tiptap';
+import * as sharedWords from '@schemas/docWords';
 import {
   GALLERY_MAX_ITEMS,
   GallerySectionContentSchema,
@@ -22,7 +25,16 @@ import {
 } from '@schemas/sections';
 import { SectionWriteSchema } from '@schemas/admin';
 import { renderSectionDocToHtml, renderTiptapToHtml, sanitizeHref } from '@/lib/content/tiptap';
-import { galleryColumns, sectionMediaIds } from '@/lib/sections/blocks';
+import {
+  GALLERY_SOLO_WIDTHS,
+  GALLERY_WIDTHS,
+  SECTION_MEDIA_IDS,
+  SECTION_MEDIA_TYPES,
+  galleryColumns,
+  galleryWidths,
+  sectionMediaIds,
+} from '@/lib/sections/blocks';
+import { TRANSFORM_WIDTHS } from '@/lib/http/imageGuard';
 import { docHasWords, richTextArabicGap } from '@/lib/admin/docWords';
 import { toggleLabel } from '@/lib/client/clips';
 
@@ -781,5 +793,232 @@ describe('layout and editor helpers', () => {
         { type: 'video' },
       ]),
     ).toEqual([a, b, c]);
+  });
+});
+
+// ── E10 code review (docs/admin-v2/as-built/E10.md "Code review"): each fix, red without it ──
+
+describe('CR1: the blocks are strict at every level, so no unrendered mediaId is stored', () => {
+  const id = '5eed0a00-0000-4000-8000-0000000000c1';
+  const hidden = '5eed0a00-0000-4000-8000-0000000000ff';
+  const words = { en: 'Words', ar: 'كلمات' };
+  const accent = { en: { from: 0, to: 1 }, ar: { from: 0 } };
+  /** Every key each block takes, filled, so every nested object is there to be tampered with. */
+  const FULL: Record<'textBlock' | 'gallery' | 'video', Record<string, unknown>> = {
+    textBlock: {
+      tag: words,
+      heading: words,
+      accent,
+      body: {
+        en: doc(p(t('Read ', link('https://example.test/a')), t('more'))),
+        ar: doc(p(t('اقرأ'))),
+      },
+    },
+    gallery: { tag: words, heading: words, accent, items: [{ kind: 'image', mediaId: id }] },
+    video: {
+      tag: words,
+      heading: words,
+      accent,
+      lead: words,
+      mediaId: id,
+      clip: { path: '/media/showreel.mp4', startS: 1, endS: 2 },
+    },
+  };
+  type Path = (string | number)[];
+  type Bag = Record<string | number, unknown>;
+
+  /** The path of every plain object in `value` (arrays walked, not counted). */
+  function objectPaths(value: unknown, path: Path = []): Path[] {
+    if (Array.isArray(value)) return value.flatMap((v, i) => objectPaths(v, [...path, i]));
+    if (typeof value !== 'object' || value === null) return [];
+    return [path, ...Object.entries(value).flatMap(([k, v]) => objectPaths(v, [...path, k]))];
+  }
+  const at = (value: unknown, path: Path): Bag =>
+    path.reduce<Bag>((node, step) => node[step] as Bag, value as Bag);
+  const withKey = (content: unknown, path: Path, key: string, v: unknown): Bag => {
+    const copy = structuredClone(content) as Bag;
+    at(copy, path)[key] = v;
+    return copy;
+  };
+  /** Every `mediaId` value anywhere in the JSON: what 0024's and 0102's `$.**.mediaId` reads. */
+  const allMediaIds = (value: unknown): string[] =>
+    objectPaths(value).flatMap((path) => {
+      const v = at(value, path)['mediaId'];
+      return typeof v === 'string' ? [v] : [];
+    });
+  const issuesOf = (type: string, content: unknown) =>
+    sectionContentIssues(type as keyof typeof FULL, content);
+
+  it('the full samples are valid, and name only the media they render', () => {
+    for (const [type, content] of Object.entries(FULL)) {
+      expect(issuesOf(type, content), type).toEqual([]);
+      expect(allMediaIds(content).sort(), type).toEqual(
+        sectionMediaIds([{ type, props: content }]).sort(),
+      );
+    }
+  });
+
+  it('an extra key at every nesting level is refused on write', () => {
+    let levels = 0;
+    for (const [type, content] of Object.entries(FULL)) {
+      for (const path of objectPaths(content)) {
+        levels += 1;
+        expect(
+          issuesOf(type, withKey(content, path, 'extra', 1)).length,
+          `${type} ${path.join('.') || '(top)'}`,
+        ).toBeGreaterThan(0);
+      }
+    }
+    // The walk saw the nested levels (heading, accent and its ranges, clip, items, the body).
+    expect(levels).toBeGreaterThan(25);
+  });
+
+  it('a mediaId hidden anywhere it is not rendered is refused, so no stored row carries one', () => {
+    for (const [type, content] of Object.entries(FULL)) {
+      for (const path of objectPaths(content)) {
+        const tampered = withKey(content, path, 'mediaId', hidden);
+        if (issuesOf(type, tampered).length > 0) continue;
+        // Accepted only where a mediaId IS rendered (the still, a picture): replaced, not added.
+        expect(allMediaIds(tampered), `${type} ${path.join('.')}`).toEqual(
+          sectionMediaIds([{ type, props: tampered }]),
+        );
+      }
+    }
+    expect(
+      issuesOf('video', { ...FULL.video, heading: { ...words, mediaId: hidden } }),
+    ).not.toEqual([]);
+    expect(
+      issuesOf('video', { ...FULL.video, clip: { path: '/media/showreel.mp4', mediaId: hidden } }),
+    ).not.toEqual([]);
+    expect(
+      issuesOf('gallery', { ...FULL.gallery, accent: { en: { from: 0, mediaId: hidden } } }),
+    ).not.toEqual([]);
+  });
+});
+
+describe('CR2: a body with a language missing says which', () => {
+  const words = doc(p(t('Hello')));
+  it('names the missing language, not "could not be read"', () => {
+    const noAr = SectionBodySchema.safeParse({ en: words });
+    expect(noAr.error?.issues.map((i) => [i.path, i.message])).toEqual([
+      [['ar'], SECTION_BODY_MISSING.ar],
+    ]);
+    const noEn = SectionBodySchema.safeParse({ ar: doc(p(t('مرحبا'))) });
+    expect(noEn.error?.issues.map((i) => [i.path, i.message])).toEqual([
+      [['en'], SECTION_BODY_MISSING.en],
+    ]);
+    expect(SECTION_BODY_MISSING).toEqual({
+      en: 'Write the English text.',
+      ar: 'Write the Arabic text.',
+    });
+    // Through the write boundary, on the field.
+    const [issue] = sectionContentIssues('textBlock', { body: { en: words } });
+    expect(issue?.path).toEqual(['content', 'body', 'ar']);
+    expect(issue?.message).toBe('Write the Arabic text.');
+  });
+});
+
+describe('CR5: the media sections are one map', () => {
+  it('the types handed `images` are exactly the types whose ids are read', () => {
+    expect(SECTION_MEDIA_TYPES).toEqual(Object.keys(SECTION_MEDIA_IDS));
+    const a = '5eed0a00-0000-4000-8000-0000000000a5';
+    const SAMPLES: Record<string, Record<string, unknown>> = {
+      aboutWho: { mediaId: a },
+      workIntro: { media: [{ mediaId: a }] },
+      gallery: { items: [{ mediaId: a }] },
+      video: { mediaId: a },
+    };
+    expect(Object.keys(SAMPLES).sort()).toEqual([...SECTION_MEDIA_TYPES].sort());
+    for (const type of SECTION_MEDIA_TYPES) {
+      expect(sectionMediaIds([{ type, props: SAMPLES[type]! }]), type).toEqual([a]);
+    }
+    // A key of Object.prototype is no section type.
+    expect(sectionMediaIds([{ type: 'constructor', props: { mediaId: a } }])).toEqual([]);
+  });
+});
+
+describe('CR6: the renderer’s href rule is the schema’s', () => {
+  it('sanitizeHref is keptHref, and sectionHrefKept asks it', () => {
+    expect(sanitizeHref).toBe(keptHref);
+    expect(keptHref('  https://example.test/a  ')).toBe('https://example.test/a');
+    expect(sectionHrefKept('//evil.example')).toBe(false);
+  });
+});
+
+describe('CR7: one definition of "has words"', () => {
+  it('the admin’s is the shared one', () => {
+    expect(docHasWords).toBe(sharedWords.docHasWords);
+  });
+
+  it('a `text` key outside a text node is no words, for the admin as for the schema', () => {
+    const stray = { type: 'doc', content: [{ type: 'paragraph', text: 'x' }] };
+    expect(docHasWords(stray)).toBe(false);
+    expect(docHasWords({ content: [{ text: 'x' }] })).toBe(false);
+    expect(sharedWords.isWordText({ type: 'text', text: ' x ' })).toBe(true);
+    expect(sharedWords.isWordText({ type: 'text', text: ' ' })).toBe(false);
+  });
+
+  it('agrees with the write check and the renderer on what is empty', () => {
+    const cases = [
+      doc(p(t('x'))),
+      doc(p(t('  ')), p()),
+      doc({ type: 'heading', attrs: { level: 2 }, content: [t(' ')] }, p(t('y'))),
+      doc({ type: 'bulletList', content: [li(p(t(' ')))] }),
+    ];
+    for (const d of cases) {
+      const words = docHasWords(d);
+      expect(sectionDocProblem(d) === 'Write some text.', JSON.stringify(d)).toBe(!words);
+      if (sectionDocProblem(d) === null) expect(renderSectionDocToHtml(d) !== '').toBe(words);
+    }
+  });
+});
+
+describe('CR8: the node budget is checked before a list is read', () => {
+  /** An array whose entries count their reads (its length is free). */
+  function watched(list: unknown[], hits: { n: number }): unknown[] {
+    return new Proxy(list, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^[0-9]+$/.test(key)) hits.n += 1;
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+  }
+  const many = () => Array.from({ length: 16_000 }, () => p(t('x')));
+
+  it('a 16,000-entry document is too long before any entry is read', () => {
+    const hits = { n: 0 };
+    expect(sectionDocProblem({ type: 'doc', content: watched(many(), hits) })).toMatch(/too long/);
+    expect(hits.n).toBe(0);
+  });
+
+  it('so is a quote holding 16,000 paragraphs', () => {
+    const hits = { n: 0 };
+    const quote = { type: 'blockquote', content: watched(many(), hits) } as unknown as Node;
+    expect(sectionDocProblem(doc(quote))).toMatch(/too long/);
+    expect(hits.n).toBe(0);
+  });
+
+  it('the budget is unchanged: 300 nodes pass, 301 do not', () => {
+    // A paragraph and its text are two nodes.
+    const pars = (n: number) => Array.from({ length: n }, () => p(t('x')));
+    expect(sectionDocProblem(doc(...pars(SECTION_DOC_MAX_NODES / 2)))).toBeNull();
+    expect(
+      sectionDocProblem(doc(...pars(SECTION_DOC_MAX_NODES / 2 - 1), p(t('x'), t('y')))),
+    ).toMatch(/too long/);
+    expect(
+      sectionDocProblem(doc({ type: 'blockquote', content: pars(SECTION_DOC_MAX_NODES / 2) })),
+    ).toMatch(/too long/);
+  });
+});
+
+describe('CR9: one picture fills the width with a wide source', () => {
+  it('asks up to 1600 alone and 1200 in columns, widths the image guard admits', () => {
+    expect(galleryWidths(1)).toEqual(GALLERY_SOLO_WIDTHS);
+    expect(Math.max(...galleryWidths(1))).toBe(1600);
+    expect(galleryWidths(2)).toEqual(GALLERY_WIDTHS);
+    expect(galleryWidths(3)).toEqual(GALLERY_WIDTHS);
+    for (const w of [...GALLERY_SOLO_WIDTHS, ...GALLERY_WIDTHS]) {
+      expect(TRANSFORM_WIDTHS.has(w), String(w)).toBe(true);
+    }
   });
 });

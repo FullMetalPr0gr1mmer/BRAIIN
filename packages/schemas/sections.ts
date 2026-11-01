@@ -1,7 +1,14 @@
 import { z } from 'zod';
 import { LocalizedTextSchema, STAT_PLACEMENTS, TestimonialPlacementSchema } from './content';
 import { SECTION_TYPES, type SectionType } from './sectionTypes';
-import { AccentSchema, MediaRefSchema, SafeHrefSchema, VideoClipSchema } from './media';
+import {
+  AccentSchema,
+  MediaRefSchema,
+  SafeHrefSchema,
+  StrictAccentSchema,
+  StrictVideoClipSchema,
+  VideoClipSchema,
+} from './media';
 import { SlugSchema, UuidSchema } from './primitives';
 import { SectionBodySchema } from './tiptap';
 
@@ -559,6 +566,17 @@ export const JoinApplySectionContentSchema = z
 // built-in copy: a block shows what is written in it and nothing else (with nothing to show
 // it renders nothing), so a block added and forgotten never puts placeholder words on a
 // page. Strict, like the rest of UI v2. Their CSS is global.css's (shared blocks).
+//
+// Strict at EVERY level, not only the top (E10 code review, CR1): section content is stored as
+// sent (sectionContentIssues validates it, the raw JSON is saved), so a key a nested object's
+// schema strips would still reach the row, and a `mediaId` hidden in a heading, an accent or a
+// clip would make that asset anon-readable through 0024's and 0102's `$.**.mediaId`. Each
+// nested object below refuses a key it does not name; the only `mediaId`s these blocks hold are
+// the ones they render (a Gallery's pictures, a Video's still). tests/lib/sectionBlocks.spec.ts
+// adds a key at every level of each block and expects a refusal.
+
+/** A block's bilingual line: English and Arabic, and nothing else. */
+const BlockText = Text.strict();
 
 /**
  * A Text block: a tag, a heading with its accent, and paragraphs of rich text in both
@@ -567,10 +585,10 @@ export const JoinApplySectionContentSchema = z
  */
 export const TextBlockSectionContentSchema = z
   .object({
-    tag: Text.optional(),
-    heading: Text.optional(),
+    tag: BlockText.optional(),
+    heading: BlockText.optional(),
     /** Only read with a heading. */
-    accent: AccentSchema.optional(),
+    accent: StrictAccentSchema.optional(),
     body: SectionBodySchema.optional(),
   })
   .strict();
@@ -589,10 +607,10 @@ export const GalleryItemSchema = z
 /** A Gallery: a tag, a heading with its accent, and up to twelve pictures in a grid. */
 export const GallerySectionContentSchema = z
   .object({
-    tag: Text.optional(),
-    heading: Text.optional(),
+    tag: BlockText.optional(),
+    heading: BlockText.optional(),
     /** Only read with a heading. */
-    accent: AccentSchema.optional(),
+    accent: StrictAccentSchema.optional(),
     items: z.array(GalleryItemSchema).min(1).max(GALLERY_MAX_ITEMS).optional(),
   })
   .strict();
@@ -605,13 +623,13 @@ export const GallerySectionContentSchema = z
  */
 export const VideoSectionContentSchema = z
   .object({
-    tag: Text.optional(),
-    heading: Text.optional(),
+    tag: BlockText.optional(),
+    heading: BlockText.optional(),
     /** Only read with a heading. */
-    accent: AccentSchema.optional(),
-    lead: Text.optional(),
+    accent: StrictAccentSchema.optional(),
+    lead: BlockText.optional(),
     mediaId: UuidSchema.optional(),
-    clip: VideoClipSchema.refine((clip) => clip.streamUid === undefined, {
+    clip: StrictVideoClipSchema.refine((clip) => clip.streamUid === undefined, {
       message: 'a film of this site (/media/….mp4) until Stream is set up',
       path: ['streamUid'],
     }).optional(),

@@ -44,7 +44,7 @@ export const sectionResource: ResourceConfig = {
   // The schema validates content only when a payload carries BOTH type and content. A
   // PATCH of content alone (or of type alone) is checked here, against the type the row
   // will have — otherwise it saves "fine" and the loader silently drops it.
-  assertWritable: async (merged, { changed, auth, sb, db }) => {
+  assertWritable: async (merged, { changed, auth, sb, db, before }) => {
     if ('type' in changed || 'content' in changed) {
       const [issue] = sectionContentIssues(merged['type'] as SectionType, merged['content'] ?? {});
       if (issue) {
@@ -72,11 +72,16 @@ export const sectionResource: ResourceConfig = {
     // moved, or turned into one) finds at most MEDIA_BLOCKS_PER_PAGE - 1 others there, hidden
     // ones included. Counted through the overlay-aware database when given (a staged save sees
     // the pending sections of the tenant, a publish the ones its release leaves), the row
-    // itself left out by id. One indexed read, and only for a media block.
+    // itself left out by id. One indexed read, and only for a row that BECOMES a media block
+    // on this page (E10 code review, CR4): the editor's form sends `type` with every save, so
+    // a row that already was one there (`before`) is not counted again, and an edit of a block
+    // on a page already over the cap (rows written around the API, or two saves racing) still
+    // saves. The race itself stays open: the count and the insert are two statements.
     if (
       ('type' in changed || 'page_id' in changed) &&
       MEDIA_TYPES.includes(merged['type']) &&
-      typeof merged['page_id'] === 'string'
+      typeof merged['page_id'] === 'string' &&
+      !(before && MEDIA_TYPES.includes(before['type']) && before['page_id'] === merged['page_id'])
     ) {
       const rows = await (db ?? liveDb(sb, auth)).list('page_sections', {
         columns: 'id,type',

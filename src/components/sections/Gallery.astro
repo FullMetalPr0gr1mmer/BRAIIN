@@ -2,8 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { GallerySectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
-import type { ImageRef } from '@/lib/media/resolve';
-import { galleryColumns } from '@/lib/sections/blocks';
+import { galleryColumns, galleryWidths, type SectionImages } from '@/lib/sections/blocks';
 import MediaImage from '@/components/media/MediaImage.astro';
 import AccentText from '@/components/ui/AccentText.astro';
 
@@ -25,15 +24,18 @@ import AccentText from '@/components/ui/AccentText.astro';
 interface Props extends GallerySectionContent {
   locale: Locale;
   /** Route data (SectionRenderer): the page's section media, resolved in one read. */
-  data?: { images?: ReadonlyMap<string, ImageRef> } | undefined;
+  data?: { images?: SectionImages } | undefined;
 }
 
 const { locale, tag, heading, accent, items = [], data } = Astro.props;
+// The page's section media (route data): SectionRenderer starts the one read, and only a
+// section with media waits for it, here.
+const images = await data?.images;
 
 const tagText = tag ? pickLocale(tag, locale) : '';
 const headingText = heading ? pickLocale(heading, locale) : '';
 const pictures = items.flatMap((item) => {
-  const image = data?.images?.get(item.mediaId);
+  const image = images?.get(item.mediaId);
   return image ? [image] : [];
 });
 const columns = galleryColumns(pictures.length);
@@ -61,7 +63,12 @@ const sizes = columns === 1 ? '100vw' : `(min-width: 47.5rem) ${Math.ceil(100 / 
       <ul class:list={['blk-gal__grid', `blk-gal__grid--${columns}`]} role="list">
         {pictures.map((image) => (
           <li class="blk-gal__item">
-            <MediaImage image={image} locale={locale} widths={[480, 800, 1200]} sizes={sizes} />
+            <MediaImage
+              image={image}
+              locale={locale}
+              widths={galleryWidths(columns)}
+              sizes={sizes}
+            />
           </li>
         ))}
       </ul>
