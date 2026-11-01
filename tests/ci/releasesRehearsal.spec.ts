@@ -98,26 +98,26 @@ describe('.github/workflows/releases-rehearsal.yml', () => {
     expect((job.steps ?? []).map(acts)).toEqual(expected);
   });
 
-  it('pins its actions to the deploy job’s commits; only the CLI action keeps the e2e job’s tag', () => {
-    // CLAUDE.md §3 supply chain (review S4). The deploy job's pins are the ones already trusted.
+  it('pins every action to the commit the e2e job pins (CLAUDE.md §3 supply chain; O-26)', () => {
+    // The e2e job's pins are the ones already trusted; checkout and setup-node are also the
+    // deploy job's.
+    const e2ePins = new Map(
+      (e2e.steps ?? [])
+        .filter((step) => step.uses !== undefined)
+        .map((step) => [actionOf(step.uses)!, step.uses!]),
+    );
     const deployPins = new Map(
       (ci.jobs['deploy']!.steps ?? [])
         .filter((step) => step.uses !== undefined)
         .map((step) => [actionOf(step.uses)!, step.uses!]),
     );
-    const e2eUses = new Set((e2e.steps ?? []).map((step) => step.uses).filter(Boolean));
-    const unpinned: string[] = [];
     for (const step of job.steps ?? []) {
       if (step.uses === undefined) continue;
-      if (/@[0-9a-f]{40}$/.test(step.uses)) {
-        expect(step.uses).toBe(deployPins.get(actionOf(step.uses)!));
-      } else {
-        expect(e2eUses.has(step.uses), step.uses).toBe(true);
-        unpinned.push(step.uses);
-      }
+      expect(step.uses).toMatch(/@[0-9a-f]{40}$/);
+      expect(step.uses).toBe(e2ePins.get(actionOf(step.uses)!));
+      const deployPin = deployPins.get(actionOf(step.uses)!);
+      if (deployPin !== undefined) expect(step.uses).toBe(deployPin);
     }
-    // The one left (no commit of it is pinned anywhere in this repository yet: README O-26).
-    expect(unpinned).toEqual(['supabase/setup-cli@v1']);
   });
 
   it('is never a need of the deploy, nor a required check, nor called by ci.yml', () => {
