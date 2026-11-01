@@ -36,7 +36,10 @@ const BRAND = {
   colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
   motion: { marquee: 'normal', reveal: true },
 };
-const LINK = /<link rel="stylesheet" href="(\/styles\/theme\.css\?v=(\d+))">/g;
+// Any link to the theme stylesheet, whatever its attribute order and address: its shape (the
+// body's hash, E4-SEC-1) is asserted on its own, so a wrong address fails there instead of
+// matching nothing here (the old `v=(\d+)` matched no hash, so "no link" passed for any page).
+const LINK = /<link\b[^>]*\bhref="(\/styles\/theme\.css\?v=[^"]*)"[^>]*>/g;
 
 type Row = Record<string, unknown> & { id: string; version: number };
 
