@@ -2,6 +2,8 @@
 import type { Locale } from '@schemas/primitives';
 import type { SectionData } from '@/lib/sections/types';
 import { isRenderedSectionType, type RenderedSectionType } from '@/lib/sections/registry';
+import { SECTION_MEDIA_TYPES, sectionMediaIds } from '@/lib/sections/blocks';
+import { getSectionImages } from '@/lib/data/sectionMedia';
 import SectionBoundary from '@/components/SectionBoundary.astro';
 import Hero from '@/components/sections/Hero.astro';
 import ServicesOverview from '@/components/sections/ServicesOverview.astro';
@@ -104,21 +106,32 @@ const REGISTRY: Record<RenderedSectionType, AnyComponent> = {
 // above is what holds the registry complete; this view of it is what the template renders.
 type AnySection = (props: Record<string, unknown>) => unknown;
 const COMPONENTS = REGISTRY as unknown as Record<RenderedSectionType, AnySection>;
+
+const shown = sections.filter((s) => s.visible !== false);
+
+// The page's section media in ONE read (Admin v2 E10 review): every media library id the shown
+// sections name (a Gallery's pictures, a Video's still, About's poster, Our Work's frames),
+// resolved together through the gated read (src/lib/data/sectionMedia.ts: PUBLIC_MEDIA_COLUMNS,
+// 0024's and 0102's anon policy, a password page's own unlocked read), so the page's
+// subrequests do not grow with its blocks. Each media section gets the answer as route data
+// (`images`), after its authored props, so no content can supply or replace it. Pages whose
+// sections name no media ask nothing.
+const images = await getSectionImages(sectionMediaIds(shown));
+const dataOf = (s: SectionData): Record<string, unknown> | undefined =>
+  SECTION_MEDIA_TYPES.includes(s.type) ? { ...s.data, images } : s.data;
 ---
 
 {
-  sections
-    .filter((s) => s.visible !== false)
-    .map((s, i) => {
-      if (!isRenderedSectionType(s.type)) return null;
-      const Comp = COMPONENTS[s.type];
-      return (
-        <SectionBoundary
-          type={s.type}
-          {...(preview ? { previewId: s.id ?? `default-${String(i)}` } : {})}
-        >
-          <Comp locale={locale} {...(s.props ?? {})} data={s.data} />
-        </SectionBoundary>
-      );
-    })
+  shown.map((s, i) => {
+    if (!isRenderedSectionType(s.type)) return null;
+    const Comp = COMPONENTS[s.type];
+    return (
+      <SectionBoundary
+        type={s.type}
+        {...(preview ? { previewId: s.id ?? `default-${String(i)}` } : {})}
+      >
+        <Comp locale={locale} {...(s.props ?? {})} data={dataOf(s)} />
+      </SectionBoundary>
+    );
+  })
 }

@@ -19,3 +19,15 @@ export function docHasWords(doc: unknown): boolean {
   }
   return false;
 }
+
+/**
+ * Whether a rich-text field's value is an Arabic gap ("Arabic missing"): its two languages go
+ * together (`bothLanguages`, a Text block's body) and the English has words the Arabic lacks.
+ * FormField's rich-text field reports it (useArabicGap); tests/admin/section-blocks.e2e.ts
+ * holds the wiring, tests/lib/sectionBlocks.spec.ts the rule.
+ */
+export function richTextArabicGap(bothLanguages: boolean, value: unknown): boolean {
+  if (!bothLanguages || typeof value !== 'object' || value === null) return false;
+  const pair = value as { en?: unknown; ar?: unknown };
+  return docHasWords(pair.en) && !docHasWords(pair.ar);
+}

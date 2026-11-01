@@ -58,13 +58,16 @@ export type LocalizedDoc = z.infer<typeof LocalizedDocSchema>;
 // ── A section's rich text (Admin v2 E10, the Text block) ──────────────────────────
 //
 // CLAUDE.md §3: "Tiptap sanitised on write AND render". The render half is the allowlist
-// renderer (src/lib/content/tiptap.ts), which every public render runs on the stored JSON.
-// This is the write half for section content: a STRICT document, exactly what the admin's
-// editor makes (RichText.tsx: StarterKit, headings 2 to 4) and the renderer emits, so a
-// document the renderer would silently alter (an image, a node or mark it drops, a link it
-// unwraps, a heading it clamps) is refused with a 422 instead of being stored. Attributes the
-// renderer never reads (a link's target or rel, a list's start) are left alone; the ones it
-// does read are held to what it keeps.
+// renderer (src/lib/content/tiptap.ts `renderSectionDocToHtml`), which every public render runs
+// on the stored JSON after this same walk. This is the write half for section content: a
+// STRICT document, exactly what the admin's editor makes (RichText.tsx: Tiptap 3's StarterKit,
+// headings 2 to 4) and the renderer emits, so a document the renderer would silently alter (an
+// image, a node or mark it drops, a link it unwraps, a heading it clamps, a list item outside a
+// list) is refused with a 422 instead of being stored. Attributes are held to the editor's own,
+// by node and mark type and by name, with scalar values only, so nothing rides in a body that
+// the renderer never reads (a `mediaId` there would make that asset anon-readable, 0102).
+// tests/lib/sectionBlocks.spec.ts checks the content model and the attributes against the
+// editor's own ProseMirror schema.
 
 /** Node types a section body may hold: what StarterKit makes and the renderer emits. */
 export const SECTION_DOC_NODES = [
@@ -88,9 +91,14 @@ export const SECTION_DOC_HEADING_LEVELS = [2, 3, 4] as const;
 
 /**
  * How deep a body may nest (a list in a quote in a list item is four) and how many nodes it may
- * hold (a paragraph and its text are two; 300 is some fifty formatted paragraphs). The count is
- * also a CPU bound: the allowlist renderer parses the document with zod on every render, about
- * 0.03 to 0.06 ms a node measured, against the Workers Free plan's 10 ms a request.
+ * hold (a paragraph and its text are two; 300 is some fifty formatted paragraphs). The walk below
+ * and the section renderer (renderSectionDocToHtml) visit each node once, so both are linear in
+ * it. At the cap, measured in Node 24 on 2026-10-31: the walk about 0.2 ms and the walk with the
+ * render about 0.3 ms warm, 2 to 2.6 ms the first time a process runs them. zod's recursive
+ * TiptapDocSchema, which renderTiptapToHtml parses with, costs about 6 ms warm and 13 ms cold on
+ * the same body, so the Text block does not use it. The Workers Free plan allows 10 ms of CPU a
+ * request: about thirty bodies at the cap, warm. tests/lib/sectionBlocks.spec.ts bounds the
+ * render and holds both walks linear.
  */
 export const SECTION_DOC_MAX_DEPTH = 8;
 export const SECTION_DOC_MAX_NODES = 300;
@@ -101,8 +109,8 @@ const LINK_SCHEMES: readonly string[] = ['http:', 'https:', 'mailto:', 'tel:'];
 /**
  * Whether the renderer keeps this href (src/lib/content/tiptap.ts `sanitizeHref`): an http,
  * https, mailto or tel URL, or a reference that stays on this site. Restated here because the
- * schema module may not import the app; tests/lib/sectionDoc.spec.ts holds the two equal over
- * a table of hostile and ordinary hrefs.
+ * schema module may not import the app; tests/lib/sectionBlocks.spec.ts holds the two equal
+ * over a table of hostile and ordinary hrefs.
  */
 export function sectionHrefKept(raw: unknown): boolean {
   if (typeof raw !== 'string') return false;
@@ -123,96 +131,221 @@ const MARKS: readonly string[] = SECTION_DOC_MARKS;
 const LEVELS: readonly unknown[] = SECTION_DOC_HEADING_LEVELS;
 const CODE_LANGUAGE = /^[a-z0-9+#-]{1,20}$/i;
 
+/** The blocks: what a document, a quote and a list item hold (StarterKit's `block` group). */
+const BLOCKS: readonly string[] = [
+  'paragraph',
+  'heading',
+  'bulletList',
+  'orderedList',
+  'blockquote',
+  'codeBlock',
+  'horizontalRule',
+];
+
 /**
- * Nodes with no children (the renderer writes `<br />` and `<hr />` and reads nothing inside).
- * A line break is the one that may carry marks: inside formatted words it takes theirs (Bold
- * over two lines, a pasted `<b>a<br>b</b>`), and its `<br />` is the same either way.
+ * What each node may hold: StarterKit's content model (doc and blockquote `block+`, listItem
+ * `paragraph block*`, the lists `listItem+`, paragraph and heading `inline*`, codeBlock `text*`).
+ * A type with no entry holds nothing: text, a line break, a rule.
  */
-const LEAVES: readonly string[] = ['hardBreak', 'horizontalRule'];
-const MARKED_LEAVES: readonly string[] = ['hardBreak'];
+const HOLDS: Readonly<Record<string, readonly string[]>> = {
+  doc: BLOCKS,
+  blockquote: BLOCKS,
+  listItem: BLOCKS,
+  bulletList: ['listItem'],
+  orderedList: ['listItem'],
+  paragraph: ['text', 'hardBreak'],
+  heading: ['text', 'hardBreak'],
+  codeBlock: ['text'],
+};
+
+/** The ones that hold at least one node (StarterKit's `+`; a list item's first paragraph). */
+const NEVER_EMPTY: readonly string[] = ['blockquote', 'listItem', 'bulletList', 'orderedList'];
+
+/**
+ * Nodes that may carry marks: text, and a line break. ProseMirror's addMark marks every inline
+ * node in a range, so Bold over two lines (or a pasted `<b>a<br>b</b>`) marks the line break
+ * too; its `<br />` is the same either way.
+ */
+const MARKED: readonly string[] = ['text', 'hardBreak'];
+
+/**
+ * A value the editor writes into a passive attribute (one the renderer never reads): Tiptap
+ * reads a pasted attribute as text, or as a number or true/false when it looks like one.
+ */
+const scalar = (v: unknown): boolean =>
+  v === null ||
+  typeof v === 'boolean' ||
+  (typeof v === 'number' && Number.isFinite(v)) ||
+  (typeof v === 'string' && v.length <= 2048);
+
+/**
+ * Every attribute a node or a mark may carry, by name, with what its value may be: the
+ * editor's own (tiptap 3.31: heading `level`, orderedList `start` and `type`, codeBlock
+ * `language`, link `href`, `target`, `rel`, `class` and `title`). A type with no entry carries
+ * none (an empty object, as ProseMirror may write, is none).
+ */
+const ATTRS: Readonly<Record<string, Readonly<Record<string, (v: unknown) => boolean>>>> = {
+  heading: { level: (v) => LEVELS.includes(v) },
+  // A pasted `start` that is not a number is stored as null (NaN in JSON).
+  orderedList: {
+    start: (v) => v === null || Number.isSafeInteger(v),
+    type: (v) => v === null || (typeof v === 'string' && v.length <= 20),
+  },
+  codeBlock: { language: (v) => v === null || (typeof v === 'string' && CODE_LANGUAGE.test(v)) },
+  link: { href: sectionHrefKept, target: scalar, rel: scalar, class: scalar, title: scalar },
+};
+
+/** The attributes the renderer reads, so a node or mark without them is refused. */
+const REQUIRED: Readonly<Record<string, string>> = { heading: 'level', link: 'href' };
 
 const NODE_KEYS: readonly string[] = ['type', 'text', 'attrs', 'marks', 'content'];
 const MARK_KEYS: readonly string[] = ['type', 'attrs'];
+
+// What an editor is told (P-12: plain words, never the editor's internal names).
+const UNREADABLE = 'This text could not be read. Write it again in the editor.';
+const TOO_LONG = 'This text is too long for one block. Split it into two Text blocks.';
+const TOO_DEEP = 'This text has too many levels inside each other. Use fewer lists inside lists.';
+const SETTINGS = 'This text carries settings the editor does not make.';
+const NO_WORDS = 'Write some text.';
+const LEVEL = 'A heading inside the text is level 2, 3 or 4.';
+const LANGUAGE = 'A code block’s language is a short name, such as css or ts.';
+const LINK =
+  'A link goes to a web address (https://…), a page of this site, an email (mailto:) or a phone (tel:).';
+const TWICE = 'The same formatting is set twice on the same words.';
+const PLAIN_CODE = 'A code block holds plain text only.';
+const LEAF: Readonly<Record<string, string>> = {
+  hardBreak: 'A line break holds nothing inside it.',
+  horizontalRule: 'A dividing line holds nothing inside it.',
+};
+const EMPTY: Readonly<Record<string, string>> = {
+  blockquote: 'A quote holds at least one paragraph.',
+  listItem: 'A list item holds at least one paragraph.',
+  bulletList: 'A list holds at least one item.',
+  orderedList: 'A list holds at least one item.',
+};
+
+/**
+ * A type or a mark's type as it may be quoted back. Never `String()` of a non-string: a nested
+ * array's `String()` recurses through Array.prototype.join, and a deep one overflows the stack.
+ */
+const labelOf = (v: unknown): string => (typeof v === 'string' ? v.slice(0, 40) : typeof v);
+
+/** Why a node of `type` may not sit in `parent` (both known types), in an editor's words. */
+function misplaced(parent: string, type: string): string {
+  if (type === 'listItem') return 'A list item sits inside a list.';
+  if (parent === 'bulletList' || parent === 'orderedList') return 'A list holds list items only.';
+  if (parent === 'codeBlock') return PLAIN_CODE;
+  if (parent === 'paragraph' || parent === 'heading') {
+    return 'A paragraph or a heading holds words and line breaks only.';
+  }
+  return 'Words sit inside a paragraph, a heading or a list.';
+}
 
 type Raw = Record<string, unknown>;
 const isObject = (v: unknown): v is Raw => typeof v === 'object' && v !== null && !Array.isArray(v);
 const onlyKeys = (v: Raw, keys: readonly string[]): boolean =>
   Object.keys(v).every((k) => keys.includes(k));
 
+/** The words for a missing or wrong attribute the renderer reads. */
+const READ_ATTR: Readonly<Record<string, string>> = {
+  level: LEVEL,
+  language: LANGUAGE,
+  href: LINK,
+};
+
+/** Why a node's or a mark's `attrs` is not the editor's, or null. */
+function attrsProblem(type: string, attrs: unknown): string | null {
+  const required = REQUIRED[type];
+  if (attrs === undefined) return required === undefined ? null : (READ_ATTR[required] ?? SETTINGS);
+  if (!isObject(attrs)) return UNREADABLE;
+  const allowed = ATTRS[type] ?? {};
+  for (const [name, value] of Object.entries(attrs)) {
+    const rule = allowed[name];
+    if (rule === undefined) return SETTINGS;
+    if (!rule(value)) return READ_ATTR[name] ?? SETTINGS;
+  }
+  if (required !== undefined && !(required in attrs)) return READ_ATTR[required] ?? SETTINGS;
+  return null;
+}
+
+/** Why a node's `marks` are not the editor's, or null. `parent` is the node's container. */
+function marksProblem(type: string, parent: string, marks: unknown): string | null {
+  if (!MARKED.includes(type) || !Array.isArray(marks)) return UNREADABLE;
+  // A code block's text carries no formatting (StarterKit's codeBlock takes no marks).
+  if (parent === 'codeBlock') return PLAIN_CODE;
+  // At most one of each: counted before the list is read, so a long list costs nothing.
+  if (marks.length > MARKS.length) return TWICE;
+  const seen: string[] = [];
+  for (const mark of marks as unknown[]) {
+    if (!isObject(mark) || !onlyKeys(mark, MARK_KEYS)) return UNREADABLE;
+    const markType = mark['type'];
+    if (typeof markType !== 'string' || !MARKS.includes(markType)) {
+      return `A Text block cannot show this formatting ("${labelOf(markType)}").`;
+    }
+    if (seen.includes(markType)) return TWICE;
+    seen.push(markType);
+    const problem = attrsProblem(markType, mark['attrs']);
+    if (problem) return problem;
+  }
+  return null;
+}
+
 /**
  * The first reason a value is not a section body, or null. Iterative and bounded (at most
  * SECTION_DOC_MAX_NODES nodes, SECTION_DOC_MAX_DEPTH deep), and it reads the raw JSON itself:
  * zod's recursive TiptapNodeSchema is never run on a section body, because inside the 64 KB
  * payload a document can nest about 1,900 deep, where that recursion overflows the stack
- * (a RangeError, not an issue), and even 500 deep costs it tens of milliseconds. Anything this
- * walk accepts is a TiptapDoc that TiptapDocSchema also accepts unchanged
- * (tests/lib/sectionBlocks.spec.ts), so the renderer's own parse of it is shallow and short.
+ * (a RangeError, not an issue), and even 500 deep costs it tens of milliseconds. Nothing here
+ * recurses or stringifies a value it was given (labelOf). Anything this walk accepts is a
+ * TiptapDoc that TiptapDocSchema also accepts unchanged (tests/lib/sectionBlocks.spec.ts).
  */
 export function sectionDocProblem(raw: unknown): string | null {
   if (!isObject(raw) || raw['type'] !== 'doc' || !onlyKeys(raw, ['type', 'content'])) {
-    return 'not a document';
+    return UNREADABLE;
   }
   const top = raw['content'];
-  if (top !== undefined && !Array.isArray(top)) return 'not a document';
-  const stack: { node: unknown; depth: number }[] = ((top ?? []) as unknown[]).map((node) => ({
-    node,
-    depth: 1,
-  }));
+  if (top !== undefined && !Array.isArray(top)) return UNREADABLE;
+  const stack: { node: unknown; depth: number; parent: string }[] = (
+    (top ?? []) as unknown[]
+  ).map((node) => ({ node, depth: 1, parent: 'doc' }));
   let seen = 0;
   let words = false;
   while (stack.length > 0) {
-    const { node, depth } = stack.pop()!;
+    const { node, depth, parent } = stack.pop()!;
     seen += 1;
-    if (seen > SECTION_DOC_MAX_NODES) return `at most ${SECTION_DOC_MAX_NODES} parts of text`;
-    if (depth > SECTION_DOC_MAX_DEPTH) return `nested at most ${SECTION_DOC_MAX_DEPTH} deep`;
-    if (!isObject(node) || !onlyKeys(node, NODE_KEYS)) return 'malformed text';
+    if (seen > SECTION_DOC_MAX_NODES) return TOO_LONG;
+    if (depth > SECTION_DOC_MAX_DEPTH) return TOO_DEEP;
+    if (!isObject(node) || !onlyKeys(node, NODE_KEYS)) return UNREADABLE;
     const { type, text, attrs, marks, content } = node;
     if (typeof type !== 'string' || !NODES.includes(type)) {
-      return `a "${String(type).slice(0, 40)}" cannot be part of this text`;
+      return type === 'image'
+        ? 'Pictures go in a Gallery section, not in a Text block.'
+        : `A Text block cannot show this part of the text ("${labelOf(type)}").`;
     }
-    if (attrs !== undefined && !isObject(attrs)) return 'malformed text';
-    if (content !== undefined && !Array.isArray(content)) return 'malformed text';
+    if (!(HOLDS[parent] ?? []).includes(type)) return misplaced(parent, type);
+    const attrsIssue = attrsProblem(type, attrs);
+    if (attrsIssue) return attrsIssue;
+    if (content !== undefined && !Array.isArray(content)) return UNREADABLE;
     if (type === 'text') {
-      if (typeof text !== 'string' || content !== undefined) return 'malformed text';
+      if (typeof text !== 'string' || content !== undefined) return UNREADABLE;
       if (text.trim() !== '') words = true;
-    } else if (text !== undefined || (marks !== undefined && !MARKED_LEAVES.includes(type))) {
-      return `a "${type}" holds no text or marks of its own`;
-    }
-    if (content !== undefined && LEAVES.includes(type)) {
-      return `a "${type}" holds nothing inside it`;
-    }
-    if (type === 'heading' && !LEVELS.includes(attrs?.['level'])) {
-      return 'a heading is level 2, 3 or 4';
-    }
-    if (type === 'codeBlock') {
-      const lang = attrs?.['language'];
-      if (
-        lang !== undefined &&
-        lang !== null &&
-        !(typeof lang === 'string' && CODE_LANGUAGE.test(lang))
-      ) {
-        return 'a code block’s language is a short name';
-      }
+    } else if (text !== undefined) {
+      return UNREADABLE;
     }
     if (marks !== undefined) {
-      if (!Array.isArray(marks)) return 'malformed text';
-      for (const mark of marks as unknown[]) {
-        if (!isObject(mark) || !onlyKeys(mark, MARK_KEYS)) return 'malformed text';
-        const markAttrs = mark['attrs'];
-        if (markAttrs !== undefined && !isObject(markAttrs)) return 'malformed text';
-        if (typeof mark['type'] !== 'string' || !MARKS.includes(mark['type'])) {
-          return `"${String(mark['type']).slice(0, 40)}" is not a formatting this text takes`;
-        }
-        if (mark['type'] === 'link' && !sectionHrefKept(markAttrs?.['href'])) {
-          return 'a link goes to a web address (https://…), a page of this site, an email (mailto:) or a phone (tel:)';
-        }
-      }
+      const marksIssue = marksProblem(type, parent, marks);
+      if (marksIssue) return marksIssue;
     }
-    for (const child of (content ?? []) as unknown[]) {
-      stack.push({ node: child, depth: depth + 1 });
+    const holds = HOLDS[type];
+    if (holds === undefined) {
+      if (content !== undefined) return LEAF[type] ?? UNREADABLE;
+      continue;
     }
+    const children = (content ?? []) as unknown[];
+    if (children.length === 0 && NEVER_EMPTY.includes(type)) return EMPTY[type] ?? UNREADABLE;
+    for (const child of children) stack.push({ node: child, depth: depth + 1, parent: type });
   }
-  return words ? null : 'write some text';
+  return words ? null : NO_WORDS;
 }
 
 /**

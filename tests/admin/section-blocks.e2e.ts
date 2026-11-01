@@ -3,7 +3,13 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
-import { describeVideoBytes, settle, testMountsOnIntersection } from '../e2e/videoBytes';
+import {
+  collectVideo,
+  describeVideoBytes,
+  scrollThrough,
+  settle,
+  testMountsOnIntersection,
+} from '../e2e/videoBytes';
 import { expectCleanAtWidths } from './collectionLayout';
 import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
@@ -24,11 +30,14 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *   the control   the Video's own pause control shows once wired and stops the film: no play()
  *                 call reaches it back in view until it is pressed again; under reduced motion
  *                 the still stays and the control stays hidden;
+ *   touch         on a phone (hasTouch, isMobile), /about and /ar/about: no film fetched after a
+ *                 full scroll, no <video> in the block, no .can-clip, the control hidden;
  *   axe           the blocks at 320, 390 and 1280 px in English and Arabic: zero WCAG 2.2 A/AA
  *                 violations and no sideways scroll;
  *   the editor    as Admin: Add section offers all three on About; each block's panel shows its
  *                 fields (the rich text editor with the body, the gallery's three pictures, the
- *                 still and the film); a heading saved; clean at every width.
+ *                 still and the film); a heading saved; clean at every width; the Text block's
+ *                 Arabic body emptied counts in "Arabic missing", and Next gap goes to it.
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
@@ -255,6 +264,33 @@ test.describe('the public page', () => {
     await ctx.close();
   });
 
+  // The case study's final film and Our Work's clips have their touch runs; this is the Video
+  // block's (E10 review, C5). A phone never plays it: clips.ts wires nothing without a hovering
+  // pointer, so the still stays, the frame never gets .can-clip and the control stays hidden.
+  for (const path of ['/about', '/ar/about']) {
+    test(`${path}, touch: the Video fetches no film and shows no control`, async ({ browser }) => {
+      const ctx = await browser.newContext({
+        hasTouch: true,
+        isMobile: true,
+        viewport: { width: 412, height: 860 },
+      });
+      const page = await ctx.newPage();
+      const films = collectVideo(page);
+      await page.goto(path, { waitUntil: 'load' });
+      await settle(page);
+      await scrollThrough(page);
+      const frame = page.locator('.blk-video__frame');
+      await frame.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(800);
+      await expect(frame.locator('img')).toBeVisible();
+      await expect(page.locator('.blk-video video')).toHaveCount(0);
+      await expect(frame).not.toHaveClass(/(?:^|\s)can-clip(?:\s|$)/);
+      await expect(page.locator('.blk-video__box button[data-clip-toggle]')).toBeHidden();
+      expect(films, 'video requested on a touch device').toEqual([]);
+      await ctx.close();
+    });
+  }
+
   for (const path of ['/about', '/ar/about']) {
     test(`${path}: the blocks pass axe at 320, 390 and 1280 px, no sideways scroll`, async ({
       browser,
@@ -374,5 +410,39 @@ test.describe('the page editor, as admin', () => {
       page.locator('#f-content-mediaId').getByRole('button', { name: 'Change…' }),
     ).toBeVisible();
     await expectCleanAtWidths(page, 'the Video panel');
+  });
+
+  // E10 review, C2: a body whose two languages go together (`bothLanguages`) counts an English
+  // with no Arabic in the screen's "Arabic missing", as a bilingual field does.
+  test('the Text block’s Arabic body emptied is a gap, and Next gap goes to it', async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await openSection(page, 'Text block');
+    const bar = page.getByRole('group', { name: 'This page' });
+    await bar
+      .getByRole('group', { name: 'Editing language' })
+      .getByRole('radio', { name: 'Both' })
+      .check();
+    const arabic = page.locator('#f-content-body-ar');
+    // The lazy rich-text chunk arrives with the stored Arabic words: no gap yet.
+    await expect(arabic).toContainText('فقرة عربية', { timeout: 15_000 });
+    await expect(bar.getByRole('status')).toHaveText('');
+    await arabic.click();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.press('Delete');
+    await expect(arabic).not.toContainText('فقرة عربية');
+    await expect(bar.getByRole('status')).toHaveText('Arabic missing: 1');
+    // From elsewhere on the form, Next gap takes focus to the emptied Arabic body.
+    await page.locator('#f-content-heading-en').focus();
+    await bar.getByRole('button', { name: 'Next gap' }).click();
+    await expect(arabic).toBeFocused();
+    // Left unsaved: the stored body is untouched.
+    const { data } = await service()
+      .from('page_sections')
+      .select('content')
+      .eq('id', ids.textBlock)
+      .single();
+    expect((data as { content: { body: unknown } }).content.body).toEqual(TEXT_BLOCK.body);
   });
 });

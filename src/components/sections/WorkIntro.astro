@@ -3,7 +3,7 @@ import type { Locale } from '@schemas/primitives';
 import type { LocalizedText } from '@schemas/content';
 import type { WorkIntroSectionContent } from '@schemas/sections';
 import { localizedHref, pickLocale } from '@/lib/i18n';
-import { getSectionImages } from '@/lib/data/sectionMedia';
+import type { ImageRef } from '@/lib/media/resolve';
 import MediaFrame from '@/components/media/MediaFrame.astro';
 import { WORK_INTRO_COPY } from '@/lib/sections/copy/workIntro';
 
@@ -26,17 +26,19 @@ interface Props {
   text?: LocalizedText;
   linkLabel?: LocalizedText;
   media?: WorkIntroSectionContent['media'];
-  /** Route-injected link target (SectionRenderer `data`) — never CMS content. */
-  data?: { linkHref?: string | null };
+  /**
+   * Route-injected link target (SectionRenderer `data`) — never CMS content — and the page's
+   * section media, resolved by SectionRenderer in one read (`images`).
+   */
+  data?: { linkHref?: string | null; images?: ReadonlyMap<string, ImageRef> };
 }
 
 const { locale, text, linkLabel, media = [], data } = Astro.props;
 const target = data?.linkHref === undefined ? '#projects' : data.linkHref;
 const linkHref = target === null ? null : localizedHref(target, locale);
 
-const images = await getSectionImages(media.map((m) => m.mediaId));
 const frames = media.flatMap((m) => {
-  const image = images.get(m.mediaId);
+  const image = data?.images?.get(m.mediaId);
   return image ? [{ image, clip: m.clip ?? null }] : [];
 });
 const [a, b] = frames;

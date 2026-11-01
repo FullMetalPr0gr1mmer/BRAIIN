@@ -72,4 +72,48 @@ describe('getPageComposition', () => {
     expect(c?.sections.map((s) => s.type)).toEqual(['cta']);
     expect((await getPageSections('home'))?.length).toBe(1);
   });
+
+  // E10-S1: a Text block row written around the API (a staff token straight to PostgREST)
+  // with a node's or a mark's `type` nested 3,500 deep. The section walk once stringified it
+  // and threw a RangeError, which emptied the whole composition (null: the route rendered its
+  // default and lost the page's SEO override). The row degrades to an empty section instead.
+  it('a Text block whose type is nested 3,500 deep degrades to an empty section', async () => {
+    const deep = (n: number) => JSON.parse('['.repeat(n) + ']'.repeat(n)) as unknown;
+    const words = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x' }] }],
+    };
+    const typeBomb = { type: 'doc', content: [{ type: deep(3500), content: [] }] };
+    const markBomb = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'x', marks: [{ type: deep(3500) }] }],
+        },
+      ],
+    };
+    sectionRows = [
+      {
+        type: 'textBlock',
+        content: { body: { en: typeBomb, ar: words } },
+        visible: true,
+        sort_order: 1,
+      },
+      {
+        type: 'textBlock',
+        content: { body: { en: words, ar: markBomb } },
+        visible: true,
+        sort_order: 2,
+      },
+      { type: 'cta', content: {}, visible: true, sort_order: 3 },
+    ];
+    const c = await getPageComposition('home');
+    expect(c?.page.id).toBe(PAGE.id);
+    expect(c?.sections.map((s) => [s.type, s.props])).toEqual([
+      ['textBlock', {}],
+      ['textBlock', {}],
+      ['cta', {}],
+    ]);
+  });
 });

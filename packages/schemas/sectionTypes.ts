@@ -58,3 +58,18 @@ export type SectionType = (typeof SECTION_TYPES)[number];
  * name. Set by the page editor's Rename dialog; no public page renders it.
  */
 export const SECTION_LABEL_MAX = 60;
+
+/**
+ * The section types that are media blocks (Admin v2 E10): a Gallery holds up to twelve pictures,
+ * a Video a still and a film. A page holds at most MEDIA_BLOCKS_PER_PAGE of them together,
+ * hidden ones included (sectionResource.assertWritable, judged on the merged or staged view;
+ * Add section says so first). The page's section media are read in ONE request whatever the
+ * count (SectionRenderer), so the cap bounds that request's ids and the page's pictures, not
+ * its subrequests.
+ */
+export const MEDIA_BLOCK_TYPES = ['gallery', 'video'] as const satisfies readonly SectionType[];
+export const MEDIA_BLOCKS_PER_PAGE = 8;
+
+/** Why a page takes no more of them, in an editor's words (the API's 422 and Add section's). */
+export const MEDIA_BLOCKS_FULL =
+  'A page holds 8 galleries and videos at most, together. Remove one before adding another.';

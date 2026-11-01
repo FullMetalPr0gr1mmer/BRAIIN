@@ -14,7 +14,7 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-006 | 2026-08-22 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open (re-scoped 2026-09-25) | `extract-zip` GHSA-jmr9-qjv8-65gv **+ GHSA-7pqw-9j4j-h8q3** allowlisted in the dev audit gate — every published version is affected |
 | EXC-007 | 2026-08-24 | Kareem (kareem@floppytech.ai)  | 2026-11-24 | Open (re-signed 2026-09-29; control built and removed) | Hero pause control **removed** — autoplaying hero/slogan video + clients marquee (and, from the UI v2 port, every banner/in-view video loop; from Round 2, the discipline card clips, the `/services` explorer clip and the service hero loops) had no pause mechanism for non-reduced-motion users (**WCAG 2.2.2, Level A**). A header control was built (Round 3, R3-7) and removed the same day at the owner's decision for mockup parity; the `body.motion-paused` wiring stays |
 | EXC-008 | 2026-09-30 | Kareem (kareem@floppytech.ai)  | 2026-12-31 | Open | Join CVs (PDF / .docx, ≤ 10 MB) are stored and downloaded **without a virus scan** — no AV service on the free tier. Compensated by a structural check at upload, a private bucket, attachment-only download under a sandbox CSP, and a "Not virus-scanned" badge |
-| EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open (re-signed 2026-09-29) | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops |
+| EXC-009 | 2026-09-25 | Kareem (kareem@floppytech.ai)  | 2026-12-24 | Open (re-signed 2026-09-29) | Background video served as a **self-hosted MP4** (`/media/showreel.mp4`, 12.2 MB, `preload="auto"` at mount), not Cloudflare Stream — Stream is unprovisioned (KAN-20). Round 2 adds the discipline card clips, the explorer clip and the service hero loops; Admin v2 E10 (2026-10-31) the editor-added Video block |
 | EXC-010 | 2026-10-01 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `basic-ftp` GHSA-c475-qrg2-pj4r allowlisted in the dev audit gate — every 5.x is affected and no dependent in the Lighthouse CI chain takes the 6.x fix |
 | EXC-011 | 2026-10-03 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `http-cache-semantics` GHSA-ch52-4w7c-c8xp allowlisted in the prod audit gate — every release is affected (no fix exists); its only importer is Astro's build-time remote-image cache, which this site never uses, and it is absent from the Worker |
 | EXC-012 | 2026-10-14 | Developer (tech@purecoffee.sa) | 2027-01-31 | Open (accepted platform exception; amended 2026-10-14) | pg_net's queue and response tables (`net.http_request_queue`, `net._http_response`) grant **ALL to PUBLIC** on Supabase (SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER and, on PostgreSQL 17, MAINTAIN), and `postgres` cannot revoke them. TRIGGER lets any login role that has a function to call attach code that runs as whoever writes the table. Since 0048 a queued lead notification holds only a timestamp and a signature for one lead (never the secret), nothing is queued while any trigger is on the queue, and `net` must stay out of the exposed API schemas |
@@ -682,6 +682,30 @@ downloads **no video bytes at all** — the background loops defer their mount a
 clips never create their `<video>` while `body.motion-paused` is set, and
 `tests/e2e/media-bytes.e2e.ts` ("paused visitor: no clip/banner bytes after a full
 scroll") asserts it on every route it covers.
+
+### Widened 2026-10-31: Admin v2 E10's Video block, a surface an editor adds
+
+E10 adds the **Video** section block: a still from the media library that plays a window of a
+site film while it is on screen (`clip.path`, a `/media/*.mp4` path only; a Stream UID is
+refused by `VideoSectionContentSchema` until KAN-20), through `MediaFrame` in view and
+`clips.ts`, the same machinery as the in-view clips above. Unlike every surface above, it is
+not placed by code: an editor adds it from the page editor's Add section, on any routed page,
+up to eight Galleries and Videos a page together (`MEDIA_BLOCKS_PER_PAGE`, refused past that by
+`sectionResource.assertWritable` and not offered by Add section). Its fence is the Worker's,
+not a CHECK: `page_sections.content` is free JSON, held to `VideoClipSchema`'s path pattern by
+`SectionWriteSchema` on write and again by the public loader on read (`toSection`), so a row
+written around the API with another path renders the still alone.
+
+Every compensating control above holds for it unchanged: the served HTML carries the still
+only; zero video bytes before intersection, and none under reduced motion, with Save-Data or
+on touch (`tests/admin/section-blocks.e2e.ts` runs `tests/e2e/videoBytes.ts`'s battery on
+`/about` and `/ar/about` with the block on them, the mount-on-intersection check on its frame,
+and a touch run on both); every Video is a window of the same file, so a visitor still
+downloads ranges of one asset; the mp4 goes through the Worker with byte ranges. It also has
+its own pause control (EXC-007, 2026-10-29). Closing this entry covers it too: a Stream UID
+allowed in the block's clip and used by every Video, then the path branch dropped from its
+schema. The scope widens by one editor surface; the owner, the expiry and the close
+conditions are unchanged.
 
 ---
 

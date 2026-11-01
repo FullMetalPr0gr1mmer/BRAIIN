@@ -1,7 +1,8 @@
-import { describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test } from 'vitest';
 import type { Locale } from '@schemas/primitives';
+import { MEDIA_BLOCKS_PER_PAGE } from '@schemas/sectionTypes';
 import type { SectionData } from '@/lib/sections/types';
-import { POSTER } from './fixtures';
+import { POSTER, SECTION_MEDIA_READS } from './fixtures';
 import { LOCALES, renderSections } from './harness';
 
 // Admin v2 E10's blocks as a visitor's browser receives them, in both languages: what the
@@ -10,10 +11,12 @@ import { LOCALES, renderSections } from './harness';
 //
 //   Text block  the body is the allowlist renderer's output and nothing else: no script, no
 //               style attribute, no image, no unsafe link, even for a document that reached
-//               the component without passing the write schema;
+//               the component without passing the write schema (the section walk refuses it
+//               whole); an empty heading or list item renders nothing;
 //   Gallery     a lazy, sized <img> per picture with the library's alt in the page's language;
 //   Video       no <video> in the HTML (clips.ts creates it in view): the still is lazy and
-//               sized, the frame an in-view clip surface of a /media file, never after-load.
+//               sized, the frame an in-view clip surface of a /media file, never after-load;
+//   one read    a page's section media are read once, whatever its blocks (SectionRenderer).
 
 const text = (en: string, ar: string) => ({ en, ar });
 const para = (t: string) => ({
@@ -55,7 +58,7 @@ describe('Text block', () => {
     });
   }
 
-  test('a hostile document that skipped the write schema still renders safe markup', async () => {
+  test('a hostile document that skipped the write schema renders no body at all', async () => {
     const hostile = {
       type: 'doc',
       content: [
@@ -81,16 +84,73 @@ describe('Text block', () => {
       ],
     };
     const html = await render(
-      [{ type: 'textBlock', props: { body: { en: hostile, ar: hostile } } }],
+      [
+        {
+          type: 'textBlock',
+          props: { heading: text('Kept', 'باقٍ'), body: { en: hostile, ar: hostile } },
+        },
+      ],
       'en',
     );
-    expect(html).not.toContain('<script');
-    expect(html).toContain('&lt;script&gt;');
-    expect(html).not.toMatch(/javascript:|evil\.example|data:image/);
+    // The section walk refuses it on render as on write: the heading stays, the body is gone.
+    expect(html).toContain('Kept');
+    expect(html).not.toContain('blk-prose');
+    expect(html).not.toMatch(/script|javascript:|evil\.example|data:image|click|away|Big/);
     expect(tags(html, 'img')).toHaveLength(0);
     expect(tags(html, 'iframe')).toHaveLength(0);
     expect(tags(html, 'h1')).toHaveLength(0);
     expect(html).not.toMatch(/\sstyle=/);
+  });
+
+  test('markup typed as words is escaped, never parsed', async () => {
+    const html = await render(
+      [
+        {
+          type: 'textBlock',
+          props: {
+            body: {
+              en: para('<script>alert(1)</script><img src=x onerror=y>'),
+              ar: para('<b>س</b>'),
+            },
+          },
+        },
+      ],
+      'en',
+    );
+    expect(html).not.toContain('<script');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=y&gt;');
+    expect(tags(html, 'img')).toHaveLength(0);
+  });
+
+  test('an empty heading or list item renders nothing (no <h3></h3>, no <li></li>)', async () => {
+    const words = (t: string) => [{ type: 'text', text: t }];
+    const body = {
+      type: 'doc',
+      content: [
+        // H3 pressed on an empty line, then left: what the editor stores.
+        { type: 'heading', attrs: { level: 3 } },
+        { type: 'heading', attrs: { level: 4 }, content: words('   ') },
+        { type: 'paragraph', content: words('Words') },
+        {
+          type: 'bulletList',
+          content: [
+            { type: 'listItem', content: [{ type: 'paragraph' }] },
+            { type: 'listItem', content: [{ type: 'paragraph', content: words('One') }] },
+          ],
+        },
+        // A list whose every item is empty leaves no empty list behind.
+        { type: 'orderedList', content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }] },
+        { type: 'blockquote', content: [{ type: 'paragraph' }] },
+        { type: 'codeBlock', attrs: { language: null } },
+      ],
+    };
+    const html = await render(
+      [{ type: 'textBlock', props: { body: { en: body, ar: body } } }],
+      'en',
+    );
+    expect(html).toContain('<p>Words</p><ul><li><p>One</p></li></ul>');
+    expect(html).not.toMatch(/<h[2-6]>\s*<\/h[2-6]>|<h3>|<h4>/);
+    expect(html).not.toMatch(/<li>\s*<\/li>|<ol>|<blockquote>|<pre>/);
   });
 
   test('with nothing written it renders nothing', async () => {
@@ -191,5 +251,59 @@ describe('Video', () => {
       'en',
     );
     expect(html).not.toContain('blk-video');
+  });
+});
+
+describe('a page reads its section media once', () => {
+  beforeEach(() => {
+    SECTION_MEDIA_READS.length = 0;
+  });
+
+  const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+  test('the most media blocks a page takes, a poster and two frames: one read', async () => {
+    const galleries = Array.from({ length: MEDIA_BLOCKS_PER_PAGE - 1 }, (_, g) => ({
+      type: 'gallery',
+      props: { items: Array.from({ length: 12 }, (_, i) => ({ mediaId: id(g * 12 + i) })) },
+    }));
+    const sections: SectionData[] = [
+      { type: 'aboutWho', props: { mediaId: POSTER.id } },
+      ...galleries,
+      { type: 'video', props: { mediaId: POSTER.id, clip: { path: '/media/showreel.mp4' } } },
+      { type: 'workIntro', props: { media: [{ mediaId: id(500) }, { mediaId: POSTER.id }] } },
+      // A hidden section is not rendered, so its pictures are not asked for.
+      { type: 'gallery', visible: false, props: { items: [{ mediaId: id(900) }] } },
+      { type: 'textBlock', props: { heading: text('Words', 'كلمات') } },
+    ];
+    const html = await render(sections, 'en');
+    expect(SECTION_MEDIA_READS).toHaveLength(1);
+    const asked = SECTION_MEDIA_READS[0]!;
+    // Every id once, in page order: the poster, the galleries' 84, the still (the poster
+    // again, asked once), then the intro's new frame.
+    expect(asked).toHaveLength(1 + 84 + 1);
+    expect(asked[0]).toBe(POSTER.id);
+    expect(asked.at(-1)).toBe(id(500));
+    expect(asked).not.toContain(id(900));
+    // Each section found its own pictures in the one answer.
+    expect(html).toContain('about-who__media');
+    expect(html).toContain('blk-video__frame');
+    expect(html).toContain('work-intro__');
+  });
+
+  test('a page whose sections name no media asks for no id', async () => {
+    await render(
+      [{ type: 'textBlock', props: { heading: text('Words', 'كلمات') } }, { type: 'gallery' }],
+      'en',
+    );
+    expect(SECTION_MEDIA_READS).toEqual([[]]);
+  });
+
+  test('a picture is never the content to supply: `images` is route data', async () => {
+    const forged = new Map([[id(7), POSTER]]);
+    const html = await render(
+      [{ type: 'gallery', props: { items: [{ mediaId: id(7) }], data: { images: forged } } }],
+      'en',
+    );
+    expect(tags(html, 'img')).toHaveLength(0);
   });
 });

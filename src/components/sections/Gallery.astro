@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { GallerySectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
-import { getSectionImages } from '@/lib/data/sectionMedia';
+import type { ImageRef } from '@/lib/media/resolve';
 import { galleryColumns } from '@/lib/sections/blocks';
 import MediaImage from '@/components/media/MediaImage.astro';
 import AccentText from '@/components/ui/AccentText.astro';
@@ -10,10 +10,11 @@ import AccentText from '@/components/ui/AccentText.astro';
 // A Gallery (Admin v2 E10, the prototype's "Borderless image grid"): up to twelve pictures
 // from the media library on paper, any number of galleries a page.
 //
-// The pictures are media library images referenced by `mediaId` and read through the gated
-// section media read (getSectionImages: 0024's anon policy, PUBLIC_MEDIA_COLUMNS, a locked
-// page's own unlocked read), so only a picture a visible section of a published page names
-// resolves; one that does not is left out, and with none the section renders nothing. Each is
+// The pictures are media library images referenced by `mediaId`, resolved by SectionRenderer's
+// one read of the page's section media (getSectionImages: 0024's and 0102's anon policy,
+// PUBLIC_MEDIA_COLUMNS, a locked page's own unlocked read) and handed here as route data
+// (`data.images`), so only a picture a visible section of a published page names resolves; one
+// that does not is left out, and with none the section renders nothing. Each is
 // a lazy <Picture> with the file's width and height, cropped to a cell of a fixed shape (CLS
 // 0), with the library's alt text in the page's language: the pictures are the content here.
 // The columns follow the count (galleryColumns, on the server), so two pictures are two
@@ -22,15 +23,16 @@ import AccentText from '@/components/ui/AccentText.astro';
 
 interface Props extends GallerySectionContent {
   locale: Locale;
+  /** Route data (SectionRenderer): the page's section media, resolved in one read. */
+  data?: { images?: ReadonlyMap<string, ImageRef> } | undefined;
 }
 
-const { locale, tag, heading, accent, items = [] } = Astro.props;
+const { locale, tag, heading, accent, items = [], data } = Astro.props;
 
 const tagText = tag ? pickLocale(tag, locale) : '';
 const headingText = heading ? pickLocale(heading, locale) : '';
-const images = await getSectionImages(items.map((item) => item.mediaId));
 const pictures = items.flatMap((item) => {
-  const image = images.get(item.mediaId);
+  const image = data?.images?.get(item.mediaId);
   return image ? [image] : [];
 });
 const columns = galleryColumns(pictures.length);

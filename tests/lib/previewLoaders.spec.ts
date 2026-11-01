@@ -206,11 +206,6 @@ const CASES: Record<string, () => Promise<void>> = {
     expect([...value.keys()]).toEqual([ID.mSection]);
     clean(report);
   },
-  'sectionMedia.getSectionImage': async () => {
-    const { value, report } = await inPreview(() => sectionMedia.getSectionImage(ID.mSection));
-    expect(value?.id).toBe(ID.mSection);
-    clean(report);
-  },
   'seo.getEntitySeo': async () => {
     const { value, report } = await inPreview(() => seo.getEntitySeo('service', ID.sPub));
     expect(value?.meta_title).toEqual(BI(`Title ${ID.esSvc.slice(-3)}`, 'عنوان'));

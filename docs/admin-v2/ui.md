@@ -735,7 +735,7 @@ Also in this column:
 **Deviations**
 - No generic background, spacing, reveal or mobile-visibility settings.
 - No editable anchors.
-- No Custom HTML, Gallery, Video or Text blocks.
+- No Custom HTML block. (Superseded for the others by E10, 2026-10-31: the Text block, the Gallery and the Video are built as typed section types; [as-built/E10.md](as-built/E10.md).)
 
 ### Template editors (AV-31)
 
@@ -2583,7 +2583,7 @@ Is that right?
 - Discard wipes the whole demo database → Discard reverts only pending changes, within the release backend's scope, after a danger confirm.
 - Error and warning toasts → toasts are success/info only; errors stay inline and persistent, warnings become inline notes or disabled-with-reason states (WCAG; repo toast policy).
 - Contenteditable rich fields storing <b>/<em>/<a> HTML and the 'Aa' highlight button → typed fields, AccentSchema word-range controls, and Tiptap (sanitised JSON) only where a body was already rich (Pillar 1).
-- Section library of 12 generic blocks including Custom HTML, Gallery, Video and Text block → only the typed section types allowed on each page. Custom HTML is never built; Text block arrives with the later Custom pages slice.
+- Section library of 12 generic blocks including Custom HTML, Gallery, Video and Text block → only the typed section types allowed on each page. Custom HTML is never built. (Superseded by E10, 2026-10-31: the Text block, the Gallery and the Video are built as typed section types any routed page may take, before the Custom pages slice; [as-built/E10.md](as-built/E10.md).)
 - Per-section settings (background, spacing, reveal, show on mobile, editable anchor) → not offered. Existing per-type layout variants are shown; anchors are code-owned and read-only (CSP removed style; visual-regression and contrast scope; content parity for mobile).
 - Page visibility 'Only people with the link' and 'Behind a password', plus hide-from/until dates → only Visible / Hidden (404 or to the homepage), immediate. Password pages cannot be edge-cached and would need hashing and rate limits.
 - '+ New page' → hidden until the later Custom pages slice (no dynamic public route or generic section type exists today).

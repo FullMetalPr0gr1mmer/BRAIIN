@@ -1,4 +1,10 @@
-import { SECTION_TYPES, type SectionType } from '@schemas/sectionTypes';
+import {
+  MEDIA_BLOCKS_FULL,
+  MEDIA_BLOCKS_PER_PAGE,
+  MEDIA_BLOCK_TYPES,
+  SECTION_TYPES,
+  type SectionType,
+} from '@schemas/sectionTypes';
 import { isVisibilityPageSlug, type VisibilityPageSlug } from '@/lib/visibility/routes';
 import type { IconName } from '@/lib/admin/icons';
 
@@ -242,7 +248,8 @@ export const SECTION_KINDS: Readonly<Record<SectionType, SectionKind>> = {
     pages: ['join'],
     group: 'form',
   },
-  // Admin v2 E10: blocks for any page, as many as it needs (no page, no `once`, no group).
+  // Admin v2 E10: blocks for any page (no page, no `once`, no group); Galleries and Videos up
+  // to MEDIA_BLOCKS_PER_PAGE together (availability below, and the API's own check).
   textBlock: {
     name: 'Text block',
     description: 'A small label, a heading and paragraphs, in both languages.',
@@ -277,6 +284,8 @@ function pagesInWords(pages: readonly VisibilityPageSlug[]): string {
   return names.length === 0 ? `the ${last} page` : `the ${names.join(', ')} and ${last} pages`;
 }
 
+const MEDIA_TYPES: readonly string[] = MEDIA_BLOCK_TYPES;
+
 export interface Availability {
   type: SectionType;
   /** The page may take one now. */
@@ -307,6 +316,12 @@ export function availability(slug: string, present: readonly string[]): Availabi
     }
     if (kind.once && has.has(type)) {
       return { type, ok: false, reason: 'This page has one already.' };
+    }
+    if (
+      MEDIA_TYPES.includes(type) &&
+      present.filter((t) => MEDIA_TYPES.includes(t)).length >= MEDIA_BLOCKS_PER_PAGE
+    ) {
+      return { type, ok: false, reason: MEDIA_BLOCKS_FULL };
     }
     if (kind.group) {
       const other = SECTION_TYPES.find((t) => SECTION_KINDS[t].group === kind.group && has.has(t));
@@ -444,7 +459,7 @@ export function routeNote(type: string, page: string, firstOfType: boolean): str
     return 'Each picture shows with its alt text from the Media library. With no picture, the section shows nothing.';
   }
   if (type === 'video') {
-    return 'Visitors see the still first. The film plays only while the still is on screen, never on phones, with reduced motion or Save-Data, and it never has sound. With no still, the section shows nothing.';
+    return 'Visitors see the still first. The film plays only while the still is on screen, never on phones or tablets, with reduced motion or Save-Data, and it never has sound. With no still, the section shows nothing.';
   }
   return null;
 }

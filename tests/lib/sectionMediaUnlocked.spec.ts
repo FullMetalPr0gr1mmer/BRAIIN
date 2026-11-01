@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MEDIA_BLOCKS_PER_PAGE } from '@schemas/sectionTypes';
+import { GALLERY_MAX_ITEMS } from '@schemas/sections';
 import { withPageAccess } from '@/lib/visibility/scope';
 
 // How a page behind a password gets its own images back (Admin v2 U14b).
@@ -54,7 +56,8 @@ vi.mock('@/lib/media/resolve', () => ({
   imageRef: (row: { id: string; storage_path: string }) => ({ src: row.storage_path }),
 }));
 
-const { getSectionImage, getSectionImages } = await import('@/lib/data/sectionMedia');
+const { SECTION_MEDIA_MAX_IDS, getSectionImages } = await import('@/lib/data/sectionMedia');
+const getSectionImage = async (id: string) => (await getSectionImages([id])).get(id) ?? null;
 
 beforeEach(() => {
   calls.length = 0;
@@ -80,16 +83,22 @@ describe("the images of a page behind a password's sections", () => {
     ]);
   });
 
-  it('asks only for well-formed ids, each once, and at most twelve', async () => {
+  it('asks only for well-formed ids, each once, and at most a page’s worth', async () => {
+    // A page's worth (Admin v2 E10 review): every section's media in one read, eight media
+    // blocks of twelve pictures, About's poster and Our Work's two frames at most.
+    expect(SECTION_MEDIA_MAX_IDS).toBeGreaterThanOrEqual(
+      MEDIA_BLOCKS_PER_PAGE * GALLERY_MAX_ITEMS + 3,
+    );
     const many = Array.from(
-      { length: 14 },
+      { length: SECTION_MEDIA_MAX_IDS + 2 },
       (_, i) => `6a1b2c3d-4e5f-4a6b-8c7d-${String(i).padStart(12, '0')}`,
     );
     await withPageAccess({ pageId: PAGE_ID, tenantId: TENANT }, () =>
       getSectionImages(['not-an-id', MEDIA_ID, MEDIA_ID, ...many]),
     );
+    expect(calls).toHaveLength(1);
     const args = calls[0]?.args as { p_ids: string[] };
-    expect(args.p_ids).toHaveLength(12);
+    expect(args.p_ids).toHaveLength(SECTION_MEDIA_MAX_IDS);
     expect(args.p_ids[0]).toBe(MEDIA_ID);
     expect(args.p_ids).not.toContain('not-an-id');
   });

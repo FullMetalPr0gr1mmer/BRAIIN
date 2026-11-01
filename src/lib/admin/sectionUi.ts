@@ -503,7 +503,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       label: 'Text',
       kind: 'richtext',
       bothLanguages: true,
-      help: 'Paragraphs, headings, lists and links, in English and Arabic. Pictures go in a Gallery section.',
+      help: 'Paragraphs, headings, lists and links, in English and Arabic. Pictures go in a Gallery section. About fifty paragraphs fit in one block; split a longer text into two.',
     },
   ],
   gallery: [
@@ -524,7 +524,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
         },
         { name: 'mediaId', label: 'Image', kind: 'media', required: true },
       ],
-      help: 'Each picture shows with its alt text from the Media library. The grid takes two or three a row.',
+      help: 'Each picture shows with its alt text from the Media library. One picture fills the width; more fill two or three columns, two on a phone.',
     },
   ],
   video: [
@@ -536,7 +536,7 @@ export const SECTION_UI: Partial<Record<SectionType, readonly FieldDef[]>> = {
       name: 'mediaId',
       label: 'Still',
       kind: 'media',
-      help: 'What visitors see first, and all they see with reduced motion. The section needs one.',
+      help: 'What visitors see first, and all they see on phones and tablets, with reduced motion or with Save-Data. The section needs one.',
     },
     {
       name: 'clip',
