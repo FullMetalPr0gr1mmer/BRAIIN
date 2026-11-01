@@ -159,3 +159,29 @@ describe('the colour maths agree with the migration’s own samples', () => {
     expect(fn('theme_palette_ok')).toContain('>= t.m - 1e-9');
   });
 });
+
+// app.role_edits_theme (theme.edit's helper, E4-SEC-3) is created again by a later slice (E5).
+// Its definition here is the canonical one, search_path pinned (E4 code review CR8): every
+// migration that creates it repeats these three lines byte for byte, so the last definition
+// never quietly drops the pin (tests/authz/sqlHelpers.spec.ts holds its role list).
+const ROLE_EDITS_THEME_SQL = [
+  'create or replace function app.role_edits_theme(r text) returns boolean',
+  '  language sql immutable',
+  "  set search_path = ''",
+  "as $$ select coalesce(r in ('admin', 'developer'), false) $$;  -- theme.edit",
+].join('\n');
+
+describe('app.role_edits_theme: one definition, search_path pinned (CR8)', () => {
+  it('every migration that creates it writes the canonical definition', () => {
+    const found = readdirSync(DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .flatMap((f) => {
+        const sql = readFileSync(`${DIR}/${f}`, 'utf8').replace(/\r\n/g, '\n');
+        return [...sql.matchAll(/create or replace function app\.role_edits_theme\(/g)].map(
+          (m) => ({ file: f, text: sql.slice(m.index, m.index + ROLE_EDITS_THEME_SQL.length) }),
+        );
+      });
+    expect(found.length).toBeGreaterThan(0);
+    for (const { file, text } of found) expect(text, file).toBe(ROLE_EDITS_THEME_SQL);
+  });
+});

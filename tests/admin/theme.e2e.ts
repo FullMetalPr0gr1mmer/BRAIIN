@@ -286,9 +286,11 @@ test.describe('as admin', () => {
     expect((await theme(page))?.['settings']).toEqual(BRAND);
     expect(await linksOn(page, '/')).toEqual([]);
     expect(await linksOn(page, '/ar/')).toEqual([]);
-    // A theme's address answers the (empty) current theme; a bare one is no address at all.
+    // A theme's address answers the (empty) current theme, never stored (CR2); a bare one is
+    // no address at all.
     const sheet = await page.request.get('/styles/theme.css?v=0000000000000000');
     expect(await sheet.text()).toBe('');
+    expect(sheet.headers()['cache-control']).toBe('no-store');
     const bare = await page.request.get('/styles/theme.css');
     expect(await bare.text()).toBe('');
     expect(bare.headers()['cache-control']).toBe('no-store');

@@ -7,9 +7,11 @@ import {
   ADMIN_PREVIEW_TOKENS,
   MARQUEE_OPTIONS,
   REVEAL_OPTIONS,
+  derivedSettings,
   failureLines,
   gateView,
   settingsOf,
+  typedMain,
   validColors,
   withMain,
 } from '@/components/admin/screens/theme/model';
@@ -85,6 +87,24 @@ describe('what the screen draws from the settings', () => {
     expect(typing.colors).toEqual({ ...SAVED.colors, primary: '#0B' });
   });
 
+  it('Simple, as typed: the main colour goes in alone; the palette follows, deferred (CR3)', () => {
+    const simple = { ...DEFAULT_THEME_SETTINGS, mode: 'simple' as const };
+    const typed = typedMain(simple, '#0B6EB0');
+    expect(typed.colors).toEqual({ ...DEFAULT_COLORS, primary: '#0B6EB0' });
+    expect(typed.motion).toEqual(simple.motion);
+    // The deferred render makes the palette from it, as choosing it did before.
+    expect(derivedSettings(typed, true)).toEqual(withMain(simple, '#0B6EB0'));
+    // Nothing typed, Advanced mode, a half-typed colour, or a palette already made from the
+    // main colour: the same object (nothing written back, no second gate).
+    expect(derivedSettings(typed, false)).toBe(typed);
+    const advanced = { ...typed, mode: 'advanced' as const };
+    expect(derivedSettings(advanced, true)).toBe(advanced);
+    const half = typedMain(simple, '#0B');
+    expect(derivedSettings(half, true)).toBe(half);
+    const made = withMain(simple, '#0B6EB0');
+    expect(derivedSettings(made, true)).toBe(made);
+  });
+
   it('says each failure once', () => {
     const failure = (message: string) => ({ message }) as GateResult['failures'][number];
     const result = {
@@ -131,6 +151,12 @@ describe('the screen’s server markup', () => {
     expect(html).toContain('Reset to brand defaults');
     // The brand's own colours pass: no error note.
     expect(html).not.toContain('hard to read');
+  });
+
+  it('draws no empty card: the form’s own fields are all hidden (CR4)', () => {
+    expect(html).not.toMatch(/<div class="card"><\/div>/);
+    // Every card the screen draws has its heading.
+    expect(html.match(/class="card"/g)).toHaveLength(4);
   });
 
   it('sets no style attribute: colours are SVG attributes (CSP, ui.md §1.6)', () => {

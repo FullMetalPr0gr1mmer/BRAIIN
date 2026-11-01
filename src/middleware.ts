@@ -2,7 +2,7 @@ import { defineMiddleware } from 'astro:middleware';
 // Astro 6+ removed `Astro.locals.runtime.env` (the getter now throws). Worker bindings
 // come from the runtime module instead — works in `astro dev` (workerd) and in prod.
 import { env } from 'cloudflare:workers';
-import { THEME_STYLESHEET_PATH, getActiveTheme } from '@/lib/data/theme';
+import { THEME_STYLESHEET_PATH, getThemeAnswer } from '@/lib/data/theme';
 import {
   CSP_REPORT_ONLY,
   collectInlineHashes,
@@ -31,6 +31,7 @@ import { pageAccessGate } from '@/lib/visibility/gate';
 import { withPageAccess } from '@/lib/visibility/scope';
 import { handlePreview, previewConnectSources } from '@/lib/http/preview';
 import { ga4Reads } from '@/lib/http/ga4';
+import { noEdgeCache } from '@/lib/http/cacheTags';
 import { getGa4MeasurementId } from '@/lib/data/ga4';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
@@ -390,7 +391,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   //      reads it on its own) renders no layout, so nothing is started for it.
   const isFileRoute = /\.[a-z0-9]+$/i.test(matched);
   if (!isAdmin && !isApi && !isHealth && !isImage && !isFileRoute && request.method === 'GET') {
-    void getActiveTheme(locals);
+    void getThemeAnswer(locals);
   }
 
   // 1b) Image transforms answer only the URLs our own markup emits. Every other
@@ -586,6 +587,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
   //    carrying no cache tag a purge could mistake for a public page's.
   const out = await secured(rendered, ga4 && (await ga4) ? { ga4: true } : {});
   if (gate.action === 'noindex') out.headers.set('X-Robots-Tag', 'noindex');
+  // 5a) A page rendered while the theme's read FAILED (refused or unreachable, not "no
+  //     theme") lacks the theme's link: it is never edge-cached, or a blip would stick to a
+  //     Tier A page for a year (E4 code review CR1). Step 1a' started the read, and the
+  //     layout awaited the same promise, so this costs nothing more.
+  if (!isPrivate && locals.theme && (await locals.theme).failed) noEdgeCache(out);
   if (unlocked !== null || bypassed) {
     // A page unlocked by its password, or one a signed-in person sees past the maintenance
     // page (U9b): private, never cached, never indexed, no tag a purge could mistake.

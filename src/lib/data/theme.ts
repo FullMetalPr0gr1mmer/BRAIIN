@@ -4,39 +4,55 @@ import { supabaseConfigured } from '@/lib/supabase/client';
 import { reportLoadError } from './parse';
 import { contentClient } from './source';
 
-// The site's active theme (Admin v2 E4, AV-27), as a visitor reads it: the tokens and version
-// of the tenant's ACTIVE v1 theme (0118's custom_themes_public_read and its column grant, the
-// anon fence first), through the content seam, so the releases preview reads the pending theme
-// in its place. Read once per request (`locals.theme`, a promise, as `locals.identity`) by
+// The site's active theme (Admin v2 E4, AV-27), as a visitor reads it: the tokens of the
+// tenant's ACTIVE v1 theme (0118's custom_themes_public_read and its column grant, the anon
+// fence first), through the content seam, so the releases preview reads the pending theme in
+// its place. Read once per request (`locals.theme`, a promise, as `locals.identity`) by
 // BaseLayout and AdminLayout, which link /styles/theme.css only when the theme sets a token,
-// and by that stylesheet's route.
+// by that stylesheet's route, and by the middleware, which keeps a page whose read FAILED out
+// of the edge cache (E4 code review CR1).
 //
 // Never throws and never fails a page: no theme is the brand's own look, which every page
-// already renders. An unconfigured database, a refused or failed read, no row, more than one
-// (the unique index allows one), and tokens that are not the closed set (the CHECK and this
-// schema are the same rules) all answer null, the last three reported.
+// already renders. An unconfigured database, no row, more than one (the unique index allows
+// one), and tokens that are not the closed set (the CHECK and this schema are the same rules)
+// all answer no theme, the last two reported. A refused or failed read answers no theme too,
+// reported, and says it failed: the page then renders without the link, so it must not be
+// kept (a blip would otherwise stick to a page cached for a year); "no theme row" is an
+// answer like any other and stays cacheable.
 
 export interface ActiveTheme {
   tokens: ThemeTokens;
-  version: number;
 }
 
 /**
- * The theme a page links: the row, its stylesheet's body, and that body's hash. The hash, not
- * the row's version, names the stylesheet's address: a version is not unique over time (a
- * theme deleted and created again starts at 1 again, and a writer may send any version), and
- * an address answered `immutable` must never stand for other colours (E4 review, E4-SEC-1).
+ * The theme a page links: the row, its stylesheet's body, and that body's hash. The hash names
+ * the stylesheet's address: the row's version is not unique over time (a theme deleted and
+ * created again starts at 1 again, and a writer may send any version), and an address answered
+ * `immutable` must never stand for other colours (E4 review, E4-SEC-1). So a visitor never
+ * reads the version at all (E4 code review CR6).
  */
 export interface LiveTheme extends ActiveTheme {
   css: string;
   hash: string;
 }
 
-/** The columns a visitor may read of a theme, and the only ones this asks for. */
-export const THEME_COLUMNS = 'tokens,version';
+/** One request's read of the theme: the theme (null for none), and whether the read failed. */
+export interface ThemeAnswer {
+  theme: LiveTheme | null;
+  /** The read was refused or failed (not "no theme"): the page must not be edge-cached. */
+  failed: boolean;
+}
 
-export async function readActiveTheme(): Promise<ActiveTheme | null> {
-  if (!supabaseConfigured()) return null;
+/** The columns a visitor may read of a theme, and the only ones this asks for. */
+export const THEME_COLUMNS = 'tokens';
+
+interface ThemeRead {
+  theme: ActiveTheme | null;
+  failed: boolean;
+}
+
+async function readTheme(): Promise<ThemeRead> {
+  if (!supabaseConfigured()) return { theme: null, failed: false };
   try {
     const { data, error } = await contentClient()
       .from('custom_themes')
@@ -44,26 +60,29 @@ export async function readActiveTheme(): Promise<ActiveTheme | null> {
       .limit(2);
     if (error) {
       reportLoadError('custom_themes', error);
-      return null;
+      return { theme: null, failed: true };
     }
     const rows = (data ?? []) as Record<string, unknown>[];
-    if (rows.length === 0) return null;
+    if (rows.length === 0) return { theme: null, failed: false };
     if (rows.length > 1) {
       reportLoadError('custom_themes', new Error('more than one active theme'));
-      return null;
+      return { theme: null, failed: false };
     }
-    const row = rows[0]!;
-    const tokens = ThemeTokensSchema.safeParse(row['tokens']);
-    const version = row['version'];
-    if (!tokens.success || typeof version !== 'number' || !Number.isInteger(version)) {
+    const tokens = ThemeTokensSchema.safeParse(rows[0]!['tokens']);
+    if (!tokens.success) {
       reportLoadError('custom_themes', new Error('the active theme is not a v1 theme'));
-      return null;
+      return { theme: null, failed: false };
     }
-    return { tokens: tokens.data, version };
+    return { theme: { tokens: tokens.data }, failed: false };
   } catch (err) {
     reportLoadError('custom_themes', err);
-    return null;
+    return { theme: null, failed: true };
   }
+}
+
+/** The active theme's row as a visitor reads it, or null (none, or a read that failed). */
+export async function readActiveTheme(): Promise<ActiveTheme | null> {
+  return (await readTheme()).theme;
 }
 
 type ThemeLocals = Pick<App.Locals, 'theme'>;
@@ -79,23 +98,28 @@ export async function themeHash(css: string): Promise<string> {
 /** What a stylesheet address's `v` must be: a hash of themeHash's shape, nothing else. */
 export const THEME_HASH_PATTERN = /^[0-9a-f]{16}$/;
 
-async function liveTheme(): Promise<LiveTheme | null> {
-  const theme = await readActiveTheme();
-  if (!theme || !hasTokens(theme.tokens)) return null;
+async function liveTheme(): Promise<ThemeAnswer> {
+  const { theme, failed } = await readTheme();
+  if (!theme || !hasTokens(theme.tokens)) return { theme: null, failed };
   const css = themeCss(theme.tokens);
-  if (!css) return null;
+  if (!css) return { theme: null, failed };
   try {
-    return { ...theme, css, hash: await themeHash(css) };
+    return { theme: { ...theme, css, hash: await themeHash(css) }, failed };
   } catch (err) {
     reportLoadError('custom_themes', err);
-    return null;
+    return { theme: null, failed: true };
   }
 }
 
-/** The active theme, once per request; null for none or the brand's own (no token set). */
-export function getActiveTheme(locals: ThemeLocals): Promise<LiveTheme | null> {
+/** This request's read of the theme, started at most once (the middleware starts it). */
+export function getThemeAnswer(locals: ThemeLocals): Promise<ThemeAnswer> {
   locals.theme ??= liveTheme();
   return locals.theme;
+}
+
+/** The active theme, once per request; null for none or the brand's own (no token set). */
+export async function getActiveTheme(locals: ThemeLocals): Promise<LiveTheme | null> {
+  return (await getThemeAnswer(locals)).theme;
 }
 
 /** The stylesheet's route (src/pages/styles/theme.css.ts); the middleware knows it by this. */

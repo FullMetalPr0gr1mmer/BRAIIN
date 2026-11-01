@@ -77,6 +77,18 @@ describe('EditorForm', () => {
     expect(render(fakeSave(), [FIELDS[0]!])).not.toContain('card__h');
   });
 
+  it('every field hidden and no heading: no card at all, never an empty one (E4 CR4)', () => {
+    const html = render(fakeSave(), FIELDS, { hidden: ['slug', 'title'] });
+    expect(html).not.toContain('class="card"');
+    expect(html).not.toContain('id="f-slug"');
+    // The save bar is still there.
+    expect(html).toContain('<button type="submit" data-variant="primary">Save changes</button>');
+    // One field shown: its card, as before.
+    const one = render(fakeSave(), FIELDS, { hidden: ['title'] });
+    expect(one.match(/class="card"/g)).toHaveLength(1);
+    expect(one).toContain('id="f-slug"');
+  });
+
   it('no language bar for a form with no bilingual field', () => {
     const html = render(fakeSave(), [FIELDS[0]!]);
     expect(html).not.toContain('Editing language');

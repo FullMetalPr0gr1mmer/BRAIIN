@@ -333,9 +333,16 @@ const CASES: Record<string, () => Promise<void>> = {
     clean(report);
   },
   'theme.readActiveTheme': async () => {
-    // Admin v2 E4: anon's two columns of the active v1 theme (never the legacy one, active too).
+    // Admin v2 E4: anon's one column of the active v1 theme (never the legacy one, active too).
     const { value, report } = await inPreview(() => theme.readActiveTheme());
-    expect(value).toEqual({ tokens: THEME_TOKENS, version: 3 });
+    expect(value).toEqual({ tokens: THEME_TOKENS });
+    clean(report);
+  },
+  'theme.getThemeAnswer': async () => {
+    // The live theme through the overlay: an answer, never a failure (CR1).
+    const { value, report } = await inPreview(() => theme.getThemeAnswer({}));
+    expect(value.failed).toBe(false);
+    expect(value.theme?.tokens).toEqual(THEME_TOKENS);
     clean(report);
   },
   'theme.getActiveTheme': async () => {

@@ -8,8 +8,9 @@
 --
 -- The design is docs/admin-v2/ui.md "Theme (/admin/appearance/theme; AV-27; theme.edit)" and
 -- slice AV-27 ("00NN_theme_settings.sql: custom_themes.settings jsonb; anon select policy +
--- column grant (tokens, version) on the active row"); what was built and every departure is
--- docs/admin-v2/as-built/E4.md.
+-- column grant (tokens, version) on the active row"; the version is not granted: the
+-- stylesheet's address is the hash of its body, so nothing reads it, E4 code review CR6);
+-- what was built and every departure is docs/admin-v2/as-built/E4.md.
 --
 --   1. The theme rules in SQL: app.theme_luminance, app.theme_mix, app.theme_contrast (WCAG
 --      2.2, the maths of scripts/contrast-audit.mjs and packages/theme/colour.ts),
@@ -31,7 +32,7 @@
 --      compiler writes (E4 review, E4-SEC-2: a glow is a ground under text); the motion tokens
 --      exactly what the motion settings say. One v1 theme per tenant (custom_themes_one_theme_v1, a partial unique
 --      index). A legacy row (settings null) is not touched and never served.
---   3. Anon reads the tenant's ACTIVE v1 theme, and of it only `tokens` and `version`: a
+--   3. Anon reads the tenant's ACTIVE v1 theme, and of it only `tokens`: a
 --      policy (custom_themes_public_read, the tenant fence first) and a column grant, so
 --      /styles/theme.css (src/pages/styles/theme.css.ts) and the pages that link it read it
 --      through the anon client. The tokens are public by nature: the stylesheet serves them.
@@ -54,8 +55,8 @@
 -- The deployed admin lists themes with an explicit column list that does not name settings,
 -- and its form reads one row into a non-strict schema; no public code reads custom_themes. A
 -- save from the deployed admin's legacy form carries no settings, so it writes a legacy row
--- the CHECK leaves alone and nothing serves. Anon gains a read of two columns of a row that
--- does not exist until the new editor saves one.
+-- the CHECK leaves alone and nothing serves. Anon gains a read of one column of a row that does
+-- not exist until the new editor saves one.
 --
 -- The Sales boundary (C10a, U7, H13) is untouched: Sales reads no row of custom_themes (the
 -- staff read is app.is_staff(), the four CMS roles). Releases stay off (app.release_tenants
@@ -319,14 +320,14 @@ drop index if exists public.custom_themes_one_theme_v1;
 create unique index custom_themes_one_theme_v1 on public.custom_themes (tenant_id)
   where settings is not null;
 
--- ═══ 3. Anon reads the active v1 theme's tokens and version ════════════════════════════════
+-- ═══ 3. Anon reads the active v1 theme's tokens ═══════════════════════════════════════════
 drop policy if exists custom_themes_public_read on public.custom_themes;
 create policy custom_themes_public_read on public.custom_themes for select to anon
   using (tenant_id = app.effective_tenant_id() and is_active and settings is not null);
 
 -- Revoking a table privilege also revokes it on every column, so anon starts from nothing.
 revoke all on public.custom_themes from anon;
-grant select (tokens, version) on public.custom_themes to anon;
+grant select (tokens) on public.custom_themes to anon;
 
 -- ═══ 4. The release registry: custom_theme with `settings` ═════════════════════════════════
 -- 0038's row word for word, `settings` appended to the columns.
@@ -604,8 +605,12 @@ $guide$::jsonb, 3);
 -- Not FOR ALL: reads stay open to every CMS role (the releases preview, see the header). The
 -- service role and the definer functions (apply_release) are not `authenticated`, so none of
 -- these applies to them. `(select ...)` makes the profile read one InitPlan per statement.
+-- The helper's canonical definition, search_path pinned (E4 code review CR8): any later
+-- migration that creates it again (E5 does) repeats these three lines byte for byte, which
+-- tests/lib/themeSql.spec.ts holds.
 create or replace function app.role_edits_theme(r text) returns boolean
   language sql immutable
+  set search_path = ''
 as $$ select coalesce(r in ('admin', 'developer'), false) $$;  -- theme.edit
 revoke all on function app.role_edits_theme(text) from public, anon, authenticated, service_role;
 grant execute on function app.role_edits_theme(text) to authenticated, service_role;
@@ -726,11 +731,12 @@ begin
   if not exists (select 1 from pg_proc
                   where oid = 'app.role_edits_theme(text)'::regprocedure
                     and provolatile = 'i' and not prosecdef
+                    and proconfig = array['search_path=""']
                     and prosrc ~ 'r in \(''admin'', ''developer''\)')
      or has_function_privilege('anon', 'app.role_edits_theme(text)', 'execute')
      or has_function_privilege('public', 'app.role_edits_theme(text)', 'execute')
      or not has_function_privilege('authenticated', 'app.role_edits_theme(text)', 'execute') then
-    raise exception 'E4: app.role_edits_theme must be an immutable Admin + Developer check, executable by staff and the service role only';
+    raise exception 'E4: app.role_edits_theme must be an immutable Admin + Developer check, search_path pinned, executable by staff and the service role only';
   end if;
   if not exists (select 1 from pg_policies
                   where schemaname = 'public' and tablename = 'custom_themes'
@@ -741,13 +747,13 @@ begin
   end if;
   if has_table_privilege('anon', 'public.custom_themes', 'select')
      or not has_column_privilege('anon', 'public.custom_themes', 'tokens', 'select')
-     or not has_column_privilege('anon', 'public.custom_themes', 'version', 'select') then
-    raise exception 'E4: anon must read custom_themes.tokens and version, and no table privilege';
+     or has_column_privilege('anon', 'public.custom_themes', 'version', 'select') then
+    raise exception 'E4: anon must read custom_themes.tokens only, and no table privilege';
   end if;
   select string_agg(a.attname, ', ' order by a.attname) into v_bad
     from pg_attribute a
    where a.attrelid = 'public.custom_themes'::regclass and a.attnum > 0 and not a.attisdropped
-     and a.attname not in ('tokens', 'version')
+     and a.attname <> 'tokens'
      and (has_column_privilege('anon', a.attrelid, a.attnum, 'select')
           or has_column_privilege('anon', a.attrelid, a.attnum, 'insert')
           or has_column_privilege('anon', a.attrelid, a.attnum, 'update')

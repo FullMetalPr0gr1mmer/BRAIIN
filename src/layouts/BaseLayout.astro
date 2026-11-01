@@ -14,7 +14,6 @@ import Ga4Loader from '@/components/Ga4Loader.astro';
 import AdminPreviewBridge from '@/components/preview/AdminPreviewBridge.astro';
 import { dir } from '@/lib/i18n';
 import { getActiveTheme, themeHref } from '@/lib/data/theme';
-import { themeCss } from '@theme/compile';
 
 interface Props {
   title: string;
@@ -78,9 +77,11 @@ const robotsValue = preview ? 'noindex,nofollow' : robots;
 // while the active theme sets a token, so a site with no theme (or one reset to the brand's)
 // renders byte for byte as before. A preview draws the PENDING theme its scope reads, which no
 // stylesheet address serves: as the same custom properties in a nonced <style> (a preview is
-// a Tier C admin response; no public page ever carries one).
+// a Tier C admin response; no public page ever carries one): the body the loader compiled
+// once, which the stylesheet would serve (E4 code review CR7). A read that failed renders no
+// link, and the middleware keeps that page out of the edge cache (CR1).
 const theme = await getActiveTheme(Astro.locals);
-const previewTheme = preview && theme ? themeCss(theme.tokens) : '';
+const previewTheme = preview && theme ? theme.css : '';
 ---
 
 <!doctype html>

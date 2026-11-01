@@ -56,7 +56,7 @@ select plan(28);
 -- ── The literals (parsed by tests/lib/previewMirror.spec.ts; keep one row per line) ──────
 create function _anon_columns() returns table (tbl text, cols text) language sql immutable as $$
   values
-    ('custom_themes', 'tokens,version'),
+    ('custom_themes', 'tokens'),
     ('disciplines', 'id,tenant_id,slug,name,short,blurb,poster_media_id,preview_video_path,preview_start_s,preview_end_s,status,sort_order,published_at,updated_at'),
     ('faq_items', 'id,tenant_id,question,answer,status,sort_order'),
     ('form_settings', 'tenant_id,inquiry,application,consent_revision'),

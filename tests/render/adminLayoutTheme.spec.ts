@@ -10,10 +10,10 @@ import { normalise } from './harness';
 // renders exactly as before. Rendered without a session (the bare shell), which is all the
 // head needs.
 
-// The address names the hash of the body (getActiveTheme's), never the row's version.
+// The address names the hash of the body (getActiveTheme's); a visitor never reads the
+// row's version (CR6).
 const THEME = {
   tokens: { '--bs-klein': '#000000' },
-  version: 5,
   css: ':root{--bs-klein:#000000;}',
   hash: 'fedcba9876543210',
 };
@@ -29,7 +29,7 @@ async function render(theme: unknown): Promise<string> {
       session: null,
       csrfToken: 'token',
       identity: Promise.resolve(IDENTITY),
-      ...(theme === undefined ? {} : { theme: Promise.resolve(theme) }),
+      ...(theme === undefined ? {} : { theme: Promise.resolve({ theme, failed: false }) }),
     } as Partial<App.Locals> as App.Locals,
   });
   return normalise(html);

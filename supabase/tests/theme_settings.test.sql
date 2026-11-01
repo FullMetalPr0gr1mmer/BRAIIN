@@ -14,7 +14,8 @@
 --     (custom_themes_live_*), so an Admin token whose profile was since demoted, deactivated or
 --     locked changes, adds and removes no theme.
 --   • Who reads it: staff of the tenant; anon reads the ACTIVE v1 theme of the launch tenant,
---     and of it only `tokens` and `version` (42501 on any other column); never a legacy row,
+--     and of it only `tokens` (42501 on any other column, the version included: E4 code
+--     review CR6); never a legacy row,
 --     an inactive theme, or another tenant's.
 --   • The release registry stages `settings`; a save is history (the snapshot keeps it).
 --   • The guides: theme (new) and roles-and-access without "do not change the site yet".
@@ -23,7 +24,7 @@
 -- (the live check); the Sales claim has none, and is refused by the role either way.
 
 begin;
-select plan(42);
+select plan(43);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values ('e4000000-0000-0000-0000-0000000000ff', 'T-E4');
@@ -129,6 +130,11 @@ select ok((select bool_and(not has_function_privilege('anon', p.oid, 'execute')
 select is((select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
             where n.nspname = 'app' and p.proname like 'theme\_%'),
   6, 'and there are six of them');
+select is((select p.proconfig from pg_proc p
+            where p.oid = 'app.role_edits_theme(text)'::regprocedure
+              and p.provolatile = 'i' and not p.prosecdef),
+  array['search_path=""'],
+  'app.role_edits_theme: invoker, immutable, search_path pinned (E4 code review CR8)');
 
 -- ---- who writes it -------------------------------------------------------------------------
 set local role authenticated;
@@ -231,7 +237,8 @@ set local role anon;
 select _as(null, null);
 select is((select tokens from public.custom_themes), _tokens(),
   'anon reads the active v1 theme''s tokens (the launch tenant''s only)');
-select ok((select version from public.custom_themes) >= 1, 'and its version');
+select throws_ok($$ select version from public.custom_themes $$, '42501', null,
+  'anon cannot read the version (the stylesheet''s address is its body''s hash: CR6)');
 select throws_ok($$ select settings from public.custom_themes $$, '42501', null,
   'anon cannot read the settings');
 select throws_ok($$ select name, is_active from public.custom_themes $$, '42501', null,

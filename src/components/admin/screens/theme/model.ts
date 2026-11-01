@@ -70,7 +70,7 @@ export interface GateView {
   palette: Palette | null;
 }
 
-export function gateView(settings: ThemeSettings): GateView {
+export function gateView(settings: Pick<ThemeSettings, 'colors'>): GateView {
   const colors = validColors(settings.colors);
   if (!colors) return { result: null, palette: null };
   return { result: gate(colors), palette: paletteOf(colors) };
@@ -81,6 +81,28 @@ export function withMain(settings: ThemeSettings, main: string): ThemeSettings {
   const hex = normalizeColour(main);
   if (!hex) return { ...settings, colors: { ...settings.colors, primary: main } };
   return { ...settings, colors: simplePalette(hex) };
+}
+
+/**
+ * Simple mode's main colour as typed or dragged: into the form at once and nothing else, so the
+ * box keeps up with the keyboard and the picker (E4 code review CR3). The palette made from it
+ * follows in a deferred render (derivedSettings).
+ */
+export function typedMain(settings: ThemeSettings, main: string): ThemeSettings {
+  return { ...settings, colors: { ...settings.colors, primary: main } };
+}
+
+/**
+ * What the screen shows and saves for the settings it holds: in Simple mode, once a main colour
+ * has been typed, the palette made from it (withMain); otherwise the settings themselves, the
+ * same object when nothing changes. The settling is the slow part, so the screen runs this in a
+ * deferred render that React drops when a newer colour arrives (CR3).
+ */
+export function derivedSettings(settings: ThemeSettings, mainTyped: boolean): ThemeSettings {
+  if (!mainTyped || settings.mode !== 'simple') return settings;
+  const next = withMain(settings, settings.colors.primary);
+  const same = THEME_ROLES.every((role) => next.colors[role] === settings.colors[role]);
+  return same ? settings : next;
 }
 
 /** The messages to show, each once (a pair the site and the admin share reads once). */

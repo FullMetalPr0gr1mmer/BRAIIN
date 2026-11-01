@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import ColorField from '@/components/admin/fields/ColorField';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import Note from '@/components/admin/kit/Note';
@@ -20,9 +20,11 @@ import {
   REVEAL_OPTIONS,
   ROLE_LABEL,
   cloneSettings,
+  derivedSettings,
   failureLines,
   gateView,
   settingsOf,
+  typedMain,
   withMain,
 } from './model';
 import SitePreview from './SitePreview';
@@ -57,6 +59,18 @@ export interface ThemeScreenProps {
 /** The fields the save carries (none drawn: the controls below edit `settings`). */
 export const THEME_FIELDS: readonly FieldDef[] = themesUi.fields;
 
+/** The screen's own address: a first save comes back here (E4 code review CR5). */
+export const THEME_SCREEN = '/admin/appearance/theme';
+
+/**
+ * A first save created the theme: open this screen again, which now finds it (findThemeId, a
+ * pending create included), rather than the record's generic address, /admin/themes/<id>,
+ * which only redirects here (CR5).
+ */
+export function reopenThemeScreen(): void {
+  window.location.assign(THEME_SCREEN);
+}
+
 // Primary and Hover carry white text (its contrast is the field's line); Accent is light text
 // on black, which the palette chip below reports instead.
 const colourField = (role: ThemeRole, swatches?: readonly string[]): FieldDef => ({
@@ -79,9 +93,32 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
       settings: cloneSettings(DEFAULT_THEME_SETTINGS),
       isActive: true,
     },
+    onCreated: reopenThemeScreen,
   });
   const settings = useMemo(() => settingsOf(save.values['settings']), [save.values]);
-  const view = useMemo(() => gateView(settings), [settings]);
+  // Simple mode's main colour goes into the form as typed (typedMain), so the box keeps up;
+  // the palette made from it and the gate over it follow in a deferred render, which React
+  // drops when a newer colour arrives: a picker drag fires about 60 input events a second, and
+  // settling a palette is the slow part (E4 code review CR3). The pair is deferred together,
+  // so a render never mixes one colour's settings with another's flag.
+  const [mainTyped, setMainTyped] = useState(false);
+  const urgent = useMemo(() => ({ settings, mainTyped }), [settings, mainTyped]);
+  const deferred = useDeferredValue(urgent);
+  const shown = useMemo(() => derivedSettings(deferred.settings, deferred.mainTyped), [deferred]);
+  // The gate reads the colours only: the palette written back below costs no second run.
+  const { primary: shownPrimary, hover: shownHover, accent: shownAccent } = shown.colors;
+  const view = useMemo(
+    () => gateView({ colors: { primary: shownPrimary, hover: shownHover, accent: shownAccent } }),
+    [shownPrimary, shownHover, shownAccent],
+  );
+  // Once the deferred render has caught up with the newest colour, the palette goes into the
+  // form, so the save carries the colours the screen shows.
+  const setValue = save.set;
+  useEffect(() => {
+    if (deferred !== urgent || !deferred.mainTyped) return;
+    setMainTyped(false);
+    if (shown !== deferred.settings) setValue('settings', shown);
+  }, [deferred, urgent, shown, setValue]);
   const set = (next: ThemeSettings) => {
     save.set('settings', next);
     // A saved theme is the active one: saving makes it the site's.
@@ -93,13 +130,13 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
   // Simple mode's suggestion for the main colour, worked out after typing stops (it settles a
   // whole palette per lightness tried).
   const [mainPick, setMainPick] = useState<string | null>(null);
-  const simpleFails = settings.mode === 'simple' && view.result !== null && !view.result.ok;
+  const simpleFails = shown.mode === 'simple' && view.result !== null && !view.result.ok;
   useEffect(() => {
     setMainPick(null);
     if (!simpleFails) return;
-    const timer = window.setTimeout(() => setMainPick(suggestMain(settings.colors.primary)), 250);
+    const timer = window.setTimeout(() => setMainPick(suggestMain(shownPrimary)), 250);
     return () => window.clearTimeout(timer);
-  }, [simpleFails, settings.colors.primary]);
+  }, [simpleFails, shownPrimary]);
 
   // The admin wears the draft while it passes (CSSOM after hydration, ui.md §1.6), and the
   // live theme again (its stylesheet) when it does not or the screen goes.
@@ -175,7 +212,10 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
                       help: 'Hover and Accent are made from it.',
                     }}
                     value={settings.colors.primary}
-                    onChange={(_name, value) => set(withMain(settings, String(value ?? '')))}
+                    onChange={(_name, value) => {
+                      setMainTyped(true);
+                      set(typedMain(settings, String(value ?? '')));
+                    }}
                     idPrefix="theme"
                   />
                 </div>
