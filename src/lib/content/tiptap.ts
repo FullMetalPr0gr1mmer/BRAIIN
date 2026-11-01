@@ -235,9 +235,9 @@ export function renderTiptapToHtml(doc: unknown): string {
  * (`sectionDocProblem`, packages/schemas/tiptap.ts: iterative, at most 300 nodes and 8 levels,
  * the editor's content model and attributes), then rendered by the same allowlist walk on the
  * JSON as stored. zod's recursive TiptapDocSchema is not run: it rebuilds its object schema
- * for every node, so one body at the cap cost about 6 ms warm and 13 ms cold to parse, where
- * the walk and this render together cost about 0.3 ms warm (Node 24, 2026-10-31; the figures
- * are in SECTION_DOC_MAX_NODES's note). Anything the walk accepts has only the keys
+ * for every node, so one body at the cap cost 6 to 26 ms warm to parse, where the walk and this
+ * render together cost 0.3 to 1.4 ms warm (Node 24, 2026-10-31 and 2026-11-01; the figures are
+ * in SECTION_DOC_MAX_NODES's note). Anything the walk accepts has only the keys
  * TiptapDocSchema keeps, so the JSON as stored is what that parse would have handed the
  * renderer. A body the walk refuses renders nothing; a heading or a list item with no words
  * renders nothing either (Walk above).

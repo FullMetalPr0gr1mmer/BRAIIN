@@ -93,12 +93,16 @@ export const SECTION_DOC_HEADING_LEVELS = [2, 3, 4] as const;
  * How deep a body may nest (a list in a quote in a list item is four) and how many nodes it may
  * hold (a paragraph and its text are two; 300 is some fifty formatted paragraphs). The walk below
  * and the section renderer (renderSectionDocToHtml) visit each node once, so both are linear in
- * it. At the cap, measured in Node 24 on 2026-10-31: the walk about 0.2 ms and the walk with the
- * render about 0.3 ms warm, 2 to 2.6 ms the first time a process runs them. zod's recursive
- * TiptapDocSchema, which renderTiptapToHtml parses with, costs about 6 ms warm and 13 ms cold on
- * the same body, so the Text block does not use it. The Workers Free plan allows 10 ms of CPU a
- * request: about thirty bodies at the cap, warm. tests/lib/sectionBlocks.spec.ts bounds the
- * render and holds both walks linear.
+ * it. At the cap (100 paragraphs, each a bold run and a link), measured in Node 24 on 2026-10-31
+ * and again on 2026-11-01 with the machine under load: the walk 0.2 to 0.9 ms and the walk with
+ * the render 0.3 to 1.4 ms warm, 1 to 9.5 ms the first time a process runs them. zod's recursive
+ * TiptapDocSchema, which renderTiptapToHtml parses with, costs 6 to 26 ms warm and 13 to 55 ms
+ * the first time on the same body (15 to 30 times more), so the Text block does not use it. The
+ * Workers Free plan allows 10 ms of CPU a request: a body at the cap fits warm with room, but a
+ * page of many full blocks, or the first render in a new isolate, can come near it, so the cap
+ * is a size bound that keeps one block cheap, not a promise for a page.
+ * tests/lib/sectionBlocks.spec.ts bounds the render (3 ms, warm, fastest of 20) and holds both
+ * walks linear.
  */
 export const SECTION_DOC_MAX_DEPTH = 8;
 export const SECTION_DOC_MAX_NODES = 300;
@@ -305,9 +309,9 @@ export function sectionDocProblem(raw: unknown): string | null {
   }
   const top = raw['content'];
   if (top !== undefined && !Array.isArray(top)) return UNREADABLE;
-  const stack: { node: unknown; depth: number; parent: string }[] = (
-    (top ?? []) as unknown[]
-  ).map((node) => ({ node, depth: 1, parent: 'doc' }));
+  const stack: { node: unknown; depth: number; parent: string }[] = ((top ?? []) as unknown[]).map(
+    (node) => ({ node, depth: 1, parent: 'doc' }),
+  );
   let seen = 0;
   let words = false;
   while (stack.length > 0) {
@@ -343,6 +347,10 @@ export function sectionDocProblem(raw: unknown): string | null {
     }
     const children = (content ?? []) as unknown[];
     if (children.length === 0 && NEVER_EMPTY.includes(type)) return EMPTY[type] ?? UNREADABLE;
+    // A list item opens with a paragraph (`paragraph block*`).
+    if (type === 'listItem' && !(isObject(children[0]) && children[0]['type'] === 'paragraph')) {
+      return 'A list item starts with a paragraph.';
+    }
     for (const child of children) stack.push({ node: child, depth: depth + 1, parent: type });
   }
   return words ? null : NO_WORDS;

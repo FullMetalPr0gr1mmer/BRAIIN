@@ -245,6 +245,13 @@ describe('a section body (SectionDocSchema)', () => {
       ['a list with no content at all', doc(p(t('x')), { type: 'orderedList' })],
       ['an empty quote', doc(p(t('x')), { type: 'blockquote' })],
       ['an empty list item', doc(p(t('x')), { type: 'bulletList', content: [li()] })],
+      [
+        'a list item that opens with a heading',
+        doc({
+          type: 'bulletList',
+          content: [li({ type: 'heading', attrs: { level: 2 }, content: [t('x')] }, p(t('y')))],
+        }),
+      ],
     ];
     for (const [name, d] of misplaced) {
       expect(sectionDocProblem(d), name).not.toBeNull();
@@ -585,9 +592,9 @@ describe('what a body costs to check and to render', () => {
       renderSectionDocToHtml(body);
       return performance.now() - start;
     });
-    // Measured about 0.3 ms warm (Node 24, 2026-10-31); zod's parse of the same body, which
-    // the Text block no longer runs, about 6 ms. A generous bound, read off the fastest run so
-    // a loaded machine does not fail it: 3 ms.
+    // Measured 0.3 to 1.4 ms warm (Node 24, 2026-10-31 and 2026-11-01, the second under load);
+    // zod's parse of the same body, which the Text block no longer runs, 6 to 26 ms. A generous
+    // bound, read off the fastest run so a loaded machine does not fail it: 3 ms.
     expect(Math.min(...runs)).toBeLessThan(3);
     expect(renderSectionDocToHtml(body)).toBe(renderTiptapToHtml(body));
   });
