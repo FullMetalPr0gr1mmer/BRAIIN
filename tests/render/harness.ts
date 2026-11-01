@@ -33,13 +33,15 @@ export async function renderComponent(
   component: AstroComponentFactory,
   props: Record<string, unknown>,
   identity: Identity = IDENTITY,
+  /** More request locals (the forms config a spec lays over the read: `formSettings`). */
+  extra: Partial<App.Locals> = {},
 ): Promise<string> {
   container ??= AstroContainer.create();
   const html = await (
     await container
   ).renderToString(component, {
     props,
-    locals: { identity: Promise.resolve(identity) } as App.Locals,
+    locals: { identity: Promise.resolve(identity), ...extra } as App.Locals,
   });
   return normalise(html);
 }
@@ -53,8 +55,9 @@ export async function renderSections(
   sections: SectionData[],
   locale: Locale,
   identity: Identity = IDENTITY,
+  extra: Partial<App.Locals> = {},
 ): Promise<string> {
-  const html = await renderComponent(SectionRenderer, { locale, sections }, identity);
+  const html = await renderComponent(SectionRenderer, { locale, sections }, identity, extra);
   if (html.includes('section-error')) {
     throw new Error(`a section failed to render: ${sections.map((s) => s.type).join(', ')}`);
   }

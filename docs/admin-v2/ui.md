@@ -1033,7 +1033,7 @@ AdminCollection is a list plus drawer:
 - Read-only for anyone without settings.integrations.
 - Copy: "Connect the tools you already use. Nothing here is needed for the site to run."
 
-**Forms.** A read-only overview of the two closed field sets:
+**Forms.** A read-only overview of the two closed field sets (U11; since E8 the forms config's editor sits above it: labels, order, the optional fields shown and required, the button, the budget words and the Join consent lines, [as-built/E8.md](as-built/E8.md)):
 - which fields are required;
 - protections: the honeypot is always on, plus the public write limits (EXC-004);
 - recruitment consent is versioned;
@@ -2044,7 +2044,7 @@ Also:
 - Integration tiles with typed drawers: GA4 id; Search Console verification token emitted by SeoHead; Calendly URL; reCAPTCHA site key.
 - Statuses are honest; no secrets in the row; read-only for non-holders.
 - IntegrationsSchema becomes typed.
-- Forms: a read-only overview with links to the editable copy.
+- Forms: a read-only overview with links to the editable copy (U11); E8 adds the forms config's editor.
 - Notifications: per-user bell preferences.
 
 **Key files:**
@@ -2606,7 +2606,7 @@ Is that right?
 - Loading screen: duration up to 3000 ms with a warning toast, progress-bar style, tagline, 'remembered per browser' → hold 500–1500 ms enforced by the schema, fade 300–600 ms, logo-over-video / logo-on-black / none, once per tab.
 - General: editable domain, default language, languages on/off and timezone → read-only facts (PUBLIC_SITE_URL; both language twins always built). Logos stay code assets (home LCP). Maintenance copy, auto-off date and staff bypass come later.
 - SEO: sitemap and structured-data on/off, a single canonical URL, EN-only Google preview → read-only status rows, per-language canonicals and EN + AR (RTL) previews. Redirects get status codes and a table instead of a drag repeater. 'Check for broken links' comes later.
-- Forms editor (labels, required, add fields, budget ranges, honeypot/reCAPTCHA/consent toggles) → a read-only overview in v1. The field sets are closed Zod contracts; the honeypot is always on; recruitment consent is versioned.
+- Forms editor (labels, required, add fields, budget ranges, honeypot/reCAPTCHA/consent toggles) → a read-only overview in v1 (U11). Since E8 the labels, the order, whether an optional field is shown or required, the button, the budget words and the Join consent lines are edited; adding fields, the honeypot switch and the captcha (O-19) stay out. The field sets are closed Zod contracts; the honeypot is always on; recruitment consent is versioned.
 - Notifications settings (email, WhatsApp, auto-reply, Slack, assignment) → in-admin bell preferences only. No outbound sending (A1).
 - Integrations (Resend, WhatsApp, Sheets, Slack, HubSpot, webhooks, API key, fake 'Test connection') → typed GA4 / Search Console / Calendly / reCAPTCHA forms with honest 'Set up' statuses and no secrets in the row. The others come later; API keys are declined.
 - Activity log 'Kept for 90 days' and CSV export → kept permanently and tamper-evident; no export (export lockdown).

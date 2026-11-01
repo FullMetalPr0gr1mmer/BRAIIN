@@ -46,6 +46,8 @@ export function serviceCacheEntities(slug: string): string[] {
     'clients:all',
     'sectors:all',
     'media:all',
+    // The "Say hello" form, as the forms config words it (Admin v2 E8).
+    'forms:all',
   ];
 }
 

@@ -32,12 +32,16 @@ export interface ApplyFormCopy {
   /** The empty first option of each select. */
   pick: string;
   skills: string;
+  /** Beside the crafts' label when the forms config requires them (Admin v2 E8). */
+  skillsRequired: string;
   portfolio: string;
   portfolioPh: string;
   linkedin: string;
   linkedinPh: string;
   optional: string;
   cvTitle: string;
+  /** Beside the CV's line when the forms config requires it (Admin v2 E8). */
+  cvRequired: string;
   cvHint: string;
   /** The dropzone's line for a file it will not send (too large, or not a PDF or .docx). */
   cvBad: string;
@@ -57,6 +61,8 @@ export interface ApplyFormCopy {
     tooLong: string;
     invalid: string;
     consent: string;
+    /** The crafts, when the forms config requires them and none is ticked. */
+    skills: string;
   };
   status: Omit<ApplyStatusCopy, 'ok'>;
 }
@@ -78,12 +84,14 @@ export const APPLY_FORM_COPY: Record<Locale, ApplyFormCopy> = {
     availability: 'When could you start?',
     pick: 'Choose one',
     skills: 'Crafts you work in',
+    skillsRequired: 'choose at least one',
     portfolio: 'Portfolio link',
     portfolioPh: 'https://behance.net/yourname',
     linkedin: 'LinkedIn',
     linkedinPh: 'https://linkedin.com/in/yourname',
     optional: 'optional',
     cvTitle: 'Drop your CV here, or click to browse',
+    cvRequired: 'required',
     cvHint: 'PDF or Word (.docx), up to 10 MB',
     cvBad: "That file won't work. Use a PDF or Word (.docx) file under 10 MB.",
     cvRemove: 'Remove',
@@ -101,6 +109,7 @@ export const APPLY_FORM_COPY: Record<Locale, ApplyFormCopy> = {
       tooLong: 'This is longer than we can accept.',
       invalid: 'Please check this field.',
       consent: 'Tick this box so we can keep and review your application.',
+      skills: 'Choose at least one craft.',
     },
     status: {
       sending: 'Sending…',
@@ -130,12 +139,14 @@ export const APPLY_FORM_COPY: Record<Locale, ApplyFormCopy> = {
     availability: 'متى تقدر تبدأ؟',
     pick: 'اختر واحداً',
     skills: 'الحِرف اللي تشتغل فيها',
+    skillsRequired: 'اختر واحدة على الأقل',
     portfolio: 'رابط أعمالك',
     portfolioPh: 'https://behance.net/yourname',
     linkedin: 'لينكدإن',
     linkedinPh: 'https://linkedin.com/in/yourname',
     optional: 'اختياري',
     cvTitle: 'اسحب سيرتك الذاتية هنا، أو اضغط للاختيار',
+    cvRequired: 'مطلوب',
     // U+200F keeps "(.docx)" on the Arabic side of "Word" (the brief's copy).
     cvHint: 'PDF أو Word ‏(.docx)، حتى ١٠ ميجابايت',
     cvBad: 'هذا الملف ما ينفع. استخدم ملف PDF أو Word ‏(.docx) أقل من ١٠ ميجابايت.',
@@ -153,6 +164,7 @@ export const APPLY_FORM_COPY: Record<Locale, ApplyFormCopy> = {
       tooLong: 'النص أطول من الحد المسموح.',
       invalid: 'يرجى مراجعة هذا الحقل.',
       consent: 'يرجى تحديد هذا المربع لنحتفظ بطلبك ونراجعه.',
+      skills: 'يرجى اختيار حرفة واحدة على الأقل.',
     },
     status: {
       sending: 'جارٍ الإرسال…',

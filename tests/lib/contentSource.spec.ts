@@ -70,6 +70,7 @@ const CONTENT_LOADERS = [
   'src/lib/data/certifications.ts',
   'src/lib/data/disciplines.ts',
   'src/lib/data/faq.ts',
+  'src/lib/data/forms.ts',
   'src/lib/data/ga4.ts',
   'src/lib/data/navigation.ts',
   'src/lib/data/pageSections.ts',

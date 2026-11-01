@@ -36,6 +36,7 @@ const blog = await import('@/lib/data/blog');
 const certifications = await import('@/lib/data/certifications');
 const disciplines = await import('@/lib/data/disciplines');
 const faq = await import('@/lib/data/faq');
+const forms = await import('@/lib/data/forms');
 const ga4 = await import('@/lib/data/ga4');
 const navigation = await import('@/lib/data/navigation');
 const pageSections = await import('@/lib/data/pageSections');
@@ -56,6 +57,7 @@ const MODULES = {
   certifications,
   disciplines,
   faq,
+  forms,
   ga4,
   navigation,
   pageSections,
@@ -286,6 +288,24 @@ const CASES: Record<string, () => Promise<void>> = {
     expect(value).toBe('FixtureCode_0123456789');
     clean(report);
   },
+  'forms.getFormSettings': async () => {
+    // Admin v2 E8: anon's four columns of the row; the fixture rewords the inquiry button.
+    const { value, report } = await inPreview(() => forms.getFormSettings());
+    expect(value.inquiry.button).toEqual({ en: 'Send it', ar: 'أرسل' });
+    expect(value.consentRevision).toBe(0);
+    clean(report);
+  },
+  'forms.formSettingsFor': async () => {
+    // Once per request: the memo on locals.
+    const locals: { formSettings?: ReturnType<typeof forms.getFormSettings> } = {};
+    const { value, report } = await inPreview(async () => {
+      const first = forms.formSettingsFor(locals);
+      expect(forms.formSettingsFor(locals)).toBe(first);
+      return first;
+    });
+    expect(value.inquiry.button?.en).toBe('Send it');
+    clean(report);
+  },
   'ga4.getGa4MeasurementId': async () => {
     // Admin v2 U15: anon's GA4 column of the row (U15's migration). A preview never loads GA4 (the
     // middleware's preview branch returns before the read), but the loader reads through the
@@ -344,7 +364,7 @@ function clean(report: ReturnType<ReturnType<typeof createPreviewSource>['report
 }
 
 describe('every public loader, inside the preview scope', () => {
-  it('has a case for every exported loader function of the 18 files', () => {
+  it('has a case for every exported loader function of the 19 files', () => {
     const exported = Object.entries(MODULES).flatMap(([name, mod]) =>
       Object.entries(mod)
         .filter(([key, value]) => typeof value === 'function' && !PURE.has(key))

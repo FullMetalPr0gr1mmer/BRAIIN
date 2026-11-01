@@ -68,3 +68,147 @@
   gap: 8px 12px;
   margin: 14px 0 0;
 }
+
+/* ---- The forms config's editor (Admin v2 E8, AdminForms) ------------------------------- */
+
+/* The editor and the as-built card, stacked in the wide column. */
+.frm-main {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  min-width: 0;
+}
+
+.frm-editor {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.frm-editor > .card + .card {
+  margin-top: 0;
+}
+
+.frm-note {
+  margin: 0 0 12px;
+  color: var(--ad-dim);
+  font-size: 13px;
+}
+
+.frm-group + .frm-group {
+  margin-top: 16px;
+}
+
+.frm-group__t {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.frm-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.frm-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--ad-line);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.frm-row__h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.frm-row__t {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+.frm-row__s {
+  color: var(--ad-dim);
+  font-size: 12px;
+}
+
+.frm-row__moves {
+  display: flex;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.frm-pair {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.frm-pair + .frm-pair {
+  margin-top: 12px;
+}
+
+.frm-legend {
+  padding: 0;
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.frm-halves {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 8px 12px;
+}
+
+.frm-half {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.frm-half input,
+.frm-half textarea {
+  inline-size: 100%;
+  min-width: 0;
+}
+
+.frm-lang {
+  color: var(--ad-dim);
+  font-size: 12px;
+}
+
+.frm-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 13px;
+}
+
+/* The note under a field's switches (a field only some forms ask) takes its own line. */
+.frm-checks .f__cue {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.frm-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.frm-next-version {
+  font-family: var(--ad-mono);
+}
+
+.frm-captcha button[role='switch'] {
+  vertical-align: middle;
+}

@@ -23,6 +23,7 @@ import { testimonialResource } from '@/lib/admin/resources/testimonials';
 import { themeResource } from '@/lib/admin/resources/themes';
 import { seoDefaultsSingleton } from '@/lib/admin/singletons/seoDefaults';
 import { siteProfileSingleton } from '@/lib/admin/singletons/siteProfile';
+import { formSettingsSingleton } from '@/lib/admin/singletons/formSettings';
 import { RELEASE_ENTITY_TYPES, type ReleaseArea, type ReleaseEntityType } from '@schemas/release';
 import { RELEASE_ENTITY_META } from './areas';
 
@@ -445,6 +446,12 @@ export const RELEASE_REGISTRY: Readonly<Record<ReleaseEntityType, RegistryEntry>
   faq_item: fromResource('faq_item', faqResource, {
     label: labelFrom(['question'], 'Question'),
     entityTags: tags('faq:all'),
+  }),
+  // The forms config (Admin v2 E8): the routes that render a form carry forms:all (the home
+  // page, Contact, Join, Services and every service page).
+  form_settings: fromSingleton('form_settings', formSettingsSingleton, {
+    label: () => ({ en: 'Forms' }),
+    entityTags: tags('forms:all'),
   }),
 };
 

@@ -304,7 +304,17 @@ for (const locale of ['en', 'ar'] as const) {
       const names = await form
         .locator('input, select, textarea')
         .evaluateAll((els) => els.map((e) => e.getAttribute('name')));
-      expect(names).toEqual(['name', 'email', 'company', 'service', 'message', 'consent', 'hp']);
+      // The last is the hidden claim of what the form shows as required (Admin v2 E8).
+      expect(names).toEqual([
+        'name',
+        'email',
+        'company',
+        'service',
+        'message',
+        'consent',
+        'hp',
+        'required_fields',
+      ]);
       await expect(form.locator('button[type="submit"]')).toHaveText(t.submit);
     });
   });
@@ -382,16 +392,21 @@ test.describe('the home lead form reports what really happened', () => {
         serviceOfInterest: 'logo',
         consentMarketing: true,
         hp: '',
+        // Admin v2 E8: the variant that sent it and what it showed as required (nothing).
+        form: 'compact',
+        requiredFields: [],
       });
       expect(Object.keys(body).sort()).toEqual(
         [
           'consentMarketing',
           'email',
+          'form',
           'hp',
           'kind',
           'locale',
           'message',
           'name',
+          'requiredFields',
           'serviceOfInterest',
         ].sort(),
       );

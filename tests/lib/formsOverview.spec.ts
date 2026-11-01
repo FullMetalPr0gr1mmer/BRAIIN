@@ -16,11 +16,11 @@ import {
   type ContactFormVariant,
 } from '@/lib/forms/contactPayload';
 import { CONTACT_FORM_COPY } from '@/lib/forms/contactCopy';
+import { BUILT_IN_FORMS, consentVersion, formSettingsFromRow } from '@/lib/forms/config';
 import { APPLY_LIMITS, CONTACT_LIMITS } from '@/lib/http/publicRateLimit';
 import { SECTION_TYPES } from '@schemas/sectionTypes';
 import { DEFAULT_SERVICES_SECTIONS } from '@/lib/sections/types';
 import {
-  CONSENT_VERSION,
   CV_LIMIT,
   FORM_WORDING,
   INQUIRY_PLACES,
@@ -224,11 +224,26 @@ describe('the Join form', () => {
     expect(facts.join.unchecked).toContain('refused for now');
   });
 
-  it('the consent version is the one the form posts', () => {
-    expect(CONSENT_VERSION).toBe(RECRUITMENT_POLICY_VERSION);
-    expect(source('src/components/ApplicationForm.astro')).toContain(
-      'value={RECRUITMENT_POLICY_VERSION}',
-    );
+  it('the consent version the Protection card states is the one the form posts', () => {
+    // Admin v2 E8: the form posts the version its published config resolves (the notice's date
+    // until the consent lines are reworded, then `.r<N>`: src/lib/forms/config.ts consentVersion),
+    // and the card reads the same published config the same way, never the notice's date alone.
+    expect(source('src/components/ApplicationForm.astro')).toContain('value={view.policyVersion}');
+    expect(source('src/lib/forms/config.ts')).toContain('policyVersion: consentVersion(settings)');
+    const page = source('src/pages/admin/forms.astro');
+    expect(page).toContain('consentVersion(await formSettingsFor(Astro.locals))');
+    expect(page).toContain('<span class="frm-version">{consentNow}</span>');
+    expect(page).not.toContain('RECRUITMENT_POLICY_VERSION');
+    // What that resolves to: the notice with no row, the revision once reworded.
+    expect(consentVersion(BUILT_IN_FORMS)).toBe(RECRUITMENT_POLICY_VERSION);
+    expect(
+      consentVersion(
+        formSettingsFromRow({
+          application: { consent: { application: { en: 'I agree', ar: 'أوافق' } } },
+          consent_revision: 2,
+        }),
+      ),
+    ).toBe(`${RECRUITMENT_POLICY_VERSION}.r2`);
   });
 });
 

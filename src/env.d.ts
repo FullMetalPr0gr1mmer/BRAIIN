@@ -44,6 +44,9 @@ declare namespace App {
     // The public site's icons (Admin v2 U9), read at most once per request by
     // src/lib/data/siteProfile.ts getSiteIcons.
     siteIcons?: Promise<import('@/lib/data/siteProfile').SiteIcons>;
+    // The published forms config (Admin v2 E8), read at most once per request by
+    // src/lib/data/forms.ts formSettingsFor. A promise, as `identity` is.
+    formSettings?: Promise<import('@/lib/forms/config').FormSettings>;
     // The releases preview (Admin v2 R9), set by its middleware branch
     // (src/lib/http/preview.ts) on a `/admin/preview/**` render only: BaseLayout drops the
     // consent banner and telemetry, says noindex and loads the bridge; SectionRenderer marks
