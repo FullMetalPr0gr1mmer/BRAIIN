@@ -135,6 +135,7 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'dashboard.css',
       'forms.css',
       'general.css',
+      'header.css',
       'health.css',
       'help.css',
       'integrations.css',

@@ -25,6 +25,8 @@ const SLUG_OF = new Map<ResourceConfig, string>(
 const SINGLETON_UI_OF: Partial<Record<ReleaseEntityType, string>> = {
   site_profile: 'profile',
   seo_defaults: 'seo',
+  // Admin v2 E5: the Header screen's form.
+  site_appearance: 'appearance',
 };
 
 /** Where each non-resource type is edited (its screen, which opens on the row itself). */
@@ -33,6 +35,8 @@ const SCREEN_OF: Partial<Record<ReleaseEntityType, string>> = {
   seo_defaults: '/admin/seo?tab=site',
   entity_seo: '/admin/seo',
   page_visibility: '/admin/visibility',
+  // Admin v2 E5: the Header screen edits the header's options.
+  site_appearance: '/admin/appearance/header',
   // Admin v2 E8: the Forms screen edits both forms of the one row.
   form_settings: '/admin/forms',
 };

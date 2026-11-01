@@ -1,0 +1,232 @@
+/* The Header screen (Admin v2 E5, /admin/appearance/header): the Menu items card and the two
+   sketches of the bar. Every colour is a token (admin.css); every option the sketches draw is a
+   closed data-* value (CSP: no style attribute). */
+
+.hdr {
+  display: grid;
+  gap: 16px;
+}
+
+/* ---- Menu items ---- */
+.hdr-menu__list {
+  margin-block: 12px;
+}
+
+.hdr-menu__row[data-hidden] .li__t {
+  color: var(--ad-dim);
+}
+
+.hdr-menu__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hdr-menu__acts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+/* An <a> in the row's icon-button set looks and sizes as the buttons do. */
+.hdr-menu__edit {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid transparent;
+  color: var(--ad-dim);
+}
+
+.hdr-menu__star[aria-pressed='true'] {
+  color: var(--ad-primary);
+}
+
+.hdr-menu__empty,
+.hdr-menu__hint {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--ad-dim);
+}
+
+@media (max-width: 600px) {
+  .hdr-menu__row {
+    flex-wrap: wrap;
+  }
+  .hdr-menu__acts {
+    inline-size: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* ---- The sketches ---- */
+.hdr-pvs {
+  display: grid;
+  gap: 14px;
+}
+
+.hdr-pv {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.hdr-pv__cap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hdr-pv__t {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hdr-pv__s,
+.hdr-pv__note {
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+.hdr-pv__note {
+  margin: 0;
+}
+
+/* The ground under the bar: the hero (dark, Klein-tinted) or the page (light). */
+.hdr-pv__stage {
+  position: relative;
+  block-size: 96px;
+  border-radius: var(--ad-r-sm);
+  overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    var(--ad-midnight),
+    color-mix(in srgb, var(--ad-primary) 55%, var(--ad-midnight))
+  );
+}
+
+.hdr-pv__stage[data-stage='page'] {
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-line);
+}
+
+.hdr-pv__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.hdr-pv__bar[data-backdrop='light'] {
+  background: color-mix(in srgb, var(--ad-midnight) 25%, transparent);
+}
+.hdr-pv__bar[data-backdrop='medium'] {
+  background: color-mix(in srgb, var(--ad-midnight) 45%, transparent);
+}
+.hdr-pv__bar[data-backdrop='dark'] {
+  background: color-mix(in srgb, var(--ad-midnight) 62%, transparent);
+}
+.hdr-pv__bar[data-backdrop='solid'] {
+  background: var(--ad-midnight);
+}
+/* The blur is a line under the solid bar, thicker as it grows: a sketch cannot blur a page. */
+.hdr-pv__bar[data-blur='soft'] {
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--ad-midnight) 18%, transparent);
+}
+.hdr-pv__bar[data-blur='strong'] {
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--ad-midnight) 28%, transparent);
+}
+
+.hdr-pv__logo {
+  flex: none;
+  block-size: 14px;
+  inline-size: 34px;
+  border-radius: 3px;
+  background: var(--ad-on-dark);
+}
+.hdr-pv__bar[data-logo='s'] .hdr-pv__logo {
+  block-size: 11px;
+  inline-size: 26px;
+}
+.hdr-pv__bar[data-logo='l'] .hdr-pv__logo {
+  block-size: 18px;
+  inline-size: 42px;
+}
+
+.hdr-pv__links {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+.hdr-pv__links > span {
+  block-size: 5px;
+  inline-size: 22px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ad-on-dark) 80%, transparent);
+}
+.hdr-pv__bar[data-align='start'] .hdr-pv__links {
+  justify-content: flex-start;
+}
+.hdr-pv__bar[data-align='end'] .hdr-pv__links {
+  justify-content: flex-end;
+}
+
+/* The logo centred: the links first, the logo, then the end group. */
+.hdr-pv__bar[data-logo-pos='center'] .hdr-pv__links {
+  order: -1;
+  justify-content: flex-start;
+}
+.hdr-pv__bar[data-logo-pos='center'] .hdr-pv__end {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.hdr-pv__end {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.hdr-pv__cta {
+  max-inline-size: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ad-on-primary);
+  background: var(--ad-primary);
+}
+
+.hdr-pv__lang {
+  block-size: 14px;
+  inline-size: 22px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ad-on-dark) 70%, transparent);
+}
+
+/* ---- What is always true ---- */
+.hdr-facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.hdr-facts li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.hdr-facts .ic {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ad-primary);
+}

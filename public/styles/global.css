@@ -913,6 +913,207 @@ html[dir='rtl'] .site-header__key::after {
 }
 
 /* ============================================================
+   The header's options (Admin v2 E5, site_appearance, edited at
+   /admin/appearance/header). SiteHeader.astro sets a data-*
+   attribute only for an option that differs from the header as
+   built, so with none set every rule below is inert. Closed sets
+   only: each value maps to a fixed rule (no inline style, CSP).
+   ============================================================ */
+
+/* Logo size. On the root, so --bs-header-h (and every offset built on it) follows the
+   preset; the logo's <Picture sizes> is the same preset (src/lib/appearance/header.ts
+   LOGO_SIZES). Without :has() (Firefox before 121) every size renders as M, consistently. */
+:root:has(.site-header[data-logo='s']) {
+  --bs-logo-w: clamp(80px, 8vw, 108px);
+}
+:root:has(.site-header[data-logo='l']) {
+  --bs-logo-w: clamp(96px, 12vw, 160px);
+}
+
+/* Not sticky: the bar stays at the top of the page and scrolls away with it (the script
+   then does nothing). The overlay keeps its place over the hero. */
+.site-header[data-sticky='off'] {
+  position: relative;
+}
+.site-header--overlay[data-sticky='off'] {
+  position: absolute;
+}
+
+/* Tint over the hero: its own layer under the links (::after; ::before is the solid
+   state's), black at 25, 45 or 62%. It fades out as the solid state fades in, so both
+   changes are opacity alone (compositor-only). No blur over the hero: the backdrop-filter
+   rule above (the intro plate) stands. */
+.site-header--overlay[data-tint]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.25);
+  transition: opacity 0.45s ease;
+}
+.site-header--overlay[data-tint='medium']::after {
+  background: rgba(0, 0, 0, 0.45);
+}
+.site-header--overlay[data-tint='dark']::after {
+  background: rgba(0, 0, 0, 0.62);
+}
+.site-header--overlay[data-tint].is-solid::after {
+  opacity: 0;
+}
+
+/* Blur behind the solid bar: none, or stronger than the built 14px. */
+.site-header--overlay[data-blur='none'].is-solid::before {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.site-header--overlay[data-blur='strong'].is-solid::before {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* The call-to-action button: a filled pill beside the language switch on wide screens, the
+   menu's last item on small ones. White on Klein and on Cobalt are both above 4.5:1. */
+.site-header__end {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.site-header__cta,
+.site-nav__cta {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--bs-klein);
+  border: 1px solid var(--bs-klein);
+  padding: 7px 15px;
+  border-radius: 999px;
+  text-decoration: none;
+  transition:
+    background 0.25s,
+    border-color 0.25s;
+}
+html[dir='rtl'] .site-header__cta,
+html[dir='rtl'] .site-nav__cta {
+  letter-spacing: 0;
+  text-transform: none;
+}
+.site-header__cta:hover,
+.site-nav__cta:hover {
+  background: var(--bs-cobalt);
+  border-color: var(--bs-cobalt);
+}
+.site-nav__cta-item {
+  display: none;
+}
+/* The small-screen copy is also a link of the menu's list, whose rules (.site-nav__list a:
+   the padding, size, spacing and underline, and their Arabic and full-screen forms) outrank
+   one class. The pill is restated here at a weight above each of them. */
+.site-nav__list a.site-nav__cta,
+.site-header[data-mobile] .site-nav__list a.site-nav__cta {
+  color: #fff;
+  padding: 7px 15px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+html[dir='rtl'] .site-nav__list a.site-nav__cta,
+html[dir='rtl'] .site-header[data-mobile] .site-nav__list a.site-nav__cta {
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.site-nav__list a.site-nav__cta::after {
+  content: none;
+}
+
+/* Wide screens: where the logo and the links sit. The bar stays ONE row, so it is exactly
+   --bs-header-h tall and every offset built on that variable holds (services.css, the
+   case study, About): the options below are sized so the six links of the seeded menu fit
+   at every width they apply to (tests/admin/header.e2e.ts measures each one). */
+@media (min-width: 56.3125rem) {
+  /* The links beside the logo, or beside the language switch (the logo at the start). */
+  .site-header[data-align='start'] .site-header__bar {
+    justify-content: flex-start;
+  }
+  .site-header[data-align='start'] .site-nav__panel {
+    margin-inline-end: auto;
+  }
+  .site-header[data-align='end'] .site-header__brand {
+    margin-inline-end: auto;
+  }
+}
+/* With the button, the narrowest wide screens (901 to 1023 px) close the spaces a little,
+   so the links, the button and the language switch keep one row beside a large logo. */
+@media (min-width: 56.3125rem) and (max-width: 63.9375rem) {
+  .site-header__bar:has(> .site-header__end) {
+    gap: 1rem;
+  }
+  .site-header__bar:has(> .site-header__end) .site-nav__list {
+    gap: clamp(12px, 1.4vw, 36px);
+  }
+}
+/* The logo centred, from 1280 px: each side of it then has room for the links on one row.
+   Narrower, the bar keeps the logo at the start (half the bar cannot hold six links there:
+   they wrapped onto a second row and the bar outgrew --bs-header-h). The links take the first
+   column, the language switch (and the button) the last, the two sharing the free space
+   evenly. */
+@media (min-width: 80rem) {
+  .site-header[data-logo-pos='center'] .site-header__bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    column-gap: 1rem;
+  }
+  .site-header[data-logo-pos='center'] .site-header__brand {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .site-header[data-logo-pos='center'] .site-nav__panel {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+  }
+  .site-header[data-logo-pos='center'] .site-nav__list {
+    gap: clamp(12px, 1.4vw, 28px);
+  }
+  .site-header[data-logo-pos='center'] .site-header__bar > .site-header__lang,
+  .site-header[data-logo-pos='center'] .site-header__end {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+}
+
+@media (max-width: 56.25rem) {
+  .site-header__cta {
+    display: none;
+  }
+  .site-nav__cta-item {
+    display: list-item;
+    list-style: none;
+  }
+  /* Full screen: the open menu covers the screen below the bar, with larger links. The
+     same zero-JS disclosure as the drawer. */
+  .site-header[data-mobile='full'] .site-nav[open] ~ .site-nav__panel {
+    height: calc(100svh - var(--bs-header-h));
+    max-height: none;
+    background: rgba(0, 0, 0, 0.96);
+    padding-block: 2rem;
+  }
+  .site-header[data-mobile='full'] .site-nav__list {
+    gap: 1.4rem;
+  }
+  .site-header[data-mobile='full'] .site-nav__list a {
+    font-size: 20px;
+  }
+}
+
+/* ============================================================
    Intro — the brand logo holds an OPAQUE plate, then the plate
    and logo leave together and hand over to the hero. Pure CSS
    timeline; the Hero script only handles skip-on-intent and

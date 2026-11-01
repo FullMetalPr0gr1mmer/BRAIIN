@@ -226,6 +226,11 @@ const DEFAULTS_VERSION = restorable(
   { tenant_id: TENANT, version: 1, robots_directives: 'index,follow' },
   { robots_directives: 'noindex,nofollow' },
 );
+// Admin v2 E5: the header's options, keyed by the tenant like the identity.
+const APPEARANCE_VERSION = restorable(
+  { tenant_id: TENANT, version: 1, header_logo_size: 'm' },
+  { header_logo_size: 'l' },
+);
 const ENTITY_SEO_VERSION = restorable(
   {
     id: UUID,
@@ -364,6 +369,15 @@ const versions: readonly Case[] = [
     row: VERSION_ROW,
   },
   {
+    // Admin v2 E5: the Header screen's History (theme.edit reads it).
+    name: 'history: the header (no id)',
+    load: () => import('@/pages/api/admin/history/index'),
+    method: 'GET',
+    url: '/api/admin/history?entityType=site_appearance',
+    allow: ['admin', 'developer'],
+    row: VERSION_ROW,
+  },
+  {
     name: "history: a page's search settings",
     load: () => import('@/pages/api/admin/history/index'),
     method: 'GET',
@@ -392,6 +406,18 @@ const versions: readonly Case[] = [
     releases: true,
     row: DEFAULTS_VERSION,
     rpcs: { write_drafts: staged('seo_defaults', TENANT) },
+  },
+  {
+    // Admin v2 E5: theme.edit publishes the header (P-2), so only Admin and Developer restore it.
+    name: 'history restore: the header (no id)',
+    load: () => import('@/pages/api/admin/history/restore'),
+    method: 'POST',
+    url: '/api/admin/history/restore',
+    body: { entityType: 'site_appearance', seq: 1 },
+    allow: ['admin', 'developer'],
+    releases: true,
+    row: APPEARANCE_VERSION,
+    rpcs: { write_drafts: staged('site_appearance', TENANT) },
   },
   {
     // A Content Creator reads a page's search settings (view) but cannot publish them: the
@@ -681,6 +707,16 @@ export const cases: readonly Case[] = [
     allow: ['admin'],
     releases: true,
     row: PROFILE_DRAFT,
+  },
+  {
+    // Admin v2 E5: staged like the theme, under the same capability (P-2).
+    name: 'header options write (releases on)',
+    load: () => import('@/pages/api/admin/site-appearance'),
+    method: 'PATCH',
+    url: '/api/admin/site-appearance',
+    body: { logoSize: 'l', version: 1 },
+    allow: ['admin', 'developer'],
+    releases: true,
   },
   {
     // Admin v2 E8: staged like the identity, under the same capability (P-2).

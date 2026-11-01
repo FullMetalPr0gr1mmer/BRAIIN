@@ -6,6 +6,7 @@ import {
   RELEASE_ENTITY_TYPES,
   type ReleaseEntityType,
 } from '@schemas/release';
+import { headerColumnDefaults } from '@schemas/appearance';
 import { mediaItemToRow } from '@/lib/admin/resources/portfolio';
 import type { AuthContext, Role } from '@/lib/auth/types';
 import { AuthorizationError } from '@/lib/authz/errors';
@@ -144,6 +145,11 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row
     value_points: [],
     deliverables: [],
   },
+  // Admin v2 E5: the header as built (the table's NOT NULL defaults: every option but the
+  // button's words and link, which have none).
+  site_appearance: Object.fromEntries(
+    Object.entries(headerColumnDefaults()).filter(([, value]) => value !== null),
+  ),
   site_profile: {
     address_country: 'SA',
     socials: [],

@@ -30,9 +30,10 @@ describe('parseSelect', () => {
     // blog, certifications, disciplines, faq (U7), navigation, pageSections (2), portfolio (3),
     // sectionMedia, seo (4: U10's getSeoRules reads entity_seo and pages), serviceCases,
     // services (2), siteProfile (2: the identity, and U9's icons from media_assets),
-    // siteVerification (U11), ga4 (U15), forms (E8), statistics, taxonomy (3), team: 29
+    // siteVerification (U11), ga4 (U15), forms (E8), appearance (E5), statistics, taxonomy (3),
+    // team: 30
     // `.from()` calls; search's two are rpcs.
-    expect(selects).toHaveLength(29);
+    expect(selects).toHaveLength(30);
     for (const q of selects) {
       expect(q.select, `${q.file}:${q.line}`).not.toBeNull();
       expect(() => parseSelect(q.select!), `${q.file}:${q.line}`).not.toThrow();

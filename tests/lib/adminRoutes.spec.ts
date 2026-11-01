@@ -389,6 +389,7 @@ describe('the locked screens the refusals e2e opens', () => {
     const server = LOCKED_SCREENS.filter((screen) => renderOf(screen) === 'server');
     expect(server.map((s) => s.href).sort()).toEqual([
       '/admin/analytics/search',
+      '/admin/appearance/header',
       '/admin/audit',
       '/admin/backups',
       '/admin/forms',
@@ -497,7 +498,11 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'Site health /admin/site-health',
       'Style-Finder /admin/ai-questions',
     ],
-    Appearance: ['Theme /admin/themes', 'Menus /admin/navigation'],
+    Appearance: [
+      'Theme /admin/themes',
+      'Header /admin/appearance/header',
+      'Menus /admin/navigation',
+    ],
     Settings: [
       'General /admin/settings',
       'SEO /admin/seo',
@@ -527,7 +532,8 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'Media library /admin/media',
     ],
     Growth: ['Website stats /admin/analytics', 'Style-Finder /admin/ai-questions'],
-    Appearance: ['Menus /admin/navigation'],
+    // Admin v2 E5: the Header screen's menu card (nav.edit).
+    Appearance: ['Header /admin/appearance/header', 'Menus /admin/navigation'],
     // Admin v2 U11: the bell's settings, every member's own. R13: Backups & versions.
     Settings: ['Notifications /admin/settings/notifications', 'Backups & versions /admin/backups'],
   },
@@ -555,7 +561,8 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
     Content: ['Media library /admin/media'],
     CRM: ['Leads /admin/leads'],
     Growth: ['Website stats /admin/analytics', 'Site health /admin/site-health'],
-    Appearance: ['Theme /admin/themes'],
+    // Admin v2 E5: the Header screen's options (theme.edit).
+    Appearance: ['Theme /admin/themes', 'Header /admin/appearance/header'],
     Settings: [
       'General /admin/settings',
       'Forms /admin/forms',

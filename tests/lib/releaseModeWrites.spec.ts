@@ -286,6 +286,8 @@ describe('every client write to a release-managed route says when it was made in
       [
         'src/components/admin/screens/collection/CollectionScreen.tsx',
         'src/components/admin/screens/collection/CollectionScreen.tsx',
+        // Admin v2 E5: the Header screen's menu card, Move up and Move down.
+        'src/components/admin/screens/header/HeaderScreen.tsx',
         'src/components/admin/screens/pageEditor/PageEditor.tsx',
         'src/components/admin/screens/projects/ProjectsList.tsx',
         'src/components/admin/screens/resources/ResourceTable.tsx',

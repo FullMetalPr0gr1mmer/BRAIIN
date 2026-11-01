@@ -15,7 +15,8 @@ function pageFileOf(href: string): string | null {
   const [segment, rest] = path.split('/');
   if (!segment) return null;
   const candidates = rest
-    ? [`src/pages/admin/${segment}/[id].astro`]
+    ? // A nested screen of its own (Admin v2 E5: /admin/appearance/header), else an edit screen.
+      [`src/pages/admin/${path}.astro`, `src/pages/admin/${segment}/[id].astro`]
     : [`src/pages/admin/${segment}.astro`, `src/pages/admin/${segment}/index.astro`];
   return candidates.find((file) => existsSync(file)) ?? null;
 }
@@ -35,6 +36,7 @@ describe('where a pending change is edited', () => {
     expect(editHref('faq_item', ID)).toBe(`/admin/faq/${ID}`);
     expect(editHref('site_profile', ID)).toBe('/admin/settings');
     expect(editHref('seo_defaults', ID)).toBe('/admin/seo?tab=site');
+    expect(editHref('site_appearance', ID)).toBe('/admin/appearance/header');
     expect(editHref('page_visibility', ID)).toBe('/admin/visibility');
     expect(editHref('form_settings', ID)).toBe('/admin/forms');
   });

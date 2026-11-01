@@ -1,9 +1,41 @@
 import { UUID, VALID_BILINGUAL, type Case } from '../harness';
 
-// Appearance: the theme (§5 "Theme editor", Admin + Developer) and the site menus (§5
-// "Navigation editor", Admin + Content Creator).
+// Appearance: the theme (§5 "Theme editor", Admin + Developer), the header's options (Admin v2
+// E5, site_appearance, the same row of §5) and the site menus (§5 "Navigation editor", Admin +
+// Content Creator).
 
 export const cases: readonly Case[] = [
+  {
+    // Admin v2 E5: the Header screen's options form loads it (theme.edit); the menu card reads
+    // the navigation instead, so Content Creator is refused here.
+    name: 'header options read',
+    load: () => import('@/pages/api/admin/site-appearance'),
+    method: 'GET',
+    url: '/api/admin/site-appearance',
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'header options write',
+    load: () => import('@/pages/api/admin/site-appearance'),
+    method: 'PATCH',
+    url: '/api/admin/site-appearance',
+    body: { logoSize: 'l', menuAlign: 'end', version: 1 },
+    allow: ['admin', 'developer'],
+  },
+  {
+    // The button: words and a link of the site, refused for everyone else the same way.
+    name: 'header options write, the button',
+    load: () => import('@/pages/api/admin/site-appearance'),
+    method: 'PATCH',
+    url: '/api/admin/site-appearance',
+    body: {
+      ctaShow: true,
+      ctaLabel: VALID_BILINGUAL,
+      ctaHref: '/contact#inquiry',
+      version: 1,
+    },
+    allow: ['admin', 'developer'],
+  },
   {
     name: 'theme list',
     load: () => import('@/pages/api/admin/themes/index'),

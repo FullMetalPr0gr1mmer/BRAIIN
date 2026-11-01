@@ -755,6 +755,26 @@ export function fixtureTables(): Record<string, Row[]> {
         updated_at: '2026-01-01T00:00:00+00:00',
       },
     ],
+    // Admin v2 E5: the header's options, a visitor reads all but the version, stamps and actors.
+    site_appearance: [
+      {
+        tenant_id: TENANT,
+        header_logo_position: 'start',
+        header_logo_size: 's',
+        header_menu_align: 'center',
+        header_sticky: true,
+        header_hide_on_scroll: true,
+        header_solid_after_hero: true,
+        header_tint: 'none',
+        header_blur: 'soft',
+        header_mobile_menu: 'drawer',
+        header_cta_show: false,
+        header_cta_label: null,
+        header_cta_href: null,
+        version: 1,
+        updated_at: '2026-01-01T00:00:00+00:00',
+      },
+    ],
     // Admin v2 E8: the forms config, a visitor reads all but the version, stamps and actors.
     form_settings: [
       {

@@ -1,6 +1,7 @@
 import { aiConfigUi } from './aiConfig';
 import { aiQuestionsUi } from './aiQuestions';
 import { aiStylesUi } from './aiStyles';
+import { appearanceUi } from './appearance';
 import { blogUi } from './blog';
 import { categoriesUi } from './categories';
 import { certificationsUi } from './certifications';
@@ -106,6 +107,8 @@ export function uiFor(slug: string): ResourceUi {
 /** Every singleton's editor by the key a page hands SingletonForm. Sorted. */
 export const SINGLETON_UI: Record<string, SingletonUi> = {
   'ai-config': aiConfigUi,
+  // Admin v2 E5: the header's options (site_appearance), the Header screen's form.
+  appearance: appearanceUi,
   integrations: integrationsUi,
   maintenance: maintenanceUi,
   profile: profileUi,

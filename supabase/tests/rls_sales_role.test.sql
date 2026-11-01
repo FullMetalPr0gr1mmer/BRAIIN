@@ -6,7 +6,8 @@
 --   1. the catalog: 'sales' is in app_role; app.is_staff() still names four roles and
 --      app.is_member() five; every capability helper answers ROLE_CAPS for every enum value
 --      (a literal copy of CLAUDE.md §5); audit_insert, the non-staff block (0097's three
---      tables, 0098's faq_items and E8's form_settings) and the sample lock read as written;
+--      tables, 0098's faq_items, E8's form_settings and E5's site_appearance) and the sample lock
+--      read as written;
 --   2. the CRM: a live Sales token reads and works leads (the stages, the timeline, the
 --      settings, the people it may assign to) through RLS and the pipeline's column grant,
 --      and writes nothing else of a lead: no insert, no delete, no ciphertext, no notes
@@ -109,6 +110,10 @@ insert into public.faq_items (id, tenant_id, question, answer, status, sort_orde
 -- The forms config (Admin v2 E8, form_settings): anon reads its public columns of the launch
 -- tenant's row, CMS staff the whole row, a Sales token none (the non-staff block).
 insert into public.form_settings (tenant_id) values ('93000000-0000-0000-0000-000000000001')
+  on conflict do nothing;
+-- The header's options (Admin v2 E5, site_appearance): anon reads the option columns of the
+-- launch tenant's row, CMS staff the whole row, a Sales token none (the non-staff block).
+insert into public.site_appearance (tenant_id) values ('93000000-0000-0000-0000-000000000001')
   on conflict do nothing;
 -- The attention list (0100_attention_staff.sql, H13): a published post with no cover, which
 -- anon reads, gives the list one row (missing_image) in this tenant, so its comparison is
@@ -334,8 +339,9 @@ select is(
   'form_settings ((tenant_id = app.effective_tenant_id()) AND app.is_staff()) | '
   'media_assets ((tenant_id = app.effective_tenant_id()) AND app.is_staff()) | '
   'service_cases ((tenant_id = app.effective_tenant_id()) AND app.is_staff()) | '
+  'site_appearance ((tenant_id = app.effective_tenant_id()) AND app.is_staff()) | '
   'testimonials ((tenant_id = app.effective_tenant_id()) AND app.is_staff())',
-  'the non-staff block: five RESTRICTIVE reads (0097''s three, the FAQ''s in 0098, the forms config''s in E8), the tenant first, then CMS staff');
+  'the non-staff block: six RESTRICTIVE reads (0097''s three, the FAQ''s in 0098, the forms config''s in E8, the header''s in E5), the tenant first, then CMS staff');
 select ok(
   not exists (select 1 from information_schema.columns
                where table_schema = 'public' and table_name = 'leads'

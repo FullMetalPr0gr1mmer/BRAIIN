@@ -26,12 +26,16 @@ const ROWS: Record<string, { types: ReleaseEntityType[]; kinds: Kind[] }> = {
     types: RELEASE_ENTITY_TYPES.filter((t) => meta(t).removeCap !== null && t !== 'redirect'),
     kinds: ['removal'],
   },
+  // P-2 "Theme + header/intro appearance" (the header: Admin v2 E5).
+  'Release — theme and appearance': {
+    types: ['custom_theme', 'site_appearance'],
+    kinds: ['edit'],
+  },
   // P-2 "Identity + footer + forms config" (the forms config: Admin v2 E8).
   'Release — public identity and forms config': {
     types: ['site_profile', 'form_settings'],
     kinds: ['edit'],
   },
-  'Release — theme and appearance': { types: ['custom_theme'], kinds: ['edit'] },
   'Release — per-entity SEO': { types: ['entity_seo'], kinds: ['edit'] },
   'Release — global SEO defaults': { types: ['seo_defaults'], kinds: ['edit'] },
   'Release — redirects (removals included)': { types: ['redirect'], kinds: ['edit', 'removal'] },

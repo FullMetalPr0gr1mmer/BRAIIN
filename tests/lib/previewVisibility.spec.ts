@@ -35,6 +35,7 @@ async function visible(tables: Record<string, Row[]>, drafts: Row[] = []) {
         : table === 'site_profile' ||
             table === 'seo_defaults' ||
             table === 'site_integrations' ||
+            table === 'site_appearance' ||
             table === 'form_settings'
           ? 'tenant_id'
           : 'id';
@@ -57,6 +58,7 @@ describe('the mirror over the fixture tenant', () => {
     expect(ids['site_profile']).toHaveLength(1);
     expect(ids['seo_defaults']).toHaveLength(1);
     expect(ids['site_integrations']).toHaveLength(1);
+    expect(ids['site_appearance']).toHaveLength(1);
     expect(ids['form_settings']).toHaveLength(1);
     expect(report.unsupported).toEqual([]);
   });
