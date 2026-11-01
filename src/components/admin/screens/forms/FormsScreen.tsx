@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import { saveModeFor } from '@/lib/admin/saveMode';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
@@ -140,7 +140,13 @@ function CopyPair({
 export default function FormsScreen(props: FormsScreenProps) {
   const column = props.form === 'inquiry' ? 'inquiry' : 'application';
   const formName = props.form === 'inquiry' ? 'Inquiry form' : 'Join form';
-  const fieldsDef: readonly FieldDef[] = [{ name: column, label: formName, kind: 'json', column }];
+  // Built once per form: useEntitySave's load depends on `fields`, so a new array every render
+  // would load the row again after each render, and onRow's state change would render again (an
+  // endless read of /api/admin/form-settings, found by the CI sweep's networkidle wait).
+  const fieldsDef = useMemo<readonly FieldDef[]>(
+    () => [{ name: column, label: formName, kind: 'json', column }],
+    [column, formName],
+  );
   // The database's count of consent rewordings, as the row last read or saved says.
   const [revision, setRevision] = useState(0);
   // Release mode only: the live consent lines (the row read holds the pending change).
