@@ -216,8 +216,9 @@ describe('pending changes a preview shows, per role and entity type', () => {
     });
   }
 
-  it('admin previews all 20 previewable types', () => {
-    expect(Object.values(EXPECTED.admin).filter((o) => o === O)).toHaveLength(20);
+  // 21 since E8 (form_settings) and E4 (custom_theme) each made one more type previewable.
+  it('admin previews all 21 previewable types', () => {
+    expect(Object.values(EXPECTED.admin).filter((o) => o === O)).toHaveLength(21);
   });
 });
 
