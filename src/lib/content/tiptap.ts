@@ -58,7 +58,7 @@ export const sanitizeHref: (raw: unknown) => string | null = keptHref;
 
 // ── Marks ───────────────────────────────────────────────────────────────────────
 
-const SIMPLE_MARK_TAGS: Record<string, string> = {
+const SIMPLE_MARK_TAGS: Readonly<Record<string, string>> = {
   bold: 'strong',
   strong: 'strong',
   italic: 'em',
@@ -75,7 +75,11 @@ function wrapWithMarks(text: string, marks: TiptapMark[] | undefined): string {
   let out = text;
   // Innermost first so the emitted nesting matches the order Tiptap stores.
   for (const mark of [...marks].reverse()) {
-    const tag = SIMPLE_MARK_TAGS[mark.type];
+    // An own entry only (H15 review, SEC-2): `[]` alone also finds what every object inherits,
+    // so a stored mark type `constructor` came out as a tag named after a function.
+    const tag = Object.hasOwn(SIMPLE_MARK_TAGS, mark.type)
+      ? SIMPLE_MARK_TAGS[mark.type]
+      : undefined;
     if (tag) {
       out = `<${tag}>${out}</${tag}>`;
       continue;

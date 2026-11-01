@@ -330,11 +330,72 @@ describe('the page editor never sends a key the type does not have', () => {
     expect(sectionContentIssues('hero', payload['content'])).toEqual([]);
   });
 
+  it('a stray key nested in any object of any type is dropped by an untouched typed save', () => {
+    // H15 review (COR-1): the typed save rebuilt every nested value from its fields but a
+    // bilingual, prose or rich-text pair, which it sent back whole, so a key hidden inside one
+    // (`heading.mediaId`) made an untouched typed save of that row refused.
+    let planted = 0;
+    const refused: string[] = [];
+    const carried: string[] = [];
+    for (const type of TYPES_WITH_CONTENT) {
+      const content = fullSectionContent(type);
+      for (const path of objectPaths(content).filter((p) => !inBody(type, p))) {
+        if (
+          objectShapes(SECTION_CONTENT_SCHEMAS[type]!)
+            .get(shapePath(path))
+            ?.keys.includes('mediaId')
+        ) {
+          continue;
+        }
+        planted += 1;
+        const row = { type, content: withKey(content, path, 'mediaId', HIDDEN) };
+        const payload = formToPayload(rowToForm(row, fields), fields);
+        const where = `${type} ${path.join('.') || '(top)'}`;
+        if (sectionContentIssues(type, payload['content']).length > 0) refused.push(where);
+        if (JSON.stringify(payload['content']).includes(HIDDEN)) carried.push(where);
+      }
+    }
+    expect(refused).toEqual([]);
+    expect(carried).toEqual([]);
+    expect(planted).toBeGreaterThan(80);
+  });
+
+  /** Every leaf of a value, by path: what a round trip must give back. */
+  const leaves = (value: unknown, path = ''): Map<string, unknown> => {
+    const out = new Map<string, unknown>();
+    const stack: [unknown, string][] = [[value, path]];
+    while (stack.length > 0) {
+      const [next, at] = stack.pop()!;
+      if (typeof next === 'object' && next !== null) {
+        for (const [k, v] of Object.entries(next)) stack.push([v, at ? `${at}.${k}` : k]);
+      } else {
+        out.set(at, next);
+      }
+    }
+    return out;
+  };
+
+  /**
+   * What an untouched typed save loses today, a known gap recorded in H15's as-built note as a
+   * follow-up (COR-6, older than H15): the Our Work intro's media items have no field for their
+   * alt override, so a typed save drops it. Remove the entry when that field exists.
+   */
+  const KNOWN_LOSSES: Readonly<Partial<Record<SectionType, readonly string[]>>> = {
+    workIntro: ['media.0.altOverride.ar', 'media.0.altOverride.en'],
+  };
+
   for (const type of TYPES_WITH_CONTENT) {
-    it(`${type}: a full stored row, re-saved untouched, passes the strict write`, () => {
+    it(`${type}: a full stored row, re-saved untouched, passes the strict write and keeps its values`, () => {
       const row = { type, content: fullSectionContent(type) };
       const payload = formToPayload(rowToForm(row, fields), fields);
       expect(sectionContentIssues(type, payload['content']), type).toEqual([]);
+      const before = leaves(row.content);
+      const after = leaves(payload['content']);
+      const lost = [...before.keys()].filter((k) => !after.has(k)).sort();
+      expect(lost, type).toEqual(KNOWN_LOSSES[type] ?? []);
+      for (const [k, v] of after) {
+        if (before.has(k)) expect(v, `${type} ${k}`).toEqual(before.get(k));
+      }
     });
   }
 });

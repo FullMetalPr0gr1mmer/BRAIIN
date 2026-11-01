@@ -619,19 +619,38 @@ export function sectionExtra(state: SectionContentState, type: unknown): Row {
   return state.extra && state.extraType === String(type) ? state.extra : {};
 }
 
+/**
+ * A pair of languages as its field edits it: the `en` and `ar` it holds (`text` only when they
+ * are strings, as BilingualField shows them), nothing else. The form state carries a stored
+ * pair whole, so without this a key hidden inside one (`heading.mediaId`, written around the
+ * API) rode back on an untouched typed save, and the strict section write refused the row
+ * (H15 review, COR-1).
+ */
+function languagePair(value: unknown, text: boolean): Row {
+  const record = (value && typeof value === 'object' && !Array.isArray(value) ? value : {}) as Row;
+  const out: Row = {};
+  for (const lang of ['en', 'ar'] as const) {
+    const half = record[lang];
+    if (half !== undefined && (!text || typeof half === 'string')) out[lang] = half;
+  }
+  return out;
+}
+
 /** One value inside a jsonb object; `undefined` means "omit the key". */
 function overrideToPayload(value: unknown, field: FieldDef, siblings: Row): unknown {
   switch (field.kind) {
     case 'bilingual':
-    case 'prose':
-      return allBlank(value) ? undefined : value;
+    case 'prose': {
+      const pair = languagePair(value, true);
+      return allBlank(pair) ? undefined : pair;
+    }
     // Admin v2 E10 (a Text block's body). An editor typed in and emptied holds a document with
     // one empty paragraph, which the section schema refuses ("write some text"): with no words
     // in either language the key is omitted, so a body cleared, or touched and left empty,
     // saves as no body rather than leaving the form unsaveable.
     case 'richtext': {
-      const pair = (typeof value === 'object' && value !== null ? value : {}) as Row;
-      return docHasWords(pair['en']) || docHasWords(pair['ar']) ? value : undefined;
+      const pair = languagePair(value, false);
+      return docHasWords(pair['en']) || docHasWords(pair['ar']) ? pair : undefined;
     }
     case 'number':
       return typeof value === 'number' && Number.isFinite(value) ? value : undefined;

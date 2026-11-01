@@ -1,4 +1,9 @@
-import { ARTICLE_DOC_MAX_DEPTH, ARTICLE_DOC_MAX_MARKS, keptHref } from '@schemas/tiptap';
+import {
+  ARTICLE_DOC_MAX_DEPTH,
+  ARTICLE_DOC_MAX_MARKS,
+  ARTICLE_DOC_MAX_NODES,
+  keptHref,
+} from '@schemas/tiptap';
 import type { TiptapDoc, TiptapMark, TiptapNode } from '@schemas/tiptap';
 
 // A blog post saved before it had a Tiptap `body` holds its words only in the `body_html`
@@ -16,6 +21,23 @@ import type { TiptapDoc, TiptapMark, TiptapNode } from '@schemas/tiptap';
 // the renderer never puts there. Nothing is cleaned or repaired, so a cache the renderer wrote
 // comes back as a document that renders to the same bytes (tests/lib/blogBody.spec.ts holds
 // that over every article corpus), and anything else renders nothing.
+//
+// It is bounded like the walk it feeds (H15 review, SEC-1): a cache longer than
+// RENDERED_HTML_MAX_LENGTH is refused before a character is read, and the reading stops at the
+// first node past ARTICLE_DOC_MAX_NODES (the renderer renders such a document as nothing
+// anyway). Unbounded, a flood of short paragraphs written around the API was built node by
+// node before the renderer refused it: 100,000 of them cost over 100 ms of CPU on every
+// edge-cache miss of the post page.
+
+/**
+ * The longest cache read back, in characters (128 K). Sized from the longest real article as the
+ * renderer writes it (H15's as-built note): docs/security-exceptions.md, 11,000 words and 2,375
+ * nodes, renders to 86 KB. Only a post saved before posts had a Tiptap source holds nothing but
+ * this cache (the seed's two, a few KB each), so the cap needs room for an article, not for the
+ * node cap's longest: reading a cache at it costs a few milliseconds a language at worst (one
+ * paragraph of nothing but `&amp;`), where the length alone was unbounded.
+ */
+export const RENDERED_HTML_MAX_LENGTH = 131_072;
 
 const ENTITIES: Readonly<Record<string, string>> = {
   '&amp;': '&',
@@ -91,10 +113,10 @@ interface Frame {
 /**
  * The Tiptap document a cache of `renderTiptapToHtml`'s output was rendered from (one that
  * renders to the same bytes), or null when the value is anything else. Iterative, linear in the
- * text, and no deeper than an article may be.
+ * text, no longer than RENDERED_HTML_MAX_LENGTH, and no deeper or longer than an article may be.
  */
 export function docFromRenderedHtml(html: unknown): TiptapDoc | null {
-  if (typeof html !== 'string') return null;
+  if (typeof html !== 'string' || html.length > RENDERED_HTML_MAX_LENGTH) return null;
   const root: TiptapNode = { type: 'doc', content: [] };
   const stack: Frame[] = [{ close: '', node: root }];
   /** The innermost block: where the next node goes. */
@@ -116,9 +138,15 @@ export function docFromRenderedHtml(html: unknown): TiptapDoc | null {
     frame.full = true;
     return true;
   };
-  const append = (node: TiptapNode): void => {
+  /** Every node the document holds, counted as the walk counts them (the doc not included). */
+  let nodes = 0;
+  /** Places a node; false once the document holds more nodes than an article may. */
+  const append = (node: TiptapNode): boolean => {
+    nodes += 1;
+    if (nodes > ARTICLE_DOC_MAX_NODES) return false;
     const parent = block();
     (parent.content ??= []).push(node);
+    return true;
   };
 
   let rest = html;
@@ -130,9 +158,10 @@ export function docFromRenderedHtml(html: unknown): TiptapDoc | null {
       const text = readText(run);
       if (text === null || !placeInline()) return null;
       const runMarks = marks();
-      append(
+      const placed = append(
         runMarks.length > 0 ? { type: 'text', text, marks: runMarks } : { type: 'text', text },
       );
+      if (!placed) return null;
       continue;
     }
     let match: RegExpExecArray | null;
@@ -140,8 +169,8 @@ export function docFromRenderedHtml(html: unknown): TiptapDoc | null {
       const frame = top();
       if (stack.length === 1 || frame.close !== match[1]) return null;
       // A formatting tag closed around nothing held an empty run of words: `<strong></strong>`.
-      if (frame.mark && !frame.full) {
-        append({ type: 'text', text: '', marks: marks() });
+      if (frame.mark && !frame.full && !append({ type: 'text', text: '', marks: marks() })) {
+        return null;
       }
       stack.pop();
       // `</code></pre>` closes a code block in one step.
@@ -155,7 +184,7 @@ export function docFromRenderedHtml(html: unknown): TiptapDoc | null {
     }
     if (rest.startsWith('<br />') || rest.startsWith('<hr />')) {
       if (top().mark) return null;
-      append({ type: rest.startsWith('<br') ? 'hardBreak' : 'horizontalRule' });
+      if (!append({ type: rest.startsWith('<br') ? 'hardBreak' : 'horizontalRule' })) return null;
       rest = rest.slice('<br />'.length);
       continue;
     }
@@ -169,7 +198,7 @@ export function docFromRenderedHtml(html: unknown): TiptapDoc | null {
         attrs['width'] = Number(match[3]);
         attrs['height'] = Number(match[4]);
       }
-      append({ type: 'image', attrs });
+      if (!append({ type: 'image', attrs })) return null;
       rest = rest.slice(match[0].length);
       continue;
     }
@@ -185,7 +214,7 @@ export function docFromRenderedHtml(html: unknown): TiptapDoc | null {
       if (top().mark) return null;
       const node: TiptapNode = { type: 'codeBlock', content: [] };
       if (match[1] !== undefined) node.attrs = { language: match[1] };
-      append(node);
+      if (!append(node)) return null;
       stack.push({ close: 'code', node });
       rest = rest.slice(match[0].length);
       continue;
@@ -200,7 +229,7 @@ export function docFromRenderedHtml(html: unknown): TiptapDoc | null {
       } else if (blockNode !== undefined) {
         if (top().mark) return null;
         const node: TiptapNode = { ...blockNode, content: [] };
-        append(node);
+        if (!append(node)) return null;
         stack.push({ close: name, node });
       } else {
         return null;

@@ -181,6 +181,24 @@ describe('the bounds', () => {
     expect(read).toBe(0);
   });
 
+  it('refuses a node whose children pass the node budget before any child is read (H15 review, COR-3)', () => {
+    // The same budget inside the document: a quote holding the cap's worth of paragraphs is one
+    // node too many, and the walk says so before it reads, copies or stacks a single one.
+    for (const copy of [false, true]) {
+      let read = 0;
+      const counted = new Proxy(paragraphs(ARTICLE_DOC_MAX_NODES).content, {
+        get(target, key, receiver) {
+          if (typeof key === 'string' && /^\d+$/.test(key)) read += 1;
+          return Reflect.get(target, key, receiver) as unknown;
+        },
+      });
+      const body = doc([para([text('x')]), { type: 'blockquote', content: counted }]);
+      const result = readArticleDoc(body, copy);
+      expect('problem' in result && result.problem, `copy ${copy}`).toMatch(/too long/);
+      expect(read, `copy ${copy}`).toBe(0);
+    }
+  });
+
   it(`takes ${ARTICLE_DOC_MAX_DEPTH} levels and refuses one more`, () => {
     // nested(n) puts the text n + 1 levels down.
     expect(articleDocProblem(nested(ARTICLE_DOC_MAX_DEPTH - 1))).toBeNull();

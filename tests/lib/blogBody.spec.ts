@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { renderTiptapToHtml } from '@/lib/content/tiptap';
-import { docFromRenderedHtml } from '@/lib/content/renderedHtml';
+import { RENDERED_HTML_MAX_LENGTH, docFromRenderedHtml } from '@/lib/content/renderedHtml';
+import { ARTICLE_DOC_MAX_NODES } from '@schemas/tiptap';
 import { SEED_SERVICES } from '../fixtures/serviceSeeds';
 import { ARTICLE_CASES, LONG_ARTICLE, randomCorpus } from '../fixtures/articleCorpus';
 
@@ -140,10 +141,80 @@ describe('the reader takes back exactly the renderer’s markup', () => {
     expect(docFromRenderedHtml(deep)).toBeNull();
     expect(docFromRenderedHtml(marks)).toBeNull();
     expect(performance.now() - start).toBeLessThan(500);
-    // Many paragraphs are fine to READ: the renderer's own bound then renders a body past it as
-    // nothing (5,000 nodes).
-    const wide = '<p>x</p>'.repeat(10_000);
-    expect(renderTiptapToHtml(docFromRenderedHtml(wide))).toBe('');
+  });
+});
+
+describe('the reader is bounded like the walk it feeds (H15 review, SEC-1)', () => {
+  /** Fastest of `runs`, in ms, after a warm-up: what the code costs, not the machine's load. */
+  function fastest(fn: () => void, runs = 10): number {
+    for (let i = 0; i < 3; i += 1) fn();
+    let best = Infinity;
+    for (let i = 0; i < runs; i += 1) {
+      const start = performance.now();
+      fn();
+      best = Math.min(best, performance.now() - start);
+    }
+    return best;
+  }
+
+  it(`takes ${ARTICLE_DOC_MAX_NODES} nodes and refuses one more, as the renderer would`, () => {
+    // A paragraph and its words are two nodes.
+    const atTheCap = '<p>x</p>'.repeat(ARTICLE_DOC_MAX_NODES / 2);
+    const back = docFromRenderedHtml(atTheCap);
+    expect(back).not.toBeNull();
+    expect(renderTiptapToHtml(back)).toBe(atTheCap);
+    for (const more of ['<hr />', '<p>x</p>', '<ul><li></li></ul>', '<p><strong></strong></p>']) {
+      expect(docFromRenderedHtml(atTheCap + more), more).toBeNull();
+    }
+  });
+
+  it('a flood of paragraphs (100 KB, 25,000 nodes) is refused at the cap, for what the cap costs', () => {
+    // Before the bound every node of the flood was built (11 to 16 ms alone, five times the
+    // cap's own read), then the renderer refused it. Now the reading stops one node past the cap:
+    // measured alone, about 2 ms. The two are timed in turn, so the machine's load counts the
+    // same on both.
+    const flood = '<p>x</p>'.repeat(12_500);
+    const atTheCap = '<p>x</p>'.repeat(ARTICLE_DOC_MAX_NODES / 2);
+    expect(flood.length).toBe(100_000);
+    expect(docFromRenderedHtml(flood)).toBeNull();
+    let floodBest = Infinity;
+    let capBest = Infinity;
+    for (let i = 0; i < 15; i += 1) {
+      let start = performance.now();
+      docFromRenderedHtml(flood);
+      floodBest = Math.min(floodBest, performance.now() - start);
+      start = performance.now();
+      docFromRenderedHtml(atTheCap);
+      capBest = Math.min(capBest, performance.now() - start);
+    }
+    expect(floodBest).toBeLessThan(capBest * 2);
+  });
+
+  it(`reads a cache of ${RENDERED_HTML_MAX_LENGTH} characters and refuses one more, before reading it`, () => {
+    const words = (n: number) => `<p>${'a'.repeat(n - '<p></p>'.length)}</p>`;
+    const atTheCap = words(RENDERED_HTML_MAX_LENGTH);
+    expect(atTheCap.length).toBe(RENDERED_HTML_MAX_LENGTH);
+    expect(renderTiptapToHtml(docFromRenderedHtml(atTheCap))).toBe(atTheCap);
+    expect(docFromRenderedHtml(words(RENDERED_HTML_MAX_LENGTH + 1))).toBeNull();
+    // 20 million characters of words overflowed the text check's stack (a RangeError).
+    const huge = words(20_000_000);
+    expect(() => docFromRenderedHtml(huge)).not.toThrow();
+    expect(docFromRenderedHtml(huge)).toBeNull();
+    expect(fastest(() => docFromRenderedHtml(huge))).toBeLessThan(1);
+  });
+
+  it('a long real article fits the length cap with room, and reads back', () => {
+    // docs/fonts.md four times over: 1,748 nodes, about 10,700 words, near the longest real
+    // article measured (docs/security-exceptions.md, 86 KB rendered).
+    const four = doc(
+      Array.from({ length: 4 }, () => (LONG_ARTICLE as { content: unknown[] }).content).flat(),
+    );
+    const html = renderTiptapToHtml(four);
+    expect(html.length).toBeGreaterThan(75_000);
+    expect(html.length).toBeLessThan(RENDERED_HTML_MAX_LENGTH * 0.7);
+    // Read back to the same bytes (measured alone, about 2 ms; not asserted, as a wall-clock
+    // bound on this reader swings with the machine's load).
+    expect(renderTiptapToHtml(docFromRenderedHtml(html))).toBe(html);
   });
 });
 
@@ -198,6 +269,27 @@ describe('the post page renders its body from the source (postBodyHtml, getPostB
       expect(post?.slug).toBe('arabic-first-brand-systems');
       expect(post?.bodyHtml).toBeNull();
     }
+  });
+
+  it('a cache too long to read is no body, never a throw, and the post still renders (COR-5)', async () => {
+    // It used to throw outside renderBody's try (the text check's RangeError), so the post was
+    // a 404 while the blog list, the sitemap and llms.txt still listed it.
+    const huge = `<p>${'a'.repeat(20_000_000)}</p>`;
+    expect(() => postBodyHtml({ body: null, body_html: { en: huge } })).not.toThrow();
+    expect(postBodyHtml({ body: null, body_html: { en: huge } })).toBeNull();
+    postRow = { ...POST, body_html: { en: huge, ar: '<p>ع</p>' }, body: null };
+    const post = await getPostBySlug('arabic-first-brand-systems');
+    expect(post?.slug).toBe('arabic-first-brand-systems');
+    expect(post?.bodyHtml).toEqual({ en: '', ar: '<p>ع</p>' });
+  });
+
+  it('anything that throws while the body is read is no body, never a failed page', () => {
+    const throwing = {
+      get en(): string {
+        throw new Error('unreadable');
+      },
+    };
+    expect(postBodyHtml({ body: null, body_html: throwing })).toBeNull();
   });
 
   it('a row whose cache the post schema refuses is still a 404, as before H15', async () => {

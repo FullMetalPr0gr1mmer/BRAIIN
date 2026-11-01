@@ -48,20 +48,26 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
  * are) holds its words only in the cache, so the cache is read back into a Tiptap document by a
  * strict reader of exactly the renderer's own markup (docFromRenderedHtml) and rendered from
  * that: a cache the renderer wrote renders to the same bytes, and anything else renders nothing.
- * Never throws (renderBody).
+ * Never throws: the read-back runs inside this function's own try, not renderBody's (H15 review,
+ * COR-5: a cache that made it throw turned the post into a 404 while the blog list, the sitemap
+ * and llms.txt still listed it), so a body that cannot be read is no body and the post renders.
  */
 export function postBodyHtml(
   row: Pick<PostDetailRow, 'body' | 'body_html'>,
 ): LocalizedProse | null {
-  if (row.body === null || row.body === undefined) {
-    const cache = row.body_html;
-    if (!cache) return null;
-    return renderBody({
-      en: docFromRenderedHtml(cache.en),
-      ...(cache.ar === undefined ? {} : { ar: docFromRenderedHtml(cache.ar) }),
-    });
+  try {
+    if (row.body === null || row.body === undefined) {
+      const cache = row.body_html;
+      if (!cache) return null;
+      return renderBody({
+        en: docFromRenderedHtml(cache.en),
+        ...(cache.ar === undefined ? {} : { ar: docFromRenderedHtml(cache.ar) }),
+      });
+    }
+    return isRecord(row.body) ? renderBody(row.body) : null;
+  } catch {
+    return null;
   }
-  return isRecord(row.body) ? renderBody(row.body) : null;
 }
 
 /** The page's view of a post row: the row, and its body rendered from the source. */
