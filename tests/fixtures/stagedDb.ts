@@ -351,7 +351,7 @@ function readRowsRpc(db: Db, args: Row) {
     reads.some(
       (r) =>
         r.key === 'tenant_id' &&
-        !['seo_defaults', 'site_appearance', 'site_profile'].includes(r.table),
+        !['form_settings', 'seo_defaults', 'site_appearance', 'site_profile'].includes(r.table),
     )
   ) {
     return { data: null, error: { code: '22023', message: 'key' } };

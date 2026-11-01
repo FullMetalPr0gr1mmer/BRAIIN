@@ -75,7 +75,10 @@ select is(
     where not (a.attname::text = any (
             e.columns || e.exempt_columns
             || array['id', 'tenant_id', 'version', 'created_at', 'updated_at', 'created_by',
-                     'updated_by', 'published_at', 'scheduled_for', 'search_en', 'search_ar']))),
+                     'updated_by', 'published_at', 'scheduled_for', 'search_en', 'search_ar']
+            -- Computed by the database, never written by a client or a release (Admin v2 E8:
+            -- app.tg_form_consent_revision).
+            || case when e.table_name = 'form_settings' then array['consent_revision'] else '{}'::text[] end))),
   '',
   'every column of a registry table is classified: writable, immediate, or system');
 

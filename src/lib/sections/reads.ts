@@ -19,10 +19,14 @@ import type { SectionData } from './types';
 //   • disciplines (getPublishedDisciplines): the disciplines, their published services, the
 //     poster image;
 //   • the public identity (getIdentity) and the menus are on every page already
-//     (`site:identity`, `nav:all`, src/lib/http/cacheTags.ts).
+//     (`site:identity`, `nav:all`, src/lib/http/cacheTags.ts);
+//   • a section that renders one of the two forms reads the forms config (Admin v2 E8,
+//     `form_settings`): `forms:all`.
 
 const CARDS = ['portfolio:all', 'sectors:all', 'clients:all', 'services:all', 'media:all'];
 const DISCIPLINES = ['disciplines:all', 'services:all', 'media:all'];
+/** A section with the inquiry form: its "What do you need?" select and the forms config. */
+const INQUIRY = [...DISCIPLINES, 'forms:all'];
 
 export const SECTION_READS: Readonly<Record<SectionType, readonly string[]>> = {
   // Copy, the site's clip registry and the identity.
@@ -32,8 +36,8 @@ export const SECTION_READS: Readonly<Record<SectionType, readonly string[]>> = {
   // The marquee's client names and logos.
   clientsMarquee: ['clients:all', 'media:all'],
   servicesOverview: DISCIPLINES,
-  // The home inquiry's grouped "What do you need?" select.
-  contact: DISCIPLINES,
+  // The home inquiry's grouped "What do you need?" select, and the form's config.
+  contact: INQUIRY,
   social: [],
   cta: [],
   aboutStory: [],
@@ -41,7 +45,7 @@ export const SECTION_READS: Readonly<Record<SectionType, readonly string[]>> = {
   // Names, bios and portraits.
   team: ['team:all', 'media:all'],
   certifications: ['certifications:all'],
-  contactInquiry: DISCIPLINES,
+  contactInquiry: INQUIRY,
   contactChannels: [],
   faq: ['faq:all'],
   selectedWork: CARDS,
@@ -57,11 +61,12 @@ export const SECTION_READS: Readonly<Record<SectionType, readonly string[]>> = {
   projectGrid: CARDS,
   pageHead: [],
   projectCatalog: CARDS,
-  hello: DISCIPLINES,
+  hello: INQUIRY,
   serviceExplorer: DISCIPLINES,
   joinWhy: [],
   joinSteps: [],
-  joinApply: [],
+  // The Join form, as the forms config words it.
+  joinApply: ['forms:all'],
 };
 
 /** The tags of the sections a page renders (a hidden section renders nothing), each once. */

@@ -96,6 +96,7 @@ const PLURAL: Readonly<Record<ReleaseEntityType, string>> = {
   page_visibility: 'Page visibility',
   faq_item: 'Questions',
   site_appearance: 'Header',
+  form_settings: 'Forms',
 };
 
 /** One row of the dialog: a change, or every sort-only edit of one list ("reorders count once"). */

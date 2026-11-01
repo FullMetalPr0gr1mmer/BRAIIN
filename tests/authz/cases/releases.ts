@@ -719,6 +719,16 @@ export const cases: readonly Case[] = [
     releases: true,
   },
   {
+    // Admin v2 E8: staged like the identity, under the same capability (P-2).
+    name: 'forms config write (releases on)',
+    load: () => import('@/pages/api/admin/form-settings'),
+    method: 'PATCH',
+    url: '/api/admin/form-settings',
+    body: { application: { button: VALID_BILINGUAL }, version: 1 },
+    allow: ['admin', 'developer'],
+    releases: true,
+  },
+  {
     name: 'global SEO defaults write (releases on)',
     load: () => import('@/pages/api/admin/seo-defaults'),
     method: 'PATCH',

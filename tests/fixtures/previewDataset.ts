@@ -775,6 +775,17 @@ export function fixtureTables(): Record<string, Row[]> {
         updated_at: '2026-01-01T00:00:00+00:00',
       },
     ],
+    // Admin v2 E8: the forms config, a visitor reads all but the version, stamps and actors.
+    form_settings: [
+      {
+        tenant_id: TENANT,
+        inquiry: { button: BI('Send it', 'أرسل') },
+        application: {},
+        consent_revision: 0,
+        version: 1,
+        updated_at: '2026-01-01T00:00:00+00:00',
+      },
+    ],
     seo_defaults: [
       {
         tenant_id: TENANT,

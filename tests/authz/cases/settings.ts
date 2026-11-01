@@ -50,6 +50,22 @@ export const cases: readonly Case[] = [
     body: { brandName: VALID_BILINGUAL, version: 1 },
     allow: ['admin', 'developer'],
   },
+  // The forms config (Admin v2 E8, form_settings): §5 "General settings", Admin + Developer.
+  {
+    name: 'forms config read',
+    load: () => import('@/pages/api/admin/form-settings'),
+    method: 'GET',
+    url: '/api/admin/form-settings',
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'forms config write',
+    load: () => import('@/pages/api/admin/form-settings'),
+    method: 'PATCH',
+    url: '/api/admin/form-settings',
+    body: { inquiry: { button: VALID_BILINGUAL }, version: 1 },
+    allow: ['admin', 'developer'],
+  },
   {
     // Admin v2 U9: the identity's new contact and brand fields, and a hidden social account.
     name: 'site profile write, contact and brand',

@@ -37,6 +37,7 @@ const blog = await import('@/lib/data/blog');
 const certifications = await import('@/lib/data/certifications');
 const disciplines = await import('@/lib/data/disciplines');
 const faq = await import('@/lib/data/faq');
+const forms = await import('@/lib/data/forms');
 const ga4 = await import('@/lib/data/ga4');
 const navigation = await import('@/lib/data/navigation');
 const pageSections = await import('@/lib/data/pageSections');
@@ -58,6 +59,7 @@ const MODULES = {
   certifications,
   disciplines,
   faq,
+  forms,
   ga4,
   navigation,
   pageSections,
@@ -298,6 +300,24 @@ const CASES: Record<string, () => Promise<void>> = {
     // Admin v2 U11: anon's Search Console column of the row.
     const { value, report } = await inPreview(() => siteVerification.getSearchConsoleToken());
     expect(value).toBe('FixtureCode_0123456789');
+    clean(report);
+  },
+  'forms.getFormSettings': async () => {
+    // Admin v2 E8: anon's four columns of the row; the fixture rewords the inquiry button.
+    const { value, report } = await inPreview(() => forms.getFormSettings());
+    expect(value.inquiry.button).toEqual({ en: 'Send it', ar: 'أرسل' });
+    expect(value.consentRevision).toBe(0);
+    clean(report);
+  },
+  'forms.formSettingsFor': async () => {
+    // Once per request: the memo on locals.
+    const locals: { formSettings?: ReturnType<typeof forms.getFormSettings> } = {};
+    const { value, report } = await inPreview(async () => {
+      const first = forms.formSettingsFor(locals);
+      expect(forms.formSettingsFor(locals)).toBe(first);
+      return first;
+    });
+    expect(value.inquiry.button?.en).toBe('Send it');
     clean(report);
   },
   'ga4.getGa4MeasurementId': async () => {

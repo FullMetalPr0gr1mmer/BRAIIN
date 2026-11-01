@@ -78,6 +78,7 @@ export const RELEASE_READ_TOTAL_IDS_MAX = 2_000;
  * `tenant_id` read of any other table, which would be the whole table in one read.
  */
 export const RELEASE_SINGLETON_TABLES: readonly string[] = [
+  'form_settings',
   'seo_defaults',
   'site_appearance',
   'site_profile',

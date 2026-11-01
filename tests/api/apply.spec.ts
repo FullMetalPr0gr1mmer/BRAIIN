@@ -15,22 +15,36 @@ let insertError = false;
 let insertThrows = false;
 let encryptThrows = false;
 let uploadError = false;
+/** The published forms config row (Admin v2 E8): null = none, 'error' = unreadable. */
+let formRow: Record<string, unknown> | null | 'error' = null;
 const inserts: Record<string, unknown>[] = [];
 const uploads: { path: string; type: string }[] = [];
 const removed: string[][] = [];
 const rpcCalls: Record<string, unknown>[] = [];
+/** When each read starts and the open flag is answered (CR9: the reads run together). */
+const events: string[] = [];
 
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
     from: (table: string) => {
+      events.push(`read:${table}`);
       const b: Record<string, unknown> = {};
       for (const m of ['select', 'eq']) b[m] = () => b;
-      b['maybeSingle'] = async () =>
-        table === 'site_profile'
+      b['maybeSingle'] = async () => {
+        if (table === 'site_profile') {
+          for (let i = 0; i < 5; i += 1) await Promise.resolve();
+          events.push('profile-answered');
+        }
+        return table === 'site_profile'
           ? accepting === 'error'
             ? { data: null, error: { message: 'down' } }
             : { data: { accepting_applications: accepting }, error: null }
-          : { data: null, error: null };
+          : table === 'form_settings'
+            ? formRow === 'error'
+              ? { data: null, error: { message: 'down' } }
+              : { data: formRow, error: null }
+            : { data: null, error: null };
+      };
       b['insert'] = async (row: Record<string, unknown>) => {
         if (insertThrows) throw new Error('socket closed');
         inserts.push(row);
@@ -140,10 +154,12 @@ beforeEach(() => {
   insertThrows = false;
   encryptThrows = false;
   uploadError = false;
+  formRow = null;
   inserts.length = 0;
   uploads.length = 0;
   removed.length = 0;
   rpcCalls.length = 0;
+  events.length = 0;
 });
 
 describe('POST /api/apply — refusals, in order', () => {
@@ -335,5 +351,126 @@ describe('POST /api/apply — storing', () => {
     const ar = await send(form({ locale: 'ar' }), { json: false });
     expect(ar.headers.get('location')).toBe('/ar/join?status=ok#apply');
     expect(ar.headers.get('cache-control')).toBe('no-store');
+  });
+});
+
+describe('POST /api/apply — the published forms config (Admin v2 E8)', () => {
+  const join = (application: Record<string, unknown>, revision = 0) => ({
+    inquiry: {},
+    application,
+    consent_revision: revision,
+  });
+
+  it('a CV the config requires is refused when none was sent (422 names cv), nothing stored', async () => {
+    formRow = join({ fields: { cv: { required: true } } });
+    const res = await send(form({}, null));
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ status: 'invalid', fields: ['cv'] });
+    expect(inserts).toHaveLength(0);
+    expect(rpcCalls.filter((a) => a['p_scope'] === 'apply:email')).toHaveLength(0);
+  });
+
+  it('a LinkedIn link and crafts the config requires are refused when empty', async () => {
+    formRow = join({ fields: { linkedin: { required: true }, skills: { required: true } } });
+    const fd = form();
+    fd.delete('skills');
+    const res = await send(fd);
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { fields: string[] }).fields.sort()).toEqual([
+      'linkedin',
+      'skills',
+    ]);
+  });
+
+  it('a control the config hides is dropped: the CV is not stored, the crafts not kept', async () => {
+    formRow = join({ fields: { cv: { visible: false }, skills: { visible: false } } });
+    expect(await statusOf(await send(form()))).toBe('ok');
+    expect(uploads).toHaveLength(0);
+    expect(inserts[0]!['cv_path']).toBeNull();
+    expect(inserts[0]!['skills']).toEqual([]);
+  });
+
+  it('a reworded consent version is accepted up to the published revision, never past it', async () => {
+    formRow = join({ consent: { application: { en: 'I agree', ar: 'أوافق' } } }, 3);
+    expect(
+      await statusOf(await send(form({ policy_version: `${RECRUITMENT_POLICY_VERSION}.r3` }))),
+    ).toBe('ok');
+    expect(inserts[0]!['consent_version']).toBe(`${RECRUITMENT_POLICY_VERSION}.r3`);
+    // An older revision is a wording a cached page really showed.
+    expect(
+      await statusOf(await send(form({ policy_version: `${RECRUITMENT_POLICY_VERSION}.r2` }))),
+    ).toBe('ok');
+    const ahead = await send(form({ policy_version: `${RECRUITMENT_POLICY_VERSION}.r4` }));
+    expect(ahead.status).toBe(422);
+    expect(await ahead.json()).toEqual({ status: 'invalid', fields: ['policyVersion'] });
+    expect(inserts).toHaveLength(2);
+  });
+
+  it('a revision on a notice older than the forms config is refused: no page ever showed that pair', async () => {
+    formRow = join({ consent: { application: { en: 'I agree', ar: 'أوافق' } } }, 1);
+    // 2026-09-30 is a published notice, but no reworded form ever showed it.
+    const res = await send(form({ policy_version: '2026-09-30.r1' }));
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ status: 'invalid', fields: ['policyVersion'] });
+    expect(inserts).toHaveLength(0);
+    // The bare older notice stays accepted (an edge-cached page can still show it).
+    expect(await statusOf(await send(form({ policy_version: '2026-09-30' })))).toBe('ok');
+  });
+
+  it('with no row a reworded version is refused: no wording was ever published', async () => {
+    const res = await send(form({ policy_version: `${RECRUITMENT_POLICY_VERSION}.r1` }));
+    expect(res.status).toBe(422);
+  });
+
+  it('an unreadable config fails closed (503 unavailable), as the limiter does', async () => {
+    formRow = 'error';
+    const res = await send(form());
+    expect(res.status).toBe(503);
+    expect(await statusOf(res)).toBe('unavailable');
+    expect(inserts).toHaveLength(0);
+  });
+
+  it('a page drawn before a control became required still sends: its claim narrows the config (CR1)', async () => {
+    formRow = join({ fields: { cv: { required: true }, linkedin: { required: true } } });
+    // Drawn when nothing was required: the hidden control was empty.
+    const stale = await send(form({ required_fields: '' }, null));
+    expect(stale.status).toBe(200);
+    // Drawn when only LinkedIn was: the CV may still be missing, LinkedIn may not.
+    const half = await send(form({ required_fields: 'linkedin' }, null));
+    expect(half.status).toBe(422);
+    expect(await half.json()).toEqual({ status: 'invalid', fields: ['linkedin'] });
+    // Drawn under this config, or no claim at all: both are required.
+    for (const claim of ['linkedin cv', null]) {
+      const fresh = await send(form({ required_fields: claim }, null));
+      expect(fresh.status).toBe(422);
+      expect(((await fresh.json()) as { fields: string[] }).fields.sort()).toEqual([
+        'cv',
+        'linkedin',
+      ]);
+    }
+    expect(inserts).toHaveLength(1);
+  });
+
+  it('a claim never keeps what the config hides (minimisation follows the server)', async () => {
+    formRow = join({ fields: { cv: { visible: false } } });
+    expect(await statusOf(await send(form({ required_fields: 'cv' })))).toBe('ok');
+    expect(uploads).toHaveLength(0);
+  });
+
+  it('the config is read beside the open flag, and the answers keep their order (CR9)', async () => {
+    expect(await statusOf(await send(form()))).toBe('ok');
+    expect(events.indexOf('read:form_settings')).toBeGreaterThanOrEqual(0);
+    expect(events.indexOf('read:form_settings')).toBeLessThan(events.indexOf('profile-answered'));
+    // Closed is still closed with an unreadable config, and nothing is counted.
+    accepting = false;
+    formRow = 'error';
+    rpcCalls.length = 0;
+    expect(await statusOf(await send(form()))).toBe('closed');
+    expect(rpcCalls).toHaveLength(0);
+  });
+
+  it('a config row that does not parse costs its parts, never the form (the built-in rules)', async () => {
+    formRow = join({ fields: { cv: { required: 'yes' } }, button: '<b>x</b>' });
+    expect(await statusOf(await send(form({}, null)))).toBe('ok');
   });
 });

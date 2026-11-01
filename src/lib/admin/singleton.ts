@@ -106,6 +106,12 @@ export interface SingletonConfig {
     sb: SupabaseClient;
     row: Record<string, unknown>;
   }) => Promise<Record<string, unknown> | void>;
+  /**
+   * With releases on only: what a staged read or save adds from the LIVE row, beside the row
+   * with the pending change laid over it (the forms config's live consent lines, Admin v2 E8,
+   * so its editor can say which version a publish will post). Never written.
+   */
+  stagedExtras?: (live: Record<string, unknown> | null) => Record<string, unknown>;
   /** Returned by GET when no row exists yet. */
   defaults: Record<string, unknown>;
   /**

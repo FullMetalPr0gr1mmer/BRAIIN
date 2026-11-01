@@ -121,6 +121,17 @@ export const RELEASE_ENTITY_META: Readonly<Record<ReleaseEntityType, ReleaseEnti
   },
   // The FAQ (Admin v2 U7, 0098): Contact-page content (pages.write, P-2).
   faq_item: content('collections', 'pages.write', 10, true),
+  // The forms config (Admin v2 E8): "Identity + footer + forms config" publish under
+  // settings.general (P-2); a singleton, never removed by a release.
+  form_settings: {
+    area: 'settings',
+    authorCaps: ['settings.general'],
+    removeCap: null,
+    key: 'tenant_id',
+    applyOrder: 110,
+    hasStatus: false,
+    publishFlag: null,
+  },
   // The site's appearance settings (Admin v2 E5): "Theme + header/intro appearance" publish
   // under theme.edit (P-2); a singleton, never removed by a release.
   site_appearance: {

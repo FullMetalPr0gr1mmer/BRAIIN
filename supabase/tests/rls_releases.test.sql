@@ -586,8 +586,8 @@ select is(
 -- ── 9. The registry and the switch-on flag ──────────────────────────────────────
 set local role authenticated;
 select _as('content_creator', '38000000-0000-0000-0000-0000000000c1');
-select is((select count(*)::int from app.release_entities), 23,
-  'CMS staff read the registry (twenty-three entity types: page visibility joined in 0057, the FAQ in 0098, the header in E5)');
+select is((select count(*)::int from app.release_entities), 24,
+  'CMS staff read the registry (twenty-four entity types: page visibility joined in 0057, the FAQ in 0098, the forms config in E8, the header in E5)');
 select ok(app.can_author('service') and not app.can_author('redirect')
           and not app.can_stage_delete('service'),
   'content creator: authors services, not redirects, and stages no removal');

@@ -35,6 +35,17 @@ export const RECRUITMENT_POLICY_VERSIONS = ['2026-09-30', '2026-10-04'] as const
 /** The notice the form shows now. */
 export const RECRUITMENT_POLICY_VERSION: (typeof RECRUITMENT_POLICY_VERSIONS)[number] =
   RECRUITMENT_POLICY_VERSIONS[RECRUITMENT_POLICY_VERSIONS.length - 1]!;
+/**
+ * The notices a reworded consent revision (`<date>.r<N>`, Admin v2 E8) may name: the notice
+ * current when the forms config shipped, and every one after it. A page only ever posts
+ * `<the notice it showed>.r<N>` (src/lib/forms/config.ts consentVersion), so an older date
+ * with a revision was never shown and is refused. A later notice is appended to
+ * RECRUITMENT_POLICY_VERSIONS and joins this list by itself, so a cached `<previous>.rN` page
+ * still sends.
+ */
+export const RECRUITMENT_REVISABLE_VERSIONS: readonly string[] = RECRUITMENT_POLICY_VERSIONS.slice(
+  RECRUITMENT_POLICY_VERSIONS.indexOf('2026-10-04'),
+);
 
 /** `{brand}` is filled from site_profile (the brand is data — CLAUDE.md §1); see recruitmentConsent(). */
 export interface RecruitmentConsentCopy {
@@ -64,7 +75,14 @@ export const RECRUITMENT_CONSENT: Record<'en' | 'ar', RecruitmentConsentCopy> = 
  * The consent copy for a locale with the brand (or legal name) filled in, as written: a
  * function replacement, so a name is never read as a `$&`-style replacement pattern.
  */
-export function recruitmentConsent(locale: 'en' | 'ar', brand: string): RecruitmentConsentCopy {
-  const c = RECRUITMENT_CONSENT[locale];
-  return { ...c, application: c.application.replaceAll('{brand}', () => brand) };
+export function recruitmentConsent(
+  locale: 'en' | 'ar',
+  brand: string,
+  lines?: { application: string; futureRoles: string },
+): RecruitmentConsentCopy {
+  // Admin v2 E8: the two lines as the forms config words them (src/lib/forms/config.ts
+  // applicationView), versioned with the form; `{brand}` is filled in either line.
+  const c = { ...RECRUITMENT_CONSENT[locale], ...lines };
+  const fill = (text: string) => text.replaceAll('{brand}', () => brand);
+  return { ...c, application: fill(c.application), futureRoles: fill(c.futureRoles) };
 }

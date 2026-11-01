@@ -164,6 +164,8 @@ describe('waitingFor: the roles that could publish it', () => {
     page_visibility: { edit: ['admin', 'developer'], remove: [] },
     // P-2 "Theme + header/intro appearance": theme.edit (Admin v2 E5); never removed.
     site_appearance: { edit: ['admin', 'developer'], remove: [] },
+    // P-2 "Identity + footer + forms config": settings.general (Admin v2 E8); never removed.
+    form_settings: { edit: ['admin', 'developer'], remove: [] },
   };
 
   for (const entityType of RELEASE_ENTITY_TYPES) {

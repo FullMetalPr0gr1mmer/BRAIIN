@@ -189,6 +189,9 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   ctaShow: true,
   ctaLabel: BI('Start a project', 'ابدأ مشروعك'),
   ctaHref: '/contact#inquiry',
+  // singletons: form_settings (Admin v2 E8)
+  inquiry: { button: BI('Send it', 'أرسل') },
+  application: { consent: { futureRoles: BI('Keep me in mind', 'تذكّروني') } },
   // entity SEO
   entityType: 'service',
   entityId: UUID_A,

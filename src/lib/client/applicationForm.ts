@@ -56,6 +56,9 @@ export const APPLY_FIELD_OF_KEY = {
   locale: 'locale',
 } as const;
 
+/** Keys a 422 names that are no schema key: a CV the forms config requires (Admin v2 E8). */
+const APPLY_FILE_FIELDS: Readonly<Record<string, string>> = { cv: 'cv' };
+
 /** CV_MAX_BYTES. */
 export const CV_LIMIT_BYTES = 10 * 1024 * 1024;
 /** CV_KINDS' extensions (a .doc is refused — owner decision J2). */
@@ -68,6 +71,8 @@ export function applyFieldsFor(keys: unknown): string[] {
   for (const key of keys) {
     if (typeof key === 'string' && Object.hasOwn(APPLY_FIELD_OF_KEY, key)) {
       out.add(APPLY_FIELD_OF_KEY[key as keyof typeof APPLY_FIELD_OF_KEY]);
+    } else if (typeof key === 'string' && Object.hasOwn(APPLY_FILE_FIELDS, key)) {
+      out.add(APPLY_FILE_FIELDS[key]!);
     }
   }
   return [...out];
@@ -142,6 +147,15 @@ export function applyOutcome(http: number, body: unknown): ApplyAnswer {
   else status = success ? 'error' : byHttp;
   const fields = status === 'invalid' && isRecord(body) ? applyFieldsFor(body['fields']) : [];
   return { status, fields };
+}
+
+/**
+ * Whether the crafts block a send: the forms config requires them (the group's
+ * `data-required`, Admin v2 E8) and no chip is ticked. A checkbox group has no `required` of
+ * its own, so formErrors' checks never see it.
+ */
+export function skillsMissing(group: { required: boolean; ticked: number }): boolean {
+  return group.required && group.ticked === 0;
 }
 
 /** GET /api/apply/status's body → open (true / false), or null when it is not that answer. */
@@ -236,7 +250,39 @@ export function mountApplicationForm(form: HTMLFormElement): void {
     return problem;
   };
 
+  // ── The crafts (Admin v2 E8): one note for the group, never one per chip ──
+  const chips = form.querySelector<HTMLElement>('.af-chips');
+  const chipBoxes = chips
+    ? [...chips.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    : [];
+  const CHIPS_ERROR = 'af-skills-error';
+  const clearChips = () => {
+    if (!chips) return;
+    document.getElementById(CHIPS_ERROR)?.remove();
+    chips.classList.remove('is-invalid');
+    chips.removeAttribute('aria-describedby');
+    for (const box of chipBoxes) box.removeAttribute('aria-invalid');
+  };
+  const markChips = (message: string) => {
+    if (!chips) return;
+    clearChips();
+    const note = document.createElement('p');
+    note.className = 'field-error';
+    note.id = CHIPS_ERROR;
+    note.textContent = message;
+    (chips.querySelector('.af-chips__row') ?? chips).insertAdjacentElement('afterend', note);
+    chips.setAttribute('aria-describedby', CHIPS_ERROR);
+    chips.classList.add('is-invalid');
+    // So focusFirstInvalid lands on the first chip when the crafts are the first problem.
+    for (const box of chipBoxes) box.setAttribute('aria-invalid', 'true');
+  };
+  /** The message the group carries (the config's requirement), else the generic one. */
+  const chipsMessage = (fallback: string) => chips?.dataset['errRequired'] ?? fallback;
+
   clearErrorsOnInput(form);
+  form.addEventListener('change', (e) => {
+    if (e.target instanceof HTMLInputElement && chipBoxes.includes(e.target)) clearChips();
+  });
   // After clearErrorsOnInput's own listener (registered first, so it runs first): a new
   // file clears the old error, then this re-judges the new one.
   form.addEventListener('change', (e) => {
@@ -286,7 +332,13 @@ export function mountApplicationForm(form: HTMLFormElement): void {
     if (consent) clearFieldError(consent);
     const noConsent = consent !== null && !consent.checked;
     if (noConsent) markConsent();
-    if (problems.size > 0 || cvBad || noConsent) {
+    const noSkills = skillsMissing({
+      required: chips?.dataset['required'] === 'true',
+      ticked: chipBoxes.filter((box) => box.checked).length,
+    });
+    if (noSkills) markChips(chipsMessage(messages.required));
+    else clearChips();
+    if (problems.size > 0 || cvBad || noConsent || noSkills) {
       showStatus(form, region, 'invalid');
       focusFirstInvalid(form);
       return;
@@ -309,11 +361,14 @@ export function mountApplicationForm(form: HTMLFormElement): void {
         showFieldErrors(form, named, messages, { focus: false });
         renderCv();
         if (consent && named.has(consent.name)) markConsent();
+        // A checkbox group is no control formErrors marks: the crafts are marked here.
+        if (named.has('skills')) markChips(chipsMessage(messages.invalid));
       }
       if (status === 'too_large' || status === 'bad_type') renderCv(true);
       if (status === 'closed') setClosed(true);
       if (status === 'ok') {
         form.reset();
+        clearChips();
         renderCv();
       }
       showStatus(form, region, status);
