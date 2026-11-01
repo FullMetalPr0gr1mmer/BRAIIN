@@ -8,7 +8,8 @@ import MediaImage from '@/components/media/MediaImage.astro';
 import AccentText from '@/components/ui/AccentText.astro';
 
 // A Gallery (Admin v2 E10, the prototype's "Borderless image grid"): up to twelve pictures
-// from the media library on paper, any number of galleries a page.
+// from the media library on paper; up to eight Galleries and Videos a page together
+// (MEDIA_BLOCKS_PER_PAGE).
 //
 // The pictures are media library images referenced by `mediaId`, resolved by SectionRenderer's
 // one read of the page's section media (getSectionImages: 0024's and 0102's anon policy,

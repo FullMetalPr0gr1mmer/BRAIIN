@@ -8,7 +8,8 @@ import AccentText from '@/components/ui/AccentText.astro';
 
 // A Video (Admin v2 E10, the prototype's "Full width clip from the brand film"): on black, an
 // optional tag, heading and line, then a full-width still that plays a window of a site film
-// while it is on screen, any number a page.
+// while it is on screen; up to eight Galleries and Videos a page together
+// (MEDIA_BLOCKS_PER_PAGE).
 //
 // The film follows the site's clip rules through MediaFrame and src/lib/client/clips.ts, the
 // same as Our Work's intro frames and the case study's final film:
@@ -27,8 +28,8 @@ import AccentText from '@/components/ui/AccentText.astro';
 // The still is a media library image (`mediaId`) at its own width and height, lazy, with the
 // library's alt text: it is what a visitor sees first and what stays without motion. It is
 // resolved by SectionRenderer's one read of the page's section media and arrives as route data
-// (`data.images`), never read here. With no still that resolves the section renders nothing (a frame with nothing in it until a clip
-// plays would be an empty box under reduced motion).
+// (`data.images`), never read here. With no still that resolves the section renders nothing
+// (a frame with nothing in it until a clip plays would be an empty box under reduced motion).
 
 interface Props extends VideoSectionContent {
   locale: Locale;

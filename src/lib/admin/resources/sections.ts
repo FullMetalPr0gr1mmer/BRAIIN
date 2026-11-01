@@ -1,10 +1,6 @@
 import { SectionUpdateSchema, SectionWriteSchema } from '@schemas/admin';
 import { sectionContentIssues, type SectionType } from '@schemas/sections';
-import {
-  MEDIA_BLOCKS_FULL,
-  MEDIA_BLOCKS_PER_PAGE,
-  MEDIA_BLOCK_TYPES,
-} from '@schemas/sectionTypes';
+import { MEDIA_BLOCKS_FULL, MEDIA_BLOCKS_PER_PAGE, MEDIA_BLOCK_TYPES } from '@schemas/sectionTypes';
 import { isSampleRating } from '@/lib/sections/samples';
 import { liveDb } from '@/lib/release/overlayDb';
 import { ValidationError } from '../errors';
