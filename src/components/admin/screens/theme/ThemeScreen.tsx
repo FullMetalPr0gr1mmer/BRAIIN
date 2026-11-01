@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import ColorField from '@/components/admin/fields/ColorField';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import Note from '@/components/admin/kit/Note';
@@ -6,7 +6,7 @@ import Segmented from '@/components/admin/kit/Segmented';
 import { confirmDialog } from '@/lib/admin/confirm';
 import { historyTargetOf } from '@/lib/admin/historyTarget';
 import { saveModeFor } from '@/lib/admin/saveMode';
-import { useEntitySave } from '@/lib/admin/useEntitySave';
+import { useEntitySave, type EntitySave } from '@/lib/admin/useEntitySave';
 import type { FieldDef } from '@/lib/admin/uiSchema';
 import { themesUi } from '@/lib/admin/ui/themes';
 import { contrast } from '@theme/colour';
@@ -65,10 +65,15 @@ export const THEME_SCREEN = '/admin/appearance/theme';
 /**
  * A first save created the theme: open this screen again, which now finds it (findThemeId, a
  * pending create included), rather than the record's generic address, /admin/themes/<id>,
- * which only redirects here (CR5).
+ * which only redirects here (CR5). Through the save's own `leave`, which lets the
+ * unsaved-changes guard go first: the form was dirty when Save was pressed and the guard is
+ * still on as the create lands, so a bare window.location.assign met the browser's "Leave
+ * site?", and a cancel left a new form whose next Save created a second theme (CR5
+ * follow-up). The bare assign is only for a save without `leave` (a test's stand-in).
  */
-export function reopenThemeScreen(): void {
-  window.location.assign(THEME_SCREEN);
+export function reopenThemeScreen(leave: EntitySave['leave']): void {
+  if (leave) leave(THEME_SCREEN);
+  else window.location.assign(THEME_SCREEN);
 }
 
 // Primary and Hover carry white text (its contrast is the field's line); Accent is light text
@@ -85,6 +90,10 @@ const colourField = (role: ThemeRole, swatches?: readonly string[]): FieldDef =>
 
 export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
   const target = { kind: 'resource', slug: 'themes', staged: releaseMode } as const;
+  // The save's `leave`, for the create's callback, which is handed to the hook before the
+  // hook has answered (read when the create lands, long after this render).
+  const leave = useRef<EntitySave['leave']>(undefined);
+  const onCreated = useCallback(() => reopenThemeScreen(leave.current), []);
   const save = useEntitySave(target, id, {
     fields: THEME_FIELDS,
     mode: saveModeFor(target),
@@ -93,8 +102,9 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
       settings: cloneSettings(DEFAULT_THEME_SETTINGS),
       isActive: true,
     },
-    onCreated: reopenThemeScreen,
+    onCreated,
   });
+  leave.current = save.leave;
   const settings = useMemo(() => settingsOf(save.values['settings']), [save.values]);
   // Simple mode's main colour goes into the form as typed (typedMain), so the box keeps up;
   // the palette made from it and the gate over it follow in a deferred render, which React

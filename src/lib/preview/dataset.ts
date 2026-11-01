@@ -47,7 +47,7 @@ import { ANON_COLUMNS, createMirror, visibilityClosure } from './visibility';
 // pages with `range()` in key order and an exact count, and paging stops at the COUNT, not
 // at a short page (a project whose max_rows is lower still reads every row). A table is
 // capped (PREVIEW_ROW_CAP, media PREVIEW_MEDIA_ROW_CAP); more rows than that marks the
-// render untrusted rather than silently showing a partial table. The seven tables anon
+// render untrusted rather than silently showing a partial table. The eight tables anon
 // reads by column are read with exactly anon's columns (and DATASET_ONLY_COLUMNS).
 //
 // Pending changes: one paged read of content_drafts per request, each row parsed. A draft is
