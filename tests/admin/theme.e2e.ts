@@ -204,6 +204,23 @@ test.describe('as admin', () => {
 
     // Every page links the live version, once, in either language.
     const [en] = await linksOn(page, '/');
+    if (en === undefined) {
+      // Say why, in the CI log: the row as staff read it, how the page was cached (a failed
+      // theme read makes it no-store), and what the stylesheet route itself answers.
+      const home = await page.request.get('/');
+      const sheet = await page.request.get('/styles/theme.css');
+      const tokens = row['tokens'];
+      throw new Error(
+        `no theme link on /: ${JSON.stringify({
+          isActive: row['isActive'] ?? row['is_active'],
+          tokenKeys: tokens && typeof tokens === 'object' ? Object.keys(tokens).length : tokens,
+          homeCache: home.headers()['cache-control'],
+          sheetStatus: sheet.status(),
+          sheetCache: sheet.headers()['cache-control'],
+          sheetBody: (await sheet.text()).slice(0, 120),
+        })}`,
+      );
+    }
     expect(await linksOn(page, '/')).toHaveLength(1);
     expect(await linksOn(page, '/ar/')).toEqual([en]);
     // The address names the hash of the body, never the row's version (E4-SEC-1).
