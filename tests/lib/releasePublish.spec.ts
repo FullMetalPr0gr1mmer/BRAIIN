@@ -785,9 +785,7 @@ describe('publishing', () => {
     expect(syncs).toMatchObject({ redirects: 0, visibility: 1, tenants: [T] });
     expect(res.data['kvSynced']).toBe(false);
     const purge = svc.calls.find((c) => c.fn === 'record_release_purge');
-    expect(purge!.args['p_tags']).toEqual(
-      expect.arrayContaining(['page:about', 'page:join']),
-    );
+    expect(purge!.args['p_tags']).toEqual(expect.arrayContaining(['page:about', 'page:join']));
   });
 
   it('a page-visibility change rebuilds the snapshot, and says when the edge missed it', async () => {
