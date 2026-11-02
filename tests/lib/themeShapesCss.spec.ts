@@ -110,6 +110,21 @@ describe('the corners: every component radius is a token or a fixed shape', () =
     expect(new Set(scaled.map((r) => r.sheet))).toEqual(new Set(SHEETS));
   });
 
+  it('a clip that rounds a card follows the corners too, never a fixed radius', () => {
+    // The discipline card on a wide screen draws its corners with clip-path's `round` (its
+    // border-radius is 0 there); a fixed `round 18px` stayed rounded under Square corners.
+    const clips = ALL.filter((r) => / round /.test(r.decls.get('clip-path') ?? ''));
+    expect(clips.map((r) => `${r.sheet} ${r.selector}`)).toEqual([
+      'global.css .disc__stage:not(:has(> :nth-child(7))) .disc-card__clip',
+      "global.css html[dir='rtl'] .disc__stage:not(:has(> :nth-child(7))) .disc-card__clip",
+    ]);
+    for (const r of clips) {
+      expect(r.decls.get('clip-path')!.replace(/\s+/g, ' '), r.selector).toMatch(
+        / round calc\(18px \* var\(--bs-radius-scale, 1\)\) ?\)$/,
+      );
+    }
+  });
+
   it('the buttons follow the button style', () => {
     const buttons = ALL.filter((r) => r.decls.get('border-radius') === BUTTON).map(
       (r) => r.selector,
@@ -211,10 +226,15 @@ describe('the headings: weight and case', () => {
   });
 
   it('no Arabic (RTL) rule reads a shape or type token; their `none` overrides stay', () => {
+    // One exception: the mirrored clip of the discipline card (a corner, not a type token),
+    // which must follow the corners exactly as its left-to-right twin does.
     const rtl = ALL.filter((r) => r.selector.includes("[dir='rtl']"));
     for (const r of rtl) {
-      for (const v of r.decls.values()) {
-        for (const name of SHAPE_TOKEN_NAMES) expect(v, r.selector).not.toContain(name);
+      for (const [prop, v] of r.decls) {
+        for (const name of SHAPE_TOKEN_NAMES) {
+          if (prop === 'clip-path' && name === '--bs-radius-scale') continue;
+          expect(v, r.selector).not.toContain(name);
+        }
       }
     }
     // Each capitalised heading with an Arabic twin keeps it at `none`.

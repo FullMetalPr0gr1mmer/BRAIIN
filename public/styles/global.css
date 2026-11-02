@@ -2434,12 +2434,16 @@ html[dir='rtl'] .disc-card__line {
     inset-inline-end: auto;
     width: var(--disc-wmax);
     border-radius: 0; /* the clip rounds the visible corners */
-    clip-path: inset(0 calc(var(--disc-wmax) - var(--disc-v)) 0 0 round 18px);
+    clip-path: inset(
+      0 calc(var(--disc-wmax) - var(--disc-v)) 0 0 round calc(18px * var(--bs-radius-scale, 1))
+    );
     pointer-events: auto;
     transition: clip-path 0.75s var(--bs-ease);
   }
   html[dir='rtl'] .disc__stage:not(:has(> :nth-child(7))) .disc-card__clip {
-    clip-path: inset(0 0 0 calc(var(--disc-wmax) - var(--disc-v)) round 18px);
+    clip-path: inset(
+      0 0 0 calc(var(--disc-wmax) - var(--disc-v)) round calc(18px * var(--bs-radius-scale, 1))
+    );
   }
 
   /* Active = the hovered card... */
