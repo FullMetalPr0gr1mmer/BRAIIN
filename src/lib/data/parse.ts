@@ -56,7 +56,27 @@ export function reportLoadError(
  * (the walk's plain words or an error's name), never the body's content.
  */
 export function reportBodyRefused(entity: string, id: string, lang: string, reason: string): void {
-  console.warn(`[content] ${entity} body not rendered (id=${id}, lang=${lang}): ${reason}`);
+  console.warn(
+    `[content] ${entity} body not rendered (id=${logSafe(id)}, lang=${logSafe(lang)}): ${logSafe(reason)}`,
+  );
+}
+
+/**
+ * A value made safe for one log line (H15 check): a refusal reason can quote a stored node or
+ * mark type, which a row written around the Worker controls. Anything quoted is replaced by an
+ * ellipsis (never stored content in a log), control characters (a forged second line) become
+ * spaces, and the whole is capped.
+ */
+export function logSafe(value: string): string {
+  const unquoted = value.replace(/"[^"]*"?/g, '"…"');
+  let out = '';
+  for (const ch of unquoted) {
+    const code = ch.codePointAt(0) ?? 0;
+    const control =
+      code < 0x20 || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029;
+    out += control ? ' ' : ch;
+  }
+  return out.slice(0, 200);
 }
 
 /** Validate a list; drop + log rows that fail. Returns only well-formed rows. */
