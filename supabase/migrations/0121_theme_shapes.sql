@@ -28,10 +28,14 @@
 --
 -- Rule 5 (the deployed Worker between this push and the deploy): no reader's shape changes and
 -- nothing narrows. The deployed editor saves v1 settings with no shape or type token, which the
--- restated function accepts as before; the deployed stylesheet route writes only the tokens a
--- row holds through a closed set that does not know the four new keys, and none is written
--- until the new editor saves one. The new tokens are custom properties the deployed
--- stylesheets do not read.
+-- restated function accepts as before. The deployed Worker's theme read parses a row's tokens
+-- with a STRICT closed set that does not know the four new keys, so it would refuse the whole
+-- theme (colours too, as "no theme", which is edge-cacheable) on a row holding one; none is
+-- written until the new Worker's editor saves a non-brand shape or type, after the deploy.
+-- Rollback: before the Worker is rolled back past this slice, save the active theme at the
+-- brand's shapes and type (its tokens are then v1's), then purge site:chrome; a
+-- Worker already rolled back reads a v2 row's colours and motion in its editor, and its save
+-- writes v1 tokens (as-built E12, "Rollback").
 --
 -- Releases stay off (app.release_tenants empty); the registry row (custom_theme: name, tokens,
 -- is_active, settings) is unchanged: a staged theme carries its settings whole. CLAUDE.md §3
