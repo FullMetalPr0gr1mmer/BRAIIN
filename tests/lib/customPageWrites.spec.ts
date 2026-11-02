@@ -15,14 +15,17 @@ import { ValidationError } from '@/lib/admin/errors';
 //        never answers a 302 to a 404.
 
 const resyncs = vi.hoisted(() => [] as { id: string; slug: string }[]);
+const deletedFlags = vi.hoisted(() => [] as boolean[]);
 vi.mock('@/lib/admin/visibilitySync', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   resyncRedirectTarget: async (
     _sb: unknown,
     _auth: unknown,
     page: { id: string; slug: string },
+    opts: { deleted?: boolean } = {},
   ) => {
     resyncs.push(page);
+    deletedFlags.push(opts.deleted === true);
     return { kvSynced: true, count: 1 };
   },
 }));
@@ -35,6 +38,7 @@ const ID = '00000000-0000-4000-8000-00000000e110';
 
 beforeEach(() => {
   resyncs.length = 0;
+  deletedFlags.length = 0;
 });
 
 describe('a page’s address (CR3)', () => {
@@ -99,6 +103,8 @@ describe('the edge follows a custom page that stops or starts rendering (CR1)', 
       { id: ID, slug: 'our-story' },
       { id: ID, slug: 'our-story' },
     ]);
+    // A status change keeps the cheap lookup; only a delete forces the rebuild.
+    expect(deletedFlags).toEqual([false, false]);
   });
 
   it('a custom page deleted resyncs; a route page needs nothing here (its route still renders)', async () => {
@@ -115,5 +121,7 @@ describe('the edge follows a custom page that stops or starts rendering (CR1)', 
       row: { id: ID, slug: 'about' },
     });
     expect(resyncs).toEqual([{ id: ID, slug: 'our-story' }]);
+    // E11 check: a delete always rebuilds (the stored setting is already cleared).
+    expect(deletedFlags).toEqual([true]);
   });
 });

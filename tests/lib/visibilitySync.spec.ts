@@ -328,6 +328,33 @@ describe('resyncRedirectTarget', () => {
     });
   });
 
+  // E11 check: after a delete, 0057's ON DELETE SET NULL has cleared the stored setting and this
+  // isolate's snapshot may be stale, so neither lookup can name the page: a delete rebuilds.
+  it('a delete rebuilds even when neither the edge copy nor a stored setting names the page', async () => {
+    __kv.set(
+      VISIBILITY_KV_KEY,
+      JSON.stringify({
+        v: 1,
+        builtAt: null,
+        pages: { about: { mode: 'hidden', target: 'our-story' } },
+        templates: {},
+      }),
+    );
+    // A stale memo in this isolate: the redirect was saved from another one.
+    clearVisibilityMemo();
+    const stale = client({ visibilityRows: [] });
+    __kv.set(VISIBILITY_KV_KEY, JSON.stringify({ v: 1, builtAt: null, pages: {}, templates: {} }));
+    expect(await resyncRedirectTarget(stale.sb, AUTH, story)).toBeNull();
+    // The same call for a delete rebuilds anyway, and the edge holds what the rows say.
+    const deleted = client({ visibilityRows: [{ ...sentHere, redirect: null }] });
+    expect(await resyncRedirectTarget(deleted.sb, AUTH, story, { deleted: true })).toEqual({
+      kvSynced: true,
+      count: 1,
+    });
+    expect(deleted.ops.some((o) => o.select === VISIBILITY_SNAPSHOT_SELECT)).toBe(true);
+    expect(JSON.parse(__kv.get(VISIBILITY_KV_KEY)!).pages.about.target).toBe(null);
+  });
+
   it('rebuilds when a stored setting names it (published again), else leaves the edge alone', async () => {
     const named = client({
       visibilityRows: [{ ...sentHere, redirect: { slug: 'our-story', status: 'published' } }],

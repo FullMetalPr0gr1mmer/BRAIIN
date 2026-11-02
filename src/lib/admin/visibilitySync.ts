@@ -263,8 +263,14 @@ export async function resyncRedirectTarget(
   sb: SupabaseClient,
   auth: AuthContext,
   page: { id: string; slug: string },
+  opts: { deleted?: boolean } = {},
 ): Promise<VisibilitySyncResult | null> {
   try {
+    // A delete always rebuilds (E11 check): 0057's ON DELETE SET NULL has already cleared the
+    // stored setting, so only the edge's snapshot could name the page, and this isolate's copy
+    // of it may be up to two minutes old. Deletes are Admin only and rare; a rebuild is two
+    // reads and one put.
+    if (opts.deleted) return await syncVisibilityToEdge(sb, auth);
     const slug = page.slug.toLowerCase();
     const edge = await getVisibilitySnapshot(env);
     let named = Object.values(edge.pages).some((entry) => entry?.target === slug);

@@ -28,10 +28,11 @@ import {
 async function followRedirects(
   ctx: { sb: SupabaseClient; auth: AuthContext },
   row: Record<string, unknown>,
+  deleted = false,
 ): Promise<HookResult> {
   const slug = typeof row['slug'] === 'string' ? row['slug'].toLowerCase() : '';
   if (!isCustomPageSlug(slug) || typeof row['id'] !== 'string') return {};
-  const sync = await resyncRedirectTarget(ctx.sb, ctx.auth, { id: row['id'], slug });
+  const sync = await resyncRedirectTarget(ctx.sb, ctx.auth, { id: row['id'], slug }, { deleted });
   return sync === null ? {} : { visibilityKvSynced: sync.kvSynced };
 }
 
@@ -80,7 +81,7 @@ export const pageResource: ResourceConfig = {
     operation === 'update' && before && before['status'] !== row['status']
       ? followRedirects({ sb, auth }, row)
       : {},
-  afterDelete: async ({ auth, sb, row }) => followRedirects({ sb, auth }, row),
+  afterDelete: async ({ auth, sb, row }) => followRedirects({ sb, auth }, row, true),
   // 0057: the pages the public routes render keep their slugs (page visibility is stored by
   // page id and enforced by slug at the edge), and so does any page that has a setting.
   constraintFields: {
