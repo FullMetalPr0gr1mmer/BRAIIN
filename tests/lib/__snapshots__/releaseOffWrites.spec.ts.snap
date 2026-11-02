@@ -3612,7 +3612,15 @@ exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
         "marquee": "slower",
         "reveal": false,
       },
-      "v": 1,
+      "shapes": {
+        "buttons": "pill",
+        "corners": "brand",
+      },
+      "type": {
+        "headingCase": "uppercase",
+        "headingWeight": 800,
+      },
+      "v": 2,
     },
     "tokens": {
       "--bs-cobalt": "#615757",
@@ -3647,7 +3655,15 @@ exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
           "marquee": "slower",
           "reveal": false,
         },
-        "v": 1,
+        "shapes": {
+          "buttons": "pill",
+          "corners": "brand",
+        },
+        "type": {
+          "headingCase": "uppercase",
+          "headingWeight": 800,
+        },
+        "v": 2,
       },
       "tokens": {
         "--bs-cobalt": "#615757",

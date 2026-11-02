@@ -1,7 +1,7 @@
 import pairs from './pairs.json';
 import { fromHsl, normalizeColour, toHsl } from './colour';
 
-// The theme's colours (Admin v2 E4, AV-27). v1 themes the three colours the site and the admin
+// The theme's colours (Admin v2 E4, AV-27). A theme sets the three colours the site and the admin
 // already draw through a token: primary (--bs-klein), hover (--bs-cobalt) and accent (--bs-sky,
 // which --bs-accent reads). The dark ground, the light section and the paper stay fixed (as-built
 // E4, Departures). The light accent tint (--bs-sky-soft) is derived, never chosen.

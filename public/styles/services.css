@@ -57,10 +57,10 @@ html[dir='rtl'] .hello::before {
 .hello__h {
   margin: 0;
   font-size: clamp(46px, 7.4vw, 124px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.9;
   letter-spacing: -0.045em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 /* A service page's "Let's talk Logo Design" is longer than "Say hello". */
 .hello__h--svc {
@@ -221,7 +221,7 @@ html[dir='rtl'] .crumb {
   gap: 16px;
   padding: 10px;
   padding-inline-start: 18px;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bs-radius-scale, 1));
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(18px) saturate(1.2);
   -webkit-backdrop-filter: blur(18px) saturate(1.2);
@@ -343,10 +343,10 @@ html[dir='rtl'] .hero__skip b {
 .svc-proof__line {
   margin: 0;
   font-size: clamp(24px, 2.7vw, 42px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 1.05;
   letter-spacing: -0.03em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .svc-proof__line {
   font-size: clamp(22px, 2.4vw, 36px);
@@ -501,7 +501,7 @@ html[dir='rtl'] .svc-proof__n {
    and the tab row above it on screen. */
 .svc-panel {
   scroll-margin-top: calc(var(--bs-header-h) + 44px + clamp(34px, 5vh, 60px) + 12px);
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bs-radius-scale, 1));
 }
 .svc-panel:focus-visible {
   outline-offset: 10px;
@@ -612,7 +612,7 @@ html[dir='rtl'] .svc-proof__n {
   position: sticky;
   top: 96px;
   aspect-ratio: 4 / 4.6;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bs-radius-scale, 1));
   overflow: hidden;
   background: var(--bs-media-bg);
 }
@@ -687,10 +687,10 @@ html[dir='rtl'] .svc-xp__k {
 .svc-xp__h {
   margin: 16px 0 0;
   font-size: clamp(38px, 5.4vw, 88px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.94;
   letter-spacing: -0.04em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .svc-xp__h {
   font-size: clamp(32px, 4.4vw, 70px);
@@ -795,7 +795,7 @@ html[dir='rtl'] .svc-row__a:focus-visible .svc-row__t {
   gap: 6px;
   padding: 7px 12px;
   border: 1px solid rgba(0, 0, 0, 0.16);
-  border-radius: 999px;
+  border-radius: var(--bs-btn-radius, 999px);
   color: var(--bs-ink);
   font-size: 12px;
   font-weight: 700;
@@ -852,7 +852,7 @@ html[dir='rtl'] .svc-row__q svg {
   gap: 10px;
   padding: 12px 18px;
   border: 1px solid rgba(0, 0, 0, 0.18);
-  border-radius: 999px;
+  border-radius: var(--bs-btn-radius, 999px);
   color: var(--bs-ink);
   font-size: 13px;
   font-weight: 700;
@@ -1096,10 +1096,10 @@ html[dir='rtl'] .svc-get__k {
 .svc-val__head h2 {
   margin: 0;
   font-size: clamp(32px, 5vw, 78px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.95;
   letter-spacing: -0.035em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .svc-val__head h2 {
   font-size: clamp(28px, 4.2vw, 64px);
@@ -1142,7 +1142,7 @@ html[dir='rtl'] .svc-val__head h2 {
   min-height: clamp(250px, 32vh, 330px);
   background: var(--bs-paper);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bs-radius-scale, 1));
   transition:
     transform 0.45s var(--bs-ease),
     color 0.4s;
@@ -1256,7 +1256,7 @@ html[dir='rtl'] .svc-vcard p {
   margin: 0;
   max-width: 20ch;
   font-size: clamp(30px, 4.4vw, 70px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 1;
   letter-spacing: -0.035em;
 }
@@ -1306,7 +1306,7 @@ html[dir='rtl'] .svc-case__t {
   position: relative;
   display: block;
   aspect-ratio: 16 / 10;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bs-radius-scale, 1));
   overflow: hidden;
   background: var(--bs-media-bg);
 }
@@ -1333,7 +1333,7 @@ a.svc-case__img:focus-visible img {
   gap: 10px;
   padding: 7px;
   padding-inline-start: 16px;
-  border-radius: 999px;
+  border-radius: var(--bs-btn-radius, 999px);
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -1487,7 +1487,7 @@ html[dir='rtl'] .svc-prob__s {
 }
 .svc-res__i {
   padding: clamp(20px, 2.2vw, 30px);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bs-radius-scale, 1));
   background: linear-gradient(160deg, rgba(0, 36, 188, 0.34), rgba(0, 36, 188, 0.12));
   border: 1px solid rgba(34, 169, 255, 0.22);
 }
@@ -1536,10 +1536,10 @@ html[dir='rtl'] .svc-res__n {
 .svc-more__head h2 {
   margin: 0;
   font-size: clamp(28px, 4vw, 62px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 1;
   letter-spacing: -0.035em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .svc-more__head h2 {
   font-size: clamp(26px, 3.4vw, 52px);
@@ -1669,7 +1669,7 @@ html[dir='rtl'] .svc-more__row:hover .svc-more__t {
   gap: 12px;
   padding: 7px;
   padding-inline-end: 20px;
-  border-radius: 999px;
+  border-radius: var(--bs-btn-radius, 999px);
   background: var(--bs-klein);
   color: var(--bs-fg);
   font-size: 13px;

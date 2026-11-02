@@ -79,7 +79,7 @@ beforeEach(() => {
 });
 afterEach(() => warn.mockRestore());
 
-describe('readActiveTheme: the active v1 theme, as a visitor reads it', () => {
+describe('readActiveTheme: the active theme with settings, as a visitor reads it', () => {
   it('asks for anon’s one column, at most two rows, and nothing else (CR6)', async () => {
     state.rows = [{ tokens: TOKENS }];
     expect(await readActiveTheme()).toEqual({ tokens: TOKENS });

@@ -15,7 +15,12 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *     site:chrome, custom properties only), a visitor's page draws the colour, with zero axe
  *     and CSP violations in either language; the admin wears it too;
  *   - Reset to brand defaults (a danger confirm) puts the brand back and no page links it;
- *   - a Developer edits it (theme.edit) and is refused a failing palette (422, the pair named).
+ *   - shapes and type (E12, AV-32): square corners and buttons, Bold headings as written; the
+ *     sample draws them, the stylesheet carries their four tokens, a visitor's page wears them
+ *     (a square consent button, a Bold hero heading as written) and the Arabic page preloads
+ *     the 700 face its Bold heading renders in, with zero axe and CSP violations;
+ *   - a Developer edits it (theme.edit) and is refused a failing palette (422, the pair named);
+ *     a v1 save (E4's editor, during a deploy) is still taken, and stored as v2.
  *
  * Its own project (playwright.config.ts `theme`), alone, after `ga4` and before `maintenance`:
  * a saved theme changes every public page the other specs read. The brand's own settings are
@@ -30,12 +35,19 @@ test.describe.configure({ mode: 'serial' });
 const SCREEN = '/admin/appearance/theme';
 const API = '/api/admin/themes';
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+const BRAND_SHAPES = { corners: 'brand', buttons: 'pill' };
+const BRAND_TYPE = { headingWeight: 800, headingCase: 'uppercase' };
+// The brand's own theme as the editor saves it since E12 (v2), and as E4's editor did (v1),
+// which the server still takes and stores as v2 at the brand's shapes and type.
 const BRAND = {
-  v: 1,
+  v: 2,
   mode: 'simple',
   colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
   motion: { marquee: 'normal', reveal: true },
+  shapes: BRAND_SHAPES,
+  type: BRAND_TYPE,
 };
+const BRAND_V1 = { v: 1, mode: BRAND.mode, colors: BRAND.colors, motion: BRAND.motion };
 // Any link to the theme stylesheet, whatever its attribute order and address: its shape (the
 // body's hash, E4-SEC-1) is asserted on its own, so a wrong address fails there instead of
 // matching nothing here (the old `v=(\d+)` matched no hash, so "no link" passed for any page).
@@ -50,7 +62,7 @@ async function csrf(page: Page): Promise<string> {
   return token!;
 }
 
-/** The tenant's v1 theme (the row with settings), or null before the first save. */
+/** The tenant's theme with settings (v1 or v2), or null before the first save. */
 async function theme(page: Page): Promise<Row | null> {
   const list = await page.request.get(API);
   expect(list.status(), await list.text()).toBe(200);
@@ -89,6 +101,16 @@ async function putBrandBack(browser: Browser) {
   }
 }
 
+/** The font preloads a public page's markup carries (the hrefs, in order). */
+async function fontPreloadsOn(page: Page, path: string): Promise<string[]> {
+  const res = await page.request.get(path);
+  expect(res.status(), path).toBe(200);
+  return [...(await res.text()).matchAll(/<link\b[^>]*>/g)]
+    .map((m) => m[0])
+    .filter((tag) => /\brel="preload"/.test(tag) && /\bas="font"/.test(tag))
+    .map((tag) => /\bhref="([^"]*)"/.exec(tag)?.[1] ?? '');
+}
+
 /** The theme links a public page carries (the address and its version). */
 async function linksOn(page: Page, path: string): Promise<string[]> {
   const res = await page.request.get(path);
@@ -108,7 +130,14 @@ test.describe('as admin', () => {
     page,
   }) => {
     await page.goto(SCREEN, { waitUntil: 'networkidle' });
-    for (const name of ['Brand colours', 'Motion', 'What stays the same', 'Preview']) {
+    for (const name of [
+      'Brand colours',
+      'Shapes',
+      'Typography',
+      'Motion',
+      'What stays the same',
+      'Preview',
+    ]) {
       await expect(page.getByRole('heading', { level: 2, name, exact: true })).toBeVisible();
     }
     expect((await new AxeBuilder({ page }).withTags(WCAG).analyze()).violations).toEqual([]);
@@ -200,10 +229,12 @@ test.describe('as admin', () => {
     ).toBeVisible();
     const row = (await theme(page))!;
     expect(row['settings']).toEqual({
-      v: 1,
+      v: 2,
       mode: 'simple',
       colors: expect.objectContaining({ primary: main }),
       motion: { marquee: 'slowest', reveal: false },
+      shapes: BRAND_SHAPES,
+      type: BRAND_TYPE,
     });
 
     // Every page links the live version, once, in either language.
@@ -315,6 +346,107 @@ test.describe('as admin', () => {
     ).toBeChecked();
   });
 
+  test('Shapes and type: square, Bold, as written; the sample, the stylesheet and the site follow', async ({
+    page,
+    browser,
+  }) => {
+    await page.goto(SCREEN, { waitUntil: 'networkidle' });
+    const pick = (group: string, option: string) =>
+      page
+        .getByRole('group', { name: group, exact: true })
+        .getByRole('radio', { name: option, exact: true })
+        .check();
+    await pick('Corners', 'Square');
+    await pick('Buttons', 'Square');
+    await pick('Heading weight', 'Bold');
+    await pick('Heading case', 'As written');
+    // The sample draws them (SVG attributes, no style).
+    const sample = page.getByRole('img', { name: /^A sample of the site in this theme/ });
+    await expect(sample).toHaveAttribute('data-corners', 'square');
+    await expect(sample).toHaveAttribute('data-buttons', 'square');
+    await expect(sample).toHaveAttribute('data-weight', '700');
+    await expect(sample).toHaveAttribute('data-case', 'as-written');
+    expect((await new AxeBuilder({ page }).withTags(WCAG).analyze()).violations).toEqual([]);
+
+    const [saved] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes(API) && r.request().method() === 'PATCH'),
+      page.getByRole('button', { name: 'Save theme', exact: true }).click(),
+    ]);
+    expect(saved.status(), await saved.text()).toBe(200);
+    const row = (await theme(page))!;
+    expect(row['settings']).toMatchObject({
+      v: 2,
+      shapes: { corners: 'square', buttons: 'square' },
+      type: { headingWeight: 700, headingCase: 'as-written' },
+    });
+
+    // The stylesheet carries the four tokens, last, in their fixed order.
+    const links = await linksOn(page, '/');
+    expect(links, 'the home page links the theme').toHaveLength(1);
+    const sheet = await page.request.get(links[0]!);
+    expect(sheet.status()).toBe(200);
+    expect(await sheet.text()).toMatch(
+      /;--bs-radius-scale:0;--bs-btn-radius:0px;--bs-heading-weight:700;--bs-heading-case:none;\}\n$/,
+    );
+
+    // The Arabic page preloads the face its Bold heading renders in; English keeps Archivo.
+    const ar = await fontPreloadsOn(page, '/ar/');
+    expect(ar, 'the Arabic page preloads one font').toHaveLength(1);
+    expect(ar).toEqual(['/fonts/almarai-700-arabic.woff2']);
+    expect(await fontPreloadsOn(page, '/')).toEqual(['/fonts/archivo-var-latin.woff2']);
+
+    // A visitor's page wears them, with zero axe and CSP violations, in both languages.
+    const visitor = await browser.newContext({ reducedMotion: 'reduce' });
+    await visitor.addInitScript(() => {
+      const seen: string[] = [];
+      (window as unknown as { __csp: string[] }).__csp = seen;
+      document.addEventListener('securitypolicyviolation', (e) => {
+        seen.push(`${e.disposition} ${e.violatedDirective} ${e.blockedURI}`);
+      });
+    });
+    try {
+      const site = await visitor.newPage();
+      for (const path of ['/', '/ar/']) {
+        await site.goto(path, { waitUntil: 'load' });
+        const read = () =>
+          site.evaluate(() => {
+            const h1 = document.querySelector('.hero h1');
+            const button = document.querySelector('.consent-actions button');
+            if (!h1 || !button) return null;
+            return {
+              weight: getComputedStyle(h1).fontWeight,
+              case: getComputedStyle(h1).textTransform,
+              button: getComputedStyle(button).borderTopLeftRadius,
+            };
+          });
+        await expect.poll(read).not.toBeNull();
+        await expect.poll(read).toEqual({ weight: '700', case: 'none', button: '0px' });
+        const found = await new AxeBuilder({ page: site }).withTags(WCAG).analyze();
+        expect(
+          found.violations.map((v) => `${path} ${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`),
+        ).toEqual([]);
+        expect(await site.evaluate(() => (window as unknown as { __csp: string[] }).__csp)).toEqual(
+          [],
+        );
+      }
+    } finally {
+      await visitor.close();
+    }
+
+    // The form shows what it saved.
+    await page.goto(SCREEN, { waitUntil: 'networkidle' });
+    await expect(
+      page
+        .getByRole('group', { name: 'Heading weight', exact: true })
+        .getByRole('radio', { name: 'Bold', exact: true }),
+    ).toBeChecked();
+    await expect(
+      page
+        .getByRole('group', { name: 'Corners', exact: true })
+        .getByRole('radio', { name: 'Square', exact: true }),
+    ).toBeChecked();
+  });
+
   test('Reset to brand defaults: a danger confirm, then no page links a theme', async ({
     page,
   }) => {
@@ -332,6 +464,8 @@ test.describe('as admin', () => {
     expect(saved.status(), await saved.text()).toBe(200);
     expect((await theme(page))?.['settings']).toEqual(BRAND);
     expect(await linksOn(page, '/')).toEqual([]);
+    // No theme: the Arabic page preloads its own face again.
+    expect(await fontPreloadsOn(page, '/ar/')).toEqual(['/fonts/almarai-800-arabic.woff2']);
     expect(await linksOn(page, '/ar/')).toEqual([]);
     // A theme's address answers the (empty) current theme, never stored (CR2); a bare one is
     // no address at all.
@@ -364,6 +498,8 @@ test.describe('as developer', () => {
     expect(await refused.text()).toContain('White text on Hover is');
     await save(page, { ...BRAND, motion: { marquee: 'slower', reveal: true } });
     expect((await theme(page))?.['settings']).toMatchObject({ motion: { marquee: 'slower' } });
-    await save(page, BRAND);
+    // E4's v1 shape is still taken (a deploy's old editor), and stored as v2.
+    await save(page, BRAND_V1);
+    expect((await theme(page))?.['settings']).toEqual(BRAND);
   });
 });

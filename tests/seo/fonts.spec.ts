@@ -1,6 +1,6 @@
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import { HERO_FACES, heroFontPreload } from '@/lib/seo/fonts';
+import { HERO_FACES, heroFontPreload, themedHeroFace } from '@/lib/seo/fonts';
 
 // The one hero-face preload per route (CLAUDE.md §6; docs/fonts.md). /ar/about's h1 renders
 // with Almarai 700, and preloading 800 there let the 700 face swap in late and shift the
@@ -23,5 +23,29 @@ describe('hero-face preload', () => {
     for (const face of HERO_FACES) {
       expect(size(heroFontPreload('ar', face)), face).toBeLessThanOrEqual(45 * 1024);
     }
+  });
+});
+
+describe('the Arabic preload follows the theme’s heading weight (Admin v2 E12)', () => {
+  it('a Bold theme preloads the 700 face where the route’s heading is 800', () => {
+    expect(themedHeroFace('almarai-800', '700')).toBe('almarai-700');
+    expect(heroFontPreload('ar', themedHeroFace('almarai-800', '700'))).toBe(
+      '/fonts/almarai-700-arabic.woff2',
+    );
+  });
+
+  it('no theme, or the brand’s weight, keeps the route’s own face; a 700 route stays 700', () => {
+    expect(themedHeroFace('almarai-800', undefined)).toBe('almarai-800');
+    expect(themedHeroFace('almarai-800', '800')).toBe('almarai-800');
+    expect(themedHeroFace('almarai-700', '700')).toBe('almarai-700');
+    expect(themedHeroFace('almarai-700', undefined)).toBe('almarai-700');
+  });
+
+  it('BaseLayout hands SeoHead the themed face, read from the theme it links', () => {
+    const layout = readFileSync('src/layouts/BaseLayout.astro', 'utf8');
+    expect(layout).toContain(
+      "themedHeroFace(heroFace ?? 'almarai-800', theme?.tokens['--bs-heading-weight'])",
+    );
+    expect(layout).toMatch(/<SeoHead[\s\S]*?heroFace=\{face\}[\s\S]*?\/>/);
   });
 });

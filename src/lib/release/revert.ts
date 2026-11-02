@@ -3,6 +3,7 @@ import type { DraftLabel, DraftOp, RestoreItem, WriteDraftsOp } from '@schemas/r
 import type { AuthContext } from '@/lib/auth/types';
 import { mediaRowToItem } from '@/lib/admin/resources/portfolio';
 import { canPublish, waitingFor } from './caps';
+import { inCurrentShape } from './currentShape';
 import { jsonEqual } from './deepEqual';
 import { mayRead } from './draftEndpoints';
 import { draftLabel, dropFields } from './drafts';
@@ -285,8 +286,17 @@ export function narrowed(
   };
 }
 
-/** Which columns of an update differ from live (derived columns never decide a change). */
-function movedColumns(patch: Readonly<Row>, live: Readonly<Row>): string[] {
+/**
+ * Which columns of an update differ from live (derived columns never decide a change). Live is
+ * read in today's shape, as the patch is (`inCurrentShape`, Admin v2 E12 code review CR5): a
+ * theme saved before E12 has not moved from the same theme restored as v2.
+ */
+function movedColumns(
+  entityType: string,
+  patch: Readonly<Row>,
+  storedLive: Readonly<Row>,
+): string[] {
+  const live = inCurrentShape(entityType, storedLive);
   return Object.keys(patch).filter(
     (column) =>
       !DERIVED_COLUMNS.includes(column) &&
@@ -394,7 +404,9 @@ function planOne(
   }
   // Never the consent record: it stays as it is now.
   const consent = CONSENT_COLUMNS[entry.entityType] ?? [];
-  const moved = movedColumns(back.derived.patch, live).filter((c) => !consent.includes(c));
+  const moved = movedColumns(entry.entityType, back.derived.patch, live).filter(
+    (c) => !consent.includes(c),
+  );
   const linksMoved = t.children !== undefined && !jsonEqual(back.derived.children, liveLinks ?? {});
   if (moved.length === 0 && !linksMoved) return {};
 

@@ -1,10 +1,25 @@
 {
-  "$comment": "The theme CI's themed Lighthouse run sets (Admin v2 E4; scripts/lhci-theme.mjs, lighthouserc.themed.json): Simple mode from a dark green main, its Hover and Accent settled by the gate, the marquee slower and the reveal off. A far cry from Klein, with a much lighter accent than the brand's sky. The tokens are what packages/theme/compile.ts makes of the settings (tests/lib/lhciTheme.spec.ts holds them equal).",
+  "$comment": "The theme CI's themed Lighthouse run sets (Admin v2 E4, E12; scripts/lhci-theme.mjs, lighthouserc.themed.json): Simple mode from a dark green main, its Hover and Accent settled by the gate, the marquee slower and the reveal off, and since E12 soft corners, rounded buttons and Bold headings as written (so the Arabic routes preload the 700 face). A far cry from Klein, with a much lighter accent than the brand's sky. The tokens are what packages/theme/compile.ts makes of the settings (tests/lib/lhciTheme.spec.ts holds them equal).",
   "settings": {
-    "v": 1,
+    "v": 2,
     "mode": "simple",
-    "colors": { "primary": "#095A34", "hover": "#077545", "accent": "#2FEF55" },
-    "motion": { "marquee": "slower", "reveal": false }
+    "colors": {
+      "primary": "#095A34",
+      "hover": "#077545",
+      "accent": "#2FEF55"
+    },
+    "motion": {
+      "marquee": "slower",
+      "reveal": false
+    },
+    "shapes": {
+      "corners": "soft",
+      "buttons": "rounded"
+    },
+    "type": {
+      "headingWeight": 700,
+      "headingCase": "as-written"
+    }
   },
   "tokens": {
     "--bs-klein": "#095a34",
@@ -17,6 +32,10 @@
     "--bs-shadow-cobalt": "0 18px 48px rgba(7, 117, 69, 0.45)",
     "--bs-marquee-scale": "1.5",
     "--bs-rv-from": "1",
-    "--bs-rv-shift": "0px"
+    "--bs-rv-shift": "0px",
+    "--bs-radius-scale": "0.5",
+    "--bs-btn-radius": "10px",
+    "--bs-heading-weight": "700",
+    "--bs-heading-case": "none"
   }
 }

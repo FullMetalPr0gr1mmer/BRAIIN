@@ -203,8 +203,8 @@ describe('derivePatch', () => {
 describe('no-ops, base and conflicts', () => {
   it('a column equal to live is dropped; nothing left is null', () => {
     const live = { slug: 'a', title: BI('A', 'أ'), sort_order: 2 };
-    expect(dropNoOps({ slug: 'a', sort_order: 3 }, live)).toEqual({ sort_order: 3 });
-    expect(dropNoOps({ slug: 'a', title: { ar: 'أ', en: 'A' } }, live)).toBeNull();
+    expect(dropNoOps('service', { slug: 'a', sort_order: 3 }, live)).toEqual({ sort_order: 3 });
+    expect(dropNoOps('service', { slug: 'a', title: { ar: 'أ', en: 'A' } }, live)).toBeNull();
   });
 
   it('equality is on JSON values: key order, null and instants', () => {
@@ -493,13 +493,15 @@ describe('review fixes (R2 review M2, L3, L4)', () => {
   });
 
   it('dropNoOps keeps a column live does not carry, and honours the base', () => {
-    expect(dropNoOps({ og_image: null }, {})).toEqual({ og_image: null });
+    expect(dropNoOps('entity_seo', { og_image: null }, {})).toEqual({ og_image: null });
     // Equal to live and to its base: nothing to publish.
-    expect(dropNoOps({ slug: 'a' }, { slug: 'a' }, { slug: 'a' })).toBeNull();
+    expect(dropNoOps('service', { slug: 'a' }, { slug: 'a' }, { slug: 'a' })).toBeNull();
     // Equal to live, but live moved off the base: kept, so the conflict is resolved, not lost.
-    expect(dropNoOps({ slug: 'a' }, { slug: 'a' }, { slug: 'b' })).toEqual({ slug: 'a' });
+    expect(dropNoOps('service', { slug: 'a' }, { slug: 'a' }, { slug: 'b' })).toEqual({
+      slug: 'a',
+    });
     // A column the base never recorded: live alone decides.
-    expect(dropNoOps({ slug: 'a' }, { slug: 'a' }, { title: 'x' })).toBeNull();
+    expect(dropNoOps('service', { slug: 'a' }, { slug: 'a' }, { title: 'x' })).toBeNull();
   });
 
   it('live rows keep the database order; only changed and new rows are placed', () => {

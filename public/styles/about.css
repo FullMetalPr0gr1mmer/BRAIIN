@@ -111,10 +111,10 @@ html[dir='rtl'] .about-who__copy .about-who__lead {
   margin: 0;
   max-width: 12ch;
   font-size: clamp(36px, 6.4vw, 108px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.9;
   letter-spacing: -0.045em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .leaders__head h2 {
   font-size: clamp(32px, 5vw, 84px);
@@ -256,7 +256,7 @@ html[dir='rtl'] .leaders__bar i {
   display: block;
   overflow: hidden;
   aspect-ratio: 4 / 5;
-  border-radius: 24px;
+  border-radius: calc(24px * var(--bs-radius-scale, 1));
   background: radial-gradient(90% 70% at 50% 30%, #2b2f3a 0%, #111318 70%);
   isolation: isolate;
 }

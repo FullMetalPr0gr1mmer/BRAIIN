@@ -5,8 +5,12 @@ import ThemeScreen, { THEME_FIELDS } from '@/components/admin/screens/theme/Them
 import SitePreview from '@/components/admin/screens/theme/SitePreview';
 import {
   ADMIN_PREVIEW_TOKENS,
+  BUTTON_OPTIONS,
+  CASE_OPTIONS,
+  CORNER_OPTIONS,
   MARQUEE_OPTIONS,
   REVEAL_OPTIONS,
+  WEIGHT_OPTIONS,
   derivedSettings,
   failureLines,
   gateView,
@@ -19,7 +23,7 @@ import { formToPayload, rowToForm } from '@/lib/admin/formPayload';
 import { DEFAULT_THEME_SETTINGS } from '@theme/compile';
 import { paletteOf, simplePalette, type GateResult } from '@theme/gate';
 import { DEFAULT_COLORS } from '@theme/palette';
-import { ThemeSettingsSchema } from '@schemas/theme';
+import { ThemeMotionSchema, ThemeShapesSchema, ThemeTypeSchema } from '@schemas/theme';
 import { THEME_TOKEN_NAMES } from '@schemas/themeTokens';
 
 // The theme editor (/admin/appearance/theme, Admin v2 E4): its pure half (model.ts) and its
@@ -30,11 +34,17 @@ import { THEME_TOKEN_NAMES } from '@schemas/themeTokens';
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 
 const SAVED = {
-  v: 1,
+  v: 2,
   mode: 'advanced',
   colors: { primary: '#000000', hover: '#615757', accent: '#938A8D' },
   motion: { marquee: 'slowest', reveal: false },
+  shapes: { corners: 'soft', buttons: 'square' },
+  type: { headingWeight: 700, headingCase: 'as-written' },
 };
+/** E4's shape: a theme saved before E12. */
+const SAVED_V1 = { v: 1, mode: SAVED.mode, colors: SAVED.colors, motion: SAVED.motion };
+const BRAND_SHAPES = { corners: 'brand', buttons: 'pill' };
+const BRAND_TYPE = { headingWeight: 800, headingCase: 'uppercase' };
 
 describe('the form holds the settings the theme was saved with', () => {
   it('a saved theme, loaded through the field kit, is the theme the editor shows', () => {
@@ -47,6 +57,19 @@ describe('the form holds the settings the theme was saved with', () => {
     // And what it sends is the object again, whichever way the form holds it.
     expect(formToPayload(form, THEME_FIELDS)['settings']).toEqual(SAVED);
     expect(formToPayload({ ...form, settings: SAVED }, THEME_FIELDS)['settings']).toEqual(SAVED);
+  });
+
+  it('a theme saved before E12 (v1) opens at the brand’s shapes and type, and saves as v2', () => {
+    const form = rowToForm(
+      { id: 'x', name: 'Site theme', settings: SAVED_V1, version: 3 },
+      THEME_FIELDS,
+    );
+    expect(settingsOf(form['settings'])).toEqual({
+      ...SAVED_V1,
+      v: 2,
+      shapes: BRAND_SHAPES,
+      type: BRAND_TYPE,
+    });
   });
 
   it('anything else is the brand’s own settings, a fresh copy each time', () => {
@@ -63,11 +86,28 @@ describe('the form holds the settings the theme was saved with', () => {
       ...SAVED,
       colors: { primary: '#00', hover: 7, accent: '#938A8D' },
       motion: { marquee: 'faster', reveal: 'no' },
+      shapes: { corners: 'huge', buttons: 999 },
+      type: { headingWeight: 900, headingCase: 'lowercase' },
       extra: true,
     });
     expect(settings.colors).toEqual({ primary: '#00', hover: '#024CFF', accent: '#938A8D' });
     expect(settings.motion).toEqual({ marquee: 'normal', reveal: true });
-    expect(Object.keys(settings).sort()).toEqual(['colors', 'mode', 'motion', 'v']);
+    // A shape or type off its list is the brand's (the editor offers only the closed choices).
+    expect(settings.shapes).toEqual(BRAND_SHAPES);
+    expect(settings.type).toEqual(BRAND_TYPE);
+    expect(Object.keys(settings).sort()).toEqual([
+      'colors',
+      'mode',
+      'motion',
+      'shapes',
+      'type',
+      'v',
+    ]);
+    // A string weight is not the number the schema stores.
+    expect(settingsOf({ ...SAVED, type: { ...SAVED.type, headingWeight: '700' } }).type).toEqual({
+      headingWeight: 800,
+      headingCase: 'as-written',
+    });
   });
 });
 
@@ -117,10 +157,23 @@ describe('what the screen draws from the settings', () => {
   });
 
   it('offers motion that only reduces, in the schema’s values', () => {
-    const marquee = ThemeSettingsSchema.innerType().shape.motion.shape.marquee.options;
+    const marquee = ThemeMotionSchema.shape.marquee.options;
     expect(MARQUEE_OPTIONS.map((o) => o.value)).toEqual(marquee);
     expect(MARQUEE_OPTIONS.map((o) => o.label)).toEqual(['Normal', 'Slower', 'Much slower']);
     expect(REVEAL_OPTIONS.map((o) => o.value)).toEqual(['on', 'off']);
+  });
+
+  it('offers the shapes and type the schema takes, every one, in words (E12)', () => {
+    expect(CORNER_OPTIONS.map((o) => o.value)).toEqual(ThemeShapesSchema.shape.corners.options);
+    expect(CORNER_OPTIONS.map((o) => o.label)).toEqual(['Brand', 'Square', 'Soft', 'Round']);
+    expect(BUTTON_OPTIONS.map((o) => o.value)).toEqual(ThemeShapesSchema.shape.buttons.options);
+    expect(BUTTON_OPTIONS.map((o) => o.label)).toEqual(['Pill', 'Rounded', 'Square']);
+    expect(WEIGHT_OPTIONS.map((o) => Number(o.value))).toEqual(
+      ThemeTypeSchema.shape.headingWeight.options.map((o) => o.value),
+    );
+    expect(WEIGHT_OPTIONS.map((o) => o.label)).toEqual(['Extra bold', 'Bold']);
+    expect(CASE_OPTIONS.map((o) => o.value)).toEqual(ThemeTypeSchema.shape.headingCase.options);
+    expect(CASE_OPTIONS.map((o) => o.label)).toEqual(['Capitals', 'As written']);
   });
 
   it('previews the admin in the three tokens admin.css reads, and only those', () => {
@@ -135,8 +188,18 @@ describe('the screen’s server markup', () => {
   const html = renderToStaticMarkup(createElement(ThemeScreen, { id: null, releaseMode: false }));
 
   it('the names the browser journey finds things by', () => {
-    for (const name of ['Brand colours', 'Motion', 'What stays the same', 'Preview']) {
+    for (const name of [
+      'Brand colours',
+      'Shapes',
+      'Typography',
+      'Motion',
+      'What stays the same',
+      'Preview',
+    ]) {
       expect(html, name).toMatch(new RegExp(`<h2 class="card__t" id="theme-[a-z]+">${name}</h2>`));
+    }
+    for (const legend of ['Corners', 'Buttons', 'Heading weight', 'Heading case']) {
+      expect(html, legend).toContain(`<legend class="visually-hidden">${legend}</legend>`);
     }
     expect(html).toContain(
       '<legend class="visually-hidden">How do you want to set colours?</legend>',
@@ -156,7 +219,7 @@ describe('the screen’s server markup', () => {
   it('draws no empty card: the form’s own fields are all hidden (CR4)', () => {
     expect(html).not.toMatch(/<div class="card"><\/div>/);
     // Every card the screen draws has its heading.
-    expect(html.match(/class="card"/g)).toHaveLength(4);
+    expect(html.match(/class="card"/g)).toHaveLength(6);
   });
 
   it('sets no style attribute: colours are SVG attributes (CSP, ui.md §1.6)', () => {
@@ -168,5 +231,34 @@ describe('the screen’s server markup', () => {
     expect(preview).toContain('role="img"');
     expect(preview).toContain(`fill="${DEFAULT_COLORS.primary.toLowerCase()}"`);
     expect(preview).toContain(`fill="${DEFAULT_COLORS.accent.toLowerCase()}"`);
+  });
+
+  it('the sample draws the shapes and type: pill and card corners, weight and case (E12)', () => {
+    const palette = paletteOf(DEFAULT_COLORS);
+    const brand = renderToStaticMarkup(createElement(SitePreview, { palette }));
+    // The brand's: pill buttons (22 px tall), cards at the site's 16 px drawn at half size,
+    // headings in 800 and capitals.
+    expect(brand).toContain('data-corners="brand"');
+    expect(brand).toMatch(/<rect x="18" y="88" width="92" height="22" rx="11"/);
+    expect(brand).toMatch(/<rect x="150" y="136" width="72" height="80" rx="8"/);
+    expect(brand).toContain('font-weight="800"');
+    expect(brand).toContain('FROM THE BRAIN TO THE');
+
+    const themed = renderToStaticMarkup(
+      createElement(SitePreview, {
+        palette,
+        shapes: { corners: 'round', buttons: 'square' },
+        type: { headingWeight: 700, headingCase: 'as-written' },
+      }),
+    );
+    expect(themed).toContain('data-corners="round"');
+    expect(themed).toContain('data-buttons="square"');
+    expect(themed).toContain('data-weight="700"');
+    expect(themed).toContain('data-case="as-written"');
+    expect(themed).toMatch(/<rect x="18" y="88" width="92" height="22" rx="0"/);
+    expect(themed).toMatch(/<rect x="150" y="136" width="72" height="80" rx="12"/);
+    expect(themed).not.toContain('font-weight="800"');
+    expect(themed).toContain('From the brain to the');
+    expect(themed).not.toMatch(/\sstyle=/);
   });
 });

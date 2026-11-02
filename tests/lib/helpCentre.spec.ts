@@ -3080,23 +3080,49 @@ describe('the shell', () => {
   });
 });
 
-describe('theme (E4), a new guide put by the theme migration', () => {
+describe('theme (E4, E12), a guide put by the theme migrations', () => {
   const article = () => SET.find((a) => a.slug === 'theme')!;
   const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
   const source = (path: string) => readFileSync(path, 'utf8');
   const SCREEN = 'src/components/admin/screens/theme';
 
-  it('is put once, at revision 0 (new), by the theme migration, as its file says', () => {
+  it('is put new by E4 (revision 0), then again by E12 (revision 1), the second as its file says', () => {
     const puts = HELP.edits.filter((e) => e.slug === 'theme');
-    expect(puts).toHaveLength(1);
-    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts.map((e) => `${e.op} ${e.revision}`)).toEqual(['put 0', 'put 1']);
     expect(puts[0]?.file).toMatch(/^\d{4}_theme_settings\.sql$/);
-    expect(HELP.revisions.get('theme')).toBe(1);
-    const file = MIGRATION_FILES.find((f) => f.name.endsWith('_theme_settings.sql'))!;
+    expect(puts[1]?.file).toMatch(/^\d{4}_theme_shapes\.sql$/);
+    expect(HELP.revisions.get('theme')).toBe(2);
+    const file = MIGRATION_FILES.find((f) => f.name.endsWith('_theme_shapes.sql'))!;
     const filed = readFileSync('docs/admin-v2/guides/theme.json', 'utf8').replace(/\r?\n$/, '');
     expect(source(`supabase/migrations/${file.name}`)).toContain(
-      `select app.put_help_guide($guide$\n${filed}\n$guide$::jsonb, 0);`,
+      `select app.put_help_guide($guide$\n${filed}\n$guide$::jsonb, 1);`,
     );
+  });
+
+  it('names the shapes and type in the words the editor uses (E12)', () => {
+    const en = text('en');
+    const model = source(`${SCREEN}/model.ts`);
+    expect(en).toContain('Shapes and type');
+    expect(en).toContain('Corners: Brand, Square, Soft or Round');
+    expect(en).toContain('Buttons: Pill, Rounded or Square');
+    expect(en).toContain('Heading weight: Extra bold or Bold');
+    expect(en).toContain('Heading case: Capitals');
+    expect(en).toContain('As written');
+    for (const label of [
+      'Brand',
+      'Square',
+      'Soft',
+      'Round',
+      'Pill',
+      'Rounded',
+      'Extra bold',
+      'Bold',
+      'Capitals',
+      'As written',
+    ]) {
+      expect(model, label).toContain(`label: '${label}' }`);
+    }
+    expect(source(`${SCREEN}/ThemeScreen.tsx`)).toContain('label="Heading weight"');
   });
 
   it('takes the free place 97, for the roles that edit the theme, on its screen', () => {

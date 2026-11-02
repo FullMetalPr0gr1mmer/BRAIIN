@@ -1,5 +1,6 @@
 import type { ContentDraftRow, DraftOp } from '@schemas/release';
 import { ValidationError } from '@/lib/admin/errors';
+import { inCurrentShape } from './currentShape';
 import { jsonEqual } from './deepEqual';
 import type { RegistryEntry } from './registry';
 
@@ -173,13 +174,19 @@ function refuseSchedule(entry: RegistryEntry, parsed: Payload): void {
  * discarded). With the change's `base` (releases.md §3: "equal to both live and base"), a
  * column the base recorded is dropped only when it also equals that base: if live moved
  * since, the column stays and shows as a conflict to resolve rather than vanishing. A
- * column `live` does not carry is kept: an absent value is unknown, not null.
+ * column `live` does not carry is kept: an absent value is unknown, not null. Live and the
+ * base are stored values, read in today's shape (`inCurrentShape`, Admin v2 E12 code review
+ * CR5): the patch is today's `toRow`, so a theme saved before E12 (v1) and the same theme as
+ * the editor saves it now (v2 at the brand's shapes and type) are the same, not a change.
  */
 export function dropNoOps(
+  entityType: string,
   patch: Readonly<Row>,
-  live: Readonly<Row>,
-  base?: Readonly<Row> | null,
+  storedLive: Readonly<Row>,
+  storedBase?: Readonly<Row> | null,
 ): Row | null {
+  const live = inCurrentShape(entityType, storedLive);
+  const base = inCurrentShape(entityType, storedBase);
   const out: Row = {};
   for (const [column, value] of Object.entries(patch)) {
     const sameAsLive = column in live && jsonEqual(value, live[column]);
