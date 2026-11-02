@@ -1960,10 +1960,10 @@ html[dir='rtl'] .clients__head h2 {
   gap: 14px;
   white-space: nowrap;
   font-size: clamp(24px, 3.5vw, 58px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   letter-spacing: -0.03em;
   line-height: normal; /* the mockup's; 1.6 set the two rows ~25px further apart */
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
   color: rgba(255, 255, 255, 0.45);
   transition: color 0.3s;
 }

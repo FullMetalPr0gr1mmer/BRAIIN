@@ -1,7 +1,7 @@
 import { riyadhDayOf } from '@schemas/visibility';
-import { upgradeThemeSettings } from '@theme/shapes';
 import { clipOfColumns } from '@/lib/admin/resources/shared';
 import { mediaRowToItem } from '@/lib/admin/resources/portfolio';
+import { columnInCurrentShape } from './currentShape';
 import { jsonEqual } from './deepEqual';
 import { derivePatch, type DerivedPatch } from './overlay';
 import type { RegistryEntry } from './registry';
@@ -34,17 +34,6 @@ type Payload = Record<string, unknown>;
 
 /** Columns `toRow` derives from another key's value: recomputed, never compared. */
 export const DERIVED_COLUMNS: readonly string[] = ['body_html', 'reading_minutes'];
-
-/**
- * Columns a later schema reads in a newer shape that means the same thing: compared in today's
- * shape, so a version saved before the change still comes back. A theme's settings saved before
- * Admin v2 E12 are v1, which today's save writes as v2 at the brand's shapes and type.
- */
-const UPGRADED_COLUMNS: Readonly<
-  Record<string, Readonly<Record<string, (v: unknown) => unknown>>>
-> = {
-  custom_theme: { settings: upgradeThemeSettings },
-};
 
 /**
  * Allowlisted columns no payload key writes (a section's legacy `style`, a password gate's
@@ -162,8 +151,12 @@ export function restorePatch(
   const lost = entry.columns.filter((column) => {
     if (skip.has(column) || !(column in row)) return false;
     if (column in derived.patch) {
-      const upgrade = UPGRADED_COLUMNS[entry.entityType]?.[column];
-      return !jsonEqual(derived.patch[column], upgrade ? upgrade(row[column]) : row[column]);
+      // The image in today's shape (currentShape.ts): a version saved before a later schema
+      // (a theme's v1 settings) still comes back.
+      return !jsonEqual(
+        derived.patch[column],
+        columnInCurrentShape(entry.entityType, column, row[column]),
+      );
     }
     // A create writes one target column; the other is null in the image (one or the other).
     return !(targets.includes(column) && row[column] === null);

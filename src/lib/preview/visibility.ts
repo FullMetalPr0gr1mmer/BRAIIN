@@ -88,7 +88,7 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
     'published_at',
     'updated_at',
   ],
-  // 0120 (Admin v2 E4): the active v1 theme's tokens, nothing else (the stylesheet serves
+  // 0120 (Admin v2 E4): the tokens of the active theme with settings, nothing else (the stylesheet serves
   // them; its address is the hash of its body, never the row's version: E4 code review CR6).
   custom_themes: ['tokens'],
   // 0098 (Admin v2 U7): never the version, the schedule, the publish date or the actors.
@@ -493,7 +493,8 @@ export function createMirror(data: MirrorData): Mirror {
       case 'sectors':
       case 'clients':
         return flagged(row);
-      // 0120 custom_themes_public_read (Admin v2 E4; anon's one column): the active v1 theme.
+      // 0120 custom_themes_public_read (Admin v2 E4; anon's one column): the active theme with
+      // settings (a v1 or a v2 one, E12).
       case 'custom_themes':
         return (
           row['is_active'] === true && row['settings'] !== null && row['settings'] !== undefined

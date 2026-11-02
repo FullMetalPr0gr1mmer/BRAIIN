@@ -7,6 +7,7 @@ import {
   CORNER_CHOICES,
   HEADING_CASES,
   HEADING_WEIGHTS,
+  upgradeThemeSettings,
   type ButtonChoice,
   type CornerChoice,
   type HeadingCase,
@@ -46,7 +47,9 @@ export function settingsOf(loaded: unknown): ThemeSettings {
     }
   }
   if (!value || typeof value !== 'object' || Array.isArray(value)) return cloneSettings(base);
-  const v = value as Row;
+  // A v1 theme (E4's) is v2 at the brand's shapes and type: the one upgrade. What is still off
+  // a list after it (a value no save wrote) is the brand's, below.
+  const v = upgradeThemeSettings(value) as Row;
   const colors = (v['colors'] && typeof v['colors'] === 'object' ? v['colors'] : {}) as Row;
   const motion = (v['motion'] && typeof v['motion'] === 'object' ? v['motion'] : {}) as Row;
   const shapes = (v['shapes'] && typeof v['shapes'] === 'object' ? v['shapes'] : {}) as Row;
@@ -181,11 +184,32 @@ export const BUTTON_OPTIONS = [
   { value: 'square', label: 'Square' },
 ] as const satisfies readonly { value: ButtonChoice; label: string }[];
 
-/** Both bold: a heading stays large, easy to read text at any weight offered (ui.md AV-32). */
+/** A heading weight as a segmented control's value (a radio's value is text). */
+export type WeightValue = `${HeadingWeight}`;
+
+/**
+ * Both bold: a heading stays large, easy to read text at any weight offered (ui.md AV-32). Tied
+ * to HEADING_WEIGHTS by type (E12 code review CR8): a value that is not a weight offered does
+ * not compile.
+ */
 export const WEIGHT_OPTIONS = [
   { value: '800', label: 'Extra bold' },
   { value: '700', label: 'Bold' },
-] as const;
+] as const satisfies readonly { value: WeightValue; label: string }[];
+
+/** A weight as the control shows it. */
+export function weightValue(weight: HeadingWeight): WeightValue {
+  return `${weight}`;
+}
+
+/** The control's value as a weight: one of HEADING_WEIGHTS, else the brand's (checked, not cast). */
+export function weightOf(value: string): HeadingWeight {
+  return oneOf<HeadingWeight>(
+    HEADING_WEIGHTS,
+    Number(value),
+    DEFAULT_THEME_SETTINGS.type.headingWeight,
+  );
+}
 
 export const CASE_OPTIONS = [
   { value: 'uppercase', label: 'Capitals' },

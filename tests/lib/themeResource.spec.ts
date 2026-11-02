@@ -240,6 +240,11 @@ describe('the database’s refusals read as the editor’s', () => {
       constraintFields,
     );
     expect(check).toMatchObject({ field: 'settings' });
-    expect(check.message).toContain('hard to read');
+    // The CHECK refuses a shape or type token that disagrees with the settings too (E12), so
+    // its words name no one cause (E12 code review CR6).
+    expect(check.message).toContain(
+      'These theme settings could not be saved. Reload the page and try again.',
+    );
+    expect(check.message).not.toMatch(/colour/i);
   });
 });

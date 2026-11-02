@@ -1,5 +1,6 @@
 import type { Palette } from '@theme/gate';
 import {
+  BUTTON_RADIUS,
   CORNER_SCALE,
   DEFAULT_SHAPES,
   DEFAULT_TYPE,
@@ -13,16 +14,21 @@ import {
 // heading. Painted by SVG attributes only (fill, stroke, rx, font-weight), with colours the
 // palette already validated: no style attribute, no markup built from strings (CSP, ui.md
 // §1.6). The fixed colours are the site's own (black, the light section, white). Since E12 it
-// draws the shapes and type too: the cards' corners (the site's 16 px, here at half size, times
-// the corner scale), the buttons (a pill, 5 or 0), the headings' weight and case. Decorative
-// words, so the picture is one image with a name.
+// draws the shapes and type too, at half the site's size, from the site's own tables
+// (packages/theme/shapes.ts; E12 code review CR9): the cards' corners (the site's 16 px times
+// the corner scale), the buttons (BUTTON_RADIUS: a pill is half the button's height), the
+// headings' weight and case. Decorative words, so the picture is one image with a name.
 
-/** A button's corner in the sample (22 px tall: a pill is 11). */
-const BUTTON_RX: Readonly<Record<ThemeShapes['buttons'], number>> = {
-  pill: 11,
-  rounded: 5,
-  square: 0,
-};
+/** The sample draws the site at half size. */
+const SAMPLE_SCALE = 0.5;
+/** The sample's buttons are 22 px tall, so a pill's corner is 11. */
+const BUTTON_HEIGHT = 22;
+/** A card's corner on the site before the scale (the discipline and value cards' 16 px). */
+const CARD_RADIUS = 16;
+
+/** A button's corner in the sample: the site's radius at half size, a pill at most. */
+const buttonRx = (style: ThemeShapes['buttons']) =>
+  Math.min(BUTTON_RADIUS[style] * SAMPLE_SCALE, BUTTON_HEIGHT / 2);
 
 export interface SitePreviewProps {
   palette: Palette;
@@ -35,8 +41,8 @@ export default function SitePreview({
   shapes = DEFAULT_SHAPES,
   type = DEFAULT_TYPE,
 }: SitePreviewProps) {
-  const rx = BUTTON_RX[shapes.buttons];
-  const card = 8 * CORNER_SCALE[shapes.corners];
+  const rx = buttonRx(shapes.buttons);
+  const card = CARD_RADIUS * SAMPLE_SCALE * CORNER_SCALE[shapes.corners];
   const weight = String(type.headingWeight);
   const heading = (words: string) =>
     type.headingCase === 'uppercase' ? words.toUpperCase() : words;

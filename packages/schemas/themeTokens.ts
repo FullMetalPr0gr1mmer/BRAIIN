@@ -63,48 +63,23 @@ export const THEME_TOKEN_NAMES: readonly ThemeTokenName[] = [
   '--bs-heading-case',
 ];
 
-export const ThemeTokensSchema = z
-  .object({
-    '--bs-klein': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-klein']).optional(),
-    '--bs-cobalt': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-cobalt']).optional(),
-    '--bs-sky': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-sky']).optional(),
-    '--bs-sky-soft': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-sky-soft']).optional(),
-    '--bs-glow-klein': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-glow-klein']).optional(),
-    '--bs-glow-sky': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-glow-sky']).optional(),
-    '--bs-shadow-klein': z
-      .string()
-      .max(60)
-      .regex(THEME_TOKEN_PATTERNS['--bs-shadow-klein'])
-      .optional(),
-    '--bs-shadow-cobalt': z
-      .string()
-      .max(60)
-      .regex(THEME_TOKEN_PATTERNS['--bs-shadow-cobalt'])
-      .optional(),
-    '--bs-marquee-scale': z
-      .string()
-      .max(60)
-      .regex(THEME_TOKEN_PATTERNS['--bs-marquee-scale'])
-      .optional(),
-    '--bs-rv-from': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-rv-from']).optional(),
-    '--bs-rv-shift': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-rv-shift']).optional(),
-    '--bs-radius-scale': z
-      .string()
-      .max(60)
-      .regex(THEME_TOKEN_PATTERNS['--bs-radius-scale'])
-      .optional(),
-    '--bs-btn-radius': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-btn-radius']).optional(),
-    '--bs-heading-weight': z
-      .string()
-      .max(60)
-      .regex(THEME_TOKEN_PATTERNS['--bs-heading-weight'])
-      .optional(),
-    '--bs-heading-case': z
-      .string()
-      .max(60)
-      .regex(THEME_TOKEN_PATTERNS['--bs-heading-case'])
-      .optional(),
-  })
-  .strict();
+/** One token's value: its key's shape, never longer than 60 characters, and optional. */
+const tokenValue = (pattern: RegExp) => z.string().max(60).regex(pattern).optional();
+
+type TokenShape = { [K in ThemeTokenName]: ReturnType<typeof tokenValue> };
+
+/**
+ * One entry per pattern, built from THEME_TOKEN_PATTERNS (E12 code review CR10), so a key and
+ * its shape are written once: a key added to the patterns is in the schema with that pattern.
+ */
+function tokenShape(): TokenShape {
+  const shape = {} as TokenShape;
+  for (const name of Object.keys(THEME_TOKEN_PATTERNS) as ThemeTokenName[]) {
+    shape[name] = tokenValue(THEME_TOKEN_PATTERNS[name]);
+  }
+  return shape;
+}
+
+export const ThemeTokensSchema = z.object(tokenShape()).strict();
 
 export type ThemeTokens = z.infer<typeof ThemeTokensSchema>;

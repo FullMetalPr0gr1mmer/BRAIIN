@@ -14,7 +14,6 @@ import { DEFAULT_THEME_SETTINGS } from '@theme/compile';
 import { suggestMain } from '@theme/gate';
 import { THEME_ROLES, THEME_SWATCHES, type ThemeRole } from '@theme/palette';
 import type { ThemeSettings } from '@schemas/theme';
-import type { HeadingWeight } from '@theme/shapes';
 import {
   ADMIN_PREVIEW_TOKENS,
   BUTTON_OPTIONS,
@@ -30,6 +29,8 @@ import {
   gateView,
   settingsOf,
   typedMain,
+  weightOf,
+  weightValue,
   withMain,
 } from './model';
 import SitePreview from './SitePreview';
@@ -58,7 +59,7 @@ import SitePreview from './SitePreview';
 // only while they pass; the sample of the site is SVG painted by attributes.
 
 export interface ThemeScreenProps {
-  /** The tenant's v1 theme (live, or a pending create), or null: the first save creates it. */
+  /** The tenant's theme with settings (live, or a pending create), or null: the first save creates it. */
   id: string | null;
   /** R12b: the screen is in release mode, so a create is staged. */
   releaseMode: boolean;
@@ -391,11 +392,11 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
                   <Segmented
                     label="Heading weight"
                     options={WEIGHT_OPTIONS}
-                    value={String(settings.type.headingWeight) as '800' | '700'}
+                    value={weightValue(settings.type.headingWeight)}
                     onChange={(weight) =>
                       set({
                         ...settings,
-                        type: { ...settings.type, headingWeight: Number(weight) as HeadingWeight },
+                        type: { ...settings.type, headingWeight: weightOf(weight) },
                       })
                     }
                   />

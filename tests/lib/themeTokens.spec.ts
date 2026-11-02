@@ -58,6 +58,22 @@ describe('ThemeTokensSchema: a closed set, one shape a key', () => {
     expect(Object.keys(ThemeTokensSchema.shape)).toEqual([...THEME_TOKEN_NAMES]);
   });
 
+  it('one entry per pattern, each that pattern, at most 60 characters, optional (CR10)', () => {
+    // Built from THEME_TOKEN_PATTERNS (E12 code review CR10), so a key and its shape are written
+    // once: a pattern added without a schema entry, or an entry reading another key's pattern,
+    // cannot happen.
+    expect(Object.keys(ThemeTokensSchema.shape)).toEqual(Object.keys(THEME_TOKEN_PATTERNS));
+    for (const name of Object.keys(THEME_TOKEN_PATTERNS) as ThemeTokenName[]) {
+      const entry = ThemeTokensSchema.shape[name];
+      expect(entry.isOptional(), name).toBe(true);
+      const checks = (entry.unwrap()._def as { checks: { kind: string }[] }).checks;
+      expect(checks, name).toEqual([
+        { kind: 'max', value: 60, message: undefined },
+        { kind: 'regex', regex: THEME_TOKEN_PATTERNS[name], message: undefined },
+      ]);
+    }
+  });
+
   it.each([...THEME_TOKEN_NAMES])('%s refuses every hostile value', (name) => {
     for (const value of HOSTILE) {
       expect(ThemeTokensSchema.safeParse({ [name]: value }).success, value).toBe(false);

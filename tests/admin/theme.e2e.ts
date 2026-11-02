@@ -62,7 +62,7 @@ async function csrf(page: Page): Promise<string> {
   return token!;
 }
 
-/** The tenant's v1 theme (the row with settings), or null before the first save. */
+/** The tenant's theme with settings (v1 or v2), or null before the first save. */
 async function theme(page: Page): Promise<Row | null> {
   const list = await page.request.get(API);
   expect(list.status(), await list.text()).toBe(200);

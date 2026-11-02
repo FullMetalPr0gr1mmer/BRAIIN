@@ -3,9 +3,8 @@ import { failuresFor } from '../theme/gate';
 import {
   BUTTON_CHOICES,
   CORNER_CHOICES,
-  DEFAULT_SHAPES,
-  DEFAULT_TYPE,
   HEADING_CASES,
+  upgradeThemeSettings,
 } from '../theme/shapes';
 
 // The theme's settings (Admin v2 E4, AV-27; ui.md "Theme"): what the editor saves in
@@ -85,18 +84,14 @@ export const ThemeSettingsV2Schema = z
   .strict();
 
 type SettingsV2 = z.infer<typeof ThemeSettingsV2Schema>;
+/** E4's settings as stored (compileTheme takes either version). */
+export type ThemeSettingsV1 = z.infer<typeof ThemeSettingsV1Schema>;
 
 export const ThemeSettingsSchema = z
   .discriminatedUnion('v', [ThemeSettingsV1Schema, ThemeSettingsV2Schema])
+  // A v1 theme is v2 at the brand's shapes and type: the one upgrade (packages/theme/shapes.ts).
   .transform((settings): SettingsV2 =>
-    settings.v === THEME_SETTINGS_VERSION
-      ? settings
-      : {
-          ...settings,
-          v: THEME_SETTINGS_VERSION,
-          shapes: { ...DEFAULT_SHAPES },
-          type: { ...DEFAULT_TYPE },
-        },
+    settings.v === THEME_SETTINGS_VERSION ? settings : upgradeThemeSettings(settings),
   )
   .superRefine((settings, ctx) => {
     // zod runs a refinement on a value whose fields already failed (a half-typed colour, a

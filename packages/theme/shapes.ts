@@ -143,12 +143,23 @@ export function shapeTokens(
   return out;
 }
 
+/** What v2 adds to E4's v1 settings (and the version it moves to). */
+export interface ThemeV2Parts {
+  v: 2;
+  shapes: ThemeShapes;
+  type: ThemeType;
+}
+
 /**
- * A stored theme's settings in today's version: E4's v1 is v2 at the brand's shapes and type
- * (what ThemeSettingsSchema answers for it); anything else as it is. No validation: the
- * release restore's round trip (src/lib/release/rowPayload.ts) compares a version saved before
- * E12 with what today's save writes for it, so an old version still comes back.
+ * A theme's settings in today's version: E4's v1 is v2 at the brand's shapes and type;
+ * anything else as it is (the same value). No validation. The ONE place a v1 theme is
+ * upgraded (E12 code review CR7): the schema's transform (ThemeSettingsSchema), the compiler
+ * (compileTheme), the editor's settingsOf and the release lane's comparisons
+ * (src/lib/release/currentShape.ts, where a stored v1 row meets what today's save writes) all
+ * call it.
  */
+export function upgradeThemeSettings<T extends { v: 1 }>(stored: T): Omit<T, 'v'> & ThemeV2Parts;
+export function upgradeThemeSettings(stored: unknown): unknown;
 export function upgradeThemeSettings(stored: unknown): unknown {
   if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return stored;
   if ((stored as { v?: unknown }).v !== 1) return stored;

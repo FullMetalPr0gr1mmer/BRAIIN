@@ -404,7 +404,7 @@ export async function stagedUpdate(
   stageKeepsArchived(auth, entry, op, stored, live);
   let derived = derivePatch(entry, op, stored);
   if (op === 'update') {
-    const remaining = dropNoOps(derived.patch, live!, draft?.base);
+    const remaining = dropNoOps(entry.entityType, derived.patch, live!, draft?.base);
     stored = dropFields(entry, stored, Object.keys(remaining ?? {}));
     if (Object.keys(stored).length === 0) {
       // Nothing differs from live: no pending change remains.
@@ -584,7 +584,7 @@ export async function stagedReorder(
     stageKeepsArchived(auth, entry, op, stored, live);
     let derived = derivePatch(entry, op, stored);
     if (op === 'update') {
-      const remaining = dropNoOps(derived.patch, live!, draft?.base);
+      const remaining = dropNoOps(entry.entityType, derived.patch, live!, draft?.base);
       stored = dropFields(entry, stored, Object.keys(remaining ?? {}));
       if (Object.keys(stored).length === 0) {
         if (draft) {

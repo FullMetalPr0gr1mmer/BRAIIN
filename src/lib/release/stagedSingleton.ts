@@ -213,7 +213,7 @@ export async function stagedSingletonUpdate(
   let merged = mergePayload(draft?.payload, payload, entry);
   let derived = derivePatch(entry, op, merged);
   if (op === 'update') {
-    const remaining = dropNoOps(derived.patch, live!, draft?.base);
+    const remaining = dropNoOps(entry.entityType, derived.patch, live!, draft?.base);
     merged = dropFields(entry, merged, Object.keys(remaining ?? {}));
   }
   if (Object.keys(merged).length === 0) {

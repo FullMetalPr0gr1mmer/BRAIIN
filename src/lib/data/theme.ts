@@ -5,7 +5,7 @@ import { reportLoadError } from './parse';
 import { contentClient } from './source';
 
 // The site's active theme (Admin v2 E4, AV-27), as a visitor reads it: the tokens of the
-// tenant's ACTIVE v1 theme (0120's custom_themes_public_read and its column grant, the anon
+// tenant's ACTIVE theme with settings (0120's custom_themes_public_read and its column grant, the anon
 // fence first), through the content seam, so the releases preview reads the pending theme in
 // its place. Read once per request (`locals.theme`, a promise, as `locals.identity`) by
 // BaseLayout and AdminLayout, which link /styles/theme.css only when the theme sets a token,
@@ -70,7 +70,7 @@ async function readTheme(): Promise<ThemeRead> {
     }
     const tokens = ThemeTokensSchema.safeParse(rows[0]!['tokens']);
     if (!tokens.success) {
-      reportLoadError('custom_themes', new Error('the active theme is not a v1 theme'));
+      reportLoadError('custom_themes', new Error('the active theme has tokens outside the set'));
       return { theme: null, failed: false };
     }
     return { theme: { tokens: tokens.data }, failed: false };

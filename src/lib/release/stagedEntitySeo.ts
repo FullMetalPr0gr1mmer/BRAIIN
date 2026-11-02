@@ -146,7 +146,7 @@ export async function stagedEntitySeoWrite(ctx: Ctx, raw: unknown): Promise<Row>
   const derived = derivePatch(e, op, stored);
   let changed = derived.patch;
   if (op === 'update') {
-    const remaining = dropNoOps(derived.patch, live!, draft?.base);
+    const remaining = dropNoOps(e.entityType, derived.patch, live!, draft?.base);
     if (!remaining) {
       // The save equals live: nothing is pending.
       if (draft) {

@@ -4,11 +4,11 @@ import {
   ThemeTokensSchema,
   type ThemeTokens,
 } from '../schemas/themeTokens';
-import type { ThemeSettings } from '../schemas/theme';
+import type { ThemeSettings, ThemeSettingsV1 } from '../schemas/theme';
 import { channels } from './colour';
 import { paletteOf } from './gate';
 import { DEFAULT_COLORS, isDefaultColors } from './palette';
-import { DEFAULT_SHAPES, DEFAULT_TYPE, shapeTokens } from './shapes';
+import { DEFAULT_SHAPES, DEFAULT_TYPE, shapeTokens, upgradeThemeSettings } from './shapes';
 
 // Settings → tokens → CSS (Admin v2 E4, AV-27). The server compiles a theme's tokens from its
 // settings on every save (the resource's toRow, src/lib/admin/resources/themes.ts), so a client
@@ -56,8 +56,12 @@ const rgba = (hex: string, alpha: string) => {
   return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
 };
 
-/** The tokens a theme's settings compile to (none for the brand's own). */
-export function compileTheme(settings: ThemeSettings): ThemeTokens {
+/**
+ * The tokens a theme's settings compile to (none for the brand's own). E4's v1 settings (as
+ * stored before E12) compile through the one upgrade, at the brand's shapes and type.
+ */
+export function compileTheme(stored: ThemeSettings | ThemeSettingsV1): ThemeTokens {
+  const settings = stored.v === 1 ? upgradeThemeSettings(stored) : stored;
   const out: ThemeTokens = {};
   if (!isDefaultColors(settings.colors)) {
     const p = paletteOf(settings.colors);
@@ -73,9 +77,7 @@ export function compileTheme(settings: ThemeSettings): ThemeTokens {
     out['--bs-rv-from'] = '1';
     out['--bs-rv-shift'] = '0px';
   }
-  // A v1 object handed over unparsed (E4's shape) is the brand's shapes and type, as the
-  // schema reads it.
-  Object.assign(out, shapeTokens(settings.shapes ?? DEFAULT_SHAPES, settings.type ?? DEFAULT_TYPE));
+  Object.assign(out, shapeTokens(settings.shapes, settings.type));
   return out;
 }
 
