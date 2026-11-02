@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { JsonLdNode } from '@/lib/seo/jsonld';
 import SeoHead from '@/components/SeoHead.astro';
-import type { HeroFace } from '@/lib/seo/fonts';
+import { themedHeroFace, type HeroFace } from '@/lib/seo/fonts';
 import type { OgImageCandidates } from '@/lib/seo/ogImage';
 import SiteHeader, { type HeaderVariant } from '@/components/SiteHeader.astro';
 import SiteFooter from '@/components/SiteFooter.astro';
@@ -82,6 +82,9 @@ const robotsValue = preview ? 'noindex,nofollow' : robots;
 // link, and the middleware keeps that page out of the edge cache (CR1).
 const theme = await getActiveTheme(Astro.locals);
 const previewTheme = preview && theme ? theme.css : '';
+// The one Arabic preload follows the theme's heading weight (Admin v2 E12): a Bold theme draws
+// the route's 800 heading with the 700 face, so that is the face preloaded.
+const face = themedHeroFace(heroFace ?? 'almarai-800', theme?.tokens['--bs-heading-weight']);
 ---
 
 <!doctype html>
@@ -96,7 +99,7 @@ const previewTheme = preview && theme ? theme.css : '';
       robots={robotsValue}
       {...ogImages ? { ogImages } : {}}
       {...canonicalOverride ? { canonicalOverride } : {}}
-      {...heroFace ? { heroFace } : {}}
+      heroFace={face}
     />
     <link rel="stylesheet" href="/styles/global.css" />
     {styles.map((sheet) => <link rel="stylesheet" href={`/styles/${sheet}`} />)}

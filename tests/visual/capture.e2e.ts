@@ -10,7 +10,19 @@ import { test } from '@playwright/test';
 // can happen before any production data changes.
 //
 // It is also the seed of the PR14 visual-regression suite.
+//
+// Since Admin v2 E12 (AV-32) each page is captured a second time THEMED (`<name>-themed.png`):
+// square corners and buttons, Bold headings as written, set the way the editor previews them
+// (the four custom properties on <html> through the CSSOM), so the side-by-side comparison shows
+// what a theme's shapes and type reach in both languages. tests/visual/theme.e2e.ts asserts it.
 const DIR = process.env.CAPTURE_DIR;
+
+const THEMED: Record<string, string> = {
+  '--bs-radius-scale': '0',
+  '--bs-btn-radius': '0px',
+  '--bs-heading-weight': '700',
+  '--bs-heading-case': 'none',
+};
 
 const ROUTES = [
   '/',
@@ -71,6 +83,14 @@ test.describe('design capture', () => {
             body: document.body.innerText,
           }));
           writeFileSync(join(DIR!, `${name}.json`), JSON.stringify(text, null, 1));
+          // The themed twin: the same page, the tokens set, two frames for the style to settle.
+          await page.evaluate(async (tokens) => {
+            for (const [k, v] of Object.entries(tokens)) {
+              document.documentElement.style.setProperty(k, v);
+            }
+            await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          }, THEMED);
+          await page.screenshot({ path: join(DIR!, `${name}-themed.png`), fullPage: true });
           await context.close();
         });
       }

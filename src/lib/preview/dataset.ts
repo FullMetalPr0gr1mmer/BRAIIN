@@ -175,7 +175,7 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row
  */
 export const DATASET_ONLY_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string[]>>> = {
   testimonials: ['consent_obtained_at', 'is_placeholder'],
-  // Admin v2 E4: what 0120's custom_themes_public_read reads (active, a v1 theme), the key,
+  // Admin v2 E4: what 0120's custom_themes_public_read reads (active, a theme with settings), the key,
   // and the tenant the dataset keeps.
   custom_themes: ['id', 'tenant_id', 'is_active', 'settings'],
 };

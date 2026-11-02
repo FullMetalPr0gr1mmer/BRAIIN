@@ -9,6 +9,7 @@ import {
 import type { AuthContext } from '@/lib/auth/types';
 import { json, type AdminRouteContext } from '@/lib/admin/route';
 import { readsEntity } from '@/lib/preview/dataset';
+import { inCurrentShape } from './currentShape';
 import { jsonEqual } from './deepEqual';
 import { RELEASE_REGISTRY, type RegistryEntry } from './registry';
 import { DERIVED_COLUMNS } from './rowPayload';
@@ -310,8 +311,10 @@ export async function versionDetail(ctx: Ctx): Promise<unknown> {
       hidden += 1;
       continue;
     }
-    const before = (item['before'] ?? null) as Row | null;
-    const after = (item['after'] ?? null) as Row | null;
+    // Both images in today's shape (Admin v2 E12 code review CR5): a theme published as v2
+    // over the same theme saved before E12 (v1) changed nothing a person set.
+    const before = inCurrentShape(type, (item['before'] ?? null) as Row | null);
+    const after = inCurrentShape(type, (item['after'] ?? null) as Row | null);
     const linkSets = type === 'portfolio_children';
     shown.push({
       id: Number(item['id']),

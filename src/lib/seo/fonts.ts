@@ -14,3 +14,14 @@ export type HeroFace = (typeof HERO_FACES)[number];
 export function heroFontPreload(locale: Locale, face: HeroFace = 'almarai-800'): string {
   return locale === 'ar' ? `/fonts/${face}-arabic.woff2` : '/fonts/archivo-var-latin.woff2';
 }
+
+/**
+ * The Arabic hero face once the theme's heading weight applies (Admin v2 E12, AV-32). A theme
+ * that sets the headings in Bold (`--bs-heading-weight: 700`) draws an 800 heading with the 700
+ * face, so that face is the one to preload; preloading 800 would leave the 700 face to swap in
+ * late (the CLS /ar/about once paid). A route whose heading is already 700 keeps it, and no
+ * theme, or the brand's weight (no token), keeps the route's own face.
+ */
+export function themedHeroFace(face: HeroFace, headingWeight: string | undefined): HeroFace {
+  return face === 'almarai-800' && headingWeight === '700' ? 'almarai-700' : face;
+}

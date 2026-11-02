@@ -17,14 +17,19 @@ import { isLoopback, themeLinks, themedRunRow } from '../../scripts/lhci-theme.m
 // image-LCP routes, LCP and the performance score warn (E4-C1, below).
 
 describe('the theme the run sets', () => {
-  it('is a valid v1 theme that passes the gate, its tokens the compiler’s', () => {
+  it('is a valid v2 theme that passes the gate, its tokens the compiler’s', () => {
     const settings = ThemeSettingsSchema.parse(fixture.settings);
     expect(gate(settings.colors).ok).toBe(true);
     expect(fixture.tokens).toEqual(compileTheme(settings));
     expect(ThemeTokensSchema.safeParse(fixture.tokens).success).toBe(true);
     expect(hasTokens(fixture.tokens)).toBe(true);
-    // Every kind of token: colours, glows, shadows and both motion settings.
-    expect(Object.keys(fixture.tokens)).toHaveLength(11);
+    // Every kind of token: colours, glows, shadows, both motion settings and (Admin v2 E12)
+    // the four shapes and type, so the run measures pages whose radii and headings follow it;
+    // stored as v2, never upgraded on the way in.
+    expect(fixture.settings.v).toBe(2);
+    expect(settings).toEqual(fixture.settings);
+    expect(Object.keys(fixture.tokens)).toHaveLength(15);
+    expect(fixture.tokens).toMatchObject({ '--bs-heading-weight': '700' });
     expect(themedRunRow()).toEqual({
       name: 'Lighthouse themed run',
       settings: fixture.settings,

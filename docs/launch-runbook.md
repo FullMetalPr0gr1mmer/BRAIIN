@@ -1956,6 +1956,25 @@ A Worker rollback across R11's PR is safe: the older minute cron never calls
 newer Worker is back), and the older publish route refuses `scheduleAt`
 (400). With releases off, as until R14, nothing can be scheduled at all.
 
+0121 (Admin v2 E12, Theme v2: shapes and type) does not move the line either: it is expand only
+(`app.theme_row_ok` restated to accept a v1 or a v2 theme, the CHECK keeping its name, the
+`theme` guide put again), and it revokes nothing. **A Worker rollback across E12's PR needs one
+step first, once a theme holds a shape or type choice.** A Worker older than E12 reads a theme's
+tokens through E4's strict set of eleven keys, so a row holding any of the four shape and type
+tokens fails that read and the older Worker serves **no theme at all**, colours included, as an
+answer that leaves the pages edge-cacheable without the theme's link. Before rolling back:
+
+1. open `/admin/appearance/theme`, set Corners to Brand, Buttons to Pill, Heading weight to
+   Extra bold and Heading case to Capitals, and save (with releases on, publish that change):
+   the tokens are then exactly E4's;
+2. purge `site:chrome` (the theme's publish tag), so no page cached while the theme was
+   unreadable keeps its theme-less head.
+
+If the Worker was already rolled back, its editor reads a v2 row's colours and motion and its
+save writes E4's settings and tokens, which the restated function accepts; save once, then
+purge `site:chrome`. The migration stays (forward only). `docs/admin-v2/as-built/E12.md`,
+Rollback.
+
 R14-prep carries no migration, so it does not move the line either, and a Worker rollback across
 it is safe while releases are off. **Once releases are switched on (§6p), roll the Worker back
 only to a build that contains R13** (`42b61c6f`: `git merge-base --is-ancestor 42b61c6f <sha>`),
