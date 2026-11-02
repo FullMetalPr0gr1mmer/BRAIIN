@@ -180,7 +180,8 @@ export const profileUi: SingletonUi = {
     {
       id: 'social',
       title: 'Social accounts',
-      sub: 'Used in the Social section and in search results.',
+      // Admin v2 E6: the footer shows them as icons when Appearance › Footer says so.
+      sub: 'Used in the Social section, in search results and, if you choose, as icons in the footer.',
       column: 'right',
       fields: ['socials'],
     },
