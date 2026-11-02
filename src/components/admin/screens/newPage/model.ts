@@ -1,4 +1,4 @@
-import { customPageSlugProblem, isRoutePageSlug } from '@schemas/customPages';
+import { customPageSlugProblem } from '@schemas/customPages';
 
 // The New page dialog's rules (Admin v2 E11), pure: the island and tests/lib/customPages.spec.ts
 // both read them. The server holds every one of them too (PageWriteSchema, 0123's trigger, the
@@ -30,18 +30,13 @@ export function titleProblem(value: string, language: 'English' | 'Arabic'): str
   return null;
 }
 
-/** Why the address cannot be a new page's (a route page's own included: it exists). */
-export function slugProblem(value: string): string | null {
-  if (isRoutePageSlug(value)) return 'The site already uses this address. Choose another one.';
-  return customPageSlugProblem(value);
-}
-
 /** Every refusal, by field; empty when the dialog may send. */
 export function newPageErrors(input: NewPageInput): NewPageErrors {
   const out: NewPageErrors = {};
   const en = titleProblem(input.titleEn, 'English');
   const ar = titleProblem(input.titleAr, 'Arabic');
-  const slug = slugProblem(input.slug);
+  // The address's one rule (E11 code review, CR9): a route slug is refused there too.
+  const slug = customPageSlugProblem(input.slug);
   if (en) out.titleEn = en;
   if (ar) out.titleAr = ar;
   if (slug) out.slug = slug;
@@ -73,4 +68,37 @@ export function heroPayload(pageId: string, input: NewPageInput): Record<string,
     sortOrder: 10,
     isPlaceholder: false,
   };
+}
+
+/**
+ * How the dialog adds the banner: its POST (the island's own adminFetch of
+ * `stagedUrl('/api/admin/sections', releaseMode)` with heroPayload, where the release-mode
+ * scan reads it, tests/lib/releaseModeWrites.spec.ts), and the client error channel.
+ */
+export interface BannerIo {
+  post: () => Promise<unknown>;
+  report: (message: string) => void;
+}
+
+export type BannerOutcome = { added: true } | { added: false; error: unknown };
+
+/**
+ * Adds the new page's banner hero. A refusal is never swallowed (E11 code review, CR4): it is
+ * reported through the client error channel, naming the page's id and the error, never the
+ * title, and handed back for the dialog to say, with Try again and Open the page.
+ */
+export async function addBanner(pageId: string, io: BannerIo): Promise<BannerOutcome> {
+  try {
+    await io.post();
+    return { added: true };
+  } catch (error) {
+    const why = error instanceof Error ? error.message : String(error);
+    io.report(`New page ${pageId}: the page was made, its banner was not (${why}).`);
+    return { added: false, error };
+  }
+}
+
+/** What the dialog says when the page was made and its banner was not. */
+export function bannerMissing(why: string): string {
+  return `The page was made as a draft, but its banner was not added (${why}). Try again, or open the page and add a Hero from Add section.`;
 }

@@ -2,9 +2,11 @@ import { useId, useState, type FormEvent } from 'react';
 import { CUSTOM_PAGE_SLUG_MAX, suggestPageSlug } from '@schemas/customPages';
 import Modal from '@/components/admin/kit/Modal';
 import Icon from '@/components/admin/kit/Icon';
-import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
+import { AdminApiError, adminFetch, describeError, reportClientError } from '@/lib/admin/client';
 import { stagedUrl } from '@/lib/admin/releaseEvents';
 import {
+  addBanner,
+  bannerMissing,
   heroPayload,
   newPageErrors,
   newPagePayload,
@@ -18,7 +20,10 @@ import {
 // the address, suggested from the English title until the address is typed in. The page is
 // created as a draft through the resource kernel (POST /api/admin/pages, marked in release
 // mode, R12b), then its banner hero with the title as its headline, and the editor opens on
-// it. Every rule is the server's too (model.ts); a refusal is said on its field.
+// it. Every rule is the server's too (model.ts); a refusal is said on its field. When the page
+// is made and its banner is not (E11 code review, CR4), the dialog stays open and says so, the
+// failure goes to the client error channel, and it offers Try again (the banner only: the page
+// exists) and Open the page.
 
 type Row = Record<string, unknown>;
 
@@ -31,10 +36,18 @@ export interface NewPageProps {
 
 const EMPTY: NewPageInput = { titleEn: '', titleAr: '', slug: '' };
 
+const editorOf = (pageId: string) => `/admin/pages/${pageId}`;
+
 /** The server's refusal of the address, in its words: the trigger's or the schema's. */
 function slugRefusal(err: AdminApiError): string | null {
   if (err.info.field === 'slug') return err.info.detail ?? describeError(err);
   return err.info.issues?.find((issue) => issue.path === 'slug')?.message ?? null;
+}
+
+/** The dialog's main button: make the page, or, once it is made, add its banner again. */
+export function submitLabel(working: boolean, made: boolean): string {
+  if (made) return working ? 'Adding the banner…' : 'Try again';
+  return working ? 'Making the page…' : 'Make the page';
 }
 
 export default function NewPage({ releaseMode, startOpen = false }: NewPageProps) {
@@ -44,10 +57,17 @@ export default function NewPage({ releaseMode, startOpen = false }: NewPageProps
   const [errors, setErrors] = useState<NewPageErrors>({});
   const [failure, setFailure] = useState('');
   const [working, setWorking] = useState(false);
+  /** The page made, whose banner was not (CR4): what Try again adds it to. */
+  const [made, setMade] = useState<string | null>(null);
   const id = useId();
 
   const close = () => {
     if (working) return;
+    // The page exists: closing opens it, rather than leaving a draft the list has not shown.
+    if (made) {
+      window.location.assign(editorOf(made));
+      return;
+    }
     setOpen(false);
     setInput(EMPTY);
     setSlugTouched(false);
@@ -63,8 +83,33 @@ export default function NewPage({ releaseMode, startOpen = false }: NewPageProps
     });
   };
 
+  /** The banner on a page already made: open the editor, or stay and say why not. */
+  const banner = async (pageId: string) => {
+    const outcome = await addBanner(pageId, {
+      post: () =>
+        adminFetch<Row>(stagedUrl('/api/admin/sections', releaseMode), {
+          method: 'POST',
+          body: heroPayload(pageId, input),
+        }),
+      report: (message) => reportClientError('admin:new-page', message),
+    });
+    if (outcome.added) {
+      window.location.assign(editorOf(pageId));
+      return;
+    }
+    setMade(pageId);
+    setWorking(false);
+    setFailure(bannerMissing(describeError(outcome.error)));
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (made) {
+      setWorking(true);
+      setFailure('');
+      await banner(made);
+      return;
+    }
     const found = newPageErrors(input);
     setErrors(found);
     setFailure('');
@@ -77,16 +122,7 @@ export default function NewPage({ releaseMode, startOpen = false }: NewPageProps
       });
       const pageId = typeof page['id'] === 'string' ? page['id'] : '';
       if (!pageId) throw new Error('The page was made, but its address could not be read.');
-      try {
-        await adminFetch<Row>(stagedUrl('/api/admin/sections', releaseMode), {
-          method: 'POST',
-          body: heroPayload(pageId, input),
-        });
-      } catch {
-        // The page is made. Without its hero it still opens with its title (the route's floor),
-        // and the editor's Add section puts one in: open the editor rather than fail here.
-      }
-      window.location.assign(`/admin/pages/${pageId}`);
+      await banner(pageId);
     } catch (err) {
       setWorking(false);
       const slugIssue = err instanceof AdminApiError ? slugRefusal(err) : null;
@@ -121,6 +157,7 @@ export default function NewPage({ releaseMode, startOpen = false }: NewPageProps
           value={input[key]}
           autoComplete="off"
           spellCheck={key !== 'slug'}
+          readOnly={made !== null}
           dir={extra.dir}
           lang={extra.lang}
           maxLength={extra.maxLength}
@@ -158,7 +195,7 @@ export default function NewPage({ releaseMode, startOpen = false }: NewPageProps
         footer={
           <>
             <button type="button" className="btn" data-variant="ghost" onClick={close}>
-              Cancel
+              {made ? 'Open the page' : 'Cancel'}
             </button>
             <button
               type="submit"
@@ -167,7 +204,7 @@ export default function NewPage({ releaseMode, startOpen = false }: NewPageProps
               form={`${id}-form`}
               disabled={working}
             >
-              {working ? 'Making the page…' : 'Make the page'}
+              {submitLabel(working, made !== null)}
             </button>
           </>
         }

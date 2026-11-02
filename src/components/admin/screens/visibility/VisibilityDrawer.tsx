@@ -54,13 +54,21 @@ export interface RedirectChoice {
   label: string;
 }
 
-export function draftOf(item: VisibilityItem, homeId: string | null): VisibilityDraft {
+export function draftOf(
+  item: VisibilityItem,
+  homeId: string | null,
+  offered?: readonly RedirectChoice[],
+): VisibilityDraft {
   const setting = item.setting;
   const mode = setting?.mode ?? 'public';
+  // A stored redirect to a page the list no longer offers (a custom page unpublished since,
+  // E11 code review CR1) reads as what the live site now shows for it: the 404.
+  const stored = setting?.redirectPageId ?? '';
+  const kept = stored && offered && !offered.some((c) => c.id === stored) ? '' : stored;
   return {
     mode,
     // A page being hidden for the first time sends its visitors home (the prototype's default).
-    redirect: mode === 'hidden' ? (setting?.redirectPageId ?? '') : (homeId ?? ''),
+    redirect: mode === 'hidden' ? kept : (homeId ?? ''),
     hideFrom: setting?.hideFrom ?? '',
     showOn: setting?.showOn ?? '',
     password: '',
@@ -93,7 +101,7 @@ export default function VisibilityDrawer({
 }) {
   const homeId = choices[0]?.id ?? null;
   const [draft, setDraft] = useState<VisibilityDraft | null>(() =>
-    item ? draftOf(item, homeId) : null,
+    item ? draftOf(item, homeId, choices) : null,
   );
   const ids = {
     redirect: useId(),
@@ -109,8 +117,8 @@ export default function VisibilityDrawer({
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    setDraft(item ? draftOf(item, homeId) : null);
-  }, [item, homeId]);
+    setDraft(item ? draftOf(item, homeId, choices) : null);
+  }, [item, homeId, choices]);
 
   const isHome = item?.kind === 'page' && item.slug === 'home';
   // A template renders many pages, so it takes public or hidden only (decision D1): a

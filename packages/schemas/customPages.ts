@@ -148,3 +148,12 @@ export function isCustomPageSectionType(type: unknown): boolean {
 /** The words the section routes say when a type is refused on a custom page. */
 export const CUSTOM_PAGE_TYPE_REFUSED =
   'This section is made for one of the site’s own pages, so a new page cannot hold it.';
+
+/**
+ * The words a page's save hears when it would change a custom page's address, or give a page
+ * one (E11 code review, CR3). The address is chosen once, in the New page dialog: a new one
+ * would leave the old URL in every cache and link, and move the page out of the set its
+ * sections were checked against.
+ */
+export const CUSTOM_PAGE_ADDRESS_FIXED =
+  'A page’s address is chosen when the page is made and does not change. Make a new page for a new address.';

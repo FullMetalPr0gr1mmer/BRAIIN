@@ -116,9 +116,12 @@ describe('getPageComposition', () => {
       ['cta', {}],
     ]);
   });
+
   // E11 review E11-C2: a section edit never moves pages.updated_at, so a custom page's
   // WebPage dateModified (and its sitemap lastmod) would understate the page's last change.
-  it('dates the composition by its latest change: the page row or any section read', async () => {
+  // Code review CR6: the date rides on the section it belongs to, so a route dates only what
+  // it renders, and a row the loader drops (an unknown type) takes its date with it.
+  it('gives each section its own row’s date, and none to a row it drops', async () => {
     pageRow = { ...PAGE, updated_at: '2026-10-01T08:00:00+00:00' };
     sectionRows = [
       {
@@ -126,23 +129,23 @@ describe('getPageComposition', () => {
         content: {},
         visible: true,
         sort_order: 1,
-        updated_at: '2026-10-30T12:00:00.123456+00:00',
+        updated_at: '2026-10-05T08:00:00+00:00',
       },
       {
-        type: 'cta',
+        type: 'not-a-type',
         content: {},
         visible: true,
         sort_order: 2,
-        updated_at: '2026-10-05T08:00:00+00:00',
+        updated_at: '2026-10-30T12:00:00.123456+00:00',
       },
+      { type: 'slogan', content: {}, visible: true, sort_order: 3 },
     ];
-    expect((await getPageComposition('home'))?.modifiedAt).toBe('2026-10-30T12:00:00.123456+00:00');
-    sectionRows = [];
-    expect((await getPageComposition('home'))?.modifiedAt).toBe('2026-10-01T08:00:00+00:00');
-    pageRow = PAGE;
-    expect((await getPageComposition('home'))?.modifiedAt).toBeNull();
-    sectionError = { code: '42501', message: 'denied' };
-    pageRow = { ...PAGE, updated_at: '2026-10-01T08:00:00+00:00' };
-    expect((await getPageComposition('home'))?.modifiedAt).toBe('2026-10-01T08:00:00+00:00');
+    const c = await getPageComposition('home');
+    expect(c?.page.updatedAt).toBe('2026-10-01T08:00:00+00:00');
+    expect(c?.sections.map((s) => [s.type, s.updatedAt])).toEqual([
+      ['cta', '2026-10-05T08:00:00+00:00'],
+      ['slogan', undefined],
+    ]);
+    expect(JSON.stringify(c)).not.toContain('2026-10-30');
   });
 });

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { isCustomPageSlug } from '@schemas/customPages';
-import { PAGE_PATHS } from '@/lib/visibility/routes';
+import { PAGE_PATHS, ROUTE_SLUG_LIST } from '@/lib/visibility/routes';
 
 // Where a link field can point (Admin v2 F5b, ui.md §2.6 "link"): the pages this site
 // has, so an editor picks a target instead of typing a path and finding out later that it
@@ -130,23 +130,26 @@ interface Row {
  * CALLER's client, so a role that cannot see a table simply contributes nothing from it —
  * and a draft is never offered, because only published rows are asked for.
  *
- * Sequential and bounded, like the admin search: three small queries on one pooled
- * connection beat three concurrent ones from a Worker with 50 subrequests.
+ * Sequential and bounded, like the admin search: four small queries on one pooled
+ * connection beat four concurrent ones from a Worker with 50 subrequests. The route pages'
+ * titles are read apart from the custom pages (E11 code review, CR10), so a hundred custom
+ * pages can never crowd a route's own title out of the bound.
  */
 export async function loadLinkables(
   sb: SupabaseClient,
   auth: AuthContext,
 ): Promise<readonly Linkable[]> {
-  const pages = await sb
+  const routePages = await sb
     .from('pages')
     .select('slug,title')
     .eq('tenant_id', auth.tenantId)
     .eq('status', 'published')
-    .limit(PER_KIND);
+    .in('slug', Object.keys(PAGE_PATHS))
+    .limit(Object.keys(PAGE_PATHS).length);
 
   const titles = new Map<string, { en: string; ar: string }>();
-  for (const row of (pages.data ?? []) as Row[]) {
-    const slug = typeof row.slug === 'string' ? row.slug : '';
+  for (const row of (routePages.data ?? []) as Row[]) {
+    const slug = typeof row.slug === 'string' ? row.slug.toLowerCase() : '';
     if (slug) titles.set(slug, labelOf(row.title, slug));
   }
 
@@ -157,15 +160,19 @@ export async function loadLinkables(
   });
 
   const out: Linkable[] = [...routes];
-  // The published custom pages (Admin v2 E11), each at `/<slug>`, from the same read.
-  for (const row of (pages.data ?? []) as Row[]) {
+  // The published custom pages (Admin v2 E11), each at `/<slug>`, by address.
+  const customPages = await sb
+    .from('pages')
+    .select('slug,title')
+    .eq('tenant_id', auth.tenantId)
+    .eq('status', 'published')
+    .not('slug', 'in', ROUTE_SLUG_LIST)
+    .order('slug', { ascending: true })
+    .limit(PER_KIND);
+  for (const row of (customPages.data ?? []) as Row[]) {
     const slug = typeof row.slug === 'string' ? row.slug : '';
     if (!isCustomPageSlug(slug)) continue;
-    out.push({
-      href: `/${slug}`,
-      label: titles.get(slug) ?? labelOf(row.title, slug),
-      group: 'page',
-    });
+    out.push({ href: `/${slug}`, label: labelOf(row.title, slug), group: 'page' });
   }
   for (const [table, prefix, group] of [
     ['services', '/services', 'service'],

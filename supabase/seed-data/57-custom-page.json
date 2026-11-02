@@ -5,6 +5,7 @@
       "conflict": ["tenant_id", "slug"],
       "rows": [
         {
+          "id": "5eed5700-0000-4000-8000-0000000000a0",
           "slug": "how-we-work",
           "title": {
             "en": "How we work",
@@ -19,17 +20,16 @@
       "table": "page_sections",
       "conflict": ["id"],
       "unlessAuthored": ["page_id"],
+      "requires": {
+        "table": "pages",
+        "by": {
+          "id": "5eed5700-0000-4000-8000-0000000000a0"
+        }
+      },
       "rows": [
         {
           "id": "5eed5700-0000-4000-8000-000000000001",
-          "page_id": {
-            "$ref": {
-              "table": "pages",
-              "by": {
-                "slug": "how-we-work"
-              }
-            }
-          },
+          "page_id": "5eed5700-0000-4000-8000-0000000000a0",
           "type": "hero",
           "content": {
             "headline": {
@@ -48,14 +48,7 @@
         },
         {
           "id": "5eed5700-0000-4000-8000-000000000002",
-          "page_id": {
-            "$ref": {
-              "table": "pages",
-              "by": {
-                "slug": "how-we-work"
-              }
-            }
-          },
+          "page_id": "5eed5700-0000-4000-8000-0000000000a0",
           "type": "textBlock",
           "content": {
             "tag": {

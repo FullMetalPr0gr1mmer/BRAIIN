@@ -8,7 +8,8 @@ import type { SectionData } from '@/lib/sections/types';
 //           and the page's SEO override) start once the page is found, as the 404 page skips
 //           them for every probe;
 //   E11-C2  WebPage's dateModified is when what the page shows last changed (a section edit
-//           never moves pages.updated_at);
+//           never moves pages.updated_at), counting only the sections it renders (code
+//           review CR6);
 //   E11-C1  the overlay header only while the page opens on its banner hero.
 
 vi.mock('astro:env/client', () => ({ PUBLIC_SITE_URL: 'https://www.example.test' }));
@@ -50,11 +51,10 @@ const TEXT: SectionData = {
   props: { body: { en: doc('Words.'), ar: doc('كلمات.') } },
 };
 
-const compose = (sections: SectionData[], modifiedAt: string | null): PageComposition => ({
-  page: PAGE,
-  sections,
-  modifiedAt,
-});
+const compose = (
+  sections: SectionData[],
+  updatedAt: string | null = PAGE.updatedAt,
+): PageComposition => ({ page: { ...PAGE, updatedAt }, sections });
 
 beforeEach(() => {
   db.composition = null;
@@ -81,7 +81,7 @@ describe('an address that is no page', () => {
   });
 
   it('a row answered for another spelling (citext) is not this page, and reads no head', async () => {
-    db.composition = compose([HERO], null);
+    db.composition = compose([HERO]);
     expect(await loadCustomPage({}, 'en', 'our-storyx')).toBeNull();
     expect(db.headReads).toBe(0);
   });
@@ -89,7 +89,7 @@ describe('an address that is no page', () => {
 
 describe('a custom page found', () => {
   it('reads its head once', async () => {
-    db.composition = compose([HERO, TEXT], PAGE.updatedAt);
+    db.composition = compose([HERO, TEXT]);
     expect(await loadCustomPage({}, 'en', PAGE.slug)).not.toBeNull();
     expect(db.compositionReads).toBe(1);
     expect(db.headReads).toBe(1);
@@ -97,7 +97,7 @@ describe('a custom page found', () => {
 
   it('dates its WebPage by its latest change, a section’s included (E11-C2)', async () => {
     const sectionEdit = '2026-10-30T12:00:00+00:00';
-    db.composition = compose([HERO, TEXT], sectionEdit);
+    db.composition = compose([HERO, { ...TEXT, updatedAt: sectionEdit }]);
     for (const locale of ['en', 'ar'] as const) {
       const page = await loadCustomPage({}, locale, PAGE.slug);
       const webPage = page?.jsonLd.find((n) => n['@type'] === 'WebPage');
@@ -110,9 +110,30 @@ describe('a custom page found', () => {
     );
   });
 
+  // Code review CR6: a section the page does not render (a type outside the custom set, a
+  // hidden one) never dates it; the row and what it shows do.
+  it('dates its WebPage by the sections it renders, never one it drops', async () => {
+    const dateOf = async (sections: SectionData[]) => {
+      db.composition = compose(sections);
+      const page = await loadCustomPage({}, 'en', PAGE.slug);
+      return page?.jsonLd.find((n) => n['@type'] === 'WebPage')?.['dateModified'];
+    };
+    const later = '2026-10-31T09:00:00+00:00';
+    // A form section (outside the custom set, written around the API) edited later.
+    expect(await dateOf([HERO, { type: 'contact', props: {}, updatedAt: later }])).toBe(
+      PAGE.updatedAt,
+    );
+    // A hidden block (the unlocked read never carries one, but a preview may).
+    expect(await dateOf([HERO, { ...TEXT, visible: false, updatedAt: later }])).toBe(
+      PAGE.updatedAt,
+    );
+    // A shown block in the set does.
+    expect(await dateOf([HERO, { ...TEXT, updatedAt: later }])).toBe(later);
+  });
+
   it('wears the overlay header only while it opens on its banner hero (E11-C1)', async () => {
     const header = async (sections: SectionData[]) => {
-      db.composition = compose(sections, null);
+      db.composition = compose(sections);
       return (await loadCustomPage({}, 'en', PAGE.slug))?.header;
     };
     // An editor moved the hero below a text block: the paper block opens the page.

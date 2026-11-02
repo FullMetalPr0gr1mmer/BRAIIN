@@ -35,6 +35,12 @@ export type RoutePageSlug = keyof typeof PAGE_PATHS;
 /** A CMS page's slug: a route page's, or a custom page's (any string isVisibilityPageSlug takes). */
 export type VisibilityPageSlug = RoutePageSlug | (string & {});
 
+/**
+ * The route slugs as a PostgREST list (`not.in.(…)`), for the admin's reads that take route
+ * pages and custom pages apart, so custom pages never crowd the route pages out of a bound.
+ */
+export const ROUTE_SLUG_LIST = `(${Object.keys(PAGE_PATHS).join(',')})`;
+
 /** The two routes that render custom pages (EN and AR). */
 export const CUSTOM_PAGE_ROUTES = ['/[slug]', '/ar/[slug]'] as const;
 
@@ -65,6 +71,17 @@ export function isVisibilityPageSlug(value: unknown): value is VisibilityPageSlu
 /** A CMS page's English path: its route's, or `/<slug>` for a custom page. */
 export function pagePathOf(slug: VisibilityPageSlug): string {
   return isRoutePageSlug(slug) ? PAGE_PATHS[slug] : `/${slug}`;
+}
+
+/**
+ * Whether a hidden page may send its visitors to this page (Admin v2 E11 code review, CR1): a
+ * route page always (its route renders whether or not its row is published, from its built-in
+ * composition), a custom page only while it is published (its route answers 404 for any other
+ * status). Anything else is no target.
+ */
+export function takesRedirects(slug: unknown, status: unknown): boolean {
+  if (isRoutePageSlug(slug)) return true;
+  return isCustomPageSlug(slug) && status === 'published';
 }
 
 export function isVisibilityTemplate(value: unknown): value is VisibilityTemplate {

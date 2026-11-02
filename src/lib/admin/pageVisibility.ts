@@ -11,8 +11,10 @@ import {
 import {
   HOME_SLUG,
   PAGE_PATHS,
+  ROUTE_SLUG_LIST,
   isVisibilityPageSlug,
   pagePathOf,
+  takesRedirects,
   type VisibilityPageSlug,
   type VisibilityTemplate,
 } from '@/lib/visibility/routes';
@@ -140,6 +142,11 @@ export interface VisibilityPageItem {
   slug: VisibilityPageSlug;
   title: { en: string; ar?: string };
   path: string;
+  /**
+   * Whether a hidden page may send its visitors here (`takesRedirects`): a route page, or a
+   * published custom page. The drawer offers only these (E11 code review, CR1).
+   */
+  redirectable: boolean;
   setting: VisibilitySetting | null;
 }
 
@@ -195,35 +202,90 @@ function titleOf(value: unknown, fallback: string): { en: string; ar?: string } 
   return { en: fallback };
 }
 
+/** A CMS page as page visibility reads it: its id, slug, title and status. */
+export interface VisibilityPageRow {
+  id: string;
+  slug: VisibilityPageSlug;
+  title: unknown;
+  status: unknown;
+}
+
+const PAGE_COLUMNS = 'id,slug,title,status';
+
 /**
- * The tenant's CMS pages a route renders: the route map's, in its order, then the custom pages
- * (Admin v2 E11) by slug.
+ * Custom pages one read takes, and the most reads a listing makes: the screen lists at most
+ * 2,000 custom pages, by address (E11 code review, CR2). The route pages are read apart, so
+ * custom pages never crowd them out.
  */
-export async function readVisibilityPages(
-  sb: SupabaseClient,
-  auth: AuthContext,
-): Promise<{ id: string; slug: VisibilityPageSlug; title: unknown }[]> {
-  const { data, error } = await sb
-    .from('pages')
-    .select('id,slug,title')
-    .eq('tenant_id', auth.tenantId)
-    .limit(200);
-  if (error) throw new Error(`read pages: ${error.message}`);
-  const order = Object.keys(PAGE_PATHS);
-  const at = (slug: string) => {
-    const i = order.indexOf(slug);
-    return i === -1 ? order.length : i;
-  };
+export const VISIBILITY_PAGE_BATCH = 200;
+export const VISIBILITY_PAGE_BATCHES = 10;
+
+function pageRows(data: unknown): VisibilityPageRow[] {
   return ((data ?? []) as Row[])
     .map((row) => ({
       id: String(row['id']),
       slug: String(row['slug'] ?? '').toLowerCase(),
       title: row['title'],
+      status: row['status'],
     }))
-    .filter((row): row is { id: string; slug: VisibilityPageSlug; title: unknown } =>
-      isVisibilityPageSlug(row.slug),
-    )
-    .sort((a, b) => at(a.slug) - at(b.slug) || a.slug.localeCompare(b.slug));
+    .filter((row): row is VisibilityPageRow => isVisibilityPageSlug(row.slug));
+}
+
+/**
+ * The tenant's CMS pages a route renders: the route map's, in its order, then the custom pages
+ * (Admin v2 E11) by slug. With `ids`, only those pages (a save names its page and its
+ * redirect's: one read, whatever the tenant holds). Without, the listing: the route pages in
+ * one read, then the custom pages ordered by slug and id, a batch at a time, so the seven
+ * route pages are never cut by a bound the custom pages fill (E11 code review, CR2).
+ */
+export async function readVisibilityPages(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  ids?: readonly string[],
+): Promise<VisibilityPageRow[]> {
+  const order = Object.keys(PAGE_PATHS);
+  const at = (slug: string) => {
+    const i = order.indexOf(slug);
+    return i === -1 ? order.length : i;
+  };
+  const sorted = (rows: VisibilityPageRow[]) =>
+    rows.sort((a, b) => at(a.slug) - at(b.slug) || a.slug.localeCompare(b.slug));
+
+  if (ids !== undefined) {
+    const wanted = [...new Set(ids)];
+    if (wanted.length === 0) return [];
+    const { data, error } = await sb
+      .from('pages')
+      .select(PAGE_COLUMNS)
+      .eq('tenant_id', auth.tenantId)
+      .in('id', wanted);
+    if (error) throw new Error(`read pages: ${error.message}`);
+    return sorted(pageRows(data).filter((row) => wanted.includes(row.id)));
+  }
+
+  const route = await sb
+    .from('pages')
+    .select(PAGE_COLUMNS)
+    .eq('tenant_id', auth.tenantId)
+    .in('slug', order);
+  if (route.error) throw new Error(`read pages: ${route.error.message}`);
+  const out = pageRows(route.data).filter((row) => order.includes(row.slug));
+  for (let batch = 0; batch < VISIBILITY_PAGE_BATCHES; batch += 1) {
+    const from = batch * VISIBILITY_PAGE_BATCH;
+    const { data, error } = await sb
+      .from('pages')
+      .select(PAGE_COLUMNS)
+      .eq('tenant_id', auth.tenantId)
+      .not('slug', 'in', ROUTE_SLUG_LIST)
+      .order('slug', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + VISIBILITY_PAGE_BATCH - 1);
+    if (error) throw new Error(`read pages: ${error.message}`);
+    const rows = (data ?? []) as Row[];
+    out.push(...pageRows(rows).filter((row) => !order.includes(row.slug)));
+    if (rows.length < VISIBILITY_PAGE_BATCH) break;
+  }
+  return sorted(out);
 }
 
 async function publishedCount(sb: SupabaseClient, auth: AuthContext, table: string) {
@@ -259,6 +321,7 @@ export async function listVisibility(
       slug: page.slug,
       title: titleOf(page.title, page.slug),
       path: pagePathOf(page.slug),
+      redirectable: takesRedirects(page.slug, page.status),
       setting: settingOf(byPage.get(page.id)),
     })),
     templates: (['service', 'case_study'] as const).map((template) => ({
@@ -282,17 +345,29 @@ export interface VisibilitySaveResult {
     | { kind: 'template'; template: VisibilityTemplate };
 }
 
+/** What a save says when the page it would send visitors to cannot take them (CR1). */
+export const REDIRECT_UNPUBLISHED =
+  'That page is not published, so its visitors would find nothing there. Choose a published page.';
+
 /**
  * Saves one page's or template's setting: insert at version 0, else an optimistic update
  * (409 when someone saved first). Checks first what the database refuses too: the homepage
  * stays visible, a redirect goes to another page the route map knows, the window is in order.
+ * And one rule the database does not hold: a redirect goes to a page that renders, a route
+ * page or a PUBLISHED custom page (E11 code review, CR1). A target unpublished or deleted
+ * later is dropped from the edge's snapshot instead (visibilitySync.ts), its visitors then
+ * seeing the 404 a hidden page with no redirect shows.
  */
 export async function saveVisibility(
   sb: SupabaseClient,
   auth: AuthContext,
   input: PageVisibilityWrite,
 ): Promise<VisibilitySaveResult> {
-  const pages = await readVisibilityPages(sb, auth);
+  // Only the pages this save names: its own and its redirect's (CR2: one read, never a bound).
+  const pages = await readVisibilityPages(sb, auth, [
+    ...('pageId' in input.target ? [input.target.pageId] : []),
+    ...(input.redirectPageId !== null ? [input.redirectPageId] : []),
+  ]);
 
   let target: VisibilitySaveResult['target'];
   if ('pageId' in input.target) {
@@ -310,8 +385,12 @@ export async function saveVisibility(
     if (target.kind === 'page' && input.redirectPageId === target.id) {
       throw new ValidationError('A page cannot send its visitors to itself.', 'redirectPageId');
     }
-    if (!pages.some((p) => p.id === input.redirectPageId)) {
+    const to = pages.find((p) => p.id === input.redirectPageId);
+    if (!to) {
       throw new ValidationError('Choose one of the pages in the list.', 'redirectPageId');
+    }
+    if (!takesRedirects(to.slug, to.status)) {
+      throw new ValidationError(REDIRECT_UNPUBLISHED, 'redirectPageId');
     }
   }
 
@@ -388,7 +467,7 @@ export async function savePagePassword(
   auth: AuthContext,
   input: PagePasswordWrite,
 ): Promise<{ setting: VisibilitySetting; slug: VisibilityPageSlug; pageId: string }> {
-  const pages = await readVisibilityPages(sb, auth);
+  const pages = await readVisibilityPages(sb, auth, [input.pageId]);
   const page = pages.find((p) => p.id === input.pageId);
   if (!page) throw new NotFoundError('page');
   if (page.slug === HOME_SLUG) throw new ValidationError(HOME_REFUSAL, 'mode');

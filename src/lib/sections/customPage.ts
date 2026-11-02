@@ -3,6 +3,7 @@ import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { isCustomPageSectionType, isCustomPageSlug } from '@schemas/customPages';
 import { sectionDocProblem } from '@schemas/tiptap';
 import { getPageComposition, type PageComposition } from '@/lib/data/pageSections';
+import { latestInstant } from '@/lib/data/parse';
 import { loadHead, type Head } from '@/lib/seo/head';
 import { buildBreadcrumbSchema, buildWebPageSchema, type JsonLdNode } from '@/lib/seo/jsonld';
 import { localizedPath, pickLocale, pickLocaleStrict } from '@/lib/i18n';
@@ -33,7 +34,8 @@ import { HERO_PRESETS, type SectionData } from './types';
 //                                     banner hero titled with the page's own title, so it has
 //                                     exactly one <h1>.
 //   4. JSON-LD: WebPage and its BreadcrumbList (Home > the page), in the page's language;
-//      `dateModified` is when what the page shows last changed (its row or a section);
+//      `dateModified` is when what the page shows last changed (its row or a section it
+//      renders, customModifiedAt);
 //   5. the header: the overlay only while the page opens on its banner hero (customHeader).
 
 export interface CustomPageData {
@@ -51,8 +53,13 @@ type Locals = Parameters<typeof loadHead>[0];
 
 const HOME = { en: 'Home', ar: 'الرئيسية' } as const;
 
-/** The sections that render a page's <h1> (the editor's heading group, library.ts). */
-const HEADING_TYPES: readonly string[] = ['hero', 'aboutStory', 'aboutWho', 'pageHead'];
+/**
+ * The sections of the custom set that render a page's <h1>: the editor's heading group
+ * (library.ts) within CUSTOM_PAGE_SECTION_TYPES, which only the hero is in (E11 code review,
+ * CR8: the other heading types never reach a custom page). tests/lib/customPages.spec.ts holds
+ * it equal to the editor's group over the set.
+ */
+export const CUSTOM_HEADING_TYPES: readonly string[] = ['hero'];
 
 /** The banner every custom page's first hero wears: route data, never content. */
 export const CUSTOM_HERO_DATA = {
@@ -90,7 +97,7 @@ export function customSections(
   title: { en: string; ar: string },
 ): SectionData[] {
   const sections = authored.filter((s) => isCustomPageSectionType(s.type));
-  const headed = sections.some((s) => s.visible !== false && HEADING_TYPES.includes(s.type));
+  const headed = sections.some((s) => s.visible !== false && CUSTOM_HEADING_TYPES.includes(s.type));
   const floor: SectionData[] = headed
     ? []
     : [
@@ -121,6 +128,23 @@ export function customSections(
  */
 export function customHeader(sections: readonly SectionData[]): 'overlay' | 'solid' {
   return sections.find((s) => s.visible !== false)?.type === 'hero' ? 'overlay' : 'solid';
+}
+
+/**
+ * When what a custom page shows last changed (Admin v2 E11 review E11-C2, code review CR6): the
+ * later of its row's `updated_at` and those of the sections it RENDERS (`customSections`' output,
+ * shown ones only), never a row the page drops (a type outside the set, a row that did not
+ * parse). The floor hero is the page's own title, dated by the row. A removed or hidden section
+ * leaves no date behind.
+ */
+export function customModifiedAt(
+  page: { updatedAt: string | null },
+  rendered: readonly SectionData[],
+): string | null {
+  return latestInstant([
+    page.updatedAt,
+    ...rendered.filter((s) => s.visible !== false).map((s) => s.updatedAt),
+  ]);
 }
 
 /** Where a block's words end, on docText's stack: a space between paragraphs and list items. */
@@ -216,6 +240,7 @@ export async function loadCustomPage(
   const name = pickLocale(page.title, locale, slug);
   const url = base + localizedPath(path, locale);
   const description = head.seo.description;
+  const modifiedAt = customModifiedAt(page, sections);
   const jsonLd = [
     buildWebPageSchema({
       name,
@@ -223,7 +248,7 @@ export async function loadCustomPage(
       siteUrl: base,
       locale,
       ...(description ? { description } : {}),
-      ...(composition.modifiedAt ? { dateModified: composition.modifiedAt } : {}),
+      ...(modifiedAt ? { dateModified: modifiedAt } : {}),
     }),
     buildBreadcrumbSchema([
       { name: HOME[locale], url: base + localizedPath('/', locale) },

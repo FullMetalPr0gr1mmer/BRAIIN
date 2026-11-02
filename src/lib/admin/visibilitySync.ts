@@ -5,6 +5,7 @@ import { env } from 'cloudflare:workers';
 import type { AuthContext } from '@/lib/auth/types';
 import {
   VISIBILITY_KV_KEY,
+  getVisibilitySnapshot,
   parseVisibilitySnapshot,
   putVisibilitySnapshot,
   visibilityRevision,
@@ -16,6 +17,7 @@ import {
   HOME_SLUG,
   isVisibilityPageSlug,
   isVisibilityTemplate,
+  takesRedirects,
   type VisibilityPageSlug,
   type VisibilityTemplate,
 } from '@/lib/visibility/routes';
@@ -27,9 +29,13 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 // keeps the snapshot a pure function of the table, so "Sync to edge" and the daily cron are
 // the same function run again.
 
-/** The columns a snapshot is built from, the page and the redirect target named by slug. */
+/**
+ * The columns a snapshot is built from, the page and the redirect target named by slug, the
+ * target with its status (a custom page takes visitors only while published, E11 code review
+ * CR1).
+ */
 export const VISIBILITY_SNAPSHOT_SELECT =
-  'id,version,mode,template,page_id,note,password_version,hide_from,show_on,page:pages!page_visibility_page_fk(slug),redirect:pages!page_visibility_redirect_fk(slug)';
+  'id,version,mode,template,page_id,note,password_version,hide_from,show_on,page:pages!page_visibility_page_fk(slug),redirect:pages!page_visibility_redirect_fk(slug,status)';
 
 /**
  * The most rows one snapshot read takes. Only the rows that are not public are read (a public
@@ -53,7 +59,7 @@ export interface VisibilitySourceRow {
   hide_from: unknown;
   show_on: unknown;
   page: { slug?: unknown } | null | unknown;
-  redirect: { slug?: unknown } | null | unknown;
+  redirect: { slug?: unknown; status?: unknown } | null | unknown;
 }
 
 const slugOf = (value: unknown): string | null => {
@@ -79,12 +85,20 @@ const instantOf = (value: unknown): string | undefined =>
     ? new Date(value).toISOString()
     : undefined;
 
+/** The redirect target's status as the snapshot query embeds it. */
+const statusOf = (value: unknown): unknown =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as { status?: unknown }).status
+    : undefined;
+
 /**
  * Table rows → the snapshot the edge reads. Only what is not public is kept (no row and a
  * public row mean the same), a page the route map does not know is dropped (it has no route
  * to gate), the homepage is never restricted, and a redirect names its target by slug (or
- * null, a 404, when the target is not a page the map knows). Pure, so the save, "Sync to
- * edge", the daily cron and the tests share it.
+ * null, a 404, when the target is not a page that renders: one the map does not know, or a
+ * custom page that is not published, E11 code review CR1, so an unpublished or deleted target
+ * never answers a 302 to a 404). Pure, so the save, "Sync to edge", the daily cron and the
+ * tests share it.
  */
 export function buildVisibilitySnapshot(
   rows: readonly VisibilitySourceRow[],
@@ -117,7 +131,8 @@ export function buildVisibilitySnapshot(
     }
     if (row.mode === 'hidden') {
       const to = slugOf(row.redirect);
-      entry.target = isVisibilityPageSlug(to) ? to : null;
+      entry.target =
+        isVisibilityPageSlug(to) && takesRedirects(to, statusOf(row.redirect)) ? to : null;
       const from = instantOf(row.hide_from);
       const until = instantOf(row.show_on);
       if (from) entry.from = from;
@@ -228,6 +243,42 @@ export async function syncVisibilityToEdge(
       message: err instanceof Error ? err.message : 'page visibility sync failed',
       detail: { tenantId: auth.tenantId },
     });
+    return { kvSynced: false, count: 0 };
+  }
+}
+
+/**
+ * After a page's status changed or the page was deleted (Admin v2 E11 code review, CR1): when
+ * a hidden page sends its visitors there, the snapshot is rebuilt at once, so the edge drops a
+ * redirect to a custom page that no longer renders (buildVisibilitySnapshot) and takes one back
+ * when the page is published again, instead of waiting for the next visibility save or the daily
+ * cron. Named by the edge's own snapshot (an unpublish, a delete: the database has already
+ * cleared a deleted target, 0057's ON DELETE SET NULL) or by a stored setting (a page published
+ * again: the snapshot has dropped it). One memoised KV read and one indexed read at most, and a
+ * rebuild only when the page is a target. Under the caller's RLS-bound client, as every save's
+ * rebuild (`page_visibility` is readable by every staff role, 0057). Null when nothing needed
+ * it; never throws.
+ */
+export async function resyncRedirectTarget(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  page: { id: string; slug: string },
+): Promise<VisibilitySyncResult | null> {
+  try {
+    const slug = page.slug.toLowerCase();
+    const edge = await getVisibilitySnapshot(env);
+    let named = Object.values(edge.pages).some((entry) => entry?.target === slug);
+    if (!named) {
+      const { data, error } = await sb
+        .from('page_visibility')
+        .select('id')
+        .eq('tenant_id', auth.tenantId)
+        .eq('redirect_page_id', page.id)
+        .limit(1);
+      named = !error && (data ?? []).length > 0;
+    }
+    return named ? await syncVisibilityToEdge(sb, auth) : null;
+  } catch {
     return { kvSynced: false, count: 0 };
   }
 }

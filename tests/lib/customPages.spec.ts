@@ -29,18 +29,22 @@ import { tierATags } from '@/lib/http/cacheTags';
 import { SECTION_READS } from '@/lib/sections/reads';
 import { pagePath } from '@/lib/seo/entityPaths';
 import { indexability, isIndexedPath } from '@/lib/seo/indexable';
-import {
-  heroPayload,
-  newPageErrors,
-  newPagePayload,
-  slugProblem,
-  titleProblem,
-} from '@/components/admin/screens/newPage/model';
+import * as newPageModel from '@/components/admin/screens/newPage/model';
+import { SECTION_KINDS } from '@/components/admin/screens/pageEditor/library';
+
+const { addBanner, bannerMissing, heroPayload, newPageErrors, newPagePayload, titleProblem } =
+  newPageModel;
 
 vi.mock('astro:env/client', () => ({ PUBLIC_SITE_URL: 'https://www.example.test' }));
 
-const { CUSTOM_HERO_DATA, customDescription, customSections, docText, heroHeadlineOf } =
-  await import('@/lib/sections/customPage');
+const {
+  CUSTOM_HEADING_TYPES,
+  CUSTOM_HERO_DATA,
+  customDescription,
+  customSections,
+  docText,
+  heroHeadlineOf,
+} = await import('@/lib/sections/customPage');
 
 // Custom pages (Admin v2 E11; docs/admin-v2/as-built/E11.md): the address rules, held to the
 // site's own files and to 0123's SQL; the route-level rules on a custom page's sections; its
@@ -326,6 +330,15 @@ describe('the sections a custom page holds', () => {
   });
 });
 
+// E11 code review CR8: the heading floor counts only heading types a custom page can hold.
+describe('the heading floor', () => {
+  it('is the editor’s heading group within the custom set', () => {
+    expect([...CUSTOM_HEADING_TYPES].sort()).toEqual(
+      CUSTOM_PAGE_SECTION_TYPES.filter((t) => SECTION_KINDS[t].group === 'heading').sort(),
+    );
+  });
+});
+
 describe('the seeded sample page (H15: the strict section write)', () => {
   const seed = JSON.parse(
     readFileSync(join(process.cwd(), 'supabase/seed-data/57-custom-page.json'), 'utf8'),
@@ -460,13 +473,67 @@ describe('the New page dialog', () => {
     expect(titleProblem('', 'Arabic')).toMatch(/in Arabic/);
     expect(titleProblem('a b c d e f g h i j k', 'English')).toMatch(/10 words/);
     expect(titleProblem('Supercalifragilistic', 'English')).toMatch(/14 letters/);
-    expect(slugProblem('about')).toMatch(/already uses/);
-    expect(slugProblem('admin')).toMatch(/already uses/);
+    expect(newPageErrors({ ...input, slug: 'about' }).slug).toMatch(/already uses/);
+    expect(newPageErrors({ ...input, slug: 'admin' }).slug).toMatch(/already uses/);
     expect(Object.keys(newPageErrors({ titleEn: '', titleAr: '', slug: 'X' })).sort()).toEqual([
       'slug',
       'titleAr',
       'titleEn',
     ]);
+  });
+
+  // E11 code review CR9: one rule for the address, the module's, never a copy of it here.
+  it('says the address’s refusal in the module’s words, from the one rule', () => {
+    expect(Object.keys(newPageModel)).not.toContain('slugProblem');
+    for (const slug of ['', 'about', 'home', 'admin', 'Our-Story', 'a'.repeat(65), 'our-story']) {
+      expect(newPageErrors({ ...input, slug }).slug, slug).toBe(
+        customPageSlugProblem(slug) ?? undefined,
+      );
+    }
+  });
+
+  // E11 code review CR4: the page made and its banner refused is said, reported and retried,
+  // never swallowed.
+  it('a banner refused is reported through the client error channel and handed back', async () => {
+    let posts = 0;
+    const reports: string[] = [];
+    const refusal = new Error('Validation failed: headline');
+    const outcome = await addBanner(PAGE_ID, {
+      post: async () => {
+        posts += 1;
+        throw refusal;
+      },
+      report: (message) => reports.push(message),
+    });
+    expect(outcome).toEqual({ added: false, error: refusal });
+    expect(posts).toBe(1);
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toContain(PAGE_ID);
+    expect(reports[0]).toContain('Validation failed: headline');
+    // The title is the editor's words, not the log's.
+    expect(reports[0]).not.toContain('Our');
+    expect(bannerMissing('it was refused')).toMatch(
+      /^The page was made as a draft, but its banner/,
+    );
+    const added = await addBanner(PAGE_ID, {
+      post: async () => {
+        posts += 1;
+        return {};
+      },
+      report: (message) => reports.push(message),
+    });
+    expect(added).toEqual({ added: true });
+    expect(posts).toBe(2);
+    expect(reports).toHaveLength(1);
+  });
+
+  it('the dialog has no silent catch', () => {
+    const src = readFileSync(
+      join(process.cwd(), 'src/components/admin/screens/newPage/NewPage.tsx'),
+      'utf8',
+    );
+    // A `catch` whose block holds nothing but comments says nothing to anyone.
+    expect(src).not.toMatch(/catch\s*(\([^)]*\))?\s*\{\s*(\/\/[^\n]*\s*)*\}/);
   });
 
   it('makes a draft page, then its banner hero titled with the page’s title, both valid writes', () => {
