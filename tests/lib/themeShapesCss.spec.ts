@@ -346,6 +346,7 @@ describe('the headings: weight and case', () => {
     '.cs-ov__h': "a case study overview's 12 px kicker",
     '.svc-get__k': "a service's 'what you get' 12 px kicker",
     '.svc-case__k': "a service case's 12 px kicker",
+    '.site-footer__heading': "a footer column's 11 px heading (E6), a label",
   };
   const headings = headingClasses();
   const isDisplay = (r: Rule) => {
