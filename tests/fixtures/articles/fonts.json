@@ -1,0 +1,1284 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "content": [{ "type": "text", "text": "Font self-hosting + subsetting runbook (KAN-23)" }]
+    },
+    {
+      "type": "blockquote",
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "Re-subset 2026-09-25 (Almarai).",
+              "marks": [{ "type": "bold" }]
+            },
+            { "type": "text", "text": " " },
+            { "type": "text", "text": "scripts/subset-fonts.py", "marks": [{ "type": "code" }] },
+            {
+              "type": "text",
+              "text": " tightened the six Almarai files — arabic ≈ 25 KB (the Arabic block U+0600–06FF + space/nbsp/joiners; contextual and lam-alef glyphs kept via the GSUB closure) and latin ≈ 10 KB (ASCII + the marks the copy uses). A route loading every face now pulls "
+            },
+            {
+              "type": "text",
+              "text": "≈ 105 KB, down from ≈ 152 KB",
+              "marks": [{ "type": "bold" }]
+            },
+            {
+              "type": "text",
+              "text": ". It was a budget failure, not a tidy-up: Lighthouse treats font requests as render-blocking, and the day "
+            },
+            { "type": "text", "text": "perf-seo-a11y", "marks": [{ "type": "code" }] },
+            { "type": "text", "text": " first ran as a PR gate " },
+            { "type": "text", "text": "/ar", "marks": [{ "type": "code" }] },
+            {
+              "type": "text",
+              "text": " missed LCP (2.50–2.52 s vs < 2.5 s) and performance (0.94 vs ≥ 0.95); after, locally, LCP ≈ 2.24 s and 0.95–0.96. The same change declares each weight's latin face BEFORE its arabic face and lets the arabic face claim U+0020/U+00A0, so spaces in Arabic text no longer pull in the latin file. Verified glyph-for-glyph: full-page screenshots of /ar, /ar/about, /ar/contact, /ar/services and / before/after are pixel-identical (2 px of antialiasing on /ar), and a scan of the visible text of every public AR route found no code point outside the new ranges. "
+            },
+            {
+              "type": "text",
+              "text": "The unicode-range descriptors in global.css must match the script's ranges.",
+              "marks": [{ "type": "bold" }]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "Status: EXECUTED (2026-08-21).",
+              "marks": [{ "type": "bold" }]
+            },
+            { "type": "text", "text": " The brand landed as " },
+            { "type": "text", "text": "Archivo", "marks": [{ "type": "bold" }] },
+            { "type": "text", "text": " (EN) + " },
+            { "type": "text", "text": "Almarai", "marks": [{ "type": "bold" }] },
+            {
+              "type": "text",
+              "text": " (AR) with the approved \"Brain Station UI\" design. Shipped in "
+            },
+            { "type": "text", "text": "public/fonts/", "marks": [{ "type": "code" }] },
+            { "type": "text", "text": ": " },
+            { "type": "text", "text": "archivo-var-latin.woff2", "marks": [{ "type": "code" }] },
+            { "type": "text", "text": " (ONE variable face, wght 400–800, latin subset, " },
+            { "type": "text", "text": "34.9 KB", "marks": [{ "type": "bold" }] },
+            {
+              "type": "text",
+              "text": " — inside the 35 KB Latin hero budget and the only Latin file a route loads) and Almarai 400/700/800 × {arabic, latin} static subsets (arabic ≤ 33.4 KB each; worst-case AR route ≈ 152 KB — inside 180 KB). "
+            },
+            { "type": "text", "text": "@font-face", "marks": [{ "type": "code" }] },
+            { "type": "text", "text": " + metric-override fallback faces (" },
+            { "type": "text", "text": "Archivo Fallback", "marks": [{ "type": "code" }] },
+            { "type": "text", "text": "/" },
+            { "type": "text", "text": "Almarai Fallback", "marks": [{ "type": "code" }] },
+            { "type": "text", "text": ", values from " },
+            { "type": "text", "text": "@capsizecss/metrics", "marks": [{ "type": "code" }] },
+            { "type": "text", "text": " vs Arial) live in " },
+            { "type": "text", "text": "public/styles/global.css", "marks": [{ "type": "code" }] },
+            { "type": "text", "text": "; the per-locale hero-face preload lives in " },
+            {
+              "type": "text",
+              "text": "src/components/SeoHead.astro",
+              "marks": [{ "type": "code" }]
+            },
+            {
+              "type": "text",
+              "text": ". Subsetting used Google Fonts' per-script split (same unicode-ranges as below) rather than pyftsubset — re-run pyftsubset only if the brand ever moves off Google-hosted sources. Canonical budgets: "
+            },
+            { "type": "text", "text": "CLAUDE.md", "marks": [{ "type": "code" }] },
+            { "type": "text", "text": " §6." }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "content": [
+        {
+          "type": "text",
+          "text": "Budgets (and what enforces each — all block the PR and the deploy)"
+        }
+      ]
+    },
+    { "type": "paragraph", "content": [{ "type": "text", "text": "Item Budget Enforced by" }] },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "EN + AR fonts " },
+        { "type": "text", "text": "per route", "marks": [{ "type": "bold" }] },
+        { "type": "text", "text": " ≤ 180 KB woff2 (AR face counts) Lighthouse (" },
+        { "type": "text", "text": "lighthouserc*.json", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": "): " },
+        { "type": "text", "text": "resource-summary:font:size", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " ≤ 184,320 B on every gated route, mobile and desktop" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "Hero face (the one preloaded — per route) ≤ 35 KB Latin / 45 KB Arabic "
+        },
+        { "type": "text", "text": "tests/seo/fonts.spec.ts", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " (every preloadable face)" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "font-display", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " " },
+        { "type": "text", "text": "swap", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " (never blocks render; " },
+        { "type": "text", "text": "optional", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " rejected — step 2b) Lighthouse " },
+        { "type": "text", "text": "font-display", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " (error)" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "CLS from fonts 0 — " },
+        { "type": "text", "text": "size-adjust", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " + " },
+        { "type": "text", "text": "ascent/descent-override", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": ", per weight and per script for Almarai (step 2b), per weight for Archivo, and per platform: Arial, or Liberation Sans + DejaVu Sans on Linux (step 2c) Lighthouse CLS < 0.1 per route; "
+        },
+        { "type": "text", "text": "tests/e2e/layout-shift.e2e.ts", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": " names any shift ≥ 0.02 and, on Linux, holds every font until the page has painted; "
+        },
+        {
+          "type": "text",
+          "text": "tests/e2e/consent-banner.e2e.ts",
+          "marks": [{ "type": "code" }]
+        },
+        { "type": "text", "text": "; " },
+        {
+          "type": "text",
+          "text": "tests/seo/fontFallbacks.spec.ts",
+          "marks": [{ "type": "code" }]
+        },
+        { "type": "text", "text": " (the faces)" }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "content": [{ "type": "text", "text": "Steps" }]
+    },
+    {
+      "type": "orderedList",
+      "attrs": { "start": 1, "type": null },
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Subset per script", "marks": [{ "type": "bold" }] },
+                {
+                  "type": "text",
+                  "text": " (Latin for EN, Arabic for AR) — don't ship one giant face: ``"
+                },
+                {
+                  "type": "text",
+                  "text": "bash # pip install fonttools brotli pyftsubset Brand.ttf --output-file=brand-latin.woff2 --flavor=woff2 \\ --unicodes=U+0000-00FF,U+0131,U+0152-0153,U+2000-206F,U+2074,U+20AC pyftsubset Brand-Arabic.ttf --output-file=brand-arabic.woff2 --flavor=woff2 \\ --unicodes=U+0600-06FF,U+0750-077F,U+08A0-08FF,U+FB50-FDFF,U+FE70-FEFF,U+0660-0669 ",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": "`" },
+                { "type": "text", "text": " Drop the woff2 into ", "marks": [{ "type": "code" }] },
+                {
+                  "type": "text",
+                  "text": "public/fonts/`. Verify each face is within the hero budget."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "orderedList",
+      "attrs": { "start": 1, "type": null },
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Declare `@font-face` with metric-overrides",
+                  "marks": [{ "type": "bold" }]
+                },
+                { "type": "text", "text": " (in " },
+                {
+                  "type": "text",
+                  "text": "public/styles/global.css",
+                  "marks": [{ "type": "code" }]
+                },
+                {
+                  "type": "text",
+                  "text": "). The override values come from comparing the brand face to the current fallback ("
+                },
+                { "type": "text", "text": "system-ui", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": ") — generate with the Fontaine/" },
+                { "type": "text", "text": "@capsizecss/metrics", "marks": [{ "type": "code" }] },
+                {
+                  "type": "text",
+                  "text": " approach so the fallback box matches the webfont box ⇒ "
+                },
+                { "type": "text", "text": "zero CLS on swap", "marks": [{ "type": "bold" }] },
+                { "type": "text", "text": ": ``" },
+                {
+                  "type": "text",
+                  "text": "css @font-face { font-family: 'Brand'; src: url('/fonts/brand-latin.woff2') format('woff2'); font-weight: 400 700;          /* if variable */ font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+20AC; } @font-face { font-family: 'Brand'; src: url('/fonts/brand-arabic.woff2') format('woff2'); font-weight: 400 700; font-display: swap; unicode-range: U+0600-06FF, U+0750-077F, U+FB50-FDFF, U+FE70-FEFF, U+0660-0669; } /* metric-matched fallback to kill CLS */ @font-face { font-family: 'Brand-fallback'; src: local('Arial'); size-adjust: 100%;            /* ← measured */ ascent-override: 90%;         /* ← measured */ descent-override: 22%;        /* ← measured */ line-gap-override: 0%; } :root { --bs-font-sans: 'Brand', 'Brand-fallback', system-ui, sans-serif; } ",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": "``" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "2b. " },
+        {
+          "type": "text",
+          "text": "Almarai's fallback is per weight AND per script",
+          "marks": [{ "type": "bold" }]
+        },
+        {
+          "type": "text",
+          "text": " (Round 3, 2026-09-29). The overrides above are measured against LATIN glyphs ("
+        },
+        { "type": "text", "text": "@capsizecss/metrics", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " vs Arial). Measured with Chromium's platform-font report (" },
+        { "type": "text", "text": "CSS.getPlatformFontsForNode", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": "), Almarai's Arabic is 26% (400) wider than Arial's and 27.7% (700) / 33.1% (800) wider than Arial Bold's — and a fallback face with no bold declared fakes bold from Arial regular, wider still from the truth. So with one face every Arabic heading, nav link, kicker, chip and paragraph re-wrapped when its web font arrived after first paint: cold at Lighthouse's desktop viewport, "
+        },
+        { "type": "text", "text": "/ar/about", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " measured 0.034–0.14 (its h1's " },
+        { "type": "text", "text": "20ch", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " cap also widened 540 → 597 px on the swap) and " },
+        { "type": "text", "text": "/ar/portfolio/all", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": " 0.13–0.26 (its header is in flow, so the re-wrapped nav and chips pushed the whole catalogue). "
+        },
+        { "type": "text", "text": "global.css", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " now declares " },
+        { "type": "text", "text": "Almarai Fallback", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": " as six faces: for each weight (400 on Arial, 700 and 800 on Arial Bold) a Latin face and an Arabic-range face with its own "
+        },
+        { "type": "text", "text": "size-adjust", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": ", and vertical overrides that follow each weight FILE's own line box (400 → 1.10em, 700 → 1.55em, 800 → 1.10em, so "
+        },
+        { "type": "text", "text": "line-height: normal", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": " boxes keep their height). The Arabic faces are declared after the Latin ones and claim the spaces, mirroring the web-font declarations. Result: widths within 1% at every weight, cold loads of "
+        },
+        { "type": "text", "text": "/ar/about", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": ", " },
+        { "type": "text", "text": "/ar/portfolio/all", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": ", " },
+        { "type": "text", "text": "/ar", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " and " },
+        { "type": "text", "text": "/ar/services", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " at 0.000–0.003. " },
+        { "type": "text", "text": "font-display", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " stays " },
+        { "type": "text", "text": "swap", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " everywhere: " },
+        { "type": "text", "text": "optional", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": " was tried and rejected — Chrome holds the first paint of text set in an "
+        },
+        { "type": "text", "text": "optional", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": " face that is still loading, and Lighthouse then puts both non-preloaded Arabic files on the LCP chain ("
+        },
+        { "type": "text", "text": "/ar/services", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": " mobile LCP 2.62 s against 2.5 s, twice in CI). Where Arial is absent the fallback needs faces of its own — Linux: step 2c; Android: still "
+        },
+        { "type": "text", "text": "system-ui", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": ", unmatched. " },
+        {
+          "type": "text",
+          "text": "Measure with the face actually in use:",
+          "marks": [{ "type": "bold" }]
+        },
+        { "type": "text", "text": " a " },
+        { "type": "text", "text": "swap", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " face that has not arrived, or an " },
+        { "type": "text", "text": "optional", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": " one that missed first paint, silently measures the fallback instead (that mistake cost one build here). Rule for headings (R3-0): never cap a swap-font heading's box in "
+        },
+        { "type": "text", "text": "ch", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": " (it is the width of \"0\" in whichever font is painting); measure the cap once under the loaded face and write it in "
+        },
+        { "type": "text", "text": "em", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": "." }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "2c. " },
+        {
+          "type": "text",
+          "text": "Fallbacks per platform and per weight; the consent banner's box holds",
+          "marks": [{ "type": "bold" }]
+        },
+        {
+          "type": "text",
+          "text": " (2026-10-04/05). With the CI pipeline waiting for every gate, the cold-load test for "
+        },
+        { "type": "text", "text": "/ar/portfolio/all", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": " failed on the first run of #38 and of #41. Two independent adversarial reviews then shaped the fix. It had two causes:"
+        }
+      ]
+    },
+    {
+      "type": "bulletList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "No matched fallback on Linux.",
+                  "marks": [{ "type": "bold" }]
+                },
+                {
+                  "type": "text",
+                  "text": " The CI runner (like any Linux machine) has no Arial, so none of the 2b faces applied. The Arabic copy fell through to "
+                },
+                { "type": "text", "text": "system-ui", "marks": [{ "type": "code" }] },
+                {
+                  "type": "text",
+                  "text": " (DejaVu Sans, unadjusted: 3% wider than Almarai at 400, 17% at 700, 12% at 800)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "The consent copy re-wraps.",
+                  "marks": [{ "type": "bold" }]
+                },
+                {
+                  "type": "text",
+                  "text": " At its cap, the Arabic copy sits on a two/three-line boundary, and the bar is pinned to the bottom edge, so it grew upward when Almarai arrived: 79 → 102 px at 1350 px and 131 → 154 px at 768 px (CLS 0.023 and 0.086). Its "
+                },
+                { "type": "text", "text": "60ch", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": " cap also followed whichever \"0\" was painting." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    { "type": "paragraph", "content": [{ "type": "text", "text": "The fixes:" }] },
+    {
+      "type": "bulletList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "`Almarai Fallback Linux`, a family of its own,",
+                  "marks": [{ "type": "bold" }]
+                },
+                { "type": "text", "text": " listed after " },
+                { "type": "text", "text": "Almarai Fallback", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": " in " },
+                { "type": "text", "text": "--bs-font-ar", "marks": [{ "type": "code" }] },
+                {
+                  "type": "text",
+                  "text": ". The Arial family stays Arial-only, so where Arial is absent it resolves nothing and the Linux family takes every character, spaces included. Windows and macOS keep the Arial faces exactly as they were, even where an office suite installed these fonts."
+                }
+              ]
+            },
+            {
+              "type": "bulletList",
+              "content": [
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        { "type": "text", "text": "Latin:", "marks": [{ "type": "italic" }] },
+                        {
+                          "type": "text",
+                          "text": " Liberation Sans (Bold for 700 and 800). Its advance widths are Arial's for every ASCII and common typographic glyph, regular and bold (compared with fontTools, "
+                        },
+                        { "type": "text", "text": "hmtx", "marks": [{ "type": "code" }] },
+                        { "type": "text", "text": "), so the Arial Latin " },
+                        { "type": "text", "text": "size-adjust", "marks": [{ "type": "code" }] },
+                        { "type": "text", "text": " carries over." }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        { "type": "text", "text": "Arabic:", "marks": [{ "type": "italic" }] },
+                        {
+                          "type": "text",
+                          "text": " DejaVu Sans 2.37 (Book; Bold for 700 and 800), which draws every glyph the site's Arabic copy uses. "
+                        },
+                        { "type": "text", "text": "size-adjust", "marks": [{ "type": "code" }] },
+                        {
+                          "type": "text",
+                          "text": " (96.92% / 85.63% / 89.25%) was measured in Chromium against 1,484 of the site's Arabic strings, with the shipped subsets and the HarfBuzz shaping Linux uses. Total width is within 0.25% of Almarai's; per string, p10/p90 is −4.4% / +3.4% (the Arial faces: −8.3% / +6.6%)."
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Vertical overrides",
+                          "marks": [{ "type": "italic" }]
+                        },
+                        { "type": "text", "text": " target Almarai's box " },
+                        {
+                          "type": "text",
+                          "text": "as Linux draws it",
+                          "marks": [{ "type": "bold" }]
+                        },
+                        {
+                          "type": "text",
+                          "text": ". Every subset has hhea = typo = 0.905 / 0.211 (1.116 em), but the two 700 files lack OS/2 "
+                        },
+                        {
+                          "type": "text",
+                          "text": "USE_TYPO_METRICS",
+                          "marks": [{ "type": "code" }]
+                        },
+                        {
+                          "type": "text",
+                          "text": ". So only Windows (DirectWrite) falls back to their win metrics and draws 700 at 1.561 em, the box the Arial 700 faces copy. FreeType (Linux) and CoreText (macOS) draw hhea at every weight, so each Linux face has override × size-adjust = 0.905 / 0.211. (A first version copied the Arial faces' 1.55 em; the first review caught it.)"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "`Archivo Fallback` per weight.",
+                  "marks": [{ "type": "bold" }]
+                },
+                {
+                  "type": "text",
+                  "text": " It was one weight-normal Arial face, so 600–800 text painted in "
+                },
+                { "type": "text", "text": "synthetic", "marks": [{ "type": "italic" }] },
+                {
+                  "type": "text",
+                  "text": " bold: Arial regular's widths, 3.5% (600) to 11.2% (800) narrower than Archivo's."
+                }
+              ]
+            },
+            {
+              "type": "bulletList",
+              "content": [
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        { "type": "text", "text": "Faces:", "marks": [{ "type": "italic" }] },
+                        {
+                          "type": "text",
+                          "text": " 400 (the old face, plus Liberation Sans), 500 (Arial or Liberation regular, 100.23%), and 600 / 700 / 800 (Arial Bold or Liberation Sans Bold, 94.77% / 98.06% / 103.01%), each on Archivo's own box, 0.878 / 0.210. Archivo sets "
+                        },
+                        {
+                          "type": "text",
+                          "text": "USE_TYPO_METRICS",
+                          "marks": [{ "type": "code" }]
+                        },
+                        { "type": "text", "text": ", so its box is the same on every platform." }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        { "type": "text", "text": "Calibration:", "marks": [{ "type": "italic" }] },
+                        {
+                          "type": "text",
+                          "text": " measured against 1,024 strings of the site's English copy, per string within −2.2% / +0.7% at p10/p90."
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Why not other values:",
+                          "marks": [{ "type": "italic" }]
+                        },
+                        {
+                          "type": "text",
+                          "text": " calibrating on the live pages' rendered text instead (weighted by font size) gave 99.90% / 95.75% / 100.19% / 105.19%. That scored better on two pages and worse on two others, Windows among them. A display headline near a wrap boundary flips at some value of any single "
+                        },
+                        { "type": "text", "text": "size-adjust", "marks": [{ "type": "code" }] },
+                        {
+                          "type": "text",
+                          "text": ". The values kept are the ones with no regression against main on Windows."
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Why it was needed:",
+                          "marks": [{ "type": "italic" }]
+                        },
+                        {
+                          "type": "text",
+                          "text": " the second review found that adding Liberation alone (a regular face) had moved Linux's bold headings from real DejaVu Bold to a synthetic bold 7–8% too narrow."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "The All projects head's paragraph",
+                  "marks": [{ "type": "bold" }]
+                },
+                { "type": "text", "text": " was the other half of the live 0.58. Its " },
+                { "type": "text", "text": "max-width: 36ch", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": " (" },
+                { "type": "text", "text": "work.css", "marks": [{ "type": "code" }] },
+                {
+                  "type": "text",
+                  "text": ") followed the painting font: 347 px in the Arial fallback, 362 px in Archivo at 1350 px. The extra 15 px pushed the row past its width, the paragraph wrapped under the heading, and the catalogue dropped 120 px. It is now 20.63 em (Archivo 400) / 19.01 em (Almarai 400)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "The consent copy's box:", "marks": [{ "type": "bold" }] }
+              ]
+            },
+            {
+              "type": "bulletList",
+              "content": [
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        { "type": "text", "text": "its cap is in " },
+                        { "type": "text", "text": "em", "marks": [{ "type": "code" }] },
+                        {
+                          "type": "text",
+                          "text": " (R3-0): 60 × the \"0\" of the face it paints in, so Archivo 400 0.573 em → 34.38 em and Almarai 0.528 em → 31.68 em;"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        { "type": "text", "text": "the Arabic copy's third line is reserved (" },
+                        {
+                          "type": "text",
+                          "text": "min-height: 3lh",
+                          "marks": [{ "type": "code" }]
+                        },
+                        { "type": "text", "text": ", on body's numeric 1.6 line-height)." }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "The banner still shows at once at every width (design-port #26). A first draft held it back on wide screens until its fonts loaded. The first review showed it is also the LCP element on Arabic Contact, Services and Join up to about 1200 px, and that tablets kept the larger re-wrap, so the draft was dropped. Where the reservation matters:"
+        }
+      ]
+    },
+    {
+      "type": "bulletList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "DirectWrite (Windows):",
+                  "marks": [{ "type": "italic" }]
+                },
+                {
+                  "type": "text",
+                  "text": " the copy is three lines in Almarai and two in the fallback at the cap, so the reservation keeps the box;"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Linux:", "marks": [{ "type": "italic" }] },
+                {
+                  "type": "text",
+                  "text": " FreeType's whole-pixel advances set it in two lines in both, so the "
+                },
+                { "type": "text", "text": "em", "marks": [{ "type": "code" }] },
+                {
+                  "type": "text",
+                  "text": " cap keeps the box, and the final bar shows two lines over the reserved third;"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "phones:", "marks": [{ "type": "italic" }] },
+                { "type": "text", "text": " it is three lines in both." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "bulletList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Measured.", "marks": [{ "type": "bold" }] },
+                {
+                  "type": "text",
+                  "text": " Every font was held until the page had painted, on the live pages. Linux was emulated: its fonts are added before first layout as local fonts are, and Almarai, Archivo and the fallbacks are drawn through FreeType-style metrics. The sum over 9 English pages × 1350 / 412 px:"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "| | Linux | Windows | |---|---|---| | main | 1.67 | 0.84 | | now | 0.25 | 0.26 |"
+        }
+      ]
+    },
+    { "type": "paragraph", "content": [{ "type": "text", "text": "Individual pages:" }] },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "| Page | main Linux | now Linux | main Windows | now Windows | |---|---|---|---|---| | "
+        },
+        { "type": "text", "text": "/portfolio/all", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " | 0.020 | 0.003 | " },
+        { "type": "text", "text": "0.579", "marks": [{ "type": "bold" }] },
+        { "type": "text", "text": " | " },
+        { "type": "text", "text": "0.001", "marks": [{ "type": "bold" }] },
+        { "type": "text", "text": " | | " },
+        { "type": "text", "text": "/contact", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " | 0.294 | 0.003 | 0.015 | 0.001 | | " },
+        { "type": "text", "text": "/about", "marks": [{ "type": "code" }] },
+        { "type": "text", "text": " | 0.24 / 0.33 | 0.004 / 0.041 | 0.005 | 0.0006 |" }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "/ar/portfolio/all", "marks": [{ "type": "code" }] },
+        {
+          "type": "text",
+          "text": " went from 0.051 / 0.192 to 0.003 / 0.007 on Linux at 1350 / 768 px."
+        }
+      ]
+    },
+    {
+      "type": "bulletList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [{ "type": "text", "text": "Tests:", "marks": [{ "type": "bold" }] }]
+            },
+            {
+              "type": "bulletList",
+              "content": [
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "tests/seo/fontFallbacks.spec.ts",
+                          "marks": [{ "type": "code" }]
+                        },
+                        {
+                          "type": "text",
+                          "text": " pins the families, faces, boxes and stack order, and the "
+                        },
+                        { "type": "text", "text": "em", "marks": [{ "type": "code" }] },
+                        { "type": "text", "text": " caps and the reservation." }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "tests/e2e/consent-banner.e2e.ts",
+                          "marks": [{ "type": "code" }]
+                        },
+                        {
+                          "type": "text",
+                          "text": " holds the banner's box with and without its web fonts (EN and AR at 412 / 768 / 1024 / 1350), and checks that it is shown at DOMContentLoaded with every font held."
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "tests/e2e/layout-shift.e2e.ts",
+                          "marks": [{ "type": "code" }]
+                        },
+                        { "type": "text", "text": " runs the worst case on Linux: " },
+                        {
+                          "type": "text",
+                          "text": "/ar/portfolio/all",
+                          "marks": [{ "type": "code" }]
+                        },
+                        { "type": "text", "text": " at 1350 and 768, and " },
+                        { "type": "text", "text": "/portfolio/all", "marks": [{ "type": "code" }] },
+                        { "type": "text", "text": ". It also asks the " },
+                        { "type": "text", "text": "FontFace", "marks": [{ "type": "code" }] },
+                        { "type": "text", "text": " objects which fallback drew the page." }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [{ "type": "text", "text": "Still open:", "marks": [{ "type": "bold" }] }]
+            },
+            {
+              "type": "bulletList",
+              "content": [
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Borderline display headlines.",
+                          "marks": [{ "type": "italic" }]
+                        },
+                        {
+                          "type": "text",
+                          "text": " In the same worst case, the home hero at 412 px re-wraps (0.15 on both platforms; main: 0.10 Linux, 0.14 Windows), and so does Join's \"Why\" heading on Windows (0.05, as on main). The realistic cold load is clean, because the hero face is preloaded."
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Windows' per-string spread.",
+                          "marks": [{ "type": "italic" }]
+                        },
+                        { "type": "text", "text": " The Arial faces leave " },
+                        {
+                          "type": "text",
+                          "text": "/ar/portfolio/all",
+                          "marks": [{ "type": "code" }]
+                        },
+                        {
+                          "type": "text",
+                          "text": " at 0.007–0.024 in the worst case, against main's 0.035–0.049."
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "The banner's button row.",
+                          "marks": [{ "type": "italic" }]
+                        },
+                        {
+                          "type": "text",
+                          "text": " A few px-wide bands where it fits beside the copy in one font and not the other: around 790–798 px in Arabic and 852–864 px in English, as on main. Below about 355 px on Arial platforms, the fallback copy runs a line longer."
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Almarai 700 on Windows, macOS and Linux with Arial.",
+                          "marks": [{ "type": "italic" }]
+                        },
+                        {
+                          "type": "text",
+                          "text": " The Arial 700 faces carry DirectWrite's 1.561 em box. That is right on Windows but 0.43 em per line too tall where Arial is drawn by CoreText or FreeType. Setting "
+                        },
+                        {
+                          "type": "text",
+                          "text": "USE_TYPO_METRICS",
+                          "marks": [{ "type": "code" }]
+                        },
+                        { "type": "text", "text": " on the two 700 subsets (" },
+                        {
+                          "type": "text",
+                          "text": "scripts/subset-fonts.py",
+                          "marks": [{ "type": "code" }]
+                        },
+                        {
+                          "type": "text",
+                          "text": ") would make every platform draw 1.116 em, with one set of overrides. It is a visible change on Windows (the filter chips go from 43 to 37 px, the mockup's height), so it is the owner's call."
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "listItem",
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "content": [
+                        { "type": "text", "text": "Android.", "marks": [{ "type": "italic" }] },
+                        {
+                          "type": "text",
+                          "text": " It has neither Arial nor these fonts, so it stays unmatched."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "orderedList",
+      "attrs": { "start": 1, "type": null },
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Preload ONLY the hero face",
+                  "marks": [{ "type": "bold" }]
+                },
+                { "type": "text", "text": " (the one above the fold), per locale, in " },
+                {
+                  "type": "text",
+                  "text": "src/components/SeoHead.astro",
+                  "marks": [{ "type": "code" }]
+                },
+                {
+                  "type": "text",
+                  "text": " — preloading more than one face wastes the budget: ``"
+                },
+                {
+                  "type": "text",
+                  "text": "html <link rel=\"preload\" href=\"/fonts/brand-latin.woff2\" as=\"font\" type=\"font/woff2\" crossorigin /> <!-- on /ar/*, preload brand-arabic.woff2 instead --> ",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": "`" },
+                {
+                  "type": "text",
+                  "text": " **The Arabic hero face is per route** (2026-09-27). Almarai is static, so the face to preload is the weight the route's above-the-fold heading actually renders in — a CSS weight with no file of its own resolves to a neighbour (600 → 700). The href comes from ",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": "heroFontPreload()" },
+                { "type": "text", "text": " in ", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": "src/lib/seo/fonts.ts" },
+                {
+                  "type": "text",
+                  "text": "; a route picks the face with BaseLayout's ",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": "heroFace" },
+                { "type": "text", "text": " prop (", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": "almarai-800" },
+                {
+                  "type": "text",
+                  "text": " by default — Home's hero; ",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": "almarai-700" },
+                {
+                  "type": "text",
+                  "text": " on About, whose h1 is weight 600). Still exactly one preload. Why: ",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": "/ar/about" },
+                {
+                  "type": "text",
+                  "text": " preloaded 800 while its h1 rendered in 700, and the late 700 swap reflowed the split heading — Lighthouse CLS 0.14 against the 0.1 budget, on ",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": "/ar/about" },
+                { "type": "text", "text": " only. The ", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": "Almarai Fallback" },
+                { "type": "text", "text": " metrics are tuned to ", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": "local('Arial')" },
+                {
+                  "type": "text",
+                  "text": ", which Android lacks (Linux has its own faces since 2c), so the swap is not CLS-free there and the preload is what keeps the shift out of the window; with 2b and 2c the swap is metric-matched per weight where Arial or its Linux stand-ins exist, and the preload keeps the headline in Almarai on a first visit. ",
+                  "marks": [{ "type": "code" }]
+                },
+                {
+                  "type": "text",
+                  "text": "tests/seo/fonts.spec.ts` locks the hrefs and each preloadable face's hero budget (every Almarai arabic face is ≈ 25 KB)."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "orderedList",
+      "attrs": { "start": 1, "type": null },
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Verify:", "marks": [{ "type": "bold" }] },
+                { "type": "text", "text": " " },
+                { "type": "text", "text": "npm run a11y:contrast", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": " and " },
+                {
+                  "type": "text",
+                  "text": "npx vitest run tests/seo/fonts.spec.ts",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": ", then the " },
+                { "type": "text", "text": "perf-seo-a11y", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": " checks CI runs on every PR — Lighthouse asserts " },
+                { "type": "text", "text": "font-display", "marks": [{ "type": "code" }] },
+                {
+                  "type": "text",
+                  "text": ", unsized-images and the per-route font bytes; axe asserts zero WCAG violations on the themed output."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "orderedList",
+      "attrs": { "start": 1, "type": null },
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "The admin mirrors these faces.",
+                  "marks": [{ "type": "bold" }]
+                },
+                { "type": "text", "text": " " },
+                {
+                  "type": "text",
+                  "text": "public/styles/admin.css",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": " declares the same " },
+                { "type": "text", "text": "@font-face", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": " set as " },
+                { "type": "text", "text": "global.css", "marks": [{ "type": "code" }] },
+                {
+                  "type": "text",
+                  "text": ", byte for byte after whitespace (Admin v2 F1), so a re-subset changes both files; "
+                },
+                {
+                  "type": "text",
+                  "text": "tests/lib/adminStyles.spec.ts",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": " fails if they differ. The admin preloads nothing: " },
+                { "type": "text", "text": "/admin", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": " is exempt from the font budget (CLAUDE.md §6)." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "content": [{ "type": "text", "text": "What's already done" }]
+    },
+    {
+      "type": "bulletList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "✅ WCAG 2.2 AA contrast audit — every UI token pair passes (lowest text pair 7.08:1 vs 4.5 min; neon accent 12.77:1 on bg). Enforced continuously by "
+                },
+                {
+                  "type": "text",
+                  "text": "scripts/contrast-audit.mjs",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": "." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "✅ " },
+                { "type": "text", "text": "prefers-reduced-motion", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": " honoured globally + per-component (marquee)." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "⏳ Fonts — this runbook (needs brand woff2)." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "✅ axe DOM pass — " },
+                { "type": "text", "text": "tests/a11y/axe.e2e.ts", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": ", in the required " },
+                {
+                  "type": "text",
+                  "text": "perf-seo-a11y / E2E + axe + CSP + video bytes",
+                  "marks": [{ "type": "code" }]
+                },
+                { "type": "text", "text": " check on every PR, and a " },
+                { "type": "text", "text": "needs", "marks": [{ "type": "code" }] },
+                { "type": "text", "text": " of the deploy." }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

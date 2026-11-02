@@ -94,10 +94,13 @@ const PURE = new Set([
   'toCard',
   'toCaseStudy',
   'renderBody',
+  'renderStoredDoc',
   'parseCaseStudies',
   'toDiscipline',
   'toServiceSummary',
   'toServiceDetail',
+  'postBodyHtml',
+  'toPostDetail',
   'toServiceCase',
   'toLeader',
   'resolveSeo',
@@ -127,9 +130,9 @@ const CASES: Record<string, () => Promise<void>> = {
     clean(report);
   },
   'blog.getPostBySlug': async () => {
-    const { value, report } = await inPreview(() => blog.getPostBySlug('new'));
+    const { value, report } = await inPreview(() => blog.getPostBySlug('new', 'en'));
     expect(value?.slug).toBe('new');
-    expect((await inPreview(() => blog.getPostBySlug('draft-post'))).value).toBeNull();
+    expect((await inPreview(() => blog.getPostBySlug('draft-post', 'en'))).value).toBeNull();
     clean(report);
   },
   'certifications.getPublishedCertifications': async () => {

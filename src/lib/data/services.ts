@@ -102,7 +102,7 @@ export function toServiceDetail(row: ServiceDetailRow): ServiceDetail {
     ...toServiceSummary(row),
     valuePoints: row.value_points,
     deliverables: row.deliverables,
-    bodyHtml: renderBody(row.body),
+    bodyHtml: renderBody(row.body, { entity: 'service', id: row.id }),
     discipline: row.discipline && { slug: row.discipline.slug, name: row.discipline.name },
   };
 }

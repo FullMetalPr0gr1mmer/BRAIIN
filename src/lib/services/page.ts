@@ -104,6 +104,10 @@ export async function loadServicePage(
   locals: Locals,
   locale: Locale,
 ): Promise<ServicePage | null> {
+  // toServiceDetail cannot throw (H15 code review, CR8): it reads the parsed row's plain data,
+  // and the body's render has its one guard in the renderer (renderArticle), which renders a
+  // stored body it refuses as nothing and logs it. Before H15 a deep body threw a RangeError
+  // here, outside the loader's try, and the page answered 500 on every request.
   const serviceQuery = getServiceBySlug(slug).then((row) => (row ? toServiceDetail(row) : null));
   const [service, disciplines, serviceCase, head] = await Promise.all([
     serviceQuery,

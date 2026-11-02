@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Locale } from '@schemas/primitives';
 import { MEDIA_BLOCKS_PER_PAGE } from '@schemas/sectionTypes';
 import type { SectionData } from '@/lib/sections/types';
@@ -100,6 +100,38 @@ describe('Text block', () => {
     expect(tags(html, 'iframe')).toHaveLength(0);
     expect(tags(html, 'h1')).toHaveLength(0);
     expect(html).not.toMatch(/\sstyle=/);
+  });
+
+  test('a stored body the walk refuses is logged once, under the row id, never its words (CR1)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const id = '12121212-1212-4212-8212-121212121212';
+    await render(
+      [{ id, type: 'textBlock', props: { body: { en: para('Fine'), ar: para('جيد') } } }],
+      'en',
+    );
+    expect(warn).not.toHaveBeenCalled();
+    let node: unknown = { type: 'paragraph', content: [{ type: 'text', text: 'secret' }] };
+    for (let i = 0; i < 12; i += 1) node = { type: 'blockquote', content: [node] };
+    const deep = { type: 'doc', content: [node] };
+    const html = await render(
+      [
+        {
+          id,
+          type: 'textBlock',
+          props: { heading: text('Kept', 'باقٍ'), body: { en: deep, ar: deep } },
+        },
+      ],
+      'ar',
+    );
+    expect(html).toContain('باقٍ');
+    expect(html).not.toContain('secret');
+    expect(warn).toHaveBeenCalledTimes(1);
+    const line = String(warn.mock.calls[0]?.[0]);
+    expect(line.startsWith(`[content] page_section body not rendered (id=${id}, lang=ar): `)).toBe(
+      true,
+    );
+    expect(line).not.toContain('secret');
+    warn.mockRestore();
   });
 
   test('markup typed as words is escaped, never parsed', async () => {
