@@ -184,7 +184,7 @@ Public routes only. **Failing any budget = blocked PR and blocked deploy** (ever
 | Lighthouse Perf / A11y / SEO | ≥ 95 each | incl. an `/ar/` RTL route |
 | Per-route client JS | ≤ 100 KB gzipped | `hls.js` post-LCP, excluded |
 | EN+AR fonts per route | ≤ 180 KB woff2 | AR face counts. lhci asserts `resource-summary:font:size` ≤ 184,320 B (180 × 1024) on every gated route, mobile and desktop |
-| Hero face | ≤ 35 KB (Latin) / 45 KB (Arabic) | preload only this face — exactly one per route. EN: Archivo variable. AR: the Almarai weight the route's above-the-fold heading renders in (`heroFace`, `src/lib/seo/fonts.ts`): 800 by default (Home), 700 on `/ar/about` (its 600-weight h1 resolves to the 700 face; preloading 800 there cost CLS 0.14). `tests/seo/fonts.spec.ts` asserts every preloadable face against this budget |
+| Hero face | ≤ 35 KB (Latin) / 45 KB (Arabic) | preload only this face — exactly one per route. EN: Archivo variable. AR: the Almarai weight the route's above-the-fold heading renders in (`heroFace`, `src/lib/seo/fonts.ts`): 800 by default (Home), 700 on `/ar/about` (its 600-weight h1 resolves to the 700 face; preloading 800 there cost CLS 0.14); and 700 wherever the active theme sets Bold headings (Admin v2 E12, `themedHeroFace`), the face the route's 800 heading then renders in. `tests/seo/fonts.spec.ts` asserts every preloadable face against this budget |
 | Poster image | ≤ 80 KB | Stream thumbnail. `tests/e2e/poster-bytes.e2e.ts` asserts the bytes served for the `fetchpriority=high` poster on About, Our Work and a case study (EN + AR, at 2×) by this build's image pipeline; a Stream thumbnail's half is EXC-009's (no Stream yet) |
 | Media CLS contribution | 0 | |
 
