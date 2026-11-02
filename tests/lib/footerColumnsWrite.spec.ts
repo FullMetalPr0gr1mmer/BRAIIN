@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { FOOTER_COLUMNS_FULL, FOOTER_COLUMNS_MAX } from '@schemas/admin';
+import {
+  FOOTER_COLUMNS_FULL,
+  FOOTER_COLUMNS_MAX,
+  FOOTER_COLUMNS_PUBLISH_FIRST,
+  FOOTER_HEADING_MOVE_FIRST,
+} from '@schemas/admin';
 import { collectionRoutes, itemRoutes } from '@/lib/admin/resource';
 import { navigationResource } from '@/lib/admin/resources/navigation';
 import { resetIds, T, type Db, type Row } from '../fixtures/stagedDb';
@@ -11,9 +16,15 @@ vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 // update schema names only what a write changes, so the row it leaves is judged over the stored
 // one, live or staged (navigationResource.assertWritable): a link keeps its address and the
 // refusal is said on the address; a heading has no link, sits at the top of the footer and is
-// never the key link; a fifth column is refused counting live AND pending headings, when it is
-// staged, never at the release's apply (where 0122's CHECK or trigger would fail the release).
-// Releases off and on, over the PostgREST stand-in.
+// never the key link; a fifth column is refused when it is staged. Releases off and on, over
+// the PostgREST stand-in.
+//
+// With releases on, the count is the PEAK apply_release (0112) passes through, not the state it
+// leaves (E6 release-mode check, round 2): the apply writes new and changed rows first and
+// removals last, so a pending removal or a column turned back into a link frees no place in the
+// same release, and it writes parent_id in a second pass, so a link under another row is not
+// made a heading in one change. Releases off, the write is one statement and stays as it was.
+// The release's own check (validate.ts) is tests/lib/footerColumnsRelease.spec.ts.
 
 const id = (n: number) => `44444444-4444-4444-8444-${String(n).padStart(12, '0')}`;
 const LABEL = { en: 'Studio', ar: 'الاستوديو' };
@@ -171,8 +182,37 @@ describe('the staged view counts the columns waiting to be published (releases o
     expect(drafts(db)).toHaveLength(1);
   });
 
-  it('three live and a pending removal of one: a new column is staged', async () => {
+  it('four live and a pending removal of one: a new column waits for the removal to publish', async () => {
     const db = footer(FOOTER_COLUMNS_MAX, true);
+    db.tables['content_drafts'] = [
+      draftRow({ entity_type: 'nav_item', entity_id: id(2), op: 'delete', payload: {} }),
+    ];
+    const res = await post(db, column, true);
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ field: 'isHeading', detail: FOOTER_COLUMNS_PUBLISH_FIRST });
+    expect(drafts(db)).toHaveLength(1);
+  });
+
+  it('four live and one pending back to a link: a link made a column waits the same way', async () => {
+    const db = footer(FOOTER_COLUMNS_MAX, true);
+    db.tables['content_drafts'] = [
+      draftRow({
+        entity_type: 'nav_item',
+        entity_id: id(4),
+        op: 'update',
+        payload: { isHeading: false, href: '/row-4' },
+        fields: ['isHeading', 'href'],
+        base: { is_heading: true, href: null },
+      }),
+    ];
+    const res = await patch(db, 50, { isHeading: true, href: null, version: 1 });
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ field: 'isHeading', detail: FOOTER_COLUMNS_PUBLISH_FIRST });
+    expect(drafts(db)).toHaveLength(1);
+  });
+
+  it('three live and a pending removal of one: a fourth still finds its place', async () => {
+    const db = footer(FOOTER_COLUMNS_MAX - 1, true);
     db.tables['content_drafts'] = [
       draftRow({ entity_type: 'nav_item', entity_id: id(2), op: 'delete', payload: {} }),
     ];
@@ -190,5 +230,39 @@ describe('the staged view counts the columns waiting to be published (releases o
       draftVersion: 1,
     });
     expect(res.status).toBe(200);
+  });
+});
+
+describe('a link under another row made a column heading', () => {
+  /** Three columns, a top-level link (50) and a link under it (51). */
+  const nested = (releases: boolean) => {
+    const db = footer(FOOTER_COLUMNS_MAX - 1, releases);
+    db.tables['navigation'] = db.tables['navigation']!.map((row) =>
+      row['id'] === id(51) ? { ...row, parent_id: id(50) } : row,
+    );
+    return db;
+  };
+  const promote = { isHeading: true, href: null, parentId: null, version: 1 };
+
+  it('releases off: one write moves it to the top and makes it a heading (as before)', async () => {
+    const db = nested(false);
+    const res = await patch(db, 51, promote);
+    expect(res.status).toBe(200);
+    expect(liveWritesOf(db, 'navigation')).toHaveLength(1);
+  });
+
+  it('releases on: refused when it is staged, its move published first', async () => {
+    const db = nested(true);
+    const res = await patch(db, 51, promote);
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ field: 'isHeading', detail: FOOTER_HEADING_MOVE_FIRST });
+    expect(drafts(db)).toEqual([]);
+  });
+
+  it('releases on: a link already at the top is made a heading in one change', async () => {
+    const db = nested(true);
+    const res = await patch(db, 50, { isHeading: true, href: null, version: 1 });
+    expect(res.status).toBe(200);
+    expect(drafts(db)).toHaveLength(1);
   });
 });

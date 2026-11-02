@@ -833,6 +833,21 @@ export const NavItemUpdateSchema = updatable(NavItemObject);
 /** What the footer's four-column limit says (the API's 422 and 0122's refusal). */
 export const FOOTER_COLUMNS_FULL = `The footer already has ${FOOTER_COLUMNS_MAX} columns. Remove one or turn it back into a link first.`;
 
+/**
+ * Releases on: a new column whose place frees only when a column's removal (or its turn back
+ * into a link) is published. A release applies its new and changed rows before its removals,
+ * so the two cannot travel together (E6 release-mode check, round 2).
+ */
+export const FOOTER_COLUMNS_PUBLISH_FIRST = `${FOOTER_COLUMNS_FULL} Publish the removal first, then add the new column.`;
+
+/**
+ * Releases on: a link under another row made a column heading. A release writes a row's parent
+ * after its other columns, so the heading would land under its old parent (E6 release-mode
+ * check, round 2).
+ */
+export const FOOTER_HEADING_MOVE_FIRST =
+  'Move this link to the top level first, publish, then make it a column heading.';
+
 // ── SEO ─────────────────────────────────────────────────────────────────────────
 
 export {

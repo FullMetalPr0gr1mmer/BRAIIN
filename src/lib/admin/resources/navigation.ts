@@ -1,6 +1,8 @@
 import {
   FOOTER_COLUMNS_FULL,
   FOOTER_COLUMNS_MAX,
+  FOOTER_COLUMNS_PUBLISH_FIRST,
+  FOOTER_HEADING_MOVE_FIRST,
   navShapeIssues,
   NavItemUpdateSchema,
   NavItemWriteSchema,
@@ -35,12 +37,30 @@ const shapeOf = (row: Row): NavShape =>
   Object.fromEntries(SHAPE_KEYS.map((key) => [key, row[NAV_KEYS[key]]])) as NavShape;
 
 /**
+ * The heading rows a column count reads. Hidden columns count: a column hidden today is one
+ * shown tomorrow (0122).
+ */
+const HEADINGS = {
+  columns: 'id',
+  eq: { is_heading: true },
+  limit: FOOTER_COLUMNS_MAX + 1,
+} as const;
+
+/**
  * The row after the write (stored or live, with the patch) holds 0122's shape, and a row that
  * BECOMES a column heading finds a place among four (E6 code review, CR3 and CR4). On every
- * write path: a save while releases are off reads live; a staged save reads live with the
- * other pending changes laid over it (`db`, R6), so a fifth column is refused when it is
- * staged, not when its release is applied; a publish and its dry run judge the state the
- * release leaves. The database's CHECK and trigger stay the last word on a live write.
+ * write path: a save while releases are off reads live, and the database's CHECK and trigger
+ * stay the last word on it. With releases on (a staged save, `db` = live with the other
+ * pending changes laid over it; a release's publish and dry run, `db` = the state the release
+ * leaves), the rule judges what `apply_release` (0112) passes THROUGH, so a change it accepts
+ * is never refused at the apply, where it would fail its whole release (E6 release-mode check,
+ * round 2):
+ *   • the apply writes new and changed rows first and removals last, so a pending removal (or a
+ *     column turned back into a link, in any order) frees no place for a new column in the same
+ *     release: the count is live's headings, those leaving included, plus the pending ones;
+ *   • it writes `parent_id` (a deferred column) in a second pass, so a link under another row
+ *     made a heading in one change would reach 0122's CHECK still under it: its move is
+ *     published first.
  */
 async function assertNavWritable(
   merged: Row,
@@ -58,14 +78,34 @@ async function assertNavWritable(
   const was =
     ctx.before === undefined ? !('is_heading' in ctx.changed) : ctx.before?.['is_heading'] === true;
   if (was) return;
-  // Hidden columns count: a column hidden today is one shown tomorrow (0122).
-  const headings = await (ctx.db ?? liveDb(ctx.sb, ctx.auth)).list('navigation', {
-    columns: 'id',
-    eq: { is_heading: true },
-    limit: FOOTER_COLUMNS_MAX + 1,
-  });
-  if (headings.filter((h) => h['id'] !== merged['id']).length >= FOOTER_COLUMNS_MAX) {
-    throw new ValidationError(FOOTER_COLUMNS_FULL, 'isHeading');
+  const others = (rows: readonly Row[]) =>
+    rows.map((h) => h['id']).filter((rowId) => rowId !== merged['id']);
+
+  if (!ctx.db) {
+    // Releases off: one write, live.
+    const headings = await liveDb(ctx.sb, ctx.auth).list('navigation', HEADINGS);
+    if (others(headings).length >= FOOTER_COLUMNS_MAX) {
+      throw new ValidationError(FOOTER_COLUMNS_FULL, 'isHeading');
+    }
+    return;
+  }
+
+  // Releases on. The live row's parent, not the change's: the change's own move lands after.
+  if (ctx.before != null && ctx.before['parent_id'] != null) {
+    throw new ValidationError(FOOTER_HEADING_MOVE_FIRST, 'isHeading');
+  }
+  const [after, now] = await Promise.all([
+    ctx.db.list('navigation', HEADINGS),
+    (ctx.live ?? liveDb(ctx.sb, ctx.auth)).list('navigation', HEADINGS),
+  ]);
+  const left = new Set(others(after));
+  // The peak: every heading the state left keeps, every live one (a removal lands last).
+  const peak = new Set([...left, ...others(now)]);
+  if (peak.size >= FOOTER_COLUMNS_MAX) {
+    throw new ValidationError(
+      left.size >= FOOTER_COLUMNS_MAX ? FOOTER_COLUMNS_FULL : FOOTER_COLUMNS_PUBLISH_FIRST,
+      'isHeading',
+    );
   }
 }
 

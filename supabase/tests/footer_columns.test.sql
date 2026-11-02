@@ -17,13 +17,18 @@
 --     check bypasses RLS, so without the composite key an Admin could put a link under
 --     another tenant's row by its id; refused as an insert and as an update (23503);
 --   • anon reads a visible heading (no link) and a link under it, never a hidden heading;
---   • releases on: a direct write of a heading is refused by the release guard.
+--   • releases on: a direct write of a heading is refused by the release guard;
+--   • releases on, what apply_release (0112) does with the releases the Worker refuses (E6
+--     release-mode check, round 2): it writes new and changed rows first, parent_id in a
+--     second pass and removals last, so a link under a link made a heading, a column removed
+--     and one added at four, and a column swapped for a link at four each fail the whole
+--     release; the removal published first, then the new column, passes.
 --
 -- T1 is created older than any seeded tenant, so inside this transaction it is the launch
 -- tenant anon resolves to (app.default_tenant_id()).
 
 begin;
-select plan(39);
+select plan(45);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name, created_at) values
@@ -273,6 +278,123 @@ set local role authenticated;
 select _as('e6000000-0000-0000-0000-0000000000a1', 'admin', 'e6000000-0000-0000-0000-000000000001');
 select is(_heading('e6000000-0000-0000-0000-0000000000c6'), '42501',
   'releases on: admin CANNOT add a column directly (the release guard)');
+reset role;
+
+-- ── 7. Releases on: what the apply passes through (E6 release-mode check, round 2) ──
+-- apply_release (0112) writes a release's new and changed rows first, in id order, parent_id
+-- (a deferred column) in a second pass, and removals last. Each refused release below would
+-- fail at the apply, and every other change it carries with it: the navigation resource's
+-- assertWritable refuses each when it is staged (tests/lib/footerColumnsWrite.spec.ts) and
+-- before a release's dry run (tests/lib/footerColumnsRelease.spec.ts), so none reaches this.
+-- T3: three columns, a link L, a link P and a link S under P. L's id sorts before H4's. No
+-- claims while the drafts are written (as the migration role): section 6's are T1's.
+select _as(null, null, null);
+insert into public.tenants (id, name, created_at) values
+  ('e6000000-0000-0000-0000-000000000003', 'E6 three', '2000-01-03T00:00:00Z');
+insert into auth.users (id, email) values
+  ('e6000000-0000-0000-0000-0000000003a1', 'e6-three-admin@example.test');
+insert into public.profiles (id, tenant_id, role, is_active, locked_until) values
+  ('e6000000-0000-0000-0000-0000000003a1', 'e6000000-0000-0000-0000-000000000003', 'admin', true, null);
+insert into public.navigation (id, tenant_id, location, label, href, is_heading, sort_order) values
+  ('e6000000-0000-0000-0003-0000000000d1', 'e6000000-0000-0000-0000-000000000003', 'footer',
+   '{"en":"H1","ar":"ع1"}', null, true, 1),
+  ('e6000000-0000-0000-0003-0000000000d2', 'e6000000-0000-0000-0000-000000000003', 'footer',
+   '{"en":"H2","ar":"ع2"}', null, true, 2),
+  ('e6000000-0000-0000-0003-0000000000d3', 'e6000000-0000-0000-0000-000000000003', 'footer',
+   '{"en":"H3","ar":"ع3"}', null, true, 3),
+  ('e6000000-0000-0000-0003-0000000000a0', 'e6000000-0000-0000-0000-000000000003', 'footer',
+   '{"en":"L","ar":"ل"}', '/l', false, 5),
+  ('e6000000-0000-0000-0003-0000000000b0', 'e6000000-0000-0000-0000-000000000003', 'footer',
+   '{"en":"P","ar":"ب"}', '/p', false, 6);
+insert into public.navigation (id, tenant_id, location, label, href, sort_order, parent_id) values
+  ('e6000000-0000-0000-0003-0000000000b1', 'e6000000-0000-0000-0000-000000000003', 'footer',
+   '{"en":"S","ar":"س"}', '/s', 7, 'e6000000-0000-0000-0003-0000000000b0');
+insert into app.release_tenants (tenant_id) values ('e6000000-0000-0000-0000-000000000003');
+
+-- A pending change as the Worker stores it (the draft, its base the live values it replaces),
+-- and the apply item it sends, by name.
+create table _e6_items (name text primary key, item jsonb not null);
+create function _e6_stage(p_name text, p_entity uuid, p_op text, p_patch jsonb)
+returns void language plpgsql as $f$
+declare
+  v_live jsonb;
+  v_base jsonb := '{}'::jsonb;
+  v_draft uuid := gen_random_uuid();
+begin
+  if p_op <> 'create' then
+    select to_jsonb(t) into v_live from public.navigation t where t.id = p_entity;
+    select coalesce(jsonb_object_agg(k, v_live -> k), '{}'::jsonb) into v_base
+      from jsonb_object_keys(p_patch) k;
+  end if;
+  insert into public.content_drafts (id, tenant_id, entity_type, entity_id, op, base, base_version)
+  values (v_draft, 'e6000000-0000-0000-0000-000000000003', 'nav_item', p_entity, p_op, v_base,
+          case when p_op = 'create' then null else (v_live ->> 'version')::int end);
+  insert into _e6_items (name, item) values (p_name,
+    jsonb_build_object('draft_id', v_draft, 'draft_version', 1, 'entity_type', 'nav_item',
+                       'entity_id', p_entity, 'op', p_op, 'patch', p_patch, 'base', v_base));
+end $f$;
+-- The named changes published as one release by T3's Admin: 'ok', or the SQLSTATE and detail.
+create function _e6_publish(p_names text[]) returns text language plpgsql as $f$
+declare
+  v_detail text;
+begin
+  perform public.apply_release('e6000000-0000-0000-0000-0000000003a1'::uuid, 'admin', 'publish',
+    (select jsonb_agg(i.item order by array_position(p_names, i.name))
+       from _e6_items i where i.name = any (p_names)));
+  return 'ok';
+exception when others then
+  get stacked diagnostics v_detail = pg_exception_detail;
+  return sqlstate || ' ' || coalesce(nullif(v_detail, ''), sqlerrm);
+end $f$;
+-- The columns of T3, by the last two characters of their ids.
+create function _e6_columns() returns text language sql as $$
+  select string_agg(right(n.id::text, 2), ',' order by n.id)
+    from public.navigation n
+   where n.tenant_id = 'e6000000-0000-0000-0000-000000000003' and n.is_heading
+$$;
+-- The removal, then the new column, each published alone, and the columns they leave; all
+-- rolled back (a pgTAP assertion inside a savepoint would be rolled back with it).
+create function _e6_apart() returns text language plpgsql as $f$
+begin
+  begin
+    raise exception using errcode = 'P0004', message =
+      _e6_publish(array['A-del']) || ' ' || _e6_publish(array['A-new']) || ' ' || _e6_columns();
+  exception
+    when sqlstate 'P0004' then return sqlerrm;
+  end;
+end $f$;
+grant select on _e6_items to service_role;
+grant execute on function _e6_publish(text[]), _e6_columns(), _e6_apart() to service_role;
+
+select _e6_stage('S', 'e6000000-0000-0000-0003-0000000000b1', 'update',
+  '{"is_heading":true,"href":null,"parent_id":null}');
+select _e6_stage('H4', 'e6000000-0000-0000-0003-0000000000d4', 'create',
+  '{"location":"footer","label":{"en":"H4","ar":"ع4"},"is_heading":true,"visible":true,"sort_order":4}');
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+set local role service_role;
+select ok(_e6_publish(array['S']) ~ '^BR422 .*navigation_heading_shape',
+  'a link under a link made a heading in one change fails at the apply (its parent is written after)');
+select is(_e6_publish(array['H4']), 'ok', 'a fourth column is published in a release');
+reset role;
+
+select _e6_stage('A-del', 'e6000000-0000-0000-0003-0000000000d2', 'delete', '{}');
+select _e6_stage('A-new', 'e6000000-0000-0000-0003-0000000000e1', 'create',
+  '{"location":"footer","label":{"en":"E","ar":"ه"},"is_heading":true,"visible":true,"sort_order":8}');
+set local role service_role;
+select ok(_e6_publish(array['A-del', 'A-new']) ~ '^BR422 .*navigation_footer_columns_max',
+  'a column removed and one added in one release fail at four (the apply removes last)');
+select is(_e6_columns(), 'd1,d2,d3,d4', 'the refused release kept nothing');
+select is(_e6_apart(), 'ok ok d1,d3,d4,e1',
+  'the removal published alone, then the new column in a release of its own: both applied');
+reset role;
+
+select _e6_stage('C-back', 'e6000000-0000-0000-0003-0000000000d4', 'update',
+  '{"is_heading":false,"href":"/h4"}');
+select _e6_stage('C-up', 'e6000000-0000-0000-0003-0000000000a0', 'update',
+  '{"is_heading":true,"href":null}');
+set local role service_role;
+select ok(_e6_publish(array['C-back', 'C-up']) ~ '^BR422 .*navigation_footer_columns_max',
+  'a column swapped for a link at four fails when the link comes first in id order');
 reset role;
 
 select * from finish();
