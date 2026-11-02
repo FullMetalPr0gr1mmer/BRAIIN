@@ -116,8 +116,13 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   logoMediaId: UUID_A,
   websiteUrl: 'https://client.example.test',
   showInMarquee: true,
-  // themes
-  tokens: { '--bs-klein': '#0024BC' },
+  // themes (Admin v2 E4: a theme is its settings; the server compiles the tokens)
+  settings: {
+    v: 1,
+    mode: 'advanced',
+    colors: { primary: '#000000', hover: '#615757', accent: '#938A8D' },
+    motion: { marquee: 'slower', reveal: false },
+  },
   isActive: true,
   // redirects
   sourcePath: '/old-page/',
@@ -176,6 +181,19 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   defaultOgMediaId: UUID_B,
   organization: { name: 'Sample' },
   robotsDirectives: 'index,follow',
+  // singletons: site_appearance (Admin v2 E5), every option off its default
+  logoPosition: 'center',
+  logoSize: 'l',
+  menuAlign: 'end',
+  sticky: true,
+  hideOnScroll: false,
+  solidAfterHero: true,
+  tint: 'medium',
+  blur: 'strong',
+  mobileMenu: 'full',
+  ctaShow: true,
+  ctaLabel: BI('Start a project', 'ابدأ مشروعك'),
+  ctaHref: '/contact#inquiry',
   // singletons: form_settings (Admin v2 E8)
   inquiry: { button: BI('Send it', 'أرسل') },
   application: { consent: { futureRoles: BI('Keep me in mind', 'تذكّروني') } },

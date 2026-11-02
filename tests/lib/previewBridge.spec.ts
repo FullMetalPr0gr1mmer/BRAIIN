@@ -32,7 +32,8 @@ describe('the envelope (packages/schemas/previewMessage.ts)', () => {
       { v: 1, type: 'highlight', sectionId: 'default-3' },
       { v: 1, type: 'scroll', y: 120 },
       { v: 1, type: 'reload' },
-      { v: 1, type: 'tokens', tokens: { '--bs-klein': '#0024BC' } },
+      // Admin v2 E4: the closed set, each value as the server compiles it (lower case).
+      { v: 1, type: 'tokens', tokens: { '--bs-klein': '#0024bc' } },
     ]) {
       expect(ToPreviewMessageSchema.safeParse(m).success, JSON.stringify(m)).toBe(true);
     }
@@ -59,6 +60,10 @@ describe('the envelope (packages/schemas/previewMessage.ts)', () => {
       { '--x': 'red; } body { display:none' },
       { '--x': 'red</style><script>' },
       { '--X': 'red' },
+      // Admin v2 E4: a key outside the closed set, or a value off its key's one shape.
+      { '--ok-name': '#ffffff' },
+      { '--bs-klein': '#0024BC' },
+      { '--bs-marquee-scale': '0.5' },
     ];
     for (const tokens of bad) {
       expect(ToPreviewMessageSchema.safeParse({ v: 1, type: 'tokens', tokens }).success).toBe(

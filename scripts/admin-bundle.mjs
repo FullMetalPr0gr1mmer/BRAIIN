@@ -101,6 +101,7 @@ const OFF_SCREEN_GROUPS = [
   'admin-content.',
   'admin-pages.',
   'admin-page-preview.',
+  'admin-theme.',
   'admin-dashboard.',
   'admin-leads.',
   'admin-leads-lazy.',
@@ -130,6 +131,8 @@ const FAMILY_GROUPS = [
   // Admin v2 E1: the page editor's own group, on its island only. Admin v2 E2: and its live
   // preview column (lazy, loaded only on the editor), which takes the editor's words from it.
   { group: 'admin-pages.', importers: /^(?:AdminPageEditor|admin-page-preview)\./ },
+  // Admin v2 E4: the theme editor's own group, on its island only.
+  { group: 'admin-theme.', importers: /^AdminTheme\./ },
 ];
 // What a family's group must never import statically: the field kit, and its own lazy part.
 const FAMILY_NEVER = {
@@ -144,6 +147,16 @@ const FAMILY_NEVER = {
     'admin-versions.',
     // E2: the live preview column and the preview's own bridge load only once it is on screen.
     'admin-page-preview.',
+    'admin-preview.',
+  ],
+  // E4: the theme editor loads the field kit, never another screen family's code.
+  'admin-theme.': [
+    'admin-screens.',
+    'admin-content.',
+    'admin-leads.',
+    'admin-pages.',
+    'admin-page-preview.',
+    'admin-versions.',
     'admin-preview.',
   ],
 };

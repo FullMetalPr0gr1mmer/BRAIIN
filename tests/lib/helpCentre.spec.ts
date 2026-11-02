@@ -899,14 +899,18 @@ describe('the guides say only what the admin does', () => {
     expect(en).toContain('maintenance switched on or off for everyone');
   });
 
-  it('the theme editor is not said to change the site: no public code reads a saved theme', () => {
-    // Applying a theme to the site is E4's; until then only the admin reads custom_themes.
-    for (const file of codeIn('src').filter((f) => !/\/admin(\/|$)/.test(f))) {
-      expect(source(file), file).not.toContain('custom_themes');
-    }
-    expect(guide('roles-and-access', 'en')).toContain(
-      'the theme editor (saved themes do not change the site yet)',
+  it('the theme changes the site since E4, and the roles guide says so', () => {
+    // Admin v2 E4: the public site reads the active theme (one loader, through the content
+    // seam), and its stylesheet route serves it.
+    const readers = codeIn('src').filter(
+      (f) => !/\/admin(\/|$)/.test(f) && source(f).includes("from('custom_themes')"),
     );
+    expect(readers).toEqual(['src/lib/data/theme.ts']);
+    expect(source('src/layouts/BaseLayout.astro')).toContain('themeHref(theme)');
+    const en = guide('roles-and-access', 'en');
+    expect(en).toContain("the site's theme (its colours and motion)");
+    expect(en).not.toContain('do not change the site yet');
+    expect(guide('roles-and-access', 'ar')).not.toContain('لا تغيّر المظاهر المحفوظة الموقع بعد');
   });
 
   it('clearing the error log is described beside the nightly purge it runs alongside', () => {
@@ -1843,6 +1847,55 @@ describe('collections-and-faq (U7), a new guide put by the FAQ migration', () =>
   });
 });
 
+describe('header-and-menu (E5), a new guide put by the site_appearance migration', () => {
+  const article = () => SET.find((a) => a.slug === 'header-and-menu')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const SCREEN = 'src/components/admin/screens/header/HeaderScreen.tsx';
+
+  it('is put once, at revision 0 (new), by the migration that creates site_appearance', () => {
+    const puts = HELP.edits.filter((e) => e.slug === 'header-and-menu');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts[0]?.file).toMatch(/^\d{4}_site_appearance\.sql$/);
+    expect(HELP.revisions.get('header-and-menu')).toBe(1);
+  });
+
+  it('takes the free place 43, for the roles that open the Header screen', () => {
+    expect(article().sort_order).toBe(43);
+    expect(SET.filter((a) => a.sort_order === 43)).toHaveLength(1);
+    expect(article().screens).toEqual(['/admin/appearance/header']);
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual([
+      'admin',
+      'content_creator',
+      'developer',
+    ]);
+  });
+
+  it('says what the screen does, in the words it uses', () => {
+    const en = text('en');
+    const screen = source(SCREEN);
+    const ui = source('src/lib/admin/ui/appearance.ts');
+    expect(en).toContain('Move up and Move down');
+    expect(screen).toContain('aria-label={`Move ${row.label} up`}');
+    expect(en).toContain('Add a link');
+    expect(screen).toContain('Add a link');
+    expect(en).toContain('Show a button');
+    expect(ui).toContain("label: 'Show a button'");
+    expect(en).toContain('needs the darkest tint');
+    expect(en).toContain('The English and Arabic switch always shows');
+    for (const label of [
+      'Appearance › Header',
+      'Move up',
+      'Add a link',
+      'Show a button',
+      'History',
+    ]) {
+      expect(text('ar')).toContain(label);
+    }
+  });
+});
+
 describe('editing-pages (E1), a new guide put by the page editor migration', () => {
   const article = () => SET.find((a) => a.slug === 'editing-pages')!;
   const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
@@ -2350,7 +2403,9 @@ describe('the Sales guides (C10a): the-sales-role, and roles-and-access with fiv
         .map((e) => e.file)
         .at(-1),
     ).toMatch(/_two_step_sign_in\.sql$/);
-    expect(HELP.revisions.get('roles-and-access')).toBe(
+    // Measured right after 0097: a later slice may put the roles guide again (E4's theme
+    // migration does), each put moving it by one more.
+    expect(helpSet(MIGRATION_FILES.slice(0, at + 1)).revisions.get('roles-and-access')).toBe(
       (before.revisions.get('roles-and-access') ?? 0) + 1,
     );
   });
@@ -2469,6 +2524,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'collections-and-faq',
       'editing-pages',
       'finding-your-way',
+      'header-and-menu',
       'media-library',
       'previewing-changes',
       'roles-and-access',
@@ -2503,6 +2559,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'finding-your-way',
       'forms-and-spam',
       'general-settings',
+      'header-and-menu',
       'maintenance-mode',
       'media-library',
       'page-visibility',
@@ -2511,6 +2568,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'roles-and-access',
       'site-health-and-logs',
       'the-sales-role',
+      'theme',
       'website-stats',
       'working-with-leads',
       'your-account',
@@ -2924,5 +2982,50 @@ describe('the shell', () => {
     expect(head).toMatch(
       /href=\{guideHref\(guide, screen\)\}\s+data-open="help"\s+data-help-guide=\{guide\}/,
     );
+  });
+});
+
+describe('theme (E4), a new guide put by the theme migration', () => {
+  const article = () => SET.find((a) => a.slug === 'theme')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const SCREEN = 'src/components/admin/screens/theme';
+
+  it('is put once, at revision 0 (new), by the theme migration, as its file says', () => {
+    const puts = HELP.edits.filter((e) => e.slug === 'theme');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts[0]?.file).toMatch(/^\d{4}_theme_settings\.sql$/);
+    expect(HELP.revisions.get('theme')).toBe(1);
+    const file = MIGRATION_FILES.find((f) => f.name.endsWith('_theme_settings.sql'))!;
+    const filed = readFileSync('docs/admin-v2/guides/theme.json', 'utf8').replace(/\r?\n$/, '');
+    expect(source(`supabase/migrations/${file.name}`)).toContain(
+      `select app.put_help_guide($guide$\n${filed}\n$guide$::jsonb, 0);`,
+    );
+  });
+
+  it('takes the free place 97, for the roles that edit the theme, on its screen', () => {
+    expect(article().sort_order).toBe(97);
+    expect(SET.filter((a) => a.sort_order === 97)).toHaveLength(1);
+    expect(article().screens).toEqual(['/admin/appearance/theme']);
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual(['admin', 'developer']);
+  });
+
+  it('says what the editor does, in the words it uses', () => {
+    const en = text('en');
+    const screen = source(`${SCREEN}/ThemeScreen.tsx`);
+    const model = source(`${SCREEN}/model.ts`);
+    for (const words of ['Generate the rest from Primary', 'Reset to brand defaults']) {
+      expect(en).toContain(words);
+      expect(screen).toContain(words);
+    }
+    expect(en).toContain('Press Save theme, or Ctrl+S');
+    expect(screen).toContain('submitLabel="Save theme"');
+    expect(en).toContain('one of the eight swatches');
+    expect(source('packages/theme/palette.ts').match(/^ {2}'#[0-9A-F]{6}',$/gm)).toHaveLength(8);
+    expect(en).toContain('normal speed, slower or much slower');
+    expect(model).toContain("{ value: 'slowest', label: 'Much slower' }");
+    expect(en).toContain('Only an Admin or a Developer can change the theme');
+    expect(text('ar')).toContain('Generate the rest from Primary');
   });
 });

@@ -1,9 +1,49 @@
 import { UUID, VALID_BILINGUAL, type Case } from '../harness';
 
-// Appearance: the theme (§5 "Theme editor", Admin + Developer) and the site menus (§5
-// "Navigation editor", Admin + Content Creator).
+// Appearance: the theme (§5 "Theme editor", Admin + Developer), the header's options (Admin v2
+// E5, site_appearance, the same row of §5) and the site menus (§5 "Navigation editor", Admin +
+// Content Creator).
+
+/** The brand's own theme, which passes the contrast gate (Admin v2 E4). */
+const THEME_SETTINGS = {
+  v: 1,
+  mode: 'simple',
+  colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
+  motion: { marquee: 'normal', reveal: true },
+};
 
 export const cases: readonly Case[] = [
+  {
+    // Admin v2 E5: the Header screen's options form loads it (theme.edit); the menu card reads
+    // the navigation instead, so Content Creator is refused here.
+    name: 'header options read',
+    load: () => import('@/pages/api/admin/site-appearance'),
+    method: 'GET',
+    url: '/api/admin/site-appearance',
+    allow: ['admin', 'developer'],
+  },
+  {
+    name: 'header options write',
+    load: () => import('@/pages/api/admin/site-appearance'),
+    method: 'PATCH',
+    url: '/api/admin/site-appearance',
+    body: { logoSize: 'l', menuAlign: 'end', version: 1 },
+    allow: ['admin', 'developer'],
+  },
+  {
+    // The button: words and a link of the site, refused for everyone else the same way.
+    name: 'header options write, the button',
+    load: () => import('@/pages/api/admin/site-appearance'),
+    method: 'PATCH',
+    url: '/api/admin/site-appearance',
+    body: {
+      ctaShow: true,
+      ctaLabel: VALID_BILINGUAL,
+      ctaHref: '/contact#inquiry',
+      version: 1,
+    },
+    allow: ['admin', 'developer'],
+  },
   {
     name: 'theme list',
     load: () => import('@/pages/api/admin/themes/index'),
@@ -18,7 +58,8 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/themes/index'),
     method: 'POST',
     url: '/api/admin/themes',
-    body: { name: 'Neon', tokens: { '--ad-accent': '#00e5ff' } },
+    // Admin v2 E4: a theme is its settings (the brand's own here, which pass the gate).
+    body: { name: 'Site theme', settings: THEME_SETTINGS },
     allow: ['admin', 'developer'],
   },
   {
@@ -35,6 +76,26 @@ export const cases: readonly Case[] = [
     url: `/api/admin/themes/${UUID}`,
     body: { name: 'Neon', version: 1 },
     allow: ['admin', 'developer'],
+  },
+  // Admin v2 E4 (P-2, P-3): with releases on a theme save is a pending change, and the gate
+  // does not move: theme.edit, Admin and Developer, staged as live.
+  {
+    name: 'theme write (releases on)',
+    load: () => import('@/pages/api/admin/themes/index'),
+    method: 'POST',
+    url: '/api/admin/themes?staged=1',
+    body: { settings: THEME_SETTINGS },
+    allow: ['admin', 'developer'],
+    releases: true,
+  },
+  {
+    name: 'theme update (releases on)',
+    load: () => import('@/pages/api/admin/themes/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/themes/${UUID}`,
+    body: { settings: THEME_SETTINGS, staged: true, version: 1 },
+    allow: ['admin', 'developer'],
+    releases: true,
   },
   {
     // The resource kernel's default delete capability, `content.archiveDelete`, is Admin

@@ -83,7 +83,6 @@ export const EDIT_SAMPLES: Readonly<Record<string, EditSample>> = {
  */
 export const UNSEEDED_LISTS: Readonly<Record<string, string>> = {
   '/api/admin/redirects': 'redirects',
-  '/api/admin/themes': 'custom_themes',
   '/api/admin/ai-questions': 'ai_questions',
   '/api/admin/ai-styles': 'ai_styles',
 };
@@ -169,7 +168,14 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     cap: 'settings.general',
     render: 'server',
   },
-  { href: '/admin/themes', api: '/api/admin/themes', cap: 'theme.edit' },
+  // Admin v2 E4: the theme editor renders its gate on the server (a 403 and Refused.astro)
+  // before it hydrates; its API twin is the themes resource (theme.edit).
+  {
+    href: '/admin/appearance/theme',
+    api: '/api/admin/themes',
+    cap: 'theme.edit',
+    render: 'server',
+  },
   // Admin v2 U10: SEO is server-rendered with in-page tabs (Pages, Redirects, Site wide); a
   // role holding none of its capabilities gets the page's own 403. The redirects list moved
   // there (/admin/redirects answers with a 302 to its tab).
@@ -203,6 +209,17 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     cap: 'seo.entityMeta',
     render: 'server',
     gate: 'mayOpenPages(session.role)',
+  },
+  // Admin v2 E5: the Header screen opens for theme.edit (its options) or nav.edit (its menu
+  // card), so SEO and Sales are refused: the page's own 403 and Refused.astro, having read
+  // nothing; its JSON twin is the options' read (theme.edit), which refuses both as well.
+  {
+    href: '/admin/appearance/header',
+    api: '/api/admin/site-appearance',
+    cap: 'theme.edit',
+    anyOf: ['theme.edit', 'nav.edit'],
+    render: 'server',
+    gate: 'const allowed = theme || nav;',
   },
   // Admin v2 R13 (plan B7.3): Backups & versions, for any release read capability, so only
   // Sales is refused: the page's own 403 and Refused.astro, having read nothing; its JSON twin

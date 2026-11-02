@@ -44,6 +44,10 @@ declare namespace App {
     // The public site's icons (Admin v2 U9), read at most once per request by
     // src/lib/data/siteProfile.ts getSiteIcons.
     siteIcons?: Promise<import('@/lib/data/siteProfile').SiteIcons>;
+    // The active theme (Admin v2 E4), read at most once per request by src/lib/data/theme.ts
+    // getThemeAnswer: the layouts' stylesheet link, /styles/theme.css and the middleware (a
+    // failed read keeps the page out of the edge cache) share it.
+    theme?: Promise<import('@/lib/data/theme').ThemeAnswer>;
     // The published forms config (Admin v2 E8), read at most once per request by
     // src/lib/data/forms.ts formSettingsFor. A promise, as `identity` is.
     formSettings?: Promise<import('@/lib/forms/config').FormSettings>;

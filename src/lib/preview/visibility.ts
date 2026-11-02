@@ -1,3 +1,4 @@
+import { HEADER_COLUMNS } from '@schemas/appearance';
 import type { DatasetTable, PreviewTable } from './relations';
 
 // The anon RLS a visitor reads through, mirrored in TypeScript for the preview (Admin v2
@@ -34,7 +35,7 @@ import type { DatasetTable, PreviewTable } from './relations';
 type Row = Readonly<Record<string, unknown>>;
 
 /**
- * Anon's column grants on the seven tables granted by column (every other preview table is
+ * Anon's column grants on the nine tables granted by column (every other preview table is
  * granted to anon whole). The dataset reads these tables with exactly these columns, and
  * the emulator answers 42501 for any other, as PostgREST does for a visitor.
  */
@@ -87,6 +88,9 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
     'published_at',
     'updated_at',
   ],
+  // 0120 (Admin v2 E4): the active v1 theme's tokens, nothing else (the stylesheet serves
+  // them; its address is the hash of its body, never the row's version: E4 code review CR6).
+  custom_themes: ['tokens'],
   // 0098 (Admin v2 U7): never the version, the schedule, the publish date or the actors.
   faq_items: ['id', 'tenant_id', 'question', 'answer', 'status', 'sort_order'],
   // Admin v2 E8: the forms config's copy and its consent revision; never the version, the
@@ -97,6 +101,8 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
   // Calendly link or the legacy jsonb. (A preview never loads GA4: its branch of the middleware
   // returns before the GA4 read, and its layout renders no loader.)
   site_integrations: ['tenant_id', 'search_console_token', 'ga4_measurement_id'],
+  // Admin v2 E5: the header's options; never the version, the stamps or the actors.
+  site_appearance: ['tenant_id', ...Object.values(HEADER_COLUMNS)],
   // 0028: never is_placeholder, the schedule, version or the actors.
   service_cases: [
     'id',
@@ -136,6 +142,11 @@ export const MIRRORED_POLICIES: Readonly<
   certifications: {
     certifications_read: 'PERMISSIVE:a3adeda401046be963dd172ac14b795c',
     certifications_write: 'PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060',
+  },
+  custom_themes: {
+    custom_themes_public_read: 'PERMISSIVE:60ccfc4f7bd6ab33c791a6223fe0906a',
+    custom_themes_read: 'PERMISSIVE:392446073406bce5902ebbac287245a1',
+    custom_themes_write: 'PERMISSIVE:e0d36cc27f03f61781ff1feec0d5adf0',
   },
   clients: {
     clients_read: 'PERMISSIVE:db9934fa0ab3f173e346a67310b57bac',
@@ -210,6 +221,11 @@ export const MIRRORED_POLICIES: Readonly<
     services_discipline_published: 'RESTRICTIVE:c37eff0d6d10d79117aab9034276c0fa',
     services_read: 'PERMISSIVE:a3adeda401046be963dd172ac14b795c',
   },
+  // Admin v2 E5: the anon read, the tenant fence alone; the non-staff block and the writes are
+  // TO authenticated, so none applies to a visitor.
+  site_appearance: {
+    site_appearance_read: 'PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54',
+  },
   // 0105 (U11): the anon read, the tenant fence alone; the staff policies are TO
   // authenticated, so none applies to a visitor.
   site_integrations: {
@@ -252,6 +268,7 @@ export const VISIBILITY_DEPS: Readonly<Record<DatasetTable, readonly DatasetTabl
   categories: [],
   certifications: [],
   clients: [],
+  custom_themes: [],
   disciplines: [],
   entity_seo: ['services', 'blog_posts', 'portfolio', 'pages'],
   faq_items: [],
@@ -280,6 +297,7 @@ export const VISIBILITY_DEPS: Readonly<Record<DatasetTable, readonly DatasetTabl
   seo_defaults: [],
   service_cases: ['services'],
   services: ['disciplines'],
+  site_appearance: [],
   site_integrations: [],
   site_profile: [],
   statistics: [],
@@ -475,14 +493,20 @@ export function createMirror(data: MirrorData): Mirror {
       case 'sectors':
       case 'clients':
         return flagged(row);
+      // 0120 custom_themes_public_read (Admin v2 E4; anon's one column): the active v1 theme.
+      case 'custom_themes':
+        return (
+          row['is_active'] === true && row['settings'] !== null && row['settings'] !== undefined
+        );
       // 0001 categories_read, 0019 site_profile_read, 0009 seo_defaults_read, 0105
       // site_integrations_public_read (U11; anon's two columns), E8 form_settings_read (anon's
-      // four columns): the tenant fence only.
+      // four columns), E5 site_appearance_read (anon's thirteen columns): the tenant fence only.
       case 'categories':
       case 'site_profile':
       case 'seo_defaults':
       case 'site_integrations':
       case 'form_settings':
+      case 'site_appearance':
         return true;
       // 0009 entity_seo_read (tenant) AND 0011 entity_seo_published_only (RESTRICTIVE: its
       // parent published, under the parent's RLS; an orphan or another entity type never).

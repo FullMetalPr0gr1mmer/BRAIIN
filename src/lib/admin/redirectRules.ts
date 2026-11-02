@@ -42,6 +42,8 @@ export const STATIC_PUBLIC_ROUTES: readonly string[] = [
   '/search',
   '/services',
   '/sitemap.xml',
+  // Admin v2 E4: the theme's stylesheet, a Worker route.
+  '/styles/theme.css',
   '/terms',
 ];
 

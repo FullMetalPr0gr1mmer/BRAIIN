@@ -1,18 +1,8 @@
 ---
-import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceTable from '@/components/admin/islands/AdminResourceTable';
-import { uiFor } from '@/lib/admin/uiSchema';
-
 export const prerender = false;
 
-const ui = uiFor('themes');
+// The theme editor lives at /admin/appearance/theme now (Admin v2 E4, ui.md §3.1: the retired
+// /admin/themes/** routes answer there, inside the admin). A 302, not a 301: an admin route is
+// never cached, and the address may be taken back. The editor's page decides who may open it.
+return Astro.redirect('/admin/appearance/theme', 302);
 ---
-
-<AdminLayout title={ui.title}>
-  <!--
-  `client:load` rather than `client:visible`: this island IS the page, so deferring it
-  to intersection just adds a blank frame. Public routes use visible/idle — /admin is
-  exempt from the CWV budgets (CLAUDE.md §6) and is gated on bundle size instead.
--->
-  <AdminResourceTable client:load resource="themes" />
-</AdminLayout>

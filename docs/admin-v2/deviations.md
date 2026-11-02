@@ -47,8 +47,13 @@
   - no Google/Adobe font links or raw font uploads; the curated self-hosted catalogue replaces them (CSP, PDPL, font budget);
   - no Custom CSS;
   - no smooth scroll or parallax (compositor-only; design-port #44/#79);
-  - colours must pass the contrast gate.
-- **Header**: the language switch always shows (owner-approved product call, O-13).
+  - colours must pass the contrast gate;
+  - v1 themes primary, hover and accent only: the dark ground, the light sections and white stay fixed (their pairs are every text pair of the site; E4);
+  - motion can only be reduced: the marquee at its normal speed, slower or much slower (no "faster"), and the reveal on scroll on or off (README "Appearance"; E4);
+  - the editor previews on a drawn sample of the site and on the admin itself; the framed site with the pending theme is R9's preview in draft mode, not a column on the screen (E4);
+  - a theme recolours what follows a token: about 30 literal brand-blue glows, tints and borders in the public stylesheets stay brand blue (E4, Departure 14; owner question 3);
+  - Content Creator and SEO read `custom_themes` rows at PostgREST (0001's staff read), though only Admin and Developer hold theme.edit: accepted, low sensitivity (the tokens are public, the stylesheet serves them), because the releases preview reads live rows through each CMS role's own client (E4, Departure 16).
+- **Header**: the language switch always shows (owner-approved product call, O-13). Since E5 the prototype's sliders are closed sets: the tint over the hero is none, light, medium or dark (black at 0, 25, 45 or 62%), and a sticky bar that stays see-through after the hero must take the darkest (white links over the page's light sections: AA needs at least 54%); the blur is none, soft (14 px, as built) or strong (24 px) and applies to the solid bar only, never over the hero (the intro plate's compositor rule, Pillar 2); the logo is S, M or L (presets of `--bs-logo-w`, which `--bs-header-h` and the logo's `sizes` follow; browsers without `:has()` draw M). Logo position and menu alignment are wide-screen only (the small-screen bar keeps logo, key link, menu and language), and the centred logo applies from 1280 px: narrower, half the bar cannot hold the menu on one row, so the logo stays at the start and the bar stays `--bs-header-h` tall. The full-screen phone menu is the same zero-JS disclosure, full height. The Menu items card orders, stars and hides links; their words, addresses, sub-links and removal stay on the Menus screen, the one navigation editor (E5).
 - **Shortcuts**: the command palette opens on ⌘/Ctrl+K and from the topbar trigger, not on a bare "/". A one-character shortcut fires on a stray keypress or a dictated "slash", and WCAG 2.1.4 (Level A) requires it to be switchable off or remappable (DoD #4).
 - **Footer**: legal links are locked (PDPL); copyright is a template (brand is data, §1).
 - **Forms**:
@@ -378,6 +383,11 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     `app.role_manages_integrations(app.live_role())`, so a demoted, deactivated or locked
     Admin or SEO token reads and writes nothing of it at PostgREST; the staff read is also
     narrowed from every CMS role to Admin + SEO (§5), which only the Worker enforced before.
+  - *Closed by E4 (0120, the theme migration).* `custom_themes` writes:
+    `custom_themes_live_insert`, `_update` and `_delete` (RESTRICTIVE) require
+    `app.role_edits_theme(app.live_role())`, so a demoted, deactivated or locked Admin or
+    Developer token can no longer restyle the live site and the admin at PostgREST (E4 made the
+    table public-facing). Its reads stay the token's role (the releases preview).
   - *Left after them.* The issued token's old role at PostgREST, until it expires, on the
     tables with no live check: `site_settings`, `ai_config`,
     `media_assets`, `system_logs` and the content tables (the staged ones close when R5's
@@ -467,8 +477,8 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §6.1 theme | smoothScroll (Lenis), parallax | deviated-ok | deviation (standard or owner decision) | AV-27 read-only facts | design-port #44/#79; compositor-only animation (§3 Pillar 2). |
 | §6.1 theme | reveal, reduceMotion, marquee speed toggles | deviated-challenge | built under A6 | AV-27 (facts only) | These only reduce motion; a site-wide reduce switch would partly answer EXC-007. |
 | §6.1 theme | Custom CSS | deviated-ok | deviation (standard or owner decision) | none | §3 CSP / ThemeTokensSchema. |
-| §6.1 header | Items order/visible/key, alignment, logo position, logo size, hide on scroll, CTA, mobile menu | covered | covered | AV-28 + MERGE:header-options; P-9 site_appearance |  |
-| §6.1 header | Transparency 0-100, blur 0-30, solid after hero, sticky, show language switch | deviated-challenge | built under A6 | AV-28 read-only facts | Bucketed data attributes are CSP-safe. 'Language switch always on' is a product call, not a § rule. |
+| §6.1 header | Items order/visible/key, alignment, logo position, logo size, hide on scroll, CTA, mobile menu | covered | covered | AV-28 + MERGE:header-options; P-9 site_appearance; E5 | Built by E5 (`site_appearance`). A link's words and address, sub-links and removal are edited on the Menus screen (Edit, Add a link). |
+| §6.1 header | Transparency 0-100, blur 0-30, solid after hero, sticky, show language switch | deviated-challenge | built under A6 | AV-28 read-only facts; E5 | Built by E5 as buckets (data attributes, CSP-safe): tint none/light/medium/dark with a minimum when the bar stays see-through, blur none/soft/strong on the solid bar only. 'Language switch always on' is a product call, not a § rule (O-13). |
 | §6.1 footer | Copyright, style light/dark, show email, show social, columns of page links | covered | covered | AV-29; P-9 (site_profile) | Copyright template (§1 brand is data) and locked legal links (PDPL) are standard-based. |
 | §6.1 loading | Enabled, style, duration, fade, once only | covered | covered | AV-30 | 500-1500 ms follows the prototype's own 'never longer than 1.5 s'. Once per tab = TDD 'once per session' (prototype hint says 'per browser'). |
 | §6.1 loading | 'bar' and 'text' styles, tagline, light background | deviated-challenge | built under A6 | AV-30 (not built) | A scaleX bar is compositor-only; the tagline needs an lhci re-gate, not a refusal. |

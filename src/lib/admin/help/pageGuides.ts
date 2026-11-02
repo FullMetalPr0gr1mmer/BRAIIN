@@ -73,6 +73,13 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
   // revision 0). For the roles that edit pages: SEO opens Pages for SEO only, which the SEO
   // guide covers, so it gets no Guide there.
   { slug: 'editing-pages', caps: ['pages.write'], screens: ['/admin/pages'] },
+  // Admin v2 E5: the Header screen opens its own guide (put by the site_appearance migration,
+  // revision 0), for the roles that open it: theme.edit (the options) or nav.edit (the menu).
+  {
+    slug: 'header-and-menu',
+    caps: ['nav.edit', 'theme.edit'],
+    screens: ['/admin/appearance/header'],
+  },
   // Admin v2 U7: the collection screens and the FAQ (the FAQ migration's put, revision 0).
   {
     slug: 'collections-and-faq',
@@ -104,6 +111,8 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
   // Admin v2 C9a: its guide is put by 0091 (H11's catalog).
   { slug: 'crm-settings', caps: ['crm.settings'], screens: ['/admin/crm/settings'] },
   { slug: 'job-applications', caps: ['applications.manage'], screens: ['/admin/applications'] },
+  // Admin v2 E4: the theme editor (0120's guide). The retired /admin/themes/** redirect here.
+  { slug: 'theme', caps: ['theme.edit'], screens: ['/admin/appearance/theme'] },
   { slug: 'general-settings', caps: ['settings.general'], screens: ['/admin/settings'] },
   { slug: 'maintenance-mode', caps: ['maintenance.manage'], screens: ['/admin/maintenance'] },
   { slug: 'page-visibility', caps: ['maintenance.manage'], screens: ['/admin/visibility'] },

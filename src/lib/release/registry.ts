@@ -24,6 +24,7 @@ import { themeResource } from '@/lib/admin/resources/themes';
 import { seoDefaultsSingleton } from '@/lib/admin/singletons/seoDefaults';
 import { siteProfileSingleton } from '@/lib/admin/singletons/siteProfile';
 import { formSettingsSingleton } from '@/lib/admin/singletons/formSettings';
+import { siteAppearanceSingleton } from '@/lib/admin/singletons/siteAppearance';
 import { RELEASE_ENTITY_TYPES, type ReleaseArea, type ReleaseEntityType } from '@schemas/release';
 import { RELEASE_ENTITY_META } from './areas';
 
@@ -394,10 +395,11 @@ export const RELEASE_REGISTRY: Readonly<Record<ReleaseEntityType, RegistryEntry>
     label: () => ({ en: 'Public identity' }),
     entityTags: tags('site:identity'),
   }),
-  // Until the Appearance slice (E4) adds `theme:active` to every page's tags.
+  // Admin v2 E4: every Tier A page links the active theme (or would, once one is set), so a
+  // theme's publish purges the ALWAYS tag every page carries for it, `site:chrome`.
   custom_theme: fromResource('custom_theme', themeResource, {
     label: named('Theme'),
-    entityTags: tags('tenant:default'),
+    entityTags: tags('site:chrome'),
   }),
   entity_seo: fromEntitySeo({
     label: (row) => ({
@@ -452,6 +454,12 @@ export const RELEASE_REGISTRY: Readonly<Record<ReleaseEntityType, RegistryEntry>
   form_settings: fromSingleton('form_settings', formSettingsSingleton, {
     label: () => ({ en: 'Forms' }),
     entityTags: tags('forms:all'),
+  }),
+  // The site's appearance settings (Admin v2 E5): the header is on every page, so a change
+  // purges them all, as the theme does (`tenant:default`).
+  site_appearance: fromSingleton('site_appearance', siteAppearanceSingleton, {
+    label: () => ({ en: 'Header' }),
+    entityTags: tags('tenant:default'),
   }),
 };
 
