@@ -148,7 +148,7 @@ const PAIRS = [
   ['ink', 'paper', 4.5, 'footer column heading on paper'],
   ['muted', 'bg', 4.5, 'dark footer: the copyright line, the mailbox and the links'],
   ['fg', 'bg', 4.5, 'dark footer: column headings and a hovered link'],
-  ['accent', 'bg', 3.0, 'dark footer: the focus outline (sky on black, UI, 1.4.11)'],
+  ['accent', 'bg', 4.5, 'dark footer: the focus outline (sky on black; UI needs 3, held to 4.5)'],
   // UI v2 (2026-09): mist blocks, secondary/case-study copy, error text on dark
   ['ink', 'mist', 4.5, 'body text on mist'],
   ['ink2', 'mist', 4.5, 'secondary copy on mist'],

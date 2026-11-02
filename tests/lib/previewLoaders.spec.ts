@@ -162,6 +162,13 @@ const CASES: Record<string, () => Promise<void>> = {
     ]);
     clean(report);
   },
+  'navigation.getFooterNavigation': async () => {
+    // Admin v2 E6: the footer's rows (columns and loose links); the dataset's menu is the
+    // header's, so the footer reads none of it.
+    const { value, report } = await inPreview(() => navigation.getFooterNavigation());
+    expect(value).toEqual({ columns: [], links: [] });
+    clean(report);
+  },
   'pageSections.getPageComposition': async () => {
     const { value, report } = await inPreview(() => pageSections.getPageComposition('home'));
     expect(value?.page.id).toBe(ID.pgHome);
