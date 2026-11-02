@@ -271,7 +271,7 @@ describe('the switch on, a route whose page may not exist', () => {
     const seen: { ga4: unknown; start: unknown }[] = [];
     const next: Next = async () => {
       seen.push({ ga4: ctx.locals['ga4'], start: ctx.locals['ga4Start'] });
-      if (found) startGa4(ctx.locals as App.Locals);
+      if (found) startGa4(ctx.locals as Pick<App.Locals, 'ga4' | 'ga4Start'>);
       // The 404 page's own rule (src/pages/404.astro): it drops any read it was handed.
       else delete ctx.locals['ga4'];
       return new Response('<html><body>page</body></html>', {
