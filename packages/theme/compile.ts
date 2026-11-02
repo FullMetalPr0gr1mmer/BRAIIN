@@ -8,6 +8,7 @@ import type { ThemeSettings } from '../schemas/theme';
 import { channels } from './colour';
 import { paletteOf } from './gate';
 import { DEFAULT_COLORS, isDefaultColors } from './palette';
+import { DEFAULT_SHAPES, DEFAULT_TYPE, shapeTokens } from './shapes';
 
 // Settings → tokens → CSS (Admin v2 E4, AV-27). The server compiles a theme's tokens from its
 // settings on every save (the resource's toRow, src/lib/admin/resources/themes.ts), so a client
@@ -17,13 +18,17 @@ import { DEFAULT_COLORS, isDefaultColors } from './palette';
 // so a site reset to the defaults renders byte for byte as one that never had a theme.
 //
 // The glows and shadows are global.css's own (alpha, offsets and blur kept), recoloured.
+// Since E12 the shapes and type write their four tokens the same way: only a choice that is
+// not the brand's (packages/theme/shapes.ts).
 
 /** The brand's own settings: what the editor starts from, and what Reset puts back. */
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = Object.freeze({
-  v: 1,
+  v: 2,
   mode: 'simple',
   colors: { ...DEFAULT_COLORS },
   motion: { marquee: 'normal', reveal: true },
+  shapes: { ...DEFAULT_SHAPES },
+  type: { ...DEFAULT_TYPE },
 }) as ThemeSettings;
 
 /**
@@ -68,6 +73,9 @@ export function compileTheme(settings: ThemeSettings): ThemeTokens {
     out['--bs-rv-from'] = '1';
     out['--bs-rv-shift'] = '0px';
   }
+  // A v1 object handed over unparsed (E4's shape) is the brand's shapes and type, as the
+  // schema reads it.
+  Object.assign(out, shapeTokens(settings.shapes ?? DEFAULT_SHAPES, settings.type ?? DEFAULT_TYPE));
   return out;
 }
 

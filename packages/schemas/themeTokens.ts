@@ -11,6 +11,12 @@ import { z } from 'zod';
  *   shadows    `0 Npx Npx rgba(r, g, b, 0.nn)` from primary and hover
  *   motion     the marquee's duration scale (slower 1.5, slowest 2.5) and reveal off (the
  *              starting opacity 1 and no shift): they can only reduce motion (README E4)
+ *   shapes     (E12) the corner scale over the site's card, image and input radii (square 0,
+ *              soft 0.5, round 1.5) and the buttons' radius (rounded 10px, square 0px)
+ *   type       (E12) the headings' weight (bold 700) and case (as written: none)
+ *
+ * Each pattern takes only the values a theme can choose that differ from the brand's: the
+ * brand's own is the stylesheets' fallback and is never written (packages/theme/compile.ts).
  *
  * The database holds the same patterns (the E4 migration's app.theme_row_ok; tests/lib/
  * themeSql.spec.ts holds them equal). The module keeps to zod alone: the preview bridge's
@@ -30,6 +36,10 @@ export const THEME_TOKEN_PATTERNS = {
   '--bs-marquee-scale': /^(1\.5|2\.5)$/,
   '--bs-rv-from': /^1$/,
   '--bs-rv-shift': /^0px$/,
+  '--bs-radius-scale': /^(0|0\.5|1\.5)$/,
+  '--bs-btn-radius': /^(10px|0px)$/,
+  '--bs-heading-weight': /^700$/,
+  '--bs-heading-case': /^none$/,
 } as const;
 
 export type ThemeTokenName = keyof typeof THEME_TOKEN_PATTERNS;
@@ -47,6 +57,10 @@ export const THEME_TOKEN_NAMES: readonly ThemeTokenName[] = [
   '--bs-marquee-scale',
   '--bs-rv-from',
   '--bs-rv-shift',
+  '--bs-radius-scale',
+  '--bs-btn-radius',
+  '--bs-heading-weight',
+  '--bs-heading-case',
 ];
 
 export const ThemeTokensSchema = z
@@ -74,6 +88,22 @@ export const ThemeTokensSchema = z
       .optional(),
     '--bs-rv-from': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-rv-from']).optional(),
     '--bs-rv-shift': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-rv-shift']).optional(),
+    '--bs-radius-scale': z
+      .string()
+      .max(60)
+      .regex(THEME_TOKEN_PATTERNS['--bs-radius-scale'])
+      .optional(),
+    '--bs-btn-radius': z.string().max(60).regex(THEME_TOKEN_PATTERNS['--bs-btn-radius']).optional(),
+    '--bs-heading-weight': z
+      .string()
+      .max(60)
+      .regex(THEME_TOKEN_PATTERNS['--bs-heading-weight'])
+      .optional(),
+    '--bs-heading-case': z
+      .string()
+      .max(60)
+      .regex(THEME_TOKEN_PATTERNS['--bs-heading-case'])
+      .optional(),
   })
   .strict();
 

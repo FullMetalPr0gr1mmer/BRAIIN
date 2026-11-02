@@ -2,6 +2,16 @@ import { normalizeColour } from '@theme/colour';
 import { DEFAULT_THEME_SETTINGS } from '@theme/compile';
 import { gate, paletteOf, simplePalette, type GateResult, type Palette } from '@theme/gate';
 import { THEME_ROLES, type ThemeColors, type ThemeRole } from '@theme/palette';
+import {
+  BUTTON_CHOICES,
+  CORNER_CHOICES,
+  HEADING_CASES,
+  HEADING_WEIGHTS,
+  type ButtonChoice,
+  type CornerChoice,
+  type HeadingCase,
+  type HeadingWeight,
+} from '@theme/shapes';
 import type { ThemeSettings } from '@schemas/theme';
 import type { ThemeTokenName } from '@schemas/themeTokens';
 
@@ -12,10 +22,16 @@ type Row = Record<string, unknown>;
 
 const MARQUEE = ['normal', 'slower', 'slowest'] as const;
 
+/** One of a closed list, else the brand's. */
+function oneOf<T>(list: readonly T[], value: unknown, fallback: T): T {
+  return (list as readonly unknown[]).includes(value) ? (value as T) : fallback;
+}
+
 /**
- * The settings a form holds, from whatever was loaded: a v1 theme as saved, else (no theme
- * yet, or a value of another shape) the brand's own. Colours are kept as typed, so a half
- * typed hex stays in the box; the gate and the server judge them.
+ * The settings a form holds, from whatever was loaded: a theme as saved (v2, or E4's v1, which
+ * has the brand's shapes and type), else (no theme yet, or a value of another shape) the brand's
+ * own. Colours are kept as typed, so a half typed hex stays in the box; the gate and the server
+ * judge them. Always v2: the next save stores the version the server writes.
  */
 export function settingsOf(loaded: unknown): ThemeSettings {
   const base = DEFAULT_THEME_SETTINGS;
@@ -33,10 +49,12 @@ export function settingsOf(loaded: unknown): ThemeSettings {
   const v = value as Row;
   const colors = (v['colors'] && typeof v['colors'] === 'object' ? v['colors'] : {}) as Row;
   const motion = (v['motion'] && typeof v['motion'] === 'object' ? v['motion'] : {}) as Row;
+  const shapes = (v['shapes'] && typeof v['shapes'] === 'object' ? v['shapes'] : {}) as Row;
+  const type = (v['type'] && typeof v['type'] === 'object' ? v['type'] : {}) as Row;
   const colour = (role: ThemeRole) =>
     typeof colors[role] === 'string' ? (colors[role] as string) : base.colors[role];
   return {
-    v: 1,
+    v: 2,
     mode: v['mode'] === 'advanced' ? 'advanced' : 'simple',
     colors: { primary: colour('primary'), hover: colour('hover'), accent: colour('accent') },
     motion: {
@@ -45,11 +63,29 @@ export function settingsOf(loaded: unknown): ThemeSettings {
         : base.motion.marquee,
       reveal: typeof motion['reveal'] === 'boolean' ? motion['reveal'] : base.motion.reveal,
     },
+    shapes: {
+      corners: oneOf<CornerChoice>(CORNER_CHOICES, shapes['corners'], base.shapes.corners),
+      buttons: oneOf<ButtonChoice>(BUTTON_CHOICES, shapes['buttons'], base.shapes.buttons),
+    },
+    type: {
+      headingWeight: oneOf<HeadingWeight>(
+        HEADING_WEIGHTS,
+        type['headingWeight'],
+        base.type.headingWeight,
+      ),
+      headingCase: oneOf<HeadingCase>(HEADING_CASES, type['headingCase'], base.type.headingCase),
+    },
   };
 }
 
 export function cloneSettings(s: ThemeSettings): ThemeSettings {
-  return { ...s, colors: { ...s.colors }, motion: { ...s.motion } };
+  return {
+    ...s,
+    colors: { ...s.colors },
+    motion: { ...s.motion },
+    shapes: { ...s.shapes },
+    type: { ...s.type },
+  };
 }
 
 /** The three colours, each `#RRGGBB`, or null while any one is not a colour yet. */
@@ -130,6 +166,31 @@ export const MARQUEE_OPTIONS = [
   { value: 'slower', label: 'Slower' },
   { value: 'slowest', label: 'Much slower' },
 ] as const;
+
+/** The corners of cards, images and inputs, in words (packages/theme/shapes.ts). */
+export const CORNER_OPTIONS = [
+  { value: 'brand', label: 'Brand' },
+  { value: 'square', label: 'Square' },
+  { value: 'soft', label: 'Soft' },
+  { value: 'round', label: 'Round' },
+] as const satisfies readonly { value: CornerChoice; label: string }[];
+
+export const BUTTON_OPTIONS = [
+  { value: 'pill', label: 'Pill' },
+  { value: 'rounded', label: 'Rounded' },
+  { value: 'square', label: 'Square' },
+] as const satisfies readonly { value: ButtonChoice; label: string }[];
+
+/** Both bold: a heading stays large, easy to read text at any weight offered (ui.md AV-32). */
+export const WEIGHT_OPTIONS = [
+  { value: '800', label: 'Extra bold' },
+  { value: '700', label: 'Bold' },
+] as const;
+
+export const CASE_OPTIONS = [
+  { value: 'uppercase', label: 'Capitals' },
+  { value: 'as-written', label: 'As written' },
+] as const satisfies readonly { value: HeadingCase; label: string }[];
 
 export const REVEAL_OPTIONS = [
   { value: 'on', label: 'Fade in as you scroll' },
