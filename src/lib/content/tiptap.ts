@@ -1,6 +1,6 @@
 import { docHasWords } from '@schemas/docWords';
 import {
-  TiptapDocSchema,
+  articleDocProblem,
   keptHref,
   sectionDocProblem,
   type TiptapDoc,
@@ -58,7 +58,7 @@ export const sanitizeHref: (raw: unknown) => string | null = keptHref;
 
 // ── Marks ───────────────────────────────────────────────────────────────────────
 
-const SIMPLE_MARK_TAGS: Record<string, string> = {
+const SIMPLE_MARK_TAGS: Readonly<Record<string, string>> = {
   bold: 'strong',
   strong: 'strong',
   italic: 'em',
@@ -75,7 +75,11 @@ function wrapWithMarks(text: string, marks: TiptapMark[] | undefined): string {
   let out = text;
   // Innermost first so the emitted nesting matches the order Tiptap stores.
   for (const mark of [...marks].reverse()) {
-    const tag = SIMPLE_MARK_TAGS[mark.type];
+    // An own entry only (H15 review, SEC-2): `[]` alone also finds what every object inherits,
+    // so a stored mark type `constructor` came out as a tag named after a function.
+    const tag = Object.hasOwn(SIMPLE_MARK_TAGS, mark.type)
+      ? SIMPLE_MARK_TAGS[mark.type]
+      : undefined;
     if (tag) {
       out = `<${tag}>${out}</${tag}>`;
       continue;
@@ -192,11 +196,56 @@ function renderNode(node: TiptapNode, walk: Walk): string {
   }
 }
 
-/** Validates then renders. Invalid input yields '' rather than throwing. */
+/**
+ * An article body (a blog post's, a service's, a project's): checked, then rendered. Invalid input
+ * yields '' rather than throwing, whatever it holds (H15).
+ *
+ * The check is `articleDocProblem` (packages/schemas/tiptap.ts): one iterative, bounded walk of
+ * the raw JSON that accepts exactly what TiptapDocSchema accepts, up to 5,000 nodes and 32
+ * levels. zod's recursive parse is not run: it overflowed the stack on a deep body (a RangeError
+ * at about 1,250 levels, so a 500 on every request of the page), and on a long real article it
+ * cost several times the Workers Free plan's 10 ms of CPU. The renderer then walks the JSON as
+ * stored, which it reads exactly as it read zod's parse of it (only `type`, `text`, `attrs`,
+ * `marks` and `content`), so the bytes are the same (tests/lib/articleRender.spec.ts holds the
+ * renders from before H15). Past the check the renderer's own recursion is at most 32 deep; the
+ * try in renderChecked is the promise that nothing in a stored body can make a page fail (the one
+ * guard of the render, H15 code review CR8).
+ */
 export function renderTiptapToHtml(doc: unknown): string {
-  const parsed = TiptapDocSchema.safeParse(doc);
-  if (!parsed.success) return '';
-  return renderChildren(parsed.data.content, ARTICLE);
+  return renderArticle(doc).html;
+}
+
+/**
+ * A stored body's render, and why it rendered nothing when it was refused (H15 code review,
+ * CR1): `refused` is the walk's refusal (its plain words for an editor, never the body's
+ * content), or the name of an error the render threw; null when the body rendered (an empty
+ * document renders '' and is not refused). The public pages log a refused STORED body under its
+ * entity and id (`reportBodyRefused`, src/lib/data/parse.ts), so a published body that a later
+ * cap refuses is a log line, not a body that silently went missing.
+ */
+export interface BodyRender {
+  html: string;
+  refused: string | null;
+}
+
+/** Checked by `problem`, then rendered by `walk`: the one guard of a body's render. */
+function renderChecked(
+  doc: unknown,
+  problem: (doc: unknown) => string | null,
+  walk: Walk,
+): BodyRender {
+  try {
+    const refused = problem(doc);
+    if (refused !== null) return { html: '', refused };
+    return { html: renderChildren((doc as TiptapDoc).content, walk), refused: null };
+  } catch (err) {
+    return { html: '', refused: err instanceof Error ? err.name : 'unknown' };
+  }
+}
+
+/** An article body's render and its refusal (renderTiptapToHtml's, with the reason kept). */
+export function renderArticle(doc: unknown): BodyRender {
+  return renderChecked(doc, articleDocProblem, ARTICLE);
 }
 
 /**
@@ -212,23 +261,33 @@ export function renderTiptapToHtml(doc: unknown): string {
  * renders nothing either (Walk above).
  */
 export function renderSectionDocToHtml(doc: unknown): string {
-  if (sectionDocProblem(doc) !== null) return '';
-  return renderChildren((doc as TiptapDoc).content, SECTION);
+  return renderSectionDoc(doc).html;
 }
 
-/** Plain text of a document — used for excerpts and reading time. */
+/** A section body's render and its refusal (renderSectionDocToHtml's, with the reason kept). */
+export function renderSectionDoc(doc: unknown): BodyRender {
+  return renderChecked(doc, sectionDocProblem, SECTION);
+}
+
+/**
+ * Plain text of a document — used for excerpts and reading time. The same check as the
+ * renderer's, then the text in document order, read without recursion ('' when refused).
+ */
 export function tiptapToPlainText(doc: unknown): string {
-  const parsed = TiptapDocSchema.safeParse(doc);
-  if (!parsed.success) return '';
-  const parts: string[] = [];
-  const walk = (nodes: TiptapNode[] | undefined): void => {
-    for (const node of nodes ?? []) {
+  try {
+    if (articleDocProblem(doc) !== null) return '';
+    const parts: string[] = [];
+    const stack: TiptapNode[] = [...((doc as TiptapDoc).content ?? [])].reverse();
+    while (stack.length > 0) {
+      const node = stack.pop()!;
       if (node.type === 'text' && typeof node.text === 'string') parts.push(node.text);
-      walk(node.content);
+      const children = node.content ?? [];
+      for (let i = children.length - 1; i >= 0; i -= 1) stack.push(children[i]!);
     }
-  };
-  walk(parsed.data.content);
-  return parts.join(' ').replace(/\s+/g, ' ').trim();
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  } catch {
+    return '';
+  }
 }
 
 /** Reading time in whole minutes, floor 1. 200 wpm is the usual editorial figure. */

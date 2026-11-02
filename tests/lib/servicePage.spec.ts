@@ -336,6 +336,42 @@ describe('loadServicePage', () => {
     expect(html).not.toContain('<script');
   });
 
+  // H15 (PRE-1): before it, toServiceDetail ran zod's recursive parse in a `.then` outside the
+  // loader's try, so a body stored around the API nested ~1,250 deep threw a RangeError and
+  // the page answered 500 on every request.
+  it('a body stored nested 20,000 deep: the page renders, without the body', async () => {
+    let node: unknown = { type: 'text', text: 'x' };
+    for (let i = 0; i < 20_000; i += 1) node = { type: 'blockquote', content: [node] };
+    rows.logo = { ...rows.logo!, body: { en: { type: 'doc', content: [node] } } };
+    const page = await loadServicePage('logo', {}, 'en');
+    expect(page?.service.slug).toBe('logo');
+    expect(page?.service.bodyHtml).toBeNull();
+    expect((await resolveServiceRoute('logo', {}, 'ar')).kind).toBe('page');
+  });
+
+  // H15 code review (CR8): the page maps its one row as it is; the body's one guard is the
+  // renderer's, which renders a refused stored body as nothing and logs it (CR1), so the page
+  // renders, and the refusal is a log line under the service's id, never the body's words.
+  it('a stored body the renderer refuses: the page renders without it, logged once by id (CR1)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const page = await loadServicePage('logo', {}, 'en');
+    expect(page?.service.bodyHtml).not.toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+    let node: unknown = { type: 'text', text: 'secret words' };
+    for (let i = 0; i < 40; i += 1) node = { type: 'blockquote', content: [node] };
+    rows.logo = { ...rows.logo!, body: { en: { type: 'doc', content: [node] } } };
+    const refused = await loadServicePage('logo', {}, 'en');
+    expect(refused?.service.slug).toBe('logo');
+    expect(refused?.service.bodyHtml).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    const line = String(warn.mock.calls[0]?.[0]);
+    expect(
+      line.startsWith(`[content] service body not rendered (id=${rows.logo.id}, lang=en): `),
+    ).toBe(true);
+    expect(line).not.toContain('secret');
+    warn.mockRestore();
+  });
+
   it('no case: the page renders without one (the band hides, the CTA skips to the form)', async () => {
     cases = {};
     const page = await loadServicePage('logo', {}, 'en');

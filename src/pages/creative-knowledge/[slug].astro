@@ -5,7 +5,7 @@ import { setTierA } from '@/lib/http/cacheTags';
 import { blogPostCacheEntities } from '@/lib/http/routeTags';
 
 const { slug } = Astro.params;
-const post = slug ? await getPostBySlug(slug) : null;
+const post = slug ? await getPostBySlug(slug, 'en') : null;
 if (!post) return Astro.rewrite('/404');
 
 setTierA(Astro.response, {

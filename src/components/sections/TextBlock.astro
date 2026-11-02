@@ -2,7 +2,8 @@
 import type { Locale } from '@schemas/primitives';
 import type { TextBlockSectionContent } from '@schemas/sections';
 import { pickLocale } from '@/lib/i18n';
-import { renderSectionDocToHtml } from '@/lib/content/tiptap';
+import { renderSectionDoc } from '@/lib/content/tiptap';
+import { reportBodyRefused } from '@/lib/data/parse';
 import AccentText from '@/components/ui/AccentText.astro';
 
 // A Text block (Admin v2 E10, the prototype's "Small label, headline and paragraphs"): an
@@ -11,11 +12,12 @@ import AccentText from '@/components/ui/AccentText.astro';
 // renders nothing.
 //
 // The paragraphs are rich text, rendered HERE from the stored Tiptap JSON on every render by
-// the allowlist renderer's section entry (renderSectionDocToHtml, src/lib/content/tiptap.ts:
-// the section walk first, then the allowlist walk, with no zod parse, linear and bounded at
-// 300 nodes), and `set:html` receives nothing else (CLAUDE.md §3: sanitised on write,
-// SectionBodySchema, AND on render). No `style=`: the renderer emits none, and the look is
-// global.css's `.blk-text`.
+// the allowlist renderer's section entry (renderSectionDoc, src/lib/content/tiptap.ts: the
+// section walk first, then the allowlist walk, with no zod parse, linear and bounded at 300
+// nodes), and `set:html` receives nothing else (CLAUDE.md §3: sanitised on write,
+// SectionBodySchema, AND on render). A stored body the walk refuses renders nothing and is
+// logged under the row's id (`data.sectionId`, from SectionRenderer), never its content (H15 code
+// review, CR1). No `style=`: the renderer emits none, and the look is global.css's `.blk-text`.
 //
 // The heading is an h2 (the page's h1 is its hero's or its head's); the body's own headings
 // are h2 to h4. No id: a page may hold several text blocks, so the section names nothing by
@@ -23,13 +25,20 @@ import AccentText from '@/components/ui/AccentText.astro';
 
 interface Props extends TextBlockSectionContent {
   locale: Locale;
+  /** Route data (SectionRenderer): the `page_sections` row's id, for the log line only. */
+  data?: { sectionId?: string } | undefined;
 }
 
-const { locale, tag, heading, accent, body } = Astro.props;
+const { locale, tag, heading, accent, body, data } = Astro.props;
 
 const tagText = tag ? pickLocale(tag, locale) : '';
 const headingText = heading ? pickLocale(heading, locale) : '';
-const html = body ? renderSectionDocToHtml(body[locale]) : '';
+const doc = body?.[locale];
+const rendered = doc === undefined || doc === null ? null : renderSectionDoc(doc);
+if (rendered?.refused) {
+  reportBodyRefused('page_section', data?.sectionId ?? '<none>', locale, rendered.refused);
+}
+const html = rendered?.html ?? '';
 const show = Boolean(tagText || headingText || html);
 ---
 
