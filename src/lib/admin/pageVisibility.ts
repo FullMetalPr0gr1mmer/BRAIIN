@@ -12,6 +12,7 @@ import {
   HOME_SLUG,
   PAGE_PATHS,
   isVisibilityPageSlug,
+  pagePathOf,
   type VisibilityPageSlug,
   type VisibilityTemplate,
 } from '@/lib/visibility/routes';
@@ -194,7 +195,10 @@ function titleOf(value: unknown, fallback: string): { en: string; ar?: string } 
   return { en: fallback };
 }
 
-/** The tenant's CMS pages the route map knows, in the map's order, by slug. */
+/**
+ * The tenant's CMS pages a route renders: the route map's, in its order, then the custom pages
+ * (Admin v2 E11) by slug.
+ */
 export async function readVisibilityPages(
   sb: SupabaseClient,
   auth: AuthContext,
@@ -206,6 +210,10 @@ export async function readVisibilityPages(
     .limit(200);
   if (error) throw new Error(`read pages: ${error.message}`);
   const order = Object.keys(PAGE_PATHS);
+  const at = (slug: string) => {
+    const i = order.indexOf(slug);
+    return i === -1 ? order.length : i;
+  };
   return ((data ?? []) as Row[])
     .map((row) => ({
       id: String(row['id']),
@@ -215,7 +223,7 @@ export async function readVisibilityPages(
     .filter((row): row is { id: string; slug: VisibilityPageSlug; title: unknown } =>
       isVisibilityPageSlug(row.slug),
     )
-    .sort((a, b) => order.indexOf(a.slug) - order.indexOf(b.slug));
+    .sort((a, b) => at(a.slug) - at(b.slug) || a.slug.localeCompare(b.slug));
 }
 
 async function publishedCount(sb: SupabaseClient, auth: AuthContext, table: string) {
@@ -250,7 +258,7 @@ export async function listVisibility(
       id: page.id,
       slug: page.slug,
       title: titleOf(page.title, page.slug),
-      path: PAGE_PATHS[page.slug],
+      path: pagePathOf(page.slug),
       setting: settingOf(byPage.get(page.id)),
     })),
     templates: (['service', 'case_study'] as const).map((template) => ({

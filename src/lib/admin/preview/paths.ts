@@ -13,6 +13,8 @@
 // path is handed to Astro's rewrite, so no `%`, dot segment, backslash or second slash ever
 // reaches the router from here.
 
+import { CUSTOM_PAGE_SLUG_MAX, RESERVED_PAGE_SLUGS, ROUTE_PAGE_SLUGS } from '@schemas/customPages';
+
 export const PREVIEW_PREFIX = '/admin/preview';
 
 /**
@@ -25,6 +27,18 @@ export const PREVIEW_PREFIX = '/admin/preview';
 export const READ_ONLY_ENDPOINTS: readonly string[] = ['/api/apply/status'];
 
 const SLUG = '[A-Za-z0-9](?:[A-Za-z0-9-]{0,118}[A-Za-z0-9])?';
+
+/**
+ * A custom page's address (Admin v2 E11, packages/schemas/customPages.ts isCustomPageSlug, as a
+ * pattern): lowercase kebab-case, at most CUSTOM_PAGE_SLUG_MAX characters, never a route slug
+ * or a reserved word, so the preview never rewrites to `/admin`, `/api` or any other path the
+ * site answers with something that is not a page. tests/lib/previewRoutes.spec.ts holds it
+ * equal to isCustomPageSlug on a table of inputs.
+ */
+const CUSTOM_PAGE = new RegExp(
+  `^/(?!(?:${[...ROUTE_PAGE_SLUGS, ...RESERVED_PAGE_SLUGS].join('|')})$)` +
+    `(?=[a-z0-9-]{1,${CUSTOM_PAGE_SLUG_MAX}}$)[a-z0-9]+(?:-[a-z0-9]+)*$`,
+);
 
 /** Every previewable LOGICAL path (no `/ar`), as a pattern, with the route it renders. */
 export const PREVIEW_ROUTES: readonly { route: string; pattern: RegExp }[] = [
@@ -47,6 +61,8 @@ export const PREVIEW_ROUTES: readonly { route: string; pattern: RegExp }[] = [
   { route: '/terms', pattern: /^\/terms$/ },
   { route: '/cookie-policy', pattern: /^\/cookie-policy$/ },
   { route: '/404', pattern: /^\/404$/ },
+  // Last: one segment no route above takes (Admin v2 E11).
+  { route: '/[slug]', pattern: CUSTOM_PAGE },
 ];
 
 /** A public path, split: its language and its logical path (`/ar/about` → ar, `/about`). */

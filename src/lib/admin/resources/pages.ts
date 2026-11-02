@@ -45,5 +45,19 @@ export const pageResource: ResourceConfig = {
       field: 'slug',
       message: 'This page’s address is part of the site’s routes and cannot change.',
     },
+    // Admin v2 E11 (0123, app.tg_pages_slug_rules): the address of a new or renamed page.
+    pages_slug_shape: {
+      field: 'slug',
+      message: 'Use lowercase letters, digits and single hyphens, at most 64 characters.',
+    },
+    pages_slug_reserved: {
+      field: 'slug',
+      message: 'The site already uses this address. Choose another one.',
+    },
+    // 0001's unique key: another page of the site has this address.
+    pages_tenant_id_slug_key: {
+      field: 'slug',
+      message: 'Another page already has this address. Choose another one.',
+    },
   },
 };

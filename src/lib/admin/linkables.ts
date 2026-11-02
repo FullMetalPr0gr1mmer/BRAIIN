@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
+import { isCustomPageSlug } from '@schemas/customPages';
 import { PAGE_PATHS } from '@/lib/visibility/routes';
 
 // Where a link field can point (Admin v2 F5b, ui.md §2.6 "link"): the pages this site
@@ -156,6 +157,16 @@ export async function loadLinkables(
   });
 
   const out: Linkable[] = [...routes];
+  // The published custom pages (Admin v2 E11), each at `/<slug>`, from the same read.
+  for (const row of (pages.data ?? []) as Row[]) {
+    const slug = typeof row.slug === 'string' ? row.slug : '';
+    if (!isCustomPageSlug(slug)) continue;
+    out.push({
+      href: `/${slug}`,
+      label: titles.get(slug) ?? labelOf(row.title, slug),
+      group: 'page',
+    });
+  }
   for (const [table, prefix, group] of [
     ['services', '/services', 'service'],
     ['portfolio', '/portfolio', 'project'],
