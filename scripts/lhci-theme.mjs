@@ -1,6 +1,6 @@
 // The themed Lighthouse run's set-up (Admin v2 E4, AV-27; README "Gates that stay green: lhci
 // (+ a themed run)"): saves the theme of tests/fixtures/themedRun.json as the tenant's active
-// v1 theme in the job's LOCAL Supabase, then checks the preview links it, so the run that
+// theme (v2 since Admin v2 E12) in the job's LOCAL Supabase, then checks the preview links it, so the run that
 // follows (lighthouserc.themed.json) measures pages that carry /styles/theme.css: one more
 // same-origin stylesheet in the head, whose cost to LCP, CLS and TBT is then gated like any
 // page's, and whose colours Lighthouse's accessibility audit (axe) reads.
