@@ -49,6 +49,36 @@ export function reportLoadError(
   console.warn(`[content] ${entity} load failed (code=${code}) — rendering the fallback`);
 }
 
+/**
+ * A STORED article body (one language) that rendered nothing because the renderer refused it or
+ * its render threw (H15 code review, CR1): the page still renders, without that body, and this
+ * line is what makes it diagnosable. The entity, the row's id, the language and the refusal
+ * (the walk's plain words or an error's name), never the body's content.
+ */
+export function reportBodyRefused(entity: string, id: string, lang: string, reason: string): void {
+  console.warn(
+    `[content] ${entity} body not rendered (id=${logSafe(id)}, lang=${logSafe(lang)}): ${logSafe(reason)}`,
+  );
+}
+
+/**
+ * A value made safe for one log line (H15 check): a refusal reason can quote a stored node or
+ * mark type, which a row written around the Worker controls. Anything quoted is replaced by an
+ * ellipsis (never stored content in a log), control characters (a forged second line) become
+ * spaces, and the whole is capped.
+ */
+export function logSafe(value: string): string {
+  const unquoted = value.replace(/"[^"]*"?/g, '"…"');
+  let out = '';
+  for (const ch of unquoted) {
+    const code = ch.codePointAt(0) ?? 0;
+    const control =
+      code < 0x20 || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029;
+    out += control ? ' ' : ch;
+  }
+  return out.slice(0, 200);
+}
+
 /** Validate a list; drop + log rows that fail. Returns only well-formed rows. */
 export function parseRows<S extends z.ZodTypeAny>(
   schema: S,
@@ -60,6 +90,24 @@ export function parseRows<S extends z.ZodTypeAny>(
     if (parsed.success) return [parsed.data as z.infer<S>];
     reportDrop(entity, row, parsed.error);
     return [];
+  });
+}
+
+/**
+ * Maps validated rows to what a page renders, each row inside its own guard (H15): a row whose
+ * mapping throws is dropped and logged (its slug and the error's name, never a value), so one
+ * bad row is a 404 or a missing entry, never a 500 or an empty list. The page and its discovery
+ * index map through the same call, so they still agree on which rows exist.
+ */
+export function mapRows<T, U>(rows: readonly T[], map: (row: T) => U, entity: string): U[] {
+  return rows.flatMap((row) => {
+    try {
+      return [map(row)];
+    } catch (err) {
+      const name = err instanceof Error ? err.name : 'unknown';
+      console.warn(`[content] dropped ${entity} row (slug=${rowSlug(row)}): unreadable (${name})`);
+      return [];
+    }
   });
 }
 

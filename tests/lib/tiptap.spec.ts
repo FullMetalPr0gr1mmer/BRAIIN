@@ -156,6 +156,28 @@ describe('renderTiptapToHtml — link marks', () => {
     const html = renderTiptapToHtml(doc([para([text('hi', [{ type: 'evilMark' }])])]));
     expect(html).toBe('<p>hi</p>');
   });
+
+  it('a mark named after an Object.prototype member is unknown too, never a tag (H15 review, SEC-2)', () => {
+    // The tag table was read with `[]`, which also finds inherited members: a stored mark type
+    // `constructor` wrapped the words in `<function Object() { [native code] }>`.
+    const names = [
+      'constructor',
+      'toString',
+      'valueOf',
+      'hasOwnProperty',
+      'isPrototypeOf',
+      'propertyIsEnumerable',
+      'toLocaleString',
+      '__proto__',
+      '__defineGetter__',
+      '__lookupGetter__',
+    ];
+    for (const name of names) {
+      expect(renderTiptapToHtml(doc([para([text('hi', [{ type: name }])])])), name).toBe(
+        '<p>hi</p>',
+      );
+    }
+  });
 });
 
 describe('renderTiptapToHtml — images', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { z } from 'zod';
-import { parseRow, parseRows } from '@/lib/data/parse';
+import { logSafe, parseRow, parseRows, reportBodyRefused } from '@/lib/data/parse';
 
 // The point of this helper is that an invalid row is dropped LOUDLY. A silent drop makes
 // a malformed case study indistinguishable from an unpublished one, with nothing to
@@ -71,5 +71,36 @@ describe('parseRow', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(parseRow(Row, { slug: 'a', n: 'x' }, 'thing')).toBeNull();
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+// H15 check: a refusal reason can quote a stored node or mark type (sectionDocProblem's
+// labelOf), which a row written around the Worker controls. The log line carries neither that
+// text nor a forged second line.
+describe('reportBodyRefused keeps stored text out of the log', () => {
+  it('drops a quoted label and turns control characters into spaces', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      reportBodyRefused(
+        'page_section',
+        'id-1',
+        'en',
+        'A Text block cannot show this part of the text ("jane.doe@example.com\n[content] forged li").',
+      );
+      expect(warn).toHaveBeenCalledTimes(1);
+      const line = String(warn.mock.calls[0]![0]);
+      expect(line).not.toContain('jane.doe');
+      expect(line).not.toContain('\n');
+      expect(line).toContain('cannot show this part of the text ("…")');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('caps a long reason and leaves a plain one as it is', () => {
+    expect(logSafe('x'.repeat(500))).toHaveLength(200);
+    expect(logSafe('the source is not a pair of languages')).toBe(
+      'the source is not a pair of languages',
+    );
   });
 });

@@ -680,6 +680,66 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
   video: VideoSectionContentSchema,
 };
 
+/** What an editor is told about a key the section's type does not have (P-12, H15). */
+export const SECTION_UNKNOWN_SETTING =
+  'This section does not use this setting. Remove it and save again.';
+
+type ContentPath = (string | number)[];
+
+/** A value being compared, and how it was reached: its parent and the step from it. */
+interface StrayFrame {
+  raw: unknown;
+  parsed: unknown;
+  parent: StrayFrame | null;
+  step: string | number | null;
+}
+
+/** The path from the content to `frame`, then `last` (built only for a stray key, CR9). */
+function strayPath(frame: StrayFrame, last: string): ContentPath {
+  const path: ContentPath = [last];
+  for (let at: StrayFrame | null = frame; at !== null && at.step !== null; at = at.parent) {
+    path.push(at.step);
+  }
+  return path.reverse();
+}
+
+/**
+ * The path of the first key `raw` holds that `parsed` (the type's schema's output for it) does
+ * not, or null. Iterative; it descends only where both hold an object or an array, so it reads
+ * no deeper than the schema's own shape. Each value keeps a link to its parent, and the path is
+ * built only when a stray key is found (H15 code review, CR9: it used to copy the path for
+ * every value it visited).
+ */
+function strayKeyPath(raw: unknown, parsed: unknown): ContentPath | null {
+  const stack: StrayFrame[] = [{ raw, parsed, parent: null, step: null }];
+  while (stack.length > 0) {
+    const next = stack.pop()!;
+    if (Array.isArray(next.raw)) {
+      if (!Array.isArray(next.parsed)) continue;
+      for (let i = next.raw.length - 1; i >= 0; i -= 1) {
+        stack.push({ raw: next.raw[i], parsed: next.parsed[i], parent: next, step: i });
+      }
+      continue;
+    }
+    const { raw: r, parsed: p } = next;
+    if (typeof r !== 'object' || r === null) continue;
+    if (typeof p !== 'object' || p === null || Array.isArray(p)) continue;
+    const keys = Object.keys(r);
+    const stray = keys.find((key) => !Object.hasOwn(p, key));
+    if (stray !== undefined) return strayPath(next, stray);
+    for (let i = keys.length - 1; i >= 0; i -= 1) {
+      const key = keys[i]!;
+      stack.push({
+        raw: (r as Record<string, unknown>)[key],
+        parsed: (p as Record<string, unknown>)[key],
+        parent: next,
+        step: key,
+      });
+    }
+  }
+  return null;
+}
+
 /**
  * Validates one section's `content` against its type, for WRITES. Returns the issues
  * with `content`-rooted paths so the admin can point at the offending field.
@@ -688,6 +748,15 @@ export const SECTION_CONTENT_SCHEMAS: Partial<Record<SectionType, z.ZodTypeAny>>
  * from its own table, and SectionRenderer spreads content into component props — a
  * stray `members` or `items` key would otherwise replace the table-backed data on a
  * public page.
+ *
+ * Strict at every level, for every type (H15): section content is stored as sent, and the
+ * older types nest objects their schemas read tolerantly (`Text`, `AccentSchema`,
+ * `VideoClipSchema`, `MediaRefSchema`; some are not strict at the top either), so a key a
+ * schema would drop on read was still stored, and a `mediaId` hidden in a heading made that
+ * asset anon-readable through 0024's and 0102's `$.**.mediaId`. A write is refused when the
+ * content holds a key, at any level, that the type's schema does not keep. The READ stays
+ * tolerant (src/lib/data/pageSections.ts parses with the same schemas and drops such a key),
+ * so a row stored before this renders as it did.
  */
 export function sectionContentIssues(type: SectionType, content: unknown): z.ZodIssue[] {
   const schema = SECTION_CONTENT_SCHEMAS[type];
@@ -705,9 +774,19 @@ export function sectionContentIssues(type: SectionType, content: unknown): z.Zod
         ];
   }
   const parsed = schema.safeParse(content);
-  return parsed.success
-    ? []
-    : parsed.error.issues.map((issue) => ({ ...issue, path: ['content', ...issue.path] }));
+  if (!parsed.success) {
+    return parsed.error.issues.map((issue) => ({ ...issue, path: ['content', ...issue.path] }));
+  }
+  const stray = strayKeyPath(content, parsed.data);
+  return stray
+    ? [
+        {
+          code: z.ZodIssueCode.custom,
+          path: ['content', ...stray],
+          message: SECTION_UNKNOWN_SETTING,
+        },
+      ]
+    : [];
 }
 
 /** Public row shape for the Tier-A page_sections read (see PageSectionRow loaders). */

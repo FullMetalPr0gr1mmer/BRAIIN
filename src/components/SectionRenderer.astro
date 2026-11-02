@@ -133,8 +133,14 @@ const images: Promise<ReadonlyMap<string, ImageRef>> = (async () =>
 // The first shown section is the top of the page (no route renders a hero outside the
 // sections), so a media section there is told so (`first`): the Video's still is then eager
 // and high priority, as MediaBanner's poster is (E10 code review, CR10).
-const dataOf = (s: SectionData, index: number): Record<string, unknown> | undefined =>
-  SECTION_MEDIA_TYPES.includes(s.type) ? { ...s.data, images, first: index === 0 } : s.data;
+//
+// A Text block is told its row's id (`sectionId`), so a stored body its renderer refuses is
+// logged under it (H15 code review, CR1); route data, so no content can name another row.
+const dataOf = (s: SectionData, index: number): Record<string, unknown> | undefined => {
+  if (SECTION_MEDIA_TYPES.includes(s.type)) return { ...s.data, images, first: index === 0 };
+  if (s.type === 'textBlock' && s.id !== undefined) return { ...s.data, sectionId: s.id };
+  return s.data;
+};
 ---
 
 {
