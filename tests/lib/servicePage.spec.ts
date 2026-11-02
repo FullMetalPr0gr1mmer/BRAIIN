@@ -349,22 +349,26 @@ describe('loadServicePage', () => {
     expect((await resolveServiceRoute('logo', {}, 'ar')).kind).toBe('page');
   });
 
-  it('a row that cannot be mapped is a logged 404, never a rejected promise (a 500)', async () => {
+  // H15 code review (CR8): the page maps its one row as it is; the body's one guard is the
+  // renderer's, which renders a refused stored body as nothing and logs it (CR1), so the page
+  // renders, and the refusal is a log line under the service's id, never the body's words.
+  it('a stored body the renderer refuses: the page renders without it, logged once by id (CR1)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    rows.logo = Object.defineProperty({ ...rows.logo! }, 'value_points', {
-      get() {
-        throw new RangeError('Maximum call stack size exceeded');
-      },
-    });
-    await expect(loadServicePage('logo', {}, 'en')).resolves.toBeNull();
-    expect((await resolveServiceRoute('logo', {}, 'en')).kind).toBe('missing');
-    expect(warn).toHaveBeenCalledWith(
-      '[content] dropped service row (slug=logo): unreadable (RangeError)',
-    );
-    // The siblings still render.
-    expect((await loadServicePage('business-cards', {}, 'en'))?.service.slug).toBe(
-      'business-cards',
-    );
+    const page = await loadServicePage('logo', {}, 'en');
+    expect(page?.service.bodyHtml).not.toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+    let node: unknown = { type: 'text', text: 'secret words' };
+    for (let i = 0; i < 40; i += 1) node = { type: 'blockquote', content: [node] };
+    rows.logo = { ...rows.logo!, body: { en: { type: 'doc', content: [node] } } };
+    const refused = await loadServicePage('logo', {}, 'en');
+    expect(refused?.service.slug).toBe('logo');
+    expect(refused?.service.bodyHtml).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    const line = String(warn.mock.calls[0]?.[0]);
+    expect(
+      line.startsWith(`[content] service body not rendered (id=${rows.logo.id}, lang=en): `),
+    ).toBe(true);
+    expect(line).not.toContain('secret');
     warn.mockRestore();
   });
 

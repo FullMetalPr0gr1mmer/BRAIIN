@@ -24,10 +24,11 @@ const title = pickLocale(post.title, locale, post.slug);
 const excerpt = pickLocale(post.excerpt, locale);
 // Metadata takes the STRICT read: no EN fallback on an Arabic page.
 const excerptMeta = pickLocaleStrict(post.excerpt, locale);
-// The body, rendered from its Tiptap source by the allowlist renderer in the loader
-// (postBodyHtml, src/lib/data/blog.ts), never the stored body_html cache (H15, PRE-2:
-// sanitised on write AND render, CLAUDE.md §3).
-const bodyHtml = pickLocale(post.bodyHtml, locale);
+// The body in this page's language (the English one when the Arabic renders nothing), rendered
+// from its Tiptap source by the allowlist renderer in the loader (postBodyHtml,
+// src/lib/data/blog.ts), never the stored body_html cache (H15, PRE-2: sanitised on write AND
+// render, CLAUDE.md §3).
+const bodyHtml = post.bodyHtml;
 const author = pickLocale(post.author?.name, locale);
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');

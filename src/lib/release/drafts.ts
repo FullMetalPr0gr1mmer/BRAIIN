@@ -9,6 +9,8 @@ import {
   DRAFT_FIELD_NAME,
   DRAFT_FIELDS_MAX,
   DRAFT_LABEL_TEXT_MAX,
+  DRAFT_TOO_DEEP,
+  DRAFT_TOO_DEEP_MESSAGE,
   DraftConflictDetailSchema,
   DraftLabelSchema,
   WriteDraftsOpsSchema,
@@ -169,9 +171,13 @@ export async function writeDrafts(
 ): Promise<WriteDraftsResult> {
   const checked = WriteDraftsOpsSchema.safeParse(ops);
   if (!checked.success) {
-    const tooLarge = checked.error.issues.some((i) => i.message === 'too-large');
+    const said = (message: string) => checked.error.issues.some((i) => i.message === message);
     throw new ValidationError(
-      tooLarge ? 'This change is too large to save. Shorten it and try again.' : 'invalid change',
+      said(DRAFT_TOO_DEEP)
+        ? DRAFT_TOO_DEEP_MESSAGE
+        : said('too-large')
+          ? 'This change is too large to save. Shorten it and try again.'
+          : 'invalid change',
     );
   }
   const { data, error } = await sb.rpc('write_drafts', {

@@ -686,19 +686,38 @@ export const SECTION_UNKNOWN_SETTING =
 
 type ContentPath = (string | number)[];
 
+/** A value being compared, and how it was reached: its parent and the step from it. */
+interface StrayFrame {
+  raw: unknown;
+  parsed: unknown;
+  parent: StrayFrame | null;
+  step: string | number | null;
+}
+
+/** The path from the content to `frame`, then `last` (built only for a stray key, CR9). */
+function strayPath(frame: StrayFrame, last: string): ContentPath {
+  const path: ContentPath = [last];
+  for (let at: StrayFrame | null = frame; at !== null && at.step !== null; at = at.parent) {
+    path.push(at.step);
+  }
+  return path.reverse();
+}
+
 /**
  * The path of the first key `raw` holds that `parsed` (the type's schema's output for it) does
  * not, or null. Iterative; it descends only where both hold an object or an array, so it reads
- * no deeper than the schema's own shape.
+ * no deeper than the schema's own shape. Each value keeps a link to its parent, and the path is
+ * built only when a stray key is found (H15 code review, CR9: it used to copy the path for
+ * every value it visited).
  */
 function strayKeyPath(raw: unknown, parsed: unknown): ContentPath | null {
-  const stack: { raw: unknown; parsed: unknown; path: ContentPath }[] = [{ raw, parsed, path: [] }];
+  const stack: StrayFrame[] = [{ raw, parsed, parent: null, step: null }];
   while (stack.length > 0) {
     const next = stack.pop()!;
     if (Array.isArray(next.raw)) {
       if (!Array.isArray(next.parsed)) continue;
       for (let i = next.raw.length - 1; i >= 0; i -= 1) {
-        stack.push({ raw: next.raw[i], parsed: next.parsed[i], path: [...next.path, i] });
+        stack.push({ raw: next.raw[i], parsed: next.parsed[i], parent: next, step: i });
       }
       continue;
     }
@@ -707,13 +726,14 @@ function strayKeyPath(raw: unknown, parsed: unknown): ContentPath | null {
     if (typeof p !== 'object' || p === null || Array.isArray(p)) continue;
     const keys = Object.keys(r);
     const stray = keys.find((key) => !Object.hasOwn(p, key));
-    if (stray !== undefined) return [...next.path, stray];
+    if (stray !== undefined) return strayPath(next, stray);
     for (let i = keys.length - 1; i >= 0; i -= 1) {
       const key = keys[i]!;
       stack.push({
         raw: (r as Record<string, unknown>)[key],
         parsed: (p as Record<string, unknown>)[key],
-        path: [...next.path, key],
+        parent: next,
+        step: key,
       });
     }
   }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ARTICLE_ATTR_MAX_DEPTH,
   ARTICLE_DOC_MAX_DEPTH,
@@ -139,7 +139,11 @@ describe('every crash class is an issue or nothing rendered, never a throw', () 
       expect(renderTiptapToHtml(body)).toBe('');
       expect(tiptapToPlainText(body)).toBe('');
       expect(readingMinutes(body)).toBe(1);
-      expect(renderBody({ en: body, ar: body })).toBeNull();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(renderBody({ en: body, ar: body }, { entity: 'service', id: 'x' })).toBeNull();
+      // Each language refused is one log line under the row's id (H15 code review, CR1).
+      expect(warn).toHaveBeenCalledTimes(2);
+      warn.mockRestore();
     });
 
     it(`${name}: refused on every write schema with a plain issue on the body`, () => {

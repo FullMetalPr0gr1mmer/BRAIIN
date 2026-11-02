@@ -208,15 +208,44 @@ function renderNode(node: TiptapNode, walk: Walk): string {
  * stored, which it reads exactly as it read zod's parse of it (only `type`, `text`, `attrs`,
  * `marks` and `content`), so the bytes are the same (tests/lib/articleRender.spec.ts holds the
  * renders from before H15). Past the check the renderer's own recursion is at most 32 deep; the
- * try is the promise that nothing in a stored body can make a page fail.
+ * try in renderChecked is the promise that nothing in a stored body can make a page fail (the one
+ * guard of the render, H15 code review CR8).
  */
 export function renderTiptapToHtml(doc: unknown): string {
+  return renderArticle(doc).html;
+}
+
+/**
+ * A stored body's render, and why it rendered nothing when it was refused (H15 code review,
+ * CR1): `refused` is the walk's refusal (its plain words for an editor, never the body's
+ * content), or the name of an error the render threw; null when the body rendered (an empty
+ * document renders '' and is not refused). The public pages log a refused STORED body under its
+ * entity and id (`reportBodyRefused`, src/lib/data/parse.ts), so a published body that a later
+ * cap refuses is a log line, not a body that silently went missing.
+ */
+export interface BodyRender {
+  html: string;
+  refused: string | null;
+}
+
+/** Checked by `problem`, then rendered by `walk`: the one guard of a body's render. */
+function renderChecked(
+  doc: unknown,
+  problem: (doc: unknown) => string | null,
+  walk: Walk,
+): BodyRender {
   try {
-    if (articleDocProblem(doc) !== null) return '';
-    return renderChildren((doc as TiptapDoc).content, ARTICLE);
-  } catch {
-    return '';
+    const refused = problem(doc);
+    if (refused !== null) return { html: '', refused };
+    return { html: renderChildren((doc as TiptapDoc).content, walk), refused: null };
+  } catch (err) {
+    return { html: '', refused: err instanceof Error ? err.name : 'unknown' };
   }
+}
+
+/** An article body's render and its refusal (renderTiptapToHtml's, with the reason kept). */
+export function renderArticle(doc: unknown): BodyRender {
+  return renderChecked(doc, articleDocProblem, ARTICLE);
 }
 
 /**
@@ -232,12 +261,12 @@ export function renderTiptapToHtml(doc: unknown): string {
  * renders nothing either (Walk above).
  */
 export function renderSectionDocToHtml(doc: unknown): string {
-  try {
-    if (sectionDocProblem(doc) !== null) return '';
-    return renderChildren((doc as TiptapDoc).content, SECTION);
-  } catch {
-    return '';
-  }
+  return renderSectionDoc(doc).html;
+}
+
+/** A section body's render and its refusal (renderSectionDocToHtml's, with the reason kept). */
+export function renderSectionDoc(doc: unknown): BodyRender {
+  return renderChecked(doc, sectionDocProblem, SECTION);
 }
 
 /**

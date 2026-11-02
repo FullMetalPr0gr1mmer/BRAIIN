@@ -49,6 +49,16 @@ export function reportLoadError(
   console.warn(`[content] ${entity} load failed (code=${code}) — rendering the fallback`);
 }
 
+/**
+ * A STORED article body (one language) that rendered nothing because the renderer refused it or
+ * its render threw (H15 code review, CR1): the page still renders, without that body, and this
+ * line is what makes it diagnosable. The entity, the row's id, the language and the refusal
+ * (the walk's plain words or an error's name), never the body's content.
+ */
+export function reportBodyRefused(entity: string, id: string, lang: string, reason: string): void {
+  console.warn(`[content] ${entity} body not rendered (id=${id}, lang=${lang}): ${reason}`);
+}
+
 /** Validate a list; drop + log rows that fail. Returns only well-formed rows. */
 export function parseRows<S extends z.ZodTypeAny>(
   schema: S,

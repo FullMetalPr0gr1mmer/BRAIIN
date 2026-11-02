@@ -16,6 +16,8 @@ import {
 import { jsonDepthWithin } from '@schemas/jsonDepth';
 import {
   DRAFT_PAYLOAD_MAX_BYTES,
+  DRAFT_TOO_DEEP,
+  DRAFT_TOO_DEEP_MESSAGE,
   DraftPayloadSchema,
   JSON_MEASURE_MAX_DEPTH,
   WriteDraftsOpsSchema,
@@ -25,6 +27,7 @@ import { collectionRoutes } from '@/lib/admin/resource';
 import { sectionResource } from '@/lib/admin/resources';
 import { sectionStateFromObject, formToPayload, rowToForm } from '@/lib/admin/formPayload';
 import { RESOURCE_UI } from '@/lib/admin/ui';
+import { writeDrafts } from '@/lib/release/drafts';
 import { fullSectionContent, objectShapes, sectionShapes } from '../fixtures/sectionShapes';
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
@@ -136,7 +139,7 @@ describe('the 64 KB refine on section content: a deep payload is an issue, never
   });
 });
 
-describe("the release draft payload's byte check: a deep payload is too large, never a throw", () => {
+describe("the release draft payload's byte check: a deep payload is refused for its depth, never a throw", () => {
   const deep = { content: deepArray(10_000) };
 
   it('jsonBytes measures a deep value as infinitely large, without stringifying it', () => {
@@ -145,9 +148,23 @@ describe("the release draft payload's byte check: a deep payload is too large, n
     expect(jsonBytes({ a: 'é' })).toBe(10);
   });
 
-  it('DraftPayloadSchema and the draft writer’s arguments refuse it as too large', () => {
+  it('DraftPayloadSchema and the draft writer’s arguments refuse it as too deep, not too large (CR6)', () => {
     expect(() => DraftPayloadSchema.safeParse(deep)).not.toThrow();
-    expect(DraftPayloadSchema.safeParse(deep).error?.issues[0]?.message).toBe('too-large');
+    expect(DraftPayloadSchema.safeParse(deep).error?.issues.map((i) => i.message)).toEqual([
+      DRAFT_TOO_DEEP,
+    ]);
+    // Just past the bound is too deep; just inside it is measured, and a big one is too large.
+    const past = { content: deepArray(JSON_MEASURE_MAX_DEPTH) };
+    expect(DraftPayloadSchema.safeParse(past).error?.issues.map((i) => i.message)).toEqual([
+      DRAFT_TOO_DEEP,
+    ]);
+    expect(
+      DraftPayloadSchema.safeParse({ content: deepArray(JSON_MEASURE_MAX_DEPTH - 1) }).success,
+    ).toBe(true);
+    const big = { content: 'x'.repeat(DRAFT_PAYLOAD_MAX_BYTES) };
+    expect(DraftPayloadSchema.safeParse(big).error?.issues.map((i) => i.message)).toEqual([
+      'too-large',
+    ]);
     const op = {
       action: 'put',
       entity_type: 'page_section',
@@ -161,7 +178,33 @@ describe("the release draft payload's byte check: a deep payload is too large, n
     };
     const ops = WriteDraftsOpsSchema.safeParse([op]);
     expect(ops.success).toBe(false);
-    expect(ops.error?.issues.some((i) => i.message === 'too-large')).toBe(true);
+    expect(ops.error?.issues.some((i) => i.message === DRAFT_TOO_DEEP)).toBe(true);
+    expect(ops.error?.issues.some((i) => i.message === 'too-large')).toBe(false);
+  });
+
+  it('the draft writer tells an editor the change has too many levels, in plain words (CR6)', async () => {
+    const op = {
+      action: 'put' as const,
+      entity_type: 'page_section' as const,
+      entity_id: PAGE,
+      op: 'update' as const,
+      payload: deep,
+      fields: ['content'],
+      base: {},
+      base_version: 1,
+      label: null,
+    };
+    const rpc = vi.fn();
+    const auth = { tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
+    const call = writeDrafts(
+      { rpc } as unknown as Parameters<typeof writeDrafts>[0],
+      auth as unknown as Parameters<typeof writeDrafts>[1],
+      [op] as unknown as Parameters<typeof writeDrafts>[2],
+      { entity: 'section', cap: 'pages.edit' } as unknown as Parameters<typeof writeDrafts>[3],
+    );
+    await expect(call).rejects.toThrow(DRAFT_TOO_DEEP_MESSAGE);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(DRAFT_TOO_DEEP_MESSAGE).not.toMatch(/[–—]|payload|JSON|large/);
   });
 
   it('an article and a section at their own bounds fit inside a draft', () => {

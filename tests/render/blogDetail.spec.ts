@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import BlogDetail from '@/components/BlogDetail.astro';
 import { toPostDetail, type PostDetailRow } from '@/lib/data/blog';
 import { LOCALES, renderComponent } from './harness';
@@ -48,7 +48,7 @@ describe('the post page body (BlogDetail)', () => {
   for (const locale of LOCALES) {
     it(`${locale}: the seed's posts serve the bytes of their cache, read back and re-rendered`, async () => {
       for (const seed of SEED_POSTS) {
-        const post = toPostDetail(row({ slug: seed.slug, body_html: seed.body_html }));
+        const post = toPostDetail(row({ slug: seed.slug, body_html: seed.body_html }), locale);
         const html = article(await renderComponent(BlogDetail, { locale, post }));
         expect(html).toContain(`<div class="prose">${seed.body_html[locale]}</div>`);
       }
@@ -67,6 +67,7 @@ describe('the post page body (BlogDetail)', () => {
             },
           },
         }),
+        locale,
       );
       const html = article(await renderComponent(BlogDetail, { locale, post }));
       // No Arabic source: the Arabic page falls back to the English body, as before.
@@ -75,11 +76,13 @@ describe('the post page body (BlogDetail)', () => {
     });
 
     it(`${locale}: a post with no source and a cache the renderer did not write serves no body`, async () => {
-      const post = toPostDetail(row({ body_html: HOSTILE }));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const post = toPostDetail(row({ body_html: HOSTILE }), locale);
       const html = article(await renderComponent(BlogDetail, { locale, post }));
       expect(html).not.toContain('class="prose"');
       expect(html).not.toMatch(/cached|<script|onerror|javascript:|style=/);
       expect(html).toContain('<h1>');
+      warn.mockRestore();
     });
   }
 });

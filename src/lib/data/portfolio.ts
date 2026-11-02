@@ -11,10 +11,10 @@ import {
 } from '@schemas/content';
 import type { VideoClip } from '@schemas/media';
 import { supabaseConfigured } from '@/lib/supabase/client';
-import { renderTiptapToHtml } from '@/lib/content/tiptap';
+import { renderArticle } from '@/lib/content/tiptap';
 import { clipOf, imageRef, type ImageRef } from '@/lib/media/resolve';
 import { describable } from '@/lib/portfolio/caseStudy';
-import { mapRows, parseRows, reportLoadError } from './parse';
+import { mapRows, parseRows, reportBodyRefused, reportLoadError } from './parse';
 import { contentClient } from './source';
 
 // Runtime data access for the public portfolio / case studies (Tier A SSR). Tenant +
@@ -173,6 +173,24 @@ function toCaseMedia(row: PortfolioMediaRow): CaseMedia {
   };
 }
 
+/** Whose body is rendered: what a refused body is logged under (H15 code review, CR1). */
+export interface BodySubject {
+  entity: string;
+  id: string;
+}
+
+/**
+ * One language of a STORED article body, rendered by the allowlist renderer; '' when the language
+ * holds nothing. A body the renderer refuses (or whose render threw) renders nothing and is
+ * logged once, under its entity and id, never its content (`reportBodyRefused`, CR1).
+ */
+export function renderStoredDoc(doc: unknown, lang: 'en' | 'ar', subject: BodySubject): string {
+  if (doc === undefined || doc === null) return '';
+  const { html, refused } = renderArticle(doc);
+  if (refused !== null) reportBodyRefused(subject.entity, subject.id, lang, refused);
+  return html;
+}
+
 /**
  * The body as HTML, rendered HERE from its Tiptap JSON by the allowlist renderer
  * (src/lib/content/tiptap.ts) — CLAUDE.md Pillar 1: "Tiptap sanitised on write AND
@@ -182,18 +200,18 @@ function toCaseMedia(row: PortfolioMediaRow): CaseMedia {
  * cache whatever markup they wrote. The renderer can only emit the tags and attributes
  * written literally in it. The cost lands on an edge-cache miss only (Security > Perf).
  *
- * Never throws (H15): the renderer answers '' for anything it cannot read, and anything
- * else that went wrong here is no body, never a page that fails.
+ * Never throws (H15): the renderer is the one guard (`renderArticle`), and it answers '' for
+ * anything it cannot read; the row's schema hands this plain data, so reading it cannot throw
+ * either (CR8: the catch that stood here could never fire).
  */
-export function renderBody(body: CaseStudyRow['body']): LocalizedProse | null {
-  try {
-    const en = renderTiptapToHtml(body?.en);
-    const ar = renderTiptapToHtml(body?.ar);
-    if (!en && !ar) return null;
-    return ar ? { en, ar } : { en };
-  } catch {
-    return null;
-  }
+export function renderBody(
+  body: CaseStudyRow['body'],
+  subject: BodySubject,
+): LocalizedProse | null {
+  const en = renderStoredDoc(body?.en, 'en', subject);
+  const ar = renderStoredDoc(body?.ar, 'ar', subject);
+  if (!en && !ar) return null;
+  return ar ? { en, ar } : { en };
 }
 
 /** What a case study is mapped for: the page renders its body; the discovery index does not. */
@@ -217,7 +235,7 @@ export function toCaseStudy(row: CaseStudyRow, use: CaseStudyUse = FOR_PAGE): Ca
   return {
     ...toCard(row),
     summary: row.summary,
-    bodyHtml: use.body ? renderBody(row.body) : null,
+    bodyHtml: use.body ? renderBody(row.body, { entity: 'portfolio', id: row.id }) : null,
     lead: row.lead,
     goal: row.goal,
     result: row.result,
@@ -263,7 +281,10 @@ export async function getPortfolioCards(
  *
  * Each row is mapped inside its own guard (H15, `mapRows`): a row that cannot be mapped is
  * dropped and logged, never the whole list (a stored body that threw used to empty the index,
- * so every case study left the sitemap and llms.txt). The index maps without the body
+ * so every case study left the sitemap and llms.txt). The body can no longer throw (its one
+ * guard is the renderer's); the guard stays here, and only here, because this is a LIST: one
+ * row's failure would otherwise cost every project its sitemap entry (H15 code review, CR8; the
+ * service and blog pages map their one row as it is). The index maps without the body
  * (`use.body` false): it never shows it, and rendering every project's body cost CPU on each
  * sitemap miss. Which rows survive does not depend on it, since renderBody never throws.
  */

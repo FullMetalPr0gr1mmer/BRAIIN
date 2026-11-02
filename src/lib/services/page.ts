@@ -1,6 +1,5 @@
 import type { Locale } from '@schemas/primitives';
 import { getServiceBySlug, toServiceDetail, type ServiceDetail } from '@/lib/data/services';
-import { mapRows } from '@/lib/data/parse';
 import { getPublishedDisciplines, type Discipline } from '@/lib/data/disciplines';
 import { getServiceCase, type ServiceCase } from '@/lib/data/serviceCases';
 import { loadHead, type Head } from '@/lib/seo/head';
@@ -105,12 +104,11 @@ export async function loadServicePage(
   locals: Locals,
   locale: Locale,
 ): Promise<ServicePage | null> {
-  // The row is mapped inside its own guard (H15, `mapRows`): a row that cannot be mapped is a
-  // logged 404, never a rejected promise that every request of the page would answer with a
-  // 500 (a stored body that threw in toServiceDetail did exactly that).
-  const serviceQuery = getServiceBySlug(slug).then((row) =>
-    row ? (mapRows([row], toServiceDetail, 'service')[0] ?? null) : null,
-  );
+  // toServiceDetail cannot throw (H15 code review, CR8): it reads the parsed row's plain data,
+  // and the body's render has its one guard in the renderer (renderArticle), which renders a
+  // stored body it refuses as nothing and logs it. Before H15 a deep body threw a RangeError
+  // here, outside the loader's try, and the page answered 500 on every request.
+  const serviceQuery = getServiceBySlug(slug).then((row) => (row ? toServiceDetail(row) : null));
   const [service, disciplines, serviceCase, head] = await Promise.all([
     serviceQuery,
     getPublishedDisciplines(),

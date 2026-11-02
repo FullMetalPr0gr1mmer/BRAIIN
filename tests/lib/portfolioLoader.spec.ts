@@ -20,9 +20,9 @@ vi.mock('@/lib/content/tiptap', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/content/tiptap')>();
   return {
     ...actual,
-    renderTiptapToHtml: (doc: unknown) => {
+    renderArticle: (doc: unknown) => {
       renders.count += 1;
-      return actual.renderTiptapToHtml(doc);
+      return actual.renderArticle(doc);
     },
   };
 });
@@ -297,6 +297,7 @@ describe('the discovery index lists exactly what the case-study page renders', (
 });
 
 describe('the case-study body is sanitised at render, not trusted from the cache (Pillar 1)', () => {
+  const SUBJECT = { entity: 'portfolio', id: 'p' };
   const doc = (content: unknown[]) => ({ type: 'doc', content });
   const para = (content: unknown[]) => ({ type: 'paragraph', content });
   // One malicious body per attack class: a script in a text node, an event handler and
@@ -332,7 +333,7 @@ describe('the case-study body is sanitised at render, not trusted from the cache
   };
 
   it('renders hostile Tiptap JSON through the allowlist: no script, on*=, javascript: or style=', () => {
-    const out = renderBody({ en: hostile, ar: hostile });
+    const out = renderBody({ en: hostile, ar: hostile }, SUBJECT);
     expect(out?.en).toContain('&lt;script&gt;');
     expect(out?.en).toContain('<p>kept</p>');
     expect(out?.en).toContain('click'); // the words survive, the link does not
@@ -353,9 +354,10 @@ describe('the case-study body is sanitised at render, not trusted from the cache
   });
 
   it('an empty, invalid or malformed body hides the body, never the case study', async () => {
-    expect(renderBody(null)).toBeNull();
-    expect(renderBody({ en: { type: 'nope' } })).toBeNull();
-    expect(renderBody({ ar: doc([para([{ type: 'text', text: 'ع' }])]) })).toEqual({
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(renderBody(null, SUBJECT)).toBeNull();
+    expect(renderBody({ en: { type: 'nope' } }, SUBJECT)).toBeNull();
+    expect(renderBody({ ar: doc([para([{ type: 'text', text: 'ع' }])]) }, SUBJECT)).toEqual({
       en: '',
       ar: '<p>ع</p>',
     });
@@ -363,6 +365,29 @@ describe('the case-study body is sanitised at render, not trusted from the cache
     const study = await getCaseStudy('the-rider');
     expect(study).not.toBeNull();
     expect(study?.bodyHtml).toBeNull();
+    warn.mockRestore();
+  });
+
+  it('a stored body the renderer refuses is logged once a language, by id, never its words (CR1)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ok = doc([para([{ type: 'text', text: 'Hi' }])]);
+    tableRows = [{ ...row, body: { en: ok, ar: ok } }];
+    expect((await getCaseStudy('the-rider'))?.bodyHtml).toEqual({
+      en: '<p>Hi</p>',
+      ar: '<p>Hi</p>',
+    });
+    expect(warn).not.toHaveBeenCalled();
+    let node: unknown = { type: 'text', text: 'secret words' };
+    for (let i = 0; i < 40; i += 1) node = { type: 'blockquote', content: [node] };
+    tableRows = [{ ...row, body: { en: ok, ar: doc([node]) } }];
+    expect((await getCaseStudy('the-rider'))?.bodyHtml).toEqual({ en: '<p>Hi</p>' });
+    expect(warn).toHaveBeenCalledTimes(1);
+    const line = String(warn.mock.calls[0]?.[0]);
+    expect(line.startsWith(`[content] portfolio body not rendered (id=${row.id}, lang=ar): `)).toBe(
+      true,
+    );
+    expect(line).not.toContain('secret');
+    warn.mockRestore();
   });
 
   it('toCaseStudy renders a bilingual body per locale', () => {

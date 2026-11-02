@@ -14,7 +14,7 @@ import { ARTICLE_CASES, LONG_ARTICLE, randomCorpus } from '../fixtures/articleCo
 // strict reader of the renderer's own markup, then rendered, so the HTML a visitor receives is
 // always the renderer's.
 
-// A minimal PostgREST stand-in for the post page's one read.
+// A minimal PostgREST stand-in for the post page's one read and the list's.
 let postRow: Record<string, unknown> | null = null;
 const selects: string[] = [];
 vi.mock('@/lib/supabase/client', () => ({
@@ -27,14 +27,31 @@ vi.mock('@/lib/supabase/client', () => ({
           return q;
         },
         eq: () => q,
+        order: () => q,
         maybeSingle: async () => ({ data: postRow, error: null }),
+        then: (resolve: (v: unknown) => unknown) =>
+          resolve({ data: postRow ? [postRow] : [], error: null }),
       };
       return q;
     },
   }),
 }));
 
-const { getPostBySlug, postBodyHtml, POST_DETAIL_COLUMNS } = await import('@/lib/data/blog');
+// Every article render the post page asks for, recorded (H15 code review, CR2: one language).
+const renders = vi.hoisted(() => ({ docs: [] as unknown[] }));
+vi.mock('@/lib/content/tiptap', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/content/tiptap')>();
+  return {
+    ...actual,
+    renderArticle: (doc: unknown) => {
+      renders.docs.push(doc);
+      return actual.renderArticle(doc);
+    },
+  };
+});
+
+const { getPostBySlug, getPublishedPosts, postBodyHtml, POST_DETAIL_COLUMNS } =
+  await import('@/lib/data/blog');
 
 const doc = (content: unknown[]) => ({ type: 'doc', content });
 const para = (words: string) => ({ type: 'paragraph', content: [{ type: 'text', text: words }] });
@@ -219,12 +236,17 @@ describe('the reader is bounded like the walk it feeds (H15 review, SEC-1)', () 
 });
 
 describe('the post page renders its body from the source (postBodyHtml, getPostBySlug)', () => {
-  it('selects the source for the page', async () => {
+  const ID = POST.id;
+  it('selects the source and the cache for the page, and no body for the list (CR4)', async () => {
     postRow = { ...POST, body: { en: doc([para('From the source')]) } };
     selects.length = 0;
-    await getPostBySlug('arabic-first-brand-systems');
+    await getPostBySlug('arabic-first-brand-systems', 'en');
     expect(selects).toEqual([POST_DETAIL_COLUMNS]);
-    expect(POST_DETAIL_COLUMNS).toMatch(/,body$/);
+    expect(POST_DETAIL_COLUMNS).toMatch(/,body_html,body$/);
+    selects.length = 0;
+    expect((await getPublishedPosts()).map((p) => p.slug)).toEqual(['arabic-first-brand-systems']);
+    expect(selects).toHaveLength(1);
+    expect(selects[0]).not.toMatch(/body/);
   });
 
   it('a post with a source: rendered from it, the cache never read, even when hostile', async () => {
@@ -233,11 +255,11 @@ describe('the post page renders its body from the source (postBodyHtml, getPostB
       body_html: { en: '<p>cached</p><script>alert(1)</script>' },
       body: { en: doc([para('<b>From</b> the source')]), ar: doc([para('من المصدر')]) },
     };
-    const post = await getPostBySlug('arabic-first-brand-systems');
-    expect(post?.bodyHtml).toEqual({
-      en: '<p>&lt;b&gt;From&lt;/b&gt; the source</p>',
-      ar: '<p>من المصدر</p>',
-    });
+    const post = await getPostBySlug('arabic-first-brand-systems', 'en');
+    expect(post?.bodyHtml).toBe('<p>&lt;b&gt;From&lt;/b&gt; the source</p>');
+    expect((await getPostBySlug('arabic-first-brand-systems', 'ar'))?.bodyHtml).toBe(
+      '<p>من المصدر</p>',
+    );
     // The page receives neither the source nor the cache: only what was rendered.
     expect(JSON.stringify(post)).not.toContain('cached');
     expect(post).not.toHaveProperty('body');
@@ -247,64 +269,163 @@ describe('the post page renders its body from the source (postBodyHtml, getPostB
   it('a post with no source (the seed’s): its cache, read back, renders to the same bytes', async () => {
     for (const seed of SEED_POSTS) {
       postRow = { ...POST, slug: seed.slug, body_html: seed.body_html, body: null };
-      expect((await getPostBySlug(seed.slug))?.bodyHtml).toEqual(seed.body_html);
+      for (const lang of ['en', 'ar'] as const) {
+        expect((await getPostBySlug(seed.slug, lang))?.bodyHtml).toBe(seed.body_html[lang]);
+      }
     }
   });
 
   it('a post with no source and a cache the renderer did not write: no body, the post still renders', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     for (const cache of HOSTILE_CACHES) {
       postRow = { ...POST, body_html: { en: cache }, body: null };
-      const post = await getPostBySlug('arabic-first-brand-systems');
+      const post = await getPostBySlug('arabic-first-brand-systems', 'en');
       expect(post?.slug, cache).toBe('arabic-first-brand-systems');
       expect(post?.bodyHtml, cache).toBeNull();
     }
+    warn.mockRestore();
   });
 
   it('a source nested 20,000 deep, or one that is not a document: no body, the post still renders', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     let node: unknown = { type: 'text', text: 'x' };
     for (let i = 0; i < 20_000; i += 1) node = { type: 'blockquote', content: [node] };
     for (const body of [{ en: doc([node]) }, 'not a doc', [1], { en: 5 }]) {
-      postRow = { ...POST, body };
-      const post = await getPostBySlug('arabic-first-brand-systems');
+      postRow = { ...POST, body, body_html: null };
+      const post = await getPostBySlug('arabic-first-brand-systems', 'en');
       expect(post?.slug).toBe('arabic-first-brand-systems');
       expect(post?.bodyHtml).toBeNull();
     }
+    warn.mockRestore();
   });
 
   it('a cache too long to read is no body, never a throw, and the post still renders (COR-5)', async () => {
     // It used to throw outside renderBody's try (the text check's RangeError), so the post was
     // a 404 while the blog list, the sitemap and llms.txt still listed it.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const huge = `<p>${'a'.repeat(20_000_000)}</p>`;
-    expect(() => postBodyHtml({ body: null, body_html: { en: huge } })).not.toThrow();
-    expect(postBodyHtml({ body: null, body_html: { en: huge } })).toBeNull();
+    const row = { id: ID, body: null, body_html: { en: huge } };
+    expect(() => postBodyHtml(row, 'en')).not.toThrow();
+    expect(postBodyHtml(row, 'en')).toBeNull();
     postRow = { ...POST, body_html: { en: huge, ar: '<p>ع</p>' }, body: null };
-    const post = await getPostBySlug('arabic-first-brand-systems');
+    const post = await getPostBySlug('arabic-first-brand-systems', 'en');
     expect(post?.slug).toBe('arabic-first-brand-systems');
-    expect(post?.bodyHtml).toEqual({ en: '', ar: '<p>ع</p>' });
+    expect(post?.bodyHtml).toBeNull();
+    expect((await getPostBySlug('arabic-first-brand-systems', 'ar'))?.bodyHtml).toBe('<p>ع</p>');
+    warn.mockRestore();
   });
 
   it('anything that throws while the body is read is no body, never a failed page', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const throwing = {
       get en(): string {
         throw new Error('unreadable');
       },
     };
-    expect(postBodyHtml({ body: null, body_html: throwing })).toBeNull();
+    expect(postBodyHtml({ id: ID, body: null, body_html: throwing }, 'en')).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      `[content] blog_post body not rendered (id=${ID}, lang=en): Error`,
+    );
+    warn.mockRestore();
   });
 
-  it('a row whose cache the post schema refuses is still a 404, as before H15', async () => {
-    postRow = { ...POST, body_html: { en: '' }, body: { en: doc([para('x')]) } };
-    expect(await getPostBySlug('arabic-first-brand-systems')).toBeNull();
+  it('a cache that is not a pair of languages is no cache: the post renders from its source (CR4)', async () => {
+    // The list no longer reads the cache, so the page must not answer 404 for a post the list
+    // names because of it (before, both refused such a row, and agreed).
+    for (const body_html of [{ en: '' }, 'text', [1], { en: 5 }]) {
+      postRow = { ...POST, body_html, body: { en: doc([para('x')]) } };
+      expect((await getPostBySlug('arabic-first-brand-systems', 'en'))?.bodyHtml).toBe('<p>x</p>');
+      expect((await getPublishedPosts()).map((p) => p.slug)).toEqual([
+        'arabic-first-brand-systems',
+      ]);
+    }
+    postRow = { ...POST, body_html: { en: 5 }, body: null };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect((await getPostBySlug('arabic-first-brand-systems', 'en'))?.bodyHtml).toBeNull();
+    warn.mockRestore();
   });
 
-  it('postBodyHtml: an Arabic cache with no Arabic source keeps the English fallback', () => {
-    expect(postBodyHtml({ body: null, body_html: { en: '<p>en</p>' } })).toEqual({
-      en: '<p>en</p>',
-    });
-    expect(postBodyHtml({ body: null, body_html: null })).toBeNull();
-    expect(postBodyHtml({ body: { ar: doc([para('ع')]) }, body_html: null })).toEqual({
-      en: '',
-      ar: '<p>ع</p>',
-    });
+  it('postBodyHtml: an Arabic page with no Arabic body falls back to the English one, as pickLocale did', () => {
+    expect(postBodyHtml({ id: ID, body: null, body_html: { en: '<p>en</p>' } }, 'ar')).toBe(
+      '<p>en</p>',
+    );
+    expect(postBodyHtml({ id: ID, body: null, body_html: null }, 'en')).toBeNull();
+    const arOnly = { id: ID, body: { ar: doc([para('ع')]) }, body_html: null };
+    expect(postBodyHtml(arOnly, 'en')).toBeNull();
+    expect(postBodyHtml(arOnly, 'ar')).toBe('<p>ع</p>');
+  });
+
+  it('renders only the language served (CR2)', async () => {
+    const en = doc([para('English')]);
+    const ar = doc([para('عربي')]);
+    postRow = { ...POST, body: { en, ar }, body_html: null };
+    renders.docs.length = 0;
+    expect((await getPostBySlug('arabic-first-brand-systems', 'en'))?.bodyHtml).toBe(
+      '<p>English</p>',
+    );
+    expect(renders.docs).toEqual([en]);
+    renders.docs.length = 0;
+    expect((await getPostBySlug('arabic-first-brand-systems', 'ar'))?.bodyHtml).toBe('<p>عربي</p>');
+    expect(renders.docs).toEqual([ar]);
+  });
+
+  it('a source the renderer refuses falls back to the cache, and the refusal is logged (CR5, CR1)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let node: unknown = { type: 'text', text: 'secret words' };
+    for (let i = 0; i < 40; i += 1) node = { type: 'blockquote', content: [node] };
+    postRow = {
+      ...POST,
+      body: { en: doc([node]) },
+      body_html: { en: '<p>The words it was saved with</p>' },
+    };
+    expect((await getPostBySlug('arabic-first-brand-systems', 'en'))?.bodyHtml).toBe(
+      '<p>The words it was saved with</p>',
+    );
+    expect(warn).toHaveBeenCalledTimes(1);
+    const line = String(warn.mock.calls[0]?.[0]);
+    expect(line.startsWith(`[content] blog_post body not rendered (id=${ID}, lang=en): `)).toBe(
+      true,
+    );
+    expect(line).not.toContain('secret');
+    warn.mockRestore();
+  });
+
+  it('a stored body is logged once when refused, and never when it renders (CR1)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Valid: a source, a cache read back, an Arabic page falling back to English, no body.
+    const valid: [Record<string, unknown>, 'en' | 'ar'][] = [
+      [{ ...POST, body: { en: doc([para('ok')]) }, body_html: null }, 'en'],
+      [{ ...POST, body: null, body_html: SEED_POSTS[0]!.body_html }, 'ar'],
+      [{ ...POST, body: { en: doc([para('ok')]) }, body_html: null }, 'ar'],
+      [{ ...POST, body: null, body_html: null }, 'en'],
+    ];
+    for (const [row, lang] of valid) {
+      postRow = row;
+      expect((await getPostBySlug('arabic-first-brand-systems', lang))?.slug).toBe(
+        'arabic-first-brand-systems',
+      );
+    }
+    expect(warn).not.toHaveBeenCalled();
+    // A cache the reader refuses: one line, its id, no content.
+    postRow = { ...POST, body: null, body_html: { en: '<p>secret</p><script>x</script>' } };
+    await getPostBySlug('arabic-first-brand-systems', 'en');
+    expect(warn.mock.calls).toEqual([
+      [
+        `[content] blog_post body not rendered (id=${ID}, lang=en): its stored HTML is not the renderer’s markup`,
+      ],
+    ]);
+    warn.mockRestore();
+  });
+});
+
+describe('the read-back gives each heading its own attrs (CR10)', () => {
+  type Headings = { content: { attrs: { level: number } }[] };
+  it('changing one read-back heading changes no other', () => {
+    const a = docFromRenderedHtml('<h3>a</h3>') as unknown as Headings;
+    a.content[0]!.attrs.level = 5;
+    const b = docFromRenderedHtml('<h3>b</h3><h3>c</h3>') as unknown as Headings;
+    expect(b.content.map((h) => h.attrs.level)).toEqual([3, 3]);
+    expect(b.content[0]!.attrs).not.toBe(b.content[1]!.attrs);
+    expect(renderTiptapToHtml(b)).toBe('<h3>b</h3><h3>c</h3>');
   });
 });

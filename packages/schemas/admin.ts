@@ -432,9 +432,12 @@ const SectionPayloadSchema = z
   // The depth first (H15): JSON.stringify recurses once a level and overflowed the stack past
   // about 4,782 levels (a 19 KB payload) with a RangeError, a 500 for every section type, where
   // the refusal below was meant. Only a value within SECTION_CONTENT_MAX_DEPTH is stringified.
+  // The depth refusal is FATAL (H15 code review, CR7): the write's own refinement
+  // (checkSectionContent) then does not run, so it reads no content this refused and never
+  // walks the depth a second time; a payload it does read is known to be within the bound.
   .superRefine((v, ctx) => {
     if (!jsonDepthWithin(v, SECTION_CONTENT_MAX_DEPTH)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: SECTION_CONTENT_TOO_DEEP });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: SECTION_CONTENT_TOO_DEEP, fatal: true });
     } else if (JSON.stringify(v).length > 65_536) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'section payload exceeds 64 KB' });
     }
@@ -493,9 +496,9 @@ function checkSectionContent(
   // An update that changes content without restating `type` (or type without content) is
   // validated against the row it will produce by sectionResource.assertWritable
   // (src/lib/admin/resources/sections.ts); here we check what the payload alone can prove.
+  // A payload SectionPayloadSchema refused for its depth never reaches here: that refusal is
+  // fatal, and zod runs no refinement over an aborted object (H15 code review, CR7).
   if (v.type === undefined || v.content === undefined) return;
-  // A payload SectionPayloadSchema refused for its depth is not read any further (H15).
-  if (!jsonDepthWithin(v.content, SECTION_CONTENT_MAX_DEPTH)) return;
   for (const issue of sectionContentIssues(v.type, v.content)) ctx.addIssue(issue);
 }
 

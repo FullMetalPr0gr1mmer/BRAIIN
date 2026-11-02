@@ -235,12 +235,16 @@ export const PostCategorySchema = z
   .nullable();
 export type PostCategory = z.infer<typeof PostCategorySchema>;
 
+/**
+ * A post as the blog list, the sitemap, llms.txt and the feeds read it: no body (H15 code review,
+ * CR4: none of them shows one, and every post's stored `body_html` was fetched and parsed on each
+ * of their misses).
+ */
 export const PostRowSchema = z.object({
   id: z.string().uuid(),
   slug: SlugSchema,
   title: LocalizedTextSchema,
   excerpt: LocalizedProseSchema.nullable(),
-  body_html: LocalizedProseSchema.nullable(),
   cover_image_url: z.string().nullable(),
   published_at: z.string().nullable(),
   updated_at: z.string().nullable(),
@@ -256,8 +260,16 @@ export type PostRow = z.infer<typeof PostRowSchema>;
  * stored `body_html` cache. Read as it is (`unknown`): null is a post saved before it had a
  * source (the seed's), whose cache is read back into a document first (src/lib/data/blog.ts);
  * a value the renderer cannot read is no body, never a missing post.
+ *
+ * The cache is read as it is too (H15 code review, CR4): the list no longer selects it, so a
+ * cache the post schema refused would make a post the list, the sitemap and llms.txt name answer
+ * 404. A cache that is not a pair of languages is no cache (src/lib/data/blog.ts reads only a
+ * string in it), and the post renders from its source.
  */
-export const PostDetailRowSchema = PostRowSchema.extend({ body: z.unknown() });
+export const PostDetailRowSchema = PostRowSchema.extend({
+  body_html: z.unknown(),
+  body: z.unknown(),
+});
 export type PostDetailRow = z.infer<typeof PostDetailRowSchema>;
 
 // ── UI v2 content model (0021–0022) ───────────────────────────────────────────────

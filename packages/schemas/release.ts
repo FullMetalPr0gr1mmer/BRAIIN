@@ -186,14 +186,32 @@ export type ReleaseFailureCode = (typeof RELEASE_FAILURE_CODES)[number];
 export const JSON_MEASURE_MAX_DEPTH = 128;
 
 /**
- * UTF-8 bytes of a JSON value as sent: the Worker's early check against the DB's cap. A value
- * nested past JSON_MEASURE_MAX_DEPTH is infinitely large (H15): JSON.stringify recurses once a
- * level and overflowed the stack on a deep payload, a RangeError where a refusal was meant.
+ * UTF-8 bytes of a JSON value as sent, or null for a value nested past JSON_MEASURE_MAX_DEPTH,
+ * which is not stringified (H15): JSON.stringify recurses once a level and overflowed the stack
+ * on a deep payload, a RangeError where a refusal was meant. The depth is walked once.
  */
-export function jsonBytes(value: unknown): number {
-  if (!jsonDepthWithin(value, JSON_MEASURE_MAX_DEPTH)) return Number.POSITIVE_INFINITY;
+function measuredBytes(value: unknown): number | null {
+  if (!jsonDepthWithin(value, JSON_MEASURE_MAX_DEPTH)) return null;
   return new TextEncoder().encode(JSON.stringify(value) ?? '').length;
 }
+
+/**
+ * UTF-8 bytes of a JSON value as sent: the Worker's early check against the DB's cap. A value
+ * nested past JSON_MEASURE_MAX_DEPTH is infinitely large (H15).
+ */
+export function jsonBytes(value: unknown): number {
+  return measuredBytes(value) ?? Number.POSITIVE_INFINITY;
+}
+
+/**
+ * A draft payload's refusal for a value nested past JSON_MEASURE_MAX_DEPTH (H15 code review,
+ * CR6): its own code, so an editor is told what is wrong with it (DRAFT_TOO_DEEP_MESSAGE), not
+ * that it is too large.
+ */
+export const DRAFT_TOO_DEEP = 'too-deep';
+/** What the draft writer answers for DRAFT_TOO_DEEP (P-12: plain words, what to do next). */
+export const DRAFT_TOO_DEEP_MESSAGE =
+  'This change has too many levels inside each other. Remove some and save again.';
 
 /**
  * A draft's payload: the merged camelCase input, an object. UNTRUSTED wherever it is read
@@ -201,9 +219,13 @@ export function jsonBytes(value: unknown): number {
  * re-parses it with the entity's own schema and toRow (releases.md A3-13). This checks only
  * the envelope.
  */
-export const DraftPayloadSchema = z
-  .record(z.string(), z.unknown())
-  .refine((p) => jsonBytes(p) <= DRAFT_PAYLOAD_MAX_BYTES, 'too-large');
+export const DraftPayloadSchema = z.record(z.string(), z.unknown()).superRefine((p, ctx) => {
+  const bytes = measuredBytes(p);
+  if (bytes === null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: DRAFT_TOO_DEEP });
+  else if (bytes > DRAFT_PAYLOAD_MAX_BYTES) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'too-large' });
+  }
+});
 
 // ---- Rows as the database returns them (snake_case) -----------------------------------------
 

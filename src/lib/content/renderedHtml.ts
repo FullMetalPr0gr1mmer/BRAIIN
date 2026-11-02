@@ -228,7 +228,10 @@ export function docFromRenderedHtml(html: unknown): TiptapDoc | null {
         stack.push({ close: name, mark: { type: markType } });
       } else if (blockNode !== undefined) {
         if (top().mark) return null;
+        // Its own attrs (H15 code review, CR10): a spread alone would hand every heading of
+        // every read-back BLOCK_TAGS' one attrs object, so a change to one changed them all.
         const node: TiptapNode = { ...blockNode, content: [] };
+        if (blockNode.attrs !== undefined) node.attrs = { ...blockNode.attrs };
         if (!append(node)) return null;
         stack.push({ close: name, node });
       } else {
