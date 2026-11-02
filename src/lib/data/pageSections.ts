@@ -8,7 +8,7 @@ import {
 import { LocalizedTextSchema } from '@schemas/content';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import type { SectionData } from '@/lib/sections/types';
-import { parseRow, parseRows, reportLoadError } from './parse';
+import { latestInstant, parseRow, parseRows, reportLoadError } from './parse';
 import { contentClient } from './source';
 import { serviceClient } from '@/lib/supabase/server';
 import { pageAccess } from '@/lib/visibility/scope';
@@ -64,20 +64,6 @@ export interface PageComposition {
    * removed section leaves no date behind; the password page's unlocked read carries none.
    */
   modifiedAt: string | null;
-}
-
-/** The latest of some timestamps (as PostgREST writes them), as written; null for none. */
-export function latestInstant(values: readonly unknown[]): string | null {
-  let best: string | null = null;
-  let bestAt = Number.NEGATIVE_INFINITY;
-  for (const value of values) {
-    if (typeof value !== 'string') continue;
-    const at = Date.parse(value);
-    if (Number.isNaN(at) || at <= bestAt) continue;
-    best = value;
-    bestAt = at;
-  }
-  return best;
 }
 
 const KNOWN = new Set<string>(SECTION_TYPES);

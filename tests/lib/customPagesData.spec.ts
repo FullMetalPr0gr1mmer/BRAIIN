@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // getPublishedCustomPages (Admin v2 E11), the sitemap's and llms.txt's reader, against a
 // stubbed client. E11 review E11-C2: its `updatedAt` is the sitemap's <lastmod>, and a section
 // edit never moves pages.updated_at, so it is the later of the row's and its newest section's
-// (embedded, newest first, one each), as the page's own WebPage dateModified is.
+// (embedded), as the page's own WebPage dateModified is.
 
 const db = vi.hoisted(() => ({
   rows: [] as unknown[],
@@ -44,20 +44,18 @@ beforeEach(() => {
 });
 
 describe('the published custom pages', () => {
-  it('embed each page’s newest section date, one only', async () => {
+  it('embed their sections’ dates (a plain embed, which the releases preview answers)', async () => {
     await getPublishedCustomPages();
     const select = db.calls.find(([m]) => m === 'select')?.[1][0];
     expect(select).toMatch(/page_sections\(updated_at\)/);
-    expect(db.calls).toContainEqual([
-      'order',
-      ['updated_at', { referencedTable: 'page_sections', ascending: false }],
-    ]);
-    expect(db.calls).toContainEqual(['limit', [1, { referencedTable: 'page_sections' }]]);
   });
 
   it('are dated by the later of the row and its newest section', async () => {
     db.rows = [
-      row('our-story', '2026-10-01T08:00:00+00:00', ['2026-10-30T12:00:00+00:00']),
+      row('our-story', '2026-10-01T08:00:00+00:00', [
+        '2026-10-05T08:00:00+00:00',
+        '2026-10-30T12:00:00+00:00',
+      ]),
       row('how-we-work', '2026-10-20T08:00:00+00:00', ['2026-10-02T08:00:00+00:00']),
       row('no-sections', '2026-10-03T08:00:00+00:00', []),
       row('undated', null, [null]),

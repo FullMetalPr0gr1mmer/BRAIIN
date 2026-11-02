@@ -2,8 +2,7 @@ import { z } from 'zod';
 import { isCustomPageSlug } from '@schemas/customPages';
 import { LocalizedTextSchema } from '@schemas/content';
 import { supabaseConfigured } from '@/lib/supabase/client';
-import { latestInstant } from './pageSections';
-import { parseRows, reportLoadError } from './parse';
+import { latestInstant, parseRows, reportLoadError } from './parse';
 import { contentClient } from './source';
 
 // The published custom pages (Admin v2 E11), for the readers that LIST pages: the sitemap and
@@ -13,8 +12,9 @@ import { contentClient } from './source';
 // render is never offered to a crawler. Bounded (§4, the Free plan): 200 pages at most.
 //
 // `updatedAt` is when what the page shows last changed (Admin v2 E11 review E11-C2): a section
-// edit never moves `pages.updated_at`, so each row embeds its newest visible section's date
-// (anon reads only those, 0011) and the later of the two is the sitemap's <lastmod>, the same
+// edit never moves `pages.updated_at`, so each row embeds its visible sections' dates (anon
+// reads only those, 0011; a plain embed, which the releases preview answers, where an ordered
+// or limited one is refused) and the latest of them all is the sitemap's <lastmod>, the same
 // rule as the page's own WebPage `dateModified` (getPageComposition's `modifiedAt`).
 
 const CustomPageRowSchema = z.object({
@@ -44,8 +44,6 @@ export async function getPublishedCustomPages(): Promise<PublishedCustomPage[]> 
       .select('id,slug,title,updated_at,page_sections(updated_at)')
       .eq('status', 'published')
       .order('slug', { ascending: true })
-      .order('updated_at', { referencedTable: 'page_sections', ascending: false })
-      .limit(1, { referencedTable: 'page_sections' })
       .limit(CUSTOM_PAGES_LISTED);
     if (error) {
       reportLoadError('page', error);
