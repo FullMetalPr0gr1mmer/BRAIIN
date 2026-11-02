@@ -1943,6 +1943,9 @@ describe('footer (E6), a new guide put by the footer columns migration', () => {
     expect(ui).toContain('{year} becomes this year');
     expect(en).toContain('up to four');
     expect(screen).toContain('Always shown');
+    // A heading's links go with it (0009: parent_id on delete cascade): both say so.
+    expect(en).toContain('Removing a column also removes the links in it');
+    expect(screen).toContain('Removing a column also removes the links in it');
     for (const label of [
       'Appearance › Footer',
       'Add a column',

@@ -181,7 +181,8 @@ select app.put_help_guide($guide$
           "Add a column gives the footer a column with a title in both languages, up to four. A column has no link of its own.",
           "Every footer link has a Column choice: the column it sits in, or No column to keep it in the row under the columns.",
           "Move up and Move down change the order. The eye shows or hides a column or a link.",
-          "Admins and Content Creators change the columns. To rename a column, change a link, add one or remove one, open the Menus screen."
+          "Admins and Content Creators change the columns. To rename a column, change a link, add one or remove one, open the Menus screen.",
+          "Removing a column also removes the links in it, so choose No column for them first."
         ]
       },
       { "t": "h", "x": "Legal links" },
@@ -216,7 +217,8 @@ select app.put_help_guide($guide$
           "يضيف Add a column إلى التذييل عمودًا بعنوان باللغتين، حتى أربعة أعمدة. وليس للعمود رابط خاص به.",
           "لكل رابط في التذييل اختيار Column: العمود الذي يظهر فيه، أو No column ليبقى في الصف أسفل الأعمدة.",
           "يغيّر Move up وMove down الترتيب. وتُظهر العين العمود أو الرابط أو تخفيه.",
-          "يغيّر الأعمدة المسؤول (Admin) وصانع المحتوى (Content Creator). ولإعادة تسمية عمود أو تغيير رابط أو إضافته أو حذفه، افتح شاشة Menus."
+          "يغيّر الأعمدة المسؤول (Admin) وصانع المحتوى (Content Creator). ولإعادة تسمية عمود أو تغيير رابط أو إضافته أو حذفه، افتح شاشة Menus.",
+          "حذف عمود يحذف الروابط التي فيه أيضًا، لذا اختر No column لها أولًا."
         ]
       },
       { "t": "h", "x": "الروابط القانونية" },

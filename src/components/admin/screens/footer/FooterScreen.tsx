@@ -522,12 +522,15 @@ function Columns({ onTitles }: { onTitles: (titles: string[]) => void }) {
       {full && model ? (
         <p className="ftr-cols__hint">
           The footer holds {FOOTER_COLUMNS_MAX} columns at most. Remove one on the Menus screen to
-          add another.
+          add another, after choosing No column for its links.
         </p>
       ) : null}
       <p className="ftr-cols__hint">
         A column shows on the site once it has a link. A column&apos;s title, a link&apos;s words
         and address, adding a link and removing one are on the Menus screen.
+      </p>
+      <p className="ftr-cols__hint">
+        Removing a column also removes the links in it, so choose No column for them first.
       </p>
     </section>
   );
