@@ -172,11 +172,12 @@ function draftSaveVerb(detail: Detail): string {
 }
 
 /** The per-tenant settings rows (src/lib/admin/singleton.ts) and their editors. */
-const SINGLETONS: Readonly<Record<string, { noun: string; ui: string }>> = {
+const SINGLETONS: Readonly<Record<string, { noun: string; ui: string | readonly string[] }>> = {
   site_settings: { noun: 'the general settings', ui: 'settings' },
   site_integrations: { noun: 'the integrations', ui: 'integrations' },
   seo_defaults: { noun: 'the global SEO defaults', ui: 'seo' },
-  site_profile: { noun: 'the public identity', ui: 'profile' },
+  // Admin v2 E6: the identity row's footer columns are edited by the Footer screen's form.
+  site_profile: { noun: 'the public identity', ui: ['profile', 'footer'] },
   ai_config: { noun: 'the Style-Finder results and logic', ui: 'ai-config' },
   // Admin v2 E5: the Header screen's form (SINGLETON_UI 'appearance').
   site_appearance: { noun: 'the header', ui: 'appearance' },
@@ -631,7 +632,7 @@ function fieldLabels(entity: string | null): ReadonlyMap<string, string> {
   const fields =
     KERNEL_ENTITIES.get(entity)?.fields ??
     (Object.hasOwn(SINGLETONS, entity)
-      ? (SINGLETON_UI[SINGLETONS[entity]!.ui]?.fields ?? [])
+      ? [SINGLETONS[entity]!.ui].flat().flatMap((key) => SINGLETON_UI[key]?.fields ?? [])
       : null);
   if (!fields) return NO_LABELS;
   const labels = new Map(

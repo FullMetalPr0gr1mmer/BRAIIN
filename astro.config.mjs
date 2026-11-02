@@ -61,6 +61,7 @@ const ADMIN_DASHBOARD_LAZY =
 const ADMIN_EDITOR_ISLAND_NAMES = [
   'AdminCollection',
   'AdminCrmSettings',
+  'AdminFooter',
   'AdminForms',
   'AdminGeneral',
   'AdminHeader',
@@ -76,6 +77,7 @@ const ADMIN_EDITOR_ISLAND_NAMES = [
 const ADMIN_EDITOR_SCREEN_DIRS = [
   'collection',
   'crmSettings',
+  'footer',
   'forms',
   'general',
   'header',

@@ -1,41 +1,14 @@
-import type { Locale } from '@schemas/primitives';
 import type { SocialLink } from '@schemas/siteProfile';
 import type { Identity } from '@/lib/identity/fallback';
 import { NETWORKS } from '@/lib/social/networks';
 
+export { copyrightLine, DEFAULT_COPYRIGHT, type CopyrightParts } from './copyright';
+
 // The public footer's settings (Admin v2 E6), pure so they are unit-tested
-// (tests/lib/footerSettings.spec.ts): the copyright line from its template, and what the
+// (tests/lib/footerColumns.spec.ts): the copyright line from its template, and what the
 // footer draws for each of U9's four settings (site_profile, 0102). Every default is the
 // footer as built, so a site that saved nothing renders the same bytes
 // (tests/render/siteChrome.spec.ts).
-
-/** The built-in line: the footer as built, "© 2026 Braiin Statiion. Jeddah, Saudi Arabia". */
-export const DEFAULT_COPYRIGHT = '© {year} {brand}. {place}';
-
-/** What the placeholders become. */
-export interface CopyrightParts {
-  /** The year as the locale writes it (Arabic-Indic digits in Arabic, as the footer always has). */
-  year: string;
-  /** The site name (site_profile, CLAUDE.md §1: the brand is data). */
-  brand: string;
-  /** The location. */
-  place: string;
-}
-
-/**
- * The copyright line: the saved template in this locale, else the built-in line, with
- * `{year}`, `{brand}` and `{place}` filled in. Each placeholder is replaced once, in one pass,
- * so a brand or place that itself contains "{year}" is never filled again. The result is
- * text: the page escapes it.
- */
-export function copyrightLine(
-  template: { en: string; ar: string } | null | undefined,
-  locale: Locale,
-  parts: CopyrightParts,
-): string {
-  const source = template?.[locale]?.trim() || DEFAULT_COPYRIGHT;
-  return source.replace(/\{(year|brand|place)\}/g, (_, key: keyof CopyrightParts) => parts[key]);
-}
 
 /** One social account as the footer draws it: an icon link named by its network. */
 export interface FooterSocial {

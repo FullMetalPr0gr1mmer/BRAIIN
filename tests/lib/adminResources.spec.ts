@@ -41,6 +41,8 @@ const SINGLETONS = [
   'ai-config',
   // Admin v2 E5: the Header screen's options form (site_appearance).
   'appearance',
+  // Admin v2 E6: the Footer screen's basics (four columns of site_profile).
+  'footer',
   'integrations',
   'maintenance',
   'profile',

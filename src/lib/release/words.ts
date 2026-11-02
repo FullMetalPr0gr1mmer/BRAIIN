@@ -22,8 +22,9 @@ const SLUG_OF = new Map<ResourceConfig, string>(
 );
 
 /** The singleton editors by the release type they edit (src/lib/admin/ui SINGLETON_UI keys). */
-const SINGLETON_UI_OF: Partial<Record<ReleaseEntityType, string>> = {
-  site_profile: 'profile',
+const SINGLETON_UI_OF: Partial<Record<ReleaseEntityType, string | readonly string[]>> = {
+  // Admin v2 E6: the identity row's footer columns are the Footer screen's form.
+  site_profile: ['profile', 'footer'],
   seo_defaults: 'seo',
   // Admin v2 E5: the Header screen's form.
   site_appearance: 'appearance',
@@ -74,7 +75,7 @@ function uiFields(entry: RegistryEntry): readonly FieldDef[] {
     return (slug ? RESOURCE_UI[slug]?.fields : undefined) ?? [];
   }
   const key = SINGLETON_UI_OF[entry.entityType];
-  return (key ? SINGLETON_UI[key]?.fields : undefined) ?? [];
+  return key ? [key].flat().flatMap((k) => SINGLETON_UI[k]?.fields ?? []) : [];
 }
 
 /** Per type: a column (or child key) → its words. Built once per isolate. */

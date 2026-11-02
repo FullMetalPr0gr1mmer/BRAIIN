@@ -1,0 +1,40 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminFooter from '@/components/admin/islands/AdminFooter';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+
+export const prerender = false;
+
+// Footer (Admin v2 E6, docs/admin-v2/ui.md "### Footer"; the prototype's
+// `route('/appearance/footer')`): the footer's basics (settings.general: Admin, Developer,
+// four columns of `site_profile`) and its link columns (nav.edit: Admin, Content Creator, the
+// navigation table's heading rows), each part for the role that holds its capability (P-9);
+// the legal links are shown locked to both. A role with neither gets the layout with the
+// refusal and a 403. The island loads each part from its API, which checks the same
+// capability again. `client:load`: the island IS the page (/admin is exempt from the CWV
+// budgets, CLAUDE.md §6, and gated on bundle size instead).
+
+const session = Astro.locals.session;
+const settings = Boolean(session && can(session.role, 'settings.general') === 'full');
+const nav = Boolean(session && can(session.role, 'nav.edit') === 'full');
+const allowed = settings || nav;
+if (!allowed) Astro.response.status = 403;
+---
+
+<AdminLayout
+  title="Footer"
+  subtitle="The bottom of every page: copyright, links and social icons."
+  styles={['footer.css']}
+>
+  {
+    allowed && (
+      <a slot="actions" class="btn" href="/" target="_blank" rel="noopener">
+        <Icon name="ext" size={16} />
+        Open the site
+      </a>
+    )
+  }
+  {!allowed ? <Refused /> : <AdminFooter client:load settings={settings} nav={nav} />}
+</AdminLayout>

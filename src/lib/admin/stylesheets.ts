@@ -14,6 +14,8 @@ export const ADMIN_STYLESHEETS = [
   'collection.css',
   'crm-settings.css',
   'dashboard.css',
+  // Admin v2 E6: the Footer screen (its sketch and the columns card).
+  'footer.css',
   'forms.css',
   'general.css',
   // Admin v2 E5: the Header screen (its sketches of the bar and the menu card).
