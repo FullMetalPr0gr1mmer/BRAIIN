@@ -19,7 +19,8 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/pages/index'),
     method: 'POST',
     url: '/api/admin/pages',
-    body: { slug: 'about', title: VALID_BILINGUAL, status: 'draft' },
+    // A custom page (Admin v2 E11): a create takes a custom page's address only.
+    body: { slug: 'our-story', title: VALID_BILINGUAL, status: 'draft' },
     allow: ['admin', 'content_creator'],
   },
   {
