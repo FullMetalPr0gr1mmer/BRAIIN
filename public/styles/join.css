@@ -135,7 +135,7 @@ html[dir='rtl'] .join-why__item p {
 .join-step {
   position: relative;
   padding: clamp(22px, 3vh, 30px);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bs-radius-scale, 1));
   background: var(--bs-paper);
   border: 1px solid var(--bs-line-l);
 }
@@ -349,7 +349,7 @@ html[dir='rtl'] .af-label {
   color: var(--bs-fg);
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--bs-line-d);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--bs-radius-scale, 1));
   padding: 14px 15px;
   transition:
     border-color 0.3s,
@@ -475,7 +475,7 @@ html[dir='rtl'] .af-grid select {
   align-items: center;
   gap: 18px;
   padding: 22px;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--bs-radius-scale, 1));
   border: 1.5px dashed rgba(255, 255, 255, 0.26);
   background: rgba(255, 255, 255, 0.03);
   transition:
@@ -513,7 +513,7 @@ html[dir='rtl'] .af-grid select {
   position: absolute;
   inset: -5px;
   border: 2px solid var(--bs-cobalt);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bs-radius-scale, 1));
   pointer-events: none;
 }
 .af-drop__ico {
@@ -522,7 +522,7 @@ html[dir='rtl'] .af-grid select {
   place-items: center;
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bs-radius-scale, 1));
   background: var(--bs-klein);
   color: var(--bs-paper);
 }
@@ -716,7 +716,7 @@ html[dir='rtl'] .af-consent label {
   align-items: center;
   gap: 12px;
   padding: 18px 20px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bs-radius-scale, 1));
   background: rgba(2, 76, 255, 0.14);
   border: 1px solid rgba(2, 76, 255, 0.45);
   font-size: 14.5px;

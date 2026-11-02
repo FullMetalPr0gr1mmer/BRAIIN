@@ -494,7 +494,7 @@ video {
 .notice {
   border: 1px solid var(--bs-border-d);
   padding: 0.75rem 1rem;
-  border-radius: 0.75rem;
+  border-radius: calc(0.75rem * var(--bs-radius-scale, 1));
   background: var(--bs-surface);
 }
 
@@ -540,7 +540,7 @@ html[dir='rtl'] .badge {
   background: var(--bs-klein);
   color: #fff;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--bs-btn-radius, 999px);
   text-decoration: none;
   font-family: inherit;
   font-size: 0.85rem;
@@ -993,7 +993,7 @@ html[dir='rtl'] .site-header__key::after {
   background: var(--bs-klein);
   border: 1px solid var(--bs-klein);
   padding: 7px 15px;
-  border-radius: 999px;
+  border-radius: var(--bs-btn-radius, 999px);
   text-decoration: none;
   transition:
     background 0.25s,
@@ -1321,8 +1321,8 @@ html:has(:focus-visible) .site-header--overlay {
   font-size: var(--bs-fs-display);
   line-height: 0.9;
   letter-spacing: -0.035em;
-  font-weight: 800;
-  text-transform: uppercase;
+  font-weight: var(--bs-heading-weight, 800);
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .hero h1 {
   font-size: clamp(34px, 5.6vw, 96px);
@@ -1765,8 +1765,8 @@ html[dir='rtl'] .about-intro__cols p {
   font-size: clamp(27px, 4.9vw, 80px);
   line-height: 1.04;
   letter-spacing: -0.035em;
-  font-weight: 800;
-  text-transform: uppercase;
+  font-weight: var(--bs-heading-weight, 800);
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .slogan p {
   line-height: 1.35;
@@ -2075,10 +2075,10 @@ html[dir='rtl'] .marquee-item {
   margin: 0;
   max-width: 15ch;
   font-size: clamp(34px, 6vw, 96px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.95;
   letter-spacing: -0.035em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .disc__head h2 {
   font-size: clamp(30px, 5vw, 80px);
@@ -2159,7 +2159,7 @@ html[dir='rtl'] .disc__stage {
   inset: 0;
   overflow: hidden;
   isolation: isolate;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bs-radius-scale, 1));
   background: var(--bs-media-bg);
 }
 .disc-card:nth-child(2) {
@@ -2239,7 +2239,7 @@ html[dir='rtl'] .disc__stage {
   position: absolute;
   z-index: 3;
   inset: 0;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bs-radius-scale, 1));
   pointer-events: none;
 }
 .disc-card:focus-visible {
@@ -2375,10 +2375,10 @@ html[dir='rtl'] .disc-card__cnt {
 .disc-card__t {
   display: block;
   font-size: clamp(16px, calc(var(--disc-rest) * 0.104), 30px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 1.02;
   letter-spacing: -0.025em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .disc-card__t {
   font-size: clamp(19px, 1.7vw, 28px);
@@ -2670,10 +2670,10 @@ html[dir='rtl'] .disc-card__line {
 .display-cta {
   margin: 0 0 clamp(48px, 8vh, 96px);
   font-size: clamp(34px, 7.4vw, 120px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.92;
   letter-spacing: -0.04em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .display-cta {
   font-size: clamp(28px, 5.4vw, 86px);
@@ -2745,7 +2745,7 @@ html[dir='rtl'] .contact-form label {
   color: var(--bs-fg);
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--bs-line-d);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--bs-radius-scale, 1));
   padding: 14px 15px;
   transition:
     border-color 0.3s,
@@ -2841,7 +2841,7 @@ html[dir='rtl'] .contact-form select {
   grid-column: 1 / -1;
   margin: 0;
   padding: 0.9rem 1.1rem;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bs-radius-scale, 1));
   background: var(--bs-surface);
 }
 
@@ -2902,7 +2902,7 @@ html[dir='rtl'] .social-strip h2 {
   min-height: 158px;
   padding: 20px;
   border: 1px solid var(--bs-line-l);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bs-radius-scale, 1));
   background: rgba(0, 0, 0, 0.025);
   color: var(--bs-ink);
   text-decoration: none;
@@ -3001,10 +3001,10 @@ html[dir='rtl'] .sbox__user {
 }
 .social-strip--klein h2 {
   font-size: clamp(38px, 7vw, 120px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.9;
   letter-spacing: -0.045em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
   max-width: 12ch;
 }
 html[dir='rtl'] .social-strip--klein h2 {
@@ -3119,7 +3119,7 @@ html[dir='rtl'] .social-strip--klein h2 {
   height: 100%;
   padding: 1.25rem;
   border: 1px solid var(--bs-border-d);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bs-radius-scale, 1));
   background: var(--bs-surface);
   color: inherit;
   text-decoration: none;
@@ -3206,7 +3206,7 @@ html[dir='rtl'] .social-strip--klein h2 {
   display: block;
   padding: 1rem 1.25rem;
   border: 1px solid var(--bs-border-d);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bs-radius-scale, 1));
   background: var(--bs-surface);
   color: inherit;
   text-decoration: none;
@@ -3275,7 +3275,7 @@ html[dir='rtl'] .social-strip--klein h2 {
   gap: 0.25rem;
   padding: 1.25rem;
   border: 1px solid var(--bs-border-d);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bs-radius-scale, 1));
   background: var(--bs-surface);
 }
 
@@ -3307,7 +3307,7 @@ html[dir='rtl'] .social-strip--klein h2 {
 .team-card {
   padding: 1.25rem;
   border: 1px solid var(--bs-border-d);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bs-radius-scale, 1));
   background: var(--bs-surface);
 }
 
@@ -3347,7 +3347,7 @@ html[dir='rtl'] .social-strip--klein h2 {
   gap: 0.2rem;
   padding: 1rem 1.25rem;
   border: 1px solid var(--bs-border-d);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bs-radius-scale, 1));
   background: var(--bs-surface);
 }
 
@@ -3371,7 +3371,7 @@ html[dir='rtl'] .social-strip--klein h2 {
   position: relative;
   aspect-ratio: 16 / 9;
   background: var(--bs-black);
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bs-radius-scale, 1));
   overflow: hidden;
 }
 
@@ -3461,7 +3461,7 @@ html[dir='rtl'] .consent-text {
   font-size: 0.85rem;
   font-weight: 600;
   padding: 0.5rem 1.1rem;
-  border-radius: 999px;
+  border-radius: var(--bs-btn-radius, 999px);
   border: 1px solid rgba(255, 255, 255, 0.4);
   background: transparent;
   color: var(--bs-fg);
@@ -3520,8 +3520,8 @@ html[dir='rtl'] {
   font-size: clamp(30px, 5vw, 74px);
   line-height: 0.98;
   letter-spacing: -0.035em;
-  font-weight: 800;
-  text-transform: uppercase;
+  font-weight: var(--bs-heading-weight, 800);
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .sec-head h2 {
   font-size: clamp(26px, 4.2vw, 62px);
@@ -3637,7 +3637,7 @@ html[dir='rtl'] .hero--banner h1 {
   min-height: 196px;
   padding: 26px;
   border: 1px solid var(--bs-line-l);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bs-radius-scale, 1));
   background: rgba(0, 0, 0, 0.025);
   overflow: hidden;
   text-decoration: none;
@@ -3955,7 +3955,7 @@ html[dir='rtl'] .klein-band::before {
   position: relative;
   overflow: hidden;
   background: var(--bs-media-bg);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--bs-radius-scale, 1));
 }
 .mf img,
 .mf video {
@@ -3985,7 +3985,7 @@ html[dir='rtl'] .klein-band::before {
 }
 .mf--film {
   aspect-ratio: 16 / 10;
-  border-radius: 22px;
+  border-radius: calc(22px * var(--bs-radius-scale, 1));
 }
 .mf--film img,
 .mf--film video {
@@ -4076,10 +4076,10 @@ html[dir='rtl'] .klein-band::before {
   margin: 0;
   max-width: 14em;
   font-size: clamp(30px, 4.6vw, 68px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 1;
   letter-spacing: -0.035em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .blk-head {
   font-size: clamp(26px, 3.8vw, 56px);
@@ -4126,7 +4126,7 @@ html[dir='rtl'] .blk-prose {
 }
 .blk-prose :where(h2, h3, h4) {
   color: var(--bs-ink);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 1.25;
 }
 .blk-prose * + :where(h2, h3, h4) {
@@ -4437,10 +4437,10 @@ html[dir='rtl'] .facets--case .facets__k {
 .sb__head h2 {
   margin: 0;
   font-size: clamp(28px, 3.6vw, 54px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   letter-spacing: -0.035em;
   line-height: 1;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
   max-width: 18ch;
 }
 html[dir='rtl'] .sb__head h2 {
@@ -4633,10 +4633,10 @@ html[dir='rtl'] .sb--reach .sb__head > p {
 .tm h2 {
   margin: 0;
   font-size: clamp(32px, 4.4vw, 70px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   letter-spacing: -0.04em;
   line-height: 0.95;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 .tm--light h2 {
   font-size: clamp(26px, 3.4vw, 50px);
@@ -4882,10 +4882,10 @@ html[dir='rtl'] .tm__bar i {
 .lead-band h2 {
   margin: 0;
   font-size: clamp(40px, 8vw, 136px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   letter-spacing: -0.045em;
   line-height: 0.9;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
   max-width: 12ch;
 }
 html[dir='rtl'] .lead-band h2 {
@@ -5157,10 +5157,10 @@ html[dir='rtl'] .sel-work__link {
   margin: 0;
   max-width: 16ch;
   font-size: clamp(34px, 5vw, 80px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.95;
   letter-spacing: -0.04em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .sel-work__state h2 {
   letter-spacing: 0;
@@ -5267,7 +5267,7 @@ html[dir='rtl'] .contact-form--compact .contact-form__foot .cta--trail {
   align-items: center;
   gap: 12px;
   padding: 18px 20px;
-  border-radius: 12px;
+  border-radius: calc(12px * var(--bs-radius-scale, 1));
   background: rgba(2, 76, 255, 0.14);
   border: 1px solid rgba(2, 76, 255, 0.45);
   font-size: 14.5px;
