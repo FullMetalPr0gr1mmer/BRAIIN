@@ -41,6 +41,12 @@ describe('where a pending change is edited', () => {
     expect(editHref('form_settings', ID)).toBe('/admin/forms');
   });
 
+  it('the identity names the labels of both its forms, General and Footer (Admin v2 E6)', () => {
+    expect(
+      fieldLabels('site_profile', ['brand_name', 'footer_copyright', 'footer_show_email']),
+    ).toEqual(['Site name', 'Copyright line', 'Show the email address']);
+  });
+
   it('the forms config names its two forms (Admin v2 E8)', () => {
     expect(fieldLabels('form_settings', ['inquiry', 'application'])).toEqual([
       'Inquiry form',
