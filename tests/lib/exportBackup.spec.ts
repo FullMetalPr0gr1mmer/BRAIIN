@@ -106,6 +106,15 @@ describe('content backup', () => {
     expect(columnsOf('statistics').has('value_numeric')).toBe(true); // added by 0023
   });
 
+  it('carries a footer column as a column (review E6-C3): is_heading with its null href', () => {
+    // navigation_heading_shape (0122) refuses a row with no href unless it is a heading, so a
+    // restore of a column without the flag fails, and the footer's columns are lost.
+    const nav = BACKUP_TABLES.find((t) => t.table === 'navigation')?.columns.split(',');
+    expect(nav).toContain('href');
+    expect(nav).toContain('parent_id');
+    expect(nav).toContain('is_heading');
+  });
+
   it("never dumps where a quote's consent record is kept", () => {
     const quotes = BACKUP_TABLES.find((t) => t.table === 'testimonials');
     expect(quotes?.columns.split(',')).toContain('consent_obtained_at');

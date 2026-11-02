@@ -40,8 +40,10 @@ import { footerSketch, sketchFacts, type SketchFacts } from './sketch';
 //   - Columns (nav.edit: Admin, Content Creator): the footer's columns (navigation heading
 //     rows, 0122) with their links, Add a column (four at most), Move up and Move down, the eye
 //     and every link's column, each one write of the navigation API (versioned; in release mode
-//     it names the row's pending change or carries the marker, R12b); a link's words and
-//     address, a column's title, adding a link and removing one are on the Menus screen;
+//     it names the row's pending change or carries the marker, R12b); hiding a column hides
+//     its links on the site (src/lib/nav/tree.ts footerTree); a link's words and address, a
+//     column's title and adding a link are on the Menus screen, where only an Admin removes
+//     a row (0009's navigation_delete_admin);
 //   - Legal links: shown locked, always (PDPL).
 
 export interface FooterScreenProps {
@@ -383,7 +385,9 @@ function Columns({ onTitles }: { onTitles: (titles: string[]) => void }) {
       void run(
         async () => ((await patch(item, { visible: !item.visible }))['draft'] ? 'pending' : 'live'),
         item.visible
-          ? `${item.label} is hidden from the footer.`
+          ? 'links' in item
+            ? `${item.label} is hidden from the footer, with its links.`
+            : `${item.label} is hidden from the footer.`
           : `${item.label} shows in the footer.`,
       ),
   };
@@ -521,13 +525,14 @@ function Columns({ onTitles }: { onTitles: (titles: string[]) => void }) {
       <AddColumn disabled={working || full} onAdd={add} />
       {full && model ? (
         <p className="ftr-cols__hint">
-          The footer holds {FOOTER_COLUMNS_MAX} columns at most. Remove one on the Menus screen to
-          add another, after choosing No column for its links.
+          The footer holds {FOOTER_COLUMNS_MAX} columns at most. To add another, an Admin removes
+          one on the Menus screen, after you choose No column for its links.
         </p>
       ) : null}
       <p className="ftr-cols__hint">
-        A column shows on the site once it has a link. A column&apos;s title, a link&apos;s words
-        and address, adding a link and removing one are on the Menus screen.
+        A column shows on the site once it has a link. Hiding a column hides its links on the site
+        too. A column&apos;s title, a link&apos;s words and address and adding a link are on the
+        Menus screen. Only an Admin can remove a link or a column there.
       </p>
       <p className="ftr-cols__hint">
         Removing a column also removes the links in it, so choose No column for them first.

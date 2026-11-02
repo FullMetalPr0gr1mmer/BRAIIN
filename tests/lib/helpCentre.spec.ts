@@ -1946,6 +1946,25 @@ describe('footer (E6), a new guide put by the footer columns migration', () => {
     // A heading's links go with it (0009: parent_id on delete cascade): both say so.
     expect(en).toContain('Removing a column also removes the links in it');
     expect(screen).toContain('Removing a column also removes the links in it');
+    // Hiding a column hides its links on the site (src/lib/nav/tree.ts, review E6-C1): the
+    // guide, the card and the column's toast say so. The screen's JSX text, as one line.
+    const flat = screen.replace(/\s+/g, ' ');
+    expect(en).toContain('Hiding a column hides its links on the site too');
+    expect(text('ar')).toContain('وإخفاء العمود يُخفي روابطه في الموقع أيضًا');
+    expect(flat).toContain('Hiding a column hides its links on the site too');
+    expect(screen).toContain('is hidden from the footer, with its links.');
+    // Only an Admin deletes a navigation row (0009 navigation_delete_admin, the authz case
+    // 'navigation delete' allows admin only), so neither tells a Content Creator to remove one
+    // (review E6-C2).
+    expect(readFileSync('supabase/migrations/0009_admin_cms.sql', 'utf8')).toMatch(
+      /create policy navigation_delete_admin on public\.navigation\s+as restrictive for delete\s+using \(tenant_id = app\.effective_tenant_id\(\) and app\.is_admin\(\)\);/,
+    );
+    expect(en).toContain('Only an Admin can remove a link or a column.');
+    expect(text('ar')).toContain('ولا يحذف رابطًا أو عمودًا إلا المسؤول (Admin).');
+    expect(flat).toContain('Only an Admin can remove a link or a column there.');
+    expect(flat).toContain('an Admin removes one on the Menus screen');
+    expect(en).not.toMatch(/add one or remove one/);
+    expect(flat).not.toMatch(/Remove one on the Menus screen|adding a link and removing one/);
     for (const label of [
       'Appearance › Footer',
       'Add a column',

@@ -13,6 +13,9 @@
 --   • at most four columns per tenant, hidden ones counted, as an INSERT and as an UPDATE that
 --     makes a link a heading (23514 naming navigation_footer_columns_max); a heading's own
 --     edits and another tenant's columns are not refused;
+--   • a parent is in the writer's own tenant (navigation_parent_fk, review E6-SEC-1): a key
+--     check bypasses RLS, so without the composite key an Admin could put a link under
+--     another tenant's row by its id; refused as an insert and as an update (23503);
 --   • anon reads a visible heading (no link) and a link under it, never a hidden heading;
 --   • releases on: a direct write of a heading is refused by the release guard.
 --
@@ -20,7 +23,7 @@
 -- tenant anon resolves to (app.default_tenant_id()).
 
 begin;
-select plan(35);
+select plan(39);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name, created_at) values
@@ -47,6 +50,10 @@ insert into public.navigation (id, tenant_id, location, label, href, visible, is
    '{"en":"Hidden","ar":"مخفي"}', null, false, true, 9),
   ('e6000000-0000-0000-0000-00000000f001', 'e6000000-0000-0000-0000-000000000001', 'footer',
    '{"en":"About","ar":"من نحن"}', '/about', true, false, 1);
+-- T2: a footer link, the parent another tenant's writer must not be able to name.
+insert into public.navigation (id, tenant_id, location, label, href, sort_order) values
+  ('e6000000-0000-0000-0000-00000000f0f1', 'e6000000-0000-0000-0000-0000000000ff', 'footer',
+   '{"en":"Elsewhere","ar":"مكان آخر"}', '/elsewhere', 1);
 
 create function _as(p_sub text, p_role text, p_tid text) returns void language sql as $$
   select set_config(
@@ -131,6 +138,15 @@ select is(
   'the BEFORE triggers in firing order: the release guard first, the column limit before the stamps');
 select ok(has_column_privilege('anon', 'public.navigation', 'is_heading', 'select'),
   'anon reads is_heading as every other column (0011''s table grant)');
+select ok(exists (select 1 from pg_constraint
+                   where conrelid = 'public.navigation'::regclass
+                     and conname = 'navigation_parent_fk' and contype = 'f' and convalidated
+                     and confdeltype = 'c'
+                     and pg_get_constraintdef(oid) ~ '^FOREIGN KEY \(tenant_id, parent_id\)')
+          and (select count(*) from pg_constraint
+                where conrelid = 'public.navigation'::regclass and contype = 'f'
+                  and confrelid = 'public.navigation'::regclass) = 1,
+  'a parent is keyed with its tenant (tenant_id, parent_id), the only key to itself');
 select is((select columns from app.release_entities where entity_type = 'nav_item'),
   array['location', 'parent_id', 'label', 'href', 'visible', 'is_key', 'sort_order', 'is_heading'],
   'the registry stages is_heading with the rest of a menu link');
@@ -192,6 +208,22 @@ select is(_state($$ update public.navigation set href = null
 select is(_state($$ update public.navigation set location = 'header'
                     where id = 'e6000000-0000-0000-0000-0000000000c1' $$), '23514',
   'a heading CANNOT move to the header');
+
+-- ── 3b. A parent of this tenant only ─────────────────────────────────────────
+select is(_state($$ insert into public.navigation (tenant_id, location, label, href, parent_id)
+                    values ('e6000000-0000-0000-0000-000000000001', 'footer',
+                            '{"en":"A","ar":"أ"}', '/a',
+                            'e6000000-0000-0000-0000-00000000f0f1') $$), '23503',
+  'admin CANNOT put a link under another tenant''s row (the key checks the tenant)');
+select ok(_message($$ insert into public.navigation (tenant_id, location, label, href, parent_id)
+                      values ('e6000000-0000-0000-0000-000000000001', 'footer',
+                              '{"en":"A","ar":"أ"}', '/a',
+                              'e6000000-0000-0000-0000-00000000f0f1') $$)
+          ~ 'navigation_parent_fk',
+  'the refusal names navigation_parent_fk (the Worker''s 422 on parentId)');
+select is(_state($$ update public.navigation set parent_id = 'e6000000-0000-0000-0000-00000000f0f1'
+                    where id = 'e6000000-0000-0000-0000-00000000f001' $$), '23503',
+  'admin CANNOT move a stored link under another tenant''s row');
 
 -- ── 4. At most four columns per tenant (hidden ones counted) ─────────────────
 -- T1 holds three: the hidden one, admin's and content_creator's.

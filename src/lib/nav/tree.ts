@@ -39,10 +39,13 @@ export function nest(rows: NavRow[]): NavNode[] {
 
 /**
  * The footer's visible rows → columns and loose links. A heading heads a column of the links
- * under it; a link under a link nests one level, as the header's; a link whose parent is
- * absent (hidden, or a heading past the fourth) is promoted to the loose links, never lost. A
- * heading that is not a top-level row, or a link without an address, is dropped (the CHECK
- * makes both impossible; a read never trusts that).
+ * under it; a link under a link nests one level, as the header's. A link whose parent (or a
+ * parent's parent) is absent from the rows is hidden with it: the rows are the visible ones,
+ * so its column or its link was hidden, and hiding a column hides its links (the Footer
+ * screen's eye, review E6-C1; unlike the header's `nest`, which promotes). A link under a
+ * heading that IS read but not drawn (past the fourth) is promoted to the loose links, never
+ * lost. A heading that is not a top-level row, or a link without an address, is dropped (the
+ * CHECK makes both impossible; a read never trusts that).
  */
 export function footerTree(rows: readonly FooterRow[]): FooterNavigation {
   const bySort = <T extends { sort_order: number }>(a: T, b: T) => a.sort_order - b.sort_order;
@@ -67,8 +70,22 @@ export function footerTree(rows: readonly FooterRow[]): FooterNavigation {
         ]
       : [],
   );
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  // True when a parent up the chain is not among the rows (hidden). A cycle stops the walk.
+  const underHidden = (row: NavRow): boolean => {
+    const seen = new Set<string>([row.id]);
+    for (let parent = row.parent_id; parent !== null;) {
+      const up = byId.get(parent);
+      if (!up) return true;
+      if (seen.has(up.id)) return false;
+      seen.add(up.id);
+      parent = up.parent_id;
+    }
+    return false;
+  };
   const loose: NavRow[] = [];
   for (const row of linkRows) {
+    if (underHidden(row)) continue;
     const column = row.parent_id ? columns.get(row.parent_id) : undefined;
     if (column) column.links.push({ ...row, children: [] });
     else loose.push(row);

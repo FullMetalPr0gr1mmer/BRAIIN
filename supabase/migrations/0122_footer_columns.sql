@@ -41,6 +41,18 @@
 --      the roles that open it (settings.general: Admin and Developer, the basics; nav.edit:
 --      Admin and Content Creator, the columns). Its place is 44, free in the catalog (43 is
 --      E5's header-and-menu, 45 collections-and-faq).
+--   5. A row's parent is in its own tenant: 0009's single-column parent_id key is replaced by
+--      a composite one, navigation_parent_fk (tenant_id, parent_id) -> (tenant_id, id), on
+--      delete cascade as before, over a new unique (tenant_id, id). A key check bypasses RLS,
+--      so the old key let a nav.edit holder who knew another tenant's row id put a link under
+--      it (and that tenant's removal then cascaded into this one). E6 makes parent_id a
+--      footer column's membership, so the fence is built here (review E6-SEC-1). The Worker
+--      maps a refusal to a 422 on parentId (src/lib/admin/resources/navigation.ts). The index
+--      (tenant_id, parent_id) serves the key's cascade and the column reads.
+--
+-- Rule 5 for the key (5.): only a write that names another tenant's row as a parent is
+-- refused, which no screen sends; every stored row passes it (one tenant today; a row that
+-- did not would stop the push with a message naming E6, before the key is added).
 --
 -- Grants are untouched: anon's table-level SELECT on navigation (0011) reads is_heading as
 -- every other column (a heading's title is public on the footer it heads), and staff write
@@ -180,8 +192,8 @@ select app.put_help_guide($guide$
         "x": [
           "Add a column gives the footer a column with a title in both languages, up to four. A column has no link of its own.",
           "Every footer link has a Column choice: the column it sits in, or No column to keep it in the row under the columns.",
-          "Move up and Move down change the order. The eye shows or hides a column or a link.",
-          "Admins and Content Creators change the columns. To rename a column, change a link, add one or remove one, open the Menus screen.",
+          "Move up and Move down change the order. The eye shows or hides a column or a link. Hiding a column hides its links on the site too.",
+          "Admins and Content Creators change the columns. To rename a column, change a link or add one, open the Menus screen. Only an Admin can remove a link or a column.",
           "Removing a column also removes the links in it, so choose No column for them first."
         ]
       },
@@ -216,8 +228,8 @@ select app.put_help_guide($guide$
         "x": [
           "يضيف Add a column إلى التذييل عمودًا بعنوان باللغتين، حتى أربعة أعمدة. وليس للعمود رابط خاص به.",
           "لكل رابط في التذييل اختيار Column: العمود الذي يظهر فيه، أو No column ليبقى في الصف أسفل الأعمدة.",
-          "يغيّر Move up وMove down الترتيب. وتُظهر العين العمود أو الرابط أو تخفيه.",
-          "يغيّر الأعمدة المسؤول (Admin) وصانع المحتوى (Content Creator). ولإعادة تسمية عمود أو تغيير رابط أو إضافته أو حذفه، افتح شاشة Menus.",
+          "يغيّر Move up وMove down الترتيب. وتُظهر العين العمود أو الرابط أو تخفيه، وإخفاء العمود يُخفي روابطه في الموقع أيضًا.",
+          "يغيّر الأعمدة المسؤول (Admin) وصانع المحتوى (Content Creator). ولإعادة تسمية عمود أو تغيير رابط أو إضافته، افتح شاشة Menus. ولا يحذف رابطًا أو عمودًا إلا المسؤول (Admin).",
           "حذف عمود يحذف الروابط التي فيه أيضًا، لذا اختر No column لها أولًا."
         ]
       },
@@ -234,6 +246,45 @@ select app.put_help_guide($guide$
   }
 }
 $guide$::jsonb, 0);
+
+-- ═══ 5. A row's parent is in its own tenant ═══════════════════════════════════════════════
+do $$
+declare
+  v_bad text;
+begin
+  select string_agg(c.id::text, ', ') into v_bad
+    from public.navigation c
+    join public.navigation p on p.id = c.parent_id
+   where p.tenant_id <> c.tenant_id;
+  if v_bad is not null then
+    raise exception 'E6: navigation rows whose parent is in another tenant: %', v_bad;
+  end if;
+end $$;
+
+alter table public.navigation drop constraint if exists navigation_tenant_id_id;
+alter table public.navigation add constraint navigation_tenant_id_id unique (tenant_id, id);
+alter table public.navigation drop constraint if exists navigation_parent_fk;
+alter table public.navigation
+  add constraint navigation_parent_fk foreign key (tenant_id, parent_id)
+    references public.navigation (tenant_id, id) on delete cascade;
+-- 0009's key, found by what it is rather than by a generated name.
+do $$
+declare
+  v_name name;
+begin
+  for v_name in
+    select c.conname from pg_constraint c
+     where c.conrelid = 'public.navigation'::regclass and c.contype = 'f'
+       and c.confrelid = 'public.navigation'::regclass
+       and c.conkey = array[(select a.attnum from pg_attribute a
+                              where a.attrelid = 'public.navigation'::regclass
+                                and a.attname = 'parent_id')]::int2[]
+  loop
+    execute format('alter table public.navigation drop constraint %I', v_name);
+  end loop;
+end $$;
+create index if not exists navigation_tenant_parent_idx
+  on public.navigation (tenant_id, parent_id) where parent_id is not null;
 
 -- ═══ Postconditions ═══════════════════════════════════════════════════════════════════════
 -- Each block says what it checks. Expressions are read as pg_get_expr prints them.
@@ -386,5 +437,30 @@ begin
   -- ---- 7. Releases are still off everywhere (0038, 0051, 0062, 0066) ----------------------
   if exists (select 1 from app.release_tenants) then
     raise exception 'E6: releases must stay switched off (app.release_tenants is not empty)';
+  end if;
+
+  -- ---- 8. The parent key: the one key from navigation to itself, (tenant_id, parent_id) to
+  -- (tenant_id, id), validated, on delete cascade, over unique (tenant_id, id) ---------------
+  if (select count(*) from pg_constraint
+       where conrelid = 'public.navigation'::regclass and contype = 'f'
+         and confrelid = 'public.navigation'::regclass) <> 1
+     or not exists (select 1 from pg_constraint
+                     where conrelid = 'public.navigation'::regclass
+                       and conname = 'navigation_parent_fk' and contype = 'f' and convalidated
+                       and confdeltype = 'c'
+                       and pg_get_constraintdef(oid)
+                           ~ '^FOREIGN KEY \(tenant_id, parent_id\) REFERENCES (public\.)?navigation\(tenant_id, id\) ON DELETE CASCADE$') then
+    raise exception 'E6: navigation_parent_fk is missing, not as written, or not the only parent key';
+  end if;
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.navigation'::regclass
+                    and conname = 'navigation_tenant_id_id' and contype = 'u'
+                    and pg_get_constraintdef(oid) = 'UNIQUE (tenant_id, id)') then
+    raise exception 'E6: navigation_tenant_id_id (unique tenant_id, id) is missing';
+  end if;
+  if not exists (select 1 from pg_indexes
+                  where schemaname = 'public' and tablename = 'navigation'
+                    and indexname = 'navigation_tenant_parent_idx') then
+    raise exception 'E6: navigation_tenant_parent_idx is missing';
   end if;
 end $$;

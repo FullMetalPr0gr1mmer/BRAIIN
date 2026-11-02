@@ -52,6 +52,12 @@ export const navigationResource: ResourceConfig = {
       field: 'isHeading',
       message: `The footer already has ${FOOTER_COLUMNS_MAX} columns. Remove one or turn it back into a link first.`,
     },
+    // A parent is keyed with its tenant (0122, review E6-SEC-1): a row of another site's
+    // menus is refused as if it did not exist.
+    navigation_parent_fk: {
+      field: 'parentId',
+      message: 'That column or link is not in this site’s menus. Choose another one.',
+    },
   },
   toRow: (input) => {
     const values = pick(input as Input, NAV_KEYS);
