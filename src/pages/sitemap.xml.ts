@@ -5,6 +5,7 @@ import { localizedPath } from '@/lib/i18n';
 import { getPublishedServices } from '@/lib/data/services';
 import { getCaseStudyIndex } from '@/lib/data/portfolio';
 import { getPublishedPosts } from '@/lib/data/blog';
+import { getPublishedCustomPages } from '@/lib/data/customPages';
 import { getSeoDefaults, getSeoRules } from '@/lib/data/seo';
 import { indexability, isIndexedPath } from '@/lib/seo/indexable';
 import type { SeoEntityType } from '@/lib/seo/entityPaths';
@@ -51,11 +52,13 @@ export const GET: APIRoute = async (context) => {
   // (`locals`); a crawler's copy may list a page up to an hour after it is hidden (max-age).
   const visibility = context?.locals?.visibility;
   const now = Date.now();
-  const [services, portfolio, posts, seoRules, seoDefaults] = await Promise.all([
+  const [services, portfolio, posts, customPages, seoRules, seoDefaults] = await Promise.all([
     getPublishedServices(),
     // The case-study page's own loader + schema (never a URL the page would 404 on).
     getCaseStudyIndex(),
     getPublishedPosts(),
+    // Admin v2 E11: the custom pages, each at `/<slug>`, with its row's `updated_at`.
+    getPublishedCustomPages(),
     // Admin v2 U10 (D8): what leaves a URL out for crawlers, read in the same round.
     getSeoRules(),
     getSeoDefaults(),
@@ -86,6 +89,11 @@ export const GET: APIRoute = async (context) => {
       path: `/creative-knowledge/${p.slug}`,
       updated: p.updated_at,
       ref: { type: 'blog_post' as const, id: p.id },
+    })),
+    ...customPages.map((p) => ({
+      path: `/${p.slug}`,
+      updated: p.updatedAt,
+      ref: { type: 'page' as const, id: p.id },
     })),
   ];
   // Page visibility first (U14a), then indexability (U10): a page hidden from search by its

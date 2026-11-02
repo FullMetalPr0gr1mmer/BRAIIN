@@ -2,7 +2,7 @@ import type { SeoRuleRow } from '@/lib/data/seo';
 import { canonicalPath } from './canonical';
 import { isNoindex } from './robots';
 import type { SeoEntityType } from './entityPaths';
-import { PAGE_PATHS } from '@/lib/visibility/routes';
+import { targetForPath } from '@/lib/visibility/routes';
 
 // Which URLs the sitemap and llms.txt may offer (Admin v2 U10 D8; ui.md §5 "sitemap noindex
 // exclusion"). A URL is left out when its effective robots says noindex (the page's own SEO
@@ -46,12 +46,11 @@ export function indexability(
 
 /** The SEO target behind a static route's path (a CMS page), or null. */
 function pageRefOf(ix: Indexability, path: string): { type: 'page'; id: string } | null {
-  for (const [slug, pagePath] of Object.entries(PAGE_PATHS)) {
-    if (pagePath !== path) continue;
-    const id = ix.pageIds.get(slug);
-    return id ? { type: 'page', id } : null;
-  }
-  return null;
+  // A route page's path, or a custom page's `/<slug>` (Admin v2 E11).
+  const target = targetForPath(path);
+  if (target?.kind !== 'page') return null;
+  const id = ix.pageIds.get(target.slug);
+  return id ? { type: 'page', id } : null;
 }
 
 /**

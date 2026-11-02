@@ -341,7 +341,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (!isAdmin && !isApi && !isHealth && !isImage && !isThemeSheet) {
     const snapshot = await getVisibilitySnapshot(env);
     locals.visibility = snapshot;
-    const target = targetForRoute(context.routePattern);
+    // The custom page routes (Admin v2 E11) name their page by the route's `slug` param.
+    const target = targetForRoute(context.routePattern, context.params);
     if (target) gate = decide(snapshot, target, Date.now());
     if (gate.action === 'password' && target?.kind === 'page') {
       // The route's language, as below: the route is what would render.

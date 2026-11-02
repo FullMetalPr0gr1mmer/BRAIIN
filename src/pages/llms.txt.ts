@@ -6,6 +6,7 @@ import { getPublishedDisciplines } from '@/lib/data/disciplines';
 import { llmsServiceLines } from '@/lib/services/discovery';
 import { getPublishedPosts } from '@/lib/data/blog';
 import { getCaseStudyIndex } from '@/lib/data/portfolio';
+import { getPublishedCustomPages } from '@/lib/data/customPages';
 import { TRAINING_DENY, RETRIEVAL_ALLOW } from '@/lib/seo/crawlers';
 import { getIdentity } from '@/lib/identity';
 import { getSeoDefaults, getSeoRules } from '@/lib/data/seo';
@@ -41,19 +42,29 @@ export const GET: APIRoute = async ({ locals }) => {
   // template, are not offered to answer engines (the middleware's snapshot, from `locals`).
   const visibility = locals?.visibility;
   const now = Date.now();
-  const [allServices, disciplines, allPosts, allCaseStudies, identity, seoRules, seoDefaults] =
-    await Promise.all([
-      getPublishedServices(),
-      getPublishedDisciplines(),
-      getPublishedPosts(),
-      // The case-study page's own loader + schema, as the sitemap uses: never a 404.
-      getCaseStudyIndex(),
-      getIdentity(locals),
-      // Admin v2 U10 (D8): a page hidden from search (robots noindex, or canonicalised onto
-      // another path) is not offered to answer engines either, as the sitemap.
-      getSeoRules(),
-      getSeoDefaults(),
-    ]);
+  const [
+    allServices,
+    disciplines,
+    allPosts,
+    allCaseStudies,
+    allCustomPages,
+    identity,
+    seoRules,
+    seoDefaults,
+  ] = await Promise.all([
+    getPublishedServices(),
+    getPublishedDisciplines(),
+    getPublishedPosts(),
+    // The case-study page's own loader + schema, as the sitemap uses: never a 404.
+    getCaseStudyIndex(),
+    // Admin v2 E11: the pages made with "New page", each at `/<slug>`.
+    getPublishedCustomPages(),
+    getIdentity(locals),
+    // Admin v2 U10 (D8): a page hidden from search (robots noindex, or canonicalised onto
+    // another path) is not offered to answer engines either, as the sitemap.
+    getSeoRules(),
+    getSeoDefaults(),
+  ]);
   const ix = indexability(seoRules, seoDefaults?.robots_directives);
   const listed = (path: string, ref: { type: SeoEntityType; id: string } | null = null) =>
     isListedPath(visibility, path, now) && isIndexedPath(ix, path, site, ref);
@@ -66,9 +77,17 @@ export const GET: APIRoute = async ({ locals }) => {
   const posts = allPosts.filter((p) =>
     listed(`/creative-knowledge/${p.slug}`, { type: 'blog_post', id: p.id }),
   );
-  const sectionLines = SECTIONS.filter(([, path]) => listed(path))
-    .map(([label, path]) => `- ${label}: ${site}${path}`)
-    .join('\n');
+  const customPages = allCustomPages.filter((p) =>
+    listed(`/${p.slug}`, { type: 'page', id: p.id }),
+  );
+  const sectionLines = [
+    ...SECTIONS.filter(([, path]) => listed(path)).map(
+      ([label, path]) => `- ${label}: ${site}${path}`,
+    ),
+    // Admin v2 E11: each custom page under the sections, by its English title (capped like
+    // the articles).
+    ...customPages.slice(0, 20).map((p) => `- ${p.title.en}: ${site}/${p.slug}`),
+  ].join('\n');
 
   // Answer engines cite pages, so list the live ones rather than only a section index —
   // grouped under their discipline (Round 2), still with no count anywhere.

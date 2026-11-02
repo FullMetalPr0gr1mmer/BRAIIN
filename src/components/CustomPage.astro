@@ -1,0 +1,38 @@
+---
+import type { Locale } from '@schemas/primitives';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import SectionRenderer from '@/components/SectionRenderer.astro';
+import { ogImageCandidates } from '@/lib/seo/ogImage';
+import type { CustomPageData } from '@/lib/sections/customPage';
+
+// A custom page (Admin v2 E11): a page made with "New page" in the admin, composed of the
+// sections a custom page holds (`pages` + `page_sections`), rendered at `/<slug>` and
+// `/ar/<slug>`. Its data is loaded by the route (src/lib/sections/customPage.ts, with the
+// route-level rules), so the route tags the sections it renders before it sets its headers.
+// Laid out as Contact is: a banner hero under the overlay header, then the sections.
+
+interface Props {
+  locale: Locale;
+  page: CustomPageData;
+}
+
+const { locale, page } = Astro.props;
+const { sections, jsonLd, path } = page;
+const { seo } = page.head;
+---
+
+<BaseLayout
+  title={seo.title}
+  description={seo.description}
+  locale={locale}
+  logicalPath={path}
+  jsonLd={jsonLd}
+  robots={seo.robots}
+  ogImages={ogImageCandidates(seo)}
+  {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
+  header="overlay"
+>
+  <main>
+    <SectionRenderer locale={locale} sections={sections} />
+  </main>
+</BaseLayout>
