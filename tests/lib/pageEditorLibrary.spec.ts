@@ -19,6 +19,7 @@ import { pageFileFor } from '../admin/routes';
 import {
   PAGE_NAMES,
   SECTION_KINDS,
+  addressNote,
   alwaysShown,
   anchorOf,
   availability,
@@ -202,7 +203,10 @@ describe('Add section: what each page may take, and why not', () => {
     for (const slug of ['admin', 'Not-Lower']) {
       expect(routedPage(slug)).toBeNull();
       expect(customPage(slug)).toBe(false);
-      expect(availability(slug, []).every((o) => !o.ok), slug).toBe(true);
+      expect(
+        availability(slug, []).every((o) => !o.ok),
+        slug,
+      ).toBe(true);
     }
   });
 
@@ -221,6 +225,14 @@ describe('Add section: what each page may take, and why not', () => {
     expect(withHero.find((o) => o.type === 'hero')?.ok).toBe(false);
     // A custom page's first hero is the banner, and the editor says so.
     expect(routeNote('hero', 'our-story', true)).toMatch(/short banner.*Our Work.*own title/);
+  });
+
+  it('the page details say where a page lives, and who chose its address', () => {
+    expect(addressNote('about', '/about')).toBe('Address /about, set by the site’s routes.');
+    expect(addressNote('our-story', '/our-story')).toBe(
+      'Address /our-story, chosen when the page was made.',
+    );
+    expect(addressNote('admin', null)).toBe('No route of the site shows this page yet.');
   });
 
   it('the seeded compositions are each something their page may hold', () => {

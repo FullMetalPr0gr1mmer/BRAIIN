@@ -34,6 +34,9 @@ const ROUTES = [
   '/join',
   '/ar/join',
   '/join?status=bad_type',
+  // Admin v2 E11: the seeded custom page (a banner hero and a text block)
+  '/how-we-work',
+  '/ar/how-we-work',
   '/search',
   // The privacy notice: its rights lines are mailto: links inside the prose (J-17)
   '/privacy',

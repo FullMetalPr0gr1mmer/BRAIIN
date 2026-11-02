@@ -1,6 +1,6 @@
 import { customPageSlugProblem, isRoutePageSlug } from '@schemas/customPages';
 
-// The New page dialog's rules (Admin v2 E11), pure: the island and tests/lib/newPage.spec.ts
+// The New page dialog's rules (Admin v2 E11), pure: the island and tests/lib/customPages.spec.ts
 // both read them. The server holds every one of them too (PageWriteSchema, 0123's trigger, the
 // unique key, SectionWriteSchema's hero headline rule); these only say a refusal before a
 // round trip, in the same words.

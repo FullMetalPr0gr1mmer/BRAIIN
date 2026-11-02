@@ -430,6 +430,17 @@ export function alwaysShown(type: string, page: string): string | null {
 }
 
 /**
+ * The page details' line about the page's address (E1; Admin v2 E11 for a custom page, whose
+ * address was chosen in the New page dialog and is not changed here).
+ */
+export function addressNote(slug: string, path: string | null): string {
+  if (!path) return 'No route of the site shows this page yet.';
+  return customPage(slug)
+    ? `Address ${path}, chosen when the page was made.`
+    : `Address ${path}, set by the site’s routes.`;
+}
+
+/**
  * What the route decides around a section, said plainly (ui.md: "honest notes on route data"),
  * or null. `firstOfType`: the section is the first of its type on the page (hidden ones count),
  * which is the one a preset dresses.
