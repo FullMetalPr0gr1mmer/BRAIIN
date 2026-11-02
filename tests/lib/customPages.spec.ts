@@ -37,13 +37,8 @@ import {
 
 vi.mock('astro:env/client', () => ({ PUBLIC_SITE_URL: 'https://www.example.test' }));
 
-const {
-  CUSTOM_HERO_DATA,
-  customDescription,
-  customSections,
-  docText,
-  heroHeadlineOf,
-} = await import('@/lib/sections/customPage');
+const { CUSTOM_HERO_DATA, customDescription, customSections, docText, heroHeadlineOf } =
+  await import('@/lib/sections/customPage');
 
 // Custom pages (Admin v2 E11; docs/admin-v2/as-built/E11.md): the address rules, held to the
 // site's own files and to 0123's SQL; the route-level rules on a custom page's sections; its
@@ -227,7 +222,9 @@ describe('the sections a custom page holds', () => {
     expect(heroHeadlineOf('one two three four five six seven eight nine ten eleven')).toBe(
       'one two three four five six seven eight nine ten',
     );
-    expect(heroHeadlineOf('Supercalifragilistic')).toBe('Supercalifrag'.padEnd(14, 'i').slice(0, 14));
+    expect(heroHeadlineOf('Supercalifragilistic')).toBe(
+      'Supercalifrag'.padEnd(14, 'i').slice(0, 14),
+    );
     expect([...heroHeadlineOf('Supercalifragilistic')].length).toBe(14);
   });
 
@@ -296,7 +293,9 @@ describe('the head, the tags and the listings', () => {
     expect(pagePath('admin')).toBeNull();
     const ix = indexability(
       {
-        rules: [{ entity_type: 'page', entity_id: 'p1', robots: 'noindex', canonical_override: null }],
+        rules: [
+          { entity_type: 'page', entity_id: 'p1', robots: 'noindex', canonical_override: null },
+        ],
         pages: [{ id: 'p1', slug: 'our-story' }],
       },
       null,
@@ -330,7 +329,10 @@ describe('the section routes hold the set on a custom page', () => {
     const { db, asked } = pageDb('our-story');
     const refused = check(row, row, db);
     await expect(refused).rejects.toBeInstanceOf(ValidationError);
-    await expect(refused).rejects.toMatchObject({ field: 'type', detail: CUSTOM_PAGE_TYPE_REFUSED });
+    await expect(refused).rejects.toMatchObject({
+      field: 'type',
+      detail: CUSTOM_PAGE_TYPE_REFUSED,
+    });
     expect(asked).toEqual([
       { table: 'pages', query: { columns: 'id,slug', eq: { id: PAGE }, limit: 1 } },
     ]);
@@ -372,10 +374,18 @@ describe('the New page dialog', () => {
 
   it('makes a draft page, then its banner hero titled with the page’s title, both valid writes', () => {
     const page = newPagePayload(input);
-    expect(page).toEqual({ slug: 'our-story', title: { en: 'Our story', ar: 'قصتنا' }, status: 'draft' });
+    expect(page).toEqual({
+      slug: 'our-story',
+      title: { en: 'Our story', ar: 'قصتنا' },
+      status: 'draft',
+    });
     expect(PageWriteSchema.safeParse(page).success).toBe(true);
     const hero = heroPayload(PAGE_ID, input);
-    expect(hero).toMatchObject({ type: 'hero', visible: true, content: { headline: page['title'] } });
+    expect(hero).toMatchObject({
+      type: 'hero',
+      visible: true,
+      content: { headline: page['title'] },
+    });
     expect(SectionWriteSchema.safeParse(hero).success).toBe(true);
   });
 });
