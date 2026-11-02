@@ -350,6 +350,8 @@ describe('the chunk plan in astro.config.mjs', () => {
     expect(at('src/lib/admin/preview/bridge.ts')).toBe('admin-preview');
     expect(at('packages/schemas/previewMessage.ts')).toBe('admin-zod');
     expect(at('packages/schemas/themeTokens.ts')).toBe('admin-zod');
+    // Admin v2 E11: the preview bridge's route map reads the custom page rules.
+    expect(at('packages/schemas/customPages.ts')).toBe('admin-zod');
     expect(at('node_modules/zod/v4/classic/schemas.js')).toBe('admin-zod');
     const priority = (name: string) => groups.find((g) => g.name === name)!.priority;
     expect(priority('admin-zod')).toBeGreaterThan(priority('admin-ui'));
