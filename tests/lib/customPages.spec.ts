@@ -62,11 +62,15 @@ describe('the address rules', () => {
   it('every top-level route of src/pages and folder of public/ is a route slug or reserved', () => {
     const taken = new Set<string>([...ROUTE_PAGE_SLUGS, ...RESERVED_PAGE_SLUGS]);
     const segments = new Set<string>();
-    for (const name of readdirSync('src/pages')) {
-      const bare = name.replace(/\.(astro|ts)$/, '').replace(/\.[a-z]+$/, '');
-      // The two catch-all routes this slice and U14 added are not addresses.
-      if (/^\[/.test(bare)) continue;
-      segments.add(bare);
+    // src/pages/ar too (E11 review E11-SEC-2): a custom page also renders at /ar/<slug>, and an
+    // Arabic-only route there would silently shadow its twin.
+    for (const dir of ['src/pages', 'src/pages/ar']) {
+      for (const name of readdirSync(dir)) {
+        const bare = name.replace(/\.(astro|ts)$/, '').replace(/\.[a-z]+$/, '');
+        // The catch-all and `[slug]` routes (this slice's, U14's) are not addresses.
+        if (/^\[/.test(bare)) continue;
+        segments.add(bare);
+      }
     }
     for (const name of readdirSync('public')) {
       if (statSync(join('public', name)).isDirectory()) segments.add(name);

@@ -57,7 +57,8 @@ const EN_ROUTES = [
   '/terms',
   '/cookie-policy',
   // Admin v2 E11: a custom page holds no form (CUSTOM_PAGE_SECTION_TYPES has no form section,
-  // and its route renders no other type), so it loads GA4 as About does.
+  // and its route renders no other type), so it loads GA4 as About does. Only once the route
+  // has found the page, though: see GA4_WHEN_FOUND_ROUTES.
   '/[slug]',
 ] as const;
 
@@ -88,6 +89,28 @@ export interface Ga4Request {
   internal: boolean;
   /** Answered privately: a page unlocked by its password, or seen past the maintenance page. */
   private: boolean;
+}
+
+/**
+ * The GA4 routes whose page may not exist (Admin v2 E11 review E11-SEC-1, E11-C4). A custom
+ * page's route answers EVERY free one-segment path (`/wp-login`, `/anything`, `/ar/anything`),
+ * and most of those are no page: the route renders the 404 page by rewrite, which measures
+ * nothing. So for these the middleware reads nothing before the render; it leaves the route a
+ * starter (`locals.ga4Start`), and the route calls startGa4 only after it has found its page.
+ * A miss then costs no read, renders no loader and lists no Google host.
+ */
+export const GA4_WHEN_FOUND_ROUTES: ReadonlySet<string> = new Set(['/[slug]', '/ar/[slug]']);
+
+/**
+ * Called by a GA4_WHEN_FOUND_ROUTES route once it has found its page: starts the read the
+ * middleware deferred (none when the middleware decided this request loads no GA4), and puts
+ * the promise where the layout's loader and the middleware's CSP step read it.
+ */
+export function startGa4(locals: Pick<App.Locals, 'ga4' | 'ga4Start'>): void {
+  const start = locals.ga4Start;
+  if (!start) return;
+  delete locals.ga4Start;
+  locals.ga4 = start();
 }
 
 /** True when this request reads the id (and its page may load GA4): the switch, then the request. */

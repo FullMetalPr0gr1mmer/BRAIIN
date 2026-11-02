@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAINTENANCE_DEFAULTS } from '@schemas/maintenance';
 import { MAINTENANCE_KV_KEY } from '@/lib/http/maintenance';
@@ -42,7 +43,8 @@ vi.mock('@/lib/auth/context', () => ({
 }));
 
 const { onRequest } = await import('@/middleware');
-const { GA4_ROUTES, NOT_GA4_ROUTES } = await import('@/lib/http/ga4');
+const { GA4_ROUTES, GA4_WHEN_FOUND_ROUTES, NOT_GA4_ROUTES, startGa4 } =
+  await import('@/lib/http/ga4');
 
 type Next = (payload?: unknown) => Promise<Response>;
 type Handler = (context: unknown, next: Next) => Promise<Response>;
@@ -251,5 +253,103 @@ describe('the switch on', () => {
     expect(res.status).toBe(503);
     expect(google(res)).toBe(false);
     expect(read.calls).toBe(0);
+  });
+});
+
+// E11 review E11-SEC-1 / E11-C4: a custom page's route answers every free one-segment path,
+// and most are no page (`/wp-admin`, `/ar/anything`): the route rewrites to the 404 page. A
+// miss must read nothing, render no loader and list no Google host; a found page loads GA4
+// as About does. And no 404 ever lists Google, whatever route rendered it.
+describe('the switch on, a route whose page may not exist', () => {
+  beforeEach(() => {
+    flag.on = true;
+  });
+
+  /** The route's render: a found page starts the read (as [slug].astro does); a miss is the 404. */
+  async function custom(path: string, route: string, found: boolean) {
+    const ctx = context(path, route);
+    const seen: { ga4: unknown; start: unknown }[] = [];
+    const next: Next = async () => {
+      seen.push({ ga4: ctx.locals['ga4'], start: ctx.locals['ga4Start'] });
+      if (found) startGa4(ctx.locals as App.Locals);
+      // The 404 page's own rule (src/pages/404.astro): it drops any read it was handed.
+      else delete ctx.locals['ga4'];
+      return new Response('<html><body>page</body></html>', {
+        status: found ? 200 : 404,
+        headers: HTML,
+      });
+    };
+    const res = await run(ctx, next);
+    return { res, ctx, seen };
+  }
+
+  it('are the custom page twins, both GA4 routes', () => {
+    expect([...GA4_WHEN_FOUND_ROUTES].sort()).toEqual(['/[slug]', '/ar/[slug]']);
+    for (const route of GA4_WHEN_FOUND_ROUTES) expect(GA4_ROUTES.has(route), route).toBe(true);
+  });
+
+  it('an address that is no page (a probe) reads nothing and lists no Google host', async () => {
+    for (const [path, route] of [
+      ['/wp-admin', '/[slug]'],
+      ['/no-such-page', '/[slug]'],
+      ['/ar/no-such-page', '/ar/[slug]'],
+    ] as const) {
+      const { res, ctx, seen } = await custom(path, route, false);
+      expect(res.status, path).toBe(404);
+      expect(seen[0]?.ga4, path).toBeUndefined();
+      expect(ctx.locals['ga4'], path).toBeUndefined();
+      expect(google(res), path).toBe(false);
+    }
+    expect(read.calls).toBe(0);
+  });
+
+  it('a page the route found reads once, at its render, and lists the GA4 hosts', async () => {
+    for (const [path, route] of [
+      ['/how-we-work', '/[slug]'],
+      ['/ar/how-we-work', '/ar/[slug]'],
+    ] as const) {
+      const before = read.calls;
+      const { res, ctx, seen } = await custom(path, route, true);
+      expect(seen[0]?.ga4, path).toBeUndefined();
+      expect(typeof seen[0]?.start, path).toBe('function');
+      expect(read.calls, path).toBe(before + 1);
+      expect(await (ctx.locals['ga4'] as Promise<string | null>)).toBe('G-ABC123XYZ');
+      expect(google(res), path).toBe(true);
+    }
+  });
+
+  it('a 404 rendered by any GA4 route lists no Google host (an unknown service or project)', async () => {
+    for (const [path, route] of [
+      ['/services/no-such-service', '/services/[slug]'],
+      ['/ar/portfolio/no-such-project', '/ar/portfolio/[slug]'],
+    ] as const) {
+      const ctx = context(path, route);
+      const next: Next = async () =>
+        new Response('<html><body>404</body></html>', { status: 404, headers: HTML });
+      const res = await run(ctx, next);
+      expect(res.status, path).toBe(404);
+      expect(google(res), path).toBe(false);
+    }
+  });
+
+  it('the 404 pages drop the read they were handed, so they render no loader', () => {
+    for (const file of ['src/pages/404.astro', 'src/pages/ar/404.astro']) {
+      const source = readFileSync(file, 'utf8');
+      expect(source, file).toMatch(/^delete Astro\.locals\.ga4;$/m);
+    }
+  });
+
+  it('the custom page routes start the read only after the page is found', () => {
+    for (const [file, notFound] of [
+      ['src/pages/[slug].astro', "if (!page) return Astro.rewrite('/404');"],
+      ['src/pages/ar/[slug].astro', "if (!page) return Astro.rewrite('/ar/404');"],
+    ] as const) {
+      const source = readFileSync(file, 'utf8');
+      const miss = source.indexOf(notFound);
+      const start = source.indexOf('startGa4(Astro.locals);');
+      expect(miss, file).toBeGreaterThan(0);
+      expect(start, file).toBeGreaterThan(miss);
+      expect(source.match(/startGa4\(/g), file).toHaveLength(1);
+    }
   });
 });

@@ -9,7 +9,8 @@ import type { CustomPageData } from '@/lib/sections/customPage';
 // sections a custom page holds (`pages` + `page_sections`), rendered at `/<slug>` and
 // `/ar/<slug>`. Its data is loaded by the route (src/lib/sections/customPage.ts, with the
 // route-level rules), so the route tags the sections it renders before it sets its headers.
-// Laid out as Contact is: a banner hero under the overlay header, then the sections.
+// Laid out as Contact is: a banner hero under the overlay header, then the sections (the
+// solid header when an editor moved the hero down: customHeader).
 
 interface Props {
   locale: Locale;
@@ -30,7 +31,7 @@ const { seo } = page.head;
   robots={seo.robots}
   ogImages={ogImageCandidates(seo)}
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
-  header="overlay"
+  header={page.header}
 >
   <main>
     <SectionRenderer locale={locale} sections={sections} />

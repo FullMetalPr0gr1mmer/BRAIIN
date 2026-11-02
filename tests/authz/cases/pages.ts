@@ -19,7 +19,8 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/pages/index'),
     method: 'POST',
     url: '/api/admin/pages',
-    // A custom page (Admin v2 E11): a create takes a custom page's address only.
+    // A custom page (Admin v2 E11). The create schema refuses a reserved word; a route slug
+    // passes it, and 0001's unique key refuses one while that route's page exists.
     body: { slug: 'our-story', title: VALID_BILINGUAL, status: 'draft' },
     allow: ['admin', 'content_creator'],
   },

@@ -8,6 +8,7 @@ import {
   buildArticleSchema,
   buildFaqSchema,
   buildWebSiteSchema,
+  buildWebPageSchema,
   orgRef,
 } from '@/lib/seo/jsonld';
 import { IDENTITY_FALLBACK, type Identity } from '@/lib/identity/fallback';
@@ -113,6 +114,98 @@ describe('JSON-LD builders', () => {
       image: 'https://x/poster.jpg',
     });
     for (const key of Object.keys(s)) expect(SERVICE_PROPS.has(key), key).toBe(true);
+  });
+
+  // Admin v2 E11 (review E11-C7): a custom page's WebPage node, in the blocking seo-ci gate.
+  it('WebPage (custom page): its fields in English and Arabic, only real optional ones', () => {
+    for (const [locale, name, url] of [
+      ['en', 'Our story', 'https://x/our-story'],
+      ['ar', 'قصتنا', 'https://x/ar/our-story'],
+    ] as const) {
+      const bare = buildWebPageSchema({ name, url, siteUrl: 'https://x/', locale });
+      expect(bare).toEqual({
+        '@context': 'https://schema.org',
+        '@type': 'WebPage',
+        name,
+        url,
+        inLanguage: locale,
+        isPartOf: { '@type': 'WebSite', url: 'https://x' },
+      });
+      const full = buildWebPageSchema({
+        name,
+        url,
+        siteUrl: 'https://x',
+        locale,
+        description: locale === 'ar' ? 'كيف نشتغل.' : 'How we work.',
+        dateModified: '2026-10-30T12:00:00+00:00',
+      });
+      expect(full.description).toBe(locale === 'ar' ? 'كيف نشتغل.' : 'How we work.');
+      expect(full.dateModified).toBe('2026-10-30T12:00:00+00:00');
+    }
+  });
+
+  it('WebPage carries only properties schema.org defines on WebPage (or CreativeWork, Thing)', () => {
+    // https://schema.org/WebPage — its own, CreativeWork's and Thing's (the ones a page may
+    // plausibly carry; anything else is "not recognised" in the Schema Markup Validator).
+    const WEBPAGE_PROPS = new Set([
+      '@context',
+      '@type',
+      // Thing
+      'additionalType',
+      'alternateName',
+      'description',
+      'disambiguatingDescription',
+      'identifier',
+      'image',
+      'mainEntityOfPage',
+      'name',
+      'potentialAction',
+      'sameAs',
+      'subjectOf',
+      'url',
+      // CreativeWork
+      'about',
+      'abstract',
+      'author',
+      'contributor',
+      'copyrightHolder',
+      'copyrightYear',
+      'creator',
+      'dateCreated',
+      'dateModified',
+      'datePublished',
+      'editor',
+      'hasPart',
+      'headline',
+      'inLanguage',
+      'isPartOf',
+      'keywords',
+      'license',
+      'mainEntity',
+      'mentions',
+      'publisher',
+      'text',
+      'thumbnailUrl',
+      // WebPage
+      'breadcrumb',
+      'lastReviewed',
+      'mainContentOfPage',
+      'primaryImageOfPage',
+      'relatedLink',
+      'reviewedBy',
+      'significantLink',
+      'speakable',
+      'specialty',
+    ]);
+    const node = buildWebPageSchema({
+      name: 'قصتنا',
+      url: 'https://x/ar/our-story',
+      siteUrl: 'https://x',
+      locale: 'ar',
+      description: 'd',
+      dateModified: '2026-10-30T12:00:00+00:00',
+    });
+    for (const key of Object.keys(node)) expect(WEBPAGE_PROPS.has(key), key).toBe(true);
   });
 
   it('BreadcrumbList positions are 1-based and ordered', () => {

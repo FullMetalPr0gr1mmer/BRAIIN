@@ -61,5 +61,9 @@ declare namespace App {
     // (src/lib/http/ga4.ts). A promise, so the layout and the CSP share the one answer; null
     // for no id. Absent everywhere else, the preview included: then no loader renders.
     ga4?: Promise<string | null>;
+    // The same read, not yet started (Admin v2 E11): on a route whose page may not exist
+    // (GA4_WHEN_FOUND_ROUTES, the custom page's `[slug]` twins) the middleware leaves this
+    // instead, and the route calls startGa4 only once it has found its page.
+    ga4Start?: () => Promise<string | null>;
   }
 }

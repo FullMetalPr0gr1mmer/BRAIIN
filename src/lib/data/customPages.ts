@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { isCustomPageSlug } from '@schemas/customPages';
 import { LocalizedTextSchema } from '@schemas/content';
 import { supabaseConfigured } from '@/lib/supabase/client';
+import { latestInstant } from './pageSections';
 import { parseRows, reportLoadError } from './parse';
 import { contentClient } from './source';
 
@@ -10,12 +11,18 @@ import { contentClient } from './source';
 // seam, so a preview reads its own source. Only rows whose slug is a custom page's address are
 // kept: the seven route pages are listed by their own routes, and a row no `[slug]` route would
 // render is never offered to a crawler. Bounded (§4, the Free plan): 200 pages at most.
+//
+// `updatedAt` is when what the page shows last changed (Admin v2 E11 review E11-C2): a section
+// edit never moves `pages.updated_at`, so each row embeds its newest visible section's date
+// (anon reads only those, 0011) and the later of the two is the sitemap's <lastmod>, the same
+// rule as the page's own WebPage `dateModified` (getPageComposition's `modifiedAt`).
 
 const CustomPageRowSchema = z.object({
   id: z.string().uuid(),
   slug: z.string(),
   title: LocalizedTextSchema,
   updated_at: z.string().nullable(),
+  page_sections: z.array(z.object({ updated_at: z.string().nullable() })).nullish(),
 });
 
 export interface PublishedCustomPage {
@@ -34,9 +41,11 @@ export async function getPublishedCustomPages(): Promise<PublishedCustomPage[]> 
   try {
     const { data, error } = await contentClient()
       .from('pages')
-      .select('id,slug,title,updated_at')
+      .select('id,slug,title,updated_at,page_sections(updated_at)')
       .eq('status', 'published')
       .order('slug', { ascending: true })
+      .order('updated_at', { referencedTable: 'page_sections', ascending: false })
+      .limit(1, { referencedTable: 'page_sections' })
       .limit(CUSTOM_PAGES_LISTED);
     if (error) {
       reportLoadError('page', error);
@@ -44,7 +53,17 @@ export async function getPublishedCustomPages(): Promise<PublishedCustomPage[]> 
     }
     return parseRows(CustomPageRowSchema, data ?? [], 'page').flatMap((row) =>
       isCustomPageSlug(row.slug)
-        ? [{ id: row.id, slug: row.slug, title: row.title, updatedAt: row.updated_at }]
+        ? [
+            {
+              id: row.id,
+              slug: row.slug,
+              title: row.title,
+              updatedAt: latestInstant([
+                row.updated_at,
+                ...(row.page_sections ?? []).map((s) => s.updated_at),
+              ]),
+            },
+          ]
         : [],
     );
   } catch (err) {

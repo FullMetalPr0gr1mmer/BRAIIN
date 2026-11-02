@@ -14,12 +14,15 @@ import { HERO_PRESETS, type SectionData } from './types';
 //
 // In order:
 //   1. the slug is a custom page's address (packages/schemas/customPages.ts), or the route
-//      answers its 404 having read NOTHING: a probe for /wp-login or /.env costs no query, and
-//      a reserved word or a route slug (`/home`) never reaches the database;
+//      answers its 404 having read NOTHING: a URL that cannot be a page's address (`/.env`,
+//      `/wp-login.php`, `/Our-Story`), a reserved word or a route slug (`/home`) never
+//      reaches the database;
 //   2. the page, published, with its sections, through the one public loader
 //      (getPageComposition: anon under RLS, a password page's unlocked read inside its scope);
-//      no published page is the 404 too. The head's reads start beside it (its SEO override is
-//      keyed by the page id), so the page costs one round trip, not two;
+//      no published page is the 404 too. A free address that is no page (`/wp-admin`) costs
+//      that one read and nothing more: the head's reads (seo_defaults, the page's SEO
+//      override) start only once the page is found (E11 review E11-C3), as the 404 page skips
+//      them for every probe. One round trip more on a found page, which the edge caches;
 //   3. route-level rules on whatever the CMS says (customSections):
 //        only the custom set renders  a type a custom page cannot hold (written around the
 //                                     API) renders nothing;
@@ -28,7 +31,9 @@ import { HERO_PRESETS, type SectionData } from './types';
 //        a heading, always            with no visible heading section the page opens with a
 //                                     banner hero titled with the page's own title, so it has
 //                                     exactly one <h1>.
-//   4. JSON-LD: WebPage and its BreadcrumbList (Home > the page), in the page's language.
+//   4. JSON-LD: WebPage and its BreadcrumbList (Home > the page), in the page's language;
+//      `dateModified` is when what the page shows last changed (its row or a section);
+//   5. the header: the overlay only while the page opens on its banner hero (customHeader).
 
 export interface CustomPageData {
   page: PageComposition['page'];
@@ -37,6 +42,8 @@ export interface CustomPageData {
   jsonLd: JsonLdNode[];
   /** The page's English path (`/<slug>`): the layout's logical path. */
   path: string;
+  /** The layout's header (customHeader). */
+  header: 'overlay' | 'solid';
 }
 
 type Locals = Parameters<typeof loadHead>[0];
@@ -105,6 +112,16 @@ export function customSections(
   });
 }
 
+/**
+ * The header a custom page wears (E11 review E11-C1): the transparent overlay only while the
+ * first section a visitor sees is its dark banner hero. An editor may move the hero below a
+ * text block (a hero has no pin), and the fixed white overlay would then sit white on white
+ * over the paper block; Services and Join make the same choice (joinPage.ts, firstVisibleType).
+ */
+export function customHeader(sections: readonly SectionData[]): 'overlay' | 'solid' {
+  return sections.find((s) => s.visible !== false)?.type === 'hero' ? 'overlay' : 'solid';
+}
+
 /** The words of a rich-text document, in order, as one line (a description's source). */
 export function docText(doc: unknown, limit = 400): string {
   const out: string[] = [];
@@ -168,22 +185,17 @@ export async function loadCustomPage(
   slug: string | undefined,
 ): Promise<CustomPageData | null> {
   if (!isCustomPageSlug(slug)) return null;
-  const compositionQuery = getPageComposition(slug);
-  const [composition, head] = await Promise.all([
-    compositionQuery,
-    loadHead(locals, {
-      locale,
-      fallbackTitle: compositionQuery.then((c) => (c ? pickLocale(c.page.title, locale) : '')),
-      fallbackDescription: compositionQuery.then((c) =>
-        c ? customDescription(c.sections, locale) : '',
-      ),
-      entity: compositionQuery.then((c) => (c ? { type: 'page' as const, id: c.page.id } : null)),
-    }),
-  ]);
+  const composition = await getPageComposition(slug);
   // The loader answers the row it was asked for (citext): only the address as stored renders.
   if (!composition || composition.page.slug.toLowerCase() !== slug) return null;
 
   const { page } = composition;
+  const head = await loadHead(locals, {
+    locale,
+    fallbackTitle: pickLocale(page.title, locale),
+    fallbackDescription: customDescription(composition.sections, locale),
+    entity: { type: 'page', id: page.id },
+  });
   const sections = customSections(composition.sections, page.title);
   const path = pagePathOf(slug);
   const base = PUBLIC_SITE_URL.replace(/\/$/, '');
@@ -197,12 +209,12 @@ export async function loadCustomPage(
       siteUrl: base,
       locale,
       ...(description ? { description } : {}),
-      ...(page.updatedAt ? { dateModified: page.updatedAt } : {}),
+      ...(composition.modifiedAt ? { dateModified: composition.modifiedAt } : {}),
     }),
     buildBreadcrumbSchema([
       { name: HOME[locale], url: base + localizedPath('/', locale) },
       { name, url },
     ]),
   ];
-  return { page, sections, head, jsonLd, path };
+  return { page, sections, head, jsonLd, path, header: customHeader(sections) };
 }

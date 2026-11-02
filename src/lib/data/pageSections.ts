@@ -57,6 +57,27 @@ export interface PageComposition {
   /** The page row — `id` keys the page's SEO override (`loadHead`, entity type 'page'). */
   page: { id: string; slug: string; title: { en: string; ar: string }; updatedAt: string | null };
   sections: SectionData[];
+  /**
+   * When what the page shows last changed: the later of the page row's `updated_at` and its
+   * sections' (as read), for a truthful `dateModified` (Pillar 3; Admin v2 E11 review E11-C2).
+   * A section edit never moves `pages.updated_at`, so the row alone would understate it. A
+   * removed section leaves no date behind; the password page's unlocked read carries none.
+   */
+  modifiedAt: string | null;
+}
+
+/** The latest of some timestamps (as PostgREST writes them), as written; null for none. */
+export function latestInstant(values: readonly unknown[]): string | null {
+  let best: string | null = null;
+  let bestAt = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const at = Date.parse(value);
+    if (Number.isNaN(at) || at <= bestAt) continue;
+    best = value;
+    bestAt = at;
+  }
+  return best;
 }
 
 const KNOWN = new Set<string>(SECTION_TYPES);
@@ -104,6 +125,7 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
     const page = pageData ? parseRow(PageRowSchema, pageData, 'page') : null;
     if (!page) return null;
     const pageRef = { id: page.id, slug: page.slug, title: page.title, updatedAt: page.updated_at };
+    const pageOnly = { page: pageRef, sections: [], modifiedAt: latestInstant([page.updated_at]) };
 
     const unlocked =
       access !== undefined && access.pageId === page.id && access.tenantId.length > 0
@@ -113,7 +135,7 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
       unlocked === null
         ? await contentClient()
             .from('page_sections')
-            .select('id,type,content,visible,sort_order')
+            .select('id,type,content,visible,sort_order,updated_at')
             .eq('page_id', page.id)
             .order('sort_order', { ascending: true })
             .order('id', { ascending: true })
@@ -123,14 +145,19 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
           });
     if (error) {
       reportLoadError('page_section', error);
-      return { page: pageRef, sections: [] };
+      return pageOnly;
     }
 
     const sections = parseRows(PageSectionRowSchema, data ?? [], 'page_section').flatMap((row) => {
       const section = toSection(row);
       return section ? [section] : [];
     });
-    return { page: pageRef, sections };
+    const edited = (data ?? []).map((row: unknown) =>
+      typeof row === 'object' && row !== null
+        ? (row as Record<string, unknown>)['updated_at']
+        : null,
+    );
+    return { page: pageRef, sections, modifiedAt: latestInstant([page.updated_at, ...edited]) };
   } catch (err) {
     reportLoadError('page_section', err);
     return null;
