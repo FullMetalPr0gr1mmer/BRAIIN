@@ -14,6 +14,7 @@ import {
 } from '@schemas/customPages';
 import { PageSlugSchema, PageWriteSchema, SectionWriteSchema } from '@schemas/admin';
 import { SECTION_TYPES } from '@schemas/sectionTypes';
+import { sectionContentIssues, type SectionType } from '@schemas/sections';
 import { PAGE_PATHS } from '@/lib/visibility/routes';
 import { sectionResource } from '@/lib/admin/resources';
 import { pageResource } from '@/lib/admin/resources/pages';
@@ -279,6 +280,68 @@ describe('the sections a custom page holds', () => {
     expect(long.endsWith('…')).toBe(true);
     expect(docText(doc('a', 'b'))).toBe('a b');
   });
+
+  // H15's rule for a Tiptap body: the bounded walk first, then no recursion. A body the section
+  // walk refuses has no words, as TextBlock renders none of it, and nothing in it can throw.
+  it('reads a body only through the section walk, without recursion', () => {
+    const list = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'One' }] },
+        {
+          type: 'bulletList',
+          content: [
+            {
+              type: 'listItem',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'two' }] }],
+            },
+            {
+              type: 'listItem',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'three' }] }],
+            },
+          ],
+        },
+      ],
+    };
+    expect(docText(list)).toBe('One two three');
+    // The limit stops the read at the run of words that reaches it.
+    expect(docText(doc('abcd', 'efgh', 'ijkl'), 6)).toBe('abcd efgh');
+    let deep: Record<string, unknown> = { type: 'text', text: 'deep' };
+    for (let i = 0; i < 100_000; i += 1) deep = { type: 'blockquote', content: [deep] };
+    const bomb = { type: 'doc', content: [deep] };
+    expect(() => docText(bomb)).not.toThrow();
+    expect(docText(bomb)).toBe('');
+    // Outside the section walk's model (an h1, an image): no words, as the page shows none.
+    const h1 = {
+      type: 'doc',
+      content: [{ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Big' }] }],
+    };
+    expect(docText(h1)).toBe('');
+    expect(docText({ type: 'doc', content: [{ type: 'image', attrs: { src: '/x.png' } }] })).toBe(
+      '',
+    );
+    expect(
+      customDescription([{ type: 'textBlock', props: { body: { en: bomb, ar: bomb } } }], 'en'),
+    ).toBe('');
+  });
+});
+
+describe('the seeded sample page (H15: the strict section write)', () => {
+  const seed = JSON.parse(
+    readFileSync(join(process.cwd(), 'supabase/seed-data/57-custom-page.json'), 'utf8'),
+  ) as { blocks: { table: string; rows: { type: string; content: unknown }[] }[] };
+  const rows = seed.blocks.filter((b) => b.table === 'page_sections').flatMap((b) => b.rows);
+
+  it('holds a section of each kind it shows', () => {
+    expect(rows.map((r) => r.type)).toEqual(['hero', 'textBlock']);
+  });
+
+  for (const row of rows) {
+    it(`its ${row.type} is a type a custom page holds, with only keys its type has`, () => {
+      expect(isCustomPageSectionType(row.type)).toBe(true);
+      expect(sectionContentIssues(row.type as SectionType, row.content)).toEqual([]);
+    });
+  }
 });
 
 describe('the head, the tags and the listings', () => {

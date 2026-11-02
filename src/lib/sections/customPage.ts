@@ -1,6 +1,7 @@
 import type { Locale } from '@schemas/primitives';
 import { PUBLIC_SITE_URL } from 'astro:env/client';
 import { isCustomPageSectionType, isCustomPageSlug } from '@schemas/customPages';
+import { sectionDocProblem } from '@schemas/tiptap';
 import { getPageComposition, type PageComposition } from '@/lib/data/pageSections';
 import { loadHead, type Head } from '@/lib/seo/head';
 import { buildBreadcrumbSchema, buildWebPageSchema, type JsonLdNode } from '@/lib/seo/jsonld';
@@ -122,25 +123,38 @@ export function customHeader(sections: readonly SectionData[]): 'overlay' | 'sol
   return sections.find((s) => s.visible !== false)?.type === 'hero' ? 'overlay' : 'solid';
 }
 
-/** The words of a rich-text document, in order, as one line (a description's source). */
+/** Where a block's words end, on docText's stack: a space between paragraphs and list items. */
+const BLOCK_END: unique symbol = Symbol('block end');
+
+/**
+ * The words of a Text block's body, in order, as one line (a description's source). The body
+ * goes through the section walk first (`sectionDocProblem`, packages/schemas/tiptap.ts: at most
+ * 300 nodes and 8 levels, H15's rule for a Tiptap body) and is then read with a stack, never
+ * recursion; a body the walk refuses has no words here, as TextBlock renders none of it.
+ */
 export function docText(doc: unknown, limit = 400): string {
+  if (sectionDocProblem(doc) !== null) return '';
   const out: string[] = [];
   let length = 0;
-  const walk = (node: unknown): void => {
-    if (length >= limit || typeof node !== 'object' || node === null) return;
+  const stack: unknown[] = [doc];
+  while (stack.length > 0 && length < limit) {
+    const node = stack.pop();
+    if (node === BLOCK_END) {
+      out.push(' ');
+      continue;
+    }
+    if (typeof node !== 'object' || node === null) continue;
     const { type, text, content } = node as { type?: unknown; text?: unknown; content?: unknown };
     if (type === 'text' && typeof text === 'string') {
       out.push(text);
       length += text.length;
-      return;
+      continue;
     }
     if (Array.isArray(content)) {
-      for (const child of content as unknown[]) walk(child);
-      // A block ends a sentence's run: a space between paragraphs and list items.
-      out.push(' ');
+      stack.push(BLOCK_END);
+      for (let i = content.length - 1; i >= 0; i -= 1) stack.push(content[i]);
     }
-  };
-  walk(doc);
+  }
   return out.join('').replace(/\s+/g, ' ').trim();
 }
 
