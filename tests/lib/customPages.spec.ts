@@ -23,6 +23,7 @@ import type { OverlayDb } from '@/lib/release/overlayDb';
 import type { AuthContext } from '@/lib/auth/types';
 import { buildWebPageSchema } from '@/lib/seo/jsonld';
 import { customPageCacheEntities, TIER_A_ROUTES } from '@/lib/http/routeTags';
+import { GA4_ROUTES } from '@/lib/http/ga4';
 import { tierATags } from '@/lib/http/cacheTags';
 import { SECTION_READS } from '@/lib/sections/reads';
 import { pagePath } from '@/lib/seo/entityPaths';
@@ -182,6 +183,35 @@ describe('the sections a custom page holds', () => {
     // Nothing that holds a form or another page's data.
     for (const type of ['contact', 'contactInquiry', 'hello', 'joinApply', 'faq', 'projectGrid']) {
       expect(isCustomPageSectionType(type), type).toBe(false);
+    }
+  });
+
+  it('no section of the set renders a form (so a custom page may load GA4, src/lib/http/ga4.ts)', () => {
+    // SectionRenderer's map: `type: Component`, and each component's import path.
+    const renderer = readFileSync('src/components/SectionRenderer.astro', 'utf8');
+    const files = new Map(
+      [...renderer.matchAll(/^import (\w+) from '@\/components\/sections\/(\w+\.astro)';$/gm)].map(
+        (m) => [m[1]!, join('src/components/sections', m[2]!)],
+      ),
+    );
+    const formIn = (file: string, depth = 0): boolean => {
+      const source = readFileSync(file, 'utf8');
+      if (/<form\b/.test(source)) return true;
+      // One level of the components it imports (a form component, a band holding one).
+      if (depth > 0) return false;
+      return [...source.matchAll(/from '@\/components\/([\w/]+\.astro)'/g)].some((m) =>
+        formIn(join('src/components', m[1]!), depth + 1),
+      );
+    };
+    // The scan sees a form where one is: Contact's inquiry section holds one.
+    expect(formIn(files.get('ContactInquiry')!)).toBe(true);
+    expect(GA4_ROUTES.has('/[slug]') && GA4_ROUTES.has('/ar/[slug]')).toBe(true);
+    for (const type of CUSTOM_PAGE_SECTION_TYPES) {
+      const component = new RegExp(`^\\s+${type}: (\\w+),$`, 'm').exec(renderer)?.[1];
+      expect(component, type).toBeDefined();
+      const file = files.get(component!);
+      expect(file, type).toBeDefined();
+      expect(formIn(file!), `${type} (${file})`).toBe(false);
     }
   });
 

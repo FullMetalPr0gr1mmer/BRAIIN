@@ -14,6 +14,7 @@ import { ENTITY_SEO } from '@/lib/admin/entitySeo';
 import { isLive } from '@/lib/admin/resource';
 import { liveRouteCheck } from '@/lib/admin/redirectRules';
 import { mediaItemToRow } from '@/lib/admin/resources/portfolio';
+import { sectionPageQuery } from '@/lib/admin/resources/sections';
 import { HOME_REFUSAL } from '@/lib/admin/visibilityCopy';
 import { HOME_SLUG } from '@/lib/visibility/routes';
 import { serviceClient } from '@/lib/supabase/server';
@@ -484,7 +485,13 @@ async function primeLinks(
   // the ids, under the caller's RLS and through the state the release leaves.
   const isAuthor = (table: string, service: boolean) => table === 'team_members' && !service;
   const columnsOf = (table: string) =>
-    table === 'media_assets' ? 'id,kind,alt' : isAuthor(table, false) ? 'id,status' : 'id';
+    table === 'media_assets'
+      ? 'id,kind,alt'
+      : isAuthor(table, false)
+        ? 'id,status'
+        : table === 'pages'
+          ? 'id,slug'
+          : 'id';
   const [answers, theirs] = await Promise.all([
     db.listMany(
       mine.map(({ table, list }) => ({
@@ -521,6 +528,17 @@ async function primeLinks(
           { columns: 'status', eq: { id } },
           statusOf.has(id) ? { status: statusOf.get(id) } : null,
         );
+      }
+    }
+    if (table === 'pages') {
+      // A section's page (Admin v2 E11): the custom page rule (sectionResource.assertWritable)
+      // asks the page's slug, answered from here, so it costs a release no read of its own. A
+      // page this read cannot see is left to the rule's own read, never primed as missing.
+      for (const row of rows) {
+        db.primeFirst(table, sectionPageQuery(String(row['id'])), {
+          id: row['id'],
+          slug: row['slug'] ?? null,
+        });
       }
     }
     if (table === 'media_assets') {

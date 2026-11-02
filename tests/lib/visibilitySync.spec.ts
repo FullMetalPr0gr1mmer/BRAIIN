@@ -120,7 +120,8 @@ const PAGES = [
   { id: HOME, slug: 'home', title: { en: 'Home' } },
   { id: ABOUT, slug: 'about', title: { en: 'About' } },
   { id: CONTACT, slug: 'contact', title: { en: 'Contact' } },
-  { id: '00000000-0000-4000-8000-00000000a0ff', slug: 'careers', title: { en: 'Careers' } },
+  // A page no route renders: a reserved word, so not a custom page either (Admin v2 E11).
+  { id: '00000000-0000-4000-8000-00000000a0ff', slug: 'admin', title: { en: 'Old admin' } },
 ];
 
 beforeEach(() => {
@@ -186,7 +187,8 @@ describe('buildVisibilitySnapshot', () => {
     const rows = [
       row({ id: 'r-about', version: 2, mode: 'hidden', page: { slug: 'about' } }),
       row({ id: 'r-home', version: 1, mode: 'hidden', page: { slug: 'home' } }),
-      row({ id: 'r-careers', version: 1, mode: 'link', page: { slug: 'careers' } }),
+      // A slug no route renders (a reserved word: not even a custom page, Admin v2 E11).
+      row({ id: 'r-admin', version: 1, mode: 'link', page: { slug: 'admin' } }),
       row({ id: 'r-svc', version: 4, mode: 'link', template: 'service' }),
     ];
     expect(buildVisibilitySnapshot(rows, TENANT).rev).toBe('r-about:2');
@@ -203,8 +205,8 @@ describe('buildVisibilitySnapshot', () => {
     const snap = buildVisibilitySnapshot(
       [
         row({ mode: 'hidden', page: { slug: 'home' } }),
-        row({ mode: 'hidden', page: { slug: 'careers' } }),
-        row({ mode: 'hidden', page: { slug: 'about' }, redirect: { slug: 'careers' } }),
+        row({ mode: 'hidden', page: { slug: 'admin' } }),
+        row({ mode: 'hidden', page: { slug: 'about' }, redirect: { slug: 'admin' } }),
         row({ mode: 'secret', page: { slug: 'join' } }),
         row({ mode: 'link', template: 'service' }),
         row({ mode: 'hidden', page: null }),
@@ -213,6 +215,26 @@ describe('buildVisibilitySnapshot', () => {
     );
     expect(snap.pages).toEqual({ about: { mode: 'hidden', target: null } });
     expect(snap.templates).toEqual({});
+  });
+
+  it('a custom page (Admin v2 E11) is a page: its own entry, and a redirect target', () => {
+    const snap = buildVisibilitySnapshot(
+      [
+        row({ id: 'r-story', version: 1, mode: 'link', page: { slug: 'our-story' } }),
+        row({
+          id: 'r-about',
+          version: 1,
+          mode: 'hidden',
+          page: { slug: 'about' },
+          redirect: { slug: 'our-story' },
+        }),
+      ],
+      TENANT,
+    );
+    expect(snap.pages).toEqual({
+      'our-story': { mode: 'link' },
+      about: { mode: 'hidden', target: 'our-story' },
+    });
   });
 
   it('the purge tags of a change: the page or the template’s pages, the menus, the discovery files', () => {

@@ -56,6 +56,9 @@ const EN_ROUTES = [
   '/privacy',
   '/terms',
   '/cookie-policy',
+  // Admin v2 E11: a custom page holds no form (CUSTOM_PAGE_SECTION_TYPES has no form section,
+  // and its route renders no other type), so it loads GA4 as About does.
+  '/[slug]',
 ] as const;
 
 const arabic = (route: string): string => (route === '/' ? '/ar' : `/ar${route}`);

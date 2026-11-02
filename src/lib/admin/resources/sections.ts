@@ -7,7 +7,7 @@ import {
   isCustomPageSlug,
 } from '@schemas/customPages';
 import { isSampleRating } from '@/lib/sections/samples';
-import { liveDb } from '@/lib/release/overlayDb';
+import { liveDb, type DbListQuery } from '@/lib/release/overlayDb';
 import { ValidationError } from '../errors';
 import type { ResourceConfig } from '../resource';
 import { fieldsOf, pick, type Input } from './shared';
@@ -28,6 +28,15 @@ const SECTION_KEYS = {
 };
 
 const MEDIA_TYPES: readonly unknown[] = MEDIA_BLOCK_TYPES;
+
+/**
+ * The read of a section's page for the custom page rule below (Admin v2 E11). One shape, so a
+ * publish answers it from its batched read of the release's links (src/lib/release/validate.ts
+ * primeLinks) and the rule costs a release no request of its own.
+ */
+export function sectionPageQuery(pageId: string): DbListQuery {
+  return { columns: 'id,slug', eq: { id: pageId }, limit: 1 };
+}
 
 export const sectionResource: ResourceConfig = {
   table: 'page_sections',
@@ -110,11 +119,10 @@ export const sectionResource: ResourceConfig = {
       typeof merged['page_id'] === 'string' &&
       !(before && before['type'] === merged['type'] && before['page_id'] === merged['page_id'])
     ) {
-      const page = await (db ?? liveDb(sb, auth)).first('pages', {
-        columns: 'id,slug',
-        eq: { id: merged['page_id'] },
-        limit: 1,
-      });
+      const page = await (db ?? liveDb(sb, auth)).first(
+        'pages',
+        sectionPageQuery(merged['page_id']),
+      );
       const slug = typeof page?.['slug'] === 'string' ? page['slug'].toLowerCase() : null;
       if (slug !== null && isCustomPageSlug(slug)) {
         throw new ValidationError(CUSTOM_PAGE_TYPE_REFUSED, 'type');

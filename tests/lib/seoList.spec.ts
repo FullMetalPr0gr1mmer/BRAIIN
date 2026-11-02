@@ -255,7 +255,8 @@ describe('listEntitySeo', () => {
   it('Arabic is incomplete when the head would show no Arabic title or description', async () => {
     const db = dbWith({
       pages: [
-        { id: 'p1', tenant_id: T, slug: 'unknown', title: BI('Odd page', ''), status: 'draft' },
+        // A slug no route renders (a reserved word, so not a custom page: Admin v2 E11).
+        { id: 'p1', tenant_id: T, slug: 'admin', title: BI('Odd page', ''), status: 'draft' },
       ],
       entity_seo: [],
       seo_defaults: [],
