@@ -328,7 +328,7 @@ describe('one copy of the menu readers (code review CR9)', () => {
     expect(menu).toContain('export const bilingual');
   });
 
-  it('reads a label as before: both languages trimmed, a missing one empty', () => {
+  it('reads a label through the shared reader: both trimmed, a missing one empty, a string as English', () => {
     const model = footerModel([
       col('X', 10, { label: { en: ' Work ', ar: 7 } }),
       link('y', 10, { label: 'Plain' }),
