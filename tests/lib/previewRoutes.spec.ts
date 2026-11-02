@@ -8,6 +8,12 @@ import {
   toPreviewPath,
 } from '@/lib/admin/preview/paths';
 import { PREVIEW_ONLY_MAX, previewTarget, twinPath } from '@/lib/preview/routes';
+import {
+  CUSTOM_PAGE_SLUG_MAX,
+  RESERVED_PAGE_SLUGS,
+  ROUTE_PAGE_SLUGS,
+  isCustomPageSlug,
+} from '@schemas/customPages';
 
 // The preview's route map (Admin v2 R9; releases.md §9 previewRoutes): every Tier A page, EN
 // and AR, is previewable, and nothing else is. Held to the page files in src/pages, so a new
@@ -92,12 +98,42 @@ describe('the preview route map', () => {
       '/services/a.b',
       '/services/-a',
       '/services/a/b',
-      '/arabic',
+      '/Arabic',
       '/ar/ar',
       `/services/${'a'.repeat(121)}`,
     ]) {
       expect(previewRouteOf(path), path).toBeNull();
     }
+  });
+
+  it('a custom page (Admin v2 E11) is previewed exactly when isCustomPageSlug takes its address', () => {
+    const table = [
+      'our-story',
+      'how-we-work',
+      'a',
+      'x9',
+      'a'.repeat(CUSTOM_PAGE_SLUG_MAX),
+      'a'.repeat(CUSTOM_PAGE_SLUG_MAX + 1),
+      'Our-Story',
+      'our--story',
+      'our_story',
+      '-story',
+      'story-',
+      ...ROUTE_PAGE_SLUGS,
+      ...RESERVED_PAGE_SLUGS,
+    ];
+    for (const slug of table) {
+      const want = isCustomPageSlug(slug) ? '/[slug]' : null;
+      // A route page's own path is its own route, never the custom one.
+      for (const path of [`/${slug}`, `/ar/${slug}`]) {
+        const got = previewRouteOf(path);
+        expect(got === '/[slug]' ? '/[slug]' : null, path).toBe(want);
+      }
+    }
+    expect(previewRouteOf('/admin')).toBeNull();
+    expect(previewRouteOf('/ar/api')).toBeNull();
+    expect(previewRouteOf('/our-story/more')).toBeNull();
+    expect(toPreviewPath('/ar/our-story')).toBe('/admin/preview/ar/our-story');
   });
 });
 

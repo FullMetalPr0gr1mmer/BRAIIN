@@ -1,0 +1,383 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  CUSTOM_PAGE_SECTION_TYPES,
+  CUSTOM_PAGE_SLUG_MAX,
+  CUSTOM_PAGE_TYPE_REFUSED,
+  RESERVED_PAGE_SLUGS,
+  ROUTE_PAGE_SLUGS,
+  customPageSlugProblem,
+  isCustomPageSectionType,
+  isCustomPageSlug,
+  suggestPageSlug,
+} from '@schemas/customPages';
+import { PageSlugSchema, PageWriteSchema, SectionWriteSchema } from '@schemas/admin';
+import { SECTION_TYPES } from '@schemas/sectionTypes';
+import { PAGE_PATHS } from '@/lib/visibility/routes';
+import { sectionResource } from '@/lib/admin/resources';
+import { pageResource } from '@/lib/admin/resources/pages';
+import { translateWriteError } from '@/lib/admin/crud';
+import { ValidationError } from '@/lib/admin/errors';
+import type { OverlayDb } from '@/lib/release/overlayDb';
+import type { AuthContext } from '@/lib/auth/types';
+import { buildWebPageSchema } from '@/lib/seo/jsonld';
+import { customPageCacheEntities, TIER_A_ROUTES } from '@/lib/http/routeTags';
+import { tierATags } from '@/lib/http/cacheTags';
+import { SECTION_READS } from '@/lib/sections/reads';
+import { pagePath } from '@/lib/seo/entityPaths';
+import { indexability, isIndexedPath } from '@/lib/seo/indexable';
+import {
+  heroPayload,
+  newPageErrors,
+  newPagePayload,
+  slugProblem,
+  titleProblem,
+} from '@/components/admin/screens/newPage/model';
+
+vi.mock('astro:env/client', () => ({ PUBLIC_SITE_URL: 'https://www.example.test' }));
+
+const {
+  CUSTOM_HERO_DATA,
+  customDescription,
+  customSections,
+  docText,
+  heroHeadlineOf,
+} = await import('@/lib/sections/customPage');
+
+// Custom pages (Admin v2 E11; docs/admin-v2/as-built/E11.md): the address rules, held to the
+// site's own files and to 0123's SQL; the route-level rules on a custom page's sections; its
+// head and JSON-LD; the API's refusal of a type a custom page cannot hold; the New page dialog.
+
+const doc = (...paras: string[]) => ({
+  type: 'doc',
+  content: paras.map((text) => ({ type: 'paragraph', content: [{ type: 'text', text }] })),
+});
+
+describe('the address rules', () => {
+  it('the route slugs are the route map’s, and no reserved word is one', () => {
+    expect([...ROUTE_PAGE_SLUGS].sort()).toEqual(Object.keys(PAGE_PATHS).sort());
+    for (const word of RESERVED_PAGE_SLUGS) {
+      expect((ROUTE_PAGE_SLUGS as readonly string[]).includes(word), word).toBe(false);
+    }
+    expect(new Set(RESERVED_PAGE_SLUGS).size).toBe(RESERVED_PAGE_SLUGS.length);
+  });
+
+  it('every top-level route of src/pages and folder of public/ is a route slug or reserved', () => {
+    const taken = new Set<string>([...ROUTE_PAGE_SLUGS, ...RESERVED_PAGE_SLUGS]);
+    const segments = new Set<string>();
+    for (const name of readdirSync('src/pages')) {
+      const bare = name.replace(/\.(astro|ts)$/, '').replace(/\.[a-z]+$/, '');
+      // The two catch-all routes this slice and U14 added are not addresses.
+      if (/^\[/.test(bare)) continue;
+      segments.add(bare);
+    }
+    for (const name of readdirSync('public')) {
+      if (statSync(join('public', name)).isDirectory()) segments.add(name);
+    }
+    expect(segments.size).toBeGreaterThan(15);
+    for (const segment of segments) {
+      // A segment no custom page could take anyway (a dot, an underscore) needs no word.
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(segment)) continue;
+      expect(taken.has(segment) || segment === 'index', segment).toBe(true);
+      expect(isCustomPageSlug(segment), segment).toBe(false);
+    }
+  });
+
+  it('0123 refuses exactly the reserved words, in the same shape and length', () => {
+    const sql = readFileSync('supabase/migrations/0123_custom_pages.sql', 'utf8');
+    const fn = /create or replace function app\.tg_pages_slug_rules\(\)[\s\S]*?end \$\$;/.exec(
+      sql,
+    )?.[0];
+    expect(fn, 'the rule is in 0123').toBeDefined();
+    const list = /v_slug = any \(array\[([^\]]+)\]\)/.exec(fn!)?.[1] ?? '';
+    const words = [...list.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    expect(words.sort()).toEqual([...RESERVED_PAGE_SLUGS].sort());
+    expect(fn).toContain(`not between 1 and ${CUSTOM_PAGE_SLUG_MAX}`);
+    expect(fn).toContain("'^[a-z0-9]+(-[a-z0-9]+)*$'");
+    expect(sql).toMatch(
+      /create trigger pages_slug_rules before insert or update of slug on public\.pages\s+for each row/,
+    );
+  });
+
+  it('a custom page’s address: lowercase words and single hyphens, at most 64, never taken', () => {
+    for (const ok of ['our-story', 'a', '2026-offers', 'a'.repeat(CUSTOM_PAGE_SLUG_MAX)]) {
+      expect(customPageSlugProblem(ok), ok).toBeNull();
+    }
+    for (const bad of [
+      '',
+      'Our-Story',
+      'our--story',
+      'our_story',
+      '-story',
+      'story-',
+      'our story',
+      'a'.repeat(CUSTOM_PAGE_SLUG_MAX + 1),
+      'about',
+      'home',
+      'portfolio-all',
+      'admin',
+      'api',
+      'ar',
+      'media',
+      'cdn-cgi',
+    ]) {
+      expect(isCustomPageSlug(bad), bad).toBe(false);
+      expect(customPageSlugProblem(bad), bad).toMatch(/\.$/);
+    }
+    expect(isCustomPageSlug(undefined)).toBe(false);
+  });
+
+  it('the page write schema refuses a reserved word and a long address, and keeps route slugs', () => {
+    expect(PageSlugSchema.safeParse('our-story').success).toBe(true);
+    expect(PageSlugSchema.safeParse('about').success).toBe(true);
+    expect(PageSlugSchema.safeParse('admin').success).toBe(false);
+    expect(PageSlugSchema.safeParse('a'.repeat(CUSTOM_PAGE_SLUG_MAX + 1)).success).toBe(false);
+    const create = PageWriteSchema.safeParse({ slug: 'search', title: { en: 'S', ar: 'س' } });
+    expect(create.success).toBe(false);
+    expect(create.error?.issues[0]?.path).toEqual(['slug']);
+  });
+
+  it('0123’s refusals and the unique key reach the editor on the address, in plain words', () => {
+    for (const [constraint, words] of [
+      ['pages_slug_shape', /lowercase letters/],
+      ['pages_slug_reserved', /already uses/],
+    ] as const) {
+      const error = translateWriteError(
+        {
+          code: '23514',
+          message: 'x',
+          details: `Failing row violates check constraint "${constraint}".`,
+        },
+        'pages',
+        'write',
+        pageResource.constraintFields,
+      );
+      expect(error, constraint).toMatchObject({ field: 'slug' });
+      expect(error.message, constraint).toMatch(words);
+    }
+    const taken = translateWriteError(
+      {
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "pages_tenant_id_slug_key"',
+        details: 'Key (tenant_id, slug)=(x, y) already exists.',
+      },
+      'pages',
+      'write',
+      pageResource.constraintFields,
+    );
+    expect(taken).toMatchObject({ field: 'slug' });
+    expect(taken.message).toMatch(/Another page already has this address/);
+  });
+
+  it('suggests an address from an English title', () => {
+    expect(suggestPageSlug('Our Story')).toBe('our-story');
+    expect(suggestPageSlug('  Café & Co. — 2026!  ')).toBe('cafe-co-2026');
+    expect(suggestPageSlug('من نحن')).toBe('');
+    expect(suggestPageSlug('word '.repeat(40)).length).toBeLessThanOrEqual(CUSTOM_PAGE_SLUG_MAX);
+  });
+});
+
+describe('the sections a custom page holds', () => {
+  it('the set is section types, and every one is told what it reads', () => {
+    for (const type of CUSTOM_PAGE_SECTION_TYPES) {
+      expect(SECTION_TYPES as readonly string[], type).toContain(type);
+      expect(SECTION_READS[type], type).toBeDefined();
+    }
+    // Nothing that holds a form or another page's data.
+    for (const type of ['contact', 'contactInquiry', 'hello', 'joinApply', 'faq', 'projectGrid']) {
+      expect(isCustomPageSectionType(type), type).toBe(false);
+    }
+  });
+
+  const title = { en: 'Our story', ar: 'قصتنا' };
+
+  it('only the set renders; the first hero is the banner; a page with no heading gets one', () => {
+    const out = customSections(
+      [
+        { type: 'contactInquiry' },
+        { type: 'textBlock', props: { body: { en: doc('x'), ar: doc('س') } } },
+        { type: 'hero', props: { headline: { en: 'Hi', ar: 'هلا' } } },
+        { type: 'hero' },
+      ],
+      title,
+    );
+    expect(out.map((s) => s.type)).toEqual(['textBlock', 'hero', 'hero']);
+    expect(out[1]?.data).toEqual(CUSTOM_HERO_DATA);
+    expect(out[2]?.data).toBeUndefined();
+    expect(CUSTOM_HERO_DATA).toMatchObject({ banner: true, ctaHref: '/portfolio' });
+  });
+
+  it('with no visible heading, the page opens with a banner of its own title', () => {
+    for (const authored of [[], [{ type: 'hero', visible: false }], [{ type: 'textBlock' }]]) {
+      const out = customSections(authored, title);
+      expect(out[0]).toMatchObject({
+        type: 'hero',
+        props: { headline: { en: 'Our story', ar: 'قصتنا' } },
+        data: CUSTOM_HERO_DATA,
+      });
+    }
+    // An Arabic title left empty falls back to the English one rather than an empty <h1>.
+    expect(customSections([], { en: 'Hi', ar: '' })[0]?.props).toEqual({
+      headline: { en: 'Hi', ar: 'Hi' },
+    });
+  });
+
+  it('a title too long for the banner’s ladder is clipped to fit', () => {
+    expect(heroHeadlineOf('one two three four five six seven eight nine ten eleven')).toBe(
+      'one two three four five six seven eight nine ten',
+    );
+    expect(heroHeadlineOf('Supercalifragilistic')).toBe('Supercalifrag'.padEnd(14, 'i').slice(0, 14));
+    expect([...heroHeadlineOf('Supercalifragilistic')].length).toBe(14);
+  });
+
+  it('describes the page with its first words, in its own language only', () => {
+    const sections = [
+      { type: 'hero', props: { sub: { en: 'A line.', ar: '' } } },
+      { type: 'textBlock', props: { body: { en: doc('First words.', 'More.'), ar: doc('كلام') } } },
+    ];
+    expect(customDescription(sections, 'en')).toBe('A line.');
+    expect(customDescription(sections, 'ar')).toBe('كلام');
+    expect(customDescription([], 'en')).toBe('');
+    expect(customDescription([{ type: 'textBlock', visible: false, props: {} }], 'en')).toBe('');
+    const long = customDescription(
+      [{ type: 'textBlock', props: { body: { en: doc('word '.repeat(80)), ar: doc('x') } } }],
+      'en',
+    );
+    expect(long.length).toBeLessThanOrEqual(160);
+    expect(long.endsWith('…')).toBe(true);
+    expect(docText(doc('a', 'b'))).toBe('a b');
+  });
+});
+
+describe('the head, the tags and the listings', () => {
+  it('WebPage: name, its own URL, its language, the site, and only real optional fields', () => {
+    const node = buildWebPageSchema({
+      name: 'قصتنا',
+      url: 'https://x/ar/our-story',
+      siteUrl: 'https://x/',
+      locale: 'ar',
+    });
+    expect(node).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: 'قصتنا',
+      url: 'https://x/ar/our-story',
+      inLanguage: 'ar',
+      isPartOf: { '@type': 'WebSite', url: 'https://x' },
+    });
+    expect(
+      buildWebPageSchema({
+        name: 'n',
+        url: 'u',
+        siteUrl: 's',
+        locale: 'en',
+        description: 'd',
+        dateModified: '2026-11-02T00:00:00Z',
+      }),
+    ).toMatchObject({ description: 'd', dateModified: '2026-11-02T00:00:00Z' });
+  });
+
+  it('a custom page is tagged by its slug and fits a purge with every section it may hold', () => {
+    expect(customPageCacheEntities('our-story')).toEqual(['page:our-story', 'media:all']);
+    expect(TIER_A_ROUTES.find((r) => r.route === 'page')).toMatchObject({ composed: true });
+    const every = CUSTOM_PAGE_SECTION_TYPES.flatMap((t) => SECTION_READS[t]);
+    const tags = tierATags({
+      route: 'page',
+      locale: 'ar',
+      entities: [...customPageCacheEntities('a'.repeat(64)), ...every],
+    });
+    expect(tags.length).toBeLessThanOrEqual(30);
+    expect(tags).toContain(`page:${'a'.repeat(64)}`);
+  });
+
+  it('its path is /<slug>, and a static route’s SEO row rule finds its page by that path', () => {
+    expect(pagePath('our-story')).toBe('/our-story');
+    expect(pagePath('admin')).toBeNull();
+    const ix = indexability(
+      {
+        rules: [{ entity_type: 'page', entity_id: 'p1', robots: 'noindex', canonical_override: null }],
+        pages: [{ id: 'p1', slug: 'our-story' }],
+      },
+      null,
+    );
+    expect(isIndexedPath(ix, '/our-story', 'https://x')).toBe(false);
+    expect(isIndexedPath(ix, '/other', 'https://x')).toBe(true);
+  });
+});
+
+describe('the section routes hold the set on a custom page', () => {
+  const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const PAGE = '22222222-2222-4222-8222-222222222222';
+  const auth = { tenantId: TENANT, userId: PAGE, role: 'admin' } as unknown as AuthContext;
+  const pageDb = (slug: string | null) => {
+    const asked: unknown[] = [];
+    const db = {
+      first: async (table: string, query: unknown) => {
+        asked.push({ table, query });
+        return slug === null ? null : { id: PAGE, slug };
+      },
+      list: async () => [],
+    } as unknown as OverlayDb;
+    return { db, asked };
+  };
+  type R = Record<string, unknown>;
+  const check = (merged: R, changed: R, db: OverlayDb, before: R | null = null) =>
+    sectionResource.assertWritable!(merged, { auth, sb: {} as never, changed, db, before });
+
+  it('refuses a type a custom page cannot hold, on the type field, in plain words', async () => {
+    const row = { page_id: PAGE, type: 'contactInquiry', content: {} };
+    const { db, asked } = pageDb('our-story');
+    const refused = check(row, row, db);
+    await expect(refused).rejects.toBeInstanceOf(ValidationError);
+    await expect(refused).rejects.toMatchObject({ field: 'type', detail: CUSTOM_PAGE_TYPE_REFUSED });
+    expect(asked).toEqual([
+      { table: 'pages', query: { columns: 'id,slug', eq: { id: PAGE }, limit: 1 } },
+    ]);
+  });
+
+  it('takes the same type on a route page, and a type of the set anywhere without a read', async () => {
+    const row = { page_id: PAGE, type: 'contactInquiry', content: {} };
+    await expect(check(row, row, pageDb('contact').db)).resolves.toBeUndefined();
+    const hero = { page_id: PAGE, type: 'hero', content: {} };
+    const quiet = pageDb('our-story');
+    await expect(check(hero, hero, quiet.db)).resolves.toBeUndefined();
+    expect(quiet.asked).toEqual([]);
+  });
+
+  it('an edit that keeps a row’s type and page reads nothing (the form sends type every save)', async () => {
+    const row = { page_id: PAGE, type: 'faq', content: {} };
+    const { db, asked } = pageDb('our-story');
+    await expect(check(row, { type: 'faq' }, db, row)).resolves.toBeUndefined();
+    expect(asked).toEqual([]);
+  });
+});
+
+describe('the New page dialog', () => {
+  const input = { titleEn: 'Our  story', titleAr: 'قصتنا', slug: 'our-story' };
+
+  it('asks for a title that fits the banner, in both languages, and a free address', () => {
+    expect(newPageErrors(input)).toEqual({});
+    expect(titleProblem('', 'Arabic')).toMatch(/in Arabic/);
+    expect(titleProblem('a b c d e f g h i j k', 'English')).toMatch(/10 words/);
+    expect(titleProblem('Supercalifragilistic', 'English')).toMatch(/14 letters/);
+    expect(slugProblem('about')).toMatch(/already uses/);
+    expect(slugProblem('admin')).toMatch(/already uses/);
+    expect(Object.keys(newPageErrors({ titleEn: '', titleAr: '', slug: 'X' })).sort()).toEqual([
+      'slug',
+      'titleAr',
+      'titleEn',
+    ]);
+  });
+
+  it('makes a draft page, then its banner hero titled with the page’s title, both valid writes', () => {
+    const page = newPagePayload(input);
+    expect(page).toEqual({ slug: 'our-story', title: { en: 'Our story', ar: 'قصتنا' }, status: 'draft' });
+    expect(PageWriteSchema.safeParse(page).success).toBe(true);
+    const hero = heroPayload(PAGE_ID, input);
+    expect(hero).toMatchObject({ type: 'hero', visible: true, content: { headline: page['title'] } });
+    expect(SectionWriteSchema.safeParse(hero).success).toBe(true);
+  });
+});
+
+const PAGE_ID = '22222222-2222-4222-8222-222222222299';

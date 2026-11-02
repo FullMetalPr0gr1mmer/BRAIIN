@@ -69,6 +69,8 @@ const CONTENT_LOADERS = [
   'src/lib/data/blog.ts',
   'src/lib/data/appearance.ts',
   'src/lib/data/certifications.ts',
+  // Admin v2 E11: the published custom pages, for the sitemap and llms.txt.
+  'src/lib/data/customPages.ts',
   'src/lib/data/disciplines.ts',
   'src/lib/data/faq.ts',
   'src/lib/data/forms.ts',

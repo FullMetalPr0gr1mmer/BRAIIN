@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { MEDIA_BLOCKS_FULL, MEDIA_BLOCKS_PER_PAGE, SECTION_TYPES } from '@schemas/sectionTypes';
 import { STAT_BAND_VARIANTS } from '@schemas/sections';
+import { CUSTOM_PAGE_SECTION_TYPES, CUSTOM_PAGE_TYPE_REFUSED } from '@schemas/customPages';
 import { ICON_NAMES } from '@/lib/admin/icons';
 import { RENDERED_SECTION_TYPES } from '@/lib/sections/registry';
 import { builtInLook } from '@/lib/sections/copy';
@@ -23,6 +24,7 @@ import {
   availability,
   collectionLinks,
   collectionScreens,
+  customPage,
   kindOf,
   linkRows,
   lookKey,
@@ -195,9 +197,30 @@ describe('Add section: what each page may take, and why not', () => {
     }
   });
 
-  it('refuses everything on a page no route shows (custom pages are E11)', () => {
-    expect(routedPage('custom-page')).toBeNull();
-    expect(availability('custom-page', []).every((o) => !o.ok)).toBe(true);
+  it('refuses everything on a page no route shows (a slug a custom page may not take)', () => {
+    // `admin` is a reserved word (packages/schemas/customPages.ts): no `[slug]` route shows it.
+    for (const slug of ['admin', 'Not-Lower']) {
+      expect(routedPage(slug)).toBeNull();
+      expect(customPage(slug)).toBe(false);
+      expect(availability(slug, []).every((o) => !o.ok), slug).toBe(true);
+    }
+  });
+
+  it('a custom page (Admin v2 E11) takes the custom set, and nothing bound to another page', () => {
+    expect(routedPage('our-story')).toBeNull();
+    expect(customPage('our-story')).toBe(true);
+    const offered = availability('our-story', []);
+    expect(offered.filter((o) => o.ok).map((o) => o.type)).toEqual(
+      SECTION_TYPES.filter((t) => (CUSTOM_PAGE_SECTION_TYPES as readonly string[]).includes(t)),
+    );
+    for (const o of offered.filter((x) => !x.ok)) {
+      expect(o.reason, o.type).toBe(CUSTOM_PAGE_TYPE_REFUSED);
+    }
+    // The heading group still holds: one hero, and with it no second heading.
+    const withHero = availability('our-story', ['hero']);
+    expect(withHero.find((o) => o.type === 'hero')?.ok).toBe(false);
+    // A custom page's first hero is the banner, and the editor says so.
+    expect(routeNote('hero', 'our-story', true)).toMatch(/short banner.*Our Work.*own title/);
   });
 
   it('the seeded compositions are each something their page may hold', () => {
