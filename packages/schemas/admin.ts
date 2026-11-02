@@ -687,18 +687,54 @@ export const TestimonialUpdateSchema = updatable(TestimonialWriteBase).superRefi
 
 // ── Navigation ──────────────────────────────────────────────────────────────────
 
-export const NavItemWriteSchema = z.object({
+/** The most footer columns (heading rows) a site holds (Admin v2 E6; the 0122 trigger). */
+export const FOOTER_COLUMNS_MAX = 4;
+
+const NavItemObject = z.object({
   location: z.enum(['header', 'footer']),
   parentId: UuidSchema.nullish(),
   label: BilingualTextSchema,
-  /** Site-relative or absolute; same scheme allowlist as rich-text links. */
-  href: z.string().trim().min(1).max(2048),
+  /**
+   * Site-relative or absolute; same scheme allowlist as rich-text links. Null only on a
+   * footer column heading (Admin v2 E6), which links nowhere.
+   */
+  href: z.string().trim().min(1).max(2048).nullish(),
   visible: z.boolean().default(true),
   /** The link the header keeps visible at <=900px. At most one per location (0019 index). */
   isKey: z.boolean().default(false),
   sortOrder: SortOrderSchema,
+  /**
+   * Admin v2 E6: a footer column's heading. It has no link, sits at the top level of the
+   * footer and is never the key link (navigation_heading_shape, 0122); the footer links under
+   * it are its column. At most FOOTER_COLUMNS_MAX per site (the database's trigger).
+   */
+  isHeading: z.boolean().default(false),
 });
-export const NavItemUpdateSchema = updatable(NavItemWriteSchema);
+
+/**
+ * A new menu row: a link (with its href) or a footer column heading (without one). An update
+ * names only what it changes, so its shape is checked against the stored row by the
+ * database's CHECK, which the resource maps to a 422 on the field.
+ */
+export const NavItemWriteSchema = NavItemObject.superRefine((v, ctx) => {
+  if (!v.isHeading) {
+    if (!v.href) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['href'],
+        message: 'a link needs an address',
+      });
+    }
+    return;
+  }
+  const say = (path: string, message: string) =>
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+  if (v.href) say('href', 'a column heading has no link: leave it empty');
+  if (v.location !== 'footer') say('location', 'column headings are for the footer');
+  if (v.parentId) say('parentId', 'a column heading sits at the top of the footer');
+  if (v.isKey) say('isKey', 'a column heading cannot be the key link');
+});
+export const NavItemUpdateSchema = updatable(NavItemObject);
 
 // ── SEO ─────────────────────────────────────────────────────────────────────────
 
