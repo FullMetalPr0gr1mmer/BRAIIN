@@ -7,11 +7,14 @@ import { profileUi } from '@/lib/admin/ui/profile';
 import {
   canAddColumn,
   columnMove,
+  columnMoveSaid,
   footerModel,
   movedIds,
   newColumnBody,
   nextSortOrder,
+  sketchColumns,
   titleProblem,
+  underLink,
 } from '@/components/admin/screens/footer/columns';
 import { footerSketch, sketchFacts } from '@/components/admin/screens/footer/sketch';
 
@@ -141,12 +144,64 @@ describe('the columns card’s writes', () => {
     expect(columnMove(model, x, 'nope')).toBeNull();
   });
 
+  it('a link moved with its sub-links says they go with it and stay hidden (code review CR2)', () => {
+    // The footer draws one level of links (src/lib/nav/tree.ts footerTree, CR1): a link's
+    // sub-links sit under it (parent_id is the link), so the one PATCH that moves the link
+    // carries them, and the card says where they went and that the site does not show them.
+    const model = footerModel([
+      col('A', 10),
+      link('p', 10),
+      link('p1', 1, { parent_id: 'p' }),
+      link('p2', 2, { parent_id: 'p' }),
+      link('q', 20),
+      link('q1', 1, { parent_id: 'q' }),
+      link('r', 30),
+    ]);
+    const [p, q, r] = model.loose;
+    expect(columnMove(model, p!, 'A')).toEqual({ parentId: 'A', sortOrder: 10 });
+    expect(columnMoveSaid(p!, 'A')).toBe(
+      'p is in the column A. The 2 links under it move with it and stay hidden: the footer shows one level of links.',
+    );
+    expect(columnMoveSaid(q!, null)).toBe(
+      'q is in no column. The link under it moves with it and stays hidden: the footer shows one level of links.',
+    );
+    expect(columnMoveSaid(r!, 'A')).toBe('r is in the column A.');
+    // The card's sub-line says the same of a link with sub-links, wherever it sits.
+    expect(underLink(p!)).toBe('2 links under it, not shown in the footer');
+    expect(underLink(q!)).toBe('1 link under it, not shown in the footer');
+    expect(underLink(r!)).toBe('');
+    const screen = readFileSync('src/components/admin/screens/footer/FooterScreen.tsx', 'utf8');
+    expect(screen).toContain('columnMoveSaid(link, name)');
+    expect(screen).toContain('underLink(link)');
+    expect(screen.replace(/\s+/g, ' ')).toContain(
+      'The footer shows one level of links: a link under another link moves with it and is not shown.',
+    );
+  });
+
   it('Move up and Move down swap neighbours and stop at the ends', () => {
     expect(movedIds(['a', 'b', 'c'], 'b', -1)).toEqual(['b', 'a', 'c']);
     expect(movedIds(['a', 'b', 'c'], 'b', 1)).toEqual(['a', 'c', 'b']);
     expect(movedIds(['a', 'b', 'c'], 'a', -1)).toEqual(['a', 'b', 'c']);
     expect(movedIds(['a', 'b', 'c'], 'c', 1)).toEqual(['a', 'b', 'c']);
     expect(movedIds(['a'], 'z', 1)).toEqual(['a']);
+  });
+});
+
+describe('the sketch draws the columns the site draws (code review CR6)', () => {
+  it('a shown column with a shown link; never an empty, hidden or all-hidden one', () => {
+    const model = footerModel([
+      col('Full', 10),
+      link('f1', 10, { parent_id: 'Full' }),
+      col('Empty', 20),
+      col('Hidden', 30, { visible: false }),
+      link('h1', 10, { parent_id: 'Hidden' }),
+      col('Quiet', 40),
+      link('q1', 10, { parent_id: 'Quiet', visible: false }),
+    ]);
+    expect(model.columns.map((c) => c.id)).toEqual(['Full', 'Empty', 'Hidden', 'Quiet']);
+    expect(sketchColumns(model)).toEqual(['Full']);
+    const screen = readFileSync('src/components/admin/screens/footer/FooterScreen.tsx', 'utf8');
+    expect(screen).toContain('onTitles(sketchColumns(next));');
   });
 });
 
@@ -258,5 +313,27 @@ describe('the Basics form: four columns of the identity row, and nothing else of
     const css = readFileSync('public/styles/admin/footer.css', 'utf8');
     expect(css).toContain(".ftr-pv__stage[data-style='dark']");
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i);
+  });
+});
+
+describe('one copy of the menu readers (code review CR9)', () => {
+  it('the columns card takes a row’s pending change and its two labels from the header’s card', () => {
+    const columns = readFileSync('src/components/admin/screens/footer/columns.ts', 'utf8');
+    const menu = readFileSync('src/components/admin/screens/header/menu.ts', 'utf8');
+    expect(columns).toContain(
+      "import { bilingual, pendingOf, type PendingRef } from '../header/menu';",
+    );
+    expect(columns).not.toMatch(/readDraft|const pendingOf|const text\b/);
+    expect(menu).toContain('export const pendingOf');
+    expect(menu).toContain('export const bilingual');
+  });
+
+  it('reads a label as before: both languages trimmed, a missing one empty', () => {
+    const model = footerModel([
+      col('X', 10, { label: { en: ' Work ', ar: 7 } }),
+      link('y', 10, { label: 'Plain' }),
+    ]);
+    expect(model.columns[0]!.title).toEqual({ en: 'Work', ar: '' });
+    expect(model.loose[0]!.label).toBe('Plain');
   });
 });

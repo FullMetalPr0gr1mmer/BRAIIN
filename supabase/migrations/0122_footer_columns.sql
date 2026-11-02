@@ -98,6 +98,9 @@ comment on column public.navigation.href is
 -- BEFORE triggers on navigation fire by name: navigation__release_guard (0066) <
 -- navigation_actor < navigation_footer_columns < navigation_updated_at < navigation_version.
 -- The release guard's refusal comes first; no stamp is computed for a refused row.
+-- The four below is FOOTER_COLUMNS_MAX (packages/schemas/footerRules.ts), the number the API,
+-- the public footer and the Footer screen read. SQL cannot import it, so the literal stays and
+-- tests/lib/footerColumns.spec.ts holds the two equal (E6 code review, CR8).
 create or replace function app.tg_navigation_footer_columns() returns trigger
   language plpgsql security invoker set search_path = ''
 as $$
@@ -191,7 +194,7 @@ select app.put_help_guide($guide$
         "t": "ol",
         "x": [
           "Add a column gives the footer a column with a title in both languages, up to four. A column has no link of its own.",
-          "Every footer link has a Column choice: the column it sits in, or No column to keep it in the row under the columns.",
+          "Every footer link has a Column choice: the column it sits in, or No column to keep it in the row under the columns. The footer shows one level of links: links put under a link on the Menus screen move with it and are not shown.",
           "Move up and Move down change the order. The eye shows or hides a column or a link. Hiding a column hides its links on the site too.",
           "Admins and Content Creators change the columns. To rename a column, change a link or add one, open the Menus screen. Only an Admin can remove a link or a column.",
           "Removing a column also removes the links in it, so choose No column for them first."
@@ -227,7 +230,7 @@ select app.put_help_guide($guide$
         "t": "ol",
         "x": [
           "يضيف Add a column إلى التذييل عمودًا بعنوان باللغتين، حتى أربعة أعمدة. وليس للعمود رابط خاص به.",
-          "لكل رابط في التذييل اختيار Column: العمود الذي يظهر فيه، أو No column ليبقى في الصف أسفل الأعمدة.",
+          "لكل رابط في التذييل اختيار Column: العمود الذي يظهر فيه، أو No column ليبقى في الصف أسفل الأعمدة. ويعرض التذييل مستوى واحدًا من الروابط: الروابط الموضوعة تحت رابط في شاشة Menus تنتقل معه ولا تظهر.",
           "يغيّر Move up وMove down الترتيب. وتُظهر العين العمود أو الرابط أو تخفيه، وإخفاء العمود يُخفي روابطه في الموقع أيضًا.",
           "يغيّر الأعمدة المسؤول (Admin) وصانع المحتوى (Content Creator). ولإعادة تسمية عمود أو تغيير رابط أو إضافته، افتح شاشة Menus. ولا يحذف رابطًا أو عمودًا إلا المسؤول (Admin).",
           "حذف عمود يحذف الروابط التي فيه أيضًا، لذا اختر No column لها أولًا."

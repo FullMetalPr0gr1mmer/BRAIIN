@@ -300,7 +300,7 @@ test.describe('as admin', () => {
       expect(footer, path).toContain('class="site-footer__social"');
       // The column: a <nav> named by its heading, its links in the order set, localized.
       const col = new RegExp(
-        `<nav class="site-footer__col" aria-labelledby="(footer-col-\\d)">\\s*<h2 class="site-footer__heading" id="\\1">${COLUMN[lang]}</h2>([\\s\\S]*?)</nav>`,
+        `<nav class="site-footer__col" aria-labelledby="(site-footer-col-\\d)">\\s*<h2 class="site-footer__heading" id="\\1">${COLUMN[lang]}</h2>([\\s\\S]*?)</nav>`,
       ).exec(footer);
       expect(col, `${path}: the column`).not.toBeNull();
       const prefix = lang === 'ar' ? '/ar' : '';

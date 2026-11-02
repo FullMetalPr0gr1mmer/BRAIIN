@@ -4,9 +4,10 @@ import { getFooterNavigation, type NavNode } from '@/lib/data/navigation';
 import { FOOTER_FALLBACK, LEGAL_LINKS } from '@/lib/nav/fallback';
 import { filterNavForVisibility } from '@/lib/visibility/listing';
 import { getIdentity, brandName } from '@/lib/identity';
-import { arabicIndic, localizedHref, localizedPath } from '@/lib/i18n';
-import { trackHref } from '@/lib/analytics/track';
+import { arabicIndic, localizedPath } from '@/lib/i18n';
 import { copyrightLine, footerAttributes, footerSocials } from '@/lib/appearance/footer';
+import FooterLink from './footer/FooterLink.astro';
+import FooterMail from './footer/FooterMail.astro';
 
 // Sitewide footer — the mockup's paper bar: "© 2026 Braiin Statiion. Jeddah, Saudi
 // Arabia" and the studio mailbox, both from the public identity (`site_profile`), so a
@@ -23,7 +24,10 @@ import { copyrightLine, footerAttributes, footerSocials } from '@/lib/appearance
 // accounts can show as icons, the style can be dark (`data-style`, global.css), and the
 // footer links can stand in up to four titled columns (navigation heading rows, 0122). Every
 // default is the footer as built, byte for byte (tests/render/siteChrome.spec.ts). The legal
-// links stay whatever is saved.
+// links stay whatever is saved. The footer draws one level of links: a link's sub-links never
+// show (src/lib/nav/tree.ts footerTree). The mailbox and a link are each drawn by one partial
+// (./footer/, E6 code review CR7); a menu with no link left draws no landmark (CR5); a
+// column's heading id is namespaced (`site-footer-col-N`, CR10).
 
 interface Props {
   locale: Locale;
@@ -72,16 +76,7 @@ const STR = {
     {
       socials.length > 0 ? (
         <div class="site-footer__end">
-          {showEmail && (
-            <a
-              class="site-footer__mail"
-              href={`mailto:${identity.contactEmail}`}
-              dir="ltr"
-              data-track="email"
-            >
-              {identity.contactEmail}
-            </a>
-          )}
+          {showEmail && <FooterMail email={identity.contactEmail} />}
           <ul class="site-footer__social" aria-label={STR.social}>
             {socials.map((s) => (
               <li>
@@ -99,17 +94,7 @@ const STR = {
           </ul>
         </div>
       ) : (
-        showEmail && (
-          /* dir=ltr: an address must not be re-ordered inside RTL text */
-          <a
-            class="site-footer__mail"
-            href={`mailto:${identity.contactEmail}`}
-            dir="ltr"
-            data-track="email"
-          >
-            {identity.contactEmail}
-          </a>
-        )
+        showEmail && <FooterMail email={identity.contactEmail} />
       )
     }
   </div>
@@ -118,20 +103,13 @@ const STR = {
     columns.length > 0 && (
       <div class="site-footer__cols">
         {columns.map((column, i) => (
-          <nav class="site-footer__col" aria-labelledby={`footer-col-${i + 1}`}>
-            <h2 class="site-footer__heading" id={`footer-col-${i + 1}`}>
+          <nav class="site-footer__col" aria-labelledby={`site-footer-col-${i + 1}`}>
+            <h2 class="site-footer__heading" id={`site-footer-col-${i + 1}`}>
               {column.label[locale] ?? column.label.en}
             </h2>
             <ul class="site-footer__list site-footer__list--col">
               {column.links.map((item) => (
-                <li>
-                  <a
-                    href={localizedHref(item.href, locale)}
-                    data-track={trackHref(localizedHref(item.href, locale))}
-                  >
-                    {item.label[locale] ?? item.label.en}
-                  </a>
-                </li>
+                <FooterLink item={item} locale={locale} />
               ))}
             </ul>
           </nav>
@@ -142,18 +120,11 @@ const STR = {
 
   <div class="site-footer__links">
     {
-      (columns.length === 0 || items.length > 0) && (
+      items.length > 0 && (
         <nav aria-label={STR.nav}>
           <ul class="site-footer__list">
             {items.map((item) => (
-              <li>
-                <a
-                  href={localizedHref(item.href, locale)}
-                  data-track={trackHref(localizedHref(item.href, locale))}
-                >
-                  {item.label[locale] ?? item.label.en}
-                </a>
-              </li>
+              <FooterLink item={item} locale={locale} />
             ))}
           </ul>
         </nav>

@@ -1,3 +1,4 @@
+import { FOOTER_COLUMNS_MAX } from '@schemas/footerRules';
 import { copyrightLine } from '@/lib/appearance/copyright';
 
 // The Footer screen's sketch (Admin v2 E6), pure so it is unit-tested
@@ -45,7 +46,7 @@ export interface FooterSketch {
   copyright: string;
   /** The mailbox, or '' when it is hidden (or unknown). */
   email: string;
-  /** Up to four column titles. */
+  /** Up to FOOTER_COLUMNS_MAX column titles. */
   columns: string[];
   /** How many icons, 0 when they are hidden. */
   socials: number;
@@ -67,7 +68,7 @@ export function footerSketch(
       place: facts.place,
     }),
     email: values['footerShowEmail'] === false ? '' : facts.email,
-    columns: columns.slice(0, 4),
+    columns: columns.slice(0, FOOTER_COLUMNS_MAX),
     socials: values['footerShowSocial'] === true ? facts.socials : 0,
   };
 }

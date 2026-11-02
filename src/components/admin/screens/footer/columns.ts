@@ -1,6 +1,5 @@
-import { readDraft } from '@/lib/admin/entitySave';
-import { FOOTER_COLUMNS_MAX } from '@schemas/admin';
-import type { PendingRef } from '../header/menu';
+import { FOOTER_COLUMNS_MAX } from '@schemas/footerRules';
+import { bilingual, pendingOf, type PendingRef } from '../header/menu';
 
 // The Footer screen's Columns card (Admin v2 E6), pure so it is unit-tested
 // (tests/lib/footerScreen.spec.ts): the footer's rows of the navigation API's list as columns
@@ -8,24 +7,11 @@ import type { PendingRef } from '../header/menu';
 // The writes are the navigation API's (`/api/admin/navigation`, nav.edit): a create for a new
 // column, one versioned PATCH per row for its column or its eye, the reorder route for an
 // order. The header's card (../header/menu.ts) supplies the shared pieces: the paged read, the
-// release-mode row write and what a change says.
+// release-mode row write, what a change says, a row's pending change and its two labels.
 
 type Row = Readonly<Record<string, unknown>>;
 
 export { FOOTER_COLUMNS_MAX };
-
-const pendingOf = (row: Row): PendingRef | null => {
-  const draft = readDraft(row);
-  return draft ? { id: draft.id, version: draft.version } : null;
-};
-
-const text = (value: unknown, lang: 'en' | 'ar'): string => {
-  if (value && typeof value === 'object') {
-    const v = (value as Row)[lang];
-    return typeof v === 'string' ? v.trim() : '';
-  }
-  return '';
-};
 
 /** One footer row as the card draws it: a column or a link. */
 export interface FooterItem {
@@ -42,7 +28,11 @@ export interface FooterItem {
   pending: PendingRef | null;
   /** For a link: the column it sits in (a heading's id), else null. */
   column: string | null;
-  /** For a link: how many sub-links sit under it (edited on the Menus screen). */
+  /**
+   * For a link: how many sub-links sit under it (edited on the Menus screen). The footer draws
+   * one level of links, so they are never shown there, and they move with their link (E6 code
+   * review, CR1 and CR2).
+   */
   children: number;
 }
 
@@ -75,7 +65,7 @@ export function footerModel(rows: readonly Row[]): FooterModel {
   }
   const item = (r: Row): FooterItem => {
     const id = r['id'] as string;
-    const title = { en: text(r['label'], 'en'), ar: text(r['label'], 'ar') };
+    const title = bilingual(r['label']);
     const parent = typeof r['parent_id'] === 'string' ? (r['parent_id'] as string) : null;
     return {
       id,
@@ -106,6 +96,40 @@ export function footerModel(rows: readonly Row[]): FooterModel {
   for (const c of columns) c.links.sort(bySort);
   loose.sort(bySort);
   return { columns, loose };
+}
+
+/**
+ * The column titles the sketch draws: the ones the site draws, a shown column with a shown link
+ * (E6 code review, CR6). An empty column, or one whose links are all hidden, is not drawn on the
+ * site (SiteFooter), so the sketch leaves it out too.
+ */
+export function sketchColumns(model: FooterModel): string[] {
+  return model.columns
+    .filter((c) => c.visible && c.links.some((l) => l.visible))
+    .map((c) => c.label);
+}
+
+/** What a link's sub-links come to: '' for none, else a phrase for the card's sub-line. */
+export function underLink(link: FooterItem): string {
+  if (link.children === 0) return '';
+  return `${link.children} ${link.children === 1 ? 'link' : 'links'} under it, not shown in the footer`;
+}
+
+/**
+ * What a column choice says once saved (E6 code review, CR2): where the link went and, when it
+ * has sub-links, that they went with it (their parent is the link, so one write moves them all)
+ * and that the footer does not show them.
+ */
+export function columnMoveSaid(link: FooterItem, columnName: string | null): string {
+  const where = columnName
+    ? `${link.label} is in the column ${columnName}.`
+    : `${link.label} is in no column.`;
+  if (link.children === 0) return where;
+  const them =
+    link.children === 1
+      ? 'The link under it moves with it and stays hidden'
+      : `The ${link.children} links under it move with it and stay hidden`;
+  return `${where} ${them}: the footer shows one level of links.`;
 }
 
 /** True while the footer can take another column (the database refuses a fifth, 0122). */

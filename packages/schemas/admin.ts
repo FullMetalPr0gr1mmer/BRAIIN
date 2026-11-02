@@ -32,6 +32,7 @@ import {
   SEO_ROBOTS,
   SEO_TITLE_MAX,
 } from './seoRules';
+import { FOOTER_COLUMNS_MAX } from './footerRules';
 import { DisplayNameValueSchema, PASSWORD_MAX_BYTES, PASSWORD_MIN, utf8Bytes } from './adminPrefs';
 import { SectionTypeSchema, sectionContentIssues, type SectionType } from './sections';
 import { SECTION_LABEL_MAX } from './sectionTypes';
@@ -688,7 +689,7 @@ export const TestimonialUpdateSchema = updatable(TestimonialWriteBase).superRefi
 // ── Navigation ──────────────────────────────────────────────────────────────────
 
 /** The most footer columns (heading rows) a site holds (Admin v2 E6; the 0122 trigger). */
-export const FOOTER_COLUMNS_MAX = 4;
+export { FOOTER_COLUMNS_MAX } from './footerRules';
 
 const NavItemObject = z.object({
   location: z.enum(['header', 'footer']),
@@ -711,30 +712,101 @@ const NavItemObject = z.object({
   isHeading: z.boolean().default(false),
 });
 
+/** The columns of a menu row that 0122's navigation_heading_shape reads, by payload name. */
+export interface NavShape {
+  isHeading?: boolean | null | undefined;
+  href?: string | null | undefined;
+  location?: string | null | undefined;
+  parentId?: string | null | undefined;
+  isKey?: boolean | null | undefined;
+}
+
+/** One way a menu row breaks the shape, on the field a person changes to fix it. */
+export interface NavShapeIssue {
+  field: keyof NavShape;
+  message: string;
+}
+
+/**
+ * What a menu row's shape lacks (navigation_heading_shape, 0122): a link needs its address; a
+ * column heading has none, is in the footer, at the top level and never the key link.
+ *
+ * `changed` names the fields a write sends (an update over a stored row, live or staged; E6
+ * code review, CR3 and CR4). The stored row is inside the CHECK, and each of its clauses reads
+ * the heading flag and one other column, so only a clause one of whose columns changed can
+ * fail: only those are judged. A heading's clash is said on its own field when the write sent
+ * it, else on the heading flag the write turned on; a link without an address is always said
+ * on its address. Absent, every clause is judged (a create).
+ */
+export function navShapeIssues(
+  row: NavShape,
+  changed?: ReadonlySet<keyof NavShape>,
+): NavShapeIssue[] {
+  const touched = (field: keyof NavShape) =>
+    !changed || changed.has(field) || changed.has('isHeading');
+  const on = (field: keyof NavShape) => (!changed || changed.has(field) ? field : 'isHeading');
+  const out: NavShapeIssue[] = [];
+  if (row.isHeading !== true) {
+    if (touched('href') && !row.href) {
+      out.push({ field: 'href', message: 'a link needs an address' });
+    }
+    return out;
+  }
+  if (touched('href') && row.href) {
+    out.push(
+      on('href') === 'href'
+        ? { field: 'href', message: 'a column heading has no link: leave it empty' }
+        : {
+            field: 'isHeading',
+            message: 'this link has an address: empty it before it becomes a column heading',
+          },
+    );
+  }
+  if (touched('location') && row.location !== 'footer') {
+    out.push(
+      on('location') === 'location'
+        ? { field: 'location', message: 'column headings are for the footer' }
+        : { field: 'isHeading', message: 'only a footer row can be a column heading' },
+    );
+  }
+  if (touched('parentId') && row.parentId) {
+    out.push(
+      on('parentId') === 'parentId'
+        ? { field: 'parentId', message: 'a column heading sits at the top of the footer' }
+        : {
+            field: 'isHeading',
+            message: 'this row sits under another one: move it to the top first',
+          },
+    );
+  }
+  if (touched('isKey') && row.isKey === true) {
+    out.push(
+      on('isKey') === 'isKey'
+        ? { field: 'isKey', message: 'a column heading cannot be the key link' }
+        : {
+            field: 'isHeading',
+            message: 'this is the key link: untick Key link before it becomes a column heading',
+          },
+    );
+  }
+  return out;
+}
+
 /**
  * A new menu row: a link (with its href) or a footer column heading (without one). An update
- * names only what it changes, so its shape is checked against the stored row by the
- * database's CHECK, which the resource maps to a 422 on the field.
+ * names only what it changes, so its shape is checked over the stored row by the resource
+ * (navigationResource.assertWritable, live and staged, with the same navShapeIssues) and,
+ * last, by the database's CHECK.
  */
 export const NavItemWriteSchema = NavItemObject.superRefine((v, ctx) => {
-  if (!v.isHeading) {
-    if (!v.href) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['href'],
-        message: 'a link needs an address',
-      });
-    }
-    return;
+  for (const issue of navShapeIssues(v)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [issue.field], message: issue.message });
   }
-  const say = (path: string, message: string) =>
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
-  if (v.href) say('href', 'a column heading has no link: leave it empty');
-  if (v.location !== 'footer') say('location', 'column headings are for the footer');
-  if (v.parentId) say('parentId', 'a column heading sits at the top of the footer');
-  if (v.isKey) say('isKey', 'a column heading cannot be the key link');
 });
 export const NavItemUpdateSchema = updatable(NavItemObject);
+
+/** What the footer's four-column limit says (the API's 422 and 0122's refusal). */
+export const FOOTER_COLUMNS_FULL = `The footer already has ${FOOTER_COLUMNS_MAX} columns. Remove one or turn it back into a link first.`;
 
 // ── SEO ─────────────────────────────────────────────────────────────────────────
 

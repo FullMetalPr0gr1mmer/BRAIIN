@@ -20,11 +20,14 @@ import { afterChange, MENU_PAGE, readMenu, rowWrite, type Wrote } from '../heade
 import {
   canAddColumn,
   columnMove,
+  columnMoveSaid,
   FOOTER_COLUMNS_MAX,
   footerModel,
   movedIds,
   newColumnBody,
+  sketchColumns,
   titleProblem,
+  underLink,
   type FooterItem,
   type FooterModel,
 } from './columns';
@@ -41,7 +44,9 @@ import { footerSketch, sketchFacts, type SketchFacts } from './sketch';
 //     rows, 0122) with their links, Add a column (four at most), Move up and Move down, the eye
 //     and every link's column, each one write of the navigation API (versioned; in release mode
 //     it names the row's pending change or carries the marker, R12b); hiding a column hides
-//     its links on the site (src/lib/nav/tree.ts footerTree); a link's words and address, a
+//     its links on the site (src/lib/nav/tree.ts footerTree), and the footer draws one level
+//     of links, so a link's sub-links move with it and are never shown (E6 code review, CR1
+//     and CR2); the sketch draws the columns the site draws (CR6); a link's words and address, a
 //     column's title and adding a link are on the Menus screen, where only an Admin removes
 //     a row (0009's navigation_delete_admin);
 //   - Legal links: shown locked, always (PDPL).
@@ -279,9 +284,7 @@ function LinkRow({
         <span className="li__t">{link.label}</span>
         <span className="li__s">
           {link.href}
-          {link.children > 0
-            ? ` · ${link.children} ${link.children === 1 ? 'link' : 'links'} under it`
-            : ''}
+          {link.children > 0 ? ` · ${underLink(link)}` : ''}
         </span>
       </span>
       {link.visible ? null : <Badge tone="gray">Hidden</Badge>}
@@ -323,7 +326,7 @@ function Columns({ onTitles }: { onTitles: (titles: string[]) => void }) {
       setStaged(menu.staged);
       setComplete(menu.complete);
       setError('');
-      onTitles(next.columns.filter((c) => c.visible).map((c) => c.label));
+      onTitles(sketchColumns(next));
     } catch (err) {
       setError(describeError(err));
       setModel((current) => current ?? { columns: [], loose: [] });
@@ -396,10 +399,10 @@ function Columns({ onTitles }: { onTitles: (titles: string[]) => void }) {
     if (!model) return;
     const values = columnMove(model, link, column);
     if (!values) return;
-    const name = column ? model.columns.find((c) => c.id === column)?.label : null;
+    const name = column ? (model.columns.find((c) => c.id === column)?.label ?? null) : null;
     void run(
       async () => ((await patch(link, values))['draft'] ? 'pending' : 'live'),
-      name ? `${link.label} is in the column ${name}.` : `${link.label} is in no column.`,
+      columnMoveSaid(link, name),
     );
   };
 
@@ -531,7 +534,8 @@ function Columns({ onTitles }: { onTitles: (titles: string[]) => void }) {
       ) : null}
       <p className="ftr-cols__hint">
         A column shows on the site once it has a link. Hiding a column hides its links on the site
-        too. A column&apos;s title, a link&apos;s words and address and adding a link are on the
+        too. The footer shows one level of links: a link under another link moves with it and is not
+        shown. A column&apos;s title, a link&apos;s words and address and adding a link are on the
         Menus screen. Only an Admin can remove a link or a column there.
       </p>
       <p className="ftr-cols__hint">

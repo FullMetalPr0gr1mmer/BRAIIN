@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import SiteFooter from '@/components/SiteFooter.astro';
@@ -194,9 +195,16 @@ describe('the footer settings', () => {
     const html = await render('ar');
     expect(html).toContain('<div class="site-footer__cols">');
     expect(html).toMatch(
-      /<nav class="site-footer__col" aria-labelledby="footer-col-1">\s*<h2 class="site-footer__heading" id="footer-col-1">\s*الاستوديو\s*<\/h2>/,
+      /<nav class="site-footer__col" aria-labelledby="site-footer-col-1">\s*<h2 class="site-footer__heading" id="site-footer-col-1">\s*الاستوديو\s*<\/h2>/,
     );
-    expect(html).toContain('aria-labelledby="footer-col-2"');
+    expect(html).toContain('aria-labelledby="site-footer-col-2"');
+    // The ids are the footer's own (code review CR10): namespaced, one per column, each named
+    // by exactly one nav.
+    const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+    expect(ids).toEqual(['site-footer-col-1', 'site-footer-col-2']);
+    for (const id of ids) {
+      expect(html.split(`aria-labelledby="${id}"`)).toHaveLength(2);
+    }
     expect(html).toContain('href="/ar/about"');
     expect(html).toContain('href="/ar/join"');
     // The loose link stays in the row under the columns; the fallback menu is not drawn.
@@ -243,6 +251,65 @@ describe('the footer settings', () => {
     const html = await render('en', IDENTITY, hidden);
     expect(html).not.toContain('site-footer__cols');
     expect(html).toContain('href="/contact"');
+  });
+
+  test('every authored link on a page that is not public: no empty landmark (code review CR5)', async () => {
+    state.nav = {
+      columns: [
+        {
+          id: 'c1',
+          label: { en: 'Studio', ar: 'الاستوديو' },
+          sort_order: 1,
+          links: [link('l1', '/about', 'About', 'من نحن')],
+        },
+      ],
+      links: [link('l4', '/contact', 'Contact', 'تواصل معنا', 2)],
+    };
+    const hidden: VisibilitySnapshot = {
+      v: 1,
+      builtAt: null,
+      pages: {
+        about: { mode: 'hidden', target: null },
+        contact: { mode: 'hidden', target: null },
+      },
+      templates: {},
+    };
+    for (const locale of ['en', 'ar'] as const) {
+      const html = await render(locale, IDENTITY, hidden);
+      expect(html).not.toContain('site-footer__cols');
+      // Neither an empty "Footer navigation" nav nor the built-in links the menu replaced.
+      expect(html).not.toMatch(/<nav aria-label="(Footer navigation|روابط التذييل)"/);
+      expect(html).not.toMatch(/<ul class="site-footer__list"><\/ul>/);
+      expect(html).not.toContain('creative-knowledge');
+      const prefix = locale === 'ar' ? '/ar' : '';
+      for (const href of LEGAL) expect(html).toContain(`href="${prefix}${href}"`);
+    }
+  });
+
+  test('the mailbox and a link are each drawn in one place (code review CR7)', async () => {
+    // One partial each, used by every branch: the mailbox beside the icons or alone, a link in
+    // a column or in the row under the columns. The bytes are unchanged with nothing saved
+    // (tests/render/siteChrome.spec.ts's snapshot).
+    const footer = readFileSync('src/components/SiteFooter.astro', 'utf8');
+    const mail = readFileSync('src/components/footer/FooterMail.astro', 'utf8');
+    const item = readFileSync('src/components/footer/FooterLink.astro', 'utf8');
+    const count = (text: string, part: string) => text.split(part).length - 1;
+    expect(count(footer + mail + item, 'site-footer__mail')).toBe(1);
+    expect(count(footer + mail + item, 'data-track={trackHref(')).toBe(1);
+    expect(count(footer, '<FooterMail email={identity.contactEmail} />')).toBe(2);
+    expect(count(footer, '<FooterLink item={item} locale={locale} />')).toBe(2);
+    // Both branches draw the same mailbox.
+    const mailOf = (html: string) => /<a class="site-footer__mail"[^>]*>[^<]*<\/a>/.exec(html)?.[0];
+    const alone = await render('ar');
+    const beside = await render(
+      'ar',
+      withFooter(
+        { showSocial: true },
+        { socials: [{ network: 'x', handle: '@s', url: 'https://x.com/s', visible: true }] },
+      ),
+    );
+    expect(mailOf(alone)).toBeDefined();
+    expect(mailOf(beside)).toBe(mailOf(alone));
   });
 
   test('a column with no link is not authored content: the built-in menu shows', async () => {

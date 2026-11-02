@@ -1953,6 +1953,13 @@ describe('footer (E6), a new guide put by the footer columns migration', () => {
     expect(text('ar')).toContain('وإخفاء العمود يُخفي روابطه في الموقع أيضًا');
     expect(flat).toContain('Hiding a column hides its links on the site too');
     expect(screen).toContain('is hidden from the footer, with its links.');
+    // The footer shows one level of links (src/lib/nav/tree.ts, code review CR1): a link's
+    // sub-links move with it and never show. The guide and the card say so.
+    expect(en).toContain(
+      'The footer shows one level of links: links put under a link on the Menus screen move with it and are not shown.',
+    );
+    expect(text('ar')).toContain('ويعرض التذييل مستوى واحدًا من الروابط');
+    expect(flat).toContain('The footer shows one level of links');
     // Only an Admin deletes a navigation row (0009 navigation_delete_admin, the authz case
     // 'navigation delete' allows admin only), so neither tells a Content Creator to remove one
     // (review E6-C2).

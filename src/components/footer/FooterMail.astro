@@ -1,0 +1,13 @@
+---
+// The footer's mailbox link (Admin v2 E6 code review, CR7): drawn in one place, beside the
+// social icons or on its own, by SiteFooter.astro.
+
+interface Props {
+  email: string;
+}
+
+const { email } = Astro.props;
+---
+
+{/* dir=ltr: an address must not be re-ordered inside RTL text */}
+<a class="site-footer__mail" href={`mailto:${email}`} dir="ltr" data-track="email">{email}</a>

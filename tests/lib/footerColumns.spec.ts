@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { FOOTER_COLUMNS_MAX, NavItemUpdateSchema, NavItemWriteSchema } from '@schemas/admin';
+import {
+  FOOTER_COLUMNS_MAX,
+  navShapeIssues,
+  NavItemUpdateSchema,
+  NavItemWriteSchema,
+  type NavShape,
+} from '@schemas/admin';
 import type { FooterRow } from '@/lib/data/navigation';
 import {
   copyrightLine,
@@ -12,7 +18,7 @@ import { translateWriteError } from '@/lib/admin/crud';
 import { ValidationError } from '@/lib/admin/errors';
 import { navigationResource } from '@/lib/admin/resources/navigation';
 import { IDENTITY_FALLBACK } from '@/lib/identity/fallback';
-import { FOOTER_COLUMNS_SHOWN, footerTree } from '@/lib/nav/tree';
+import { footerTree } from '@/lib/nav/tree';
 
 // The footer's link columns and settings (Admin v2 E6): the pure pieces the public footer and
 // the navigation API stand on. The SQL half (0122's CHECK and trigger) is pgTAP's
@@ -66,9 +72,36 @@ describe('footerTree: the footer rows as columns and loose links', () => {
   it('draws four columns at most; a fifth heading’s links are promoted, never lost', () => {
     const rows = [1, 2, 3, 4, 5].map((n) => heading(`h${n}`, n));
     const tree = footerTree([...rows, row({ id: 'under5', parent_id: 'h5' })]);
-    expect(FOOTER_COLUMNS_SHOWN).toBe(FOOTER_COLUMNS_MAX);
+    expect(FOOTER_COLUMNS_MAX).toBe(4);
     expect(tree.columns.map((c) => c.id)).toEqual(['h1', 'h2', 'h3', 'h4']);
     expect(tree.links.map((l) => l.id)).toEqual(['under5']);
+  });
+
+  it('a column link’s sub-link nests under its link, never in the loose row (code review CR1)', () => {
+    // Heading H > link L1 > sub-link L1a. The footer draws one level of links (SiteFooter
+    // draws no children, in a column or not), so L1a is never drawn; before the fix it was
+    // promoted into "Footer navigation" while the Footer card counted it under L1.
+    const tree = footerTree([
+      heading('H', 1),
+      row({ id: 'L1', parent_id: 'H', sort_order: 1 }),
+      row({ id: 'L1a', parent_id: 'L1', sort_order: 2 }),
+      row({ id: 'L1b', parent_id: 'L1', sort_order: 1 }),
+      row({ id: 'L3', sort_order: 3 }),
+    ]);
+    expect(
+      tree.columns.map((c) => [c.id, c.links.map((l) => [l.id, l.children.map((x) => x.id)])]),
+    ).toEqual([['H', [['L1', ['L1b', 'L1a']]]]]);
+    expect(tree.links.map((l) => l.id)).toEqual(['L3']);
+  });
+
+  it('a link under a fifth heading is promoted with its sub-links under it', () => {
+    const rows = [1, 2, 3, 4, 5].map((n) => heading(`h${n}`, n));
+    const tree = footerTree([
+      ...rows,
+      row({ id: 'p', parent_id: 'h5' }),
+      row({ id: 'p1', parent_id: 'p' }),
+    ]);
+    expect(tree.links.map((l) => [l.id, l.children.map((c) => c.id)])).toEqual([['p', ['p1']]]);
   });
 
   it('a hidden column hides its links (review E6-C1): the heading is not read, nor are they drawn', () => {
@@ -211,7 +244,10 @@ describe('a column heading through the navigation API (two layers with 0122)', (
     }
     expect(fields['navigation_footer_columns_max']?.message).toContain(String(FOOTER_COLUMNS_MAX));
     // One number: the trigger refuses at four others, the schema and the reader say four.
+    // SQL cannot import FOOTER_COLUMNS_MAX, so the migration names it beside its literal
+    // (code review CR8); tests/lib/footerLimit.spec.ts holds every reader to the constant.
     expect(MIGRATION).toMatch(/if v_others >= 4 then/);
+    expect(MIGRATION).toContain('The four below is FOOTER_COLUMNS_MAX');
     expect(FOOTER_COLUMNS_MAX).toBe(4);
   });
 
@@ -233,5 +269,67 @@ describe('a column heading through the navigation API (two layers with 0122)', (
     );
     expect(error).toBeInstanceOf(ValidationError);
     expect((error as ValidationError).field).toBe('parentId');
+  });
+});
+
+describe('a menu row’s shape over the stored row (code review CR3, CR4)', () => {
+  const link: NavShape = { isHeading: false, href: '/about', location: 'footer', parentId: null };
+  const head: NavShape = { isHeading: true, href: null, location: 'footer', parentId: null };
+  const fields = (row: NavShape, changed?: (keyof NavShape)[]) =>
+    navShapeIssues(row, changed ? new Set(changed) : undefined).map((i) => i.field);
+
+  it('a link whose address is emptied is said on its address, never on the heading flag', () => {
+    expect(fields({ ...link, href: null }, ['href'])).toEqual(['href']);
+    expect(fields({ ...link, href: '' }, ['href'])).toEqual(['href']);
+    // A heading turned back into a link without an address: the address is what is missing.
+    expect(fields({ ...head, isHeading: false }, ['isHeading'])).toEqual(['href']);
+  });
+
+  it('a heading’s clash is said on the field the write sent, else on the flag it turned on', () => {
+    expect(fields({ ...head, href: '/x' }, ['href'])).toEqual(['href']);
+    expect(fields({ ...link, isHeading: true }, ['isHeading'])).toEqual(['isHeading']);
+    expect(fields({ ...head, location: 'header' }, ['location'])).toEqual(['location']);
+    expect(
+      fields({ ...link, href: null, isHeading: true, location: 'header' }, ['isHeading', 'href']),
+    ).toEqual(['isHeading']);
+    expect(fields({ ...head, parentId: 'p' }, ['parentId'])).toEqual(['parentId']);
+    expect(
+      fields({ ...link, href: null, isHeading: true, parentId: 'p' }, ['isHeading', 'href']),
+    ).toEqual(['isHeading']);
+    expect(fields({ ...head, isKey: true }, ['isKey'])).toEqual(['isKey']);
+    expect(
+      fields({ ...link, href: null, isKey: true, isHeading: true }, ['isHeading', 'href']),
+    ).toEqual(['isHeading']);
+  });
+
+  it('judges only what the write can have broken: the stored row is inside the CHECK', () => {
+    // A write that names none of a clause's columns cannot break it (a label, an order, an
+    // eye); nor does the read of a stored row trust a column the write did not send.
+    expect(fields({ isHeading: false }, [])).toEqual([]);
+    expect(fields({ isHeading: false }, ['parentId'])).toEqual([]);
+    expect(fields({ ...head, href: '/x' }, ['parentId'])).toEqual([]);
+    expect(fields({ ...link, href: null })).toEqual(['href']);
+  });
+
+  it('a create is judged whole, with the same words the create schema says', () => {
+    const issues = navShapeIssues({
+      isHeading: true,
+      href: '/x',
+      location: 'header',
+      parentId: 'p',
+      isKey: true,
+    });
+    expect(issues.map((i) => i.field)).toEqual(['href', 'location', 'parentId', 'isKey']);
+    const parsed = NavItemWriteSchema.safeParse({
+      location: 'header',
+      label: { en: 'a', ar: 'ب' },
+      href: '/x',
+      parentId: '00000000-0000-4000-8000-000000000001',
+      isKey: true,
+      isHeading: true,
+    });
+    expect(parsed.error?.issues.map((i) => [i.path.join('.'), i.message])).toEqual(
+      issues.map((i) => [i.field, i.message]),
+    );
   });
 });
