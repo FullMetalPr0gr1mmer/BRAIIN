@@ -113,6 +113,19 @@ function subjects(selector: string): string[] {
  * src/pages, the admin left out): a rule that names one is a button's.
  */
 function buttonClasses(): Set<string> {
+  return classesOn(/<button\b([^>]*)>/g);
+}
+
+/**
+ * Every class an `<h1>` to `<h6>` carries in the public markup: a rule that names one styles
+ * a heading, whatever its selector says (E12 check: `.leader__n` is an h3 styled by class).
+ */
+function headingClasses(): Set<string> {
+  return classesOn(/<h[1-6]\b([^>]*)>/g);
+}
+
+/** The classes the public markup puts on the tags a pattern matches (group 1: the attributes). */
+function classesOn(tags: RegExp): Set<string> {
   const out = new Set<string>();
   const walk = (dir: string): string[] =>
     readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -122,7 +135,7 @@ function buttonClasses(): Set<string> {
     });
   for (const file of ['src/components', 'src/layouts', 'src/pages'].flatMap(walk)) {
     const src = readFileSync(file, 'utf8');
-    for (const tag of src.matchAll(/<button\b([^>]*)>/g)) {
+    for (const tag of src.matchAll(tags)) {
       const attr = /\bclass(?::list)?=(\{[^}]*\}|"[^"]*")/.exec(tag[1]!);
       if (!attr) continue;
       for (const quoted of attr[1]!.matchAll(/["'`]([^"'`]+)["'`]/g)) {
@@ -324,11 +337,26 @@ describe('the headings: weight and case', () => {
     '.svc-res__n': "a result's number",
     '.join-step__n': "a Join step's number in a circle",
   };
+  // Heading elements (h1 to h6, found in the markup) styled as LABELS: set at 700 or lighter
+  // in literal capitals by design, so they keep their capitals when a theme picks "As written"
+  // (the case token stands only beside the heading weight, below). Each must stay a label:
+  // 700 or lighter and in capitals, or its reason is stale.
+  const LABEL_CAPS: Record<string, string> = {
+    '.leader__n': "a leader's name on the card, a 700 label in capitals",
+    '.cs-ov__h': "a case study overview's 12 px kicker",
+    '.svc-get__k': "a service's 'what you get' 12 px kicker",
+    '.svc-case__k': "a service case's 12 px kicker",
+  };
+  const headings = headingClasses();
   const isDisplay = (r: Rule) => {
     const w = r.decls.get('font-weight');
     const size = minPx(resolve(r.decls.get('font-size') ?? ''));
     return (
       subjects(r.selector).some((subject) => /^h[1-6]\b/.test(subject)) ||
+      // A class the markup puts on a heading element (found the way the buttons are).
+      subjects(r.selector).some((subject) =>
+        [...subject.matchAll(/\.([\w-]+)/g)].some((m) => headings.has(m[1]!)),
+      ) ||
       w === '800' ||
       w === '900' ||
       w === WEIGHT ||
@@ -346,7 +374,13 @@ describe('the headings: weight and case', () => {
           r.decls.get('text-transform') === 'uppercase'),
     ).map((r) => r.selector);
     // Every name still stands (no stale reason), and no other display rule is literal.
-    expect(new Set(literal)).toEqual(new Set(Object.keys(STAY)));
+    expect(new Set(literal)).toEqual(new Set([...Object.keys(STAY), ...Object.keys(LABEL_CAPS)]));
+    // A named label stays a label: 700 or lighter, in capitals.
+    for (const selector of Object.keys(LABEL_CAPS)) {
+      const r = ALL.find((rule) => rule.selector === selector)!;
+      expect(Number(r.decls.get('font-weight') ?? 400), selector).toBeLessThanOrEqual(700);
+      expect(r.decls.get('text-transform'), selector).toBe('uppercase');
+    }
     // None of them is in capitals: a capitalised display line always follows the case token.
     const capitals = ALL.filter(
       (r) => r.selector in STAY && r.decls.get('text-transform') === 'uppercase',
