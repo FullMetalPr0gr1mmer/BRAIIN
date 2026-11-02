@@ -795,7 +795,7 @@ html[dir='rtl'] .svc-row__a:focus-visible .svc-row__t {
   gap: 6px;
   padding: 7px 12px;
   border: 1px solid rgba(0, 0, 0, 0.16);
-  border-radius: 999px;
+  border-radius: var(--bs-btn-radius, 999px);
   color: var(--bs-ink);
   font-size: 12px;
   font-weight: 700;

@@ -126,6 +126,8 @@ describe('the corners: every component radius is a token or a fixed shape', () =
   });
 
   it('the buttons follow the button style', () => {
+    // The explorer's per-row Inquire link (`.svc-row__q`) is an outlined button beside the
+    // panel's `.svc-xp__btn`, so it follows the style too (it stayed a pill under Square once).
     const buttons = ALL.filter((r) => r.decls.get('border-radius') === BUTTON).map(
       (r) => r.selector,
     );
@@ -134,6 +136,7 @@ describe('the corners: every component radius is a token or a fixed shape', () =
       '.site-header__cta, .site-nav__cta',
       '.consent-actions button',
       '.fb__apply',
+      '.svc-row__q',
       '.svc-xp__btn',
       '.svc-case__see',
       '.svc-fab',
@@ -217,6 +220,83 @@ describe('the headings: weight and case', () => {
 
   it('legibility: every weight offered is bold (WCAG large text needs 700 or more)', () => {
     for (const w of HEADING_WEIGHTS) expect(w).toBeGreaterThanOrEqual(700);
+  });
+
+  describe('legibility: every 3:1 text pair is large text at every weight a theme offers', () => {
+    // WCAG 1.4.3 lets text pass at 3:1 only when it is large: 24 px at any weight, or 18.66 px
+    // (14 pt) at 700 or more. The contrast gate scores some pairs at 3:1, so the text those
+    // pairs colour must stay large under every heading weight a theme can choose (the weight
+    // token's lightest offer, not the brand's 800). Every pair under 4.5:1 is named here as
+    // text (with the rule that colours it and the rules that size it) or as not text (icons,
+    // rings, discs, marks), so a new 3:1 pair is a decision, never a silent pass.
+    type Pair = [string, string, number, string];
+    const pairs = JSON.parse(readFileSync('packages/theme/pairs.json', 'utf8')) as Record<
+      'site' | 'admin',
+      { pairs: Pair[] }
+    >;
+    const NOT_TEXT = new Set([
+      'the check on a Primary disc',
+      'an arrow on a Primary disc',
+      'arrows, underlines and focus rings on white',
+      'the plus on a value card',
+      'focus rings on white',
+      'focus rings on the light section',
+      'the Say hello icons',
+      'switches, checkboxes and radios',
+      "a list row's icon",
+      "a switch's knob when on",
+      'the first chart series on a card',
+      'the first chart series on the background',
+    ]);
+    const TEXT: Record<string, { colour: [string, string]; sized: string[] }> = {
+      // The hero's highlighted word inherits the h1's size and weight (both directions).
+      "the hero's highlighted word and focus rings on black": {
+        colour: ['.hero h1 .accent', 'var(--bs-cobalt)'],
+        sized: ['.hero h1', "html[dir='rtl'] .hero h1"],
+      },
+    };
+    const low = [...pairs.site.pairs, ...pairs.admin.pairs].filter((p) => p[2] < 4.5);
+
+    /** A declaration's value, a `var(--x)` read from the global sheet's `:root`. */
+    function resolve(value: string): string {
+      const v = /^var\((--[a-z0-9-]+)\)$/.exec(value);
+      if (!v) return value;
+      const root = ALL.find((r) => r.selector === ':root' && r.decls.has(v[1]!));
+      return root ? resolve(root.decls.get(v[1]!)!) : value;
+    }
+    const lightest = Math.min(...HEADING_WEIGHTS);
+    /** The weight a rule renders at its lightest under any theme. */
+    function weightOf(value: string): number | null {
+      if (value === WEIGHT) return lightest;
+      return /^[0-9]+$/.test(value) ? Number(value) : null;
+    }
+
+    it('every pair under 4.5:1 is named, as text or not', () => {
+      const whats = low.map((p) => p[3]);
+      expect(whats.filter((w) => !NOT_TEXT.has(w) && !(w in TEXT))).toEqual([]);
+      // No stale names either.
+      expect([...NOT_TEXT, ...Object.keys(TEXT)].filter((w) => !whats.includes(w))).toEqual([]);
+    });
+
+    it('the text each 3:1 pair colours is 24 px, or 18.66 px and bold, at its smallest', () => {
+      for (const [what, { colour, sized }] of Object.entries(TEXT)) {
+        const painted = ALL.find((r) => r.selector === colour[0]);
+        expect(painted?.decls.get('color'), what).toBe(colour[1]);
+        // The weight is the first sized rule's (a mirrored rule inherits it).
+        const weightDecl = sized
+          .map((s) => ALL.find((r) => r.selector === s)?.decls.get('font-weight'))
+          .find((w) => w !== undefined);
+        const weight = weightDecl === undefined ? 400 : weightOf(weightDecl);
+        for (const s of sized) {
+          const rule = ALL.find((r) => r.selector === s);
+          expect(rule, `${what}: ${s}`).toBeDefined();
+          const size = minPx(resolve(rule!.decls.get('font-size') ?? ''));
+          expect(size, `${what}: ${s} has a font-size`).not.toBeNull();
+          const large = size! >= 24 || (size! >= 18.66 && weight !== null && weight >= 700);
+          expect(large, `${what}: ${s} at ${size}px, weight ${weight}`).toBe(true);
+        }
+      }
+    });
   });
 
   it('the case token only stands where the brand set capitals, beside the weight', () => {
