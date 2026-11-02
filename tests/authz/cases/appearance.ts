@@ -122,6 +122,16 @@ export const cases: readonly Case[] = [
     allow: ['admin', 'content_creator'],
   },
   {
+    // Admin v2 E6: a footer column is a navigation heading row (no link), through the same
+    // route and gate (nav.edit) as any link.
+    name: 'navigation create, a footer column',
+    load: () => import('@/pages/api/admin/navigation/index'),
+    method: 'POST',
+    url: '/api/admin/navigation',
+    body: { location: 'footer', label: VALID_BILINGUAL, isHeading: true },
+    allow: ['admin', 'content_creator'],
+  },
+  {
     name: 'navigation read one',
     load: () => import('@/pages/api/admin/navigation/[id]'),
     method: 'GET',
@@ -134,6 +144,15 @@ export const cases: readonly Case[] = [
     method: 'PATCH',
     url: `/api/admin/navigation/${UUID}`,
     body: { label: VALID_BILINGUAL, version: 1 },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    // Admin v2 E6: the Footer screen's column picker moves a link under a column heading.
+    name: 'navigation update, a link into a footer column',
+    load: () => import('@/pages/api/admin/navigation/[id]'),
+    method: 'PATCH',
+    url: `/api/admin/navigation/${UUID}`,
+    body: { parentId: UUID, sortOrder: 20, version: 1 },
     allow: ['admin', 'content_creator'],
   },
   {

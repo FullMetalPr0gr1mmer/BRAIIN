@@ -98,6 +98,21 @@ export const cases: readonly Case[] = [
     allow: ['admin', 'developer'],
   },
   {
+    // Admin v2 E6: the Footer screen's Basics form, all four at once (settings.general).
+    name: 'site profile write, the footer screen basics',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'PATCH',
+    url: '/api/admin/site-profile',
+    body: {
+      footerCopyright: { en: '© {year} {brand}. {place}', ar: '© {year} {brand}. {place}' },
+      footerStyle: 'dark',
+      footerShowEmail: false,
+      footerShowSocial: true,
+      version: 1,
+    },
+    allow: ['admin', 'developer'],
+  },
+  {
     // The settings form ALWAYS sends the checkbox, so an unchanged flag must not turn a
     // Developer's identity save into a 403. (The stubbed stored row has it closed.)
     name: 'site profile write, applications flag unchanged',
