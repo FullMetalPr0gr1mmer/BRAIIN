@@ -170,6 +170,7 @@ describe('playwright.config.ts', () => {
       'general',
       'header',
       'ga4',
+      'theme',
       'maintenance',
       'maintenance-teardown',
     ]);
@@ -224,6 +225,7 @@ describe('playwright.config.ts', () => {
           spec('general'),
           spec('header'),
           spec('ga4'),
+          spec('theme'),
           spec('maintenance'),
           'maintenance\\.teardown\\.ts$',
           spec('releases-mode'),
@@ -237,9 +239,11 @@ describe('playwright.config.ts', () => {
       // Admin v2 E5: the header's options, alone after general settings.
       p('header', { testMatch: spec('header'), dependencies: ['general'] }),
       p('ga4', { testMatch: spec('ga4'), dependencies: ['header'] }),
+      // Admin v2 E4: the theme, alone, between GA4 and maintenance.
+      p('theme', { testMatch: spec('theme'), dependencies: ['ga4'] }),
       p('maintenance', {
         testMatch: spec('maintenance'),
-        dependencies: ['ga4'],
+        dependencies: ['theme'],
         teardown: 'maintenance-teardown',
       }),
       p('maintenance-teardown', { testMatch: 'maintenance\\.teardown\\.ts$' }),

@@ -38,11 +38,18 @@ async function visible(tables: Record<string, Row[]>, drafts: Row[] = []) {
             table === 'site_appearance' ||
             table === 'form_settings'
           ? 'tenant_id'
-          : 'id';
+          : // Admin v2 E4: a visitor reads a theme's tokens only, never its id or version.
+            table === 'custom_themes'
+            ? 'tokens'
+            : 'id';
     const { data, error } = await db.from(table).select(key);
     if (error) throw new Error(`${table}: ${error.code}`);
     out[table] = (data as unknown as Row[]).map((r) =>
-      table === 'portfolio_services' ? `${r['portfolio_id']}>${r['service_id']}` : String(r[key]),
+      table === 'portfolio_services'
+        ? `${r['portfolio_id']}>${r['service_id']}`
+        : table === 'custom_themes'
+          ? String((r['tokens'] as Row)['--bs-klein'])
+          : String(r[key]),
     );
   }
   return { ids: out, report: source.report() };
@@ -60,6 +67,8 @@ describe('the mirror over the fixture tenant', () => {
     expect(ids['site_integrations']).toHaveLength(1);
     expect(ids['site_appearance']).toHaveLength(1);
     expect(ids['form_settings']).toHaveLength(1);
+    // Admin v2 E4: the active v1 theme (its primary, black), never the active legacy one.
+    expect(ids['custom_themes']).toEqual(['#000000']);
     expect(report.unsupported).toEqual([]);
   });
 

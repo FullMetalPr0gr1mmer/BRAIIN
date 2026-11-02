@@ -1,7 +1,7 @@
 import { configDefaults, defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 
-// Path aliases mirror tsconfig.json so tests resolve @/ , @schemas/ , @consent/.
+// Path aliases mirror tsconfig.json so tests resolve @/ , @schemas/ , @consent/ , @theme/.
 export default defineConfig({
   // The admin's React islands (.tsx) are rendered in tests with react-dom/server. Astro's
   // base tsconfig leaves JSX untransformed ("preserve"), which Vite's parser cannot read;
@@ -13,6 +13,7 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '@schemas': fileURLToPath(new URL('./packages/schemas', import.meta.url)),
       '@consent': fileURLToPath(new URL('./packages/consent', import.meta.url)),
+      '@theme': fileURLToPath(new URL('./packages/theme', import.meta.url)),
       // `astro:env/*` is a virtual module that only exists inside the Astro build, so
       // anything importing config was untestable. Stubbing it lets tests reach the
       // routes and API handlers in src/pages/.

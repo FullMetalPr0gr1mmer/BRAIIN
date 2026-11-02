@@ -2,6 +2,7 @@ import { defineMiddleware } from 'astro:middleware';
 // Astro 6+ removed `Astro.locals.runtime.env` (the getter now throws). Worker bindings
 // come from the runtime module instead — works in `astro dev` (workerd) and in prod.
 import { env } from 'cloudflare:workers';
+import { THEME_STYLESHEET_PATH, getThemeAnswer } from '@/lib/data/theme';
 import {
   CSP_REPORT_ONLY,
   collectInlineHashes,
@@ -30,6 +31,7 @@ import { pageAccessGate } from '@/lib/visibility/gate';
 import { withPageAccess } from '@/lib/visibility/scope';
 import { handlePreview, previewConnectSources } from '@/lib/http/preview';
 import { ga4Reads } from '@/lib/http/ga4';
+import { noEdgeCache } from '@/lib/http/cacheTags';
 import { getGa4MeasurementId } from '@/lib/data/ga4';
 import { writeSystemLog } from '@/lib/data/systemLog';
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
@@ -230,6 +232,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // By the route Astro matched, not by spelling: `/_image/`, `/%5Fimage` and `/_imag%65/`
   // reach the same endpoint (src/lib/http/imageGuard.ts `isImageEndpoint`).
   const isImage = isImageEndpoint(context.routePattern, url.pathname);
+  // The site's theme stylesheet (Admin v2 E4), by the route Astro matched: custom properties
+  // as public as global.css, which the asset layer serves during maintenance without the
+  // Worker. The admin links it on every screen, and the admin works through maintenance.
+  const isThemeSheet = matched === THEME_STYLESHEET_PATH;
   const isPrivate = isAdmin || isAdminApi;
 
   // The nonce is minted FIRST, before any early return. Previously it was generated
@@ -289,11 +295,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return out;
   };
 
-  // 1) Maintenance pre-cache check (before edge-cache lookup). /admin, /api, /healthz and
-  //    the image endpoint exempt. `/_image` is not a page: it answers only the transforms
-  //    the guard below admits, and its stills are as public as the `/_astro/*` files the
-  //    asset layer serves without the Worker during maintenance. Gating it 503'd the admin's
-  //    own thumbnails of uploads for every editor off the allowlist.
+  // 1) Maintenance pre-cache check (before edge-cache lookup). /admin, /api, /healthz, the
+  //    image endpoint and the theme stylesheet (E4) exempt. `/_image` is not a page: it
+  //    answers only the transforms the guard below admits, and its stills are as public as
+  //    the `/_astro/*` files the asset layer serves without the Worker during maintenance.
+  //    Gating it 503'd the admin's own thumbnails of uploads for every editor off the
+  //    allowlist; gating the theme would draw the admin in the brand's colours instead.
   //
   //    Admin v2 U9b: ONE KV read decides it (src/lib/http/maintenance.ts): in force when the
   //    switch is on and "Back on" has not come, so the site returns at that instant with no
@@ -302,7 +309,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   //    own session check, fail CLOSED (no session, an unreadable one, an error or a slow auth
   //    server: the 503). A bypassed page is private, untagged and noindex (step 5).
   let bypassed = false;
-  if (!isAdmin && !isApi && !isHealth && !isImage) {
+  if (!isAdmin && !isApi && !isHealth && !isImage && !isThemeSheet) {
     const now = Date.now();
     const m = await getMaintenanceState(env, now);
     if (m.active) {
@@ -331,7 +338,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   let gate: VisibilityGate = PASS;
   /** The page this request unlocked, when it did: the render runs inside its scope. */
   let unlocked: { pageId: string; tenantId: string } | null = null;
-  if (!isAdmin && !isApi && !isHealth && !isImage) {
+  if (!isAdmin && !isApi && !isHealth && !isImage && !isThemeSheet) {
     const snapshot = await getVisibilitySnapshot(env);
     locals.visibility = snapshot;
     const target = targetForRoute(context.routePattern);
@@ -374,6 +381,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
           await next(locale === 'ar' ? '/ar/404' : '/404');
       return secured(hiddenAnswer(answer));
     }
+  }
+
+  // 1a') The active theme (Admin v2 E4): its read starts here, beside the page's own loaders,
+  //      and BaseLayout awaits the same promise (src/lib/data/theme.ts, once per request), so
+  //      the theme costs the page no round trip of its own. It never rejects (no theme is the
+  //      brand's look). A preview (an /admin path) reads it inside its scope instead, and a
+  //      route that is a file (the sitemap, robots.txt, llms.txt, the stylesheet itself, which
+  //      reads it on its own) renders no layout, so nothing is started for it.
+  const isFileRoute = /\.[a-z0-9]+$/i.test(matched);
+  if (!isAdmin && !isApi && !isHealth && !isImage && !isFileRoute && request.method === 'GET') {
+    void getThemeAnswer(locals);
   }
 
   // 1b) Image transforms answer only the URLs our own markup emits. Every other
@@ -569,6 +587,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
   //    carrying no cache tag a purge could mistake for a public page's.
   const out = await secured(rendered, ga4 && (await ga4) ? { ga4: true } : {});
   if (gate.action === 'noindex') out.headers.set('X-Robots-Tag', 'noindex');
+  // 5a) A page rendered while the theme's read FAILED (refused or unreachable, not "no
+  //     theme") lacks the theme's link: it is never edge-cached, or a blip would stick to a
+  //     Tier A page for a year (E4 code review CR1). Step 1a' started the read, and the
+  //     layout awaited the same promise, so this costs nothing more.
+  if (!isPrivate && locals.theme && (await locals.theme).failed) noEdgeCache(out);
   if (unlocked !== null || bypassed) {
     // A page unlocked by its password, or one a signed-in person sees past the maintenance
     // page (U9b): private, never cached, never indexed, no tag a purge could mistake.

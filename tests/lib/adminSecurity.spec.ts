@@ -203,18 +203,31 @@ describe('admin navigation gating', () => {
 
 describe('theme tokens are CSS custom properties only', () => {
   it('rejects a value that could break out of the declaration', () => {
-    // With no 'unsafe-inline' in style-src, tokens are injected into one nonced <style>
-    // block. A value containing `;` or `}` escapes its declaration and authors CSS.
-    expect(ThemeTokensSchema.safeParse({ '--x': 'red; } body { display:none' }).success).toBe(
+    // With no 'unsafe-inline' in style-src, tokens reach the page as /styles/theme.css, a
+    // preview's nonced <style> or style.setProperty. A value containing `;` or `}` would
+    // escape its declaration and author CSS; each key takes one shape only (Admin v2 E4).
+    expect(
+      ThemeTokensSchema.safeParse({ '--bs-klein': 'red; } body { display:none' }).success,
+    ).toBe(false);
+    expect(ThemeTokensSchema.safeParse({ '--bs-klein': 'red</style><script>' }).success).toBe(
       false,
     );
-    expect(ThemeTokensSchema.safeParse({ '--x': 'red</style><script>' }).success).toBe(false);
-    expect(ThemeTokensSchema.safeParse({ '--x': 'url(javascript:alert(1))' }).success).toBe(true);
+    expect(ThemeTokensSchema.safeParse({ '--bs-klein': 'url(javascript:alert(1))' }).success).toBe(
+      false,
+    );
+    expect(ThemeTokensSchema.safeParse({ '--bs-glow-sky': 'rgba(1, 2, 3, 0.4);x' }).success).toBe(
+      false,
+    );
+    expect(ThemeTokensSchema.safeParse({ '--bs-klein': '#0024bc' }).success).toBe(true);
   });
 
-  it('rejects key names that are not custom properties', () => {
+  it('takes the closed set of keys only (Admin v2 E4)', () => {
     expect(ThemeTokensSchema.safeParse({ color: 'red' }).success).toBe(false);
-    expect(ThemeTokensSchema.safeParse({ '--ok-name': '#fff' }).success).toBe(true);
+    expect(ThemeTokensSchema.safeParse({ '--ok-name': '#ffffff' }).success).toBe(false);
+    expect(ThemeTokensSchema.safeParse({ '--bs-fg': '#ffffff' }).success).toBe(false);
+    // Motion can only be reduced: no scale under 1.
+    expect(ThemeTokensSchema.safeParse({ '--bs-marquee-scale': '0.5' }).success).toBe(false);
+    expect(ThemeTokensSchema.safeParse({ '--bs-marquee-scale': '2.5' }).success).toBe(true);
   });
 });
 

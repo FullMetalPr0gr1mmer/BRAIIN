@@ -64,8 +64,8 @@ SQL source: `app.release_entities`. TS source: `src/lib/release/registry.ts`, ke
 | page_section | page_sections | Pages | admin, CC | pages.write + content.publish | archiveDelete (0007) | page:&lt;slug of page_id&gt; | 90 |
 | nav_item | navigation | Navigation | admin, CC | nav.edit + content.publish | archiveDelete (0009) | nav:all | 100 |
 | site_profile (singleton; every column except `accepting_applications`) | site_profile | Settings | admin, developer | settings.general | — | site:identity | 110 |
-| custom_theme (+ activation) | custom_themes | Appearance | admin, developer | theme.edit | content.archiveDelete | theme:active (the Appearance slice adds it to ALWAYS; until then tenant:default) | 110 |
-| site_chrome_* (Appearance slice singletons, one table per capability — Phase-3 amendment: a capability split through a row becomes a table) | … | Appearance | per table | theme.edit or settings.general | — | theme:active / site:identity | 110 |
+| custom_theme (+ activation) | custom_themes | Appearance | admin, developer | theme.edit | content.archiveDelete | site:chrome (every page carries it; amended by E4, which chose this ALWAYS tag over a new theme:active) | 110 |
+| site_chrome_* (Appearance slice singletons, one table per capability — Phase-3 amendment: a capability split through a row becomes a table) | … | Appearance | per table | theme.edit or settings.general | — | site:chrome / site:identity | 110 |
 | entity_seo | entity_seo | SEO | admin, seo | seo.entityMeta | — | the target's tag (service:/portfolio:/page:/blog:&lt;slug&gt;) | 120 |
 | seo_defaults (singleton) | seo_defaults | SEO | admin, seo | seo.globalDefaults | — | tenant:default | 120 |
 | redirect | redirects | SEO | admin, seo | redirects.manage | redirects.manage | none — KV `site:redirects` is rebuilt after the release | 130 |
@@ -445,7 +445,7 @@ apply_release(p_actor uuid, p_role text, p_mode text /* publish|dry_run|schedule
 - Editors can add table-backed sections (statistics, team, leadership, testimonials, clientsMarquee, certifications, faq…) to any composed page.
 - Static route lists therefore miss tables. Example: About stamps `page:about, team:all, statistics:all` but no `certifications:all` and no `testimonials:all`.
 - New `src/lib/sections/reads.ts` `SECTION_READS: Record<SectionType, CacheTag[]>`. Every Tier A route calls `setTierA(…, entities: [...routeTags, ...sectionTags(sections)])`.
-- New tags: `certifications:all`, `faq:all`, `theme:active` (Appearance), `seo:sitemap`, `seo:llms`.
+- New tags: `certifications:all`, `faq:all`, `seo:sitemap`, `seo:llms`. (No `theme:active`: E4 purges a theme by `site:chrome`, which every page already carries.)
 - `sitemap.xml.ts` / `llms.txt.ts` stamp `tenant:default, seo:*` (still `max-age=3600` until the zone; then long `s-maxage` + purge, closing their `TODO(KAN-20)`).
 
 ### 5.3 `src/lib/http/purge.ts` — the one module that talks to Cloudflare

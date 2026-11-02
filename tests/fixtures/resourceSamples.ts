@@ -116,8 +116,13 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   logoMediaId: UUID_A,
   websiteUrl: 'https://client.example.test',
   showInMarquee: true,
-  // themes
-  tokens: { '--bs-klein': '#0024BC' },
+  // themes (Admin v2 E4: a theme is its settings; the server compiles the tokens)
+  settings: {
+    v: 1,
+    mode: 'advanced',
+    colors: { primary: '#000000', hover: '#615757', accent: '#938A8D' },
+    motion: { marquee: 'slower', reveal: false },
+  },
   isActive: true,
   // redirects
   sourcePath: '/old-page/',

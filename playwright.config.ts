@@ -26,6 +26,9 @@ const HEADER_SPEC = /[\\/]tests[\\/]admin[\\/]header\.e2e\.ts$/;
 // page the other specs read (the CI e2e build turns GA4_NOTICE_READY on): its own project, after
 // general settings and before maintenance.
 const GA4_SPEC = /[\\/]tests[\\/]admin[\\/]ga4\.e2e\.ts$/;
+// The theme (Admin v2 E4) saves colours every public page then draws: its own project, after GA4
+// and before maintenance, and it puts the brand's own theme back when it ends.
+const THEME_SPEC = /[\\/]tests[\\/]admin[\\/]theme\.e2e\.ts$/;
 const MAINTENANCE_SPEC = /[\\/]tests[\\/]admin[\\/]maintenance\.e2e\.ts$/;
 // The section blocks (Admin v2 E10) put a Text block, a Gallery and a Video on About, a page
 // the public and the admin specs read (pages.e2e.ts counts its sections), and remove them when
@@ -102,6 +105,7 @@ export default defineConfig({
         GENERAL_SPEC,
         HEADER_SPEC,
         GA4_SPEC,
+        THEME_SPEC,
         MAINTENANCE_SPEC,
         /maintenance\.teardown\.ts$/,
         RELEASES_MODE_SPEC,
@@ -163,13 +167,23 @@ export default defineConfig({
       dependencies: ['header'],
     },
     {
+      // The theme (Admin v2 E4) saves colours every public page draws, so the axe and CSP
+      // checks of the other specs would read a themed site: alone, after GA4, and it saves the
+      // brand's own theme back when it ends (no token: no page links a stylesheet).
+      name: 'theme',
+      testDir: './tests/admin',
+      testMatch: THEME_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['ga4'],
+    },
+    {
       // Maintenance (Admin v2 U9b) takes the shared preview down: last of all, and its
       // teardown switches it off whatever happened.
       name: 'maintenance',
       testDir: './tests/admin',
       testMatch: MAINTENANCE_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['ga4'],
+      dependencies: ['theme'],
       teardown: 'maintenance-teardown',
     },
     {

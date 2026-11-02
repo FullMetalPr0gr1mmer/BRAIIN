@@ -1,0 +1,114 @@
+/* Screen stylesheet: the theme editor, /admin/appearance/theme (Admin v2 E4). Linked only
+   through AdminLayout's `styles` prop (styles={['theme.css']}), after admin.css. The cards,
+   the colour fields, the segmented controls and the notes are the kit's (admin.css). Here:
+   the two columns (the cards, then the sticky preview), the palette chips, the motion rows,
+   the facts list and the sample of the site. It uses admin.css's tokens and declares none,
+   and holds no colour literal (tests/lib/adminStyles.spec.ts, scripts/contrast-audit.mjs):
+   the chips and the sample are SVG painted by attributes from the validated palette. */
+
+.theme {
+  min-inline-size: 0;
+}
+
+.theme__cols {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .theme__cols {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  }
+
+  .theme__side {
+    position: sticky;
+    top: 18px;
+  }
+}
+
+.theme__main {
+  display: grid;
+  gap: 18px;
+  min-inline-size: 0;
+}
+
+.theme__main > .card + .card {
+  margin-top: 0;
+}
+
+.theme__body {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.theme__pal {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.theme__chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-inline-size: 0;
+}
+
+.theme__chip svg {
+  flex: none;
+}
+
+.theme__chip rect {
+  stroke: var(--ad-line-2);
+}
+
+.theme__chip > div {
+  display: grid;
+  min-inline-size: 0;
+}
+
+.theme__hex {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.theme__fails {
+  margin: 6px 0 10px;
+  padding-inline-start: 18px;
+}
+
+.theme__row {
+  display: grid;
+  gap: 6px;
+}
+
+.theme__label {
+  font-weight: 600;
+}
+
+.theme__facts {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.theme__facts dt {
+  font-weight: 600;
+}
+
+.theme__facts dd {
+  margin: 2px 0 0;
+  color: var(--ad-dim);
+}
+
+.theme__pv {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-xs);
+  font-family: Archivo, Almarai, sans-serif;
+}

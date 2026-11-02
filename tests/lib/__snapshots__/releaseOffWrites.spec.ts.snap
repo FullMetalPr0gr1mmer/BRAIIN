@@ -3587,8 +3587,31 @@ exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
   "full": {
     "is_active": true,
     "name": "Sample theme",
+    "settings": {
+      "colors": {
+        "accent": "#938A8D",
+        "hover": "#615757",
+        "primary": "#000000",
+      },
+      "mode": "advanced",
+      "motion": {
+        "marquee": "slower",
+        "reveal": false,
+      },
+      "v": 1,
+    },
     "tokens": {
-      "--bs-klein": "#0024BC",
+      "--bs-cobalt": "#615757",
+      "--bs-glow-klein": "rgba(0, 0, 0, 0.42)",
+      "--bs-glow-sky": "rgba(147, 138, 141, 0.45)",
+      "--bs-klein": "#000000",
+      "--bs-marquee-scale": "1.5",
+      "--bs-rv-from": "1",
+      "--bs-rv-shift": "0px",
+      "--bs-shadow-cobalt": "0 18px 48px rgba(97, 87, 87, 0.45)",
+      "--bs-shadow-klein": "0 12px 38px rgba(0, 0, 0, 0.45)",
+      "--bs-sky": "#938a8d",
+      "--bs-sky-soft": "#c3bdbf",
     },
   },
   "keys": {
@@ -3598,9 +3621,32 @@ exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
     "name": {
       "name": "Sample theme",
     },
-    "tokens": {
+    "settings": {
+      "settings": {
+        "colors": {
+          "accent": "#938A8D",
+          "hover": "#615757",
+          "primary": "#000000",
+        },
+        "mode": "advanced",
+        "motion": {
+          "marquee": "slower",
+          "reveal": false,
+        },
+        "v": 1,
+      },
       "tokens": {
-        "--bs-klein": "#0024BC",
+        "--bs-cobalt": "#615757",
+        "--bs-glow-klein": "rgba(0, 0, 0, 0.42)",
+        "--bs-glow-sky": "rgba(147, 138, 141, 0.45)",
+        "--bs-klein": "#000000",
+        "--bs-marquee-scale": "1.5",
+        "--bs-rv-from": "1",
+        "--bs-rv-shift": "0px",
+        "--bs-shadow-cobalt": "0 18px 48px rgba(97, 87, 87, 0.45)",
+        "--bs-shadow-klein": "0 12px 38px rgba(0, 0, 0, 0.45)",
+        "--bs-sky": "#938a8d",
+        "--bs-sky-soft": "#c3bdbf",
       },
     },
   },
@@ -3611,8 +3657,8 @@ exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
     "name": {
       "name": null,
     },
-    "tokens": {
-      "tokens": null,
+    "settings": {
+      "error": "Validation failed: not a theme",
     },
   },
 }
@@ -3622,8 +3668,9 @@ exports[`resource configs: toRow is what it was before R2 > themes 2`] = `
 {
   "full": [
     "name",
-    "tokens",
     "is_active",
+    "settings",
+    "tokens",
   ],
   "keys": {
     "isActive": [
@@ -3632,7 +3679,8 @@ exports[`resource configs: toRow is what it was before R2 > themes 2`] = `
     "name": [
       "name",
     ],
-    "tokens": [
+    "settings": [
+      "settings",
       "tokens",
     ],
   },
@@ -3643,8 +3691,8 @@ exports[`resource configs: toRow is what it was before R2 > themes 2`] = `
     "name": [
       "name",
     ],
-    "tokens": [
-      "tokens",
+    "settings": [
+      "error",
     ],
   },
 }

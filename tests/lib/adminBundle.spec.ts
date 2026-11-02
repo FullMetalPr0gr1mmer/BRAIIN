@@ -1027,3 +1027,93 @@ describe('the live preview column is its own lazy group (Admin v2 E2)', () => {
     ).toContain('admin-ui imports admin-page-preview.V1.js statically');
   });
 });
+
+describe('the theme editor has its own group (Admin v2 E4)', () => {
+  interface Group {
+    name: string;
+    test: RegExp | ((id: string) => boolean);
+    priority: number;
+  }
+  let groups: Group[] = [];
+  beforeAll(async () => {
+    const config = (await import('../../astro.config.mjs')).default as {
+      vite: { build: { rollupOptions: { output: { codeSplitting: { groups: Group[] } } } } };
+    };
+    groups = [...config.vite.build.rollupOptions.output.codeSplitting.groups].sort(
+      (a, b) => b.priority - a.priority,
+    );
+  });
+  const claim = (path: string) => {
+    const id = join(process.cwd(), path);
+    return groups.find((g) => (typeof g.test === 'function' ? g.test(id) : g.test.test(id)))?.name;
+  };
+  const priority = (name: string) => groups.find((g) => g.name === name)!.priority;
+
+  it('claims its island, its screen and the theme package for admin-theme', () => {
+    const screen = 'src/components/admin/screens/theme';
+    const pkg = 'packages/theme';
+    const paths = [
+      'src/components/admin/islands/AdminTheme.tsx',
+      ...readdirSync(join(process.cwd(), screen)).map((name) => `${screen}/${name}`),
+      ...readdirSync(join(process.cwd(), pkg)).map((name) => `${pkg}/${name}`),
+    ];
+    for (const path of paths) expect(claim(path), path).toBe('admin-theme');
+    // Not admin-ui, which every admin screen loads (it once was: about 47 KB gz on each).
+    expect(claim('src/components/admin/screens/theme/ThemeScreen.tsx')).not.toBe('admin-ui');
+    // The token shapes stay with the preview bridge's zod, which the editor imports from there.
+    expect(claim('packages/schemas/themeTokens.ts')).toBe('admin-zod');
+  });
+
+  it('the shared admin chunk never carries the gate: admin.ts imports nothing of the theme', () => {
+    // packages/schemas/admin.ts rides in admin-ui whole (its `updatable()` calls are not
+    // schema chains the bundler may drop), so the theme's write schemas, which carry the gate
+    // and its pairs, live in packages/schemas/theme.ts, which only the server imports.
+    const admin = readFileSync(join(process.cwd(), 'packages/schemas/admin.ts'), 'utf8');
+    expect(admin).not.toMatch(/from '\.\/theme'|from '\.\.\/theme\//);
+    for (const dir of ['src/components/admin', 'src/lib/admin']) {
+      const files = readdirSync(join(process.cwd(), dir), { recursive: true }) as string[];
+      for (const name of files.filter((f) => /\.tsx?$/.test(f))) {
+        const path = `${dir}/${name.split(sep).join('/')}`;
+        const source = readFileSync(join(process.cwd(), path), 'utf8');
+        for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
+          if (!/^@theme\/|^@schemas\/theme$/.test(m[1]!)) continue;
+          // Only the theme editor's own modules (admin-theme) and the server's resource.
+          expect(path, `${path} imports ${m[1]}`).toMatch(
+            /^src\/(components\/admin\/screens\/theme\/|lib\/admin\/resources\/themes\.ts$)/,
+          );
+        }
+      }
+    }
+  });
+
+  it('sits below the field kit and above the shared screens group', () => {
+    expect(priority('admin-theme')).toBeLessThan(priority('admin-fields'));
+    expect(priority('admin-theme')).toBeGreaterThan(priority('admin-screens'));
+  });
+
+  it('is loaded statically by its island only, and loads no other screen family', () => {
+    const THEME = {
+      ...GOOD,
+      'admin-fields.F1.js': 'import"./admin-ui.U1.js";export const f=1;',
+      'admin-screens.S1.js': 'import"./admin-ui.U1.js";import"./admin-fields.F1.js";',
+      'admin-theme.T1.js': 'import"./admin-ui.U1.js";import"./admin-fields.F1.js";',
+      'AdminTheme.I1.js': 'import"./admin-theme.T1.js";',
+    };
+    expect(check(build(THEME)).problems).toEqual([]);
+    const problems = (files: Record<string, string>) =>
+      (check(build({ ...THEME, ...files })).problems as string[]).join('\n');
+    expect(problems({ 'AdminGeneral.G1.js': 'import"./admin-theme.T1.js";' })).toContain(
+      'AdminGeneral.G1.js imports admin-theme.T1.js statically',
+    );
+    expect(
+      problems({
+        'admin-theme.T1.js': 'import"./admin-ui.U1.js";import"./admin-screens.S1.js";',
+      }),
+    ).toContain('admin-theme.T1.js imports admin-screens. statically');
+    expect(
+      problems({
+        'admin-ui.U1.js': 'import"./admin-theme.T1.js";const L=()=>import(`./admin-rich.X1.js`);',
+      }),
+    ).toContain('admin-ui imports admin-theme.T1.js statically');
+  });
+});

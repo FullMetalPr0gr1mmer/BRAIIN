@@ -67,6 +67,9 @@ const NOT_GATEABLE = [
   // The web app manifests (Admin v2 U9): a file the head links, not a page.
   '/manifest.webmanifest',
   '/ar/manifest.webmanifest',
+  // The theme's stylesheet (Admin v2 E4): a file the head links, never gated (the middleware
+  // reads no visibility for it, as for /_image).
+  '/styles/theme.css',
   '/healthz',
 ];
 const ALL_NOT_GATEABLE = new Set(NOT_GATEABLE);

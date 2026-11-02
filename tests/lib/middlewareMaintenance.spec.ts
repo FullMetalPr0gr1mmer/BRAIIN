@@ -10,8 +10,9 @@ import { __kv } from '../stubs/cloudflare-workers';
 // allowed address passes; a signed-in person passes only when the value allows the bypass AND
 // the admin's own session check passes (mocked here: tests/lib/maintenanceBypass.spec.ts proves
 // the check itself), and that answer is private, untagged and noindex; anything else is the
-// 503 (fail closed). /admin, /api, /healthz and /_image are never gated, and the page
-// visibility gate still runs after a bypass. "Back on" ends it at the instant.
+// 503 (fail closed). /admin, /api, /healthz, /_image and the theme stylesheet (E4) are never
+// gated, and the page visibility gate still runs after a bypass. "Back on" ends it at the
+// instant.
 
 const bypass = vi.hoisted(() => ({ result: true as boolean | 'throw', calls: 0 }));
 
@@ -197,6 +198,8 @@ describe('never gated', () => {
     ['/api/admin/settings/maintenance', '/api/admin/settings/maintenance'],
     ['/healthz', '/healthz'],
     ['/_image?href=x&w=1&h=1&f=webp', '/_image'],
+    // Admin v2 E4: the theme's custom properties, which every admin screen links.
+    ['/styles/theme.css?v=0123456789abcdef', '/styles/theme.css'],
   ])('%s', async (path, route) => {
     set({ active: true, staffBypass: false });
     const res = await run(context(path, route), page().next);

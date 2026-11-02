@@ -444,6 +444,8 @@ export default function EditorForm({
 
   // The fields' cards: the groups' (U9) when there are any, else one card as before, with
   // `head`'s header band (U11) when the form is that one named card (groups title their own).
+  // With every field hidden and no header (E4's theme editor, whose own cards edit the one
+  // field it saves), no card at all rather than an empty one (E4 code review CR4).
   const fieldsBlock = (
     shown: readonly FieldDef[],
     cards: readonly FieldGroup[],
@@ -451,7 +453,7 @@ export default function EditorForm({
   ) =>
     cards.length > 0 ? (
       <GroupedFields groups={cards} slots={slots} fields={shown} renderField={renderField} />
-    ) : (
+    ) : shown.length === 0 && !head ? null : (
       <div className="card">
         {head && (
           <div className="card__h">
