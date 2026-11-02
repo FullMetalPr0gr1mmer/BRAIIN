@@ -5,9 +5,27 @@ import type { CaseStudyRow, PortfolioMediaRow } from '@schemas/content';
 // what matters here is which provider/key reaches a page, not Vite's asset pipeline.
 
 vi.mock('@/lib/media/static', () => ({
-  staticImage: (key: string) =>
-    key === 'stills/work/p0.jpg' ? { src: '/_astro/p0.jpg', width: 1280, height: 720 } : null,
+  staticImage: (key: string) => {
+    // A still whose lookup throws: the H15 per-row guard's probe (any mapping that throws).
+    if (key === 'stills/work/boom.jpg') throw new RangeError('Maximum call stack size exceeded');
+    return key === 'stills/work/p0.jpg'
+      ? { src: '/_astro/p0.jpg', width: 1280, height: 720 }
+      : null;
+  },
 }));
+
+// Every body render, counted (H15: the discovery index renders none).
+const renders = vi.hoisted(() => ({ count: 0 }));
+vi.mock('@/lib/content/tiptap', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/content/tiptap')>();
+  return {
+    ...actual,
+    renderArticle: (doc: unknown) => {
+      renders.count += 1;
+      return actual.renderArticle(doc);
+    },
+  };
+});
 
 // A minimal PostgREST stand-in: every filter is recorded, and the rows are filtered by the
 // `slug` equality the case-study query applies — enough to drive the page loader and the
@@ -39,7 +57,7 @@ vi.mock('@/lib/supabase/client', () => ({
   }),
 }));
 
-const { toCard, toCaseStudy, renderBody, getCaseStudy, getCaseStudyIndex } =
+const { toCard, toCaseStudy, renderBody, getCaseStudy, getCaseStudyIndex, parseCaseStudies } =
   await import('@/lib/data/portfolio');
 
 const t = (en: string) => ({ en, ar: `ع-${en}` });
@@ -216,9 +234,70 @@ describe('the discovery index lists exactly what the case-study page renders', (
     tableRows = [row];
     expect(await getCaseStudy('nope')).toBeNull();
   });
+
+  // H15 (PRE-1): before it, one project whose stored body nested ~1,250 deep threw a RangeError
+  // while the index rendered every body, the index answered [] and EVERY case study left
+  // sitemap.xml and llms.txt; its own page answered 404.
+  const deep = (() => {
+    let node: unknown = { type: 'text', text: 'x' };
+    for (let i = 0; i < 20_000; i += 1) node = { type: 'blockquote', content: [node] };
+    return {
+      ...row,
+      id: '77777777-7777-4777-8777-777777777777',
+      slug: 'deep',
+      body: { en: { type: 'doc', content: [node] } },
+    };
+  })();
+
+  it('a body stored nested 20,000 deep: its page renders without the body, the index keeps every row', async () => {
+    tableRows = [row, deep];
+    expect((await getCaseStudyIndex()).map((e) => e.slug)).toEqual(['the-rider', 'deep']);
+    const study = await getCaseStudy('deep');
+    expect(study?.slug).toBe('deep');
+    expect(study?.bodyHtml).toBeNull();
+  });
+
+  it('a row that cannot be mapped is a 404 and absent from the index, never an empty index', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const boom = {
+      ...row,
+      id: '88888888-8888-4888-8888-888888888888',
+      slug: 'boom',
+      poster: media({ storage_path: 'stills/work/boom.jpg' }),
+    };
+    tableRows = [boom, row];
+    expect((await getCaseStudyIndex()).map((e) => e.slug)).toEqual(['the-rider']);
+    expect(await getCaseStudy('boom')).toBeNull();
+    expect(await getCaseStudy('the-rider')).not.toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      '[content] dropped portfolio row (slug=boom): unreadable (RangeError)',
+    );
+    warn.mockRestore();
+  });
+
+  it('the index renders no body (it never shows one, and each cost CPU on a sitemap miss); the page does', async () => {
+    const hi = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hi' }] }],
+    };
+    tableRows = [
+      { ...row, body: { en: hi, ar: hi } },
+      { ...deep, body: { en: hi } },
+    ];
+    renders.count = 0;
+    expect((await getCaseStudyIndex()).map((e) => e.slug)).toEqual(['the-rider', 'deep']);
+    expect(renders.count).toBe(0);
+    expect((await getCaseStudy('the-rider'))?.bodyHtml).toEqual({
+      en: '<p>Hi</p>',
+      ar: '<p>Hi</p>',
+    });
+    expect(renders.count).toBe(2);
+    expect(parseCaseStudies(tableRows, { body: false })[0]?.bodyHtml).toBeNull();
+  });
 });
 
 describe('the case-study body is sanitised at render, not trusted from the cache (Pillar 1)', () => {
+  const SUBJECT = { entity: 'portfolio', id: 'p' };
   const doc = (content: unknown[]) => ({ type: 'doc', content });
   const para = (content: unknown[]) => ({ type: 'paragraph', content });
   // One malicious body per attack class: a script in a text node, an event handler and
@@ -254,7 +333,7 @@ describe('the case-study body is sanitised at render, not trusted from the cache
   };
 
   it('renders hostile Tiptap JSON through the allowlist: no script, on*=, javascript: or style=', () => {
-    const out = renderBody({ en: hostile, ar: hostile });
+    const out = renderBody({ en: hostile, ar: hostile }, SUBJECT);
     expect(out?.en).toContain('&lt;script&gt;');
     expect(out?.en).toContain('<p>kept</p>');
     expect(out?.en).toContain('click'); // the words survive, the link does not
@@ -275,9 +354,10 @@ describe('the case-study body is sanitised at render, not trusted from the cache
   });
 
   it('an empty, invalid or malformed body hides the body, never the case study', async () => {
-    expect(renderBody(null)).toBeNull();
-    expect(renderBody({ en: { type: 'nope' } })).toBeNull();
-    expect(renderBody({ ar: doc([para([{ type: 'text', text: 'ع' }])]) })).toEqual({
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(renderBody(null, SUBJECT)).toBeNull();
+    expect(renderBody({ en: { type: 'nope' } }, SUBJECT)).toBeNull();
+    expect(renderBody({ ar: doc([para([{ type: 'text', text: 'ع' }])]) }, SUBJECT)).toEqual({
       en: '',
       ar: '<p>ع</p>',
     });
@@ -285,6 +365,29 @@ describe('the case-study body is sanitised at render, not trusted from the cache
     const study = await getCaseStudy('the-rider');
     expect(study).not.toBeNull();
     expect(study?.bodyHtml).toBeNull();
+    warn.mockRestore();
+  });
+
+  it('a stored body the renderer refuses is logged once a language, by id, never its words (CR1)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ok = doc([para([{ type: 'text', text: 'Hi' }])]);
+    tableRows = [{ ...row, body: { en: ok, ar: ok } }];
+    expect((await getCaseStudy('the-rider'))?.bodyHtml).toEqual({
+      en: '<p>Hi</p>',
+      ar: '<p>Hi</p>',
+    });
+    expect(warn).not.toHaveBeenCalled();
+    let node: unknown = { type: 'text', text: 'secret words' };
+    for (let i = 0; i < 40; i += 1) node = { type: 'blockquote', content: [node] };
+    tableRows = [{ ...row, body: { en: ok, ar: doc([node]) } }];
+    expect((await getCaseStudy('the-rider'))?.bodyHtml).toEqual({ en: '<p>Hi</p>' });
+    expect(warn).toHaveBeenCalledTimes(1);
+    const line = String(warn.mock.calls[0]?.[0]);
+    expect(line.startsWith(`[content] portfolio body not rendered (id=${row.id}, lang=ar): `)).toBe(
+      true,
+    );
+    expect(line).not.toContain('secret');
+    warn.mockRestore();
   });
 
   it('toCaseStudy renders a bilingual body per locale', () => {

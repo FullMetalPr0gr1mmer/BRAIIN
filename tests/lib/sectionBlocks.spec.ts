@@ -23,7 +23,7 @@ import {
   VideoSectionContentSchema,
   sectionContentIssues,
 } from '@schemas/sections';
-import { SectionWriteSchema } from '@schemas/admin';
+import { SECTION_CONTENT_TOO_DEEP, SectionWriteSchema } from '@schemas/admin';
 import { renderSectionDocToHtml, renderTiptapToHtml, sanitizeHref } from '@/lib/content/tiptap';
 import {
   GALLERY_SOLO_WIDTHS,
@@ -421,7 +421,12 @@ describe('a section body (SectionDocSchema)', () => {
         content,
       });
       expect(write.success, name).toBe(false);
-      expect(write.error?.issues[0]?.path, name).toEqual(['content', 'body', 'en']);
+      // H15: the payload's depth is checked before anything reads it (3,500 levels is past
+      // SECTION_CONTENT_MAX_DEPTH), so the refusal is the content's, and the body is not read.
+      expect(
+        write.error?.issues.map((i) => [i.path, i.message]),
+        name,
+      ).toEqual([[['content'], SECTION_CONTENT_TOO_DEEP]]);
       expect(() => renderSectionDocToHtml(d), name).not.toThrow();
       expect(renderSectionDocToHtml(d), name).toBe('');
     }

@@ -31,15 +31,22 @@ const MarkSchema: z.ZodType<TiptapMark> = z.object({
   attrs: z.record(z.string(), z.unknown()).optional(),
 });
 
-export const TiptapNodeSchema: z.ZodType<TiptapNode> = z.lazy(() =>
-  z.object({
-    type: z.string().max(40),
-    text: z.string().optional(),
-    attrs: z.record(z.string(), z.unknown()).optional(),
-    marks: z.array(MarkSchema).optional(),
-    content: z.array(TiptapNodeSchema).optional(),
-  }),
-);
+/**
+ * One node of a document. The object is built ONCE (H15): `z.lazy(() => z.object(...))` built a
+ * new object schema for every node it parsed, about ten times the cost of the parse itself
+ * (E10-S3). Only `content` is lazy, to reach the node schema it is part of. No public render or
+ * write runs it any more (an article body is read by `readArticleDoc`, a section body by
+ * `sectionDocProblem`, both iterative and bounded); it stays the stored shape's one statement,
+ * which those walks are held to (tests/lib/articleDoc.spec.ts).
+ */
+const TiptapNodeObject: z.ZodType<TiptapNode> = z.object({
+  type: z.string().max(40),
+  text: z.string().optional(),
+  attrs: z.record(z.string(), z.unknown()).optional(),
+  marks: z.array(MarkSchema).optional(),
+  content: z.array(z.lazy(() => TiptapNodeObject)).optional(),
+});
+export const TiptapNodeSchema: z.ZodType<TiptapNode> = TiptapNodeObject;
 
 export const TiptapDocSchema = z.object({
   type: z.literal('doc'),
@@ -48,13 +55,6 @@ export const TiptapDocSchema = z.object({
 export type TiptapDoc = z.infer<typeof TiptapDocSchema>;
 
 export const EMPTY_DOC: TiptapDoc = { type: 'doc', content: [] };
-
-/** Locale-keyed rich text (CLAUDE.md §8: rich-text → locale-keyed JSONB). */
-export const LocalizedDocSchema = z.object({
-  en: TiptapDocSchema,
-  ar: TiptapDocSchema.optional(),
-});
-export type LocalizedDoc = z.infer<typeof LocalizedDocSchema>;
 
 // ── A section's rich text (Admin v2 E10, the Text block) ──────────────────────────
 //
@@ -417,3 +417,210 @@ export const SectionBodySchema = z
   .object({ en: sectionDocIn('en'), ar: sectionDocIn('ar') })
   .strict();
 export type SectionBody = z.infer<typeof SectionBodySchema>;
+
+// ── An article's rich text (H15): blog posts, services and projects ───────────────────
+//
+// An article body is read by the renderer that has always taken it (src/lib/content/tiptap.ts
+// `renderTiptapToHtml`): every node and mark it ever took, images, h1 to h6 and unknown types
+// included, so it is NOT held to the section allowlist above (stored bodies would stop
+// rendering). What it may not be is unbounded. zod's recursive TiptapNodeSchema overflowed the
+// stack at about 1,250 levels (42 KB): a RangeError, so a 500 on save, and a body stored around
+// the API (a staff token straight to PostgREST) made a service page a 500 on every request and
+// emptied the case-study index (E10 review, PRE-1). It cost tens of milliseconds on an ordinary
+// long body besides.
+//
+// `readArticleDoc` walks the raw JSON once, iteratively, and never recurses or stringifies a
+// value it was given. It accepts exactly what TiptapDocSchema accepts, within the bounds below,
+// and answers zod's own output for it (unknown keys dropped, as the parse dropped them), so a
+// save stores what it stored before and the renderer, given the JSON as stored, writes the bytes
+// it wrote from the parse (tests/lib/articleDoc.spec.ts holds both, over a seeded corpus;
+// tests/lib/articleRender.spec.ts holds the renders to the bytes before H15).
+
+/**
+ * How long, deep and formatted an article may be. Sized from long real articles: the
+ * repository's own documents as the editor stores them (H15's as-built note) run 437 to 2,375
+ * nodes for 2,500 to 11,000 words, never deeper than 6, with a third as many marks as nodes and
+ * a few attribute values a link or heading. So 5,000 nodes is some 23,000 words; 32 levels is
+ * fifteen lists inside lists; 16 marks on one run of words is more than the editor has kinds of
+ * formatting; 20,000 marks and attribute values together is four times the longest measured. An
+ * attribute value nests at most 8 deep (the editor writes scalars). At the caps the walk and the
+ * render together stay a few milliseconds warm (tests/lib/articleDoc.spec.ts measures it).
+ */
+export const ARTICLE_DOC_MAX_NODES = 5_000;
+export const ARTICLE_DOC_MAX_DEPTH = 32;
+export const ARTICLE_DOC_MAX_MARKS = 16;
+export const ARTICLE_DOC_MAX_FORMATTING = 20_000;
+export const ARTICLE_ATTR_MAX_DEPTH = 8;
+
+const ARTICLE_TOO_LONG = 'This text is too long to save. Shorten it and save again.';
+const ARTICLE_FORMATTING = 'This text carries too much formatting. Remove some and save again.';
+
+/** A node's or a mark's type as zod's `z.string().max(40)` takes it. */
+const shortType = (v: unknown): boolean => typeof v === 'string' && v.length <= 40;
+
+/**
+ * Whether `attrs` (a record TiptapNodeSchema takes) fits the formatting budget and the attribute
+ * depth: every value inside it, however nested, counts once.
+ */
+function attrsFit(attrs: Raw, budget: { left: number }): boolean {
+  const stack: { value: unknown; depth: number }[] = [{ value: attrs, depth: 1 }];
+  while (stack.length > 0) {
+    const { value, depth } = stack.pop()!;
+    const entries: unknown[] = Array.isArray(value) ? value : Object.values(value as Raw);
+    // Counted before any entry is read (E10 CR8): a wide value costs nothing past the budget.
+    budget.left -= entries.length;
+    if (budget.left < 0) return false;
+    for (const entry of entries) {
+      if (typeof entry !== 'object' || entry === null) continue;
+      if (depth >= ARTICLE_ATTR_MAX_DEPTH) return false;
+      stack.push({ value: entry, depth: depth + 1 });
+    }
+  }
+  return true;
+}
+
+/** zod's record output: every key but `__proto__`, each value as it was (z.unknown()). */
+function recordCopy(attrs: Raw): Raw {
+  const out: Raw = {};
+  for (const key in attrs) {
+    if (key !== '__proto__') out[key] = attrs[key];
+  }
+  return out;
+}
+
+/** zod's object output: the shape's keys in its order, each one the input holds. */
+function objectCopy(raw: Raw, keys: readonly string[], values: Raw): Raw {
+  const out: Raw = {};
+  for (const key of keys) {
+    if (key in raw) out[key] = values[key];
+  }
+  return out;
+}
+
+const DOC_KEYS: readonly string[] = ['type', 'content'];
+
+/** The reason a value is not an article body, or the body as TiptapDocSchema parses it. */
+export type ArticleDocRead = { problem: string } | { doc: TiptapDoc };
+
+interface ArticleFrame {
+  node: unknown;
+  depth: number;
+  /** Where the node's copy goes (the parent's copied `content`), when copying. */
+  into: unknown[] | undefined;
+  at: number;
+}
+
+/**
+ * Reads an article body: the first reason it is not one, or the document as TiptapDocSchema
+ * parses it. With `copy` false it only checks (the renderer reads the JSON as stored) and
+ * answers the value itself.
+ */
+export function readArticleDoc(raw: unknown, copy = true): ArticleDocRead {
+  if (!isObject(raw) || raw['type'] !== 'doc') return { problem: UNREADABLE };
+  const top = raw['content'];
+  if (top !== undefined && !Array.isArray(top)) return { problem: UNREADABLE };
+  const list = (top ?? []) as unknown[];
+  // The node budget is checked before a list is read (E10 CR8).
+  if (list.length > ARTICLE_DOC_MAX_NODES) return { problem: ARTICLE_TOO_LONG };
+  const topCopy = copy && top !== undefined ? new Array<unknown>(list.length) : undefined;
+  const stack: ArticleFrame[] = [];
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    stack.push({ node: list[i], depth: 1, into: topCopy, at: i });
+  }
+  const budget = { left: ARTICLE_DOC_MAX_FORMATTING };
+  let seen = 0;
+  while (stack.length > 0) {
+    const { node, depth, into, at } = stack.pop()!;
+    seen += 1;
+    if (seen > ARTICLE_DOC_MAX_NODES) return { problem: ARTICLE_TOO_LONG };
+    if (depth > ARTICLE_DOC_MAX_DEPTH) return { problem: TOO_DEEP };
+    if (!isObject(node)) return { problem: UNREADABLE };
+    const { type, text, attrs, marks, content } = node;
+    if (!shortType(type)) return { problem: UNREADABLE };
+    if (text !== undefined && typeof text !== 'string') return { problem: UNREADABLE };
+    if (attrs !== undefined) {
+      if (!isObject(attrs)) return { problem: UNREADABLE };
+      if (!attrsFit(attrs, budget)) {
+        return { problem: budget.left < 0 ? ARTICLE_FORMATTING : SETTINGS };
+      }
+    }
+    let marksCopy: unknown[] | undefined;
+    if (marks !== undefined) {
+      if (!Array.isArray(marks)) return { problem: UNREADABLE };
+      // Counted before the list is read, like the nodes.
+      if (marks.length > ARTICLE_DOC_MAX_MARKS) return { problem: ARTICLE_FORMATTING };
+      budget.left -= marks.length;
+      if (budget.left < 0) return { problem: ARTICLE_FORMATTING };
+      if (copy) marksCopy = new Array<unknown>(marks.length);
+      for (let m = 0; m < marks.length; m += 1) {
+        const mark: unknown = marks[m];
+        if (!isObject(mark) || !shortType(mark['type'])) return { problem: UNREADABLE };
+        const markAttrs = mark['attrs'];
+        if (markAttrs !== undefined) {
+          if (!isObject(markAttrs)) return { problem: UNREADABLE };
+          if (!attrsFit(markAttrs, budget)) {
+            return { problem: budget.left < 0 ? ARTICLE_FORMATTING : SETTINGS };
+          }
+        }
+        if (marksCopy) {
+          marksCopy[m] = objectCopy(mark, MARK_KEYS, {
+            type: mark['type'],
+            attrs: isObject(markAttrs) ? recordCopy(markAttrs) : markAttrs,
+          });
+        }
+      }
+    }
+    if (content !== undefined && !Array.isArray(content)) return { problem: UNREADABLE };
+    const children = (content ?? []) as unknown[];
+    // Every node already on the stack is counted later, so this is the same budget, checked
+    // before the children are copied onto it (E10 CR8).
+    if (seen + stack.length + children.length > ARTICLE_DOC_MAX_NODES) {
+      return { problem: ARTICLE_TOO_LONG };
+    }
+    const childCopy =
+      copy && content !== undefined ? new Array<unknown>(children.length) : undefined;
+    if (into) {
+      into[at] = objectCopy(node, NODE_KEYS, {
+        type,
+        text,
+        attrs: isObject(attrs) ? recordCopy(attrs) : attrs,
+        marks: marksCopy ?? marks,
+        content: childCopy ?? content,
+      });
+    }
+    for (let i = children.length - 1; i >= 0; i -= 1) {
+      stack.push({ node: children[i], depth: depth + 1, into: childCopy, at: i });
+    }
+  }
+  if (!copy) return { doc: raw as TiptapDoc };
+  return { doc: objectCopy(raw, DOC_KEYS, { type: 'doc', content: topCopy ?? top }) as TiptapDoc };
+}
+
+/** The first reason a value is not an article body, or null (a check: nothing is copied). */
+export function articleDocProblem(raw: unknown): string | null {
+  const read = readArticleDoc(raw, false);
+  return 'problem' in read ? read.problem : null;
+}
+
+/**
+ * One language of an article body, read by {@link readArticleDoc}, never by zod's recursive node
+ * schema. A missing language says which (the English one is required).
+ */
+const articleDocIn = (lang: 'en' | 'ar') =>
+  z.unknown().transform((doc, ctx): TiptapDoc => {
+    const read: ArticleDocRead =
+      doc === undefined ? { problem: SECTION_BODY_MISSING[lang] } : readArticleDoc(doc);
+    if ('doc' in read) return read.doc;
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: read.problem });
+    return z.NEVER;
+  });
+
+/**
+ * Locale-keyed rich text (CLAUDE.md §8: rich-text → locale-keyed JSONB): an article's body, the
+ * English required and the Arabic optional, each read by {@link readArticleDoc} (H15).
+ */
+export const LocalizedDocSchema = z.object({
+  en: articleDocIn('en'),
+  ar: articleDocIn('ar').optional(),
+});
+export type LocalizedDoc = z.infer<typeof LocalizedDocSchema>;
