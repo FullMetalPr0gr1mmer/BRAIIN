@@ -439,7 +439,11 @@ describe('GET /api/admin/releases/[id]: one version’s changes', () => {
 
 // ---- restoring a version -------------------------------------------------------------------
 
-/** The brand's own theme settings (Admin v2 E4), which compile to no token. */
+/**
+ * The brand's own theme settings as Admin v2 E4 saved them (v1), which compile to no token. A
+ * version saved before E12 still restores: the round trip reads it as v2 at the brand's shapes
+ * and type (rowPayload's UPGRADED_COLUMNS; these two restore tests fail without it).
+ */
 const BRAND_THEME = {
   v: 1,
   mode: 'simple',

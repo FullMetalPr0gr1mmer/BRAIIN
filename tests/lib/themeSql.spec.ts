@@ -4,67 +4,109 @@ import { mix } from '@theme/colour';
 import { channels } from '@theme/colour';
 import { compileTheme, DEFAULT_THEME_SETTINGS, THEME_EFFECTS } from '@theme/compile';
 import { themeSqlBlocks } from '@theme/sql';
-import { ThemeColorsSchema, ThemeMotionSchema, ThemeSettingsSchema } from '@schemas/theme';
+import {
+  ThemeColorsSchema,
+  ThemeMotionSchema,
+  ThemeSettingsV1Schema,
+  ThemeSettingsV2Schema,
+  ThemeShapesSchema,
+  ThemeTypeSchema,
+} from '@schemas/theme';
 import { THEME_TOKEN_NAMES } from '@schemas/themeTokens';
+import { SHAPE_TOKEN_NAMES, SHAPE_TOKEN_RULES } from '@theme/shapes';
 
-// The database's copy of the theme rules (Admin v2 E4): custom_themes_theme_v1, the CHECK the
-// E4 migration adds, calls app.theme_row_ok and app.theme_palette_ok, whose pairs, token shapes
-// and brand defaults are GENERATED from the files the editor and the Worker read
-// (packages/theme/sql.ts). If they drift, the database refuses a theme the Worker accepted, or
-// takes one it refused. pgTAP (supabase/tests/theme_settings.test.sql) proves the CHECK runs;
-// this proves it checks the same things.
+// The database's copy of the theme rules (Admin v2 E4, E12): custom_themes_theme_v1, the CHECK
+// the E4 migration adds, calls app.theme_row_ok and app.theme_palette_ok, whose pairs, token
+// shapes, brand defaults and (since E12) shape and type choices are GENERATED from the files the
+// editor and the Worker read (packages/theme/sql.ts). If they drift, the database refuses a
+// theme the Worker accepted, or takes one it refused. pgTAP (supabase/tests/theme_settings and
+// theme_shapes) proves the CHECK runs; this proves it checks the same things.
 
 const DIR = 'supabase/migrations';
-const FILE = readdirSync(DIR).find((f) => /^\d{4}_theme_settings\.sql$/.test(f));
-const SQL = FILE ? readFileSync(`${DIR}/${FILE}`, 'utf8') : '';
+const FILES = readdirSync(DIR)
+  .filter((f) => f.endsWith('.sql'))
+  .sort();
+const read = (f: string | undefined) =>
+  f ? readFileSync(`${DIR}/${f}`, 'utf8').replace(/\r\n/g, '\n') : '';
+// E4's migration (the colour maths and the pairs), and the LATEST migration that restates
+// app.theme_row_ok (E12's since AV-32: the token rules, the defaults, the effects, the shapes
+// and type). A later restatement takes over the second role, and these tests follow it.
+const FILE = FILES.find((f) => /^\d{4}_theme_settings\.sql$/.test(f));
+const SQL = read(FILE);
+const ROW_OK_FILE = FILES.filter((f) =>
+  read(f).includes('create or replace function app.theme_row_ok('),
+).at(-1);
+const ROW_OK_SQL = read(ROW_OK_FILE);
+
+/** The latest migration that writes a block's markers. */
+const holderOf = (name: string) =>
+  FILES.filter((f) => read(f).includes(`-- BEGIN ${name}\n`)).at(-1);
 
 /** The lines between `-- BEGIN <name>` and `-- END <name>`, as written. */
-function block(name: string): string | null {
-  const open = SQL.indexOf(`-- BEGIN ${name}\n`);
-  const close = SQL.indexOf(`\n    -- END ${name}\n`, open);
+function block(name: string, sql: string): string | null {
+  const open = sql.indexOf(`-- BEGIN ${name}\n`);
+  const close = sql.indexOf(`\n    -- END ${name}\n`, open);
   if (open < 0 || close < 0) return null;
-  return SQL.slice(open + `-- BEGIN ${name}\n`.length, close);
+  return sql.slice(open + `-- BEGIN ${name}\n`.length, close);
 }
 
-/** A function's body in the migration, from its `create or replace` to the next one. */
-function fn(name: string): string {
-  const at = SQL.indexOf(`create or replace function app.${name}(`);
+/** A function's body in a migration, from its `create or replace` to the next one. */
+function fn(name: string, sql = SQL): string {
+  const at = sql.indexOf(`create or replace function app.${name}(`);
   expect(at, name).toBeGreaterThan(-1);
-  const end = SQL.indexOf('create or replace function', at + 10);
-  return SQL.slice(at, end < 0 ? undefined : end);
+  const end = sql.indexOf('create or replace function', at + 10);
+  return sql.slice(at, end < 0 ? undefined : end);
 }
 
-describe('the E4 migration holds the generated rules', () => {
-  it('exists once', () => {
+describe('the theme migrations hold the generated rules', () => {
+  it("E4's exists once, and E12 restates app.theme_row_ok last", () => {
     expect(readdirSync(DIR).filter((f) => f.endsWith('_theme_settings.sql'))).toHaveLength(1);
+    expect(ROW_OK_FILE).toMatch(/^\d{4}_theme_shapes\.sql$/);
   });
 
   it.each(Object.entries(themeSqlBlocks()))('%s: verbatim between its markers', (name, body) => {
-    expect(block(name), name).toBe(body);
+    // The latest migration that writes the block holds what the editor and the Worker check:
+    // the pairs in E4's app.theme_palette_ok, the rest in the latest app.theme_row_ok.
+    const holder = holderOf(name);
+    expect(holder, name).toBe(name === 'theme pairs' ? FILE : ROW_OK_FILE);
+    const sql = read(holder);
+    expect(block(name, sql), name).toBe(body);
     // Once: a second copy would be a block nothing holds equal.
-    expect(SQL.split(`-- BEGIN ${name}\n`)).toHaveLength(2);
+    expect(sql.split(`-- BEGIN ${name}\n`)).toHaveLength(2);
   });
 
   it('the pairs are in app.theme_palette_ok, the shapes and defaults in app.theme_row_ok', () => {
     expect(fn('theme_palette_ok')).toContain('-- BEGIN theme pairs');
-    expect(fn('theme_row_ok')).toContain('-- BEGIN theme token rules');
-    expect(fn('theme_row_ok')).toContain('-- BEGIN theme defaults');
-    expect(fn('theme_row_ok')).toContain('-- BEGIN theme effects');
+    const rowOk = fn('theme_row_ok', ROW_OK_SQL);
+    expect(rowOk).toContain('-- BEGIN theme token rules');
+    expect(rowOk).toContain('-- BEGIN theme defaults');
+    expect(rowOk).toContain('-- BEGIN theme effects');
+    expect(rowOk).toContain('-- BEGIN theme shape rules');
   });
 });
 
 describe('app.theme_row_ok checks what the schemas and the compiler say', () => {
-  const body = fn('theme_row_ok');
+  const body = fn('theme_row_ok', ROW_OK_SQL);
+  const arrays = (re: RegExp) =>
+    [...body.matchAll(re)].map((m) => [...m[1]!.matchAll(/'([^']+)'/g)].map((x) => x[1]!));
   const array = (re: RegExp) => {
     const m = re.exec(body);
     expect(m, String(re)).not.toBeNull();
     return [...m![1]!.matchAll(/'([^']+)'/g)].map((x) => x[1]!);
   };
 
-  it('the settings keys, each level closed', () => {
-    const top = array(/is distinct from array\[('colors'[^\]]*)\]/);
-    expect(top).toEqual(['colors', 'mode', 'motion', 'v']);
-    expect(Object.keys(ThemeSettingsSchema.innerType().shape).sort()).toEqual(top);
+  it('the settings keys, each level closed, v1 (E4) and v2 (E12)', () => {
+    const [v1, v2, ...more] = arrays(/is distinct from array\[('colors'[^\]]*)\]/g);
+    expect(more).toEqual([]);
+    expect(v1).toEqual(Object.keys(ThemeSettingsV1Schema.shape).sort());
+    expect(v2).toEqual(Object.keys(ThemeSettingsV2Schema.shape).sort());
+    expect(v2).toEqual(['colors', 'mode', 'motion', 'shapes', 'type', 'v']);
+    expect(array(/is distinct from array\[('buttons'[^\]]*)\]/)).toEqual(
+      Object.keys(ThemeShapesSchema.shape).sort(),
+    );
+    expect(array(/is distinct from array\[('headingCase'[^\]]*)\]/)).toEqual(
+      Object.keys(ThemeTypeSchema.shape).sort(),
+    );
     expect(array(/is distinct from array\[('accent'[^\]]*)\]/)).toEqual(
       Object.keys(ThemeColorsSchema.shape).sort(),
     );
@@ -91,6 +133,38 @@ describe('app.theme_row_ok checks what the schemas and the compiler say', () => 
     expect(keys).toEqual(written);
     expect(keys).toEqual(THEME_TOKEN_NAMES.slice(0, 8));
     expect(body).toContain('return v_present = 8');
+  });
+
+  it("the shape and type tokens: none on a v1 theme, the choice's own on a v2 one", () => {
+    expect(array(/v_shape_keys constant text\[\] := array\[([^\]]*)\]/)).toEqual([
+      ...SHAPE_TOKEN_NAMES,
+    ]);
+    expect([...SHAPE_TOKEN_NAMES]).toEqual(THEME_TOKEN_NAMES.slice(11));
+    expect(body).toContain('if p_tokens ?| v_shape_keys then');
+    // Every setting is one of its choices, of its JSON type, and its token is that choice's.
+    expect(body).toMatch(
+      /-- END theme shape rules\s+\)\s+select 1\s+from \(select distinct grp, key from s\) as k\s+where not exists \(\s+select 1 from s as r\s+where r\.grp = k\.grp and r\.key = k\.key\s+and jsonb_typeof\(p_settings -> r\.grp -> r\.key\) = r\.kind\s+and \(p_settings -> r\.grp ->> r\.key\) = r\.choice\s+and \(p_tokens ->> r\.token\) is not distinct from r\.value\)\) then\s+return false;/,
+    );
+    // The table's choices are the schema's, every one, and the compiler writes each value.
+    const choices = (key: string) =>
+      SHAPE_TOKEN_RULES.filter((r) => r.key === key).map((r) => r.choice);
+    expect(choices('corners')).toEqual([...ThemeShapesSchema.shape.corners.options]);
+    expect(choices('buttons')).toEqual([...ThemeShapesSchema.shape.buttons.options]);
+    expect(choices('headingCase')).toEqual([...ThemeTypeSchema.shape.headingCase.options]);
+    expect(choices('headingWeight')).toEqual(
+      ThemeTypeSchema.shape.headingWeight.options.map((o) => String(o.value)),
+    );
+    for (const rule of SHAPE_TOKEN_RULES) {
+      const settings = {
+        ...DEFAULT_THEME_SETTINGS,
+        shapes: { ...DEFAULT_THEME_SETTINGS.shapes },
+        type: { ...DEFAULT_THEME_SETTINGS.type },
+      };
+      const group = settings[rule.group] as unknown as Record<string, unknown>;
+      group[rule.key] = rule.kind === 'number' ? Number(rule.choice) : rule.choice;
+      const tokens = compileTheme(settings);
+      expect(tokens[rule.token], `${rule.key} ${rule.choice}`).toBe(rule.value ?? undefined);
+    }
   });
 
   it('each glow and shadow must be the compiler’s own string, not only of its shape', () => {

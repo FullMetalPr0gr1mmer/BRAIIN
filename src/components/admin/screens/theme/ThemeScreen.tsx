@@ -14,11 +14,16 @@ import { DEFAULT_THEME_SETTINGS } from '@theme/compile';
 import { suggestMain } from '@theme/gate';
 import { THEME_ROLES, THEME_SWATCHES, type ThemeRole } from '@theme/palette';
 import type { ThemeSettings } from '@schemas/theme';
+import type { HeadingWeight } from '@theme/shapes';
 import {
   ADMIN_PREVIEW_TOKENS,
+  BUTTON_OPTIONS,
+  CASE_OPTIONS,
+  CORNER_OPTIONS,
   MARQUEE_OPTIONS,
   REVEAL_OPTIONS,
   ROLE_LABEL,
+  WEIGHT_OPTIONS,
   cloneSettings,
   derivedSettings,
   failureLines,
@@ -39,6 +44,9 @@ import SitePreview from './SitePreview';
 //   The gate       every failing pair in words, with a colour of the same hue that passes
 //                  ("Use #0B6EB0 for Hover"); the server refuses a theme that fails anyway
 //                  (the schema), and so does the database (custom_themes_theme_v1).
+//   Shapes         (E12, AV-32) the corners of cards, pictures and fields, and the buttons:
+//                  closed choices, each one token the public stylesheets read.
+//   Typography     (E12) the headings' weight (both bold) and case.
 //   Motion         two settings that can only reduce motion.
 //   Facts          what this version cannot change, read only.
 //   Reset          the brand's own settings, after a danger confirm.
@@ -170,7 +178,7 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
   const reset = async () => {
     const ok = await confirmDialog({
       message:
-        "Reset the theme? The brand's own colours and motion come back. Nothing changes on the site until you save.",
+        "Reset the theme? The brand's own colours, shapes, headings and motion come back. Nothing changes on the site until you save.",
       confirmLabel: 'Reset',
     });
     if (ok) set({ ...cloneSettings(DEFAULT_THEME_SETTINGS), mode: settings.mode });
@@ -321,6 +329,93 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
               )}
             </section>
 
+            <section className="card" aria-labelledby="theme-shapes">
+              <div className="card__h">
+                <div>
+                  <h2 className="card__t" id="theme-shapes">
+                    Shapes
+                  </h2>
+                  <p className="card__sub">
+                    The corners of cards, pictures and form fields, and the buttons. Each corner
+                    keeps its size next to the others.
+                  </p>
+                </div>
+              </div>
+              <div className="theme__body">
+                <div className="theme__row">
+                  <span className="theme__label" aria-hidden="true">
+                    Corners
+                  </span>
+                  <Segmented
+                    label="Corners"
+                    options={CORNER_OPTIONS}
+                    value={settings.shapes.corners}
+                    onChange={(corners) =>
+                      set({ ...settings, shapes: { ...settings.shapes, corners } })
+                    }
+                  />
+                </div>
+                <div className="theme__row">
+                  <span className="theme__label" aria-hidden="true">
+                    Buttons
+                  </span>
+                  <Segmented
+                    label="Buttons"
+                    options={BUTTON_OPTIONS}
+                    value={settings.shapes.buttons}
+                    onChange={(buttons) =>
+                      set({ ...settings, shapes: { ...settings.shapes, buttons } })
+                    }
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="card" aria-labelledby="theme-type">
+              <div className="card__h">
+                <div>
+                  <h2 className="card__t" id="theme-type">
+                    Typography
+                  </h2>
+                  <p className="card__sub">
+                    Headings stay bold either way, so they stay easy to read. Arabic has no
+                    capitals, so Arabic headings keep their case.
+                  </p>
+                </div>
+              </div>
+              <div className="theme__body">
+                <div className="theme__row">
+                  <span className="theme__label" aria-hidden="true">
+                    Heading weight
+                  </span>
+                  <Segmented
+                    label="Heading weight"
+                    options={WEIGHT_OPTIONS}
+                    value={String(settings.type.headingWeight) as '800' | '700'}
+                    onChange={(weight) =>
+                      set({
+                        ...settings,
+                        type: { ...settings.type, headingWeight: Number(weight) as HeadingWeight },
+                      })
+                    }
+                  />
+                </div>
+                <div className="theme__row">
+                  <span className="theme__label" aria-hidden="true">
+                    Heading case
+                  </span>
+                  <Segmented
+                    label="Heading case"
+                    options={CASE_OPTIONS}
+                    value={settings.type.headingCase}
+                    onChange={(headingCase) =>
+                      set({ ...settings, type: { ...settings.type, headingCase } })
+                    }
+                  />
+                </div>
+              </div>
+            </section>
+
             <section className="card" aria-labelledby="theme-motion">
               <div className="card__h">
                 <div>
@@ -409,13 +504,13 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
                     Preview
                   </h2>
                   <p className="card__sub">
-                    A part of the site in these colours. This admin follows them too while they
+                    A part of the site in this theme. This admin follows its colours too while they
                     pass.
                   </p>
                 </div>
               </div>
               {view.palette ? (
-                <SitePreview palette={view.palette} />
+                <SitePreview palette={view.palette} shapes={settings.shapes} type={settings.type} />
               ) : (
                 <p className="admin-sub">Finish typing a colour to see it.</p>
               )}

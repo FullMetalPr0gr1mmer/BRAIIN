@@ -3,7 +3,8 @@ import { contrast, fromHsl } from '@theme/colour';
 import { compileTheme, DEFAULT_THEME_SETTINGS, hasTokens, themeCss } from '@theme/compile';
 import { gate, ratioText, simplePalette } from '@theme/gate';
 import { DEFAULT_COLORS, THEME_SWATCHES } from '@theme/palette';
-import { ThemeSettingsSchema, type ThemeSettings } from '@schemas/theme';
+import { upgradeThemeSettings } from '@theme/shapes';
+import { ThemeMotionSchema, ThemeSettingsSchema, type ThemeSettings } from '@schemas/theme';
 import {
   THEME_TOKEN_NAMES,
   THEME_TOKEN_PATTERNS,
@@ -18,11 +19,21 @@ import {
 // strict, contrast-gated and can only reduce motion.
 
 const THEMED: ThemeSettings = {
-  v: 1,
+  v: 2,
   mode: 'advanced',
   colors: { primary: '#000000', hover: '#615757', accent: '#938A8D' },
   motion: { marquee: 'slower', reveal: false },
+  shapes: { corners: 'brand', buttons: 'pill' },
+  type: { headingWeight: 800, headingCase: 'uppercase' },
 };
+
+/** E4's settings, as a theme saved before E12 holds them. */
+const THEMED_V1 = {
+  v: 1,
+  mode: THEMED.mode,
+  colors: THEMED.colors,
+  motion: THEMED.motion,
+} as const;
 
 /** Values that would break out of a declaration, a <style> or a stylesheet. */
 const HOSTILE = [
@@ -147,11 +158,7 @@ describe('compileTheme', () => {
       expect(compileTheme({ ...DEFAULT_THEME_SETTINGS, motion })).toEqual(tokens);
     }
     // The schema has no faster marquee to compile.
-    expect(ThemeSettingsSchema.innerType().shape.motion.shape.marquee.options).toEqual([
-      'normal',
-      'slower',
-      'slowest',
-    ]);
+    expect(ThemeMotionSchema.shape.marquee.options).toEqual(['normal', 'slower', 'slowest']);
   });
 
   it('what it compiles always parses, for every swatch, many mains and every motion', () => {
@@ -229,6 +236,10 @@ describe('themeCss: one :root rule of the closed set, nothing else', () => {
       '--bs-marquee-scale': '2.5',
       '--bs-rv-from': '1',
       '--bs-rv-shift': '0px',
+      '--bs-radius-scale': '0.5',
+      '--bs-btn-radius': '0px',
+      '--bs-heading-weight': '700',
+      '--bs-heading-case': 'none',
     };
     for (const name of THEME_TOKEN_NAMES) {
       expect(themeCss({ [name]: one[name] })).toBe(`:root{${name}:${one[name]};}`);
@@ -251,7 +262,15 @@ describe('ThemeSettingsSchema', () => {
       { ...THEMED, customCss: 'body{}' },
       { ...THEMED, colors: { ...THEMED.colors, dark: '#000000' } },
       { ...THEMED, motion: { ...THEMED.motion, parallax: true } },
-      { ...THEMED, v: 2 },
+      { ...THEMED, v: 3 },
+      { ...THEMED_V1, shapes: THEMED.shapes },
+      { ...THEMED, shapes: { ...THEMED.shapes, radius: 4 } },
+      { ...THEMED, shapes: { ...THEMED.shapes, corners: 'huge' } },
+      { ...THEMED, shapes: { ...THEMED.shapes, buttons: 'ghost' } },
+      { ...THEMED, type: { ...THEMED.type, headingWeight: 900 } },
+      { ...THEMED, type: { ...THEMED.type, headingWeight: '700' } },
+      { ...THEMED, type: { ...THEMED.type, headingCase: 'lowercase' } },
+      { ...THEMED, type: { headingWeight: 800 } },
       { ...THEMED, mode: 'expert' },
       { ...THEMED, motion: { marquee: 'faster', reveal: true } },
       { ...THEMED, colors: { ...THEMED.colors, primary: '#000' } },
@@ -286,6 +305,79 @@ describe('ThemeSettingsSchema', () => {
       const result = run();
       expect(result.success).toBe(false);
       if (!result.success) expect(result.error.issues[0]?.path).toEqual(['colors', 'primary']);
+    }
+  });
+});
+
+describe('settings v2: shapes and type (Admin v2 E12, AV-32)', () => {
+  const SHAPED: ThemeSettings = {
+    ...THEMED,
+    shapes: { corners: 'square', buttons: 'rounded' },
+    type: { headingWeight: 700, headingCase: 'as-written' },
+  };
+
+  it("reads a v1 theme (E4's) as v2 at the brand's shapes and type, so it compiles as before", () => {
+    const read = ThemeSettingsSchema.parse(THEMED_V1);
+    expect(read).toEqual({
+      ...THEMED_V1,
+      v: 2,
+      shapes: { corners: 'brand', buttons: 'pill' },
+      type: { headingWeight: 800, headingCase: 'uppercase' },
+    });
+    expect(compileTheme(read)).toEqual(compileTheme(THEMED));
+    // Parsing what it answered changes nothing (the resource parses twice: route, then toRow).
+    expect(ThemeSettingsSchema.parse(read)).toEqual(read);
+    // The restore's round trip upgrades a stored v1 the same way (src/lib/release/rowPayload.ts).
+    expect(upgradeThemeSettings(THEMED_V1)).toEqual(read);
+    expect(upgradeThemeSettings(read)).toBe(read);
+    for (const other of [null, 'x', [], { v: 3 }]) expect(upgradeThemeSettings(other)).toBe(other);
+  });
+
+  it("the brand's shapes and type write no token; each other choice writes its one", () => {
+    expect(compileTheme(DEFAULT_THEME_SETTINGS)).toEqual({});
+    expect(
+      compileTheme({ ...DEFAULT_THEME_SETTINGS, shapes: SHAPED.shapes, type: SHAPED.type }),
+    ).toEqual({
+      '--bs-radius-scale': '0',
+      '--bs-btn-radius': '10px',
+      '--bs-heading-weight': '700',
+      '--bs-heading-case': 'none',
+    });
+    const one = (shapes: Partial<ThemeSettings['shapes']>, type: Partial<ThemeSettings['type']>) =>
+      compileTheme({
+        ...DEFAULT_THEME_SETTINGS,
+        shapes: { ...DEFAULT_THEME_SETTINGS.shapes, ...shapes },
+        type: { ...DEFAULT_THEME_SETTINGS.type, ...type },
+      });
+    expect(one({ corners: 'soft' }, {})).toEqual({ '--bs-radius-scale': '0.5' });
+    expect(one({ corners: 'round' }, {})).toEqual({ '--bs-radius-scale': '1.5' });
+    expect(one({ buttons: 'square' }, {})).toEqual({ '--bs-btn-radius': '0px' });
+    expect(one({}, { headingWeight: 700 })).toEqual({ '--bs-heading-weight': '700' });
+    expect(one({}, { headingCase: 'as-written' })).toEqual({ '--bs-heading-case': 'none' });
+    expect(hasTokens(one({ buttons: 'square' }, {}))).toBe(true);
+  });
+
+  it('a shaped theme parses, and its stylesheet writes the four tokens last, in order', () => {
+    expect(ThemeSettingsSchema.parse(SHAPED)).toEqual(SHAPED);
+    const tokens = compileTheme(SHAPED);
+    expect(ThemeTokensSchema.safeParse(tokens).success).toBe(true);
+    expect(themeCss(tokens)).toMatch(
+      /;--bs-radius-scale:0;--bs-btn-radius:10px;--bs-heading-weight:700;--bs-heading-case:none;\}$/,
+    );
+  });
+
+  it('the token patterns take only the choices, never the brand values or anything else', () => {
+    const ok = (name: ThemeTokenName, v: string) => THEME_TOKEN_PATTERNS[name].test(v);
+    for (const v of ['0', '0.5', '1.5']) expect(ok('--bs-radius-scale', v)).toBe(true);
+    for (const v of ['1', '2', '0.25', '-1', '1.5px'])
+      expect(ok('--bs-radius-scale', v)).toBe(false);
+    for (const v of ['10px', '0px']) expect(ok('--bs-btn-radius', v)).toBe(true);
+    for (const v of ['999px', '0', '50%', '10']) expect(ok('--bs-btn-radius', v)).toBe(false);
+    expect(ok('--bs-heading-weight', '700')).toBe(true);
+    for (const v of ['800', '900', '400', 'bold']) expect(ok('--bs-heading-weight', v)).toBe(false);
+    expect(ok('--bs-heading-case', 'none')).toBe(true);
+    for (const v of ['uppercase', 'lowercase', 'capitalize']) {
+      expect(ok('--bs-heading-case', v)).toBe(false);
     }
   });
 });

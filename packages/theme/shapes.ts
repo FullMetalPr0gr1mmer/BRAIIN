@@ -142,3 +142,15 @@ export function shapeTokens(
   }
   return out;
 }
+
+/**
+ * A stored theme's settings in today's version: E4's v1 is v2 at the brand's shapes and type
+ * (what ThemeSettingsSchema answers for it); anything else as it is. No validation: the
+ * release restore's round trip (src/lib/release/rowPayload.ts) compares a version saved before
+ * E12 with what today's save writes for it, so an old version still comes back.
+ */
+export function upgradeThemeSettings(stored: unknown): unknown {
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return stored;
+  if ((stored as { v?: unknown }).v !== 1) return stored;
+  return { ...stored, v: 2, shapes: { ...DEFAULT_SHAPES }, type: { ...DEFAULT_TYPE } };
+}

@@ -34,7 +34,15 @@ const SETTINGS = {
   colors: { primary: '#000000', hover: '#615757', accent: '#938a8d' },
   motion: { marquee: 'slower', reveal: false },
 };
-const SAVED = { ...SETTINGS, colors: { ...SETTINGS.colors, accent: '#938A8D' } };
+// What the server stores: since Admin v2 E12 a v1 save (the deployed editor's, during a deploy)
+// is stored as v2 at the brand's shapes and type, and compiles the same tokens.
+const SAVED = {
+  ...SETTINGS,
+  v: 2,
+  colors: { ...SETTINGS.colors, accent: '#938A8D' },
+  shapes: { corners: 'brand', buttons: 'pill' },
+  type: { headingWeight: 800, headingCase: 'uppercase' },
+};
 
 interface Write {
   op: 'insert' | 'update';
@@ -119,6 +127,26 @@ describe('a theme save compiles its tokens on the server', () => {
     expect(update.values['tokens']).toEqual(compileTheme(SAVED as never));
   });
 
+  it('a v2 save writes its shape and type tokens with the rest (Admin v2 E12)', async () => {
+    const shaped = {
+      ...SAVED,
+      shapes: { corners: 'square', buttons: 'square' },
+      type: { headingWeight: 700, headingCase: 'as-written' },
+    };
+    const { status, writes } = await call('admin', 'PATCH', { settings: shaped, version: 1 });
+    expect(status).toBe(200);
+    const update = writes.find((w) => w.op === 'update' && 'settings' in w.values)!;
+    expect(update.values['settings']).toEqual(shaped);
+    expect(update.values['tokens']).toMatchObject({
+      '--bs-klein': '#000000',
+      '--bs-radius-scale': '0',
+      '--bs-btn-radius': '0px',
+      '--bs-heading-weight': '700',
+      '--bs-heading-case': 'none',
+    });
+    expect(update.values['tokens']).toEqual(compileTheme(shaped as never));
+  });
+
   it('a rename alone touches neither', async () => {
     const { status, writes } = await call('admin', 'PATCH', { name: 'Autumn', version: 1 });
     expect(status).toBe(200);
@@ -159,7 +187,10 @@ describe('what a save refuses, before anything is written', () => {
     ['a half-typed colour', { ...SETTINGS, colors: { ...SETTINGS.colors, primary: '#00' } }],
     ['custom CSS', { ...SETTINGS, css: 'body{display:none}' }],
     ['a faster marquee', { ...SETTINGS, motion: { marquee: 'faster', reveal: true } }],
-    ['another version', { ...SETTINGS, v: 2 }],
+    ['another version', { ...SETTINGS, v: 3 }],
+    ['v1 with shapes', { ...SETTINGS, shapes: { corners: 'square', buttons: 'pill' } }],
+    ['a free radius', { ...SAVED, shapes: { corners: 'brand', buttons: 'pill', radius: 4 } }],
+    ['a black heading', { ...SAVED, type: { headingWeight: 900, headingCase: 'uppercase' } }],
     ['no settings at all', undefined],
   ])('%s: 422, nothing written', async (_name, settings) => {
     const { status, writes } = await call('admin', 'POST', { settings });
