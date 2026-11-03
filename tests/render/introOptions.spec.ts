@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'vitest';
 import { INTRO_DEFAULTS, type IntroSettings } from '@schemas/appearance';
 import { DEFAULT_HOME_SECTIONS, withHomeData, withHomeIntro } from '@/lib/sections/types';
+import { introFromRow } from '@/lib/appearance/intro';
 import { LOCALES, renderSections } from './harness';
+import {
+  INTRO_STYLES,
+  expectedPlate,
+  introRunColumns,
+  plateOf,
+} from '../../scripts/lhci-intro.mjs';
 
 // The loading screen's look (Admin v2 E7, site_appearance's intro_ columns), rendered through
 // SectionRenderer as the home route composes it (withHomeIntro, then withHomeData with the
@@ -126,5 +133,18 @@ describe('a saved look', () => {
       disciplines: [],
     });
     expect(none[0]?.data).toEqual({ ctaHref: '/portfolio' });
+  });
+});
+
+describe('the Lighthouse re-gate (scripts/lhci-intro.mjs)', () => {
+  test('the plate each style serves is the one the script waits for, in both languages', async () => {
+    for (const style of [...INTRO_STYLES, 'reset']) {
+      const look = introFromRow(introRunColumns(style));
+      for (const locale of LOCALES) {
+        const html = await renderSections(home(look), locale);
+        expect(plateOf(html), `${style} ${locale}`).toBe(expectedPlate(style));
+        expect(html.includes('class="intro__tag"'), `${style} ${locale}`).toBe(style !== 'reset');
+      }
+    }
   });
 });

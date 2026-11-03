@@ -152,7 +152,9 @@ jobs:
   lighthouse:
     name: Lighthouse budgets
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    # 60, not 50, since Admin v2 E7: its three loading screen runs add 18 Lighthouse runs to
+    # the 120 before them.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -192,6 +194,26 @@ jobs:
       # class of defect that only exists on desktop widths.
       - name: Lighthouse budgets (desktop)
         run: npm run lhci:desktop
+      # Admin v2 E7 (README's E7 row: "lhci re-gate"): the main run's budgets again, all errors,
+      # on / and /ar (the only pages with the intro plate), once per loading screen style:
+      # over the video, on black, on light, each with the bar, a tagline in both languages and
+      # the longest timing. Nothing is added to the page but the plate's own markup (no
+      # request, no script), so no budget is relaxed, unlike the themed run's stylesheet.
+      # Before the theme, then reset, so the themed run measures what it measured before.
+      - name: Loading screen over the video (local Supabase)
+        run: node scripts/lhci-intro.mjs video
+      - name: Lighthouse budgets, loading screen over the video (mobile)
+        run: npm run lhci:intro
+      - name: Loading screen on black (local Supabase)
+        run: node scripts/lhci-intro.mjs black
+      - name: Lighthouse budgets, loading screen on black (mobile)
+        run: npm run lhci:intro
+      - name: Loading screen on light (local Supabase)
+        run: node scripts/lhci-intro.mjs light
+      - name: Lighthouse budgets, loading screen on light (mobile)
+        run: npm run lhci:intro
+      - name: Loading screen as built (local Supabase)
+        run: node scripts/lhci-intro.mjs reset
       # Admin v2 E4 (AV-27; README "lhci (+ a themed run)"): the same budgets with a theme
       # set, on four routes (both languages, a text-LCP service page and Contact): every page
       # then links one more same-origin stylesheet, /styles/theme.css, so its cost to LCP, CLS

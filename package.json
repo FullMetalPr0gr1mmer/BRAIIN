@@ -22,6 +22,7 @@
     "lhci": "lhci autorun",
     "lhci:desktop": "lhci autorun --config=lighthouserc.desktop.json",
     "lhci:themed": "lhci autorun --config=lighthouserc.themed.json",
+    "lhci:intro": "lhci autorun --config=lighthouserc.intro.json",
     "audit": "node scripts/audit-gate.mjs",
     "audit:all": "node scripts/audit-gate.mjs --include-dev",
     "cf:types": "wrangler types",
