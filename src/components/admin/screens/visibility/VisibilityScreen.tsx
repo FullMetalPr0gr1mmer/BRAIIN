@@ -57,6 +57,17 @@ export function edgeLine(
   return { tone: 'info', text: `The live site has these settings${when}.` };
 }
 
+/**
+ * Where a hidden page may send its visitors: the pages that render, in the list's order (the
+ * homepage first). A custom page that is not published is left out: its address answers 404
+ * (E11 code review, CR1), and the save refuses it too.
+ */
+export function redirectChoices(pages: ListAnswer['pages']): RedirectChoice[] {
+  return pages
+    .filter((page) => page.redirectable)
+    .map((page) => ({ id: page.id, label: page.title.en }));
+}
+
 function saved(item: VisibilityItem, mode: VisibilityDraft['mode']): string {
   const title = itemTitle(item);
   if (mode === 'public') return `${title} is visible to everyone.`;
@@ -99,10 +110,7 @@ export default function VisibilityScreen() {
     () => (list ? [...list.pages, ...list.templates] : []),
     [list],
   );
-  const choices: RedirectChoice[] = useMemo(
-    () => (list?.pages ?? []).map((page) => ({ id: page.id, label: page.title.en })),
-    [list],
-  );
+  const choices: RedirectChoice[] = useMemo(() => redirectChoices(list?.pages ?? []), [list]);
 
   async function apply(item: VisibilityItem, draft: VisibilityDraft) {
     setBusy(true);

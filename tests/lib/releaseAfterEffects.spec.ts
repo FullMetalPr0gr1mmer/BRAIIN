@@ -176,6 +176,15 @@ describe('the snapshots a release moves', () => {
       snapshotNeeds([item('page', 'update', { slug: 'about' }, { slug: 'about' })]).visibility,
     ).toBe(false);
     expect(snapshotNeeds([item('page', 'create', null, { slug: 'new' })]).visibility).toBe(false);
+    // E11 code review CR1: a custom page that starts or stops rendering may be a hidden page's
+    // redirect target, kept only while it is published; a route page renders whatever its status.
+    const status = (slug: string, from: string, to: string) =>
+      snapshotNeeds([item('page', 'update', { slug, status: from }, { slug, status: to })])
+        .visibility;
+    expect(status('our-story', 'published', 'draft')).toBe(true);
+    expect(status('our-story', 'archived', 'published')).toBe(true);
+    expect(status('our-story', 'published', 'published')).toBe(false);
+    expect(status('about', 'published', 'draft')).toBe(false);
     expect(snapshotNeeds(null)).toEqual({
       redirects: true,
       visibility: true,

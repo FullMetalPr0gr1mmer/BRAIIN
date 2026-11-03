@@ -1,4 +1,4 @@
-import { PAGE_PATHS } from '@/lib/visibility/routes';
+import { isVisibilityPageSlug, pagePathOf } from '@/lib/visibility/routes';
 
 // Where each kind of SEO target lives on the public site, as a LOGICAL path (no `/ar`; the
 // Arabic twin is `/ar` + it): one place for the SEO list's previews, the sitemap's
@@ -7,9 +7,12 @@ import { PAGE_PATHS } from '@/lib/visibility/routes';
 
 export type SeoEntityType = 'service' | 'blog_post' | 'portfolio' | 'page';
 
-/** A CMS page's slug → its path, or null for a page no public route renders. */
+/**
+ * A CMS page's slug → its path: a route page's, or `/<slug>` for a custom page (Admin v2 E11);
+ * null for a slug no public route renders (one a custom page may not take).
+ */
 export function pagePath(slug: string): string | null {
-  return Object.hasOwn(PAGE_PATHS, slug) ? PAGE_PATHS[slug as keyof typeof PAGE_PATHS] : null;
+  return isVisibilityPageSlug(slug) ? pagePathOf(slug) : null;
 }
 
 /** The public path of an SEO target, or null when it has none. */

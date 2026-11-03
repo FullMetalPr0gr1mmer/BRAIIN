@@ -27,11 +27,12 @@ describe('the page cards', () => {
       [],
       [],
     );
+    // `zeta` is a custom page (Admin v2 E11): it renders at /zeta.
     expect(cards.map((c) => [c.slug, c.path, c.sections])).toEqual([
       ['home', '/', 2],
       ['about', '/about', 1],
       ['portfolio-all', '/portfolio/all', 0],
-      ['zeta', null, 0],
+      ['zeta', '/zeta', 0],
     ]);
     expect(cards[0]).toMatchObject({
       title: { en: 'HOME', ar: 'ع' },

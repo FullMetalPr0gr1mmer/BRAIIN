@@ -16,8 +16,8 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *                WCAG 2.2 A/AA violations and no sideways scroll at 320, 390 and 1280 px;
  *   About        the sections in the site's order, the first open, its fields prefilled with
  *                the words the page shows (the built-in copy, nothing stored);
- *   a scratch    a page of this run's own (no route shows it, so no visitor sees any of this),
- *   page         with two sections made by the service role: Move down, the eye (and a refused
+ *   a scratch    a page of this run's own (a draft custom page, so its route answers a 404 and
+ *   page         no visitor sees any of this), with two sections made by the service role: Move down, the eye (and a refused
  *                one, whose reason stays after the list is read again), Rename, a
  *                heading's words saved as the only difference stored, the switch that asks
  *                before unsaved words are dropped, English / العربية / Both and "Arabic
@@ -25,6 +25,10 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *   Add section  on About, as Admin: the kinds it may not take say why; with words not saved
  *                in the open section, opening the new one asks first; a call to action is
  *                added hidden at the end, then deleted (a hidden section renders nowhere);
+ *   New page     (Admin v2 E11) as Admin: the dialog suggests an address from the English title,
+ *                refuses a word the site already answers, makes a draft with its banner hero
+ *                and opens its editor; the draft answers a 404 on the site, published it
+ *                renders in both languages; a Content Creator has the button, SEO does not;
  *   per role     a Content Creator edits sections but deletes none ("hide it instead"); SEO
  *                gets the SEO drawer only; Developer and Sales are refused by the server.
  *
@@ -45,6 +49,9 @@ const TITLE = { en: `Scratch ${MARK}`, ar: `مسودة ${MARK}` };
 let scratchId = '';
 let aboutId = '';
 const added: string[] = [];
+/** The page New page makes (E11), removed with its sections afterwards. */
+const NEW_SLUG = `e2e-new-${MARK}`;
+const NEW_TITLE = { en: `Made ${MARK}`, ar: `صفحة ${MARK}` };
 
 function service() {
   const env = staffEnv()!;
@@ -93,6 +100,9 @@ test.afterAll(async () => {
   const svc = service();
   if (added.length > 0) await svc.from('page_sections').delete().in('id', added);
   if (scratchId) await svc.from('pages').delete().eq('id', scratchId);
+  // The New page test's page (its sections go with it: page_sections cascades), by its
+  // address, so a run cut short after the create still cleans up.
+  await svc.from('pages').delete().eq('tenant_id', TENANT_ID).eq('slug', NEW_SLUG);
 });
 
 async function open(page: Page, path: string) {
@@ -162,8 +172,11 @@ test.describe('as admin', () => {
       'href',
       '/admin/portfolio',
     );
-    // "New page" waits for custom pages (E11).
-    await expect(page.locator('main').getByRole('link', { name: 'New page' })).toHaveCount(0);
+    // The scratch page is a custom page (E11): it lives at its own address.
+    await expect(
+      cards.locator('li', { has: page.getByRole('link', { name: `Edit ${TITLE.en}` }) }),
+    ).toContainText(`/${SLUG} · 2 sections`);
+    await expect(page.getByRole('button', { name: 'New page' })).toBeVisible();
     await expectCleanAtWidths(page, 'the pages list');
   });
 
@@ -361,13 +374,83 @@ test.describe('as admin', () => {
     // The page details: its title saved through the pages route.
     await pick(page, 'Page details').click();
     await expect(page.getByRole('region', { name: 'Page details' })).toContainText(
-      'No route of the site shows this page yet.',
+      `Address /${SLUG}, chosen when the page was made.`,
     );
     await page.locator('#f-title-en').fill(`${TITLE.en} renamed`);
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page.locator('.save-status[data-state="saved"]')).toBeVisible();
     const { data } = await service().from('pages').select('title').eq('id', scratchId).single();
     expect((data as { title: { en: string } }).title.en).toBe(`${TITLE.en} renamed`);
+  });
+
+  test('New page: a draft with its banner, its editor, then the page in both languages (E11)', async ({
+    page,
+  }) => {
+    await open(page, '/admin/pages');
+    await page.getByRole('button', { name: 'New page' }).click();
+    const dialog = page.getByRole('dialog', { name: 'New page' });
+    await expect(dialog).toBeVisible();
+    await expectCleanAtWidths(page, 'the New page dialog');
+    const address = dialog.getByLabel('Address', { exact: true });
+    // The address follows the English title until it is typed in.
+    await dialog.getByLabel('Title in English', { exact: true }).fill(NEW_TITLE.en);
+    await expect(address).toHaveValue(`made-${MARK}`);
+    await dialog.getByLabel('Title in Arabic', { exact: true }).fill(NEW_TITLE.ar);
+    // A word the site already answers is refused on the address, before anything is sent.
+    await address.fill('admin');
+    await dialog.getByRole('button', { name: 'Make the page' }).click();
+    await expect(dialog.getByRole('alert')).toHaveText(
+      'The site already uses this address. Choose another one.',
+    );
+    await address.fill(NEW_SLUG);
+    await expect(dialog).toContainText(`The page will be at /${NEW_SLUG} and /ar/${NEW_SLUG}.`);
+    await dialog.getByRole('button', { name: 'Make the page' }).click();
+    await page.waitForURL(/\/admin\/pages\/[0-9a-f-]{36}(\?|$)/);
+    const newPageId = /\/admin\/pages\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
+    expect(newPageId).not.toBe('');
+
+    // Stored: a draft at its address, with one shown hero whose headline is the title.
+    const svc = service();
+    const { data: row } = await svc
+      .from('pages')
+      .select('slug,title,status')
+      .eq('id', newPageId)
+      .single();
+    expect(row).toEqual({ slug: NEW_SLUG, title: NEW_TITLE, status: 'draft' });
+    const { data: sections } = await svc
+      .from('page_sections')
+      .select('type,visible,content')
+      .eq('page_id', newPageId);
+    expect(sections).toEqual([{ type: 'hero', visible: true, content: { headline: NEW_TITLE } }]);
+
+    // The editor opened on it, and its page details say where it lives.
+    await expect(column(page).locator('li.pe__row[aria-current="true"]')).toHaveCount(1);
+    await pick(page, 'Page details').click();
+    await expect(page.getByRole('region', { name: 'Page details' })).toContainText(
+      `Address /${NEW_SLUG}, chosen when the page was made.`,
+    );
+
+    // A draft is not on the site.
+    for (const path of [`/${NEW_SLUG}`, `/ar/${NEW_SLUG}`]) {
+      const res = await page.request.get(path);
+      expect(res.status(), path).toBe(404);
+    }
+    // Published (by the service role: this suite runs with releases off), it renders in both
+    // languages with its title as its one heading.
+    const published = await svc
+      .from('pages')
+      .update({ status: 'published', published_at: new Date().toISOString() })
+      .eq('id', newPageId);
+    expect(published.error).toBeNull();
+    for (const [path, title] of [
+      [`/${NEW_SLUG}`, NEW_TITLE.en],
+      [`/ar/${NEW_SLUG}`, NEW_TITLE.ar],
+    ] as const) {
+      const res = await page.goto(path);
+      expect(res?.status(), path).toBe(200);
+      await expect(page.locator('h1'), path).toHaveCount(1);
+      await expect(page.locator('h1'), path).toHaveAttribute('aria-label', title);
+    }
   });
 
   test('Add section on About: refused kinds say why; one added hidden at the end, deleted', async ({
@@ -426,6 +509,10 @@ test.describe('as content_creator', () => {
     const bar = page.getByRole('group', { name: 'This page' });
     await expect(bar.getByRole('link', { name: 'Visibility' })).toHaveCount(0);
     await expectCleanAtWidths(page, 'the page editor (Content Creator)');
+    // A Content Creator makes pages too (pages.write, E11); the SEO drawer is checked below.
+    await open(page, '/admin/pages');
+    await expect(page.getByRole('button', { name: 'New page' })).toBeVisible();
+    await openEditor(page, aboutId);
 
     await bar.getByRole('button', { name: 'SEO' }).click();
     const seo = page.getByRole('dialog', { name: 'SEO: About' });
@@ -457,6 +544,9 @@ test.describe('as seo', () => {
   test.use({ storageState: authFile('seo') });
 
   test('the SEO drawer only, clean at every width', async ({ page }) => {
+    // SEO reads the pages list but makes no page (no pages.write, E11).
+    await open(page, '/admin/pages');
+    await expect(page.getByRole('button', { name: 'New page' })).toHaveCount(0);
     await open(page, `/admin/pages/${aboutId}`);
     await expect(page.getByRole('complementary', { name: 'Sections' })).toHaveCount(0);
     await expect(page.getByText('Your role changes this page’s SEO')).toBeVisible();

@@ -51,10 +51,16 @@ function context(
   cookie?: { name: string; value: string },
 ) {
   const url = new URL(`https://www.example.test${path}`);
+  // As Astro gives them: a dynamic route's `slug` is its last segment (Admin v2 E11's custom
+  // page routes read it).
+  const params: Record<string, string> = routePattern?.endsWith('[slug]')
+    ? { slug: decodeURIComponent(url.pathname.split('/').pop() ?? '') }
+    : {};
   return {
     request: new Request(url, { method }),
     url,
     routePattern,
+    params,
     locals: {} as Record<string, unknown>,
     cookies: {
       get: (name: string) => (cookie && cookie.name === name ? { value: cookie.value } : undefined),
@@ -295,7 +301,7 @@ describe('middleware: every gated route stays public with no rows, and with unre
     // One route at a time: every OTHER page link only and every other template hidden, and
     // this route's response is its baseline, byte for byte, headers and all.
     for (const route of GATED_ROUTES) {
-      const own = targetForRoute(route);
+      const own = targetForRoute(route, { slug: 'sample' });
       expect(own, route).not.toBeNull();
       const pages = Object.fromEntries(
         Object.keys(PAGE_PATHS)
@@ -318,6 +324,42 @@ describe('middleware: every gated route stays public with no rows, and with unre
     for (const route of GATED_ROUTES.filter((r) => !r.endsWith('/portfolio/[slug]'))) {
       expect(await renderOnce(pathOf(route), route), route).toEqual(baseline.get(route));
     }
+  });
+});
+
+describe('middleware: a custom page (Admin v2 E11)', () => {
+  it('hides, unlists and gates a custom page by its own address, before the render', async () => {
+    setSnapshot({ 'our-story': { mode: 'hidden', target: null } });
+    for (const [path, route, notFound] of [
+      ['/our-story', '/[slug]', '/404'],
+      ['/ar/our-story', '/ar/[slug]', '/ar/404'],
+    ] as const) {
+      const { next, calls } = page();
+      const res = await run(context(path, route), next);
+      expect(res.status, path).toBe(404);
+      expect(calls, path).toEqual([notFound]);
+      expect(res.headers.get('cache-control'), path).toBe('private, no-store');
+    }
+    // Another custom page, and the same address written another way, are not this page: the
+    // second is not a custom page's address at all, and its route answers its own 404.
+    for (const path of ['/other-page', '/Our-Story']) {
+      const { next, calls } = page();
+      expect((await run(context(path, '/[slug]'), next)).status, path).toBe(200);
+      expect(calls, path).toEqual([undefined]);
+    }
+    setSnapshot({ 'our-story': { mode: 'link' } });
+    const linked = await run(context('/our-story', '/[slug]'), page().next);
+    expect(linked.status).toBe(200);
+    expect(linked.headers.get('x-robots-tag')).toBe('noindex');
+  });
+
+  it('sends a hidden route page to a custom page, in the route’s language', async () => {
+    setSnapshot({ about: { mode: 'hidden', target: 'our-story' } });
+    const en = await run(context('/about', '/about'), page().next);
+    expect(en.status).toBe(302);
+    expect(en.headers.get('location')).toBe('/our-story');
+    const ar = await run(context('/ar/about', '/ar/about'), page().next);
+    expect(ar.headers.get('location')).toBe('/ar/our-story');
   });
 });
 

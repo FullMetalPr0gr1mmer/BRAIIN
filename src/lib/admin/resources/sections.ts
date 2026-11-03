@@ -1,8 +1,13 @@
 import { SectionUpdateSchema, SectionWriteSchema } from '@schemas/admin';
 import { sectionContentIssues, type SectionType } from '@schemas/sections';
 import { MEDIA_BLOCKS_FULL, MEDIA_BLOCKS_PER_PAGE, MEDIA_BLOCK_TYPES } from '@schemas/sectionTypes';
+import {
+  CUSTOM_PAGE_TYPE_REFUSED,
+  isCustomPageSectionType,
+  isCustomPageSlug,
+} from '@schemas/customPages';
 import { isSampleRating } from '@/lib/sections/samples';
-import { liveDb } from '@/lib/release/overlayDb';
+import { liveDb, type DbListQuery } from '@/lib/release/overlayDb';
 import { ValidationError } from '../errors';
 import type { ResourceConfig } from '../resource';
 import { fieldsOf, pick, type Input } from './shared';
@@ -23,6 +28,15 @@ const SECTION_KEYS = {
 };
 
 const MEDIA_TYPES: readonly unknown[] = MEDIA_BLOCK_TYPES;
+
+/**
+ * The read of a section's page for the custom page rule below (Admin v2 E11). One shape, so a
+ * publish answers it from its batched read of the release's links (src/lib/release/validate.ts
+ * primeLinks) and the rule costs a release no request of its own.
+ */
+export function sectionPageQuery(pageId: string): DbListQuery {
+  return { columns: 'id,slug', eq: { id: pageId }, limit: 1 };
+}
 
 export const sectionResource: ResourceConfig = {
   table: 'page_sections',
@@ -91,6 +105,28 @@ export const sectionResource: ResourceConfig = {
       });
       const others = rows.filter((row) => row['id'] !== merged['id']).length;
       if (others >= MEDIA_BLOCKS_PER_PAGE) throw new ValidationError(MEDIA_BLOCKS_FULL, 'type');
+    }
+    // A custom page's set (Admin v2 E11): a section joining a custom page (created there, moved
+    // there, or turned into another type) must be one a custom page holds. The page's slug is
+    // read through the same overlay-aware database (a pending page's own, with releases on),
+    // and only for a type outside the set that BECOMES this page's: every type in the set is
+    // allowed everywhere, and an edit that keeps a row's type and page (the form sends `type`
+    // with every save) reads nothing. The page never renders a type outside the set either
+    // (src/lib/sections/customPage.ts), so a row written around the API shows nothing.
+    if (
+      ('type' in changed || 'page_id' in changed) &&
+      !isCustomPageSectionType(merged['type']) &&
+      typeof merged['page_id'] === 'string' &&
+      !(before && before['type'] === merged['type'] && before['page_id'] === merged['page_id'])
+    ) {
+      const page = await (db ?? liveDb(sb, auth)).first(
+        'pages',
+        sectionPageQuery(merged['page_id']),
+      );
+      const slug = typeof page?.['slug'] === 'string' ? page['slug'].toLowerCase() : null;
+      if (slug !== null && isCustomPageSlug(slug)) {
+        throw new ValidationError(CUSTOM_PAGE_TYPE_REFUSED, 'type');
+      }
     }
   },
 };

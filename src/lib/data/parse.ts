@@ -122,3 +122,20 @@ export function parseRow<S extends z.ZodTypeAny>(
   reportDrop(entity, row, parsed.error);
   return null;
 }
+
+/**
+ * The latest of some timestamps (as PostgREST writes them), as written; null for none. A
+ * page's last change is its row's or a section's (Admin v2 E11 review E11-C2).
+ */
+export function latestInstant(values: readonly unknown[]): string | null {
+  let best: string | null = null;
+  let bestAt = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const at = Date.parse(value);
+    if (Number.isNaN(at) || at <= bestAt) continue;
+    best = value;
+    bestAt = at;
+  }
+  return best;
+}

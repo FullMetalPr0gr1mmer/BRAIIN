@@ -678,7 +678,7 @@ Realtime and Team notes are omitted (deviations).
 
 **Template cards.** "Service page (template) · template for 28 services" and "Project page (template) · 12 projects" open AV-31.
 
-**"+ New page"** is hidden until AV-33 (deviation).
+**"+ New page"**: built as E11 (AV-33; [as-built E11](as-built/E11.md)).
 
 ### Page editor (/admin/pages/[id], flush; AV-25/26)
 

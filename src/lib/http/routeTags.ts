@@ -57,6 +57,15 @@ export function caseStudyCacheEntities(slug: string): string[] {
   ];
 }
 
+/**
+ * A custom page (Admin v2 E11, `/<slug>`): itself (a release's page item, or a section's,
+ * purges `page:<slug>` through the registry, R7) and the media every head reads. What its
+ * sections read is added by `sectionTags`, as on every composed page.
+ */
+export function customPageCacheEntities(slug: string): string[] {
+  return [`page:${slug}`, 'media:all'];
+}
+
 /** The blog's index: every post, and each post's author (an E-E-A-T team member). */
 export const BLOG_CACHE_ENTITIES = ['blog:all', 'team:all'] as const;
 
@@ -85,6 +94,7 @@ export const TIER_A_ROUTES: readonly TierARoute[] = [
   { route: 'portfolio-item', entities: caseStudyCacheEntities('sample'), composed: false },
   { route: 'contact', entities: CONTACT_CACHE_ENTITIES, composed: true },
   { route: 'join', entities: JOIN_CACHE_ENTITIES, composed: true },
+  { route: 'page', entities: customPageCacheEntities('sample'), composed: true },
   { route: 'blog', entities: BLOG_CACHE_ENTITIES, composed: false },
   { route: 'blog-post', entities: blogPostCacheEntities('sample'), composed: false },
   { route: 'search', entities: [], composed: false },

@@ -30,7 +30,7 @@ import { pageAccessCookieName, verifyAccessCookie } from '@/lib/visibility/acces
 import { pageAccessGate } from '@/lib/visibility/gate';
 import { withPageAccess } from '@/lib/visibility/scope';
 import { handlePreview, previewConnectSources } from '@/lib/http/preview';
-import { ga4Reads } from '@/lib/http/ga4';
+import { GA4_WHEN_FOUND_ROUTES, ga4Reads } from '@/lib/http/ga4';
 import { noEdgeCache } from '@/lib/http/cacheTags';
 import { getGa4MeasurementId } from '@/lib/data/ga4';
 import { writeSystemLog } from '@/lib/data/systemLog';
@@ -341,7 +341,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (!isAdmin && !isApi && !isHealth && !isImage && !isThemeSheet) {
     const snapshot = await getVisibilitySnapshot(env);
     locals.visibility = snapshot;
-    const target = targetForRoute(context.routePattern);
+    // The custom page routes (Admin v2 E11) name their page by the route's `slug` param.
+    const target = targetForRoute(context.routePattern, context.params);
     if (target) gate = decide(snapshot, target, Date.now());
     if (gate.action === 'password' && target?.kind === 'page') {
       // The route's language, as below: the route is what would render.
@@ -545,15 +546,20 @@ export const onRequest = defineMiddleware(async (context, next) => {
   //     exactly when it carries the loader. With the switch off (production until the owner
   //     signs off the notice) nothing is read and nothing changes. One subrequest of the
   //     Workers Free plan's 50 per page while on; none while off, and none on any other route.
-  const ga4 = ga4Reads({
+  //     A route whose page may not exist (GA4_WHEN_FOUND_ROUTES: a custom page's `[slug]`
+  //     answers every free one-segment path) gets the read unstarted instead, and starts it
+  //     only once it has found its page (startGa4), so a probe's 404 reads nothing.
+  const ga4Wanted = ga4Reads({
     method: request.method,
     routePattern: context.routePattern,
     internal: isAdmin || isApi || isHealth || isImage,
     private: unlocked !== null || bypassed,
-  })
-    ? getGa4MeasurementId()
-    : null;
-  if (ga4) locals.ga4 = ga4;
+  });
+  if (ga4Wanted && GA4_WHEN_FOUND_ROUTES.has(context.routePattern ?? '')) {
+    locals.ga4Start = getGa4MeasurementId;
+  } else if (ga4Wanted) {
+    locals.ga4 = getGa4MeasurementId();
+  }
 
   // 3) Render. A page whose password this request answered renders inside the page-access
   //    scope, which is the only thing that lets its sections be read (src/lib/data/
@@ -584,7 +590,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // 5) Apply the same headers to the rendered response (with GA4's hosts when step 2b's read
   //    found an id: the layout then carries the loader); a link-only page is not indexed,
   //    and an unlocked page is private: never stored by any cache, never indexed, and
-  //    carrying no cache tag a purge could mistake for a public page's.
+  //    carrying no cache tag a purge could mistake for a public page's. The read is taken
+  //    from `locals` AFTER the render (a when-found route started it there, and the 404
+  //    pages clear it so they carry no loader), and never for a 404: nothing to measure.
+  const ga4 = rendered.status === 404 ? undefined : locals.ga4;
   const out = await secured(rendered, ga4 && (await ga4) ? { ga4: true } : {});
   if (gate.action === 'noindex') out.headers.set('X-Robots-Tag', 'noindex');
   // 5a) A page rendered while the theme's read FAILED (refused or unreachable, not "no

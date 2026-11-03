@@ -14,7 +14,9 @@ import type { VisibilityModeKey } from '../visibilityCopy';
 //   content_drafts   the pending changes of pages and sections: "Unpublished changes". While
 //                    releases are off nothing is staged, so this read finds none and no card
 //                    wears the badge (switching off needs every pending change discarded,
-//                    R11), which is why the screen asks no flag first.
+//                    R11), which is why the screen asks no flag first. A pending page create
+//                    (New page with releases on, Admin v2 E11) is a card of its own, from its
+//                    draft's slug and title, until the release that publishes it.
 // The mapping is pure (`pageCards`, `templateCards`), so it is tested without a database
 // (tests/lib/pagesList.spec.ts).
 
@@ -96,6 +98,15 @@ export function pageCards(
     if (typeof v['page_id'] === 'string') mode.set(v['page_id'], modeOf(v['mode']));
   }
   const pending = new Set<string>();
+  const live = new Set(pages.map((p) => text(p['id'])));
+  // A pending create of a page (Admin v2 E11): no row yet, so its card comes from its draft.
+  const created: Row[] = [];
+  for (const d of drafts) {
+    const id = text(d['entity_id']);
+    if (d['entity_type'] === 'page' && d['op'] === 'create' && id && !live.has(id)) {
+      created.push({ id, slug: d['slug'], title: d['title'], status: 'draft', updated_at: null });
+    }
+  }
   for (const d of drafts) {
     const id = text(d['entity_id']);
     if (d['entity_type'] === 'page') pending.add(id);
@@ -106,7 +117,7 @@ export function pageCards(
       if (named) pending.add(named);
     }
   }
-  return pages
+  return [...pages, ...created]
     .map((p): PageCard => {
       const id = text(p['id']);
       const slug = text(p['slug']).toLowerCase();
@@ -203,7 +214,9 @@ export async function loadPagesList(sb: SupabaseClient, auth: AuthContext): Prom
       .limit(50),
     sb
       .from('content_drafts')
-      .select('entity_type,entity_id,page_id:payload->>pageId')
+      .select(
+        'entity_type,entity_id,op,page_id:payload->>pageId,slug:payload->>slug,title:payload->title',
+      )
       .eq('tenant_id', auth.tenantId)
       .in('entity_type', ['page', 'page_section'])
       .limit(LIST_CAP.sections),

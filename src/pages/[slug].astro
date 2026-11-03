@@ -1,0 +1,26 @@
+---
+import CustomPage from '@/components/CustomPage.astro';
+import { setTierA } from '@/lib/http/cacheTags';
+import { startGa4 } from '@/lib/http/ga4';
+import { customPageCacheEntities } from '@/lib/http/routeTags';
+import { loadCustomPage } from '@/lib/sections/customPage';
+import { sectionTags } from '@/lib/sections/reads';
+
+// Tier A (Admin v2 E11). A custom page, made with "New page" in the admin: `/<slug>`. Every
+// static route beats this one (Astro's priority), so it only ever sees a single segment no
+// file answers. Not a custom page's address, no such page, or not published: the 404 page,
+// by rewrite (it renders with its own status and noindex, and the middleware's authored
+// redirects still answer after a 404). Purges on `page:<slug>` and what its sections read.
+const page = await loadCustomPage(Astro.locals, 'en', Astro.params.slug);
+if (!page) return Astro.rewrite('/404');
+// Only now, with the page found, may it load GA4 (src/lib/http/ga4.ts GA4_WHEN_FOUND_ROUTES):
+// a miss above read nothing for it and renders the 404 page with no loader.
+startGa4(Astro.locals);
+setTierA(Astro.response, {
+  route: 'page',
+  locale: 'en',
+  entities: [...customPageCacheEntities(page.page.slug), ...sectionTags(page.sections)],
+});
+---
+
+<CustomPage locale="en" page={page} />
