@@ -149,6 +149,13 @@ const PAIRS = [
   ['muted', 'bg', 4.5, 'dark footer: the copyright line, the mailbox and the links'],
   ['fg', 'bg', 4.5, 'dark footer: column headings and a hovered link'],
   ['accent', 'bg', 4.5, 'dark footer: the focus outline (sky on black; UI needs 3, held to 4.5)'],
+  // Admin v2 E7: the loading screen's tagline and bar on its opaque plates (global.css
+  // `.intro[data-backdrop]`); over the video the plate is see-through, as built. The bar on
+  // black is accent on bg, already held at 4.5 above (and by the theme gate), so it is not
+  // listed again at 3.
+  ['paper', 'bg', 4.5, 'loading screen on black: the tagline'],
+  ['ink2', 'paper', 4.5, 'loading screen on light: the tagline'],
+  ['klein', 'paper', 3.0, 'loading screen on light: the progress bar (UI, 1.4.11)'],
   // UI v2 (2026-09): mist blocks, secondary/case-study copy, error text on dark
   ['ink', 'mist', 4.5, 'body text on mist'],
   ['ink2', 'mist', 4.5, 'secondary copy on mist'],
