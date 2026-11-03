@@ -19,6 +19,7 @@ import {
   BUTTON_OPTIONS,
   CASE_OPTIONS,
   CORNER_OPTIONS,
+  FONT_GROUPS,
   MARQUEE_OPTIONS,
   REVEAL_OPTIONS,
   ROLE_LABEL,
@@ -31,8 +32,10 @@ import {
   typedMain,
   weightOf,
   weightValue,
+  withFont,
   withMain,
 } from './model';
+import FontTiles from './FontTiles';
 import SitePreview from './SitePreview';
 
 // The theme editor (/admin/appearance/theme, Admin v2 E4, AV-27; ui.md "Theme"; the
@@ -48,6 +51,9 @@ import SitePreview from './SitePreview';
 //   Shapes         (E12, AV-32) the corners of cards, pictures and fields, and the buttons:
 //                  closed choices, each one token the public stylesheets read.
 //   Typography     (E12) the headings' weight (both bold) and case.
+//   Fonts          (E13) the family the English pages and the Arabic pages are set in, from
+//                  the closed, self-hosted font catalogue (packages/theme/fonts.ts): a tile
+//                  per family, drawn in itself. Today the brand's two (owner item O-21).
 //   Motion         two settings that can only reduce motion.
 //   Facts          what this version cannot change, read only.
 //   Reset          the brand's own settings, after a danger confirm.
@@ -179,7 +185,7 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
   const reset = async () => {
     const ok = await confirmDialog({
       message:
-        "Reset the theme? The brand's own colours, shapes, headings and motion come back. Nothing changes on the site until you save.",
+        "Reset the theme? The brand's own colours, shapes, headings, fonts and motion come back. Nothing changes on the site until you save.",
       confirmLabel: 'Reset',
     });
     if (ok) set({ ...cloneSettings(DEFAULT_THEME_SETTINGS), mode: settings.mode });
@@ -417,6 +423,32 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
               </div>
             </section>
 
+            <section className="card" aria-labelledby="theme-fonts">
+              <div className="card__h">
+                <div>
+                  <h2 className="card__t" id="theme-fonts">
+                    Fonts
+                  </h2>
+                  <p className="card__sub">
+                    Every font is served from the site itself, trimmed to the letters the site uses
+                    and measured so pages do not jump while it loads. A developer adds a font to
+                    this list once its licence is checked.
+                  </p>
+                </div>
+              </div>
+              <div className="theme__body">
+                {FONT_GROUPS.map((group) => (
+                  <FontTiles
+                    key={group.script}
+                    script={group.script}
+                    label={group.label}
+                    value={settings.fonts[group.script]}
+                    onChange={(id) => set(withFont(settings, group.script, id))}
+                  />
+                ))}
+              </div>
+            </section>
+
             <section className="card" aria-labelledby="theme-motion">
               <div className="card__h">
                 <div>
@@ -466,13 +498,6 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
               </div>
               <dl className="theme__facts">
                 <div>
-                  <dt>Fonts</dt>
-                  <dd>
-                    Archivo for English and Almarai for Arabic, served from the site itself. Another
-                    font needs a developer.
-                  </dd>
-                </div>
-                <div>
                   <dt>Backgrounds</dt>
                   <dd>The black sections, the light sections and white stay as they are.</dd>
                 </div>
@@ -511,7 +536,12 @@ export default function ThemeScreen({ id, releaseMode }: ThemeScreenProps) {
                 </div>
               </div>
               {view.palette ? (
-                <SitePreview palette={view.palette} shapes={settings.shapes} type={settings.type} />
+                <SitePreview
+                  palette={view.palette}
+                  shapes={settings.shapes}
+                  type={settings.type}
+                  fonts={settings.fonts}
+                />
               ) : (
                 <p className="admin-sub">Finish typing a colour to see it.</p>
               )}

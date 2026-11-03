@@ -164,10 +164,9 @@ export interface ThemeV3Parts extends ThemeV2Parts {
  * settingsOf and the release lane's comparisons (src/lib/release/currentShape.ts, where a stored
  * older row meets what today's save writes) all call it.
  */
-export function upgradeThemeSettings<T extends { v: 1 }>(stored: T): Omit<T, 'v'> & ThemeV3Parts;
-export function upgradeThemeSettings<T extends { v: 2 } & ThemeV2Parts>(
+export function upgradeThemeSettings<T extends { v: 1 } | ({ v: 2 } & ThemeV2Parts)>(
   stored: T,
-): Omit<T, 'v'> & ThemeV3Parts;
+): Omit<T, 'v' | 'shapes' | 'type'> & ThemeV3Parts;
 export function upgradeThemeSettings(stored: unknown): unknown;
 export function upgradeThemeSettings(stored: unknown): unknown {
   if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return stored;

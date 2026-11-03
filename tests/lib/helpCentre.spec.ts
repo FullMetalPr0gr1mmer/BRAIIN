@@ -3080,23 +3080,42 @@ describe('the shell', () => {
   });
 });
 
-describe('theme (E4, E12), a guide put by the theme migrations', () => {
+describe('theme (E4, E12, E13), a guide put by the theme migrations', () => {
   const article = () => SET.find((a) => a.slug === 'theme')!;
   const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
   const source = (path: string) => readFileSync(path, 'utf8');
   const SCREEN = 'src/components/admin/screens/theme';
 
-  it('is put new by E4 (revision 0), then again by E12 (revision 1), the second as its file says', () => {
+  it('is put new by E4 (revision 0), again by E12 (1) and by E13 (2), the last as its file says', () => {
     const puts = HELP.edits.filter((e) => e.slug === 'theme');
-    expect(puts.map((e) => `${e.op} ${e.revision}`)).toEqual(['put 0', 'put 1']);
+    expect(puts.map((e) => `${e.op} ${e.revision}`)).toEqual(['put 0', 'put 1', 'put 2']);
     expect(puts[0]?.file).toMatch(/^\d{4}_theme_settings\.sql$/);
     expect(puts[1]?.file).toMatch(/^\d{4}_theme_shapes\.sql$/);
-    expect(HELP.revisions.get('theme')).toBe(2);
-    const file = MIGRATION_FILES.find((f) => f.name.endsWith('_theme_shapes.sql'))!;
+    expect(puts[2]?.file).toMatch(/^\d{4}_theme_fonts\.sql$/);
+    expect(HELP.revisions.get('theme')).toBe(3);
+    const file = MIGRATION_FILES.find((f) => f.name.endsWith('_theme_fonts.sql'))!;
     const filed = readFileSync('docs/admin-v2/guides/theme.json', 'utf8').replace(/\r?\n$/, '');
     expect(source(`supabase/migrations/${file.name}`)).toContain(
-      `select app.put_help_guide($guide$\n${filed}\n$guide$::jsonb, 1);`,
+      `select app.put_help_guide($guide$\n${filed}\n$guide$::jsonb, 2);`,
     );
+  });
+
+  it('names the Fonts card in the words the editor uses, and no longer says the fonts are fixed (E13)', () => {
+    const en = text('en');
+    const ar = text('ar');
+    const screen = source(`${SCREEN}/ThemeScreen.tsx`);
+    const model = source(`${SCREEN}/model.ts`);
+    expect(screen).toMatch(/id="theme-fonts">\s+Fonts\s+<\/h2>/);
+    for (const label of ['English pages', 'Arabic pages']) {
+      expect(en, label).toContain(label);
+      expect(model, label).toContain(`label: '${label}' }`);
+    }
+    expect(en).toContain('Archivo for English and Almarai for Arabic');
+    expect(en).toContain('A developer adds a new font once its licence is checked');
+    expect(en).toContain("brand's own colours, shapes, headings, fonts and motion");
+    expect(en).not.toContain('fonts are fixed');
+    expect(ar).toContain('الخطوط');
+    expect(ar).not.toContain('والخطوط ثابتة');
   });
 
   it('names the shapes and type in the words the editor uses (E12)', () => {

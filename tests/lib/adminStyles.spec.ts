@@ -2,11 +2,14 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ADMIN_STYLESHEETS } from '@/lib/admin/stylesheets';
+import { FONT_FAMILIES } from '@theme/fonts';
+import { familyFaceRules, fontFaceCss } from '@theme/fontFaces';
 
 // public/styles/admin.css, the Admin v2 design system (F1). Each rule here keeps a
 // property the port depends on:
 //   - the admin's @font-face set is global.css's, so authors proof Arabic in the faces
-//     visitors see (docs/fonts.md: both stylesheets change together);
+//     visitors see (docs/fonts.md: both stylesheets change together), then every other
+//     family of the font catalogue (Admin v2 E13), so the theme editor draws each in itself;
 //   - colour literals live only in the token block, so a palette change is one edit and
 //     scripts/contrast-audit.mjs, which reads that block, checks every colour that ships;
 //   - every class the admin markup uses is still styled: a restyle that drops a hook an
@@ -65,10 +68,16 @@ const outsideTokens = (css: string) =>
   withoutTokenBlocks(css).replace(/@font-face\s*\{[^}]*\}/g, '');
 
 describe('admin.css fonts', () => {
-  it('declares exactly the @font-face set global.css does', () => {
+  it('declares exactly the @font-face set global.css does, then the catalogue’s other families', () => {
     const admin = fontFaces(ADMIN);
+    const site = fontFaces(GLOBAL);
     expect(admin.length).toBeGreaterThan(0);
-    expect(admin).toEqual(fontFaces(GLOBAL));
+    expect(admin.slice(0, site.length)).toEqual(site);
+    expect(admin.slice(site.length)).toEqual(
+      FONT_FAMILIES.filter((f) => !f.brand).flatMap((f) =>
+        fontFaceCss(familyFaceRules(f), 'spaced'),
+      ),
+    );
   });
 
   it('sets Arabic in the public site’s stack, Almarai and both fallbacks first', () => {

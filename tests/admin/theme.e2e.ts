@@ -19,8 +19,11 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *     sample draws them, the stylesheet carries their four tokens, a visitor's page wears them
  *     (a square consent button, a Bold hero heading as written) and the Arabic page preloads
  *     the 700 face its Bold heading renders in, with zero axe and CSP violations;
+ *   - fonts (E13): the Fonts card shows the font catalogue's families per script (the brand's
+ *     Archivo and Almarai until owner item O-21), each chosen, drawn in itself; the sample's
+ *     lines are drawn in them; a save writes no font token and the stylesheet carries no face;
  *   - a Developer edits it (theme.edit) and is refused a failing palette (422, the pair named);
- *     a v1 save (E4's editor, during a deploy) is still taken, and stored as v2.
+ *     a v1 or v2 save (E4's or E12's editor, during a deploy) is still taken, and stored as v3.
  *
  * Its own project (playwright.config.ts `theme`), alone, after `ga4` and before `maintenance`:
  * a saved theme changes every public page the other specs read. The brand's own settings are
@@ -37,17 +40,21 @@ const API = '/api/admin/themes';
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const BRAND_SHAPES = { corners: 'brand', buttons: 'pill' };
 const BRAND_TYPE = { headingWeight: 800, headingCase: 'uppercase' };
-// The brand's own theme as the editor saves it since E12 (v2), and as E4's editor did (v1),
-// which the server still takes and stores as v2 at the brand's shapes and type.
+const BRAND_FONTS = { latin: 'archivo', arabic: 'almarai' };
+// The brand's own theme as the editor saves it since E13 (v3), and as E4's (v1) and E12's (v2)
+// editors did, which the server still takes and stores as v3 at the brand's shapes, type and
+// fonts.
 const BRAND = {
-  v: 2,
+  v: 3,
   mode: 'simple',
   colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
   motion: { marquee: 'normal', reveal: true },
   shapes: BRAND_SHAPES,
   type: BRAND_TYPE,
+  fonts: BRAND_FONTS,
 };
 const BRAND_V1 = { v: 1, mode: BRAND.mode, colors: BRAND.colors, motion: BRAND.motion };
+const BRAND_V2 = { ...BRAND_V1, v: 2, shapes: BRAND_SHAPES, type: BRAND_TYPE };
 // Any link to the theme stylesheet, whatever its attribute order and address: its shape (the
 // body's hash, E4-SEC-1) is asserted on its own, so a wrong address fails there instead of
 // matching nothing here (the old `v=(\d+)` matched no hash, so "no link" passed for any page).
@@ -62,7 +69,7 @@ async function csrf(page: Page): Promise<string> {
   return token!;
 }
 
-/** The tenant's theme with settings (v1 or v2), or null before the first save. */
+/** The tenant's theme with settings (v1, v2 or v3), or null before the first save. */
 async function theme(page: Page): Promise<Row | null> {
   const list = await page.request.get(API);
   expect(list.status(), await list.text()).toBe(200);
@@ -229,12 +236,13 @@ test.describe('as admin', () => {
     ).toBeVisible();
     const row = (await theme(page))!;
     expect(row['settings']).toEqual({
-      v: 2,
+      v: 3,
       mode: 'simple',
       colors: expect.objectContaining({ primary: main }),
       motion: { marquee: 'slowest', reveal: false },
       shapes: BRAND_SHAPES,
       type: BRAND_TYPE,
+      fonts: BRAND_FONTS,
     });
 
     // Every page links the live version, once, in either language.
@@ -375,19 +383,28 @@ test.describe('as admin', () => {
     expect(saved.status(), await saved.text()).toBe(200);
     const row = (await theme(page))!;
     expect(row['settings']).toMatchObject({
-      v: 2,
+      v: 3,
       shapes: { corners: 'square', buttons: 'square' },
       type: { headingWeight: 700, headingCase: 'as-written' },
+      fonts: BRAND_FONTS,
     });
+    // The brand's fonts write no font token (E13).
+    expect(Object.keys(row['tokens'] as object).filter((k) => k.startsWith('--bs-font'))).toEqual(
+      [],
+    );
 
     // The stylesheet carries the four tokens, last, in their fixed order.
     const links = await linksOn(page, '/');
     expect(links, 'the home page links the theme').toHaveLength(1);
     const sheet = await page.request.get(links[0]!);
     expect(sheet.status()).toBe(200);
-    expect(await sheet.text()).toMatch(
+    const body = await sheet.text();
+    expect(body).toMatch(
       /;--bs-radius-scale:0;--bs-btn-radius:0px;--bs-heading-weight:700;--bs-heading-case:none;\}\n$/,
     );
+    // The brand's fonts: no family's faces ahead of the rule, only the one :root rule (E13).
+    expect(body.startsWith(':root{')).toBe(true);
+    expect(body).not.toContain('@font-face');
 
     // The Arabic page preloads the face its Bold heading renders in; English keeps Archivo.
     const ar = await fontPreloadsOn(page, '/ar/');
@@ -447,6 +464,57 @@ test.describe('as admin', () => {
     ).toBeChecked();
   });
 
+  test('Fonts: the catalogue’s families per script, each chosen and drawn in itself (E13)', async ({
+    page,
+  }) => {
+    await page.goto(SCREEN, { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { level: 2, name: 'Fonts', exact: true })).toBeVisible();
+    // One group per script, a radio per family (the brand's alone until O-21), chosen. A radio's
+    // name is its tile's words: the family, then its licence.
+    for (const [group, family] of [
+      ['English pages', 'Archivo'],
+      ['Arabic pages', 'Almarai'],
+    ] as const) {
+      const radios = page.getByRole('group', { name: group, exact: true }).getByRole('radio');
+      await expect(radios, group).toHaveCount(1);
+      await expect(radios.first(), group).toHaveAccessibleName(
+        new RegExp(`^${family}\\s*The brand's font\\. SIL Open Font License 1\\.1$`),
+      );
+      await expect(radios.first(), group).toBeChecked();
+    }
+    // Each tile's sample and the site sample's lines are drawn in the family (an attribute).
+    await expect(page.locator('.theme__font[data-font="archivo"] text')).toHaveAttribute(
+      'font-family',
+      /^'Archivo', 'Archivo Fallback'/,
+    );
+    await expect(page.locator('.theme__font[data-font="almarai"] text')).toHaveAttribute(
+      'font-family',
+      /^'Almarai', 'Almarai Fallback', 'Almarai Fallback Linux'/,
+    );
+    const sample = page.getByRole('img', { name: /^A sample of the site in this theme/ });
+    await expect(sample).toHaveAttribute('data-latin', 'archivo');
+    await expect(sample).toHaveAttribute('data-arabic', 'almarai');
+    // The browser draws the Arabic tile in Almarai itself: admin.css declares the faces, and the
+    // tile's 700 Arabic face is the one that loads (asked of the face list, never a vacuous
+    // check() over a family that matches nothing).
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          await document.fonts.ready;
+          return [...document.fonts]
+            .filter(
+              (f) =>
+                f.family.replace(/["']/g, '') === 'Almarai' &&
+                f.weight === '700' &&
+                /U\+0?600-0?6FF/i.test(f.unicodeRange),
+            )
+            .map((f) => f.status);
+        }),
+      )
+      .toEqual(['loaded']);
+    expect((await new AxeBuilder({ page }).withTags(WCAG).analyze()).violations).toEqual([]);
+  });
+
   test('Reset to brand defaults: a danger confirm, then no page links a theme', async ({
     page,
   }) => {
@@ -498,8 +566,15 @@ test.describe('as developer', () => {
     expect(await refused.text()).toContain('White text on Hover is');
     await save(page, { ...BRAND, motion: { marquee: 'slower', reveal: true } });
     expect((await theme(page))?.['settings']).toMatchObject({ motion: { marquee: 'slower' } });
-    // E4's v1 shape is still taken (a deploy's old editor), and stored as v2.
+    // E4's v1 and E12's v2 shapes are still taken (a deploy's old editor), and stored as v3.
     await save(page, BRAND_V1);
+    expect((await theme(page))?.['settings']).toEqual(BRAND);
+    await save(page, { ...BRAND_V2, motion: { marquee: 'slower', reveal: true } });
+    expect((await theme(page))?.['settings']).toEqual({
+      ...BRAND,
+      motion: { marquee: 'slower', reveal: true },
+    });
+    await save(page, BRAND_V2);
     expect((await theme(page))?.['settings']).toEqual(BRAND);
   });
 });

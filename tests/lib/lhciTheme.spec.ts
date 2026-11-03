@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import { compileTheme, hasTokens } from '@theme/compile';
+import { FONT_FAMILIES } from '@theme/fonts';
 import { gate } from '@theme/gate';
 import { ThemeSettingsSchema } from '@schemas/theme';
 import { ThemeTokensSchema } from '@schemas/themeTokens';
@@ -17,7 +18,7 @@ import { isLoopback, themeLinks, themedRunRow } from '../../scripts/lhci-theme.m
 // image-LCP routes, LCP and the performance score warn (E4-C1, below).
 
 describe('the theme the run sets', () => {
-  it('is a valid v2 theme that passes the gate, its tokens the compiler’s', () => {
+  it('is a valid v3 theme that passes the gate, its tokens the compiler’s', () => {
     const settings = ThemeSettingsSchema.parse(fixture.settings);
     expect(gate(settings.colors).ok).toBe(true);
     expect(fixture.tokens).toEqual(compileTheme(settings));
@@ -25,10 +26,15 @@ describe('the theme the run sets', () => {
     expect(hasTokens(fixture.tokens)).toBe(true);
     // Every kind of token: colours, glows, shadows, both motion settings and (Admin v2 E12)
     // the four shapes and type, so the run measures pages whose radii and headings follow it;
-    // stored as v2, never upgraded on the way in.
-    expect(fixture.settings.v).toBe(2);
+    // stored as v3 (Admin v2 E13), never upgraded on the way in. The two font tokens are the
+    // only ones it cannot set: the font catalogue holds no family but the brand's until owner
+    // item O-21, and a theme then writes no font token (tests/lib/fontCatalogue.spec.ts). The
+    // run takes the first non-brand family once one joins.
+    expect(fixture.settings.v).toBe(3);
+    expect(fixture.settings.fonts).toEqual({ latin: 'archivo', arabic: 'almarai' });
     expect(settings).toEqual(fixture.settings);
     expect(Object.keys(fixture.tokens)).toHaveLength(15);
+    expect(FONT_FAMILIES.every((f) => f.brand)).toBe(true);
     expect(fixture.tokens).toMatchObject({ '--bs-heading-weight': '700' });
     expect(themedRunRow()).toEqual({
       name: 'Lighthouse themed run',
