@@ -260,7 +260,51 @@ bound. Past the last rung the stagger flattens into a simultaneous pop.
   **route** level, not baked into CMS content, so authoring the home page in the CMS
   cannot silently drop it and a `hero` section on any other page can never inherit an
   undismissable overlay. An explicit `intro` in CMS content still wins; that is the off
-  switch.
+  switch, and since Admin v2 E7 it is Appearance › Loading screen's "Show the loading
+  screen" (the home page's first visible hero; off stores `intro: false`, on removes the key).
+
+---
+
+## 7. The loading screen's look (Admin v2 E7)
+
+The plate's look is data: five `intro_` columns of `public.site_appearance` (`theme.edit`),
+edited on Appearance › Loading screen, read by the home routes (`getIntroSettings`) and handed
+to the hero as route data. Every option is a closed set; each one off its default is ONE
+`data-*` bucket on `.intro` (or an element under the logo), which `global.css` maps to a fixed
+rule. With no row, the plate is byte for byte what it was (`tests/render/introOptions.spec.ts`).
+
+| Option | Values (default first) | On the plate |
+| --- | --- | --- |
+| behind the logo | video, black, light | `data-backdrop="black"` / `"light"` (an opaque ground; on light the white logo is drawn black by a static `filter: brightness(0)`) |
+| progress bar | off, on | `<span class="intro__bar"><i></i></span>` under the logo |
+| tagline | none, `{en, ar}` 1 to 60 characters | `<p class="intro__tag">` under the logo, as text |
+| hold | 1000, then 500 to 1500 by 100 ms | `data-hold="800"` → `--bs-intro-hold: 0.8s` |
+| fade | 450, then 300 to 600 by 50 ms | `data-fade="300"` → `--bs-intro-fade: 0.3s` |
+
+**The two inputs stay the only knobs.** A bucket sets `--bs-intro-hold` or `--bs-intro-fade`
+on `body:has(.intro[data-hold='…'])`, and every other instant (§1) derives from them as before,
+so the strict order holds at every bucket (`tests/admin/loading.e2e.ts` seeks it). The bucket
+rules sit inside `@media (prefers-reduced-motion: no-preference)`: their selectors are more
+specific than the safety net's `body:has(.intro)`, which zeroes both for reduced motion, and
+must never outrank it.
+
+**The logo never changes.** It is the home LCP element (CLAUDE.md §6): its markup, box, file
+and entrance (from opacity .01) are the same whatever the look. The tagline and the bar hang
+below it in `.intro__below`, absolutely positioned at half the logo's height (its box is
+520:266) plus a gap, so they never move the logo, and they enter from opacity 0 with the logo's
+FOUC guard (an element first painted at opacity 0 is not an LCP candidate). They leave with the
+plate, and they pause with it while the logo loads (`body.intro-waiting`). The bar is a
+`scaleX` (compositor-only) over the hold, from the guard; in Arabic it fills from the right.
+
+**An opaque plate and the consent banner.** The plate stays `pointer-events: none` (§2), so a
+click still reaches what is under it. Over the video that is fine: the plate is see-through and
+the banner shows through it. An opaque plate would hide the banner while its buttons still take
+the click, so `body:has(.intro[data-backdrop]) .consent-banner` lifts the banner (z-index 91)
+above the plate (90): a consent choice is never made on a banner nobody can see.
+
+**Lighthouse.** CI measures `/` and `/ar` with each style (the bar, a tagline and the longest
+timing) on the main run's budgets (`scripts/lhci-intro.mjs`, `lighthouserc.intro.json`), then
+puts the intro back as built before the themed run.
 
 ---
 
