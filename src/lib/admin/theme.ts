@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-// Which theme the editor edits (Admin v2 E4): the tenant's one v1 theme (a row with settings,
+// Which theme the editor edits (Admin v2 E4): the tenant's one theme with settings (v1 or v2,
 // custom_themes_one_theme_v1), read under the person's own RLS (staff read their tenant's
 // themes). With releases on, a theme nobody has published yet is a pending create: its id is
 // the draft's entity id, so a second save stages onto it rather than a second create (which

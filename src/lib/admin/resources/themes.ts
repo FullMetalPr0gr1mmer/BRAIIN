@@ -4,8 +4,8 @@ import { ValidationError } from '../errors';
 import type { ResourceConfig } from '../resource';
 import { fieldsOf, pick, type Input } from './shared';
 
-// The site's theme (Admin v2 E4, AV-27; Admin + Developer, theme.edit). One v1 theme per tenant
-// (custom_themes_one_theme_v1): the editor at /admin/appearance/theme saves its settings, and
+// The site's theme (Admin v2 E4, AV-27; Admin + Developer, theme.edit). One theme with settings
+// per tenant (custom_themes_one_theme_v1): the editor at /admin/appearance/theme saves its settings, and
 // the TOKENS are compiled here from them on every save, staged or live, so a client never
 // writes a token and a release's publish (R6, which re-derives each item through this toRow)
 // compiles the same way. The settings are contrast-gated by their schema; the database's CHECK
@@ -26,7 +26,10 @@ export const themeResource: ResourceConfig = {
   // The database's two refusals, said on the settings (a 422, not a stray field name): a
   // second theme created beside the tenant's one (two people saving the first theme at once),
   // and the CHECK, which only a theme the gate let through but the database did not could
-  // reach (the same pairs, in SQL: tests/lib/themeSql.spec.ts).
+  // reach (the same pairs, in SQL: tests/lib/themeSql.spec.ts). Since E12 the CHECK also
+  // holds the shape and type tokens to the settings, so its words name no one cause (E12 code
+  // review CR6): the colours are judged on the screen before a save, and a refusal here means
+  // the saved settings and this build disagree, which a reload settles.
   constraintFields: {
     custom_themes_one_theme_v1: {
       field: 'settings',
@@ -34,7 +37,7 @@ export const themeResource: ResourceConfig = {
     },
     custom_themes_theme_v1: {
       field: 'settings',
-      message: 'These colours are hard to read, so the theme was not saved.',
+      message: 'These theme settings could not be saved. Reload the page and try again.',
     },
   },
   toRow: (input) => {

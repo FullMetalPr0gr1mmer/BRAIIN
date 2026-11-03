@@ -153,10 +153,10 @@ html[dir='rtl'] .work-intro__link {
 .pgrid__head h2 {
   margin: 0;
   font-size: clamp(34px, 6vw, 96px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   letter-spacing: -0.04em;
   line-height: 0.9;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .pgrid__head h2 {
   letter-spacing: 0;
@@ -342,7 +342,7 @@ html[dir='rtl'] .fb__lbl {
    sets `hidden` on it — this rule covers browsers that know the media feature). */
 .fb__apply {
   padding: 10px 18px;
-  border-radius: 999px;
+  border-radius: var(--bs-btn-radius, 999px);
   border: 1px solid rgba(255, 255, 255, 0.5);
   background: transparent;
   color: var(--bs-paper);
@@ -398,7 +398,7 @@ html[dir='rtl'] .fb__lbl {
   padding: clamp(40px, 8vh, 90px) 16px;
   text-align: center;
   border: 1px dashed rgba(255, 255, 255, 0.2);
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bs-radius-scale, 1));
 }
 .fb__empty p {
   margin: 0 0 8px;
@@ -467,10 +467,10 @@ html[dir='rtl'] .catalog-head__back svg {
 .catalog-head h1 {
   margin: 0;
   font-size: clamp(46px, 8.6vw, 150px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.88;
   letter-spacing: -0.05em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .catalog-head__row p {
   max-width: 19.01em; /* 36ch of Almarai 400 */

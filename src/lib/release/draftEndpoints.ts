@@ -595,7 +595,8 @@ export async function resolveDraft(
   const { entityId, detail } = auditTarget(draft);
   // A full replace (entity SEO) writes every column whatever it holds: it is empty when all
   // of them equal live and the base; and its `fields` (display) name the ones that differ.
-  const differing = entry.kind === 'entitySeo' ? dropNoOps(next.patch, live, base) : next.patch;
+  const differing =
+    entry.kind === 'entitySeo' ? dropNoOps(entry.entityType, next.patch, live, base) : next.patch;
   const empty =
     entry.kind === 'entitySeo'
       ? differing === null

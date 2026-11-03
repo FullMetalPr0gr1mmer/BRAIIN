@@ -64,10 +64,10 @@ html[dir='rtl'] .cs-title__back svg {
 .cs-title h1 {
   margin: 0;
   font-size: clamp(40px, 7.4vw, 128px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.9;
   letter-spacing: -0.045em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
   max-width: 16ch;
 }
 html[dir='rtl'] .cs-title h1 {
@@ -226,7 +226,7 @@ html[dir='rtl'] .cs-ov__body p {
 }
 .cs-res li {
   padding: 18px;
-  border-radius: 16px;
+  border-radius: calc(16px * var(--bs-radius-scale, 1));
   background: var(--bs-paper);
   border: 1px solid var(--bs-line-l);
 }
@@ -367,10 +367,10 @@ html[dir='rtl'] .cs-quote blockquote p {
 .cs-bd__head h2 {
   margin: 0;
   font-size: clamp(36px, 6vw, 100px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.9;
   letter-spacing: -0.045em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
   max-width: 13ch;
 }
 html[dir='rtl'] .cs-bd__head h2 {
@@ -410,7 +410,7 @@ html[dir='rtl'] .cs-bd__head h2 {
   display: block;
   overflow: hidden;
   aspect-ratio: 16 / 10;
-  border-radius: 18px;
+  border-radius: calc(18px * var(--bs-radius-scale, 1));
   background: var(--bs-media-bg-l);
   cursor: zoom-in;
 }
@@ -485,10 +485,10 @@ html[dir='rtl'] .cs-bdi__tag {
 .cs-gal__head h2 {
   margin: 0;
   font-size: clamp(34px, 5.4vw, 90px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.9;
   letter-spacing: -0.045em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
 }
 html[dir='rtl'] .cs-gal__head h2 {
   letter-spacing: 0;
@@ -611,7 +611,7 @@ html[dir='rtl'] .cs-gal__head h2 {
   width: auto;
   height: auto;
   object-fit: contain;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--bs-radius-scale, 1));
 }
 .lightbox__btn {
   position: absolute;
@@ -748,10 +748,10 @@ html[dir='rtl'] .cs-next__k {
   display: block;
   margin-top: 14px;
   font-size: clamp(34px, 6vw, 100px);
-  font-weight: 800;
+  font-weight: var(--bs-heading-weight, 800);
   line-height: 0.92;
   letter-spacing: -0.045em;
-  text-transform: uppercase;
+  text-transform: var(--bs-heading-case, uppercase);
   max-width: 16ch;
 }
 html[dir='rtl'] .cs-next__t {

@@ -1,13 +1,16 @@
 import pairs from './pairs.json';
 import { THEME_TOKEN_NAMES, THEME_TOKEN_PATTERNS } from '../schemas/themeTokens';
 import { THEME_EFFECTS } from './compile';
+import { SHAPE_TOKEN_RULES } from './shapes';
 
 // The database's copy of the theme rules (Admin v2 E4), generated from the one source the
 // editor and the Worker read: the pairs (pairs.json) and the token shapes
 // (packages/schemas/themeTokens.ts). The E4 migration holds these blocks verbatim, between
 // `-- BEGIN <name>` and `-- END <name>` lines, and tests/lib/themeSql.spec.ts fails when they
 // differ, so the CHECK cannot drift from the gate. A change to either source needs a new
-// migration that restates the function the block lives in.
+// migration that restates the function the block lives in. Since E12 (AV-32) the latest
+// migration that restates app.theme_row_ok holds the token rules and the shape and type table
+// (packages/theme/shapes.ts); E4's keeps the pairs, which E12 does not change.
 
 type Def = string | [string, number, string];
 interface Block {
@@ -71,6 +74,18 @@ export function effectsValuesSql(): string {
   ).join(',\n');
 }
 
+/**
+ * The shapes and type as `(grp, key, kind, choice, token, value)` rows (SHAPE_TOKEN_RULES):
+ * every choice of every setting, the JSON type it is stored as, and the token it writes (null
+ * for the brand's: no token).
+ */
+export function shapeRulesValuesSql(): string {
+  return SHAPE_TOKEN_RULES.map(
+    (r) =>
+      `    (${quote(r.group)}, ${quote(r.key)}, ${quote(r.kind)}, ${quote(r.choice)}, ${quote(r.token)}, ${r.value === null ? 'null::text' : quote(r.value)})`,
+  ).join(',\n');
+}
+
 /** Every generated block, by the name its markers carry in the migration. */
 export function themeSqlBlocks(): Record<string, string> {
   return {
@@ -78,5 +93,6 @@ export function themeSqlBlocks(): Record<string, string> {
     'theme token rules': tokenRulesValuesSql(),
     'theme defaults': defaultsValuesSql(),
     'theme effects': effectsValuesSql(),
+    'theme shape rules': shapeRulesValuesSql(),
   };
 }

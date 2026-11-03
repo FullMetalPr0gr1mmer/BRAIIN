@@ -1,6 +1,7 @@
 import { riyadhDayOf } from '@schemas/visibility';
 import { clipOfColumns } from '@/lib/admin/resources/shared';
 import { mediaRowToItem } from '@/lib/admin/resources/portfolio';
+import { columnInCurrentShape } from './currentShape';
 import { jsonEqual } from './deepEqual';
 import { derivePatch, type DerivedPatch } from './overlay';
 import type { RegistryEntry } from './registry';
@@ -149,7 +150,14 @@ export function restorePatch(
   const targets = targetColumns(entry);
   const lost = entry.columns.filter((column) => {
     if (skip.has(column) || !(column in row)) return false;
-    if (column in derived.patch) return !jsonEqual(derived.patch[column], row[column]);
+    if (column in derived.patch) {
+      // The image in today's shape (currentShape.ts): a version saved before a later schema
+      // (a theme's v1 settings) still comes back.
+      return !jsonEqual(
+        derived.patch[column],
+        columnInCurrentShape(entry.entityType, column, row[column]),
+      );
+    }
     // A create writes one target column; the other is null in the image (one or the other).
     return !(targets.includes(column) && row[column] === null);
   });

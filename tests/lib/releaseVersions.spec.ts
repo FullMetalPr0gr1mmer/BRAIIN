@@ -106,6 +106,25 @@ const OTHER_PROJECT = id(10);
 /** The page the samples' visibility setting names. */
 const PAGE_A = '0f0f0f0f-0000-4000-8000-00000000000a';
 
+/**
+ * The brand's own theme settings as Admin v2 E4 saved them (v1), which compile to no token. A
+ * version saved before E12 still restores: the round trip reads it as v2 at the brand's shapes
+ * and type (src/lib/release/currentShape.ts; the theme restore tests fail without it).
+ */
+const BRAND_THEME = {
+  v: 1,
+  mode: 'simple',
+  colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
+  motion: { marquee: 'normal', reveal: true },
+};
+/** The same theme as the editor saves it since E12. */
+const BRAND_THEME_V2 = {
+  ...BRAND_THEME,
+  v: 2,
+  shapes: { corners: 'brand', buttons: 'pill' },
+  type: { headingWeight: 800, headingCase: 'uppercase' },
+};
+
 const release = (over: Row): Row => ({
   tenant_id: T,
   kind: 'publish',
@@ -426,6 +445,34 @@ describe('GET /api/admin/releases/[id]: one version’s changes', () => {
     expect(res.data['release']).toMatchObject({ id: V3, kind: 'rollback', restores: 1 });
   });
 
+  it('a theme published as v2 over the same theme saved before E12 (v1) lists no settings change', async () => {
+    // E12 code review CR5: the two images are read in today's shape, so only what a person
+    // set shows (here the name).
+    const db = seed({
+      content_release_items: [
+        {
+          id: 1,
+          tenant_id: T,
+          release_id: V2,
+          entity_type: 'custom_theme',
+          entity_id: THEME,
+          op: 'update',
+          draft_id: id(50),
+          before: { name: 'Day', settings: BRAND_THEME, tokens: {}, is_active: true },
+          after: { name: 'Night', settings: BRAND_THEME_V2, tokens: {}, is_active: true },
+        },
+      ],
+    });
+    const res = await as('admin', db, DETAIL, 'GET', `/api/admin/releases/${V2}`, undefined, {
+      id: V2,
+    });
+    expect(res.status).toBe(200);
+    const [theme] = res.data['items'] as Row[];
+    expect(theme!['fields']).toEqual([
+      { column: 'name', kind: 'text', before: 'Day', after: 'Night' },
+    ]);
+  });
+
   it('a version that is not there, or not an id, is 404', async () => {
     const db = seed();
     for (const v of [id(999), 'nope']) {
@@ -438,14 +485,6 @@ describe('GET /api/admin/releases/[id]: one version’s changes', () => {
 });
 
 // ---- restoring a version -------------------------------------------------------------------
-
-/** The brand's own theme settings (Admin v2 E4), which compile to no token. */
-const BRAND_THEME = {
-  v: 1,
-  mode: 'simple',
-  colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
-  motion: { marquee: 'normal', reveal: true },
-};
 
 describe('POST /api/admin/releases/[id]/restore', () => {
   it('releases off: 409 releases-off after the flag read, and nothing else read or written', async () => {
@@ -579,6 +618,39 @@ describe('POST /api/admin/releases/[id]/restore', () => {
     expect(res.data).toMatchObject({ staged: [], marked: true });
     expect(writerCalls(db)).toEqual([]);
     expect(auditRowsOf(db)).toEqual([]);
+  });
+
+  it('a theme saved before E12 (v1) whose settings did not move restores its name alone', async () => {
+    // E12 code review CR5: live and the version both hold v1; the restore's patch is v2 (the
+    // brand's shapes and type), which is the same theme, so the settings did not move.
+    const theme = {
+      id: THEME,
+      tenant_id: T,
+      name: 'Night',
+      settings: BRAND_THEME,
+      tokens: {},
+      is_active: true,
+      version: 2,
+    };
+    const db = seed(
+      { custom_themes: [theme] },
+      asOf(1, [
+        {
+          entity_type: 'custom_theme',
+          entity_id: THEME,
+          before: { ...theme, name: 'Day' },
+          exists_now: true,
+        },
+      ]),
+    );
+    const res = await restore(db);
+    expect(res.status).toBe(200);
+    const [call] = writerCalls(db);
+    const ops = (call!.values as Row)['p_ops'] as Row[];
+    expect(ops).toHaveLength(1);
+    expect(ops[0]).toMatchObject({ op: 'update', entity_id: THEME, payload: { name: 'Day' } });
+    expect(Object.keys(ops[0]!['payload'] as Row)).toEqual(['name']);
+    expect(ops[0]!['base']).toEqual({ name: 'Night' });
   });
 
   it('a derived column today renders differently is no change on its own (body_html)', async () => {
