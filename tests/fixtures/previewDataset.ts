@@ -788,7 +788,8 @@ export function fixtureTables(): Record<string, Row[]> {
         updated_at: '2026-01-01T00:00:00+00:00',
       },
     ],
-    // Admin v2 E5: the header's options, a visitor reads all but the version, stamps and actors.
+    // Admin v2 E5 and E7: the header's options and the loading screen's look, a visitor reads all
+    // but the version, stamps and actors.
     site_appearance: [
       {
         tenant_id: TENANT,
@@ -804,6 +805,12 @@ export function fixtureTables(): Record<string, Row[]> {
         header_cta_show: false,
         header_cta_label: null,
         header_cta_href: null,
+        // Admin v2 E7: the loading screen's look, a black plate held 800 ms.
+        intro_backdrop: 'black',
+        intro_bar: false,
+        intro_tagline: null,
+        intro_hold_ms: 800,
+        intro_fade_ms: 450,
         version: 1,
         updated_at: '2026-01-01T00:00:00+00:00',
       },

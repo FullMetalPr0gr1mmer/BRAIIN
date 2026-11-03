@@ -165,7 +165,7 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
         ? 'This site has no home page in Pages yet, so it shows the built-in one, with its loading screen.'
         : 'The logo plays before the home page appears, in English and Arabic. Saved with the home page, like any edit of it.';
   return (
-    <section className="card ld-on" aria-labelledby={`${base}-title`}>
+    <section className="card" aria-labelledby={`${base}-title`}>
       <div className="card__h">
         <h2 className="card-title" id={`${base}-title`}>
           On the home page
