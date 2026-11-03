@@ -1,0 +1,80 @@
+---
+import { getImage } from 'astro:assets';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminLoading from '@/components/admin/islands/AdminLoading';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { writeSystemLog } from '@/lib/data/systemLog';
+import logo from '@/assets/braiin-logo-white.png';
+
+export const prerender = false;
+
+// Loading screen (Admin v2 E7, docs/admin-v2/ui.md "### Loading screen"; the prototype's
+// `route('/appearance/loading')`): whether the home page opens with its intro (pages.write:
+// Admin, Content Creator, the home hero section's `intro`) and how the intro looks (theme.edit:
+// Admin, Developer, `site_appearance`'s intro_ columns), each part for the role that holds its
+// capability (P-9, O-14). A role with neither gets the layout with the refusal and a 403, having
+// read nothing. The island loads each part from its API, which checks the same capability
+// again. `client:load`: the island IS the page (/admin is exempt from the CWV budgets,
+// CLAUDE.md §6, and gated on bundle size instead).
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const theme = Boolean(session && can(session.role, 'theme.edit') === 'full');
+const pages = Boolean(session && can(session.role, 'pages.write') === 'full');
+const allowed = theme || pages;
+if (!allowed) Astro.response.status = 403;
+
+// The switch's page: the home page's id, read under the person's own RLS (pages.write holders
+// read every page of their tenant). Its sections are read by the island through the section
+// kernel, which lays a pending change over them in release mode.
+let homePageId: string | null = null;
+let homeError = false;
+if (allowed && pages && sb) {
+  const { data, error } = await sb.from('pages').select('id').eq('slug', 'home').maybeSingle();
+  if (error) {
+    homeError = true;
+    await writeSystemLog({
+      level: 'error',
+      source: 'admin:loading',
+      message: `home page read failed: ${error.message}`,
+      detail: { path: Astro.url.pathname },
+    });
+  } else if (data && typeof data.id === 'string') {
+    homePageId = data.id;
+  }
+}
+// The logo for the tiles and the preview: the same file the site's intro draws, served by the
+// admin's own origin through /_image (img-src 'self').
+const logoSrc = allowed ? (await getImage({ src: logo, width: 260, format: 'webp' })).src : '';
+---
+
+<AdminLayout
+  title="Loading screen"
+  subtitle="The short intro before the home page. Keep it quick."
+  styles={['loading.css']}
+>
+  {
+    allowed && (
+      <a slot="actions" class="btn" href="/" target="_blank" rel="noopener">
+        <Icon name="ext" size={16} />
+        Open the site
+      </a>
+    )
+  }
+  {
+    !allowed ? (
+      <Refused />
+    ) : (
+      <AdminLoading
+        client:load
+        theme={theme}
+        pages={pages}
+        homePageId={homePageId}
+        homeError={homeError}
+        logoSrc={logoSrc}
+      />
+    )
+  }
+</AdminLayout>

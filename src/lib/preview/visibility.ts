@@ -1,4 +1,4 @@
-import { HEADER_COLUMNS } from '@schemas/appearance';
+import { APPEARANCE_COLUMNS } from '@schemas/appearance';
 import type { DatasetTable, PreviewTable } from './relations';
 
 // The anon RLS a visitor reads through, mirrored in TypeScript for the preview (Admin v2
@@ -101,8 +101,9 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
   // Calendly link or the legacy jsonb. (A preview never loads GA4: its branch of the middleware
   // returns before the GA4 read, and its layout renders no loader.)
   site_integrations: ['tenant_id', 'search_console_token', 'ga4_measurement_id'],
-  // Admin v2 E5: the header's options; never the version, the stamps or the actors.
-  site_appearance: ['tenant_id', ...Object.values(HEADER_COLUMNS)],
+  // Admin v2 E5: the header's options, and E7 the loading screen's; never the version, the
+  // stamps or the actors.
+  site_appearance: ['tenant_id', ...Object.values(APPEARANCE_COLUMNS)],
   // 0028: never is_placeholder, the schedule, version or the actors.
   service_cases: [
     'id',

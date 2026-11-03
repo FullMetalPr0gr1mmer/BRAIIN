@@ -1,0 +1,314 @@
+/* The Loading screen (Admin v2 E7, /admin/appearance/loading): the on/off card, the Style
+   tiles and the preview of the intro. Every colour is a token (admin.css); every option the
+   tiles and the preview draw is a closed data-* value (CSP: no style attribute), the timing as
+   the same buckets the site maps (global.css), so the preview plays what a visitor sees. */
+
+.ld {
+  display: grid;
+  gap: 16px;
+}
+
+/* ---- The Style tiles (a radio group over the backdrop) ---- */
+.ld-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.ld-tile {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+  cursor: pointer;
+}
+
+.ld-tile:has(input:checked) {
+  border-color: var(--ad-primary);
+  box-shadow: 0 0 0 1px var(--ad-primary);
+}
+
+.ld-tile:has(input:focus-visible) {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: 2px;
+}
+
+.ld-tile__lb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ld-tile__lb input {
+  margin: 0;
+  accent-color: var(--ad-primary);
+}
+
+/* A tile's picture and the preview's stage share the grounds: the hero (the loop's sketch, a
+   dark Klein-tinted ground), black, or light. */
+.ld-tile__pv,
+.ld-pv__hero {
+  background: linear-gradient(
+    135deg,
+    var(--ad-midnight),
+    color-mix(in srgb, var(--ad-primary) 55%, var(--ad-midnight))
+  );
+}
+
+.ld-tile__pv {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  border-radius: calc(var(--ad-r-sm) - 2px);
+  overflow: hidden;
+}
+
+.ld-tile__pv[data-backdrop='black'],
+.ld-pv__plate[data-backdrop='black'] {
+  background: var(--ad-midnight);
+}
+
+.ld-tile__pv[data-backdrop='light'],
+.ld-pv__plate[data-backdrop='light'] {
+  background: var(--ad-card);
+  box-shadow: inset 0 0 0 1px var(--ad-line);
+}
+
+.ld-tile__pv img {
+  inline-size: 46%;
+  block-size: auto;
+}
+
+/* The white logo drawn black on the light ground, as the site does (a static filter). */
+.ld-tile__pv[data-backdrop='light'] img,
+.ld-pv__plate[data-backdrop='light'] .ld-pv__logo {
+  filter: brightness(0);
+}
+
+/* ---- The preview ---- */
+.ld-pv {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.ld-pv__stage {
+  position: relative;
+  inline-size: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--ad-r-sm);
+  overflow: hidden;
+}
+
+/* Under the plate: the hero as a sketch (two headline lines), what the intro hands over to. */
+.ld-pv__hero {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: end;
+  gap: 6px;
+  padding: 14px;
+}
+
+.ld-pv__hero span {
+  display: block;
+  block-size: 9px;
+  inline-size: 62%;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ad-on-dark) 70%, transparent);
+}
+
+.ld-pv__hero span + span {
+  inline-size: 40%;
+}
+
+/* The plate: see-through over the hero (the video style), or opaque. */
+.ld-pv__plate {
+  --ld-hold: 1s;
+  --ld-fade: 0.45s;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+}
+
+.ld-pv__plate[data-hold='500'] {
+  --ld-hold: 0.5s;
+}
+.ld-pv__plate[data-hold='600'] {
+  --ld-hold: 0.6s;
+}
+.ld-pv__plate[data-hold='700'] {
+  --ld-hold: 0.7s;
+}
+.ld-pv__plate[data-hold='800'] {
+  --ld-hold: 0.8s;
+}
+.ld-pv__plate[data-hold='900'] {
+  --ld-hold: 0.9s;
+}
+.ld-pv__plate[data-hold='1100'] {
+  --ld-hold: 1.1s;
+}
+.ld-pv__plate[data-hold='1200'] {
+  --ld-hold: 1.2s;
+}
+.ld-pv__plate[data-hold='1300'] {
+  --ld-hold: 1.3s;
+}
+.ld-pv__plate[data-hold='1400'] {
+  --ld-hold: 1.4s;
+}
+.ld-pv__plate[data-hold='1500'] {
+  --ld-hold: 1.5s;
+}
+.ld-pv__plate[data-fade='300'] {
+  --ld-fade: 0.3s;
+}
+.ld-pv__plate[data-fade='350'] {
+  --ld-fade: 0.35s;
+}
+.ld-pv__plate[data-fade='400'] {
+  --ld-fade: 0.4s;
+}
+.ld-pv__plate[data-fade='500'] {
+  --ld-fade: 0.5s;
+}
+.ld-pv__plate[data-fade='550'] {
+  --ld-fade: 0.55s;
+}
+.ld-pv__plate[data-fade='600'] {
+  --ld-fade: 0.6s;
+}
+
+.ld-pv__logo {
+  inline-size: 34%;
+  block-size: auto;
+}
+
+.ld-pv__below {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.ld-pv__tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ad-on-dark);
+}
+
+.ld-pv__plate[data-backdrop='light'] .ld-pv__tag {
+  color: var(--ad-ink);
+}
+
+.ld-pv__bar {
+  display: block;
+  inline-size: 72px;
+  block-size: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--ad-on-dark) 22%, transparent);
+}
+
+.ld-pv__bar i {
+  display: block;
+  block-size: 100%;
+  background: var(--ad-accent);
+  transform: scaleX(0.6);
+  transform-origin: left center;
+}
+
+.ld-pv__plate[data-backdrop='light'] .ld-pv__bar {
+  background: color-mix(in srgb, var(--ad-ink) 12%, transparent);
+}
+
+.ld-pv__plate[data-backdrop='light'] .ld-pv__bar i {
+  background: var(--ad-primary);
+}
+
+/* Play preview: the site's choreography, small. The logo and what is under it enter after the
+   FOUC guard (.12s), the bar fills over the hold, then the plate leaves over the fade and the
+   hero shows. The admin's reduced-motion rule (admin.css) stops it: the plate stays still. */
+.ld-pv__plate[data-play] {
+  animation: ld-out var(--ld-fade) ease both;
+  animation-delay: var(--ld-hold);
+}
+
+.ld-pv__plate[data-play] .ld-pv__logo,
+.ld-pv__plate[data-play] .ld-pv__below {
+  animation: ld-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.12s;
+}
+
+.ld-pv__plate[data-play] .ld-pv__bar i {
+  animation: ld-bar calc(var(--ld-hold) - 0.12s) linear both;
+  animation-delay: 0.12s;
+}
+
+@keyframes ld-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@keyframes ld-in {
+  from {
+    opacity: 0;
+    transform: scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ld-bar {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.ld-pv__cap,
+.ld-pv__note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+.ld-pv__cap {
+  color: var(--ad-ink);
+  font-size: 12.5px;
+}
+
+/* ---- What is always true ---- */
+.ld-facts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.ld-facts li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.ld-facts .ic {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ad-primary);
+}

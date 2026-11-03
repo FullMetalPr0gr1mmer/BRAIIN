@@ -233,6 +233,18 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     render: 'server',
     gate: 'const allowed = settings || nav;',
   },
+  // Admin v2 E7: the Loading screen opens for theme.edit (its look) or pages.write (its on/off
+  // switch), so SEO and Sales are refused: the page's own 403 and Refused.astro, having read
+  // nothing; its JSON twin is the look's read (the appearance singleton, theme.edit), which
+  // refuses both as well.
+  {
+    href: '/admin/appearance/loading',
+    api: '/api/admin/site-appearance',
+    cap: 'theme.edit',
+    anyOf: ['theme.edit', 'pages.write'],
+    render: 'server',
+    gate: 'const allowed = theme || pages;',
+  },
   // Admin v2 R13 (plan B7.3): Backups & versions, for any release read capability, so only
   // Sales is refused: the page's own 403 and Refused.astro, having read nothing; its JSON twin
   // is the versions list, behind the same capabilities.
