@@ -25,6 +25,9 @@ const HEADER_SPEC = /[\\/]tests[\\/]admin[\\/]header\.e2e\.ts$/;
 // The footer (Admin v2 E6) saves its basics and a column every public page then draws: its own
 // project, after the header.
 const FOOTER_SPEC = /[\\/]tests[\\/]admin[\\/]footer\.e2e\.ts$/;
+// The loading screen (Admin v2 E7) saves a look the home page's intro then draws, and turns the
+// intro off and on: its own project, after the footer.
+const LOADING_SPEC = /[\\/]tests[\\/]admin[\\/]loading\.e2e\.ts$/;
 // Google Analytics 4 (Admin v2 U15) saves a measurement id, which puts the loader on every public
 // page the other specs read (the CI e2e build turns GA4_NOTICE_READY on): its own project, after
 // general settings and before maintenance.
@@ -108,6 +111,7 @@ export default defineConfig({
         GENERAL_SPEC,
         HEADER_SPEC,
         FOOTER_SPEC,
+        LOADING_SPEC,
         GA4_SPEC,
         THEME_SPEC,
         MAINTENANCE_SPEC,
@@ -171,6 +175,16 @@ export default defineConfig({
       dependencies: ['header'],
     },
     {
+      // The loading screen (Admin v2 E7): a black plate with a bar and a tagline, then a light
+      // one, on the home page while it runs, and the intro turned off and on; then the row
+      // removed and the home hero put back: alone, after the footer.
+      name: 'loading',
+      testDir: './tests/admin',
+      testMatch: LOADING_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['footer'],
+    },
+    {
       // GA4 (Admin v2 U15) saves an id, so every public page carries the loader and lists
       // Google's hosts while it runs: alone, after the specs that read those pages, and it
       // clears the id when it ends.
@@ -178,7 +192,7 @@ export default defineConfig({
       testDir: './tests/admin',
       testMatch: GA4_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['footer'],
+      dependencies: ['loading'],
     },
     {
       // The theme (Admin v2 E4) saves colours every public page draws, so the axe and CSP
