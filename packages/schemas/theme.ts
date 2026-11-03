@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ARABIC_FAMILY_IDS, LATIN_FAMILY_IDS } from '../theme/fonts';
 import { failuresFor } from '../theme/gate';
 import {
   BUTTON_CHOICES,
@@ -23,13 +24,18 @@ import {
 //            soft, round) and the buttons (pill, rounded, square): packages/theme/shapes.ts
 //   type     (v2) the headings' weight (800 or 700, both bold) and case (uppercase or as
 //            written)
+//   fonts    (v3, Admin v2 E13) the family the English pages are set in (`latin`) and the one
+//            the Arabic pages are (`arabic`), each one of the font catalogue's families for its
+//            script (packages/theme/fonts.ts): a closed, self-hosted list, today the brand's
+//            Archivo and Almarai only (owner item O-21)
 //
-// Versions: E4 saved `v: 1` (no shapes, no type). The schema reads both and answers v2 either
-// way (a v1 theme is the brand's shapes and type), so the editor, the resource's toRow and a
-// release's publish see one shape and the next save stores v2. The database's CHECK
-// (app.theme_row_ok) still accepts a v1 row, so a theme saved before E12 stays valid and served.
+// Versions: E4 saved `v: 1` (no shapes, no type), E12 `v: 2` (no fonts). The schema reads all
+// three and answers v3 (an older theme is the brand's shapes, type and fonts), so the editor,
+// the resource's toRow and a release's publish see one shape and the next save stores v3. The
+// database's CHECK (app.theme_row_ok) still accepts v1 and v2 rows, so a theme saved before
+// stays valid and served.
 
-export const THEME_SETTINGS_VERSION = 2 as const;
+export const THEME_SETTINGS_VERSION = 3 as const;
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -61,6 +67,10 @@ export const ThemeTypeSchema = z
   })
   .strict();
 
+export const ThemeFontsSchema = z
+  .object({ latin: z.enum(LATIN_FAMILY_IDS), arabic: z.enum(ARABIC_FAMILY_IDS) })
+  .strict();
+
 /** E4's settings, as saved before E12 (read, never written again). */
 export const ThemeSettingsV1Schema = z
   .object({
@@ -71,10 +81,10 @@ export const ThemeSettingsV1Schema = z
   })
   .strict();
 
-/** The settings a save stores since E12. */
+/** E12's settings, as saved before E13 (read, never written again). */
 export const ThemeSettingsV2Schema = z
   .object({
-    v: z.literal(THEME_SETTINGS_VERSION),
+    v: z.literal(2),
     mode: z.enum(['simple', 'advanced']),
     colors: ThemeColorsSchema,
     motion: ThemeMotionSchema,
@@ -83,14 +93,30 @@ export const ThemeSettingsV2Schema = z
   })
   .strict();
 
-type SettingsV2 = z.infer<typeof ThemeSettingsV2Schema>;
-/** E4's settings as stored (compileTheme takes either version). */
+/** The settings a save stores since E13. */
+export const ThemeSettingsV3Schema = z
+  .object({
+    v: z.literal(THEME_SETTINGS_VERSION),
+    mode: z.enum(['simple', 'advanced']),
+    colors: ThemeColorsSchema,
+    motion: ThemeMotionSchema,
+    shapes: ThemeShapesSchema,
+    type: ThemeTypeSchema,
+    fonts: ThemeFontsSchema,
+  })
+  .strict();
+
+type SettingsV3 = z.infer<typeof ThemeSettingsV3Schema>;
+/** E4's settings as stored (compileTheme takes every version). */
 export type ThemeSettingsV1 = z.infer<typeof ThemeSettingsV1Schema>;
+/** E12's settings as stored. */
+export type ThemeSettingsV2 = z.infer<typeof ThemeSettingsV2Schema>;
 
 export const ThemeSettingsSchema = z
-  .discriminatedUnion('v', [ThemeSettingsV1Schema, ThemeSettingsV2Schema])
-  // A v1 theme is v2 at the brand's shapes and type: the one upgrade (packages/theme/shapes.ts).
-  .transform((settings): SettingsV2 =>
+  .discriminatedUnion('v', [ThemeSettingsV1Schema, ThemeSettingsV2Schema, ThemeSettingsV3Schema])
+  // An older theme is v3 at the brand's shapes, type and fonts: the one upgrade
+  // (packages/theme/shapes.ts).
+  .transform((settings): SettingsV3 =>
     settings.v === THEME_SETTINGS_VERSION ? settings : upgradeThemeSettings(settings),
   )
   .superRefine((settings, ctx) => {
@@ -113,6 +139,7 @@ export type ThemeSettings = z.output<typeof ThemeSettingsSchema>;
 export type ThemeMotion = z.infer<typeof ThemeMotionSchema>;
 export type ThemeShapesSettings = z.infer<typeof ThemeShapesSchema>;
 export type ThemeTypeSettings = z.infer<typeof ThemeTypeSchema>;
+export type ThemeFontsSettings = z.infer<typeof ThemeFontsSchema>;
 
 /**
  * A theme's save (the `themes` resource, src/lib/admin/resources/themes.ts): its settings, from

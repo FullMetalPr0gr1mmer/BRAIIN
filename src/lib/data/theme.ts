@@ -1,5 +1,6 @@
 import { ThemeTokensSchema, type ThemeTokens } from '@schemas/themeTokens';
-import { hasTokens, themeCss } from '@theme/compile';
+import { hasTokens } from '@theme/compile';
+import { themeStylesheet } from '@theme/stylesheet';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import { reportLoadError } from './parse';
 import { contentClient } from './source';
@@ -101,7 +102,7 @@ export const THEME_HASH_PATTERN = /^[0-9a-f]{16}$/;
 async function liveTheme(): Promise<ThemeAnswer> {
   const { theme, failed } = await readTheme();
   if (!theme || !hasTokens(theme.tokens)) return { theme: null, failed };
-  const css = themeCss(theme.tokens);
+  const css = themeStylesheet(theme.tokens);
   if (!css) return { theme: null, failed };
   try {
     return { theme: { ...theme, css, hash: await themeHash(css) }, failed };
