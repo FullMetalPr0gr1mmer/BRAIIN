@@ -153,7 +153,7 @@ jobs:
     name: Lighthouse budgets
     runs-on: ubuntu-latest
     # 60, not 50, since Admin v2 E7: its three loading screen runs add 18 Lighthouse runs to
-    # the 120 before them.
+    # the 132 before them.
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1

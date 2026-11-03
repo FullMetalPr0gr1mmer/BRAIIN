@@ -81,7 +81,10 @@ describe('entityPath', () => {
     expect(entityPath('blog_post', 'hello')).toBe('/creative-knowledge/hello');
     expect(entityPath('page', 'home')).toBe('/');
     expect(entityPath('page', 'portfolio-all')).toBe('/portfolio/all');
-    expect(entityPath('page', 'unknown')).toBeNull();
+    // A custom page (Admin v2 E11) lives at its own address; a word a page may not take, nowhere.
+    expect(entityPath('page', 'our-story')).toBe('/our-story');
+    expect(entityPath('page', 'admin')).toBeNull();
+    expect(entityPath('page', 'Unknown')).toBeNull();
     expect(entityPath('service', null)).toBeNull();
     expect(pagePath('toString')).toBeNull();
   });

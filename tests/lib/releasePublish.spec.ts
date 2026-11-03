@@ -752,21 +752,21 @@ describe('publishing', () => {
 
   it('a page renamed by a Content Creator: the visibility snapshot rebuilt as the system (R6 question 2)', async () => {
     // The snapshot names pages by slug: a hidden page renamed would otherwise be public at the
-    // edge under its new name until the daily re-sync.
+    // edge under its new name until the daily re-sync. (Since E11's code review, CR3, no page
+    // takes or leaves a custom page's address by rename, so the rename here is between two
+    // route slugs, which only 0057's trigger refuses, at the apply this stub stands in for.)
     const draft = draftRow({
       id: draftId(16),
       entity_type: 'page',
       entity_id: PAGE,
       op: 'update',
-      payload: { slug: 'who-we-are' },
+      payload: { slug: 'join' },
       base: { slug: 'about' },
     });
     svc.answer = (fn) =>
       fn === 'record_release_purge'
         ? { data: null, error: null }
-        : published(7, [
-            applied('page', PAGE, 'update', { slug: 'about' }, { slug: 'who-we-are' }),
-          ]);
+        : published(7, [applied('page', PAGE, 'update', { slug: 'about' }, { slug: 'join' })]);
     const db = seed({
       content_drafts: [draft],
       pages: [
@@ -785,9 +785,7 @@ describe('publishing', () => {
     expect(syncs).toMatchObject({ redirects: 0, visibility: 1, tenants: [T] });
     expect(res.data['kvSynced']).toBe(false);
     const purge = svc.calls.find((c) => c.fn === 'record_release_purge');
-    expect(purge!.args['p_tags']).toEqual(
-      expect.arrayContaining(['page:about', 'page:who-we-are']),
-    );
+    expect(purge!.args['p_tags']).toEqual(expect.arrayContaining(['page:about', 'page:join']));
   });
 
   it('a page-visibility change rebuilds the snapshot, and says when the edge missed it', async () => {

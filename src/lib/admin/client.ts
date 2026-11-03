@@ -119,6 +119,29 @@ export async function adminUpload<T = unknown>(
   return unwrap<T>(await fetch(url, init));
 }
 
+/**
+ * Sends one line to the first-party error sink (POST /api/clientlog: the public pages'
+ * ErrorReporter channel, PII-scrubbed and written to system_logs by the server, CLAUDE.md §10),
+ * for a failure a screen handles itself and so no global handler sees (Admin v2 E11 code review,
+ * CR4). A beacon, so a navigation right after it does not cancel it. Never throws: a beacon
+ * the browser refuses is dropped, as ErrorReporter drops one.
+ */
+export function reportClientError(source: string, message: string): void {
+  try {
+    navigator.sendBeacon(
+      '/api/clientlog',
+      JSON.stringify({
+        level: 'error',
+        message: message.slice(0, 2000) || 'error',
+        source: source.slice(0, 120),
+        path: location.pathname.slice(0, 2048) || '/',
+      }),
+    );
+  } catch {
+    // Reporting is best effort and must never turn into a failure of its own.
+  }
+}
+
 /** Human-readable text for the error envelope the API kernel returns. */
 export function describeError(err: unknown): string {
   if (!(err instanceof AdminApiError)) {

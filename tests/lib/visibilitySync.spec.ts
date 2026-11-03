@@ -19,12 +19,14 @@ vi.mock('@/lib/data/systemLog', () => ({
 const {
   buildVisibilitySnapshot,
   edgeVisibilityStatus,
+  resyncRedirectTarget,
   syncVisibilityToEdge,
   visibilityPurgeTags,
   VISIBILITY_ROW_LIMIT,
   VISIBILITY_SNAPSHOT_SELECT,
 } = await import('@/lib/admin/visibilitySync');
-const { HOME_REFUSAL, saveVisibility } = await import('@/lib/admin/pageVisibility');
+const { HOME_REFUSAL, REDIRECT_UNPUBLISHED, saveVisibility } =
+  await import('@/lib/admin/pageVisibility');
 
 const env = stubEnv as unknown as { SESSION: KVNamespace };
 const AUTH: AuthContext = {
@@ -92,7 +94,7 @@ function client(db: {
       op.values = values;
       return b;
     };
-    for (const m of ['eq', 'neq', 'match', 'limit', 'order']) {
+    for (const m of ['eq', 'neq', 'match', 'limit', 'order', 'in', 'not', 'range']) {
       b[m] = (a: unknown, v?: unknown) => {
         op.filters.push(
           `${m}:${typeof a === 'object' ? JSON.stringify(a) : `${String(a)}=${String(v)}`}`,
@@ -116,11 +118,23 @@ function client(db: {
   return { sb: { from } as unknown as SupabaseClient, ops };
 }
 
+const STORY = '00000000-0000-4000-8000-00000000e110';
+const LATER = '00000000-0000-4000-8000-00000000e111';
 const PAGES = [
-  { id: HOME, slug: 'home', title: { en: 'Home' } },
-  { id: ABOUT, slug: 'about', title: { en: 'About' } },
-  { id: CONTACT, slug: 'contact', title: { en: 'Contact' } },
-  { id: '00000000-0000-4000-8000-00000000a0ff', slug: 'careers', title: { en: 'Careers' } },
+  { id: HOME, slug: 'home', title: { en: 'Home' }, status: 'published' },
+  { id: ABOUT, slug: 'about', title: { en: 'About' }, status: 'published' },
+  // A route page renders from its built-in composition whatever its row's status.
+  { id: CONTACT, slug: 'contact', title: { en: 'Contact' }, status: 'draft' },
+  // A page no route renders: a reserved word, so not a custom page either (Admin v2 E11).
+  {
+    id: '00000000-0000-4000-8000-00000000a0ff',
+    slug: 'admin',
+    title: { en: 'Old admin' },
+    status: 'published',
+  },
+  // Custom pages (Admin v2 E11): one published, one a draft (its address answers 404).
+  { id: STORY, slug: 'our-story', title: { en: 'Our story' }, status: 'published' },
+  { id: LATER, slug: 'later', title: { en: 'Later' }, status: 'draft' },
 ];
 
 beforeEach(() => {
@@ -186,7 +200,8 @@ describe('buildVisibilitySnapshot', () => {
     const rows = [
       row({ id: 'r-about', version: 2, mode: 'hidden', page: { slug: 'about' } }),
       row({ id: 'r-home', version: 1, mode: 'hidden', page: { slug: 'home' } }),
-      row({ id: 'r-careers', version: 1, mode: 'link', page: { slug: 'careers' } }),
+      // A slug no route renders (a reserved word: not even a custom page, Admin v2 E11).
+      row({ id: 'r-admin', version: 1, mode: 'link', page: { slug: 'admin' } }),
       row({ id: 'r-svc', version: 4, mode: 'link', template: 'service' }),
     ];
     expect(buildVisibilitySnapshot(rows, TENANT).rev).toBe('r-about:2');
@@ -203,8 +218,8 @@ describe('buildVisibilitySnapshot', () => {
     const snap = buildVisibilitySnapshot(
       [
         row({ mode: 'hidden', page: { slug: 'home' } }),
-        row({ mode: 'hidden', page: { slug: 'careers' } }),
-        row({ mode: 'hidden', page: { slug: 'about' }, redirect: { slug: 'careers' } }),
+        row({ mode: 'hidden', page: { slug: 'admin' } }),
+        row({ mode: 'hidden', page: { slug: 'about' }, redirect: { slug: 'admin' } }),
         row({ mode: 'secret', page: { slug: 'join' } }),
         row({ mode: 'link', template: 'service' }),
         row({ mode: 'hidden', page: null }),
@@ -213,6 +228,55 @@ describe('buildVisibilitySnapshot', () => {
     );
     expect(snap.pages).toEqual({ about: { mode: 'hidden', target: null } });
     expect(snap.templates).toEqual({});
+  });
+
+  it('a custom page (Admin v2 E11) is a page: its own entry, and a redirect target', () => {
+    const snap = buildVisibilitySnapshot(
+      [
+        row({ id: 'r-story', version: 1, mode: 'link', page: { slug: 'our-story' } }),
+        row({
+          id: 'r-about',
+          version: 1,
+          mode: 'hidden',
+          page: { slug: 'about' },
+          redirect: { slug: 'our-story', status: 'published' },
+        }),
+      ],
+      TENANT,
+    );
+    expect(snap.pages).toEqual({
+      'our-story': { mode: 'link' },
+      about: { mode: 'hidden', target: 'our-story' },
+    });
+  });
+
+  // E11 code review CR1: a custom page answers 404 unless it is published, so a redirect to one
+  // unpublished since (or never published: a row written around the save) becomes the 404 a
+  // hidden page with no redirect shows, never a 302 to a 404. A route page renders whatever
+  // its row's status, so it stays a target.
+  it('drops a redirect to a custom page that is not published, never to a route page', () => {
+    const hidden = (id: string, slug: string, redirect: Record<string, unknown> | null) =>
+      row({ id, version: 1, mode: 'hidden', page: { slug }, redirect });
+    const snap = buildVisibilitySnapshot(
+      [
+        hidden('r-1', 'about', { slug: 'our-story', status: 'draft' }),
+        hidden('r-2', 'join', { slug: 'our-story', status: 'archived' }),
+        hidden('r-3', 'portfolio', { slug: 'our-story' }),
+        hidden('r-4', 'services', { slug: 'contact', status: 'draft' }),
+        hidden('r-5', 'later', { slug: 'our-story', status: 'published' }),
+      ],
+      TENANT,
+    );
+    expect(snap.pages).toEqual({
+      about: { mode: 'hidden', target: null },
+      join: { mode: 'hidden', target: null },
+      portfolio: { mode: 'hidden', target: null },
+      services: { mode: 'hidden', target: 'contact' },
+      later: { mode: 'hidden', target: 'our-story' },
+    });
+    expect(VISIBILITY_SNAPSHOT_SELECT).toContain(
+      'redirect:pages!page_visibility_redirect_fk(slug,status)',
+    );
   });
 
   it('the purge tags of a change: the page or the template’s pages, the menus, the discovery files', () => {
@@ -226,6 +290,90 @@ describe('buildVisibilitySnapshot', () => {
     expect(visibilityPurgeTags({ kind: 'template', template: 'case_study' })[0]).toBe(
       'portfolio:all',
     );
+  });
+});
+
+// E11 code review CR1: when a custom page stops (or starts) rendering, a hidden page that sends
+// its visitors there follows at once, instead of at the next visibility save or the daily cron.
+describe('resyncRedirectTarget', () => {
+  const story = { id: STORY, slug: 'our-story' };
+  const sentHere = {
+    id: 'r-about',
+    version: 1,
+    mode: 'hidden',
+    template: null,
+    hide_from: null,
+    show_on: null,
+    page: { slug: 'about' },
+    redirect: { slug: 'our-story', status: 'draft' },
+  };
+
+  it('rebuilds when the edge names the page as a target (an unpublish, a delete)', async () => {
+    __kv.set(
+      VISIBILITY_KV_KEY,
+      JSON.stringify({
+        v: 1,
+        builtAt: null,
+        pages: { about: { mode: 'hidden', target: 'our-story' } },
+        templates: {},
+      }),
+    );
+    const { sb, ops } = client({ visibilityRows: [sentHere] });
+    expect(await resyncRedirectTarget(sb, AUTH, story)).toEqual({ kvSynced: true, count: 1 });
+    // The edge named it: no lookup of the setting, straight to the rebuild.
+    expect(ops.some((o) => o.select === 'id')).toBe(false);
+    expect(JSON.parse(__kv.get(VISIBILITY_KV_KEY)!).pages.about).toEqual({
+      mode: 'hidden',
+      target: null,
+    });
+  });
+
+  // E11 check: after a delete, 0057's ON DELETE SET NULL has cleared the stored setting and this
+  // isolate's snapshot may be stale, so neither lookup can name the page: a delete rebuilds.
+  it('a delete rebuilds even when neither the edge copy nor a stored setting names the page', async () => {
+    __kv.set(
+      VISIBILITY_KV_KEY,
+      JSON.stringify({
+        v: 1,
+        builtAt: null,
+        pages: { about: { mode: 'hidden', target: 'our-story' } },
+        templates: {},
+      }),
+    );
+    // A stale memo in this isolate: the redirect was saved from another one.
+    clearVisibilityMemo();
+    const stale = client({ visibilityRows: [] });
+    __kv.set(VISIBILITY_KV_KEY, JSON.stringify({ v: 1, builtAt: null, pages: {}, templates: {} }));
+    expect(await resyncRedirectTarget(stale.sb, AUTH, story)).toBeNull();
+    // The same call for a delete rebuilds anyway, and the edge holds what the rows say.
+    const deleted = client({ visibilityRows: [{ ...sentHere, redirect: null }] });
+    expect(await resyncRedirectTarget(deleted.sb, AUTH, story, { deleted: true })).toEqual({
+      kvSynced: true,
+      count: 1,
+    });
+    expect(deleted.ops.some((o) => o.select === VISIBILITY_SNAPSHOT_SELECT)).toBe(true);
+    expect(JSON.parse(__kv.get(VISIBILITY_KV_KEY)!).pages.about.target).toBe(null);
+  });
+
+  it('rebuilds when a stored setting names it (published again), else leaves the edge alone', async () => {
+    const named = client({
+      visibilityRows: [{ ...sentHere, redirect: { slug: 'our-story', status: 'published' } }],
+    });
+    expect(await resyncRedirectTarget(named.sb, AUTH, story)).toEqual({ kvSynced: true, count: 1 });
+    const lookup = named.ops.find((o) => o.select === 'id');
+    expect(lookup?.filters).toEqual([
+      `eq:tenant_id=${AUTH.tenantId}`,
+      `eq:redirect_page_id=${STORY}`,
+      'limit:1=undefined',
+    ]);
+    expect(JSON.parse(__kv.get(VISIBILITY_KV_KEY)!).pages.about.target).toBe('our-story');
+
+    clearVisibilityMemo();
+    __kv.clear();
+    const none = client({ visibilityRows: [] });
+    expect(await resyncRedirectTarget(none.sb, AUTH, story)).toBeNull();
+    expect(none.ops.filter((o) => o.select === VISIBILITY_SNAPSHOT_SELECT)).toEqual([]);
+    expect(__kv.has(VISIBILITY_KV_KEY)).toBe(false);
   });
 });
 
@@ -365,6 +513,35 @@ describe('saveVisibility', () => {
     await expect(
       save({}, { target: { pageId: HOME }, mode: 'public' }).run(),
     ).resolves.toBeDefined();
+  });
+
+  // E11 code review CR1: a hidden page sends its visitors only to a page that renders.
+  it('refuses a redirect to a custom page that is not published, with the admin’s words', async () => {
+    await expect(
+      save({}, { target: { pageId: ABOUT }, mode: 'hidden', redirectPageId: LATER }).run(),
+    ).rejects.toMatchObject({ field: 'redirectPageId', detail: REDIRECT_UNPUBLISHED });
+    // A published custom page takes them, and so does a route page whatever its row's status.
+    for (const to of [STORY, CONTACT]) {
+      const { run, ops } = save(
+        {},
+        { target: { pageId: ABOUT }, mode: 'hidden', redirectPageId: to },
+      );
+      await run();
+      expect(ops.find((o) => o.op === 'insert')?.values?.['redirect_page_id']).toBe(to);
+    }
+  });
+
+  // E11 code review CR2: a save reads the pages it names, by id, never a bounded list of all.
+  it('reads only the pages it names', async () => {
+    const { run, ops } = save(
+      {},
+      { target: { pageId: ABOUT }, mode: 'hidden', redirectPageId: STORY },
+    );
+    await run();
+    const reads = ops.filter((o) => o.table === 'pages');
+    expect(reads).toHaveLength(1);
+    expect(reads[0]?.filters).toContain(`in:id=${[ABOUT, STORY].join(',')}`);
+    expect(reads[0]?.filters.some((f) => f.startsWith('limit'))).toBe(false);
   });
 
   it('refuses a page it does not know, a redirect to itself and a redirect off the list', async () => {

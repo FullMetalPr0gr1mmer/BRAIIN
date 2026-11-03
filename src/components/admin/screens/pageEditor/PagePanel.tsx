@@ -1,6 +1,7 @@
 import { useEffect, type MutableRefObject } from 'react';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import { useEntitySave, type EntitySave } from '@/lib/admin/useEntitySave';
+import { addressNote } from './library';
 import { PAGE_FIELDS } from './model';
 import type { PageEditorPage } from './types';
 
@@ -40,11 +41,7 @@ export default function PagePanel({ page, formRef, onRow }: PagePanelProps) {
           <h2 id="pe-panel-h" className="pe__h">
             Page details
           </h2>
-          <p className="pe__tiny">
-            {page.path
-              ? `Address ${page.path}, set by the site’s routes.`
-              : 'No route of the site shows this page yet.'}
-          </p>
+          <p className="pe__tiny">{addressNote(page.slug, page.path)}</p>
         </div>
       </div>
       <EditorForm

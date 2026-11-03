@@ -165,8 +165,10 @@ const ADMIN_PREVIEW = /[\\/]src[\\/]lib[\\/]admin[\\/]preview[\\/]/;
 // with its theme tokens. Claimed above admin-ui, so the bridge imports them from this chunk
 // and never admin-ui, whose static graph is React (admin-vendor) and the admin helpers:
 // about 120 KB gz a preview render loaded and never ran (scripts/admin-bundle.mjs check 7).
+// Admin v2 E11: also the custom page address rules (customPages.ts, which imports nothing),
+// read by the bridge's route map and by the New page dialog.
 const ADMIN_ZOD =
-  /[\\/](node_modules[\\/]zod[\\/]|packages[\\/]schemas[\\/](previewMessage|themeTokens)\.ts$)/;
+  /[\\/](node_modules[\\/]zod[\\/]|packages[\\/]schemas[\\/](previewMessage|themeTokens|customPages)\.ts$)/;
 // A kit piece both the kit's reference screen and a screen group draw (C4b: the React KPI
 // card, in the gallery and on the leads list): in admin-ui, so neither the AdminKit entry nor
 // the group's chunk imports the other's. Small (under 1 KB gz) and shared, like any kit piece

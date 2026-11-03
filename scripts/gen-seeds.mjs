@@ -30,6 +30,10 @@
 //                                                        // values form a slice, inserted only
 //                                                        // while the table holds NO row of
 //                                                        // that slice (once, never again)
+//                   "requires": {"table": "pages",       // with unlessAuthored: and only while
+//                                "by": {"id": "…"}},     // that row exists (a parent this seed
+//                                                        // made itself, by its own id: never
+//                                                        // an editor's row of the same slug)
 //                   "tenantScoped": true,                // default true: adds tenant_id
 //                   "rows": [ { …columns…,
 //                               "__placeholder": true,   // demoted in production mode
@@ -107,8 +111,19 @@ export function literal(value) {
   return `${quote(JSON.stringify(value))}::jsonb`;
 }
 
+/** `exists (…)` for one row of the launch tenant, named by its columns (a block's `requires`). */
+function existsSql(ref) {
+  const where = Object.entries(ref.by)
+    .map(([k, v]) => `${k} = ${literal(v)}`)
+    .join(' and ');
+  return `exists (select 1 from public.${ref.table} where tenant_id = ${quote(TENANT_ID)} and ${where})`;
+}
+
 function blockSql(block, mode) {
   const scoped = block.tenantScoped !== false;
+  if (block.requires && !block.unlessAuthored) {
+    throw new Error(`${block.source}:${block.table} takes requires only with unlessAuthored`);
+  }
   const rows = block.rows.map((r) => {
     const row = rowForMode(r, mode);
     return scoped ? { tenant_id: TENANT_ID, ...row } : row;
@@ -159,12 +174,17 @@ function blockSql(block, mode) {
     const tenant = scoped
       ? `tenant_id = ${quote(TENANT_ID)}${sliceColumns.length > 0 ? ' and ' : ''}`
       : '';
+    // A parent the rows belong to only when THIS seed made it (Admin v2 E11 code review, CR5):
+    // the sample page's sections go in only while the page with the seed's own id exists, so a
+    // page an editor made at the same address (the parent's insert then did nothing) never
+    // takes the sample's sections.
+    const requires = block.requires ? `${existsSql(block.requires)} and ` : '';
     const stmts = [...slices.values()].map((slice) => {
       const match = sliceColumns.map((c) => `${c} = ${literal(slice[0][c])}`).join(' and ');
       const values = slice.map((r) => `      (${tuple(r)})`).join(',\n');
       return (
         `do $seed$ begin\n` +
-        `  if not exists (select 1 from public.${block.table} where ${tenant}${match}) then\n` +
+        `  if ${requires}not exists (select 1 from public.${block.table} where ${tenant}${match}) then\n` +
         `    insert into public.${block.table} (${columns.join(', ')}) values\n${values}\n` +
         `    on conflict (${block.conflict.join(', ')}) do nothing;\n` +
         `  end if;\n` +

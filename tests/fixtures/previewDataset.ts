@@ -645,6 +645,7 @@ export function fixtureTables(): Record<string, Row[]> {
       T({ id: ID.pvLocked, page_id: ID.pgLocked, template: null, mode: 'password' }),
       T({ id: ID.pvHome, page_id: ID.pgHome, template: null, mode: 'public' }),
     ],
+    // Each section's edit time: a custom page's dateModified reads it (Admin v2 E11 review).
     page_sections: [
       T({
         id: ID.psVis,
@@ -653,6 +654,7 @@ export function fixtureTables(): Record<string, Row[]> {
         content: { frames: [{ image: { mediaId: ID.mSection } }] },
         visible: true,
         sort_order: 1,
+        updated_at: '2026-01-02T00:00:00+00:00',
       }),
       T({
         id: ID.psHidden,
@@ -661,6 +663,7 @@ export function fixtureTables(): Record<string, Row[]> {
         content: { mediaId: ID.mHiddenSection },
         visible: false,
         sort_order: 2,
+        updated_at: '2026-01-02T00:00:00+00:00',
       }),
       T({
         id: ID.psOfDraft,
@@ -669,6 +672,7 @@ export function fixtureTables(): Record<string, Row[]> {
         content: { mediaId: ID.mDraftSection },
         visible: true,
         sort_order: 1,
+        updated_at: '2026-01-02T00:00:00+00:00',
       }),
       T({
         id: ID.psLocked,
@@ -677,6 +681,7 @@ export function fixtureTables(): Record<string, Row[]> {
         content: { mediaId: ID.mLockedSection },
         visible: true,
         sort_order: 1,
+        updated_at: '2026-01-02T00:00:00+00:00',
       }),
     ],
     navigation: [

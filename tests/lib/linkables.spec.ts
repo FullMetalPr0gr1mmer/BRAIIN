@@ -115,7 +115,11 @@ describe('CODE_ROUTES', () => {
 describe('loadLinkables', () => {
   const auth = { tenantId: 't-1', role: 'admin' } as unknown as AuthContext;
 
-  /** A PostgREST stand-in: one answer per table, and the filters it was asked for. */
+  /**
+   * A PostgREST stand-in: one answer per table, honouring what the reader asks of `pages` (in,
+   * `not in`, order and limit, in the table's own order otherwise, as a heap would), and the
+   * filters it was asked for.
+   */
   function client(byTable: Record<string, { slug: string; title: unknown }[]>) {
     const asked: { table: string; filters: Record<string, string>; limit: number }[] = [];
     return {
@@ -123,17 +127,32 @@ describe('loadLinkables', () => {
       from(table: string) {
         const filters: Record<string, string> = {};
         const entry = { table, filters, limit: 0 };
+        let rows = [...(byTable[table] ?? [])];
+        let ordered = false;
         const builder = {
           select: () => builder,
           eq: (column: string, value: string) => {
             filters[column] = value;
             return builder;
           },
-          order: () => builder,
+          in: (column: 'slug', values: string[]) => {
+            rows = rows.filter((r) => values.includes(r[column]));
+            return builder;
+          },
+          not: (column: 'slug', _op: string, list: string) => {
+            const values = list.replace(/^\(|\)$/g, '').split(',');
+            rows = rows.filter((r) => !values.includes(r[column]));
+            return builder;
+          },
+          order: () => {
+            ordered = true;
+            return builder;
+          },
           limit: (n: number) => {
             entry.limit = n;
             asked.push(entry);
-            return Promise.resolve({ data: byTable[table] ?? [], error: null });
+            const out = ordered ? [...rows].sort((a, b) => a.slug.localeCompare(b.slug)) : rows;
+            return Promise.resolve({ data: out.slice(0, n), error: null });
           },
         };
         return builder;
@@ -144,11 +163,32 @@ describe('loadLinkables', () => {
   it('asks for published rows of this tenant only, bounded', async () => {
     const sb = client({});
     await loadLinkables(sb as never, auth);
-    expect(sb.asked.map((a) => a.table)).toEqual(['pages', 'services', 'portfolio']);
+    expect(sb.asked.map((a) => a.table)).toEqual(['pages', 'pages', 'services', 'portfolio']);
     for (const ask of sb.asked) {
       expect(ask.filters).toEqual({ tenant_id: 't-1', status: 'published' });
       expect(ask.limit).toBeLessThanOrEqual(100);
     }
+  });
+
+  // E11 code review CR10: the route pages' titles are read apart from the custom pages, so a
+  // hundred custom pages stored ahead of them never crowd a route's own title out of the bound.
+  it('a route keeps its page’s title however many custom pages there are', async () => {
+    const custom = Array.from({ length: 120 }, (_, i) => ({
+      slug: `page-${String(i).padStart(3, '0')}`,
+      title: { en: `Page ${i}`, ar: `صفحة ${i}` },
+    }));
+    const sb = client({
+      pages: [...custom, { slug: 'about', title: { en: 'Who we are', ar: 'من نحن' } }],
+    });
+    const links = await loadLinkables(sb as never, auth);
+    expect(links.find((link) => link.href === '/about')?.label.en).toBe('Who we are');
+    const pages = links.filter((link) => link.group === 'page' && /^\/page-/.test(link.href));
+    expect(pages).toHaveLength(100);
+    expect(pages[0]).toEqual({
+      href: '/page-000',
+      label: { en: 'Page 0', ar: 'صفحة 0' },
+      group: 'page',
+    });
   });
 
   it('adds published services and projects under their public paths', async () => {
@@ -205,6 +245,8 @@ describe('loadLinkables', () => {
         const builder = {
           select: () => builder,
           eq: () => builder,
+          in: () => builder,
+          not: () => builder,
           order: () => builder,
           limit: () => Promise.resolve({ data: null, error: { message: 'denied' } }),
         };

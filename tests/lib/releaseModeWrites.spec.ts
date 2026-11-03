@@ -477,8 +477,18 @@ describe('a create made in a drawer or a modal says so (SaveTarget `staged`)', (
     }
     // Every create page that hydrates a resource editor (the collection screens' /new pages
     // open their drawer, whose mode is the screen's list answer). /admin/themes/new answers
-    // with a 302 since E4; the theme editor's page is checked below.
-    expect(checked).toBeGreaterThanOrEqual(13);
+    // with a 302 since E4, and /admin/pages/new since E11; the theme editor's page and the
+    // pages list's New page are checked below.
+    expect(checked).toBeGreaterThanOrEqual(12);
+  });
+
+  it('the pages list’s New page passes its mode, read for the pages resource (E11)', () => {
+    const page = readFileSync('src/pages/admin/pages/index.astro', 'utf8');
+    expect(page).toContain("await createReleaseMode(Astro.locals, 'pages')");
+    expect(page).toMatch(/<AdminNewPage\s[^>]*\breleaseMode=\{releaseMode\}/);
+    const island = readFileSync('src/components/admin/screens/newPage/NewPage.tsx', 'utf8');
+    expect(island).toContain("stagedUrl('/api/admin/pages', releaseMode)");
+    expect(island).toContain("stagedUrl('/api/admin/sections', releaseMode)");
   });
 
   it('the theme editor’s page passes its mode, read for the themes resource (E4)', () => {

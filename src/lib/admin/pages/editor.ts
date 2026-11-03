@@ -78,6 +78,30 @@ export function previewable(path: string | null): boolean {
   );
 }
 
+/**
+ * A page made with New page while releases are on (Admin v2 E11): no row until its release is
+ * published, so the editor opens on its pending create (the draft's slug, title and status).
+ * Read only when the id names no live page, so an ordinary open costs nothing more; with
+ * releases off there is no draft and this finds nothing.
+ */
+async function pendingCreate(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  id: string,
+): Promise<Row | null> {
+  const { data, error } = await sb
+    .from('content_drafts')
+    .select('entity_id,slug:payload->>slug,title:payload->title,status:payload->>status')
+    .eq('tenant_id', auth.tenantId)
+    .eq('entity_type', 'page')
+    .eq('entity_id', id)
+    .eq('op', 'create')
+    .maybeSingle();
+  if (error) throw new Error(`read content_drafts: ${error.message}`);
+  const draft = data as Row | null;
+  return draft ? { id, slug: draft['slug'], title: draft['title'], status: draft['status'] } : null;
+}
+
 /** The page as the editor opens on it, or null when the id names no page of the tenant. */
 export async function loadEditorPage(
   sb: SupabaseClient,
@@ -101,7 +125,7 @@ export async function loadEditorPage(
   ]);
   if (page.error) throw new Error(`read pages: ${page.error.message}`);
   if (visibility.error) throw new Error(`read page_visibility: ${visibility.error.message}`);
-  const row = page.data as Row | null;
+  const row = (page.data as Row | null) ?? (await pendingCreate(sb, auth, id));
   if (!row) return null;
   const slug = String(row['slug'] ?? '').toLowerCase();
   const title = (row['title'] && typeof row['title'] === 'object' ? row['title'] : {}) as Row;

@@ -494,7 +494,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §6.2 content/raw | Flat map of 253 bilingual keys + raw values shared with the site | covered | covered | AV-23, AV-25 | Typed section fields replace data-i keys. Add a key inventory test: every seed_home/seed_pages key maps to a field or a documented code-owned exception. |
 | §6.2 pages | Section label, visible, order | covered | covered | AV-25 (page_sections.label) |  |
 | §6.2 pages | Section background, spacing, reveal, show on mobile, anchor | deviated-challenge | built under A6 | AV-25 (not offered) | Closed variants are CSP-safe; only 'show on mobile' has a Pillar 3 parity argument. |
-| §6.2 pages | New pages created from the editor (hero + text block) | deviated-challenge | built under A6 | AV-33 (later, owner item 9) | Not in A1's later list. |
+| §6.2 pages | New pages created from the editor (hero + text block) | deviated-challenge | built under A6 | AV-33; built as E11 (New page, the `[slug]` routes) | Not in A1's later list. |
 | §6.2 cats/services | Disciplines, services, case, clip windows, SEO | covered | covered | AV-14, AV-19 | Prototype caps value cards at 4 and problems at 5 (repo 6): tighten the admin schema. Case client derived from the project. |
 | §6.2 projects | Project record incl. hero, final film, breakdown, gallery, keywords, quote, featured | covered | covered | AV-15 | Inline quote -> linked testimonial with consent (§8 gate); free service tags -> the 28 services. |
 | §6.2 collections | Taxonomies, testimonials, clients, team, FAQ, joinWhy/joinSteps | covered | covered | AV-15, AV-16 (faq_items), AV-25 (join items) | Client 'visible' is the disclosure permission (§8). |

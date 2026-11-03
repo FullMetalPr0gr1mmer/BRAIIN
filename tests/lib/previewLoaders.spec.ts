@@ -44,6 +44,7 @@ const { withContentSource } = await import('@/lib/data/source');
 const appearance = await import('@/lib/data/appearance');
 const blog = await import('@/lib/data/blog');
 const certifications = await import('@/lib/data/certifications');
+const customPages = await import('@/lib/data/customPages');
 const disciplines = await import('@/lib/data/disciplines');
 const faq = await import('@/lib/data/faq');
 const forms = await import('@/lib/data/forms');
@@ -67,6 +68,7 @@ const MODULES = {
   appearance,
   blog,
   certifications,
+  customPages,
   disciplines,
   faq,
   forms,
@@ -172,6 +174,29 @@ const CASES: Record<string, () => Promise<void>> = {
       ['/portfolio', ['/portfolio/all']],
     ]);
     clean(report);
+  },
+  // Admin v2 E11: the published custom pages (the fixture has none; a pending one shows).
+  'customPages.getPublishedCustomPages': async () => {
+    const { value, report } = await inPreview(() => customPages.getPublishedCustomPages());
+    expect(value).toEqual([]);
+    clean(report);
+    const pending = await inPreview(
+      () => customPages.getPublishedCustomPages(),
+      [
+        draft('page', 'create', '00000000-0000-4000-8000-00000000e110', {
+          slug: 'our-story',
+          title: BI('Our story', 'قصتنا'),
+          status: 'published',
+        }),
+        draft('page', 'create', '00000000-0000-4000-8000-00000000e111', {
+          slug: 'later',
+          title: BI('Later', 'لاحقًا'),
+          status: 'draft',
+        }),
+      ],
+    );
+    expect(pending.value.map((p) => [p.slug, p.title.en])).toEqual([['our-story', 'Our story']]);
+    clean(pending.report);
   },
   'navigation.getFooterNavigation': async () => {
     // Admin v2 E6: the footer's rows (columns and loose links); the dataset's menu is the

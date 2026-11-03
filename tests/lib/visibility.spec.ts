@@ -176,19 +176,25 @@ describe('parseVisibilitySnapshot: anything unreadable is every page public', ()
         v: 1,
         pages: {
           home: { mode: 'hidden' },
-          constructor: { mode: 'hidden' },
-          careers: { mode: 'hidden' },
+          // Not a page's address (Admin v2 E11: a custom page's is lowercase, never reserved).
+          toString: { mode: 'hidden' },
+          admin: { mode: 'hidden' },
+          // A custom page's address is a page, kept as its own key (never the prototype's).
+          constructor: { mode: 'link' },
           about: { mode: 'secret' },
           join: { mode: 'link', target: 'contact', from: FROM },
-          contact: { mode: 'hidden', target: 'nowhere', from: 'soon' },
+          contact: { mode: 'hidden', target: 'No-where', from: 'soon' },
         },
         templates: { service: { mode: 'link' }, blog: { mode: 'hidden' } },
       }),
     );
     expect(parsed.pages).toEqual({
+      constructor: { mode: 'link' },
       join: { mode: 'link' },
       contact: { mode: 'hidden', target: null },
     });
+    expect(Object.hasOwn(parsed.pages, 'constructor')).toBe(true);
+    expect(Object.getPrototypeOf(parsed.pages)).toBe(Object.prototype);
     expect(parsed.templates).toEqual({});
   });
 

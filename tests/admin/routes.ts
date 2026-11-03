@@ -447,6 +447,8 @@ export const REDIRECT_PAGES: Readonly<Record<string, string>> = {
   '/admin/redirects': '/admin/seo?tab=redirects',
   // Admin v2 U5: the disciplines are the Services overview.
   '/admin/disciplines': '/admin/services',
+  // Admin v2 E11: making a page is the pages list's New page dialog.
+  '/admin/pages/new': '/admin/pages?new=1',
 };
 
 /** Every screen of the menu: sidebar links, then their tabs, each once. */
