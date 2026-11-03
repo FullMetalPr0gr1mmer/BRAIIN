@@ -34,7 +34,7 @@ export interface Identity {
   /** The icons' media ids; the icons themselves are read apart (getSiteIcons). */
   faviconMediaId: string | null;
   appIconMediaId: string | null;
-  /** The footer settings E6 renders; until then the footer is today's whatever these say. */
+  /** The footer settings (U9 stores them, E6 renders them: src/lib/appearance/footer.ts). */
   footer: {
     copyright: { en: string; ar: string } | null;
     style: 'light' | 'dark';

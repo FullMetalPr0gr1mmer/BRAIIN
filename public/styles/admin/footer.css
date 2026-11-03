@@ -1,0 +1,230 @@
+/* The Footer screen (Admin v2 E6, /admin/appearance/footer): the sketch of the footer, the
+   Columns card and the locked legal links. Every colour is a token (admin.css); the sketch's
+   style is one closed data-* value (CSP: no style attribute). */
+
+.ftr {
+  display: grid;
+  gap: 16px;
+}
+
+/* ---- The sketch ---- */
+.ftr-pv {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.ftr-pv__stage {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--ad-r-sm);
+  border: 1px solid var(--ad-line);
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  font-size: 12px;
+}
+
+.ftr-pv__stage[data-style='dark'] {
+  background: var(--ad-midnight);
+  border-color: var(--ad-midnight);
+  color: var(--ad-on-dark);
+}
+
+.ftr-pv__copy,
+.ftr-pv__mail {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ftr-pv__mail {
+  font-weight: 700;
+}
+
+.ftr-pv__cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ad-line);
+}
+
+.ftr-pv__col {
+  display: grid;
+  gap: 5px;
+  align-content: start;
+}
+
+.ftr-pv__col b {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+}
+
+/* A link, drawn as a bar. */
+.ftr-pv__col > span {
+  display: block;
+  block-size: 5px;
+  inline-size: 70%;
+  border-radius: var(--ad-r-pill);
+  background: currentColor;
+  opacity: 0.35;
+}
+
+.ftr-pv__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ad-line);
+  font-size: 11px;
+}
+
+.ftr-pv__stage[data-style='dark'] .ftr-pv__cols,
+.ftr-pv__stage[data-style='dark'] .ftr-pv__foot {
+  border-top-color: var(--ad-side-rule);
+}
+
+.ftr-pv__icons {
+  display: flex;
+  gap: 5px;
+}
+
+.ftr-pv__icons i {
+  display: block;
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.ftr-pv__note {
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+/* ---- Columns ---- */
+.ftr-cols__list {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ftr-cols__col {
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+  padding: 4px 10px 10px;
+}
+
+.ftr-cols__head .li__t {
+  font-weight: 700;
+}
+
+.ftr-cols__col[data-hidden] .ftr-cols__head .li__t,
+.ftr-cols__link[data-hidden] .li__t {
+  color: var(--ad-dim);
+}
+
+.ftr-cols__links {
+  margin: 4px 0 0;
+}
+
+.ftr-cols__acts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+/* An <a> in the row's icon-button set looks and sizes as the buttons do. */
+.ftr-cols__edit {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid transparent;
+  color: var(--ad-dim);
+}
+
+.ftr-cols__pick {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ad-dim);
+}
+
+.ftr-cols__pick select {
+  inline-size: auto;
+  max-inline-size: 180px;
+  padding-block: 6px;
+  font-size: 13px;
+}
+
+.ftr-cols__loose {
+  margin-top: 12px;
+}
+
+.ftr-cols__sub {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ftr-cols__hint {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--ad-dim);
+}
+
+/* ---- Add a column ---- */
+.ftr-add {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ad-line);
+}
+
+.ftr-add__t {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ftr-add__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.ftr-add__f {
+  flex: 1 1 180px;
+  margin-bottom: 0;
+}
+
+.ftr-add__err {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--ad-err-text);
+}
+
+/* ---- Legal links ---- */
+.ftr-legal {
+  margin-top: 8px;
+}
+
+@media (max-width: 600px) {
+  .ftr-cols__link,
+  .ftr-cols__head {
+    flex-wrap: wrap;
+  }
+  .ftr-cols__acts,
+  .ftr-cols__pick {
+    inline-size: 100%;
+    justify-content: flex-end;
+  }
+}

@@ -80,6 +80,14 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     caps: ['nav.edit', 'theme.edit'],
     screens: ['/admin/appearance/header'],
   },
+  // Admin v2 E6: the Footer screen opens its own guide (put by the footer columns migration,
+  // revision 0), for the roles that open it: settings.general (the basics) or nav.edit (the
+  // columns).
+  {
+    slug: 'footer',
+    caps: ['nav.edit', 'settings.general'],
+    screens: ['/admin/appearance/footer'],
+  },
   // Admin v2 U7: the collection screens and the FAQ (the FAQ migration's put, revision 0).
   {
     slug: 'collections-and-faq',

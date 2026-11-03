@@ -133,6 +133,8 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'collection.css',
       'crm-settings.css',
       'dashboard.css',
+      // Admin v2 E6: the Footer screen.
+      'footer.css',
       'forms.css',
       'general.css',
       'header.css',

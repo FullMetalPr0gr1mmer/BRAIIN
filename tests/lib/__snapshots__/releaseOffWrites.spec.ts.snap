@@ -1336,6 +1336,7 @@ exports[`resource configs: toRow is what it was before R2 > navigation 1`] = `
 {
   "full": {
     "href": "/services",
+    "is_heading": true,
     "is_key": true,
     "label": {
       "ar": "الخدمات",
@@ -1349,6 +1350,9 @@ exports[`resource configs: toRow is what it was before R2 > navigation 1`] = `
   "keys": {
     "href": {
       "href": "/services",
+    },
+    "isHeading": {
+      "is_heading": true,
     },
     "isKey": {
       "is_key": true,
@@ -1374,7 +1378,10 @@ exports[`resource configs: toRow is what it was before R2 > navigation 1`] = `
   },
   "nulls": {
     "href": {
-      "error": "Validation failed: unsupported link scheme",
+      "href": null,
+    },
+    "isHeading": {
+      "is_heading": null,
     },
     "isKey": {
       "is_key": null,
@@ -1408,10 +1415,14 @@ exports[`resource configs: toRow is what it was before R2 > navigation 2`] = `
     "visible",
     "is_key",
     "sort_order",
+    "is_heading",
   ],
   "keys": {
     "href": [
       "href",
+    ],
+    "isHeading": [
+      "is_heading",
     ],
     "isKey": [
       "is_key",
@@ -1434,7 +1445,10 @@ exports[`resource configs: toRow is what it was before R2 > navigation 2`] = `
   },
   "nulls": {
     "href": [
-      "error",
+      "href",
+    ],
+    "isHeading": [
+      "is_heading",
     ],
     "isKey": [
       "is_key",

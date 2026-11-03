@@ -144,6 +144,11 @@ const PAIRS = [
   ['dim', 'paper', 4.5, 'secondary text on paper (svc numbers/blurbs)'],
   ['klein', 'paper', 4.5, 'tags / accents on paper'],
   ['cobalt', 'paper', 3.0, 'focus outline on paper — footer links (UI, 1.4.11)'],
+  // Admin v2 E6: the footer's column headings on paper, and the dark footer (data-style="dark")
+  ['ink', 'paper', 4.5, 'footer column heading on paper'],
+  ['muted', 'bg', 4.5, 'dark footer: the copyright line, the mailbox and the links'],
+  ['fg', 'bg', 4.5, 'dark footer: column headings and a hovered link'],
+  ['accent', 'bg', 4.5, 'dark footer: the focus outline (sky on black; UI needs 3, held to 4.5)'],
   // UI v2 (2026-09): mist blocks, secondary/case-study copy, error text on dark
   ['ink', 'mist', 4.5, 'body text on mist'],
   ['ink2', 'mist', 4.5, 'secondary copy on mist'],

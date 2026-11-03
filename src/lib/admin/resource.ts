@@ -129,10 +129,22 @@ export interface ResourceConfig {
    * one it only restates: `changed` holds every column the payload sent, equal or not (E10
    * code review, CR4: the media block cap). Absent, a rule judges as if every sent column
    * changed.
+   *
+   * `live` is live alone, with no pending change over it, kept for the request: a release's
+   * check passes it, so a rule that must see the state the apply passes THROUGH (live rows a
+   * removal has not yet taken away; E6's four footer columns) reads it once per release.
+   * Absent, such a rule reads `liveDb` itself.
    */
   assertWritable?: (
     merged: Row,
-    ctx: { auth: AuthContext; sb: Db; changed: Row; db?: OverlayDb; before?: Row | null },
+    ctx: {
+      auth: AuthContext;
+      sb: Db;
+      changed: Row;
+      db?: OverlayDb;
+      before?: Row | null;
+      live?: OverlayDb;
+    },
   ) => void | Promise<void>;
   /**
    * Named constraints of this table and what they mean to an editor — turns a raw

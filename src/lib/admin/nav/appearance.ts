@@ -21,6 +21,14 @@ export const appearance: NavArea = {
       icon: 'header',
       caps: ['theme.edit', 'nav.edit'],
     },
+    // Admin v2 E6: the footer's basics (settings.general) and its link columns (nav.edit),
+    // each card for its own capability.
+    {
+      href: '/admin/appearance/footer',
+      label: 'Footer',
+      icon: 'link',
+      caps: ['settings.general', 'nav.edit'],
+    },
     { href: '/admin/navigation', label: 'Menus', icon: 'list', caps: ['nav.edit'] },
   ],
 };

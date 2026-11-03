@@ -1896,6 +1896,99 @@ describe('header-and-menu (E5), a new guide put by the site_appearance migration
   });
 });
 
+describe('footer (E6), a new guide put by the footer columns migration', () => {
+  const article = () => SET.find((a) => a.slug === 'footer')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const SCREEN = 'src/components/admin/screens/footer/FooterScreen.tsx';
+
+  it('is put once, at revision 0 (new), by the migration that adds the footer columns', () => {
+    const puts = HELP.edits.filter((e) => e.slug === 'footer');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts[0]?.file).toMatch(/^\d{4}_footer_columns\.sql$/);
+    expect(HELP.revisions.get('footer')).toBe(1);
+  });
+
+  it('takes the free place 44, for the roles that open the Footer screen', () => {
+    expect(article().sort_order).toBe(44);
+    expect(SET.filter((a) => a.sort_order === 44)).toHaveLength(1);
+    expect(article().screens).toEqual(['/admin/appearance/footer']);
+    // settings.general (Admin, Developer: the basics) or nav.edit (Admin, Content Creator:
+    // the columns); SEO and Sales open neither.
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual([
+      'admin',
+      'content_creator',
+      'developer',
+    ]);
+  });
+
+  it('says what the screen does, in the words it uses', () => {
+    const en = text('en');
+    const screen = source(SCREEN);
+    const ui = source('src/lib/admin/ui/footer.ts');
+    expect(en).toContain('Add a column');
+    expect(screen).toContain('Add a column');
+    expect(en).toContain('No column');
+    expect(screen).toContain('<option value="">No column</option>');
+    expect(en).toContain('Move up and Move down');
+    expect(screen).toContain('aria-label={`Move ${item.label} up`}');
+    expect(en).toContain('Press Save the footer');
+    expect(screen).toContain('submitLabel="Save the footer"');
+    expect(en).toContain('Show the email address');
+    expect(ui).toContain("label: 'Show the email address'");
+    expect(en).toContain('Show social icons');
+    expect(ui).toContain("label: 'Show social icons'");
+    expect(en).toContain('{year}');
+    expect(ui).toContain('{year} becomes this year');
+    expect(en).toContain('up to four');
+    expect(screen).toContain('Always shown');
+    // A heading's links go with it (0009: parent_id on delete cascade): both say so.
+    expect(en).toContain('Removing a column also removes the links in it');
+    expect(screen).toContain('Removing a column also removes the links in it');
+    // Hiding a column hides its links on the site (src/lib/nav/tree.ts, review E6-C1): the
+    // guide, the card and the column's toast say so. The screen's JSX text, as one line.
+    const flat = screen.replace(/\s+/g, ' ');
+    expect(en).toContain('Hiding a column hides its links on the site too');
+    expect(text('ar')).toContain('وإخفاء العمود يُخفي روابطه في الموقع أيضًا');
+    expect(flat).toContain('Hiding a column hides its links on the site too');
+    expect(screen).toContain('is hidden from the footer, with its links.');
+    // The footer shows one level of links (src/lib/nav/tree.ts, code review CR1): a link's
+    // sub-links move with it and never show. The guide and the card say so.
+    expect(en).toContain(
+      'The footer shows one level of links: links put under a link on the Menus screen move with it and are not shown.',
+    );
+    expect(text('ar')).toContain('ويعرض التذييل مستوى واحدًا من الروابط');
+    expect(flat).toContain('The footer shows one level of links');
+    // Only an Admin deletes a navigation row (0009 navigation_delete_admin, the authz case
+    // 'navigation delete' allows admin only), so neither tells a Content Creator to remove one
+    // (review E6-C2).
+    expect(readFileSync('supabase/migrations/0009_admin_cms.sql', 'utf8')).toMatch(
+      /create policy navigation_delete_admin on public\.navigation\s+as restrictive for delete\s+using \(tenant_id = app\.effective_tenant_id\(\) and app\.is_admin\(\)\);/,
+    );
+    expect(en).toContain('Only an Admin can remove a link or a column.');
+    expect(text('ar')).toContain('ولا يحذف رابطًا أو عمودًا إلا المسؤول (Admin).');
+    expect(flat).toContain('Only an Admin can remove a link or a column there.');
+    expect(flat).toContain('an Admin removes one on the Menus screen');
+    expect(en).not.toMatch(/add one or remove one/);
+    expect(flat).not.toMatch(/Remove one on the Menus screen|adding a link and removing one/);
+    for (const label of [
+      'Appearance › Footer',
+      'Add a column',
+      'No column',
+      'Move up',
+      'Save the footer',
+      'Show the email address',
+      'Show social icons',
+      'History',
+      'Menus',
+      'PDPL',
+    ]) {
+      expect(text('ar')).toContain(label);
+    }
+  });
+});
+
 describe('editing-pages (E1), a new guide put by the page editor migration', () => {
   const article = () => SET.find((a) => a.slug === 'editing-pages')!;
   const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
@@ -2524,6 +2617,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'collections-and-faq',
       'editing-pages',
       'finding-your-way',
+      'footer',
       'header-and-menu',
       'media-library',
       'previewing-changes',
@@ -2557,6 +2651,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
     expect(shown('developer')).toEqual([
       'backups-and-versions',
       'finding-your-way',
+      'footer',
       'forms-and-spam',
       'general-settings',
       'header-and-menu',

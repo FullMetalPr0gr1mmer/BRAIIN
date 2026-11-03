@@ -13,7 +13,8 @@ export interface PendingRef {
   version: number;
 }
 
-const pendingOf = (row: Row): PendingRef | null => {
+/** A row's pending change, or null (shared with the Footer screen's card, E6). */
+export const pendingOf = (row: Row): PendingRef | null => {
   const draft = readDraft(row);
   return draft ? { id: draft.id, version: draft.version } : null;
 };
@@ -32,15 +33,25 @@ export interface MenuRow {
   pending: PendingRef | null;
 }
 
-const text = (value: unknown): string => {
-  if (typeof value === 'string') return value.trim();
+/**
+ * A label's two languages, trimmed ('' for one that is missing); a plain string is English
+ * (shared with the Footer screen's card, E6).
+ */
+export const bilingual = (value: unknown): { en: string; ar: string } => {
+  if (typeof value === 'string') return { en: value.trim(), ar: '' };
   if (value && typeof value === 'object') {
     const v = value as Row;
-    const en = typeof v['en'] === 'string' ? v['en'].trim() : '';
-    const ar = typeof v['ar'] === 'string' ? v['ar'].trim() : '';
-    return en || ar;
+    return {
+      en: typeof v['en'] === 'string' ? v['en'].trim() : '',
+      ar: typeof v['ar'] === 'string' ? v['ar'].trim() : '',
+    };
   }
-  return '';
+  return { en: '', ar: '' };
+};
+
+const text = (value: unknown): string => {
+  const { en, ar } = bilingual(value);
+  return en || ar;
 };
 
 /** The header menu's rows (an API list answer's `rows`) → its top-level links, in order. */

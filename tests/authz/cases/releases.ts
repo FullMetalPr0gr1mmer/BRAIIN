@@ -697,6 +697,26 @@ export const cases: readonly Case[] = [
     releases: true,
   },
   {
+    // Admin v2 E6: the Footer screen's Basics, staged with the identity (P-3).
+    name: 'site profile write, the footer basics (releases on)',
+    load: () => import('@/pages/api/admin/site-profile'),
+    method: 'PATCH',
+    url: '/api/admin/site-profile',
+    body: { footerStyle: 'dark', footerShowSocial: true, version: 1 },
+    allow: ['admin', 'developer'],
+    releases: true,
+  },
+  {
+    // Admin v2 E6: a footer column, staged as a nav item (nav.edit).
+    name: 'navigation create, a footer column (releases on)',
+    load: () => import('@/pages/api/admin/navigation/index'),
+    method: 'POST',
+    url: '/api/admin/navigation?staged=1',
+    body: { location: 'footer', label: VALID_BILINGUAL, isHeading: true },
+    allow: ['admin', 'content_creator'],
+    releases: true,
+  },
+  {
     // Staged or not, opening the intake is Admin only in the Worker (guardWrite), before the
     // staged save refuses the changed switch with 422 and points to the intake endpoint.
     name: 'site profile opens job applications (releases on, Admin-only)',

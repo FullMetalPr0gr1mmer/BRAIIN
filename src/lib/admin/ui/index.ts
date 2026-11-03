@@ -8,6 +8,7 @@ import { certificationsUi } from './certifications';
 import { clientsUi } from './clients';
 import { disciplinesUi } from './disciplines';
 import { faqUi } from './faq';
+import { footerUi } from './footer';
 import { integrationsUi } from './integrations';
 import { maintenanceUi } from './maintenance';
 import { mediaUi } from './media';
@@ -109,6 +110,8 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
   'ai-config': aiConfigUi,
   // Admin v2 E5: the header's options (site_appearance), the Header screen's form.
   appearance: appearanceUi,
+  // Admin v2 E6: the footer's basics, four columns of the identity row (site_profile).
+  footer: footerUi,
   integrations: integrationsUi,
   maintenance: maintenanceUi,
   profile: profileUi,
