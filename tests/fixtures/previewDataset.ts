@@ -688,6 +688,7 @@ export function fixtureTables(): Record<string, Row[]> {
         href: '/portfolio',
         sort_order: 1,
         is_key: true,
+        is_heading: false,
         visible: true,
       }),
       T({
@@ -698,6 +699,7 @@ export function fixtureTables(): Record<string, Row[]> {
         href: '/soon',
         sort_order: 2,
         is_key: false,
+        is_heading: false,
         visible: false,
       }),
       T({
@@ -708,6 +710,7 @@ export function fixtureTables(): Record<string, Row[]> {
         href: '/portfolio/all',
         sort_order: 1,
         is_key: false,
+        is_heading: false,
         visible: true,
       }),
       // A third level: a pending delete of the top link takes it too (0009's cascade).
@@ -719,6 +722,7 @@ export function fixtureTables(): Record<string, Row[]> {
         href: '/portfolio/all#archive',
         sort_order: 1,
         is_key: false,
+        is_heading: false,
         visible: true,
       }),
     ],

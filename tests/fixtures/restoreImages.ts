@@ -20,6 +20,9 @@ const OVERRIDES: Partial<Record<ReleaseEntityType, Row>> = {
     problems: [{ problem: BI('Problem', 'مشكلة'), solution: BI('Solution', 'حل') }],
   },
   page_section: { type: 'cta', content: { heading: BI('Heading', 'عنوان') } },
+  // Admin v2 E6: the full change carries a link, a parent and the key, so it is a link, not a
+  // footer column heading (which has none of the three: NavItemWriteSchema refuses the mix).
+  nav_item: { isHeading: false },
   page_visibility: {
     target: { pageId: PAGE },
     mode: 'hidden',

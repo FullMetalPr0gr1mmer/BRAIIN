@@ -1,11 +1,13 @@
 ---
 import type { Locale } from '@schemas/primitives';
-import { getNavigation, type NavNode } from '@/lib/data/navigation';
+import { getFooterNavigation, type NavNode } from '@/lib/data/navigation';
 import { FOOTER_FALLBACK, LEGAL_LINKS } from '@/lib/nav/fallback';
 import { filterNavForVisibility } from '@/lib/visibility/listing';
 import { getIdentity, brandName } from '@/lib/identity';
-import { arabicIndic, localizedHref, localizedPath } from '@/lib/i18n';
-import { trackHref } from '@/lib/analytics/track';
+import { arabicIndic, localizedPath } from '@/lib/i18n';
+import { copyrightLine, footerAttributes, footerSocials } from '@/lib/appearance/footer';
+import FooterLink from './footer/FooterLink.astro';
+import FooterMail from './footer/FooterMail.astro';
 
 // Sitewide footer — the mockup's paper bar: "© 2026 Braiin Statiion. Jeddah, Saudi
 // Arabia" and the studio mailbox, both from the public identity (`site_profile`), so a
@@ -16,6 +18,16 @@ import { trackHref } from '@/lib/analytics/track';
 // section from the bottom of any page) and the legal links, which are PDPL obligations
 // and therefore hard-wired (LEGAL_LINKS) rather than left to whether someone authored a
 // nav row for them.
+//
+// Admin v2 E6 (Appearance › Footer): the copyright line is a template (`{year}`, `{brand}`,
+// `{place}`; none saved is the line above), the mailbox can be hidden, the visible social
+// accounts can show as icons, the style can be dark (`data-style`, global.css), and the
+// footer links can stand in up to four titled columns (navigation heading rows, 0122). Every
+// default is the footer as built, byte for byte (tests/render/siteChrome.spec.ts). The legal
+// links stay whatever is saved. The footer draws one level of links: a link's sub-links never
+// show (src/lib/nav/tree.ts footerTree). The mailbox and a link are each drawn by one partial
+// (./footer/, E6 code review CR7); a menu with no link left draws no landmark (CR5); a
+// column's heading id is namespaced (`site-footer-col-N`, CR10).
 
 interface Props {
   locale: Locale;
@@ -23,59 +35,101 @@ interface Props {
 
 const { locale } = Astro.props;
 
-const identity = await getIdentity(Astro.locals);
+// Both reads at once: neither waits on the other.
+const [identity, authored] = await Promise.all([getIdentity(Astro.locals), getFooterNavigation()]);
 const brand = brandName(identity, locale);
 const place = identity.location[locale];
 
-const authored = await getNavigation('footer');
+const visibility = Astro.locals.visibility;
+const now = Date.now();
+// Authored = a link of its own (a column with no link is a title over nothing, not a menu).
+const anyAuthored =
+  authored.links.length > 0 || authored.columns.some((column) => column.links.length > 0);
 // As the header: a page that is not public leaves the menu (the legal links never do).
 const items: NavNode[] = filterNavForVisibility(
-  authored.length > 0 ? authored : FOOTER_FALLBACK,
-  Astro.locals.visibility,
-  Date.now(),
+  anyAuthored ? authored.links : FOOTER_FALLBACK,
+  visibility,
+  now,
 );
+// A column whose every link left (hidden pages) is not drawn: a title over nothing.
+const columns = authored.columns
+  .map((column) => ({ ...column, links: filterNavForVisibility(column.links, visibility, now) }))
+  .filter((column) => column.links.length > 0);
 
 // The Arabic bar writes the year in Arabic-Indic digits, as the mockup does (© ٢٠٢٦).
 const year = new Date().getFullYear();
 const yearText = locale === 'ar' ? arabicIndic(year) : String(year);
+const copy = copyrightLine(identity.footer.copyright, locale, { year: yearText, brand, place });
+const showEmail = identity.footer.showEmail;
+const socials = footerSocials(identity);
+const attrs = footerAttributes(identity);
 
 const STR = {
-  en: { nav: 'Footer navigation', legal: 'Legal' },
-  ar: { nav: 'روابط التذييل', legal: 'روابط قانونية' },
+  en: { nav: 'Footer navigation', legal: 'Legal', social: 'Social accounts' },
+  ar: { nav: 'روابط التذييل', legal: 'روابط قانونية', social: 'حسابات التواصل الاجتماعي' },
 }[locale];
 ---
 
-<footer class="site-footer">
+<footer class="site-footer" {...attrs}>
   <div class="site-footer__bar">
-    <p class="site-footer__copy">© {yearText} {brand}. {place}</p>
-    {/* dir=ltr: an address must not be re-ordered inside RTL text */}
-    <a
-      class="site-footer__mail"
-      href={`mailto:${identity.contactEmail}`}
-      dir="ltr"
-      data-track="email"
-    >
-      {identity.contactEmail}
-    </a>
+    <p class="site-footer__copy">{copy}</p>
+    {
+      socials.length > 0 ? (
+        <div class="site-footer__end">
+          {showEmail && <FooterMail email={identity.contactEmail} />}
+          <ul class="site-footer__social" aria-label={STR.social}>
+            {socials.map((s) => (
+              <li>
+                <a href={s.href} target="_blank" rel="noopener" aria-label={s.label}>
+                  {s.icon ? (
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d={s.icon} />
+                    </svg>
+                  ) : (
+                    s.label
+                  )}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        showEmail && <FooterMail email={identity.contactEmail} />
+      )
+    }
   </div>
 
+  {
+    columns.length > 0 && (
+      <div class="site-footer__cols">
+        {columns.map((column, i) => (
+          <nav class="site-footer__col" aria-labelledby={`site-footer-col-${i + 1}`}>
+            <h2 class="site-footer__heading" id={`site-footer-col-${i + 1}`}>
+              {column.label[locale] ?? column.label.en}
+            </h2>
+            <ul class="site-footer__list site-footer__list--col">
+              {column.links.map((item) => (
+                <FooterLink item={item} locale={locale} />
+              ))}
+            </ul>
+          </nav>
+        ))}
+      </div>
+    )
+  }
+
   <div class="site-footer__links">
-    <nav aria-label={STR.nav}>
-      <ul class="site-footer__list">
-        {
-          items.map((item) => (
-            <li>
-              <a
-                href={localizedHref(item.href, locale)}
-                data-track={trackHref(localizedHref(item.href, locale))}
-              >
-                {item.label[locale] ?? item.label.en}
-              </a>
-            </li>
-          ))
-        }
-      </ul>
-    </nav>
+    {
+      items.length > 0 && (
+        <nav aria-label={STR.nav}>
+          <ul class="site-footer__list">
+            {items.map((item) => (
+              <FooterLink item={item} locale={locale} />
+            ))}
+          </ul>
+        </nav>
+      )
+    }
 
     <nav aria-label={STR.legal}>
       <ul class="site-footer__list">

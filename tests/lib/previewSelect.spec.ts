@@ -27,13 +27,14 @@ describe('parseSelect', () => {
 
   it('parses every select any loader sends (read from the loaders, the private ones too)', () => {
     const selects = loaderQueries().filter((q) => q.table !== null);
-    // blog, certifications, disciplines, faq (U7), navigation, pageSections (2), portfolio (3),
+    // blog, certifications, disciplines, faq (U7), navigation (2: the header's, and E6's footer
+    // with its columns), pageSections (2), portfolio (3),
     // sectionMedia, seo (4: U10's getSeoRules reads entity_seo and pages), serviceCases,
     // services (2), siteProfile (2: the identity, and U9's icons from media_assets),
     // siteVerification (U11), ga4 (U15), forms (E8), appearance (E5), statistics, taxonomy (3),
-    // team, theme (E4): 31
+    // team, theme (E4): 32
     // `.from()` calls; search's two are rpcs.
-    expect(selects).toHaveLength(31);
+    expect(selects).toHaveLength(32);
     for (const q of selects) {
       expect(q.select, `${q.file}:${q.line}`).not.toBeNull();
       expect(() => parseSelect(q.select!), `${q.file}:${q.line}`).not.toThrow();

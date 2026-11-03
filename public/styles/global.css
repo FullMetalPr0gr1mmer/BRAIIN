@@ -3101,6 +3101,100 @@ html[dir='rtl'] .social-strip--klein h2 {
   gap: 1.25rem;
 }
 
+/* Admin v2 E6 (Appearance › Footer). Each rule applies only to markup a saved setting adds,
+   so the footer as built keeps its look: the mailbox with the social icons (`__end`), the
+   link columns (`__cols`, at most four, from navigation heading rows) and the dark style
+   (`data-style="dark"`; contrast-audit's "dark footer" pairs). */
+.site-footer__end {
+  display: flex;
+  align-items: center;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+}
+
+.site-footer__social {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 24 px at least: WCAG 2.5.8 target size. */
+.site-footer__social a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 28px;
+  min-block-size: 28px;
+}
+
+.site-footer__social svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.site-footer__cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 20px 24px;
+  margin-top: 14px;
+  padding-top: 18px;
+  border-top: 1px solid var(--bs-line-l);
+}
+
+.site-footer__heading {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bs-ink);
+}
+
+html[dir='rtl'] .site-footer__heading {
+  letter-spacing: 0;
+}
+
+.site-footer__list--col {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* A text link under 24 px tall still meets 2.5.8 through its row (axe target-size). */
+.site-footer__list--col a {
+  display: inline-block;
+  min-block-size: 24px;
+}
+
+.site-footer[data-style='dark'] {
+  background: var(--bs-bg);
+  color: var(--bs-muted); /* #a6adbf on black: 9.35:1 (contrast-audit) */
+  border-top-color: var(--bs-line-d);
+}
+
+.site-footer[data-style='dark'] a {
+  color: var(--bs-muted);
+}
+
+.site-footer[data-style='dark'] a:hover,
+.site-footer[data-style='dark'] .site-footer__heading {
+  color: var(--bs-fg);
+}
+
+.site-footer[data-style='dark'] .site-footer__links,
+.site-footer[data-style='dark'] .site-footer__cols {
+  border-top-color: var(--bs-line-d);
+}
+
+/* The focus ring in sky on the dark footer, as on the dark bands (contrast-audit). */
+.site-footer[data-style='dark'] :focus-visible {
+  outline-color: var(--bs-sky);
+}
+
 /* ============================================================
    Interior pages (services / portfolio / blog / search / about /
    contact / legal) — same selectors as before, brand-restyled.

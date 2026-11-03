@@ -730,11 +730,13 @@ export async function checkSelection(
 
   await primeRoutes(db, items);
 
-  // The entity's own rules, over the state the release leaves.
+  // The entity's own rules, over the state the release leaves (and live alone, read once, for
+  // a rule that must see the state the apply passes through: E6's footer columns).
+  const liveReads = memoDb(liveDb(sb, auth));
   for (const item of items) {
     if (!item.merged || item.report.errors.length > 0) continue;
     try {
-      await rulesOf(item, { auth, sb, db });
+      await rulesOf(item, { auth, sb, db, live: liveReads });
     } catch (err) {
       item.report.errors.push(asIssue(err));
     }
@@ -756,7 +758,7 @@ export async function checkSelection(
 
 async function rulesOf(
   item: Derived,
-  ctx: { auth: AuthContext; sb: SupabaseClient; db: MemoDb },
+  ctx: { auth: AuthContext; sb: SupabaseClient; db: MemoDb; live: MemoDb },
 ): Promise<void> {
   const { entry, merged, patch } = item;
   if (!merged) return;

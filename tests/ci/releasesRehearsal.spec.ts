@@ -169,6 +169,7 @@ describe('playwright.config.ts', () => {
       'visibility',
       'general',
       'header',
+      'footer',
       'ga4',
       'theme',
       'maintenance',
@@ -224,6 +225,7 @@ describe('playwright.config.ts', () => {
           spec('visibility'),
           spec('general'),
           spec('header'),
+          spec('footer'),
           spec('ga4'),
           spec('theme'),
           spec('maintenance'),
@@ -238,7 +240,9 @@ describe('playwright.config.ts', () => {
       p('general', { testMatch: spec('general'), dependencies: ['visibility'] }),
       // Admin v2 E5: the header's options, alone after general settings.
       p('header', { testMatch: spec('header'), dependencies: ['general'] }),
-      p('ga4', { testMatch: spec('ga4'), dependencies: ['header'] }),
+      // Admin v2 E6: the footer, alone after the header.
+      p('footer', { testMatch: spec('footer'), dependencies: ['header'] }),
+      p('ga4', { testMatch: spec('ga4'), dependencies: ['footer'] }),
       // Admin v2 E4: the theme, alone, between GA4 and maintenance.
       p('theme', { testMatch: spec('theme'), dependencies: ['ga4'] }),
       p('maintenance', {

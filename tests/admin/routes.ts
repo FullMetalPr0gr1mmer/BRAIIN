@@ -221,6 +221,18 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     render: 'server',
     gate: 'const allowed = theme || nav;',
   },
+  // Admin v2 E6: the Footer screen opens for settings.general (its basics) or nav.edit (its
+  // columns card), so SEO and Sales are refused: the page's own 403 and Refused.astro, having
+  // read nothing; its JSON twin is the basics' read (the identity singleton,
+  // settings.general), which refuses both as well.
+  {
+    href: '/admin/appearance/footer',
+    api: '/api/admin/site-profile',
+    cap: 'settings.general',
+    anyOf: ['settings.general', 'nav.edit'],
+    render: 'server',
+    gate: 'const allowed = settings || nav;',
+  },
   // Admin v2 R13 (plan B7.3): Backups & versions, for any release read capability, so only
   // Sales is refused: the page's own 403 and Refused.astro, having read nothing; its JSON twin
   // is the versions list, behind the same capabilities.

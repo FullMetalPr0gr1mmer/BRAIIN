@@ -1,0 +1,20 @@
+---
+import type { Locale } from '@schemas/primitives';
+import type { NavNode } from '@/lib/data/navigation';
+import { localizedHref } from '@/lib/i18n';
+import { trackHref } from '@/lib/analytics/track';
+
+// One footer link as a list item (Admin v2 E6 code review, CR7): drawn in one place, in a
+// column or in the row under the columns, by SiteFooter.astro. One level only: a link's
+// sub-links are never drawn in the footer (src/lib/nav/tree.ts footerTree).
+
+interface Props {
+  item: NavNode;
+  locale: Locale;
+}
+
+const { item, locale } = Astro.props;
+const href = localizedHref(item.href, locale);
+---
+
+<li><a href={href} data-track={trackHref(href)}>{item.label[locale] ?? item.label.en}</a></li>

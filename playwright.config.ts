@@ -22,6 +22,9 @@ const GENERAL_SPEC = /[\\/]tests[\\/]admin[\\/]general\.e2e\.ts$/;
 // The header's options (Admin v2 E5) change the bar on every public page (its markup, its
 // height): its own project, after general settings.
 const HEADER_SPEC = /[\\/]tests[\\/]admin[\\/]header\.e2e\.ts$/;
+// The footer (Admin v2 E6) saves its basics and a column every public page then draws: its own
+// project, after the header.
+const FOOTER_SPEC = /[\\/]tests[\\/]admin[\\/]footer\.e2e\.ts$/;
 // Google Analytics 4 (Admin v2 U15) saves a measurement id, which puts the loader on every public
 // page the other specs read (the CI e2e build turns GA4_NOTICE_READY on): its own project, after
 // general settings and before maintenance.
@@ -104,6 +107,7 @@ export default defineConfig({
         VISIBILITY_SPEC,
         GENERAL_SPEC,
         HEADER_SPEC,
+        FOOTER_SPEC,
         GA4_SPEC,
         THEME_SPEC,
         MAINTENANCE_SPEC,
@@ -157,6 +161,16 @@ export default defineConfig({
       dependencies: ['general'],
     },
     {
+      // The footer (Admin v2 E6): the dark style, a template, the mailbox hidden, the icons and
+      // a column on every public page while it runs, then all of it put back: alone, after the
+      // header.
+      name: 'footer',
+      testDir: './tests/admin',
+      testMatch: FOOTER_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['header'],
+    },
+    {
       // GA4 (Admin v2 U15) saves an id, so every public page carries the loader and lists
       // Google's hosts while it runs: alone, after the specs that read those pages, and it
       // clears the id when it ends.
@@ -164,7 +178,7 @@ export default defineConfig({
       testDir: './tests/admin',
       testMatch: GA4_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['header'],
+      dependencies: ['footer'],
     },
     {
       // The theme (Admin v2 E4) saves colours every public page draws, so the axe and CSP

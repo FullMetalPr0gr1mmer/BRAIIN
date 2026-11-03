@@ -75,8 +75,10 @@ export const BACKUP_TABLES: readonly { table: string; columns: string }[] = [
     columns: 'id,page_id,type,content,style,visible,sort_order,is_placeholder,updated_at',
   },
   {
+    // is_heading (Admin v2 E6, 0122): a footer column has no href, so a restore without the
+    // flag could not insert it (navigation_heading_shape) and the columns would be lost.
     table: 'navigation',
-    columns: 'id,location,parent_id,label,href,visible,is_key,sort_order',
+    columns: 'id,location,parent_id,label,href,visible,is_key,sort_order,is_heading',
   },
   {
     table: 'site_profile',

@@ -479,6 +479,17 @@ describe('the changed fields: names, never values', () => {
     ).toEqual(['Stage', 'Value (SAR)']);
   });
 
+  it('the identity row names the labels of both its forms, General and Footer (Admin v2 E6)', () => {
+    expect(
+      changedFields({
+        entity_type: 'site_profile',
+        detail: {
+          fields: ['brand_name', 'footer_copyright', 'footer_style', 'footer_show_social'],
+        },
+      }),
+    ).toEqual(['Site name', 'Copyright line', 'Footer style', 'Show social icons']);
+  });
+
   it('never shows a value, whatever the detail holds', () => {
     const d = describeRow(
       row('lead.update', {

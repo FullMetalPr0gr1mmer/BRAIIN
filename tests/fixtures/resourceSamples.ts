@@ -96,6 +96,8 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   label: BI('Services', 'الخدمات'),
   href: '/services',
   isKey: true,
+  // Admin v2 E6: a footer column heading.
+  isHeading: true,
   // team
   bio: BI('Bio', 'نبذة'),
   avatarUrl: 'https://images.example.test/a.jpg',

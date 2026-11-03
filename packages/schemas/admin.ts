@@ -33,6 +33,7 @@ import {
   SEO_ROBOTS,
   SEO_TITLE_MAX,
 } from './seoRules';
+import { FOOTER_COLUMNS_MAX } from './footerRules';
 import { DisplayNameValueSchema, PASSWORD_MAX_BYTES, PASSWORD_MIN, utf8Bytes } from './adminPrefs';
 import { SectionTypeSchema, sectionContentIssues, type SectionType } from './sections';
 import { SECTION_LABEL_MAX } from './sectionTypes';
@@ -712,18 +713,140 @@ export const TestimonialUpdateSchema = updatable(TestimonialWriteBase).superRefi
 
 // ── Navigation ──────────────────────────────────────────────────────────────────
 
-export const NavItemWriteSchema = z.object({
+/** The most footer columns (heading rows) a site holds (Admin v2 E6; the 0122 trigger). */
+export { FOOTER_COLUMNS_MAX } from './footerRules';
+
+const NavItemObject = z.object({
   location: z.enum(['header', 'footer']),
   parentId: UuidSchema.nullish(),
   label: BilingualTextSchema,
-  /** Site-relative or absolute; same scheme allowlist as rich-text links. */
-  href: z.string().trim().min(1).max(2048),
+  /**
+   * Site-relative or absolute; same scheme allowlist as rich-text links. Null only on a
+   * footer column heading (Admin v2 E6), which links nowhere.
+   */
+  href: z.string().trim().min(1).max(2048).nullish(),
   visible: z.boolean().default(true),
   /** The link the header keeps visible at <=900px. At most one per location (0019 index). */
   isKey: z.boolean().default(false),
   sortOrder: SortOrderSchema,
+  /**
+   * Admin v2 E6: a footer column's heading. It has no link, sits at the top level of the
+   * footer and is never the key link (navigation_heading_shape, 0122); the footer links under
+   * it are its column. At most FOOTER_COLUMNS_MAX per site (the database's trigger).
+   */
+  isHeading: z.boolean().default(false),
 });
-export const NavItemUpdateSchema = updatable(NavItemWriteSchema);
+
+/** The columns of a menu row that 0122's navigation_heading_shape reads, by payload name. */
+export interface NavShape {
+  isHeading?: boolean | null | undefined;
+  href?: string | null | undefined;
+  location?: string | null | undefined;
+  parentId?: string | null | undefined;
+  isKey?: boolean | null | undefined;
+}
+
+/** One way a menu row breaks the shape, on the field a person changes to fix it. */
+export interface NavShapeIssue {
+  field: keyof NavShape;
+  message: string;
+}
+
+/**
+ * What a menu row's shape lacks (navigation_heading_shape, 0122): a link needs its address; a
+ * column heading has none, is in the footer, at the top level and never the key link.
+ *
+ * `changed` names the fields a write sends (an update over a stored row, live or staged; E6
+ * code review, CR3 and CR4). The stored row is inside the CHECK, and each of its clauses reads
+ * the heading flag and one other column, so only a clause one of whose columns changed can
+ * fail: only those are judged. A heading's clash is said on its own field when the write sent
+ * it, else on the heading flag the write turned on; a link without an address is always said
+ * on its address. Absent, every clause is judged (a create).
+ */
+export function navShapeIssues(
+  row: NavShape,
+  changed?: ReadonlySet<keyof NavShape>,
+): NavShapeIssue[] {
+  const touched = (field: keyof NavShape) =>
+    !changed || changed.has(field) || changed.has('isHeading');
+  const on = (field: keyof NavShape) => (!changed || changed.has(field) ? field : 'isHeading');
+  const out: NavShapeIssue[] = [];
+  if (row.isHeading !== true) {
+    if (touched('href') && !row.href) {
+      out.push({ field: 'href', message: 'a link needs an address' });
+    }
+    return out;
+  }
+  if (touched('href') && row.href) {
+    out.push(
+      on('href') === 'href'
+        ? { field: 'href', message: 'a column heading has no link: leave it empty' }
+        : {
+            field: 'isHeading',
+            message: 'this link has an address: empty it before it becomes a column heading',
+          },
+    );
+  }
+  if (touched('location') && row.location !== 'footer') {
+    out.push(
+      on('location') === 'location'
+        ? { field: 'location', message: 'column headings are for the footer' }
+        : { field: 'isHeading', message: 'only a footer row can be a column heading' },
+    );
+  }
+  if (touched('parentId') && row.parentId) {
+    out.push(
+      on('parentId') === 'parentId'
+        ? { field: 'parentId', message: 'a column heading sits at the top of the footer' }
+        : {
+            field: 'isHeading',
+            message: 'this row sits under another one: move it to the top first',
+          },
+    );
+  }
+  if (touched('isKey') && row.isKey === true) {
+    out.push(
+      on('isKey') === 'isKey'
+        ? { field: 'isKey', message: 'a column heading cannot be the key link' }
+        : {
+            field: 'isHeading',
+            message: 'this is the key link: untick Key link before it becomes a column heading',
+          },
+    );
+  }
+  return out;
+}
+
+/**
+ * A new menu row: a link (with its href) or a footer column heading (without one). An update
+ * names only what it changes, so its shape is checked over the stored row by the resource
+ * (navigationResource.assertWritable, live and staged, with the same navShapeIssues) and,
+ * last, by the database's CHECK.
+ */
+export const NavItemWriteSchema = NavItemObject.superRefine((v, ctx) => {
+  for (const issue of navShapeIssues(v)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [issue.field], message: issue.message });
+  }
+});
+export const NavItemUpdateSchema = updatable(NavItemObject);
+
+/** What the footer's four-column limit says (the API's 422 and 0122's refusal). */
+export const FOOTER_COLUMNS_FULL = `The footer already has ${FOOTER_COLUMNS_MAX} columns. Remove one or turn it back into a link first.`;
+
+/**
+ * Releases on: a new column whose place frees only when a column's removal (or its turn back
+ * into a link) is published. A release applies its new and changed rows before its removals,
+ * so the two cannot travel together (E6 release-mode check, round 2).
+ */
+export const FOOTER_COLUMNS_PUBLISH_FIRST = `${FOOTER_COLUMNS_FULL} Publish the removal first, then add the new column.`;
+
+/**
+ * Releases on: a link under another row made a column heading. A release writes a row's parent
+ * after its other columns, so the heading would land under its old parent (E6 release-mode
+ * check, round 2).
+ */
+export const FOOTER_HEADING_MOVE_FIRST =
+  'Move this link to the top level first, publish, then make it a column heading.';
 
 // ── SEO ─────────────────────────────────────────────────────────────────────────
 
