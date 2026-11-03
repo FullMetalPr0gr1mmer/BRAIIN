@@ -171,13 +171,13 @@ describe('the reader and the plate’s attributes', () => {
 
 describe('the CSS buckets', () => {
   // The no-preference block that holds the site's timing buckets.
-  const motionBlock = (() => {
+  const motionBlock = () => {
     const at = GLOBAL.indexOf(
       '@media (prefers-reduced-motion: no-preference) {\n  body:has(.intro[data-hold=',
     );
     expect(at, 'the timing buckets sit in a no-preference block').toBeGreaterThan(0);
     return GLOBAL.slice(at, GLOBAL.indexOf('\n}\n', at));
-  })();
+  };
 
   it('global.css maps every step but the default to the token, once, inside no-preference', () => {
     for (const [range, attr, token, fallback] of [
@@ -190,7 +190,7 @@ describe('the CSS buckets', () => {
         if (v === fallback) {
           expect(count, `${attr} ${v} is the default: no rule`).toBe(0);
         } else {
-          expect(motionBlock, `${attr} ${v}`).toContain(rule);
+          expect(motionBlock(), `${attr} ${v}`).toContain(rule);
           expect(count, `${attr} ${v} once`).toBe(1);
         }
       }
