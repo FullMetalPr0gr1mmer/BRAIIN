@@ -299,9 +299,10 @@ test.describe('as admin', () => {
     const card = page.getByRole('region', { name: 'A data table' });
     const table = card.getByRole('table', { name: 'Sample entries, with selection' });
     const preview = table.getByRole('button', { name: 'Preview Sample entry 1', exact: true });
-    // The table sits far below the first screen: bring the row into view, then measure,
-    // so the presses below land on it and not outside the viewport.
-    await preview.scrollIntoViewIfNeeded();
+    // The table sits far below the first screen: bring the row to the middle of the window,
+    // then measure, so the presses below land on it and not outside the viewport, nor in the
+    // band a shown savebar covers at the bottom (the release-mode rehearsal, R14a).
+    await preview.evaluate((el) => el.scrollIntoView({ block: 'center' }));
     await page.mouse.move(1, 1);
     const spot = (await preview.boundingBox())!;
     const x = spot.x + spot.width / 2;
@@ -339,7 +340,8 @@ test.describe('as admin', () => {
     // #kit-work-edit (a zero-JS page: where the press went is the address it led to).
     const title = page.getByRole('link', { name: 'Selected work', exact: true });
     const edit = page.getByRole('link', { name: 'Edit Selected work', exact: true });
-    await edit.scrollIntoViewIfNeeded();
+    // The middle of the window, clear of a shown savebar (R14a).
+    await edit.evaluate((el) => el.scrollIntoView({ block: 'center' }));
     await page.mouse.move(1, 1);
     const spot = (await edit.boundingBox())!;
     const x = spot.x + spot.width / 2;

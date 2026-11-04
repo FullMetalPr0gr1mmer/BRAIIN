@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import { STAFF_IDS, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
@@ -15,6 +15,11 @@ import { STAFF_IDS, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff'
  *
  * As the Admin, on a question of this run's own (a random marker, the FAQ on /contact):
  *
+ *   room       with a pending change of its own (thrown away after), the shown savebar covers
+ *              no control (R14a, WCAG 2.2 2.4.11): /admin/ai-config's last Save, focused from
+ *              the top and scrolled to the page's end, and the kit's stuck bulk bar, at phone,
+ *              tablet and desktop widths, are each the element at their own centre and end
+ *              above the bar (the first rehearsal's style-finder failure);
  *   publish    a new question saved through the FAQ route waits as a pending change (not on
  *              /contact); the savebar counts it; Publish… in the dialog puts it live as a new
  *              version ("Published vP"), and /contact shows it;
@@ -47,6 +52,7 @@ test.describe.configure({ mode: 'serial' });
 const MARK = `E2E R ${randomBytes(4).toString('hex')}`;
 const Q1 = { en: `${MARK}: first wording?`, ar: `${MARK}: الصياغة الأولى؟` };
 const Q2 = { en: `${MARK}: second wording?`, ar: `${MARK}: الصياغة الثانية؟` };
+const ROOM_Q = { en: `${MARK}: room check?`, ar: `${MARK}: فحص المساحة؟` };
 const ANSWER = { en: 'Yes. Answer first, one paragraph.', ar: 'نعم. الإجابة أولًا، فقرة واحدة.' };
 
 function service() {
@@ -140,6 +146,24 @@ async function open(page: Page, path: string) {
   await page.waitForFunction(() => document.querySelector('astro-island[ssr]') === null);
 }
 
+/**
+ * The control is clear of the shown savebar: it ends above the bar's top, and the element at its
+ * centre is the control (or inside it), so a press lands on it.
+ */
+async function expectClear(page: Page, control: Locator, bar: Locator, label: string) {
+  const box = await control.boundingBox();
+  const barBox = await bar.boundingBox();
+  expect(box, `${label}: on screen`).not.toBeNull();
+  expect(barBox, `${label}: the savebar is on screen`).not.toBeNull();
+  expect(box!.y + box!.height, `${label}: ends above the savebar`).toBeLessThanOrEqual(barBox!.y);
+  const own = await control.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return at !== null && (at === el || el.contains(at));
+  });
+  expect(own, `${label}: the element at its centre is its own`).toBe(true);
+}
+
 /** The questions /contact shows. */
 async function contactQuestions(page: Page): Promise<string[]> {
   await page.goto('/contact', { waitUntil: 'load' });
@@ -159,6 +183,69 @@ interface Versions {
   versions: { id: string; number: number | null; kind: string; restores: number | null }[];
   upcoming: { id: string; status: string }[];
 }
+
+test('room: the shown savebar covers no screen’s last control, focus or the bulk bar', async ({
+  page,
+}) => {
+  test.slow();
+  const headers = await csrf(page);
+  const created = await page.request.post('/api/admin/faq?staged=1', {
+    headers,
+    data: { question: ROOM_Q, answer: ANSWER, status: 'published', sortOrder: 9_998 },
+  });
+  expect(created.status(), await created.text()).toBe(200);
+  const row = await data<{ id: string; draft?: unknown }>(created);
+  expect(row.draft, 'the save is a pending change, not a live write').toBeTruthy();
+  try {
+    // The fixed bar (the kit's gallery also draws one in its page: data-inline).
+    const bar = page.locator('.savebar[data-shown]:not([data-inline])');
+    for (const width of [1280, 768, 390, 320]) {
+      await page.setViewportSize({ width, height: 720 });
+      // An immediate screen whose last control is its form's Save (EditorForm's actions row).
+      await open(page, '/admin/ai-config');
+      await expect(bar).toBeVisible({ timeout: 15_000 });
+      const save = page.getByRole('button', { name: /^Save style-finder results/ });
+      await expect(save).toBeVisible();
+      // Reached by the keyboard from the top of the page: focus scrolls it clear.
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await save.focus();
+      await expect(save).toBeFocused();
+      await expectClear(page, save, bar, `ai-config Save, focused, ${width}px`);
+      // The page scrolled to its end, where the first rehearsal found it under the bar.
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await expectClear(page, save, bar, `ai-config Save, at the end, ${width}px`);
+    }
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 720 });
+      await open(page, '/admin/kit');
+      await expect(bar).toBeVisible({ timeout: 15_000 });
+      const card = page.getByRole('region', { name: 'A data table' });
+      const table = card.getByRole('table', { name: 'Sample entries, with selection' });
+      await table.getByRole('checkbox', { name: 'Select all on this page' }).check();
+      const bulk = page.getByRole('region', { name: 'Bulk actions' });
+      await expect(bulk).toContainText('25 selected');
+      // The table's first rows at the top and the rest past the window: the bulk bar is stuck
+      // to the bottom of the window, where the savebar is.
+      await table.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      expect(
+        await table.evaluate((el) => el.getBoundingClientRect().bottom > window.innerHeight),
+        `the table runs past the window at ${width}px, so the bulk bar is stuck`,
+      ).toBe(true);
+      const clear = bulk.getByRole('button', { name: 'Clear selection' });
+      await expectClear(page, clear, bar, `bulk bar Clear selection, ${width}px`);
+      await clear.click();
+      await expect(bulk).toHaveCount(0);
+    }
+  } finally {
+    // Its own pending change only: a create, so nothing of it is live.
+    const { error } = await service()
+      .from('content_drafts')
+      .delete()
+      .eq('tenant_id', TENANT_ID)
+      .eq('entity_id', row.id);
+    expect(error).toBeNull();
+  }
+});
 
 test('publish: a new question waits as a pending change, then goes live as a version', async ({
   page,
