@@ -676,7 +676,7 @@ Realtime and Team notes are omitted (deviations).
 - Open page (EN/AR);
 - an Edit link (stretched).
 
-**Template cards.** "Service page (template) · template for 28 services" and "Project page (template) · 12 projects" open AV-31.
+**Template cards.** "Service page (template) · template for 28 services" and "Project page (template) · 12 projects" open AV-31. (Built in E3: they open the template editors for a role that edits pages, else Services and Projects, SEO's way to the meta; [as-built E3](as-built/E3.md).)
 
 **"+ New page"**: built as E11 (AV-33; [as-built E11](as-built/E11.md)).
 
@@ -746,6 +746,8 @@ Also in this column:
 - "Shared text" is read-only, because the labels are code (SERVICE_PAGE_COPY and the case-study components), with a note.
 - "Full editor" links to the full editor.
 - The preview shows /services/<slug> or /portfolio/<slug>.
+
+**Resolved departure (E3, 2026-11-04): "Shared text" is editable.** The README's E3 row ("Template editors + editable shared text (`template_copy`, staged, AR required, code defaults)") wins over the read-only line above, as verification.md's challenge on UI deviation 11 asked. The words are a closed catalogue per template (`packages/schemas/templateCopyKeys.ts`; "Confidential client" stays code-owned, because the Our Work cards share it), stored as differences from the built-in words in one staged row per tenant (`public.template_copy`), English and Arabic both required, plain text, a cap per line; no row is the pages as built, byte for byte. The item's own words save through its full editor's PATCH, not entity drafts of their own (one write path; with releases on that save is the staged one). As built: [as-built/E3.md](as-built/E3.md).
 
 ### Services (AV-14)
 
@@ -2397,7 +2399,7 @@ Also:
 - /admin/pages/template/service|project with a 'Showing [item]' picker.
 - Fixed template parts as the sections list.
 - 'This service/project' field groups write the entity drafts.
-- 'Shared text' read-only (code-owned labels) with an explanation.
+- 'Shared text' read-only (code-owned labels) with an explanation. (Superseded by E3, 2026-11-04: editable, a staged `template_copy` row with code defaults; see "Template editors (AV-31)" above and [as-built/E3.md](as-built/E3.md).)
 - Full editor link; preview of the item's page.
 
 **Key files:**

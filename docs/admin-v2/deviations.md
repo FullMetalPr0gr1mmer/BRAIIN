@@ -28,7 +28,12 @@
   - testimonials need consent;
   - projects link the 28 real services;
   - a client's "Visible" is the disclosure permission;
-  - archive/delete is Admin only.
+  - archive/delete is Admin only;
+  - the template pages' shared text (E3, [as-built/E3.md](as-built/E3.md)) is a closed catalogue
+    per template: an editor rewords the lines the templates have, never adds one, and a
+    rewritten heading colours a word range, never markup; "Confidential client" stays the
+    code's (the Our Work cards and the case blocks share it). ui.md's read-only "Shared text"
+    is resolved in the README row's favour: it is editable, staged, Arabic required.
 - **Media**:
   - images only (video via Stream later, EXC-009);
   - no SVG/GIF, no animations, and no AVIF or HEIC input (the Images binding reads AVIF only on an Enterprise plan; U3);
@@ -528,7 +533,7 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 | §8.1 | SECTION_LIBRARY generic blocks (text, gallery, video, CTA, custom HTML) | deviated-challenge | built under A6 | AV-25 typed types; AV-33 textBlock; built as E10 (Text block, Gallery, Video) | Refusing Custom HTML (Pillar 1) is right; Gallery/Video/Text are ordinary typed types. |
 | §8.1 | Preview updates at once while typing | deviated-ok | deviation (standard or owner decision) | P-4; R9; AV-26 | Binding. |
 | §8.1 | Template pages: 'Showing' picker + the record's own content | covered | covered | AV-31 |  |
-| §8.1 | Template 'Shared text' (v.*, p.*) editable | deviated-challenge | built under A6 | AV-31 (read-only) | Labels are code today, not by rule. |
+| §8.1 | Template 'Shared text' (v.*, p.*) editable | deviated-challenge | built under A6 | AV-31 (read-only); built as E3 (`template_copy`: staged, Arabic required, the code's words as defaults) | Labels were code, not by rule; since E3 a closed catalogue per template is editable, "Confidential client" excepted (shared with the Our Work cards). |
 | §8.2 | public / hidden (404, leaves menu) / link only; homepage cannot be hidden; per-item visible | covered | covered | AV-13 + MERGE:link-only; P-2/P-3 | AV-13 says immediate but P-3 stages it: the visibility KV snapshot must be re-synced after apply and rollback. After an apply, R7 rebuilds it as the system when the release changed page visibility or renamed or removed a page (and the redirect map when it changed a redirect); a rollback (R10) is a release through the same apply and after-effects, so the same rebuild follows it (`releasePublish.spec`, the all-types rollback). |
 | §8.2 | Password gate, redirect to another page, hide-from/until dates, template-wide hide | deviated-challenge | built under A6 | none (AV-13: 404 or home only) | All feasible pre-cache in the Worker (see challenges). |
 | §8.2 | Maintenance for all visitors except signed-in team and allowed IPs; 503 + Retry-After | covered | covered | src/middleware.ts block 1, src/lib/http/maintenance.ts, src/lib/http/maintenanceBypass.ts (U9b); tests/lib/middlewareMaintenance.spec.ts, tests/admin/maintenance.e2e.ts | Immediate kill switch vs the prototype's 'after you publish' is a Pillar 1 call. Retry-After counts down to "Back on". |
