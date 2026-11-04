@@ -368,6 +368,10 @@ export function anchorOf(type: string, page: string, variant: unknown): string |
       return 'inquiry';
     case 'joinApply':
       return 'apply';
+    // Admin v2 E9: the Leadership slider's own section is `#team` (LeadershipSlider.astro);
+    // packages/schemas/sectionAppearance.ts CODE_ANCHORED_TYPES holds the same kinds.
+    case 'leadership':
+      return 'team';
     case 'faq':
       return 'faq';
     case 'projectGrid':

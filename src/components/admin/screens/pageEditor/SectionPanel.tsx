@@ -7,6 +7,8 @@ import { useEntitySave, type EntitySave } from '@/lib/admin/useEntitySave';
 import { alwaysShown, anchorOf, kindOf, linkRows, routeNote, sectionName } from './library';
 import { builtInFor, sectionFormFields, variantOf, type SectionRow } from './model';
 import type { BuiltInLooks } from './types';
+import AppearanceCard from './AppearanceCard';
+import { appearanceFieldNames, appearanceFields } from './appearance';
 
 // The fields column for one section (Admin v2 E1, ui.md "Fields column"): its name, kind and
 // anchor; Rename, and Delete for an Admin or "hide it instead" for anyone else; what the route
@@ -24,6 +26,8 @@ export interface SectionPanelProps {
   /** The page's slug (its built-in looks, its route's rules). */
   page: string;
   firstOfType: boolean;
+  /** Admin v2 E9: among the first two sections the page shows (a reveal waits until further down). */
+  opening: boolean;
   builtIns: BuiltInLooks;
   /** `content.archiveDelete`: Delete, and "Advanced (JSON)" (F5b D5). */
   remove: boolean;
@@ -41,6 +45,7 @@ export default function SectionPanel({
   section,
   page,
   firstOfType,
+  opening,
   builtIns,
   remove,
   opens,
@@ -50,8 +55,22 @@ export default function SectionPanel({
   onRename,
   onDelete,
 }: SectionPanelProps) {
-  const fields = useMemo(() => sectionFormFields(section.placeholder), [section.placeholder]);
   const typed = sectionFields(section.type) !== null;
+  // Admin v2 E9: the appearance fields ride the section's own save (drawn by AppearanceCard). A
+  // kind with no words of its own saves its type and appearance only, never a content it
+  // does not draw.
+  const look = appearanceFields(section.type);
+  const fields = useMemo(
+    () =>
+      typed
+        ? [...sectionFormFields(section.placeholder), ...look]
+        : [...sectionFormFields(false).filter((f) => f.name === 'type'), ...look],
+    [section.placeholder, typed, look],
+  );
+  const hidden = useMemo(
+    () => (typed ? ['type', ...appearanceFieldNames(section.type)] : fields.map((f) => f.name)),
+    [typed, section.type, fields],
+  );
   const save = useEntitySave(SECTION_TARGET, section.id, {
     fields,
     autosave: { idleMs: 800 },
@@ -70,10 +89,22 @@ export default function SectionPanel({
   const name = sectionName(section);
   const kind = kindOf(section.type);
   const content = save.values['content'];
-  const anchor = anchorOf(section.type, page, variantOf(content));
+  const codeAnchor = anchorOf(section.type, page, variantOf(content));
+  // The header follows the stored anchor where the code names none (Admin v2 E9).
+  const storedAnchor = typeof save.saved['anchor'] === 'string' ? save.saved['anchor'] : null;
+  const anchor = codeAnchor ?? storedAnchor;
   const note = routeNote(section.type, page, firstOfType);
   const links = linkRows(section.type, opens);
   const builtIn = builtInFor(builtIns, { type: section.type, page, firstOfType, content });
+  const appearance = (
+    <AppearanceCard
+      save={save}
+      type={section.type}
+      variant={variantOf(content)}
+      opening={opening}
+      codeAnchor={codeAnchor}
+    />
+  );
 
   return (
     <section className="pe__panel" aria-labelledby="pe-panel-h">
@@ -156,19 +187,33 @@ export default function SectionPanel({
         <EditorForm
           save={save}
           fields={fields}
-          hidden={['type']}
+          hidden={hidden}
           builtIn={builtIn ? { content: builtIn } : undefined}
           languageBar="page"
           submitLabel="Save changes"
           canAdvanced={remove}
           noun="section"
+          after={appearance}
         />
       ) : (
-        <Note tone="info">
-          {`This section has no words of its own to write here${
-            links.length > 0 ? ': everything it shows comes from the screen above.' : '.'
-          }`}
-        </Note>
+        <>
+          <Note tone="info">
+            {`This section has no words of its own to write here${
+              links.length > 0 ? ': everything it shows comes from the screen above.' : '.'
+            }`}
+          </Note>
+          {look.length > 0 ? (
+            <EditorForm
+              save={save}
+              fields={fields}
+              hidden={hidden}
+              languageBar="page"
+              submitLabel="Save changes"
+              noun="section"
+              after={appearance}
+            />
+          ) : null}
+        </>
       )}
     </section>
   );
