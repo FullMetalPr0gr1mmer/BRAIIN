@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { LocalizedTextSchema, STAT_PLACEMENTS, TestimonialPlacementSchema } from './content';
 import { SECTION_TYPES, type SectionType } from './sectionTypes';
+import { SECTION_BACKGROUNDS, SECTION_REVEALS, SECTION_SPACINGS } from './sectionAppearance';
 import {
   AccentSchema,
   MediaRefSchema,
@@ -802,6 +803,14 @@ export const PageSectionRowSchema = z.object({
   content: z.record(z.string(), z.unknown()),
   visible: z.boolean(),
   sort_order: z.number(),
+  // Admin v2 E9 (0127): the section's appearance and anchor, null for its own look. A value the
+  // database's CHECKs would never hold reads as null (`catch`), so a row is never dropped for
+  // its look; the renderer applies each only where the kind takes it
+  // (src/lib/sections/appearance.ts). Optional: a read that does not select them has none.
+  background: z.enum(SECTION_BACKGROUNDS).nullable().optional().catch(null),
+  spacing: z.enum(SECTION_SPACINGS).nullable().optional().catch(null),
+  reveal: z.enum(SECTION_REVEALS).nullable().optional().catch(null),
+  anchor: z.string().max(64).nullable().optional().catch(null),
 });
 export type PageSectionRow = z.infer<typeof PageSectionRowSchema>;
 

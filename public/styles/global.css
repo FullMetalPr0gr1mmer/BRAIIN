@@ -4503,6 +4503,144 @@ html[dir='rtl'] .blk-prose {
   object-fit: cover;
 }
 
+/* ---- Admin v2 E9: section appearance. src/lib/sections/appearance.ts writes the attributes on a
+   section's own first element (`data-bg`, `data-space`, `data-reveal`); which kinds take which
+   is packages/schemas/sectionAppearance.ts. No attribute, no change: a section with nothing
+   chosen renders exactly as before. Backgrounds are the Text block's and the Gallery's, every
+   colour scoped here and gated pair by pair (scripts/contrast-audit.mjs, "E9"); a pair with a
+   theme colour is one the theme gate already checks on every save (E4). ---- */
+
+/* Light grey: the paper rules hold (ink, dim and Klein are gated on mist as on paper); only the
+   ground moves, and a code block takes the white the mist would hide it in. */
+:is(.blk-text, .blk-gal)[data-bg='mist'] {
+  background: var(--bs-mist);
+}
+.blk-text[data-bg='mist'] .blk-prose pre {
+  background: var(--bs-paper);
+}
+
+/* Black: the dark context's colours (white, muted, sky); Klein is never text on black. The
+   focus ring stays cobalt (3:1 on black). */
+:is(.blk-text, .blk-gal)[data-bg='ink'] {
+  background: var(--bs-black);
+  color: var(--bs-fg);
+}
+:is(.blk-text, .blk-gal)[data-bg='ink'] .tag,
+:is(.blk-text, .blk-gal)[data-bg='ink'] .blk-head em,
+.blk-text[data-bg='ink'] .blk-prose a {
+  color: var(--bs-sky);
+}
+.blk-text[data-bg='ink'] .blk-prose {
+  color: var(--bs-muted);
+}
+.blk-text[data-bg='ink'] .blk-prose :where(h2, h3, h4),
+.blk-text[data-bg='ink'] .blk-prose blockquote {
+  color: var(--bs-fg);
+}
+.blk-text[data-bg='ink'] .blk-prose blockquote {
+  border-inline-start-color: var(--bs-sky);
+}
+.blk-text[data-bg='ink'] .blk-prose pre {
+  background: var(--bs-surface);
+  color: var(--bs-fg);
+}
+.blk-text[data-bg='ink'] .blk-prose hr {
+  border-top-color: var(--bs-line-d);
+}
+.blk-gal[data-bg='ink'] .blk-gal__item {
+  background: var(--bs-media-bg);
+}
+
+/* Primary: white on the theme's primary, the Klein bands' rules (.klein-band). Cobalt is no
+   ring on Klein, so the focus ring is white there (3:1 and more on any primary the theme gate
+   takes). */
+:is(.blk-text, .blk-gal)[data-bg='klein'] {
+  background: var(--bs-klein);
+  color: var(--bs-paper);
+}
+:is(.blk-text, .blk-gal)[data-bg='klein'] .tag {
+  color: rgba(255, 255, 255, 0.8);
+}
+:is(.blk-text, .blk-gal)[data-bg='klein'] .tag .dot {
+  background: var(--bs-paper);
+}
+:is(.blk-text, .blk-gal)[data-bg='klein'] .blk-head em {
+  color: var(--bs-sky-soft);
+}
+.blk-text[data-bg='klein'] .blk-prose {
+  color: rgba(255, 255, 255, 0.88);
+}
+.blk-text[data-bg='klein'] .blk-prose :where(h2, h3, h4),
+.blk-text[data-bg='klein'] .blk-prose blockquote,
+.blk-text[data-bg='klein'] .blk-prose a {
+  color: var(--bs-paper);
+}
+.blk-text[data-bg='klein'] .blk-prose blockquote {
+  border-inline-start-color: var(--bs-paper);
+}
+.blk-text[data-bg='klein'] .blk-prose pre {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--bs-paper);
+}
+.blk-text[data-bg='klein'] .blk-prose hr {
+  border-top-color: rgba(255, 255, 255, 0.14);
+}
+.blk-gal[data-bg='klein'] .blk-gal__item {
+  background: var(--bs-media-bg);
+}
+:is(.blk-text, .blk-gal)[data-bg='klein'] :focus-visible {
+  outline-color: var(--bs-paper);
+}
+
+/* Spacing: the blocks' own padding is clamp(64px, 10vh, 130px) above and below (the Video's
+   film reaches its bottom edge, so only its top moves). */
+:is(.blk-text, .blk-gal)[data-space='compact'] {
+  padding-block: clamp(36px, 5.5vh, 72px);
+}
+:is(.blk-text, .blk-gal)[data-space='roomy'] {
+  padding-block: clamp(96px, 15vh, 190px);
+}
+.blk-video[data-space='compact'] {
+  padding-block-start: clamp(36px, 5.5vh, 72px);
+}
+.blk-video[data-space='roomy'] {
+  padding-block-start: clamp(96px, 15vh, 190px);
+}
+
+/* Reveal: CSS only, no script. A scroll-driven animation (as the Slogan's), so the section
+   fades (or rises and fades) in as it enters the view, and only where the browser runs them
+   and the visitor has not asked for less motion: everywhere else it is simply there, as it is
+   to a crawler. The theme's "reveal off" (E4: --bs-rv-from 1, --bs-rv-shift 0px) leaves nothing
+   hidden or moving. Keyboard focus inside a section ends it at once (WCAG 2.4.7: focus never
+   lands on a fading element). `translate`, not `transform`, so a section's own transform is
+   never replaced. The first two sections a page shows never carry it (appearance.ts, §6). */
+@keyframes bs-section-fade {
+  from {
+    opacity: var(--bs-rv-from, 0);
+  }
+}
+@keyframes bs-section-rise {
+  from {
+    opacity: var(--bs-rv-from, 0);
+    translate: 0 var(--bs-rv-shift, 26px);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    [data-reveal] {
+      animation: bs-section-fade linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+    [data-reveal='rise'] {
+      animation-name: bs-section-rise;
+    }
+    [data-reveal]:focus-within {
+      animation: none;
+    }
+  }
+}
+
 /* ---- Project card (ProjectCard.astro) ---- */
 .pcard {
   display: block;

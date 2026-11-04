@@ -235,11 +235,14 @@ describe('playwright.config.ts', () => {
           spec('maintenance'),
           'maintenance\\.teardown\\.ts$',
           spec('releases-mode'),
-          spec('section-blocks'),
+          spec('section-(?:blocks|appearance)'),
         ],
         dependencies: ['admin-samples'],
       }),
-      p('blocks', { testMatch: spec('section-blocks'), dependencies: ['chromium', 'admin'] }),
+      p('blocks', {
+        testMatch: spec('section-(?:blocks|appearance)'),
+        dependencies: ['chromium', 'admin'],
+      }),
       p('visibility', { testMatch: spec('visibility'), dependencies: ['blocks'] }),
       p('general', { testMatch: spec('general'), dependencies: ['visibility'] }),
       // Admin v2 E5: the header's options, alone after general settings.

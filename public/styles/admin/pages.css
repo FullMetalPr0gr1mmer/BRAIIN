@@ -550,3 +550,22 @@
   background: var(--ad-card);
   box-shadow: var(--ad-shadow-sm);
 }
+
+/* Admin v2 E9: the section's Appearance card, after its words and before Save. */
+.pe__look {
+  display: grid;
+  gap: 12px;
+}
+
+/* The anchor's box with its "#" before it; the address is written left to right in both
+   languages. */
+.pe__anchor {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pe__anchor input {
+  flex: 1;
+  min-inline-size: 0;
+}

@@ -90,6 +90,13 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   pageId: UUID_A,
   type: 'richText',
   content: { heading: BI('Heading', 'عنوان') },
+  // Admin v2 E9 (0127): a section's appearance (closed buckets) and its anchor (a lower-case
+  // slug). Shared keys, not overrides: no other config takes them, so the releases-off
+  // snapshot of every other resource is unchanged.
+  background: 'mist',
+  spacing: 'compact',
+  reveal: 'fade',
+  anchor: 'our-story',
   // navigation
   location: 'header',
   parentId: UUID_C,

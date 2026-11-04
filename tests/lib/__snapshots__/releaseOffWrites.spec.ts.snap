@@ -2149,6 +2149,8 @@ exports[`resource configs: toRow is what it was before R2 > redirects 2`] = `
 exports[`resource configs: toRow is what it was before R2 > sections 1`] = `
 {
   "full": {
+    "anchor": "our-story",
+    "background": "mist",
     "content": {
       "heading": {
         "ar": "عنوان",
@@ -2158,11 +2160,19 @@ exports[`resource configs: toRow is what it was before R2 > sections 1`] = `
     "is_placeholder": false,
     "label": "Slogan, under the hero",
     "page_id": "0f0f0f0f-0000-4000-8000-00000000000a",
+    "reveal": "fade",
     "sort_order": 7,
+    "spacing": "compact",
     "type": "richText",
     "visible": true,
   },
   "keys": {
+    "anchor": {
+      "anchor": "our-story",
+    },
+    "background": {
+      "background": "mist",
+    },
     "content": {
       "content": {
         "heading": {
@@ -2180,8 +2190,14 @@ exports[`resource configs: toRow is what it was before R2 > sections 1`] = `
     "pageId": {
       "page_id": "0f0f0f0f-0000-4000-8000-00000000000a",
     },
+    "reveal": {
+      "reveal": "fade",
+    },
     "sortOrder": {
       "sort_order": 7,
+    },
+    "spacing": {
+      "spacing": "compact",
     },
     "type": {
       "type": "richText",
@@ -2191,6 +2207,12 @@ exports[`resource configs: toRow is what it was before R2 > sections 1`] = `
     },
   },
   "nulls": {
+    "anchor": {
+      "anchor": null,
+    },
+    "background": {
+      "background": null,
+    },
     "content": {
       "content": null,
     },
@@ -2203,8 +2225,14 @@ exports[`resource configs: toRow is what it was before R2 > sections 1`] = `
     "pageId": {
       "page_id": null,
     },
+    "reveal": {
+      "reveal": null,
+    },
     "sortOrder": {
       "sort_order": null,
+    },
+    "spacing": {
+      "spacing": null,
     },
     "type": {
       "type": null,
@@ -2226,8 +2254,18 @@ exports[`resource configs: toRow is what it was before R2 > sections 2`] = `
     "sort_order",
     "is_placeholder",
     "label",
+    "background",
+    "spacing",
+    "reveal",
+    "anchor",
   ],
   "keys": {
+    "anchor": [
+      "anchor",
+    ],
+    "background": [
+      "background",
+    ],
     "content": [
       "content",
     ],
@@ -2240,8 +2278,14 @@ exports[`resource configs: toRow is what it was before R2 > sections 2`] = `
     "pageId": [
       "page_id",
     ],
+    "reveal": [
+      "reveal",
+    ],
     "sortOrder": [
       "sort_order",
+    ],
+    "spacing": [
+      "spacing",
     ],
     "type": [
       "type",
@@ -2251,6 +2295,12 @@ exports[`resource configs: toRow is what it was before R2 > sections 2`] = `
     ],
   },
   "nulls": {
+    "anchor": [
+      "anchor",
+    ],
+    "background": [
+      "background",
+    ],
     "content": [
       "content",
     ],
@@ -2263,8 +2313,14 @@ exports[`resource configs: toRow is what it was before R2 > sections 2`] = `
     "pageId": [
       "page_id",
     ],
+    "reveal": [
+      "reveal",
+    ],
     "sortOrder": [
       "sort_order",
+    ],
+    "spacing": [
+      "spacing",
     ],
     "type": [
       "type",

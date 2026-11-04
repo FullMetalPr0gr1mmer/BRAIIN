@@ -97,3 +97,59 @@ test.describe('design capture', () => {
     }
   }
 });
+
+// Admin v2 E9: the section appearance variants, each a picture of the seeded custom page's Text
+// block (`how-we-work`, both languages, a desktop and a phone width) with the attribute set on it
+// the way the renderer writes it, plain and under the themed tokens. tests/visual/
+// sectionAppearance.e2e.ts asserts what these show (the grounds, the contrast, axe, the spacing).
+const LOOKS: readonly (readonly [string, Record<string, string>])[] = [
+  ['own', {}],
+  ['bg-mist', { 'data-bg': 'mist' }],
+  ['bg-ink', { 'data-bg': 'ink' }],
+  ['bg-klein', { 'data-bg': 'klein' }],
+  ['space-compact', { 'data-space': 'compact' }],
+  ['space-roomy', { 'data-space': 'roomy' }],
+];
+
+test.describe('design capture, section appearance', () => {
+  test.skip(!DIR, 'CAPTURE_DIR not set');
+  test.describe.configure({ mode: 'parallel' });
+
+  for (const vp of VIEWPORTS) {
+    for (const locale of ['en', 'ar'] as const) {
+      const path = locale === 'ar' ? '/ar/how-we-work' : '/how-we-work';
+      test(`${locale}-${vp.tag}-e9-looks`, async ({ browser }) => {
+        const context = await browser.newContext({
+          viewport: { width: vp.width, height: vp.height },
+          reducedMotion: 'reduce',
+          isMobile: vp.tag === 'm',
+          hasTouch: vp.tag === 'm',
+        });
+        const page = await context.newPage();
+        await page.goto(path, { waitUntil: 'load' });
+        await page.evaluate(() => document.fonts.ready);
+        const block = page.locator('section.blk-text');
+        mkdirSync(DIR!, { recursive: true });
+        for (const themed of [false, true]) {
+          for (const [look, attrs] of LOOKS) {
+            await page.evaluate(
+              async ({ attrs, tokens }) => {
+                const el = document.querySelector('section.blk-text')!;
+                for (const name of ['data-bg', 'data-space']) el.removeAttribute(name);
+                for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+                for (const [k, v] of Object.entries(tokens)) {
+                  document.documentElement.style.setProperty(k, v);
+                }
+                await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+              },
+              { attrs, tokens: themed ? THEMED : {} },
+            );
+            const name = `${locale}-${vp.tag}-e9-${look}${themed ? '-themed' : ''}.png`;
+            await block.screenshot({ path: join(DIR!, name) });
+          }
+        }
+        await context.close();
+      });
+    }
+  }
+});

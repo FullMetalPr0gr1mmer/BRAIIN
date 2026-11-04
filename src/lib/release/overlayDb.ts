@@ -423,6 +423,8 @@ export interface MemoDb extends OverlayDb {
     found: boolean,
   ): void;
   primeFirst(table: string, query: DbListQuery, row: Row | null): void;
+  /** A `list` (or a `listMany` entry) answered ahead, from a wider read of the same state. */
+  primeList(table: string, query: DbListQuery, rows: readonly Row[]): void;
 }
 
 const keyFor = (...parts: unknown[]): string => JSON.stringify(parts);
@@ -490,6 +492,9 @@ export function memoDb(inner: OverlayDb): MemoDb {
     },
     primeFirst(table, query, row) {
       firsts.set(queryKey(table, query), Promise.resolve(row));
+    },
+    primeList(table, query, rows) {
+      lists.set(queryKey(table, query), Promise.resolve(rows.map((row) => ({ ...row }))));
     },
   };
 }

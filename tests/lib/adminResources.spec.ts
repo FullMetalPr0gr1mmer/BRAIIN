@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as R from '@/lib/admin/resources';
 import { RESOURCE_UI, SINGLETON_UI, columnOf, type FieldDef } from '@/lib/admin/uiSchema';
 import type { ResourceConfig } from '@/lib/admin/resource';
+import { appearanceFieldNames } from '@/components/admin/screens/pageEditor/appearance';
 
 // The admin is data-driven twice over: a UI descriptor (src/lib/admin/ui) says which
 // fields a form edits, a resource config (src/lib/admin/resources) says which columns the
@@ -110,7 +111,13 @@ for (const [slug, ui] of Object.entries(RESOURCE_UI)) {
 
     it('points every mapped constraint at a field its form actually has', () => {
       // A constraint message aimed at a field the form does not render points at nothing.
-      const names = ui.fields.map((f) => f.name);
+      // A section's appearance and anchor (Admin v2 E9) are drawn by the page editor's
+      // Appearance card, riding the section's own save (appearanceFields), not by the legacy
+      // form at /admin/sections.
+      const names = [
+        ...ui.fields.map((f) => f.name),
+        ...(slug === 'sections' ? appearanceFieldNames('textBlock') : []),
+      ];
       for (const [constraint, target] of Object.entries(config!.constraintFields ?? {})) {
         if (target.field) expect(names, `${slug}: ${constraint}`).toContain(target.field);
       }

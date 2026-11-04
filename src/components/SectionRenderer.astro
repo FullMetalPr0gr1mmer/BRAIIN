@@ -3,6 +3,7 @@ import type { Locale } from '@schemas/primitives';
 import type { SectionData } from '@/lib/sections/types';
 import { isRenderedSectionType, type RenderedSectionType } from '@/lib/sections/registry';
 import { SECTION_MEDIA_TYPES, sectionMediaIds } from '@/lib/sections/blocks';
+import { appearanceAttrs } from '@/lib/sections/appearance';
 import { getSectionImages } from '@/lib/data/sectionMedia';
 import { reportLoadError } from '@/lib/data/parse';
 import type { ImageRef } from '@/lib/media/resolve';
@@ -111,6 +112,11 @@ const COMPONENTS = REGISTRY as unknown as Record<RenderedSectionType, AnySection
 
 const shown = sections.filter((s) => s.visible !== false);
 
+// Each shown section's appearance and anchor (Admin v2 E9), as attributes on its first element:
+// undefined for a section that chose none, so its markup is unchanged. The rules (what each kind
+// takes, no reveal in the page's opening, one element per anchor) are src/lib/sections/appearance.ts.
+const attrs = appearanceAttrs(shown);
+
 // The page's section media in ONE read (Admin v2 E10 review): every media library id the shown
 // sections name (a Gallery's pictures, a Video's still, About's poster, Our Work's frames),
 // resolved together through the gated read (src/lib/data/sectionMedia.ts: PUBLIC_MEDIA_COLUMNS,
@@ -151,6 +157,7 @@ const dataOf = (s: SectionData, index: number): Record<string, unknown> | undefi
       <SectionBoundary
         type={s.type}
         {...(preview ? { previewId: s.id ?? `default-${String(i)}` } : {})}
+        {...(attrs[i] ? { attrs: attrs[i] } : {})}
       >
         <Comp locale={locale} {...(s.props ?? {})} data={dataOf(s, i)} />
       </SectionBoundary>

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { isCustomPageSlug } from '@schemas/customPages';
+import { anchorProblem, takesAnchor } from '@schemas/sectionAppearance';
 import { PAGE_PATHS, ROUTE_SLUG_LIST } from '@/lib/visibility/routes';
 
 // Where a link field can point (Admin v2 F5b, ui.md §2.6 "link"): the pages this site
@@ -12,8 +13,9 @@ import { PAGE_PATHS, ROUTE_SLUG_LIST } from '@/lib/visibility/routes';
 //                  and its siblings, the legal notices, and the in-page anchors code
 //                  renders. No read, always there.
 //   loadLinkables  what the CMS has PUBLISHED — a page's own title, every published
-//                  service and project — read through the caller's own client, so RLS
-//                  decides the rows and a draft never shows up as a link target.
+//                  service and project, and (Admin v2 E9) the anchors an editor gave the
+//                  shown sections of those pages — read through the caller's own client, so
+//                  RLS decides the rows and a draft never shows up as a link target.
 //
 // `isSiteHref` is the client's copy of the rule the server enforces (SafeHrefSchema in
 // packages/schemas/media.ts; tests/lib/linkables.spec.ts holds the two equal on a table of
@@ -120,8 +122,15 @@ function labelOf(title: unknown, slug: string): { en: string; ar: string } {
 }
 
 interface Row {
+  id?: unknown;
   slug?: unknown;
   title?: unknown;
+}
+
+/** A published page a section anchor can be on: its path and its name. */
+interface AnchorPage {
+  path: string;
+  label: { en: string; ar: string };
 }
 
 /**
@@ -141,16 +150,22 @@ export async function loadLinkables(
 ): Promise<readonly Linkable[]> {
   const routePages = await sb
     .from('pages')
-    .select('slug,title')
+    .select('id,slug,title')
     .eq('tenant_id', auth.tenantId)
     .eq('status', 'published')
     .in('slug', Object.keys(PAGE_PATHS))
     .limit(Object.keys(PAGE_PATHS).length);
 
   const titles = new Map<string, { en: string; ar: string }>();
+  // The published pages by id, for the section anchors below (Admin v2 E9).
+  const anchorPages = new Map<string, AnchorPage>();
   for (const row of (routePages.data ?? []) as Row[]) {
     const slug = typeof row.slug === 'string' ? row.slug.toLowerCase() : '';
     if (slug) titles.set(slug, labelOf(row.title, slug));
+    const path = PAGE_PATHS[slug as keyof typeof PAGE_PATHS];
+    if (typeof row.id === 'string' && path) {
+      anchorPages.set(row.id, { path, label: titles.get(slug) ?? PAGE_LABELS[slug]! });
+    }
   }
 
   const routes = CODE_ROUTES.map((route): Linkable => {
@@ -163,7 +178,7 @@ export async function loadLinkables(
   // The published custom pages (Admin v2 E11), each at `/<slug>`, by address.
   const customPages = await sb
     .from('pages')
-    .select('slug,title')
+    .select('id,slug,title')
     .eq('tenant_id', auth.tenantId)
     .eq('status', 'published')
     .not('slug', 'in', ROUTE_SLUG_LIST)
@@ -173,6 +188,38 @@ export async function loadLinkables(
     const slug = typeof row.slug === 'string' ? row.slug : '';
     if (!isCustomPageSlug(slug)) continue;
     out.push({ href: `/${slug}`, label: labelOf(row.title, slug), group: 'page' });
+    if (typeof row.id === 'string') {
+      anchorPages.set(row.id, { path: `/${slug}`, label: labelOf(row.title, slug) });
+    }
+  }
+  // The anchors an editor gave the SHOWN sections of those published pages (Admin v2 E9,
+  // `page_sections.anchor`), each as `<path>#<anchor>`, once the pages are known (no read when
+  // none is published). A kind whose component names its own anchor renders no stored one, so
+  // it is not offered; the code anchors are CODE_ROUTES' own.
+  if (anchorPages.size > 0) {
+    const { data } = await sb
+      .from('page_sections')
+      .select('page_id,type,anchor')
+      .eq('tenant_id', auth.tenantId)
+      .eq('visible', true)
+      .in('page_id', [...anchorPages.keys()])
+      .not('anchor', 'is', null)
+      .order('anchor', { ascending: true })
+      .limit(PER_KIND);
+    for (const row of (data ?? []) as { page_id?: unknown; type?: unknown; anchor?: unknown }[]) {
+      const page = typeof row.page_id === 'string' ? anchorPages.get(row.page_id) : undefined;
+      const anchor = typeof row.anchor === 'string' ? row.anchor : '';
+      const type = typeof row.type === 'string' ? row.type : '';
+      if (!page || anchorProblem(anchor) !== null) continue;
+      if (type !== 'statistics' && !takesAnchor(type, undefined)) continue;
+      const href = `${page.path}#${anchor}`;
+      if (!isSiteHref(href) || out.some((link) => link.href === href)) continue;
+      out.push({
+        href,
+        label: { en: `${page.label.en}: #${anchor}`, ar: `${page.label.ar}: #${anchor}` },
+        group: 'anchor',
+      });
+    }
   }
   for (const [table, prefix, group] of [
     ['services', '/services', 'service'],

@@ -71,8 +71,12 @@ export const BACKUP_TABLES: readonly { table: string; columns: string }[] = [
   },
   { table: 'pages', columns: 'id,slug,title,status,nav_visible,updated_at' },
   {
+    // The appearance and the anchor (Admin v2 E9, 0127) travel with the section: a restore
+    // without them would put every section back in its own look and break links to its anchor.
     table: 'page_sections',
-    columns: 'id,page_id,type,content,style,visible,sort_order,is_placeholder,updated_at',
+    columns:
+      'id,page_id,type,content,style,visible,sort_order,is_placeholder,background,spacing,reveal,' +
+      'anchor,updated_at',
   },
   {
     // is_heading (Admin v2 E6, 0122): a footer column has no href, so a restore without the

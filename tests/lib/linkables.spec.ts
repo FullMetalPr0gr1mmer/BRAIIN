@@ -120,7 +120,7 @@ describe('loadLinkables', () => {
    * `not in`, order and limit, in the table's own order otherwise, as a heap would), and the
    * filters it was asked for.
    */
-  function client(byTable: Record<string, { slug: string; title: unknown }[]>) {
+  function client(byTable: Record<string, { id?: string; slug: string; title: unknown }[]>) {
     const asked: { table: string; filters: Record<string, string>; limit: number }[] = [];
     return {
       asked,
@@ -139,8 +139,15 @@ describe('loadLinkables', () => {
             rows = rows.filter((r) => values.includes(r[column]));
             return builder;
           },
-          not: (column: 'slug', _op: string, list: string) => {
-            const values = list.replace(/^\(|\)$/g, '').split(',');
+          not: (column: 'slug', op: string, list: string | null) => {
+            // `not(column, 'is', null)` (E9's anchors): the rows where it is set.
+            if (op === 'is' && list === null) {
+              rows = rows.filter((r) => (r as Record<string, unknown>)[column] != null);
+              return builder;
+            }
+            const values = String(list)
+              .replace(/^\(|\)$/g, '')
+              .split(',');
             rows = rows.filter((r) => !values.includes(r[column]));
             return builder;
           },
@@ -151,7 +158,9 @@ describe('loadLinkables', () => {
           limit: (n: number) => {
             entry.limit = n;
             asked.push(entry);
-            const out = ordered ? [...rows].sort((a, b) => a.slug.localeCompare(b.slug)) : rows;
+            // Ordered by the slug (pages, services, projects) or the anchor (sections, E9).
+            const key = (r: Record<string, unknown>) => String(r['slug'] ?? r['anchor'] ?? '');
+            const out = ordered ? [...rows].sort((a, b) => key(a).localeCompare(key(b))) : rows;
             return Promise.resolve({ data: out.slice(0, n), error: null });
           },
         };
@@ -255,5 +264,52 @@ describe('loadLinkables', () => {
     };
     const links = await loadLinkables(sb as never, auth);
     expect(links.map((link) => link.href)).toEqual(CODE_ROUTES.map((route) => route.href));
+  });
+
+  // Admin v2 E9: the anchors an editor gave the shown sections of the published pages.
+  it('offers the stored section anchors of the published pages, by their page’s path', async () => {
+    const ABOUT = '0f0f0f0f-0000-4000-8000-0000000000a1';
+    const CUSTOM = '0f0f0f0f-0000-4000-8000-0000000000a2';
+    const sb = client({
+      pages: [
+        { id: ABOUT, slug: 'about', title: { en: 'Who we are', ar: 'من نحن' } },
+        { id: CUSTOM, slug: 'how-we-work', title: { en: 'How we work', ar: 'كيف نشتغل' } },
+      ],
+      page_sections: [
+        { page_id: ABOUT, type: 'textBlock', anchor: 'our-story' },
+        { page_id: CUSTOM, type: 'cta', anchor: 'next-step' },
+        // a code-anchored kind renders no stored anchor: not offered
+        { page_id: ABOUT, type: 'leadership', anchor: 'leaders' },
+        // a page that is not published (not among the pages read): not offered
+        { page_id: '0f0f0f0f-0000-4000-8000-0000000000ff', type: 'textBlock', anchor: 'draft' },
+        // a value the rules refuse: not offered
+        { page_id: ABOUT, type: 'textBlock', anchor: 'Main Bit' },
+      ] as never,
+    });
+    const links = await loadLinkables(sb as never, auth);
+    const anchors = links.filter((link) => link.href.includes('#') && link.group === 'anchor');
+    expect(anchors.slice(CODE_ROUTES.filter((r) => r.group === 'anchor').length)).toEqual([
+      // in the anchors' order (the read's)
+      {
+        href: '/how-we-work#next-step',
+        label: { en: 'How we work: #next-step', ar: 'كيف نشتغل: #next-step' },
+        group: 'anchor',
+      },
+      {
+        href: '/about#our-story',
+        label: { en: 'Who we are: #our-story', ar: 'من نحن: #our-story' },
+        group: 'anchor',
+      },
+    ]);
+    for (const link of anchors) expect(isSiteHref(link.href), link.href).toBe(true);
+    const read = sb.asked.find((a) => a.table === 'page_sections');
+    expect(read?.filters).toEqual({ tenant_id: 't-1', visible: true });
+    expect(read?.limit).toBeLessThanOrEqual(100);
+  });
+
+  it('reads no section when no page is published', async () => {
+    const sb = client({ page_sections: [{ page_id: 'x', type: 'cta', anchor: 'a' }] as never });
+    await loadLinkables(sb as never, auth);
+    expect(sb.asked.some((a) => a.table === 'page_sections')).toBe(false);
   });
 });

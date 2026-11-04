@@ -4,6 +4,7 @@ import type { Role } from '@/lib/auth/types';
 import { client, T, type Db, type Row } from '../fixtures/stagedDb';
 import { ADMIN, callRoute, draftRow, makeDb } from '../fixtures/stagedRoute';
 import { MEDIA_BLOCKS_FULL, MEDIA_BLOCKS_PER_PAGE } from '@schemas/sectionTypes';
+import { ANCHOR_DISCIPLINE, ANCHOR_TAKEN } from '@schemas/sectionAppearance';
 
 // The publish and validate endpoints (Admin v2 R6) over the PostgREST stand-in: the selection as
 // the person saw it, the per-change capabilities, the live re-read, the check over the state the
@@ -1482,6 +1483,80 @@ describe('the media block cap over a release (E10)', () => {
     const [item] = res.data['items'] as Row[];
     expect(item!['errors']).toEqual([
       expect.objectContaining({ field: 'type', message: MEDIA_BLOCKS_FULL }),
+    ]);
+  });
+});
+
+// E9 review (E9-C4, P-15): the section anchor rule reads two things for a change that moves an
+// anchor (another section of its page holding it, a discipline whose slug it is). Neither read
+// is one the batched read serves, so per change they cost two requests: a release moving about
+// 24 anchors passed the Free plan's 50. The publish now answers both for every change from two
+// reads (validate.ts primeAnchors) over the state the release leaves, the rule's answers
+// unchanged.
+describe('section anchors over a release (E9)', () => {
+  const MOVES = 25;
+  const section = (n: number, anchor: string | null = null): Row => ({
+    id: id(400 + n),
+    tenant_id: T,
+    page_id: PAGE,
+    type: 'textBlock',
+    label: null,
+    content: {},
+    visible: true,
+    sort_order: n,
+    is_placeholder: false,
+    anchor,
+    version: 1,
+  });
+  const move = (n: number, anchor: string, from: string | null = null) =>
+    draftRow({
+      id: draftId(400 + n),
+      entity_type: 'page_section',
+      entity_id: id(400 + n),
+      op: 'update',
+      payload: { anchor },
+      base: { anchor: from },
+      label: { en: `Block ${n}` },
+    });
+
+  it('a release moving 25 anchors costs a handful of reads, not two per anchor', async () => {
+    const sections = Array.from({ length: MOVES }, (_, n) => section(n));
+    const drafts = sections.map((_, n) => move(n, `part-${n}`));
+    const db = seed({ page_sections: sections, content_drafts: drafts });
+    svc.answer = () => dryOk(MOVES);
+    const res = await run(VALIDATE, db, select(...drafts));
+    expect(res.status).toBe(200);
+    expect(res.data).toMatchObject({ ok: true });
+    expect(db.calls.length + svc.calls.length).toBeLessThanOrEqual(12);
+  });
+
+  it('still refuses a taken anchor and a discipline’s slug, and lets two sections swap', async () => {
+    const sections = [
+      section(0, 'alpha'),
+      section(1, 'beta'),
+      section(2, 'kept'),
+      section(3),
+      section(4),
+    ];
+    const drafts = [
+      move(0, 'beta', 'alpha'), // the swap: each takes the other's, as the release leaves them
+      move(1, 'alpha', 'beta'),
+      move(3, 'kept'), // held live by section 2, which this release leaves alone
+      move(4, 'branding'), // the seeded discipline's slug
+    ];
+    const db = seed({ page_sections: sections, content_drafts: drafts });
+    svc.answer = () => dryOk(drafts.length);
+    const res = await run(VALIDATE, db, select(...drafts));
+    expect(res.status).toBe(200);
+    const errorsOf = (n: number) =>
+      (res.data['items'] as Row[]).find((i) => i['draftId'] === draftId(400 + n))!['errors'];
+    expect(errorsOf(0)).toEqual([]);
+    expect(errorsOf(1)).toEqual([]);
+    expect(errorsOf(3)).toEqual([
+      expect.objectContaining({ field: 'anchor', message: ANCHOR_TAKEN }),
+    ]);
+    expect(errorsOf(4)).toEqual([
+      expect.objectContaining({ field: 'anchor', message: ANCHOR_DISCIPLINE }),
     ]);
   });
 });

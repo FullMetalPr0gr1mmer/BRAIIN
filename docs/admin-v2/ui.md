@@ -712,10 +712,11 @@ Also in this column:
 - **Delete**: Admin only (content.archiveDelete). Content Creator sees the hint "Hide it instead".
 
 **Fields column**
-- Header: label, type, and the anchor shown read-only from a code map (#selected-work…).
+- Header: label, type, and the anchor: the code map's (#selected-work…), read-only, or since E9 the section's own stored anchor.
 - Typed fields from sectionUi, prefilled with the built-in copy.
 - Accent-range controls.
-- Variant and placement selects where the type already has them. These are the only "Section settings".
+- Variant and placement selects where the type already has them.
+- Since E9 ([as-built/E9.md](as-built/E9.md)), an Appearance card after the words, saved with the section: a background (light grey, black or the primary colour) and a spacing (compact or roomy) on the blocks whose colours and padding allow them (Text block, Gallery; spacing also the Video), a reveal (fade, or rise and fade) on every kind that does not open a page, and an editable anchor (lower-case words joined by hyphens, up to 40, unique on the page, never an id the site uses) where the code names none. What a kind keeps is said, not hidden.
 - Collection link rows, e.g. "Managed in Testimonials · 3 items", "Numbers on this page", "Form fields → Settings › Forms".
 - Honest notes on route data, e.g. "The button goes to Selected work while a project is featured, otherwise to Our Work."
 - joinWhy and joinSteps items are edited here as a collection-style list with a drawer. The steps' time label is kept.
@@ -737,8 +738,8 @@ Also in this column:
 - Preview and "Restore as a draft". Restore goes back through the resource kernel and is gated at publish.
 
 **Deviations**
-- No generic background, spacing, reveal or mobile-visibility settings.
-- No editable anchors.
+- No mobile-visibility setting (content parity for mobile). Background, spacing and reveal are offered since E9 as closed buckets per kind, not as generic settings on every section: a background and a spacing only on the blocks whose every colour and padding the variants were built and contrast-gated for, a reveal never on a section that opens a page nor on the Slogan, which moves on its own ([as-built/E9.md](as-built/E9.md)).
+- Editable anchors are offered since E9, where the section's component names no anchor of its own; the code anchors stay read-only, since other links point at them.
 - No Custom HTML block. (Superseded for the others by E10, 2026-10-31: the Text block, the Gallery and the Video are built as typed section types; [as-built/E10.md](as-built/E10.md).)
 
 ### Template editors (AV-31)
@@ -2590,7 +2591,7 @@ Is that right?
 - Error and warning toasts → toasts are success/info only; errors stay inline and persistent, warnings become inline notes or disabled-with-reason states (WCAG; repo toast policy).
 - Contenteditable rich fields storing <b>/<em>/<a> HTML and the 'Aa' highlight button → typed fields, AccentSchema word-range controls, and Tiptap (sanitised JSON) only where a body was already rich (Pillar 1).
 - Section library of 12 generic blocks including Custom HTML, Gallery, Video and Text block → only the typed section types allowed on each page. Custom HTML is never built. (Superseded by E10, 2026-10-31: the Text block, the Gallery and the Video are built as typed section types any routed page may take, before the Custom pages slice; [as-built/E10.md](as-built/E10.md).)
-- Per-section settings (background, spacing, reveal, show on mobile, editable anchor) → not offered. Existing per-type layout variants are shown; anchors are code-owned and read-only (CSP removed style; visual-regression and contrast scope; content parity for mobile).
+- Per-section settings (background, spacing, reveal, show on mobile, editable anchor) → show on mobile is not offered (content parity for mobile). Since E9 ([as-built/E9.md](as-built/E9.md)) the rest are offered as closed buckets stored on the section and drawn as attributes on its own first element (no `style=`, CSP unchanged): a background and a spacing on the Text block and the Gallery (spacing also the Video), each background contrast-gated pair by pair and under any theme the gate takes, with visual baselines; a CSS-only reveal on every kind that does not open a page, never on the first two sections a page shows, none under reduced motion; an editable anchor (slug rules, unique per page, never an id the site renders) where the code names none. Code anchors stay read-only, and the existing per-type layout variants are shown as before.
 - Page visibility 'Only people with the link' and 'Behind a password', plus hide-from/until dates → only Visible / Hidden (404 or to the homepage), immediate. Password pages cannot be edge-cached and would need hashing and rate limits.
 - '+ New page' → hidden until the later Custom pages slice (no dynamic public route or generic section type exists today).
 - Template pages' 'Shared text' editable → read-only in v1, because those labels are code (SERVICE_PAGE_COPY, case-study components).

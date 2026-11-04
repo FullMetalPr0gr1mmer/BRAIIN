@@ -67,6 +67,7 @@ import {
 import PagePanel from './PagePanel';
 import RenameModal from './RenameModal';
 import SectionPanel from './SectionPanel';
+import { inOpening } from './appearance';
 import SectionsColumn, { PAGE_DETAILS } from './SectionsColumn';
 import type { PageEditorPage, PageEditorSetup } from './types';
 
@@ -626,6 +627,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
                 section={section}
                 page={page.slug}
                 firstOfType={rows ? isFirstOfType(rows, section.id) : true}
+                opening={rows ? inOpening(rows, section.id, page.slug) : true}
                 builtIns={builtIns}
                 remove={access.remove}
                 opens={access.opens}

@@ -39,6 +39,12 @@ import { DisplayNameValueSchema, PASSWORD_MAX_BYTES, PASSWORD_MIN, utf8Bytes } f
 import { SectionTypeSchema, sectionContentIssues, type SectionType } from './sections';
 import { SECTION_LABEL_MAX } from './sectionTypes';
 import {
+  SECTION_BACKGROUNDS,
+  SECTION_REVEALS,
+  SECTION_SPACINGS,
+  anchorProblem,
+} from './sectionAppearance';
+import {
   MEDIA_META_LIMITS,
   MediaAltSchema,
   MediaDisplayNameSchema,
@@ -484,6 +490,36 @@ export const SectionLabelSchema = z.preprocess(
     .nullable(),
 );
 
+/** A blank appearance value is the section's own look (null): the editor's select sends ''. */
+const blankIsNull = (value: unknown): unknown =>
+  typeof value === 'string' && value.trim() === '' ? null : value;
+
+/**
+ * A section's appearance choice (Admin v2 E9): one of its closed bucket, or null for the
+ * section's own look. Which kinds take which choice is the Worker's rule
+ * (sectionResource.assertWritable, on the merged row) and the E9 migration's CHECKs.
+ */
+const appearanceChoice = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess(blankIsNull, z.enum(values).nullable());
+
+/**
+ * A section's anchor (Admin v2 E9, `page_sections.anchor`): lower-case words joined by single
+ * hyphens, at most ANCHOR_MAX characters, never an id the site's code renders
+ * (packages/schemas/sectionAppearance.ts anchorProblem; the E9 migration's CHECK holds the same
+ * rules). Blank is none (null). Unique on its page: the Worker and the database.
+ */
+export const SectionAnchorSchema = z.preprocess(
+  blankIsNull,
+  z
+    .string()
+    .trim()
+    .superRefine((anchor, ctx) => {
+      const problem = anchorProblem(anchor);
+      if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+    })
+    .nullable(),
+);
+
 // `type` is the SECTION_TYPES enum, not a free identifier: an unknown type used to save
 // fine and then be skipped by the renderer without a word — the editor saw "saved", the
 // visitor saw nothing. `content` is validated against its type's schema on write (the
@@ -500,6 +536,11 @@ const SectionWriteBase = z.object({
   isPlaceholder: z.boolean().default(false),
   /** Admin v2 E1: the section's name in the page editor (0115). Optional: no key, no write. */
   label: SectionLabelSchema.optional(),
+  /** Admin v2 E9: the section's appearance and anchor. Optional: no key, no write. */
+  background: appearanceChoice(SECTION_BACKGROUNDS).optional(),
+  spacing: appearanceChoice(SECTION_SPACINGS).optional(),
+  reveal: appearanceChoice(SECTION_REVEALS).optional(),
+  anchor: SectionAnchorSchema.optional(),
 });
 
 function checkSectionContent(
