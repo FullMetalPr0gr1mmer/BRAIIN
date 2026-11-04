@@ -120,7 +120,7 @@ describe('loadLinkables', () => {
    * `not in`, order and limit, in the table's own order otherwise, as a heap would), and the
    * filters it was asked for.
    */
-  function client(byTable: Record<string, { slug: string; title: unknown }[]>) {
+  function client(byTable: Record<string, { id?: string; slug: string; title: unknown }[]>) {
     const asked: { table: string; filters: Record<string, string>; limit: number }[] = [];
     return {
       asked,

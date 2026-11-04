@@ -94,8 +94,8 @@ async function dress(
         a.href = '#';
         a.dataset['e9Probe'] = '';
         a.textContent = document.documentElement.lang === 'ar' ? 'رابط' : 'a link';
-        p.append(a);
-        prose.append(p);
+        p.appendChild(a);
+        prose.appendChild(p);
       }
       const css = (el: Element | null) => (el ? getComputedStyle(el) : null);
       const of = (sel: string) => css(block.querySelector(sel))?.color ?? null;
