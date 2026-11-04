@@ -240,10 +240,6 @@ export async function loadPagesList(sb: SupabaseClient, auth: AuthContext): Prom
   const rows = (read: { data: unknown }) => (read.data ?? []) as Row[];
   return {
     pages: pageCards(rows(pages), rows(sections), rows(visibility), rows(drafts)),
-    templates: templateCards(
-      rows(visibility),
-      { services, projects },
-      mayEditTemplates(auth.role),
-    ),
+    templates: templateCards(rows(visibility), { services, projects }, mayEditTemplates(auth.role)),
   };
 }

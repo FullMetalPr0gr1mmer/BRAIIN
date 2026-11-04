@@ -199,6 +199,9 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   // singletons: form_settings (Admin v2 E8)
   inquiry: { button: BI('Send it', 'أرسل') },
   application: { consent: { futureRoles: BI('Keep me in mind', 'تذكّروني') } },
+  // singletons: template_copy (Admin v2 E3), one line of each template's shared text
+  service: { seeCase: BI('Read the story', 'اقرأ القصة') },
+  project: { nextProject: BI('Up next', 'التالي') },
   // entity SEO
   entityType: 'service',
   entityId: UUID_A,

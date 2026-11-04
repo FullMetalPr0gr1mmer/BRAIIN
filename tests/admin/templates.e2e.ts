@@ -121,7 +121,7 @@ const bothLanguages = (page: Page) =>
     .check();
 
 /** The writes a step sends to a service, a project or the shared text, as "METHOD /path". */
-const WRITTEN = /^\/api\/admin\/(services|portfolio|template-copy)/;
+const WRITTEN = /^\/api\/admin\/(?:services|portfolio|template-copy)(?:\/|$)/;
 function writes(page: Page): string[] {
   const seen: string[] = [];
   page.on('request', (r) => {

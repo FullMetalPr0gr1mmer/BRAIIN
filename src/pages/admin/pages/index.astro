@@ -160,11 +160,9 @@ const sections = (n: number) => `${n} ${n === 1 ? 'section' : 'sections'}`;
             Templates
           </h2>
           <p class="pg-tpl__s">
-            {
-              makePages
-                ? 'Every service and every project has its own page, built from one template each. Open one to edit a page beside its preview, and the shared text all of them show.'
-                : 'Every service and every project has its own page, built from one template each. Their words are edited in Services and Projects.'
-            }
+            {makePages
+              ? 'Every service and every project has its own page, built from one template each. Open one to edit a page beside its preview, and the shared text all of them show.'
+              : 'Every service and every project has its own page, built from one template each. Their words are edited in Services and Projects.'}
           </p>
           <ul class="pg-grid" aria-labelledby="pg-tpl-h">
             {list.templates.map((tpl) => (
