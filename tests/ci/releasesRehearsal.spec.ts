@@ -358,3 +358,32 @@ describe('the switch the rehearsal sends', () => {
     expect(setup).not.toMatch(/execFileSync\('psql', \[url/);
   });
 });
+
+describe('the drill (tests/admin/releases-mode.e2e.ts, R14a)', () => {
+  const drill = readFileSync('tests/admin/releases-mode.e2e.ts', 'utf8');
+  const code = drill.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const migration = readFileSync('supabase/migrations/0112_release_schedule.sql', 'utf8');
+
+  it('fires the minute cron through miniflare’s own trigger, and fails on its answer', () => {
+    // wrangler's `/__scheduled` is a middleware it bundles into the Worker, and the Astro
+    // adapter's build is no_bundle, so that path reached the site (a 404) and the scheduled
+    // release never fired: the first rehearsal's poll timed out on it.
+    expect(code).toContain("page.request.get('/cdn-cgi/local/scheduled?cron=*+*+*+*+*')");
+    expect(code).toMatch(/expect\(fired\.status\(\), await fired\.text\(\)\)\.toBe\(200\)/);
+    expect(code).not.toContain('/__scheduled');
+  });
+
+  it('unschedules what is still scheduled before it starts and after it ends', () => {
+    // A release a failed attempt left is a second "Scheduled" card on the retry, and fires with
+    // the drill's own. The database's path, as the e2e Admin: 0112's signature.
+    expect(migration).toContain(
+      'create or replace function public.unschedule_release(p_actor uuid, p_role text, p_release uuid,',
+    );
+    expect(code).toMatch(/svc\.rpc\('unschedule_release', \{\s*p_actor: STAFF_IDS\.admin,/);
+    const before = /test\.beforeAll\(async \(\) => \{\s*await unscheduleAll\(\);/;
+    const after =
+      /test\.afterAll\(async \(\) => \{\s*if \(!staffEnv\(\)\) return;\s*await unscheduleAll\(\);/;
+    expect(code).toMatch(before);
+    expect(code).toMatch(after);
+  });
+});
