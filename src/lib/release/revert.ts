@@ -289,7 +289,7 @@ export function narrowed(
 /**
  * Which columns of an update differ from live (derived columns never decide a change). Live is
  * read in today's shape, as the patch is (`inCurrentShape`, Admin v2 E12 code review CR5): a
- * theme saved before E12 has not moved from the same theme restored as v2.
+ * theme saved before E12 (v1) or E13 (v2) has not moved from the same theme restored as v3.
  */
 function movedColumns(
   entityType: string,

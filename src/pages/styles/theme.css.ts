@@ -3,9 +3,12 @@ import { THEME_HASH_PATTERN, getActiveTheme } from '@/lib/data/theme';
 
 // The site's theme as a stylesheet (Admin v2 E4, AV-27): `/styles/theme.css?v=<hash>`.
 // Same-origin, so the strict CSP's `style-src 'self'` takes it with no nonce and no inline
-// style anywhere (CLAUDE.md §3, §7). Its whole body is one `:root{…}` rule of the active
-// theme's custom properties, each re-checked against its key's shape (themeCss): nothing but
-// the closed token set can be written.
+// style anywhere (CLAUDE.md §3, §7). Its body is one `:root{…}` rule of the active theme's
+// custom properties, each re-checked against its key's shape (themeCss): nothing but the closed
+// token set can be written. Since E13 a font token (a family of the font catalogue that is not
+// the brand's) also puts that family's `@font-face` rules first, the catalogue's own text
+// (themeStylesheet, packages/theme/stylesheet.ts); while the catalogue holds only the brand's
+// families (O-21) no theme has one, and the body is exactly the `:root` rule.
 //
 // BaseLayout and AdminLayout link it only while a theme sets a token, with the hash of the
 // body in the address (themeHash: 16 hex digits of its SHA-256), so the right address is a

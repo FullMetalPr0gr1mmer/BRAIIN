@@ -4,8 +4,9 @@ import {
   ThemeTokensSchema,
   type ThemeTokens,
 } from '../schemas/themeTokens';
-import type { ThemeSettings, ThemeSettingsV1 } from '../schemas/theme';
+import type { ThemeSettings, ThemeSettingsV1, ThemeSettingsV2 } from '../schemas/theme';
 import { channels } from './colour';
+import { DEFAULT_FONTS, fontTokens } from './fonts';
 import { paletteOf } from './gate';
 import { DEFAULT_COLORS, isDefaultColors } from './palette';
 import { DEFAULT_SHAPES, DEFAULT_TYPE, shapeTokens, upgradeThemeSettings } from './shapes';
@@ -19,16 +20,19 @@ import { DEFAULT_SHAPES, DEFAULT_TYPE, shapeTokens, upgradeThemeSettings } from 
 //
 // The glows and shadows are global.css's own (alpha, offsets and blur kept), recoloured.
 // Since E12 the shapes and type write their four tokens the same way: only a choice that is
-// not the brand's (packages/theme/shapes.ts).
+// not the brand's (packages/theme/shapes.ts). Since E13 so do the fonts: a family of the font
+// catalogue that is not the brand's writes its stack (packages/theme/fonts.ts); with O-21 open
+// the catalogue has none, so no font token is ever written yet.
 
 /** The brand's own settings: what the editor starts from, and what Reset puts back. */
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = Object.freeze({
-  v: 2,
+  v: 3,
   mode: 'simple',
   colors: { ...DEFAULT_COLORS },
   motion: { marquee: 'normal', reveal: true },
   shapes: { ...DEFAULT_SHAPES },
   type: { ...DEFAULT_TYPE },
+  fonts: { ...DEFAULT_FONTS },
 }) as ThemeSettings;
 
 /**
@@ -57,11 +61,14 @@ const rgba = (hex: string, alpha: string) => {
 };
 
 /**
- * The tokens a theme's settings compile to (none for the brand's own). E4's v1 settings (as
- * stored before E12) compile through the one upgrade, at the brand's shapes and type.
+ * The tokens a theme's settings compile to (none for the brand's own). E4's v1 and E12's v2
+ * settings (as stored before) compile through the one upgrade, at the brand's shapes, type and
+ * fonts.
  */
-export function compileTheme(stored: ThemeSettings | ThemeSettingsV1): ThemeTokens {
-  const settings = stored.v === 1 ? upgradeThemeSettings(stored) : stored;
+export function compileTheme(
+  stored: ThemeSettings | ThemeSettingsV1 | ThemeSettingsV2,
+): ThemeTokens {
+  const settings = stored.v === 3 ? stored : upgradeThemeSettings(stored);
   const out: ThemeTokens = {};
   if (!isDefaultColors(settings.colors)) {
     const p = paletteOf(settings.colors);
@@ -78,6 +85,7 @@ export function compileTheme(stored: ThemeSettings | ThemeSettingsV1): ThemeToke
     out['--bs-rv-shift'] = '0px';
   }
   Object.assign(out, shapeTokens(settings.shapes, settings.type));
+  Object.assign(out, fontTokens(settings.fonts));
   return out;
 }
 
@@ -87,10 +95,12 @@ export function hasTokens(tokens: ThemeTokens | null | undefined): boolean {
 }
 
 /**
- * The stylesheet: `:root{--name:value;…}`, the closed set in a fixed order, each value checked
+ * The tokens' rule: `:root{--name:value;…}`, the closed set in a fixed order, each value checked
  * against its key's pattern again here (a value that is not of its shape is left out, never
  * escaped), '' when nothing is left. Nothing else can be written: no selector but :root, no
- * property that is not a theme token, no `;` `{` `}` `<` `>` or backslash inside a value.
+ * property that is not a theme token, no `;` `{` `}` `<` `>` or backslash inside a value. The
+ * stylesheet a page links is this rule after the chosen font families' faces, when a theme
+ * chooses one that is not the brand's (themeStylesheet, packages/theme/stylesheet.ts, E13).
  */
 export function themeCss(input: unknown): string {
   const parsed = ThemeTokensSchema.safeParse(input);

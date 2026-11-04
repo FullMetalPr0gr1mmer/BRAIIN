@@ -1,6 +1,7 @@
 import pairs from './pairs.json';
 import { THEME_TOKEN_NAMES, THEME_TOKEN_PATTERNS } from '../schemas/themeTokens';
 import { THEME_EFFECTS } from './compile';
+import { fontTokenRules } from './fonts';
 import { SHAPE_TOKEN_RULES } from './shapes';
 
 // The database's copy of the theme rules (Admin v2 E4), generated from the one source the
@@ -10,7 +11,10 @@ import { SHAPE_TOKEN_RULES } from './shapes';
 // differ, so the CHECK cannot drift from the gate. A change to either source needs a new
 // migration that restates the function the block lives in. Since E12 (AV-32) the latest
 // migration that restates app.theme_row_ok holds the token rules and the shape and type table
-// (packages/theme/shapes.ts); E4's keeps the pairs, which E12 does not change.
+// (packages/theme/shapes.ts); E4's keeps the pairs, which E12 does not change. Since E13 it
+// also holds the font table (packages/theme/fonts.ts): a family added to the catalogue changes
+// two blocks (its token's pattern and its row), so it needs a migration that restates the
+// function, and tests/lib/themeSql.spec.ts is red until one does.
 
 type Def = string | [string, number, string];
 interface Block {
@@ -86,6 +90,20 @@ export function shapeRulesValuesSql(): string {
   ).join(',\n');
 }
 
+/**
+ * The fonts as `(key, choice, token, value)` rows (fontTokenRules): every family of the font
+ * catalogue as a choice of its script's key, and the stack its token holds (null for the
+ * brand's: no token).
+ */
+export function fontRulesValuesSql(): string {
+  return fontTokenRules()
+    .map(
+      (r) =>
+        `    (${quote(r.key)}, ${quote(r.choice)}, ${quote(r.token)}, ${r.value === null ? 'null::text' : quote(r.value)})`,
+    )
+    .join(',\n');
+}
+
 /** Every generated block, by the name its markers carry in the migration. */
 export function themeSqlBlocks(): Record<string, string> {
   return {
@@ -94,5 +112,6 @@ export function themeSqlBlocks(): Record<string, string> {
     'theme defaults': defaultsValuesSql(),
     'theme effects': effectsValuesSql(),
     'theme shape rules': shapeRulesValuesSql(),
+    'theme font rules': fontRulesValuesSql(),
   };
 }
