@@ -1989,6 +1989,78 @@ describe('footer (E6), a new guide put by the footer columns migration', () => {
   });
 });
 
+describe('loading-screen (E7), a new guide put by the loading screen migration', () => {
+  const article = () => SET.find((a) => a.slug === 'loading-screen')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const SCREEN = 'src/components/admin/screens/loading/LoadingScreen.tsx';
+
+  it('is put once, at revision 0 (new), by the migration that adds the intro columns', () => {
+    const puts = HELP.edits.filter((e) => e.slug === 'loading-screen');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts[0]?.file).toMatch(/^\d{4}_loading_screen\.sql$/);
+    expect(HELP.revisions.get('loading-screen')).toBe(1);
+  });
+
+  it('takes the free place 46, for the roles that open the Loading screen', () => {
+    expect(article().sort_order).toBe(46);
+    expect(SET.filter((a) => a.sort_order === 46)).toHaveLength(1);
+    expect(article().screens).toEqual(['/admin/appearance/loading']);
+    // pages.write (Admin, Content Creator: the switch) or theme.edit (Admin, Developer: the
+    // look); SEO and Sales open neither.
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual([
+      'admin',
+      'content_creator',
+      'developer',
+    ]);
+  });
+
+  it('says what the screen does, in the words it uses', () => {
+    const en = text('en');
+    const screen = source(SCREEN);
+    const ui = source('src/lib/admin/ui/loading.ts');
+    for (const [words, where] of [
+      ['Show the loading screen', screen],
+      ['Logo over the video', ui],
+      ['Logo on black', ui],
+      ['Logo on light', ui],
+      ['Duration', ui],
+      ['Fade', ui],
+      ['Play preview', screen],
+      ['Save the loading screen', screen],
+    ] as const) {
+      expect(en, words).toContain(words);
+      expect(where, words).toContain(words);
+    }
+    // The site rule and the bounds are the schema's (packages/schemas/appearance.ts).
+    expect(en).toContain('from 500 to 1500 ms');
+    expect(en).toContain('from 300 to 600 ms');
+    expect(en).toContain('never longer than 1.5 seconds');
+    // What is always true, as the screen says it.
+    expect(en).toContain('once per visit, in each tab');
+    expect(screen).toContain('once per visit, in each tab');
+    expect(en).toContain('ask for less motion never see it');
+    expect(screen).toContain('ask for less motion never see it');
+    expect(en).toContain('any tap, key or scroll skips it');
+    expect(screen).toContain('Any tap, key or scroll skips it');
+    for (const label of [
+      'Appearance › Loading screen',
+      'Show the loading screen',
+      'Logo over the video',
+      'Logo on black',
+      'Logo on light',
+      'Duration',
+      'Fade',
+      'Play preview',
+      'Save the loading screen',
+      'History',
+    ]) {
+      expect(text('ar')).toContain(label);
+    }
+  });
+});
+
 describe('editing-pages (E1), a new guide put by the page editor migration', () => {
   const article = () => SET.find((a) => a.slug === 'editing-pages')!;
   const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
@@ -2619,6 +2691,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'finding-your-way',
       'footer',
       'header-and-menu',
+      'loading-screen',
       'media-library',
       'previewing-changes',
       'roles-and-access',
@@ -2655,6 +2728,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'forms-and-spam',
       'general-settings',
       'header-and-menu',
+      'loading-screen',
       'maintenance-mode',
       'media-library',
       'page-visibility',

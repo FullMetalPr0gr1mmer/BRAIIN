@@ -10,6 +10,7 @@ import {
 import { getPageComposition } from '@/lib/data/pageSections';
 import { getPortfolioCards } from '@/lib/data/portfolio';
 import { getPublishedDisciplines } from '@/lib/data/disciplines';
+import { getIntroSettings } from '@/lib/data/appearance';
 import { loadHead } from '@/lib/seo/head';
 import { ogImageCandidates } from '@/lib/seo/ogImage';
 import { PAGE_META } from '@/lib/seo/pageMeta';
@@ -29,9 +30,11 @@ const meta = PAGE_META.home[locale];
 // so the head loader is handed the composition query rather than its result.
 // The featured projects load alongside: the Selected work band shows them, and whether
 // there are any decides where the hero's "See our work" points. The disciplines load once
-// for the discipline cards and the lead form's grouped select (Round 2).
+// for the discipline cards and the lead form's grouped select (Round 2). The loading
+// screen's look (Admin v2 E7) loads alongside too, for the hero's intro plate: one more
+// read, in this same round, never thrown.
 const compositionQuery = getPageComposition('home');
-const [composition, { seo, identity }, featured, disciplines] = await Promise.all([
+const [composition, { seo, identity }, featured, disciplines, intro] = await Promise.all([
   compositionQuery,
   loadHead(Astro.locals, {
     locale,
@@ -41,6 +44,7 @@ const [composition, { seo, identity }, featured, disciplines] = await Promise.al
   }),
   getPortfolioCards({ featuredOnly: true }),
   getPublishedDisciplines(),
+  getIntroSettings(),
 ]);
 // A published page with no sections yet renders the default composition (its SEO override,
 // keyed by the page id above, still applies).
@@ -49,6 +53,7 @@ const sections = withHomeData(withHomeIntro(composed), {
   featured,
   ctaHref: homeHeroCtaHref(composed, featured.length),
   disciplines,
+  intro,
 });
 
 const jsonLd = [

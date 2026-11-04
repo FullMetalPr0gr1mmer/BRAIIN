@@ -208,8 +208,8 @@ everything.
   names the live version. The question is removed by the service role at the end.
 - **The specs written for releases off** skip in the rehearsal (`RELEASES_OFF_ONLY`, in
   `tests/admin/staff.ts`): whole files blog, collections, faq, fields, general, pages, projects,
-  reorder, seo, services and visibility, and (added by their own slices) header, footer, theme
-  and section-blocks (their saves go live at once and they check the public
+  reorder, seo, services and visibility, and (added by their own slices) header, footer, theme,
+  section-blocks and loading (E7) (their saves go live at once and they check the public
   site, or the screen's live-mode controls); and the describes "releases off" of releases-ui and
   backups, backups' history drawers (the service's, the identity's, the SEO defaults' and a
   page's search settings': "no Restore while releases are off") and dashboard's

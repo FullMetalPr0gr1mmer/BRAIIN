@@ -127,8 +127,10 @@ select is(
       and has_column_privilege('anon', a.attrelid, a.attnum, 'select')),
   'header_blur,header_cta_href,header_cta_label,header_cta_show,header_hide_on_scroll,'
   || 'header_logo_position,header_logo_size,header_menu_align,header_mobile_menu,'
-  || 'header_solid_after_hero,header_sticky,header_tint,tenant_id',
-  'anon may read the header''s options and the tenant, no other column');
+  || 'header_solid_after_hero,header_sticky,header_tint,'
+  -- Admin v2 E7 (the loading screen migration): the intro's five options join the grant.
+  || 'intro_backdrop,intro_bar,intro_fade_ms,intro_hold_ms,intro_tagline,tenant_id',
+  'anon may read the header''s and the intro''s options and the tenant, no other column');
 select ok(not has_table_privilege('anon', 'public.site_appearance', 'select')
           and not has_any_column_privilege('anon', 'public.site_appearance', 'insert, update, references'),
   'anon holds no table-level SELECT and no write');
@@ -143,7 +145,9 @@ select ok(exists (select 1 from app.release_entities
                      and key_column = 'tenant_id' and area = 'appearance'
                      and author_roles = '{admin,developer}' and delete_roles = '{}'
                      and 'header_tint' = any (columns) and 'header_cta_href' = any (columns)
-                     and cardinality(columns) = 12 and exempt_columns = '{}'),
+                     -- Admin v2 E7: the loading screen's five columns appended (17).
+                     and 'intro_hold_ms' = any (columns) and cardinality(columns) = 17
+                     and exempt_columns = '{}'),
   'the registry row: staged under appearance, authored by Admin and Developer, never removed');
 select is(
   (select tgname::text from pg_trigger

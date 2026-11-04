@@ -38,8 +38,8 @@
 --   8. form_settings (Admin v2 E8) is public copy: anon reads its four columns (item 3), every
 --      CMS role reads the launch tenant's row (the non-staff block reads the claim's role, no
 --      profile), and a sales claim and another tenant read none.
---   9. site_appearance (Admin v2 E5) is the public header's options: anon reads its thirteen
---      columns (item 3), every CMS role reads the launch tenant's row (the non-staff block reads
+--   9. site_appearance (Admin v2 E5) is the public header's options (and, from E7, the loading
+--      screen's look): anon reads its eighteen columns (item 3), every CMS role reads the launch tenant's row (the non-staff block reads
 --      the claim's role, no profile), and a sales claim and another tenant read none.
 -- The literals are held equal to ANON_COLUMNS, DATASET_ONLY_COLUMNS, CREATE_DEFAULTS and MIRRORED_POLICIES
 -- by tests/lib/previewMirror.spec.ts, which parses this file: a grant, default or policy
@@ -65,7 +65,7 @@ create function _anon_columns() returns table (tbl text, cols text) language sql
     ('form_settings', 'tenant_id,inquiry,application,consent_revision'),
     ('media_assets', 'id,tenant_id,kind,provider,storage_path,width,height,alt,stream_uid,mime_type,updated_at'),
     ('service_cases', 'id,tenant_id,service_id,portfolio_id,title,context,problems,results,status,published_at,updated_at'),
-    ('site_appearance', 'tenant_id,header_logo_position,header_logo_size,header_menu_align,header_sticky,header_hide_on_scroll,header_solid_after_hero,header_tint,header_blur,header_mobile_menu,header_cta_show,header_cta_label,header_cta_href'),
+    ('site_appearance', 'tenant_id,header_logo_position,header_logo_size,header_menu_align,header_sticky,header_hide_on_scroll,header_solid_after_hero,header_tint,header_blur,header_mobile_menu,header_cta_show,header_cta_label,header_cta_href,intro_backdrop,intro_bar,intro_tagline,intro_hold_ms,intro_fade_ms'),
     ('site_integrations', 'tenant_id,search_console_token,ga4_measurement_id'),
     ('testimonials', 'id,tenant_id,slug,quote,author_name,author_role,client_id,portfolio_id,avatar_media_id,placements,status,sort_order,published_at,updated_at')
 $$;
@@ -142,6 +142,10 @@ create function _create_defaults() returns table (tbl text, col text, dflt text)
     ('site_appearance', 'header_solid_after_hero', $d$true$d$),
     ('site_appearance', 'header_sticky', $d$true$d$),
     ('site_appearance', 'header_tint', $d$'none'::text$d$),
+    ('site_appearance', 'intro_backdrop', $d$'video'::text$d$),
+    ('site_appearance', 'intro_bar', $d$false$d$),
+    ('site_appearance', 'intro_fade_ms', $d$450$d$),
+    ('site_appearance', 'intro_hold_ms', $d$1000$d$),
     ('site_profile', 'accepting_applications', $d$false$d$),
     ('site_profile', 'address_country', $d$'SA'::text$d$),
     ('site_profile', 'footer_show_email', $d$true$d$),

@@ -1,7 +1,9 @@
 ---
 import { Picture } from 'astro:assets';
+import { INTRO_DEFAULTS, type IntroSettings } from '@schemas/appearance';
 import type { Locale } from '@schemas/primitives';
 import type { HeroSectionContent } from '@schemas/sections';
+import { introAttributes } from '@/lib/appearance/intro';
 import { localizedHref, pickLocale } from '@/lib/i18n';
 import { accentWordsOf, splitTrailingMark } from '@/lib/text/accent';
 import { heroText, splitBold, type HeroText } from '@/lib/text/heroLinks';
@@ -47,6 +49,10 @@ interface Props extends HeroSectionContent {
                    footage (.hero__skip), first in the hero's tab order.
       - `noSub`    the page has no sub line of its own (a service with no tagline): render
                    none, rather than the home slogan the built-in copy would put there.
+      Admin v2 E7 (the home routes, withHomeData):
+      - `introLook` the loading screen's look (site_appearance's intro_ columns): the backdrop,
+                   the bar, the tagline and the two timing buckets. Used only when the plate
+                   shows (`intro`, the home hero's content); absent, the intro as built.
       A HeroText is a string in the page's language or an {en, ar} pair. Hrefs are
       localized (`/services#branding` → `/ar/services#branding`; `#inquiry` stays).
       Their CSS is in public/styles/services.css — a page using them links that sheet. */
@@ -59,6 +65,7 @@ interface Props extends HeroSectionContent {
         crumb?: { items: readonly { label: HeroText; href: string }[] } | undefined;
         skipLink?: { kicker: HeroText; label: HeroText; href: string } | undefined;
         noSub?: boolean;
+        introLook?: IntroSettings;
       }
     | undefined;
 }
@@ -116,6 +123,16 @@ const banner = data?.banner === true;
 // A banner hero never opens with the full-viewport plate, whatever its content says.
 const intro = introProp && !banner;
 const href = localizedHref(data?.ctaHref ?? '#selected-work', locale);
+
+// The loading screen's look (Admin v2 E7). Each option off its default is one `data-*` bucket on
+// the plate (global.css maps it to a fixed rule; the timing ones set the two tokens the whole
+// choreography derives from, docs/hero-intro.md §1), and the tagline and the bar are rendered
+// only when set, so the intro as built keeps its bytes. The logo's markup never changes: it is
+// the home LCP element (CLAUDE.md §6). The tagline is text, escaped like every other.
+const look = data?.introLook ?? INTRO_DEFAULTS;
+const lookAttrs = introAttributes(look);
+const tagline = look.tagline ? look.tagline[locale] : '';
+const below = tagline !== '' || look.bar;
 const clip = data?.clip;
 
 const altLink = data?.altLink
@@ -157,7 +174,7 @@ const src = videoUid ? undefined : videoSrc;
 
 {
   intro ? (
-    <div class="intro" aria-hidden="true">
+    <div class="intro" aria-hidden="true" {...lookAttrs}>
       <Picture
         src={logo}
         alt=""
@@ -169,6 +186,16 @@ const src = videoUid ? undefined : videoSrc;
         loading="eager"
         fetchpriority="high"
       />
+      {below && (
+        <div class="intro__below">
+          {tagline && <p class="intro__tag">{tagline}</p>}
+          {look.bar && (
+            <span class="intro__bar">
+              <i />
+            </span>
+          )}
+        </div>
+      )}
     </div>
   ) : null
 }
@@ -295,6 +322,7 @@ const src = videoUid ? undefined : videoSrc;
 </section>
 
 <script>
+  import { introHoldCap } from '@/lib/client/introGate';
   import { mountLazyVideo, setVideoInView } from '@/lib/client/lazyVideo';
 
   // Intro: once per tab session; any navigation intent cuts straight to the page.
@@ -348,11 +376,12 @@ const src = videoUid ? undefined : videoSrc;
     const fading = typeof fade?.currentTime === 'number' && fade.currentTime >= holdMs;
     if (logo && !fading) {
       // Bounds the wait so time-to-content stays honest even on a cold edge: worst case
-      // is CAP + hold + fade (4.45s with the UI v2 1.0s hold). Warm (the overwhelming
-      // majority) releases in ~0.7s. 3s, not the 2s it was: CAP + hold must outlast the
-      // measured cold transform (~3.6s) or the plate lifts before the logo exists — with
-      // the old 3.5s hold, 2s had slack to spare; with a 1.0s hold it had none.
-      const HOLD_CAP_MS = 3000;
+      // is CAP + hold + fade. Warm (the overwhelming majority) releases in ~0.7s. CAP + hold
+      // must outlast the measured cold transform (~3.6s) or the plate lifts before the logo
+      // exists, so the cap is DERIVED from the hold (the loading screen's bucket, Admin v2
+      // E7): CAP + hold is 4s for every bucket, 3s at the UI v2 1.0s hold as before, and the
+      // worst case is 4s + fade (4.6s at most). src/lib/client/introGate.ts has the numbers.
+      const HOLD_CAP_MS = introHoldCap(holdMs);
       document.body.classList.add('intro-waiting');
       let released = false;
       const release = () => {
