@@ -368,6 +368,29 @@ describe('admin.css: the shown savebar never covers a control or focus (R14a, WC
     expect(declared('.savebar', 'inset-block-end')).toEqual(['var(--ad-savebar-gap)']);
   });
 
+  it('keeps a stuck bulk bar’s measured room too, so a focused row is clear of both bars', () => {
+    // The bulk bar sits on the band right above the shown bar (h + gap + 8px). Scroll padding
+    // that ended where the bulk bar starts left a row's focused control behind it (R14a review,
+    // CR-1): while a bulk bar shows, the scroll port also ends above the bulk bar.
+    const both = declared(`:root${GATE}:has(.bulkbar)`, 'scroll-padding-block-end');
+    expect(both).toHaveLength(1);
+    const bulkAt = declared(`.admin-body${GATE} .bulkbar`, 'inset-block-end')[0];
+    expect(bulkAt).toBe(`${ROOM}8px)`);
+    // The bulk bar's own place (its inset over the savebar), then its measured height, then a gap.
+    const value = both[0]!;
+    expect(value.startsWith(`${ROOM}8px + var(--ad-bulkbar-h, var(--ad-bulkbar)) + `), value).toBe(
+      true,
+    );
+    expect(Number(/\+ (\d+)px\)$/.exec(value)?.[1])).toBeGreaterThanOrEqual(8);
+    // A stand-in before BulkBar's first measure, and the measure read only under the shown bar.
+    expect(ADMIN).toMatch(/--ad-bulkbar:\s*\d+px;/);
+    for (const rule of rules) {
+      if (/var\(--ad-bulkbar(-h)?[,)]/.test(rule.body)) {
+        expect(rule.selector, rule.body).toContain(GATE);
+      }
+    }
+  });
+
   it('stands in with the worst bar measured until the first measure', () => {
     const px = (value: string | undefined) => Number(/^(\d+)px$/.exec(value ?? '')?.[1]);
     const wide = rules
@@ -389,7 +412,7 @@ describe('admin.css: the shown savebar never covers a control or focus (R14a, WC
         expect(rule.selector, rule.body).toContain(GATE);
       }
     }
-    expect(rules.filter((r) => r.selector.includes(GATE))).toHaveLength(4);
+    expect(rules.filter((r) => r.selector.includes(GATE))).toHaveLength(5);
     // What a page has with no bar: main's own values.
     expect(declared('.admin-main', 'padding')).toEqual(['var(--ad-pad-b) var(--ad-pad-i) 60px']);
     expect(declared('.bulkbar', 'inset-block-end')).toEqual(['16px']);

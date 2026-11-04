@@ -404,6 +404,8 @@
      its real height once shown), and its inset from the window's bottom. */
   --ad-savebar: 112px;
   --ad-savebar-gap: 22px;
+  /* The bulk bar's height before it is measured (R14a: BulkBar keeps --ad-bulkbar-h). */
+  --ad-bulkbar: 64px;
 }
 
 /* A dialog's ::backdrop inherits from its dialog only from Chromium 122, and the
@@ -4566,6 +4568,16 @@ dialog.drw[data-size='wide'] {
 :root:has(.savebar[data-shown]:not([data-inline])) {
   scroll-padding-block-end: calc(
     var(--ad-savebar-h, var(--ad-savebar)) + var(--ad-savebar-gap) + 8px
+  );
+}
+
+/* A bulk bar stuck above the shown bar (below) covers a band of its own, so while one shows the
+   scroll port also ends above it: a row's control reached by the keyboard is scrolled clear of
+   both bars, not left behind the bulk bar (R14a review, WCAG 2.2 2.4.11). */
+:root:has(.savebar[data-shown]:not([data-inline])):has(.bulkbar) {
+  scroll-padding-block-end: calc(
+    var(--ad-savebar-h, var(--ad-savebar)) + var(--ad-savebar-gap) + 8px +
+      var(--ad-bulkbar-h, var(--ad-bulkbar)) + 8px
   );
 }
 

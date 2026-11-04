@@ -4,6 +4,8 @@ import {
   SAVEBAR_HEIGHT_PROPERTY,
   reserveSavebarSpace,
 } from '@/components/admin/screens/release/savebarSpace';
+import { BULKBAR_HEIGHT_PROPERTY } from '@/components/admin/kit/DataTable';
+import { reserveBoxHeight } from '@/lib/admin/client/boxHeight';
 
 // The room a page keeps under the fixed savebar (Admin v2 R14a; releases.md §7, WCAG 2.2
 // 2.4.11). The first release-mode rehearsal found a screen's last Save under the bar at 1280 px:
@@ -93,5 +95,37 @@ describe('Savebar runs it for the fixed bar only, while it shows', () => {
 
   it('measures the bar itself (the region), not a wrapper', () => {
     expect(source).toMatch(/<div\s+ref=\{barRef\}\s+className="savebar"\s+role="region"/);
+  });
+});
+
+describe('the bulk bar keeps its own measure (R14a review, CR-1)', () => {
+  // Stuck above the shown savebar, the bulk bar covers a band of its own; admin.css adds its
+  // measured height to the scroll padding while one shows (tests/lib/adminStyles.spec.ts), so a
+  // row focused by the keyboard is not left behind it. The browser half is the drill's Tab walk
+  // (tests/admin/releases-mode.e2e.ts, "room").
+  it('writes the named property, rounded up, follows a resize and removes only its own', () => {
+    const bar = { height: 59.4, getBoundingClientRect: () => ({ height: bar.height }) };
+    const root = fakeRoot();
+    root.props.set('--ad-savebar-h', '109px');
+    const { Observer, made } = fakeObserver();
+    const stop = reserveBoxHeight(bar, root.style, Observer, BULKBAR_HEIGHT_PROPERTY);
+    expect(BULKBAR_HEIGHT_PROPERTY).toBe('--ad-bulkbar-h');
+    expect(root.props.get('--ad-bulkbar-h')).toBe('60px');
+    bar.height = 118;
+    made[0]!.callback();
+    expect(root.props.get('--ad-bulkbar-h')).toBe('118px');
+    stop();
+    expect(made[0]!.disconnected).toBe(true);
+    expect(root.props.has('--ad-bulkbar-h')).toBe(false);
+    expect(root.props.get('--ad-savebar-h')).toBe('109px');
+  });
+
+  const source = readFileSync('src/components/admin/kit/DataTable.tsx', 'utf8');
+
+  it('BulkBar measures itself in a layout effect, on the root’s style, with the real observer', () => {
+    expect(source).toMatch(
+      /useLayoutEffect\(\(\) => \{\s*const bar = barRef\.current;\s*if \(!bar \|\| typeof ResizeObserver === 'undefined'\) return;\s*return reserveBoxHeight\(\s*bar,\s*document\.documentElement\.style,\s*ResizeObserver,\s*BULKBAR_HEIGHT_PROPERTY,?\s*\);\s*\}, \[\]\);/,
+    );
+    expect(source).toMatch(/<div ref=\{barRef\} className="bulkbar" role="region"/);
   });
 });

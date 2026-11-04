@@ -16,10 +16,12 @@ import { STAFF_IDS, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff'
  * As the Admin, on a question of this run's own (a random marker, the FAQ on /contact):
  *
  *   room       with a pending change of its own (thrown away after), the shown savebar covers
- *              no control (R14a, WCAG 2.2 2.4.11): /admin/ai-config's last Save, focused from
- *              the top and scrolled to the page's end, and the kit's stuck bulk bar, at phone,
- *              tablet and desktop widths, are each the element at their own centre and end
- *              above the bar (the first rehearsal's style-finder failure);
+ *              no control (R14a, WCAG 2.2 2.4.11): /admin/ai-config's last Save, focused while
+ *              it sits in the bar's band and scrolled to the page's end, and the kit's stuck
+ *              bulk bar, at phone, tablet and desktop widths, are each the element at their own
+ *              centre and end above the bar (the first rehearsal's style-finder failure); every
+ *              row control of the kit's table reached by Tab with the bulk bar stuck ends above
+ *              the bulk bar;
  *   publish    a new question saved through the FAQ route waits as a pending change (not on
  *              /contact); the savebar counts it; Publish… in the dialog puts it live as a new
  *              version ("Published vP"), and /contact shows it;
@@ -164,6 +166,23 @@ async function expectClear(page: Page, control: Locator, bar: Locator, label: st
   expect(own, `${label}: the element at its centre is its own`).toBe(true);
 }
 
+/**
+ * Scrolls the page so the control's centre is at the shown savebar's centre, and says whether
+ * the control is then under the bar (the precondition of a focus check that depends on the
+ * scroll padding).
+ */
+async function placeInBand(control: Locator): Promise<boolean> {
+  return control.evaluate((el) => {
+    const bar = document.querySelector('.savebar[data-shown]:not([data-inline])');
+    if (!bar) return false;
+    const b = bar.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    window.scrollBy(0, r.top + r.height / 2 - (b.top + b.height / 2));
+    const now = el.getBoundingClientRect();
+    return now.bottom > b.top && now.top < b.bottom;
+  });
+}
+
 /** The questions /contact shows. */
 async function contactQuestions(page: Page): Promise<string[]> {
   await page.goto('/contact', { waitUntil: 'load' });
@@ -206,11 +225,19 @@ test('room: the shown savebar covers no screen’s last control, focus or the bu
       await expect(bar).toBeVisible({ timeout: 15_000 });
       const save = page.getByRole('button', { name: /^Save style-finder results/ });
       await expect(save).toBeVisible();
-      // Reached by the keyboard from the top of the page: focus scrolls it clear.
-      await page.evaluate(() => window.scrollTo(0, 0));
+      // Focused while it sits in the bar's band: the browser scrolls a control it focuses only
+      // when it lies outside the scroll port less the scroll padding, so the Save ends clear of
+      // the bar only while that padding keeps the bar's room (C43). Focused from the top
+      // instead, Chromium centres an off-screen control and the padding is never tested (R14a
+      // review). The page is first scrolled so the Save's centre is at the bar's, and that it
+      // is under the bar is asserted, so the check cannot pass on a page that never put it there.
+      expect(
+        await placeInBand(save),
+        `ai-config Save sits under the bar before it is focused, ${width}px`,
+      ).toBe(true);
       await save.focus();
       await expect(save).toBeFocused();
-      await expectClear(page, save, bar, `ai-config Save, focused, ${width}px`);
+      await expectClear(page, save, bar, `ai-config Save, focused in the bar's band, ${width}px`);
       // The page scrolled to its end, where the first rehearsal found it under the bar.
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       await expectClear(page, save, bar, `ai-config Save, at the end, ${width}px`);
@@ -231,6 +258,48 @@ test('room: the shown savebar covers no screen’s last control, focus or the bu
         await table.evaluate((el) => el.getBoundingClientRect().bottom > window.innerHeight),
         `the table runs past the window at ${width}px, so the bulk bar is stuck`,
       ).toBe(true);
+      // Every row's controls reached by Tab with the bulk bar stuck over the band above the
+      // savebar: each is the element at its own centre and ends above the bulk bar, so focus
+      // is never left behind it (R14a review, WCAG 2.2 2.4.11: the scroll padding keeps both
+      // bars' room while a bulk bar shows). The walk must reach all 25 rows (a checkbox, the
+      // title link and Preview each) and must scroll the page, so it cannot pass empty.
+      await table
+        .getByRole('checkbox', { name: 'Select all on this page' })
+        .evaluate((el) => (el as HTMLElement).focus({ preventScroll: true }));
+      const startY = await page.evaluate(() => window.scrollY);
+      let walked = 0;
+      for (let i = 0; i < 120; i += 1) {
+        await page.keyboard.press('Tab');
+        const at = await table.evaluate((t) => {
+          const el = document.activeElement as HTMLElement | null;
+          const body = (t as HTMLTableElement).tBodies[0];
+          if (!el || !body?.contains(el)) return null;
+          const r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          const bulkTop = document.querySelector('.bulkbar')?.getBoundingClientRect().top ?? 0;
+          return {
+            name: el.getAttribute('aria-label') ?? el.textContent?.trim() ?? el.tagName,
+            own: hit !== null && (hit === el || el.contains(hit)),
+            bottom: r.bottom,
+            bulkTop,
+          };
+        });
+        if (at === null) break;
+        walked += 1;
+        expect(at.own, `${at.name}, reached by Tab at ${width}px: the element at its centre`).toBe(
+          true,
+        );
+        expect(
+          at.bottom,
+          `${at.name}, reached by Tab at ${width}px: ends above the bulk bar`,
+        ).toBeLessThanOrEqual(at.bulkTop + 1);
+      }
+      expect(walked, `Tab reached every row's controls at ${width}px`).toBeGreaterThanOrEqual(75);
+      expect(
+        await page.evaluate(() => window.scrollY),
+        `the walk scrolled the page at ${width}px`,
+      ).toBeGreaterThan(startY);
+      await table.evaluate((el) => el.scrollIntoView({ block: 'start' }));
       const clear = bulk.getByRole('button', { name: 'Clear selection' });
       await expectClear(page, clear, bar, `bulk bar Clear selection, ${width}px`);
       await clear.click();
