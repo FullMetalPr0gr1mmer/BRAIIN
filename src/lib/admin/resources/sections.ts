@@ -6,6 +6,13 @@ import {
   isCustomPageSectionType,
   isCustomPageSlug,
 } from '@schemas/customPages';
+import {
+  ANCHOR_CODE_OWNED,
+  ANCHOR_DISCIPLINE,
+  ANCHOR_TAKEN,
+  appearanceProblem,
+  takesAnchor,
+} from '@schemas/sectionAppearance';
 import { isSampleRating } from '@/lib/sections/samples';
 import { liveDb, type DbListQuery } from '@/lib/release/overlayDb';
 import { ValidationError } from '../errors';
@@ -25,7 +32,19 @@ const SECTION_KEYS = {
   // Admin v2 E1 (0115): the section's name in the page editor's sections column. Written only
   // when a payload carries it (the Rename dialog); the legacy section form never sends it.
   label: 'label',
+  // Admin v2 E9 (0127): the section's appearance and anchor (packages/schemas/sectionAppearance.ts).
+  // Written only when a payload carries them (the page editor's Appearance card).
+  background: 'background',
+  spacing: 'spacing',
+  reveal: 'reveal',
+  anchor: 'anchor',
 };
+
+/** The variant a section's content holds (the Numbers band names its own anchor). */
+const variantOfContent = (content: unknown): unknown =>
+  content && typeof content === 'object'
+    ? (content as Record<string, unknown>)['variant']
+    : undefined;
 
 const MEDIA_TYPES: readonly unknown[] = MEDIA_BLOCK_TYPES;
 
@@ -46,15 +65,38 @@ export const sectionResource: ResourceConfig = {
   publishFlag: 'visible',
   entity: 'page_section',
   writeCap: 'pages.write',
-  listColumns: 'id,page_id,type,label,visible,sort_order,is_placeholder,version,updated_at',
+  listColumns: 'id,page_id,type,label,anchor,visible,sort_order,is_placeholder,version,updated_at',
   columns:
-    'id,page_id,type,label,content,visible,sort_order,is_placeholder,version,created_at,updated_at',
+    'id,page_id,type,label,content,visible,sort_order,is_placeholder,background,spacing,reveal,' +
+    'anchor,version,created_at,updated_at',
   orderBy: { column: 'sort_order', ascending: true },
   filterableColumns: ['page_id'],
   createSchema: SectionWriteSchema,
   updateSchema: SectionUpdateSchema,
   toRow: (input) => pick(input as Input, SECTION_KEYS),
   fields: fieldsOf(SECTION_KEYS),
+  // Admin v2 E9: the database's own refusals (0127), on the field that caused them. The Worker's
+  // rules below say the same first; these catch a write that reached the CHECKs another way.
+  constraintFields: {
+    page_sections_background_bucket: {
+      field: 'background',
+      message: 'This kind of section keeps its own background: its colours are part of its design.',
+    },
+    page_sections_spacing_bucket: {
+      field: 'spacing',
+      message: 'This kind of section keeps its own spacing: it is part of its layout.',
+    },
+    page_sections_reveal_bucket: {
+      field: 'reveal',
+      message: 'This kind of section opens a page, so it always shows at once: it takes no reveal.',
+    },
+    page_sections_anchor_shape: {
+      field: 'anchor',
+      message:
+        'Use lower-case letters and numbers, with single hyphens between words, at most 40, and not a name the site uses itself.',
+    },
+    page_sections_anchor_unique: { field: 'anchor', message: ANCHOR_TAKEN },
+  },
   // The schema validates content only when a payload carries BOTH type and content. A
   // PATCH of content alone (or of type alone) is checked here, against the type the row
   // will have — otherwise it saves "fine" and the loader silently drops it.
@@ -126,6 +168,51 @@ export const sectionResource: ResourceConfig = {
       const slug = typeof page?.['slug'] === 'string' ? page['slug'].toLowerCase() : null;
       if (slug !== null && isCustomPageSlug(slug)) {
         throw new ValidationError(CUSTOM_PAGE_TYPE_REFUSED, 'type');
+      }
+    }
+    // Section appearance (Admin v2 E9): a background, spacing or reveal only on the kinds that
+    // take it, judged on the merged row, so a type change that leaves a choice its new kind
+    // does not take is refused too (the E9 migration's CHECKs hold the same; this says it on the
+    // field first). No read.
+    if (['type', 'background', 'spacing', 'reveal'].some((key) => key in changed)) {
+      const problem = appearanceProblem(String(merged['type']), {
+        background: merged['background'],
+        spacing: merged['spacing'],
+        reveal: merged['reveal'],
+      });
+      if (problem) throw new ValidationError(problem.message, problem.field);
+    }
+    // The anchor (Admin v2 E9): never on a section whose component names its own (the editor
+    // shows that one), judged on every save that could make it one (the form sends `type` and
+    // `content` with every save; no read). Unique on its page and never a discipline's slug (the
+    // Services explorer's panels are ids named by them): read only when the anchor or its page
+    // MOVES (a save that restates them reads nothing), through the overlay-aware database, so a
+    // staged save sees the pending anchors of the tenant and a publish the ones its release
+    // leaves; the two reads go together (listMany), only for a save that moves the anchor. The database's deferred UNIQUE (tenant,
+    // page, anchor) is the second net; a discipline renamed later onto an anchor is dropped at
+    // render (src/lib/sections/appearance.ts), never a duplicate id.
+    const anchor = merged['anchor'];
+    if (
+      typeof anchor === 'string' &&
+      ['anchor', 'type', 'content', 'page_id'].some((key) => key in changed)
+    ) {
+      if (!takesAnchor(String(merged['type']), variantOfContent(merged['content']))) {
+        throw new ValidationError(ANCHOR_CODE_OWNED, 'anchor');
+      }
+      const moved =
+        !before || before['anchor'] !== anchor || before['page_id'] !== merged['page_id'];
+      if (moved && typeof merged['page_id'] === 'string') {
+        const [sections = [], disciplines = []] = await (db ?? liveDb(sb, auth)).listMany([
+          {
+            table: 'page_sections',
+            query: { columns: 'id', eq: { page_id: merged['page_id'], anchor }, limit: 2 },
+          },
+          { table: 'disciplines', query: { columns: 'id', eq: { slug: anchor }, limit: 1 } },
+        ]);
+        if (sections.some((row) => row['id'] !== merged['id'])) {
+          throw new ValidationError(ANCHOR_TAKEN, 'anchor');
+        }
+        if (disciplines.length > 0) throw new ValidationError(ANCHOR_DISCIPLINE, 'anchor');
       }
     }
   },

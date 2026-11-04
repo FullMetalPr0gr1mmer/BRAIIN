@@ -10,7 +10,7 @@
 --     (0016's grant and fence: the verification accepted the column as public), never on a
 --     hidden one.
 --   • A rename is history like any other edit: the snapshot trigger keeps the label.
---   • The release registry stages it: page_section's columns end with `label`.
+--   • The release registry stages it: page_section's columns hold `label` (E9 appends more).
 --   • editing-pages is in the catalog (revision 1, place 41) and in every tenant, a tenant made
 --     after the migration included.
 -- No stale-token rows: no definer function or live check guards page_sections (its writes are
@@ -125,9 +125,11 @@ select throws_ok($$ update public.page_sections set label = 'anon' $$, '42501', 
 -- ---- the registry and the guide (as the migration role) ---------------------------------------
 reset role;
 select _as(null, null);
-select is((select columns from app.release_entities where entity_type = 'page_section'),
-  array['page_id', 'type', 'content', 'style', 'visible', 'sort_order', 'is_placeholder', 'label'],
-  'the release registry stages a rename: page_section''s columns end with label');
+-- E9 (0127) appended the appearance columns after `label`; supabase/tests/section_appearance.test.sql
+-- holds the whole row.
+select ok((select columns from app.release_entities where entity_type = 'page_section')
+            @> array['page_id', 'type', 'content', 'style', 'visible', 'sort_order', 'is_placeholder', 'label'],
+  'the release registry stages a rename: page_section''s columns hold label');
 select ok(exists (select 1 from app.help_guide_catalog
                    where slug = 'editing-pages' and revision >= 1 and sort_order = 41
                      and caps = array['pages.write'] and screens = array['/admin/pages']),
