@@ -130,7 +130,12 @@ const FAMILY_GROUPS = [
   },
   // Admin v2 E1: the page editor's own group, on its island only. Admin v2 E2: and its live
   // preview column (lazy, loaded only on the editor), which takes the editor's words from it.
-  { group: 'admin-pages.', importers: /^(?:AdminPageEditor|admin-page-preview)\./ },
+  // Admin v2 E3: and the template editors' island, the same family (its layout, its leave rule
+  // and the preview column's words).
+  {
+    group: 'admin-pages.',
+    importers: /^(?:AdminPageEditor|AdminTemplateEditor|admin-page-preview)\./,
+  },
   // Admin v2 E4: the theme editor's own group, on its island only.
   { group: 'admin-theme.', importers: /^AdminTheme\./ },
 ];
