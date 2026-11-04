@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext, Role } from '@/lib/auth/types';
 
+/** A page section's appearance columns with nothing chosen (Admin v2 E9, 0127). */
+const NO_LOOK = { background: null, spacing: null, reveal: null, anchor: null };
+
 // One made-up tenant covering every fence the preview's anon-RLS mirror copies (Admin v2
 // R8), and a fake staff client that serves it the way PostgREST would to a staff token
 // (every row of the tenant, whatever its status), paged by `range()` under a `max_rows`
@@ -646,6 +649,7 @@ export function fixtureTables(): Record<string, Row[]> {
       T({ id: ID.pvHome, page_id: ID.pgHome, template: null, mode: 'public' }),
     ],
     // Each section's edit time: a custom page's dateModified reads it (Admin v2 E11 review).
+    // Each with the appearance columns a live row carries (Admin v2 E9, 0127), none chosen.
     page_sections: [
       T({
         id: ID.psVis,
@@ -655,6 +659,7 @@ export function fixtureTables(): Record<string, Row[]> {
         visible: true,
         sort_order: 1,
         updated_at: '2026-01-02T00:00:00+00:00',
+        ...NO_LOOK,
       }),
       T({
         id: ID.psHidden,
@@ -664,6 +669,7 @@ export function fixtureTables(): Record<string, Row[]> {
         visible: false,
         sort_order: 2,
         updated_at: '2026-01-02T00:00:00+00:00',
+        ...NO_LOOK,
       }),
       T({
         id: ID.psOfDraft,
@@ -673,6 +679,7 @@ export function fixtureTables(): Record<string, Row[]> {
         visible: true,
         sort_order: 1,
         updated_at: '2026-01-02T00:00:00+00:00',
+        ...NO_LOOK,
       }),
       T({
         id: ID.psLocked,
@@ -682,6 +689,7 @@ export function fixtureTables(): Record<string, Row[]> {
         visible: true,
         sort_order: 1,
         updated_at: '2026-01-02T00:00:00+00:00',
+        ...NO_LOOK,
       }),
     ],
     navigation: [
