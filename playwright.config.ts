@@ -32,6 +32,9 @@ const GA4_SPEC = /[\\/]tests[\\/]admin[\\/]ga4\.e2e\.ts$/;
 // The theme (Admin v2 E4) saves colours every public page then draws: its own project, after GA4
 // and before maintenance, and it puts the brand's own theme back when it ends.
 const THEME_SPEC = /[\\/]tests[\\/]admin[\\/]theme\.e2e\.ts$/;
+// The template editors (Admin v2 E3) save shared text every service page then shows: their own
+// project, after the theme and before maintenance, and they remove the row when they end.
+const TEMPLATES_SPEC = /[\\/]tests[\\/]admin[\\/]templates\.e2e\.ts$/;
 const MAINTENANCE_SPEC = /[\\/]tests[\\/]admin[\\/]maintenance\.e2e\.ts$/;
 // The section blocks (Admin v2 E10) put a Text block, a Gallery and a Video on About, a page
 // the public and the admin specs read (pages.e2e.ts counts its sections), and remove them when
@@ -110,6 +113,7 @@ export default defineConfig({
         FOOTER_SPEC,
         GA4_SPEC,
         THEME_SPEC,
+        TEMPLATES_SPEC,
         MAINTENANCE_SPEC,
         /maintenance\.teardown\.ts$/,
         RELEASES_MODE_SPEC,
@@ -191,13 +195,23 @@ export default defineConfig({
       dependencies: ['ga4'],
     },
     {
+      // The template editors (Admin v2 E3) save a line of the service template's shared text,
+      // which every service page shows while it runs: alone, after the theme, and the row is
+      // removed when it ends (no row: the templates as built).
+      name: 'templates',
+      testDir: './tests/admin',
+      testMatch: TEMPLATES_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['theme'],
+    },
+    {
       // Maintenance (Admin v2 U9b) takes the shared preview down: last of all, and its
       // teardown switches it off whatever happened.
       name: 'maintenance',
       testDir: './tests/admin',
       testMatch: MAINTENANCE_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['theme'],
+      dependencies: ['templates'],
       teardown: 'maintenance-teardown',
     },
     {
