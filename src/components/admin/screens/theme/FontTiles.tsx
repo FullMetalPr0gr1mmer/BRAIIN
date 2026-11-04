@@ -8,8 +8,10 @@ import { fontOptions } from './model';
 // the group's name is the legend, the arrow keys and the checked state are the browser's own,
 // and the label shows the state (public/styles/admin/theme.css). The sample is SVG text whose
 // font is an attribute (no style attribute, ui.md §1.6); admin.css declares every family of the
-// catalogue, so the sample is the real face. While owner item O-21 is open each group has the
-// brand's family alone, chosen.
+// catalogue, so the sample is the real face. The anchor is `start` in both scripts: SVG's
+// text-anchor follows the direction, so an Arabic sample starts at the box's right edge and runs
+// left into it (with `end` it ran right, out of the box, clipped; E13-CR-1). While owner item
+// O-21 is open each group has the brand's family alone, chosen.
 
 export interface FontTilesProps {
   script: FontScript;
@@ -49,7 +51,7 @@ export default function FontTiles({ script, label, value, onChange }: FontTilesP
                 fontWeight="700"
                 fontFamily={option.stack}
                 fill="currentColor"
-                textAnchor={script === 'arabic' ? 'end' : 'start'}
+                textAnchor="start"
                 direction={script === 'arabic' ? 'rtl' : 'ltr'}
               >
                 {option.sample}

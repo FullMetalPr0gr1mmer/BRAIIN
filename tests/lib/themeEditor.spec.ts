@@ -343,4 +343,46 @@ describe('the screen’s server markup', () => {
     expect(html).toContain('>Aa</text>');
     expect(html).toContain('>أب</text>');
   });
+
+  // SVG's text-anchor is relative to the text's direction: `start` is the right edge of a
+  // right-to-left run, so `end` with `rtl` pins the LEFT edge at x and the text runs right
+  // (E13-CR-1: the Arabic tile drew its sample from x=62 out of its 64-wide box, clipped). A
+  // tile's sample, and the site sample's right-to-left line, must grow from the edge they stand
+  // at into their box: a line that grows left stands in the right half, one that grows right in
+  // the left half, a centred one at the middle. (The site sample's other lines are short labels
+  // placed in its columns, outside this rule.)
+  it('the tiles’ samples and the Arabic line grow into their box (E13-CR-1)', () => {
+    const preview = renderToStaticMarkup(
+      createElement(SitePreview, { palette: paletteOf(DEFAULT_COLORS) }),
+    );
+    const lines = (markup: string) =>
+      [...markup.matchAll(/<svg [^>]*viewBox="0 0 (\d+) \d+"[^>]*>([\s\S]*?)<\/svg>/g)].flatMap(
+        ([, width, body]) =>
+          [...(body ?? '').matchAll(/<text ([^>]*)>([^<]*)<\/text>/g)].map(([, attrs, words]) => {
+            const read = (name: string) =>
+              new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(attrs ?? '')?.[1];
+            return {
+              words: words ?? '',
+              width: Number(width),
+              x: Number(read('x')),
+              anchor: read('text-anchor') ?? 'start',
+              direction: read('direction') ?? 'ltr',
+            };
+          }),
+      );
+    const tiles = lines(html).filter((l) => l.words === 'Aa' || l.words === 'أب');
+    expect(tiles.map((l) => l.words).sort()).toEqual(['Aa', 'أب']);
+    const arabic = lines(preview).filter((l) => l.direction === 'rtl');
+    expect(arabic).toHaveLength(1);
+    for (const line of [...tiles, ...arabic]) {
+      expect(line.width, line.words).toBeGreaterThan(0);
+      const half = line.width / 2;
+      const growsLeft =
+        (line.anchor === 'start' && line.direction === 'rtl') ||
+        (line.anchor === 'end' && line.direction === 'ltr');
+      if (line.anchor === 'middle') expect(line.x, line.words).toBe(half);
+      else if (growsLeft) expect(line.x, line.words).toBeGreaterThan(half);
+      else expect(line.x, line.words).toBeLessThan(half);
+    }
+  });
 });

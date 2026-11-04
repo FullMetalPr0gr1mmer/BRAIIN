@@ -15,7 +15,7 @@ import {
 //     admin.css hold (tests/lib/fontCatalogue.spec.ts compares them block by block), so the
 //     numbers here are the ones docs/fonts.md 2b and 2c measured, copied, not new.
 //   • A non-brand family's faces are written into /styles/theme.css ahead of its `:root` rule
-//     when a theme chooses it (themeStylesheet, packages/theme/compile.ts), from this table,
+//     when a theme chooses it (themeStylesheet, packages/theme/stylesheet.ts), from this table,
 //     keyed by the closed token: never from row data.
 //   • The one hero-face preload is a family's file at the weight a route's heading renders in
 //     (heroFile), so it follows the theme's choice.

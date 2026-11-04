@@ -512,6 +512,26 @@ test.describe('as admin', () => {
         }),
       )
       .toEqual(['loaded']);
+    // Each tile's sample lies inside its own box, drawn in the loaded face (E13-CR-1: the
+    // Arabic sample ran out of its 64-wide box and was clipped; SVG's text-anchor follows the
+    // direction). Both tiles are measured, so the check is never vacuous.
+    const boxes = await page.locator('.theme__font svg.theme__sample').evaluateAll((svgs) =>
+      svgs.map((svg) => {
+        const text = svg.querySelector('text');
+        const box = text instanceof SVGGraphicsElement ? text.getBBox() : null;
+        const view = (svg as SVGSVGElement).viewBox.baseVal;
+        return {
+          sample: text?.textContent ?? '',
+          inside:
+            box !== null &&
+            box.width > 0 &&
+            box.x >= view.x - 0.5 &&
+            box.x + box.width <= view.x + view.width + 0.5,
+        };
+      }),
+    );
+    expect(boxes.map((b) => b.sample).sort()).toEqual(['Aa', 'أب']);
+    for (const box of boxes) expect(box.inside, box.sample).toBe(true);
     expect((await new AxeBuilder({ page }).withTags(WCAG).analyze()).violations).toEqual([]);
   });
 
