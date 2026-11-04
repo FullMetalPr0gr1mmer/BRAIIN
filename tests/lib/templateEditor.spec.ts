@@ -410,7 +410,8 @@ describe('the files’ pointers to their tests (E3 review)', () => {
       const href = TEMPLATE_EDITOR_PATHS[kind];
       const page = readFileSync(`src/pages${href}.astro`, 'utf8');
       expect(page, href).toContain('tests/admin/templates.e2e.ts');
-      if (/\(tests\/admin\/routes\.ts\s*\/\/\s*LOCKED_SCREENS\)/.test(page)) {
+      // The pointer as it was written, on one line or across a comment's line break.
+      if (/tests\/admin\/routes\.ts[\s/]*LOCKED_SCREENS/.test(page)) {
         expect(locked.has(href), `${href} claims LOCKED_SCREENS`).toBe(true);
       }
     }
