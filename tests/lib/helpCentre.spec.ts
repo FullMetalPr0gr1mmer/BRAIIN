@@ -3244,3 +3244,49 @@ describe('theme (E4, E12, E13), a guide put by the theme migrations', () => {
     expect(text('ar')).toContain('Generate the rest from Primary');
   });
 });
+
+// Admin v2 R14b: the publishing guide says what a save does in both ways of publishing, in the
+// words the screens use for release mode (so a renamed control fails here, not in a reader's
+// hands), and keeps every sentence that is still true while releases are off.
+describe('saving-and-publishing describes both ways of publishing (Admin v2 R14b)', () => {
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const article = SET.find((a) => a.slug === 'saving-and-publishing')!;
+  const en = textsOf(article, 'en').join('\n');
+  const ar = textsOf(article, 'ar').join('\n');
+
+  it('says releases are off until switched on, and what a save does then', () => {
+    expect(en).toContain('Until it is, what you save is what the site shows');
+    expect(en).toContain('Once publishing in releases is switched on');
+    expect(en).toContain('Save no longer changes the site.');
+    expect(ar).toContain('بعد تفعيل النشر عبر الإصدارات');
+  });
+
+  it('names the release-mode controls as the screens draw them', () => {
+    expect(source('src/components/admin/kit/SaveStatus.tsx')).toContain(
+      "return 'Saved as an unpublished change'",
+    );
+    expect(en).toContain('Saved as an unpublished change');
+    expect(source('src/components/admin/fields/VisibilityField.tsx')).toContain(
+      "export const VISIBLE_LABEL = 'Visible on the site';",
+    );
+    expect(en).toContain('Visible on the site switch');
+    expect(source('src/components/admin/screens/release/model.ts')).toContain(
+      "whenSchedule: 'Schedule for',",
+    );
+    expect(en).toContain('Schedule for, in the same window');
+    const notice = source('src/components/admin/fields/DraftNotice.tsx');
+    for (const label of ['Keep my version', 'Use the live version']) {
+      expect(notice).toContain(label);
+      expect(en).toContain(label);
+      expect(ar).toContain(label);
+    }
+    expect(source('src/lib/admin/nav/settings.ts')).toContain("label: 'Backups & versions',");
+    expect(en).toContain('Backups & versions in Settings');
+  });
+
+  it('lists what stays immediate as the design does (releases.md §1.2)', () => {
+    expect(en).toContain(
+      'Maintenance mode, users, integrations, leads, job applications and media details still save at once.',
+    );
+  });
+});
