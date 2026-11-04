@@ -1,0 +1,38 @@
+/* The template editors (Admin v2 E3, /admin/pages/template/service and /project), on top of the
+   page editor's layout (pages.css, which they link too): the Showing picker in the bar, and the
+   parts column's fixed parts, read only. Every colour is a token (admin.css). */
+
+/* "Showing [picker]": the label beside the select, which takes the room the bar has. */
+.tpl__pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+  max-inline-size: 26rem;
+}
+
+.tpl__pick > label {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ad-dim);
+}
+
+.tpl__pick > select {
+  min-inline-size: 0;
+  padding-block: 7px;
+  font-size: 13.5px;
+}
+
+/* A part that is no block of its own (the floating button, the image viewer): listed, not picked. */
+.tpl__fixed {
+  cursor: default;
+}
+
+/* What a part shows of the item, in plain case under its name (the kicker style is for kinds). */
+.tpl__own {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ad-dim2);
+}

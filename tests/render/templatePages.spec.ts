@@ -68,7 +68,7 @@ const SERVICE: ServiceDetail = {
   sortOrder: 1,
   updatedAt: null,
   poster: POSTER,
-  clip: { uid: null, path: '/media/showreel.mp4', startS: 2, endS: 6 },
+  clip: { path: '/media/showreel.mp4', startS: 2, endS: 6 },
   valuePoints: [
     { title: t('One system', 'نظام واحد'), text: t('Every use, one rule.', 'كل استخدام بقاعدة.') },
     { title: t('Made to last', 'يدوم'), text: t('No trend chasing.', 'بلا ملاحقة موضة.') },

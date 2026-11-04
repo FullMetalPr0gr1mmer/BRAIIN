@@ -3,6 +3,7 @@ import type { AuthContext } from '@/lib/auth/types';
 import { PAGE_PATHS, type VisibilityTemplate } from '@/lib/visibility/routes';
 import { pagePath } from '@/lib/seo/entityPaths';
 import type { VisibilityModeKey } from '../visibilityCopy';
+import { TEMPLATE_EDITOR_PATHS, mayEditTemplates } from './templates';
 
 // The pages list (Admin v2 E1, docs/admin-v2/ui.md "Pages list (/admin/pages; AV-25)").
 // SERVER ONLY: /admin/pages reads it under the person's own RLS and renders the cards with no
@@ -43,7 +44,10 @@ export interface TemplateCard {
   title: string;
   /** What it renders, in words: "28 services", "12 projects". */
   sub: string;
-  /** Where its items are edited until the template editors (E3) arrive. */
+  /**
+   * Its editor (Admin v2 E3: /admin/pages/template/<kind>) for a role that edits pages, else the
+   * area where its items are edited (Services, Projects), which SEO opens for their meta.
+   */
   href: string;
   visibility: 'public' | 'hidden';
 }
@@ -145,6 +149,8 @@ export function templateSub(n: number | null, one: string, many: string, unknown
 export function templateCards(
   visibility: readonly Row[],
   counts: { services: number | null; projects: number | null },
+  /** The role opens the template editors (pages.write, `mayEditTemplates`). */
+  editors = false,
 ): TemplateCard[] {
   const mode = (template: VisibilityTemplate): 'public' | 'hidden' =>
     visibility.some((v) => v['template'] === template && v['mode'] === 'hidden')
@@ -160,7 +166,7 @@ export function templateCards(
         'published services',
         'Template for every service page',
       ),
-      href: '/admin/services',
+      href: editors ? TEMPLATE_EDITOR_PATHS.service : '/admin/services',
       visibility: mode('service'),
     },
     {
@@ -172,7 +178,7 @@ export function templateCards(
         'published projects',
         'Template for every project page',
       ),
-      href: '/admin/portfolio',
+      href: editors ? TEMPLATE_EDITOR_PATHS.project : '/admin/portfolio',
       visibility: mode('case_study'),
     },
   ];
@@ -234,6 +240,10 @@ export async function loadPagesList(sb: SupabaseClient, auth: AuthContext): Prom
   const rows = (read: { data: unknown }) => (read.data ?? []) as Row[];
   return {
     pages: pageCards(rows(pages), rows(sections), rows(visibility), rows(drafts)),
-    templates: templateCards(rows(visibility), { services, projects }),
+    templates: templateCards(
+      rows(visibility),
+      { services, projects },
+      mayEditTemplates(auth.role),
+    ),
   };
 }

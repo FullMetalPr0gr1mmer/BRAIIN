@@ -63,8 +63,8 @@ function overlay<C extends object>(
   map: Row,
   builtIn: Record<Locale, C>,
 ): Record<Locale, C> {
-  const en: Row = { ...builtIn.en };
-  const ar: Row = { ...builtIn.ar };
+  const en: Row = { ...(builtIn.en as Row) };
+  const ar: Row = { ...(builtIn.ar as Row) };
   const keys = TEMPLATE_COPY_KEYS[kind] as Readonly<Record<string, TemplateCopyKey>>;
   for (const [key, def] of Object.entries(keys)) {
     if (def.kind !== 'text') continue;

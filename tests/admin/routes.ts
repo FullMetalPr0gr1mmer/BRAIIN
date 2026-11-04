@@ -274,6 +274,10 @@ export const LOCKED_APIS: readonly LockedApi[] = [
     cap: 'services.write',
     anyOf: ['services.write', 'seo.entityMeta'],
   },
+  // Admin v2 E3: the template editors are reached from the pages list, not the menu, so their
+  // shared text's API keeps its own negative check: SEO, Developer and Sales get a 403 from it
+  // (the pages themselves refuse the same roles: tests/admin/templates.e2e.ts).
+  { api: '/api/admin/template-copy', cap: 'pages.write' },
 ];
 
 /** How a locked screen refuses (see LockedScreen). */
@@ -411,6 +415,18 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   // Backups & versions (Admin v2 R13): the notice a download that hit the hourly limit comes
   // back with, and a version's details asked for while none exists (releases off: no read, the
   // page as it is), for every role that opens it.
+  // The template editors (Admin v2 E3): reached from the pages list's Templates cards, for the
+  // roles that edit pages. Each opens on its first published item with its preview column.
+  {
+    href: '/admin/pages/template/service',
+    label: 'Service page template',
+    caps: ['pages.write'],
+  },
+  {
+    href: '/admin/pages/template/project',
+    label: 'Project page template',
+    caps: ['pages.write'],
+  },
   {
     href: '/admin/backups?export=limit',
     label: 'Backups, download limit',

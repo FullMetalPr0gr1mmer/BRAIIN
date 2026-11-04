@@ -143,8 +143,10 @@ const ADMIN_CONTENT =
 // with them (the SEO drawer, the collections' reorder rule) is the field kit's (ADMIN_FIELDS).
 // Admin v2 E2: what the editor needs of the live preview before the column loads (its heading,
 // its words, the Edit | Preview switch) rides with the editor.
+// Admin v2 E3: the template editors (their island and screen code) are the page editor's family:
+// the same layout, its leave rule and E2's preview column, so they share this group.
 const ADMIN_PAGES =
-  /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]AdminPageEditor\.tsx$|screens[\\/]pageEditor[\\/]|screens[\\/]pagePreview[\\/]editorSide\.ts$)/;
+  /[\\/]src[\\/]components[\\/]admin[\\/](islands[\\/]Admin(PageEditor|TemplateEditor)\.tsx$|screens[\\/](pageEditor|templateEditor)[\\/]|screens[\\/]pagePreview[\\/]editorSide\.ts$)/;
 // The page editor's live preview column (Admin v2 E2): the column and the bridge's parent half,
 // reached only through import() once the preview is on screen, so the editor's first load never
 // carries it and a narrow screen that never opens the preview never downloads it.

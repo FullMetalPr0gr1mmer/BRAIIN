@@ -1,4 +1,4 @@
-import type { ProjectCopyKey, ServiceCopyKey, TemplateKind } from '@schemas/templateCopy';
+import type { ProjectCopyKey, ServiceCopyKey, TemplateKind } from '@schemas/templateCopyKeys';
 
 // The fixed parts of the two template pages (Admin v2 E3), in the order the page shows them:
 // what the template editor lists, read only, in its parts column, and the `data-pv-section`

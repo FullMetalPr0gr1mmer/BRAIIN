@@ -84,6 +84,14 @@ describe('the page cards', () => {
 });
 
 describe('the template cards', () => {
+  it('opens the template editors for a role that edits pages (Admin v2 E3)', () => {
+    const cards = templateCards([], { services: 28, projects: 12 }, true);
+    expect(cards.map((c) => c.href)).toEqual([
+      '/admin/pages/template/service',
+      '/admin/pages/template/project',
+    ]);
+  });
+
   it('the service and the project page, their counts, where they are edited, hidden or not', () => {
     expect(
       templateCards([{ page_id: null, template: 'case_study', mode: 'hidden' }], {
