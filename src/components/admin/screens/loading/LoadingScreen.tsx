@@ -172,7 +172,7 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
   // The built-in home page always opens with its loading screen: on, and nothing to switch.
   const target = state.kind === 'read' ? state.target : null;
   const on = state.kind === 'read' ? switchOn(state.target, state.content) : false;
-  const hint = switchHint(target);
+  const hint = switchHint(target, on);
   return (
     <section className="card" aria-labelledby={`${base}-title`}>
       <div className="card__h">

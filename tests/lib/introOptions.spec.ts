@@ -219,7 +219,7 @@ describe('the CSS buckets', () => {
     expect(GLOBAL).toMatch(
       /body:has\(\.intro\[data-backdrop\]\) \.consent-banner \{\s*z-index: 91;\s*\}/,
     );
-    // Above the plate (z-index 90), below the header (100).
+    // Above the plate (z-index 90) and the header (60); only the skip link (100) is higher.
     expect(GLOBAL).toMatch(/\.intro \{\s*position: fixed;\s*inset: 0;\s*z-index: 90;/);
   });
 
@@ -486,14 +486,41 @@ describe('the switch follows the home route’s fallback (E7 review, E7-C2)', ()
       hero: { id: 'h', version: 1, pending: null },
     });
     for (const why of ['nohome', 'unpublished', 'empty'] as const) {
-      const words = switchHint({ kind: 'builtin', why });
+      const words = switchHint({ kind: 'builtin', why }, true);
       expect(words).toBe(BUILTIN_HINTS[why]);
       expect(words).toContain('built-in one, with its loading screen');
       expect(words).not.toMatch(/[\u2013\u2014]/);
     }
-    expect(switchHint({ kind: 'nohero' })).toContain('no hero section');
-    expect(switchHint(null)).toContain('Saved with the home page');
-    expect(switchHint(introTarget(published, [hero]))).toBe(switchHint(null));
+    expect(switchHint({ kind: 'nohero' }, false)).toContain('no hero section');
+    expect(switchHint(null, false)).toContain('Saved with the home page');
+  });
+
+  it('the hint says what the switch does now: on plays the logo, off opens without it (E7-R1)', () => {
+    // A screen reader hears the hint with the switch (aria-describedby), so it must not say the
+    // logo plays on a switch that is off.
+    for (const [rows, on] of [
+      [[hero], true],
+      [[heroOff], false],
+    ] as const) {
+      const target = introTarget(published, rows);
+      expect(switchShows(target, rows)).toBe(on);
+      const words = switchHint(target, switchShows(target, rows));
+      expect(words).toContain('Saved with the home page');
+      expect(words).not.toMatch(/[\u2013\u2014]/);
+      if (on) expect(words).toMatch(/^The logo plays before the home page appears/);
+      else expect(words).toMatch(/^The home page opens without the logo\./);
+    }
+    // While it reads, or after a failed read, the switch shows off and disabled: the hint
+    // claims neither state.
+    const reading = switchHint(null, false);
+    expect(reading).toMatch(/^When on, the logo plays/);
+    expect(reading).not.toBe(switchHint(introTarget(published, [hero]), true));
+    expect(reading).not.toBe(switchHint(introTarget(published, [heroOff]), false));
+    // The built-in page and the page with no hero say the same in either state: their switch
+    // cannot move.
+    for (const target of [{ kind: 'builtin', why: 'nohome' }, { kind: 'nohero' }] as const) {
+      expect(switchHint(target, true)).toBe(switchHint(target, false));
+    }
   });
 
   it('the island renders with these functions: it reads the page with its sections and asks introTarget', () => {
@@ -510,7 +537,9 @@ describe('the switch follows the home route’s fallback (E7 review, E7-C2)', ()
     expect(island).toMatch(
       /const on = state\.kind === 'read' \? switchOn\(state\.target, state\.content\) : false;/,
     );
-    expect(island).toContain('const hint = switchHint(target);');
+    // The hint is told the switch's state, so it never says the logo plays on a switch that is
+    // off (E7-R1).
+    expect(island).toContain('const hint = switchHint(target, on);');
     expect(island).toMatch(/disabled=\{busy \|\| target === null \|\| !switchMovable\(target\)\}/);
     // The toggle writes only over a hero of the home page visitors see.
     expect(island).toContain("if (state.kind !== 'read' || state.target.kind !== 'hero') return;");

@@ -84,8 +84,12 @@ export const BUILTIN_HINTS: Readonly<Record<BuiltinWhy, string>> = {
 };
 const NO_HERO_HINT =
   'The home page shows no hero section, so it has no loading screen. Add a hero to the home page in Pages.';
-const SWITCH_HINT =
-  'The logo plays before the home page appears, in English and Arabic. Saved with the home page, like any edit of it.';
+const SAVED = 'Saved with the home page, like any edit of it.';
+/** The hero's switch, by its state (a screen reader hears it with the switch: E7 review, E7-R1). */
+const SWITCH_ON_HINT = `The logo plays before the home page appears, in English and Arabic. ${SAVED}`;
+const SWITCH_OFF_HINT = `The home page opens without the logo. Turn it on to play it, in English and Arabic. ${SAVED}`;
+/** While the switch reads, or after a failed read: it shows off and disabled, so neither state. */
+const SWITCH_HINT = `When on, the logo plays before the home page appears, in English and Arabic. ${SAVED}`;
 
 /**
  * Whether the switch shows on, for what the read found (`content` is the hero's, when there is
@@ -101,10 +105,15 @@ export function switchOn(target: IntroTarget, content: Readonly<Record<string, u
 /** Whether the switch can be moved: only over a hero of the home page visitors see. */
 export const switchMovable = (target: IntroTarget): boolean => target.kind === 'hero';
 
-/** The switch's hint for what the read found (null while it reads, or when it failed). */
-export function switchHint(target: IntroTarget | null): string {
+/**
+ * The switch's hint for what the read found (null while it reads, or when it failed) and the
+ * state the switch shows (`on`, switchOn's): over the hero it says what that state does, so it
+ * never says the logo plays on a switch that is off (E7 review, E7-R1).
+ */
+export function switchHint(target: IntroTarget | null, on: boolean): string {
   if (target?.kind === 'builtin') return BUILTIN_HINTS[target.why];
   if (target?.kind === 'nohero') return NO_HERO_HINT;
+  if (target?.kind === 'hero') return on ? SWITCH_ON_HINT : SWITCH_OFF_HINT;
   return SWITCH_HINT;
 }
 
