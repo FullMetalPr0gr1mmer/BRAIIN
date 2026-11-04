@@ -164,13 +164,14 @@ test.describe('as admin', () => {
       '/admin/visibility',
     );
     await expect(cards.getByRole('link', { name: `Edit ${TITLE.en}` })).toBeVisible();
+    // The template cards open the template editors (E3) for a role that edits pages.
     await expect(page.getByRole('link', { name: 'Service page' })).toHaveAttribute(
       'href',
-      '/admin/services',
+      '/admin/pages/template/service',
     );
     await expect(page.getByRole('link', { name: 'Project page' })).toHaveAttribute(
       'href',
-      '/admin/portfolio',
+      '/admin/pages/template/project',
     );
     // The scratch page is a custom page (E11): it lives at its own address.
     await expect(
