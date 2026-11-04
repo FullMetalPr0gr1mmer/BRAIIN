@@ -286,11 +286,13 @@ test.describe('who may change it (both server layers)', () => {
 });
 
 test.describe('the served page', () => {
-  for (const path of [`/${SLUG}`, `/ar/${SLUG}`]) {
-    test(`${path}: the attributes on the second Text block, none of the opening's reveal`, async ({
+  // The title names the language, never the slug: SLUG carries a per-load mark, and a title
+  // that differs between the runner and its worker is "not found in the worker process".
+  for (const prefix of ['', '/ar'] as const) {
+    test(`${prefix || '/'} page: the attributes on the second Text block, none of the opening's reveal`, async ({
       request,
     }) => {
-      const res = await request.get(path);
+      const res = await request.get(`${prefix}/${SLUG}`);
       expect(res.status()).toBe(200);
       const html = await res.text();
       const openings = html.match(/<section\b[^>]*class="blk-text"[^>]*>/g) ?? [];
