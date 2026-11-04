@@ -400,8 +400,10 @@
   --ad-main-min: 32rem;
   --ad-pad-b: clamp(18px, 2.4vw, 28px);
   --ad-pad-i: clamp(16px, 2.4vw, 28px);
-  /* The savebar's height, for the scroll padding that keeps focus clear of it (R12). */
-  --ad-savebar: 64px;
+  /* The savebar's height before it is measured (R12, R14a: Savebar keeps --ad-savebar-h at
+     its real height once shown), and its inset from the window's bottom. */
+  --ad-savebar: 112px;
+  --ad-savebar-gap: 22px;
 }
 
 /* A dialog's ::backdrop inherits from its dialog only from Chromium 122, and the
@@ -4553,20 +4555,35 @@ dialog.drw[data-size='wide'] {
    The prototype's .savebar (app.css 83-85): a fixed midnight pill at the bottom centre while
    anything unpublished is waiting. AdminLayout draws it only with releases on, so with them
    off none of this renders. It slides in from @starting-style (the reduced-motion block below
-   drops the transition), and while it shows, the page's scroll port ends above it so a focused
-   control is scrolled clear of it (WCAG 2.2 2.4.11, technique C43); its height is
-   --ad-savebar, a row on a wide screen and up to three on a narrow one. */
+   drops the transition), and while it shows, the page keeps room for it (R14a): the main
+   column ends above it, the scroll port too so a focused control is scrolled clear of it (WCAG
+   2.2 2.4.11, technique C43), and the sticky bulk bar and the toasts sit over it, not under.
+   The room is the bar's MEASURED height (--ad-savebar-h, which Savebar.tsx keeps through the
+   CSSOM: one row on a wide screen with a long lead, two with a short one, three on a phone)
+   plus its inset; --ad-savebar, the worst case measured, stands in until the first measure.
+   Every rule is under the shown bar, which renders only with releases on: with them off
+   nothing here applies. */
 :root:has(.savebar[data-shown]:not([data-inline])) {
-  scroll-padding-block-end: calc(var(--ad-savebar) + 16px);
+  scroll-padding-block-end: calc(
+    var(--ad-savebar-h, var(--ad-savebar)) + var(--ad-savebar-gap) + 8px
+  );
 }
 
 .admin-body:has(.savebar[data-shown]:not([data-inline])) .admin-main {
-  padding-block-end: calc(var(--ad-savebar) + 32px);
+  padding-block-end: calc(var(--ad-savebar-h, var(--ad-savebar)) + var(--ad-savebar-gap) + 16px);
+}
+
+.admin-body:has(.savebar[data-shown]:not([data-inline])) .bulkbar {
+  inset-block-end: calc(var(--ad-savebar-h, var(--ad-savebar)) + var(--ad-savebar-gap) + 8px);
+}
+
+.admin-body:has(.savebar[data-shown]:not([data-inline])) .toasts {
+  inset-block-end: calc(var(--ad-savebar-h, var(--ad-savebar)) + var(--ad-savebar-gap) + 8px);
 }
 
 @media (max-width: 640px) {
   :root {
-    --ad-savebar: 132px;
+    --ad-savebar: 200px;
   }
 }
 
@@ -4574,7 +4591,7 @@ dialog.drw[data-size='wide'] {
   position: fixed;
   z-index: 50;
   inset-inline: 0;
-  inset-block-end: 22px;
+  inset-block-end: var(--ad-savebar-gap);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
