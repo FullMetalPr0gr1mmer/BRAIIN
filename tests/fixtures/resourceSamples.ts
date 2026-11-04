@@ -220,8 +220,15 @@ export const SAMPLE_OVERRIDES: Readonly<Record<string, Readonly<Record<string, u
   // The public identity's location is bilingual text; a nav item's is its menu.
   site_profile: { location: BI('Riyadh, Saudi Arabia', 'الرياض، السعودية') },
   // A section's name in the page editor (Admin v2 E1, 0115) is plain text; a nav item's
-  // label is its bilingual words.
-  page_section: { label: 'Slogan, under the hero' },
+  // label is its bilingual words. Its appearance and anchor (Admin v2 E9, 0127) are closed
+  // buckets and a lower-case slug.
+  page_section: {
+    label: 'Slogan, under the hero',
+    background: 'mist',
+    spacing: 'compact',
+    reveal: 'fade',
+    anchor: 'our-story',
+  },
 };
 
 /** The sample for one payload key of one entity type. */

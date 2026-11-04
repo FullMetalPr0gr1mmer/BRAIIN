@@ -188,9 +188,10 @@ export const sectionResource: ResourceConfig = {
     // Services explorer's panels are ids named by them): read only when the anchor or its page
     // MOVES (a save that restates them reads nothing), through the overlay-aware database, so a
     // staged save sees the pending anchors of the tenant and a publish the ones its release
-    // leaves; the two reads go together (listMany), only for a save that moves the anchor. The database's deferred UNIQUE (tenant,
-    // page, anchor) is the second net; a discipline renamed later onto an anchor is dropped at
-    // render (src/lib/sections/appearance.ts), never a duplicate id.
+    // leaves; the two reads go together (listMany), only for a save that moves the anchor.
+    // The database's deferred UNIQUE (tenant, page, anchor) is the second net; a discipline
+    // renamed later onto an anchor is dropped at render (src/lib/sections/appearance.ts),
+    // never a duplicate id.
     const anchor = merged['anchor'];
     if (
       typeof anchor === 'string' &&
