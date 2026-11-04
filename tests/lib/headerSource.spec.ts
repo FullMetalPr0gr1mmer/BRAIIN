@@ -2,7 +2,13 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { HEADER_COLUMNS, HEADER_DEFAULTS, headerColumnDefaults } from '@schemas/appearance';
+import {
+  HEADER_COLUMNS,
+  HEADER_DEFAULTS,
+  INTRO_COLUMNS,
+  appearanceColumnDefaults,
+  headerColumnDefaults,
+} from '@schemas/appearance';
 import { SITE_APPEARANCE_HEADER_COLUMNS } from '@/lib/data/appearance';
 import { siteAppearanceSingleton } from '@/lib/admin/singletons/siteAppearance';
 import { appearanceUi } from '@/lib/admin/ui/appearance';
@@ -40,14 +46,22 @@ describe('one source for the header’s columns and defaults (CR7)', () => {
     const byColumn = headerColumnDefaults();
     expect(Object.keys(byColumn)).toEqual(Object.values(HEADER_COLUMNS));
     expect(byColumn['header_logo_size']).toBe(HEADER_DEFAULTS.logoSize);
-    expect(siteAppearanceSingleton.defaults).toEqual(byColumn);
+    // Admin v2 E7: the row's defaults are the header's and the intro's (appearanceColumnDefaults,
+    // held by tests/lib/introOptions.spec.ts); the header's part is headerColumnDefaults.
+    expect(siteAppearanceSingleton.defaults).toMatchObject(byColumn);
     expect(ANON_COLUMNS['site_appearance']).toEqual([
       'tenant_id',
       ...Object.values(HEADER_COLUMNS),
+      ...Object.values(INTRO_COLUMNS),
     ]);
     // The preview's create defaults are the table's: the NOT NULL columns (the button's words
-    // and link have none).
+    // and link, and the intro's tagline, have none).
     expect(CREATE_DEFAULTS['site_appearance']).toEqual(
+      Object.fromEntries(
+        Object.entries(appearanceColumnDefaults()).filter(([, value]) => value !== null),
+      ),
+    );
+    expect(CREATE_DEFAULTS['site_appearance']).toMatchObject(
       Object.fromEntries(Object.entries(byColumn).filter(([, value]) => value !== null)),
     );
     for (const field of appearanceUi.fields) {

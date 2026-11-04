@@ -2,6 +2,7 @@
 // In Phase 3 these come from the `page_sections` table; until then pages use the
 // default compositions below so the site looks real before content is authored.
 
+import type { IntroSettings } from '@schemas/appearance';
 import type { HeroText } from '@/lib/text/heroLinks';
 import { HERO_COPY, HERO_LABELS } from './copy/hero';
 
@@ -89,11 +90,17 @@ export function homeHeroCtaHref(
  * featured project cards (loaded once, for the band and for the CTA decision above) go to
  * every Selected work band, and the CTA target to the first hero. Round 2: the published
  * disciplines (loaded once) go to the discipline cards — in home mode — and to the home
- * lead form's grouped select.
+ * lead form's grouped select. Admin v2 E7: the loading screen's look (`intro`, read once
+ * from site_appearance) goes to the first hero, the one `withHomeIntro` gives the plate.
  */
 export function withHomeData<Card, Discipline>(
   sections: readonly SectionData[],
-  data: { featured: readonly Card[]; ctaHref: string; disciplines: readonly Discipline[] },
+  data: {
+    featured: readonly Card[];
+    ctaHref: string;
+    disciplines: readonly Discipline[];
+    intro?: IntroSettings;
+  },
 ): SectionData[] {
   let heroSeen = false;
   return sections.map((s) => {
@@ -104,7 +111,14 @@ export function withHomeData<Card, Discipline>(
     if (s.type === 'contact') return { ...s, data: { ...s.data, groups: data.disciplines } };
     if (s.type === 'hero' && !heroSeen) {
       heroSeen = true;
-      return { ...s, data: { ...s.data, ctaHref: data.ctaHref } };
+      return {
+        ...s,
+        data: {
+          ...s.data,
+          ctaHref: data.ctaHref,
+          ...(data.intro ? { introLook: data.intro } : {}),
+        },
+      };
     }
     return s;
   });

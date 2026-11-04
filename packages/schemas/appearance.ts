@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
 // The site's appearance settings (Admin v2 E5, `public.site_appearance`, the E5 migration): one
-// row per tenant under theme.edit (P-9). E5 holds the header's options; E7 adds the loading
-// screen's to the same row. Every option is a CLOSED set (Track UI: bucketed options, no free
-// CSS or HTML) mirrored by a SQL CHECK, and every default is the header as built, so a site
-// with no row renders exactly what it rendered before E5.
+// row per tenant under theme.edit (P-9). E5 holds the header's options; E7 (the loading screen
+// migration) adds the loading screen's look to the same row. Every option is a CLOSED set
+// (Track UI: bucketed options, no free CSS or HTML) mirrored by a SQL CHECK, and every default
+// is the site as built, so a site with no row renders exactly what it rendered before E5.
 //
 // The CTA's words are plain text (rendered as text, never markup): trimmed, no control
 // character, English and Arabic both required, at most 40 characters each (the SQL CHECK
@@ -48,12 +48,16 @@ export const HEADER_CTA_HREF_LOCALIZED = /^\/ar(?:[/?#]|$)/;
 
 const CONTROL = /[\u0000-\u001F\u007F-\u009F]/;
 
-const ctaHalf = z
-  .string()
-  .trim()
-  .min(1)
-  .max(HEADER_CTA_LABEL_MAX)
-  .refine((v) => !CONTROL.test(v), { message: 'Use plain words, without line breaks.' });
+/** One language of a plain one-line text: trimmed, 1 to `max` characters, no control character. */
+const plainLine = (max: number) =>
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(max)
+    .refine((v) => !CONTROL.test(v), { message: 'Use plain words, without line breaks.' });
+
+const ctaHalf = plainLine(HEADER_CTA_LABEL_MAX);
 
 export const HeaderCtaLabelSchema = z.object({ en: ctaHalf, ar: ctaHalf });
 export type HeaderCtaLabel = z.infer<typeof HeaderCtaLabelSchema>;
@@ -143,10 +147,119 @@ export function tintAllowed(s: Pick<HeaderSettings, 'sticky' | 'solidAfterHero' 
   return !s.sticky || s.solidAfterHero || s.tint === HEADER_TINT_MINIMUM;
 }
 
+// ─── The loading screen (Admin v2 E7) ─────────────────────────────────────────────────────
+// The look of the home page's intro plate (docs/hero-intro.md): what is behind the logo, a
+// progress bar, a tagline under the logo, and the plate's two timing tokens in buckets. Whether
+// the plate shows at all is the home hero section's `intro` (pages.write, P-9 and O-14), not
+// this row. The logo itself never changes: it is the home page's LCP element (CLAUDE.md §6).
+
+/** Behind the logo: the hero loop (as built, a see-through plate), black, or light. */
+export const INTRO_BACKDROPS = ['video', 'black', 'light'] as const;
+export type IntroBackdrop = (typeof INTRO_BACKDROPS)[number];
+
+/** A bounded number in fixed steps (the hold and the fade, in milliseconds). */
+export interface StepRange {
+  readonly min: number;
+  readonly max: number;
+  readonly step: number;
+}
+/** How long the logo holds the plate: never longer than 1.5 s (the site rule). */
+export const INTRO_HOLD: StepRange = { min: 500, max: 1500, step: 100 };
+/** How long the plate and the logo take to leave. */
+export const INTRO_FADE: StepRange = { min: 300, max: 600, step: 50 };
+export const INTRO_TAGLINE_MAX = 60;
+
+/** Every value of a step range, in order (the CSS buckets, the SQL CHECK, the slider). */
+export function stepValues(range: StepRange): number[] {
+  const out: number[] = [];
+  for (let v = range.min; v <= range.max; v += range.step) out.push(v);
+  return out;
+}
+
+/** A stored or sent number on one of the range's steps, else the fallback. */
+export function inSteps(range: StepRange, value: unknown, fallback: number): number {
+  return typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= range.min &&
+    value <= range.max &&
+    (value - range.min) % range.step === 0
+    ? value
+    : fallback;
+}
+
+const stepped = (range: StepRange) =>
+  z
+    .number()
+    .int()
+    .min(range.min)
+    .max(range.max)
+    .refine((v) => (v - range.min) % range.step === 0, {
+      message: `Use a step of ${range.step} ms.`,
+    });
+
+export const IntroTaglineSchema = z.object({
+  en: plainLine(INTRO_TAGLINE_MAX),
+  ar: plainLine(INTRO_TAGLINE_MAX),
+});
+export type IntroTagline = z.infer<typeof IntroTaglineSchema>;
+
+/** The loading screen's look as the site reads it (every option known). */
+export interface IntroSettings {
+  backdrop: IntroBackdrop;
+  bar: boolean;
+  tagline: IntroTagline | null;
+  holdMs: number;
+  fadeMs: number;
+}
+
+/** The intro as built: what no row, and every unreadable option, means. */
+export const INTRO_DEFAULTS: Readonly<IntroSettings> = {
+  backdrop: 'video',
+  bar: false,
+  tagline: null,
+  holdMs: 1000,
+  fadeMs: 450,
+};
+
+/** Payload key → column (the singleton's `toRow` and `fields`). */
+export const INTRO_COLUMNS: Readonly<Record<keyof IntroSettings, string>> = {
+  backdrop: 'intro_backdrop',
+  bar: 'intro_bar',
+  tagline: 'intro_tagline',
+  holdMs: 'intro_hold_ms',
+  fadeMs: 'intro_fade_ms',
+};
+
 /**
- * A save of the appearance settings: any of the options (the Header screen sends them all; a
- * release's pending change, a restore or a cut patch names only some) and the row's version (0
- * before the first save, as every singleton). The two rules that span options are checked
+ * Every payload key of the row → its column, the header's and the loading screen's (the
+ * singleton's `toRow` and `fields`, the preview's anon columns).
+ */
+export const APPEARANCE_COLUMNS: Readonly<Record<string, string>> = {
+  ...HEADER_COLUMNS,
+  ...INTRO_COLUMNS,
+};
+
+/**
+ * The whole row as built, by column (the header's and the intro's defaults): the singleton's
+ * answer before the first save and, less the nullable columns, the table's own defaults.
+ */
+export function appearanceColumnDefaults(): Record<
+  string,
+  string | number | boolean | HeaderCtaLabel | IntroTagline | null
+> {
+  const out: Record<string, string | number | boolean | HeaderCtaLabel | IntroTagline | null> = {
+    ...headerColumnDefaults(),
+  };
+  for (const [key, column] of Object.entries(INTRO_COLUMNS)) {
+    out[column] = INTRO_DEFAULTS[key as keyof IntroSettings];
+  }
+  return out;
+}
+
+/**
+ * A save of the appearance settings: any of the options (the Header screen sends the header's,
+ * the Loading screen the intro's; a release's pending change, a restore or a cut patch names
+ * only some) and the row's version (0 before the first save, as every singleton). The two rules that span options are checked
  * here when the save names every option they read, and always by the SQL CHECKs, which see the
  * stored values too (a refusal there is a 422 on the field, src/lib/admin/singletons).
  */
@@ -164,6 +277,11 @@ export const SiteAppearanceWriteSchema = z
     ctaShow: z.boolean().optional(),
     ctaLabel: HeaderCtaLabelSchema.nullable().optional(),
     ctaHref: HeaderCtaHrefSchema.nullable().optional(),
+    backdrop: z.enum(INTRO_BACKDROPS).optional(),
+    bar: z.boolean().optional(),
+    tagline: IntroTaglineSchema.nullable().optional(),
+    holdMs: stepped(INTRO_HOLD).optional(),
+    fadeMs: stepped(INTRO_FADE).optional(),
     version: z.number().int().min(0),
   })
   .superRefine((value, ctx) => {

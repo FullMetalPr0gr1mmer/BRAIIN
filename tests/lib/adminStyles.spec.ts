@@ -143,6 +143,8 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'integrations.css',
       'kit.css',
       'leads.css',
+      // Admin v2 E7: the Loading screen.
+      'loading.css',
       'login.css',
       'maintenance.css',
       'media.css',
