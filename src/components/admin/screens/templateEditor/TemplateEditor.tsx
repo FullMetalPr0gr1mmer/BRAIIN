@@ -172,7 +172,7 @@ function Editor({ kind, groups, selected, builtIn, access }: TemplateEditorSetup
   const draftNote = item ? unpublishedNote(kind, item.status) : null;
 
   return (
-    <div className="pe tpl">
+    <div className="pe">
       <div className="pe__bar" role="group" aria-label={`The ${noun} page template`}>
         <a className="btn" data-size="sm" data-variant="ghost" href="/admin/pages">
           <Icon name="back" size={15} />

@@ -259,7 +259,8 @@ on conflict (entity_type) do nothing;
 -- H11's app.put_help_guide (0069). page-templates is NEW, so revision 0; sort_order 48, a free
 -- place after the appearance guides (43 to 46). For the roles that open the template editors:
 -- pages.write (Admin, Content Creator; the Worker's filter from ROLE_CAPS). Its screens are the
--- two editors; PAGE_GUIDES (src/lib/admin/help/pageGuides.ts) offers it there.
+-- two editors, then Pages, whose Templates cards open them; PAGE_GUIDES
+-- (src/lib/admin/help/pageGuides.ts) offers it on the two editors.
 -- tests/lib/helpCentre.spec.ts reads these statements (tests/fixtures/helpSet.ts) and holds the
 -- copy to the words the screen uses.
 select app.put_help_guide($guide$
@@ -268,7 +269,7 @@ select app.put_help_guide($guide$
   "sort_order": 48,
   "minutes": 2,
   "tags": ["content"],
-  "screens": ["/admin/pages/template/service", "/admin/pages/template/project"],
+  "screens": ["/admin/pages/template/service", "/admin/pages/template/project", "/admin/pages"],
   "caps": ["pages.write"],
   "title": "The service and project page templates",
   "title_ar": "قالبا صفحة الخدمة وصفحة المشروع",
@@ -666,7 +667,7 @@ begin
   if not exists (select 1 from app.help_guide_catalog c
                   where c.slug = 'page-templates' and c.revision = 1 and c.sort_order = 48
                     and c.screens = array['/admin/pages/template/service',
-                                          '/admin/pages/template/project']
+                                          '/admin/pages/template/project', '/admin/pages']
                     and c.caps = array['pages.write'])
      or (select count(*) from app.help_guide_catalog where sort_order = 48) <> 1 then
     raise exception 'E3: the page-templates guide is not in the catalog at revision 1, place 48';

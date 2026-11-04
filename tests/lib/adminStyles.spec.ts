@@ -153,6 +153,8 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'seo.css',
       'services.css',
       'stats.css',
+      // Admin v2 E3: the template editors.
+      'templates.css',
       'theme.css',
       'two-step.css',
       'users.css',
