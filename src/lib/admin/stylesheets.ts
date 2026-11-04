@@ -25,6 +25,8 @@ export const ADMIN_STYLESHEETS = [
   'integrations.css',
   'kit.css',
   'leads.css',
+  // Admin v2 E7: the Loading screen (its tiles and the preview of the intro).
+  'loading.css',
   'login.css',
   'maintenance.css',
   'media.css',
@@ -35,6 +37,8 @@ export const ADMIN_STYLESHEETS = [
   'seo.css',
   'services.css',
   'stats.css',
+  // Admin v2 E3: the template editors (the Showing picker, the fixed parts), over pages.css.
+  'templates.css',
   // Admin v2 E4: the theme editor.
   'theme.css',
   'two-step.css',

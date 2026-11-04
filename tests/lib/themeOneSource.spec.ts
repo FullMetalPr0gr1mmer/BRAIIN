@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // One source for each of the theme's shape facts (Admin v2 E12 code review CR7, CR9): the
-// v1-to-v2 upgrade is written once (packages/theme/shapes.ts upgradeThemeSettings) and every
+// upgrade of an older theme (v1, and since E13 v2, to v3) is written once (packages/theme/shapes.ts upgradeThemeSettings) and every
 // reader of a v1 theme goes through it; the editor's sample draws the buttons from the site's
 // own radius table (BUTTON_RADIUS), not a copy of it. Proven by replacing the module's two
 // facts here: a reader with its own copy would not follow.
@@ -36,11 +36,12 @@ const V1 = {
   colors: { primary: '#0024BC', hover: '#024CFF', accent: '#22A9FF' },
   motion: { marquee: 'slower', reveal: false },
 } as const;
-const AS_V2 = {
+const AS_V3 = {
   ...V1,
-  v: 2,
+  v: 3,
   shapes: { corners: 'brand', buttons: 'pill' },
   type: { headingWeight: 800, headingCase: 'uppercase' },
+  fonts: { latin: 'archivo', arabic: 'almarai' },
 };
 
 beforeEach(() => {
@@ -49,7 +50,7 @@ beforeEach(() => {
 
 describe('a v1 theme is upgraded in one place', () => {
   it('the schema reads it through upgradeThemeSettings', () => {
-    expect(ThemeSettingsSchema.parse(V1)).toEqual(AS_V2);
+    expect(ThemeSettingsSchema.parse(V1)).toEqual(AS_V3);
     expect(seen.upgrades).toBe(1);
   });
 
@@ -63,7 +64,7 @@ describe('a v1 theme is upgraded in one place', () => {
   });
 
   it("the editor's settingsOf reads it through upgradeThemeSettings", () => {
-    expect(settingsOf(V1)).toEqual(AS_V2);
+    expect(settingsOf(V1)).toEqual(AS_V3);
     expect(seen.upgrades).toBe(1);
   });
 });

@@ -6,21 +6,25 @@ import { compileTheme, DEFAULT_THEME_SETTINGS, THEME_EFFECTS } from '@theme/comp
 import { themeSqlBlocks } from '@theme/sql';
 import {
   ThemeColorsSchema,
+  ThemeFontsSchema,
   ThemeMotionSchema,
   ThemeSettingsV1Schema,
   ThemeSettingsV2Schema,
+  ThemeSettingsV3Schema,
   ThemeShapesSchema,
   ThemeTypeSchema,
 } from '@schemas/theme';
-import { THEME_TOKEN_NAMES } from '@schemas/themeTokens';
+import { FONT_STACK_TOKENS, THEME_TOKEN_NAMES } from '@schemas/themeTokens';
+import { FONT_SCRIPTS, FONT_TOKENS, familiesOf, fontTokenRules } from '@theme/fonts';
 import { SHAPE_TOKEN_NAMES, SHAPE_TOKEN_RULES } from '@theme/shapes';
 
 // The database's copy of the theme rules (Admin v2 E4, E12): custom_themes_theme_v1, the CHECK
 // the E4 migration adds, calls app.theme_row_ok and app.theme_palette_ok, whose pairs, token
-// shapes, brand defaults and (since E12) shape and type choices are GENERATED from the files the
-// editor and the Worker read (packages/theme/sql.ts). If they drift, the database refuses a
-// theme the Worker accepted, or takes one it refused. pgTAP (supabase/tests/theme_settings and
-// theme_shapes) proves the CHECK runs; this proves it checks the same things.
+// shapes, brand defaults, (since E12) shape and type choices and (since E13) the font catalogue's
+// families are GENERATED from the files the editor and the Worker read (packages/theme/sql.ts).
+// If they drift, the database refuses a theme the Worker accepted, or takes one it refused.
+// pgTAP (supabase/tests/theme_settings, theme_shapes and theme_fonts) proves the CHECK runs;
+// this proves it checks the same things.
 
 const DIR = 'supabase/migrations';
 const FILES = readdirSync(DIR)
@@ -29,8 +33,9 @@ const FILES = readdirSync(DIR)
 const read = (f: string | undefined) =>
   f ? readFileSync(`${DIR}/${f}`, 'utf8').replace(/\r\n/g, '\n') : '';
 // E4's migration (the colour maths and the pairs), and the LATEST migration that restates
-// app.theme_row_ok (E12's since AV-32: the token rules, the defaults, the effects, the shapes
-// and type). A later restatement takes over the second role, and these tests follow it.
+// app.theme_row_ok (E13's since the font catalogue: the token rules, the defaults, the effects,
+// the shapes and type, the fonts). A later restatement takes over the second role, and these
+// tests follow it.
 const FILE = FILES.find((f) => /^\d{4}_theme_settings\.sql$/.test(f));
 const SQL = read(FILE);
 const ROW_OK_FILE = FILES.filter((f) =>
@@ -59,9 +64,9 @@ function fn(name: string, sql = SQL): string {
 }
 
 describe('the theme migrations hold the generated rules', () => {
-  it("E4's exists once, and E12 restates app.theme_row_ok last", () => {
+  it("E4's exists once, and E13 restates app.theme_row_ok last", () => {
     expect(readdirSync(DIR).filter((f) => f.endsWith('_theme_settings.sql'))).toHaveLength(1);
-    expect(ROW_OK_FILE).toMatch(/^\d{4}_theme_shapes\.sql$/);
+    expect(ROW_OK_FILE).toMatch(/^\d{4}_theme_fonts\.sql$/);
   });
 
   it.each(Object.entries(themeSqlBlocks()))('%s: verbatim between its markers', (name, body) => {
@@ -82,6 +87,7 @@ describe('the theme migrations hold the generated rules', () => {
     expect(rowOk).toContain('-- BEGIN theme defaults');
     expect(rowOk).toContain('-- BEGIN theme effects');
     expect(rowOk).toContain('-- BEGIN theme shape rules');
+    expect(rowOk).toContain('-- BEGIN theme font rules');
   });
 });
 
@@ -95,12 +101,17 @@ describe('app.theme_row_ok checks what the schemas and the compiler say', () => 
     return [...m![1]!.matchAll(/'([^']+)'/g)].map((x) => x[1]!);
   };
 
-  it('the settings keys, each level closed, v1 (E4) and v2 (E12)', () => {
-    const [v1, v2, ...more] = arrays(/is distinct from array\[('colors'[^\]]*)\]/g);
+  it('the settings keys, each level closed, v1 (E4), v2 (E12) and v3 (E13)', () => {
+    const [v1, v2, v3, ...more] = arrays(/is distinct from array\[('colors'[^\]]*)\]/g);
     expect(more).toEqual([]);
     expect(v1).toEqual(Object.keys(ThemeSettingsV1Schema.shape).sort());
     expect(v2).toEqual(Object.keys(ThemeSettingsV2Schema.shape).sort());
     expect(v2).toEqual(['colors', 'mode', 'motion', 'shapes', 'type', 'v']);
+    expect(v3).toEqual(Object.keys(ThemeSettingsV3Schema.shape).sort());
+    expect(v3).toEqual(['colors', 'fonts', 'mode', 'motion', 'shapes', 'type', 'v']);
+    expect(array(/is distinct from array\[('arabic'[^\]]*)\]/)).toEqual(
+      Object.keys(ThemeFontsSchema.shape).sort(),
+    );
     expect(array(/is distinct from array\[('buttons'[^\]]*)\]/)).toEqual(
       Object.keys(ThemeShapesSchema.shape).sort(),
     );
@@ -135,12 +146,12 @@ describe('app.theme_row_ok checks what the schemas and the compiler say', () => 
     expect(body).toContain('return v_present = 8');
   });
 
-  it("the shape and type tokens: none on a v1 theme, the choice's own on a v2 one", () => {
+  it("the shape and type tokens: none on a v1 theme, the choice's own on a v2 or v3 one", () => {
     expect(array(/v_shape_keys constant text\[\] := array\[([^\]]*)\]/)).toEqual([
       ...SHAPE_TOKEN_NAMES,
     ]);
-    expect([...SHAPE_TOKEN_NAMES]).toEqual(THEME_TOKEN_NAMES.slice(11));
-    expect(body).toContain('if p_tokens ?| v_shape_keys then');
+    expect([...SHAPE_TOKEN_NAMES]).toEqual(THEME_TOKEN_NAMES.slice(11, 15));
+    expect(body).toMatch(/if v_version = 1 then\s+if p_tokens \?\| v_shape_keys then/);
     // Every setting is one of its choices, of its JSON type, and its token is that choice's.
     expect(body).toMatch(
       /-- END theme shape rules\s+\)\s+select 1\s+from \(select distinct grp, key from s\) as k\s+where not exists \(\s+select 1 from s as r\s+where r\.grp = k\.grp and r\.key = k\.key\s+and jsonb_typeof\(p_settings -> r\.grp -> r\.key\) = r\.kind\s+and \(p_settings -> r\.grp ->> r\.key\) = r\.choice\s+and \(p_tokens ->> r\.token\) is not distinct from r\.value\)\) then\s+return false;/,
@@ -163,6 +174,37 @@ describe('app.theme_row_ok checks what the schemas and the compiler say', () => 
       const group = settings[rule.group] as unknown as Record<string, unknown>;
       group[rule.key] = rule.kind === 'number' ? Number(rule.choice) : rule.choice;
       const tokens = compileTheme(settings);
+      expect(tokens[rule.token], `${rule.key} ${rule.choice}`).toBe(rule.value ?? undefined);
+    }
+  });
+
+  it("the font tokens: none on a v1 or v2 theme, the family's own on a v3 one (E13)", () => {
+    expect(array(/v_font_keys constant text\[\] := array\[([^\]]*)\]/)).toEqual([
+      ...FONT_STACK_TOKENS,
+    ]);
+    expect([...FONT_STACK_TOKENS]).toEqual(THEME_TOKEN_NAMES.slice(15));
+    expect([...FONT_STACK_TOKENS]).toEqual(FONT_SCRIPTS.map((s) => FONT_TOKENS[s]));
+    expect(body).toMatch(/if v_version < 3 then\s+if p_tokens \?\| v_font_keys then/);
+    // Each script's family is one of the catalogue's, a string, and its token that family's.
+    expect(body).toMatch(
+      /-- END theme font rules\s+\)\s+select 1\s+from \(select distinct key from f\) as k\s+where not exists \(\s+select 1 from f as r\s+where r\.key = k\.key\s+and jsonb_typeof\(v_fonts -> r\.key\) = 'string'\s+and \(v_fonts ->> r\.key\) = r\.choice\s+and \(p_tokens ->> r\.token\) is not distinct from r\.value\)\) then\s+return false;/,
+    );
+    // The table's choices are the schema's, script by script, and the compiler writes each.
+    for (const script of FONT_SCRIPTS) {
+      expect(
+        fontTokenRules()
+          .filter((r) => r.key === script)
+          .map((r) => r.choice),
+      ).toEqual(familiesOf(script).map((f) => f.id));
+      expect(familiesOf(script).map((f) => f.id)).toEqual([
+        ...ThemeFontsSchema.shape[script].options,
+      ]);
+    }
+    for (const rule of fontTokenRules()) {
+      const tokens = compileTheme({
+        ...DEFAULT_THEME_SETTINGS,
+        fonts: { ...DEFAULT_THEME_SETTINGS.fonts, [rule.key]: rule.choice },
+      });
       expect(tokens[rule.token], `${rule.key} ${rule.choice}`).toBe(rule.value ?? undefined);
     }
   });

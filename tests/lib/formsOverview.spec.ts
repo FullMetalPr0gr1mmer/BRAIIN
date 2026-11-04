@@ -270,18 +270,23 @@ describe('where the words around each form are edited', () => {
     expect(facts.join.wording.join(' ')).toContain('edited with the Join page, in Pages');
   });
 
-  it('a service page renders the Hello block itself, with fixed words that name the service', () => {
+  it('a service page renders the Hello block itself, with the template’s shared text and the service’s name', () => {
     const page = source('src/components/service/ServicePage.astro');
     const calls = [...page.matchAll(/<Hello\b[\s\S]*?\/>/g)].map((m) => m[0]);
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toContain('headingOverride={serviceHelloHeading(name, locale)}');
+    // Admin v2 E3: the lead-in and the lead are the service template's shared text (`copy`: the
+    // page's template_copy over the built-in words), never a section's content.
+    expect(calls[0]).toContain(
+      'headingOverride={serviceHelloHeading(name, locale, copy.helloLeadIn)}',
+    );
     expect(calls[0]).toContain('leadOverride={copy.helloLead}');
+    expect(page).toContain('const copy = page.copy[locale];');
     expect(calls[0]).not.toContain('{...');
     expect(source('src/components/sections/Hello.astro')).toContain(
       'Direct props (never reachable from CMS content',
     );
     expect(facts.inquiry.wording).toContain(
-      'On each service page those words are fixed, and the heading names the service.',
+      "On each service page those words are the service page template's shared text, edited in Pages, and the heading names the service.",
     );
     // No line of the inquiry tab sends every place to Pages.
     expect(facts.inquiry.wording.join(' ')).not.toMatch(/the page that holds it/);

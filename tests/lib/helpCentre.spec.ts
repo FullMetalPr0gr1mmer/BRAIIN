@@ -1989,6 +1989,78 @@ describe('footer (E6), a new guide put by the footer columns migration', () => {
   });
 });
 
+describe('loading-screen (E7), a new guide put by the loading screen migration', () => {
+  const article = () => SET.find((a) => a.slug === 'loading-screen')!;
+  const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const SCREEN = 'src/components/admin/screens/loading/LoadingScreen.tsx';
+
+  it('is put once, at revision 0 (new), by the migration that adds the intro columns', () => {
+    const puts = HELP.edits.filter((e) => e.slug === 'loading-screen');
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ op: 'put', revision: 0 });
+    expect(puts[0]?.file).toMatch(/^\d{4}_loading_screen\.sql$/);
+    expect(HELP.revisions.get('loading-screen')).toBe(1);
+  });
+
+  it('takes the free place 46, for the roles that open the Loading screen', () => {
+    expect(article().sort_order).toBe(46);
+    expect(SET.filter((a) => a.sort_order === 46)).toHaveLength(1);
+    expect(article().screens).toEqual(['/admin/appearance/loading']);
+    // pages.write (Admin, Content Creator: the switch) or theme.edit (Admin, Developer: the
+    // look); SEO and Sales open neither.
+    expect(ROLES.filter((r) => mayRead(r, article().caps))).toEqual([
+      'admin',
+      'content_creator',
+      'developer',
+    ]);
+  });
+
+  it('says what the screen does, in the words it uses', () => {
+    const en = text('en');
+    const screen = source(SCREEN);
+    const ui = source('src/lib/admin/ui/loading.ts');
+    for (const [words, where] of [
+      ['Show the loading screen', screen],
+      ['Logo over the video', ui],
+      ['Logo on black', ui],
+      ['Logo on light', ui],
+      ['Duration', ui],
+      ['Fade', ui],
+      ['Play preview', screen],
+      ['Save the loading screen', screen],
+    ] as const) {
+      expect(en, words).toContain(words);
+      expect(where, words).toContain(words);
+    }
+    // The site rule and the bounds are the schema's (packages/schemas/appearance.ts).
+    expect(en).toContain('from 500 to 1500 ms');
+    expect(en).toContain('from 300 to 600 ms');
+    expect(en).toContain('never longer than 1.5 seconds');
+    // What is always true, as the screen says it.
+    expect(en).toContain('once per visit, in each tab');
+    expect(screen).toContain('once per visit, in each tab');
+    expect(en).toContain('ask for less motion never see it');
+    expect(screen).toContain('ask for less motion never see it');
+    expect(en).toContain('any tap, key or scroll skips it');
+    expect(screen).toContain('Any tap, key or scroll skips it');
+    for (const label of [
+      'Appearance › Loading screen',
+      'Show the loading screen',
+      'Logo over the video',
+      'Logo on black',
+      'Logo on light',
+      'Duration',
+      'Fade',
+      'Play preview',
+      'Save the loading screen',
+      'History',
+    ]) {
+      expect(text('ar')).toContain(label);
+    }
+  });
+});
+
 describe('editing-pages (E1), a new guide put by the page editor migration', () => {
   const article = () => SET.find((a) => a.slug === 'editing-pages')!;
   const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
@@ -2619,7 +2691,9 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'finding-your-way',
       'footer',
       'header-and-menu',
+      'loading-screen',
       'media-library',
+      'page-templates',
       'previewing-changes',
       'roles-and-access',
       'saving-and-publishing',
@@ -2655,6 +2729,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'forms-and-spam',
       'general-settings',
       'header-and-menu',
+      'loading-screen',
       'maintenance-mode',
       'media-library',
       'page-visibility',
@@ -3080,23 +3155,42 @@ describe('the shell', () => {
   });
 });
 
-describe('theme (E4, E12), a guide put by the theme migrations', () => {
+describe('theme (E4, E12, E13), a guide put by the theme migrations', () => {
   const article = () => SET.find((a) => a.slug === 'theme')!;
   const text = (lang: 'en' | 'ar') => textsOf(article(), lang).join(' ');
   const source = (path: string) => readFileSync(path, 'utf8');
   const SCREEN = 'src/components/admin/screens/theme';
 
-  it('is put new by E4 (revision 0), then again by E12 (revision 1), the second as its file says', () => {
+  it('is put new by E4 (revision 0), again by E12 (1) and by E13 (2), the last as its file says', () => {
     const puts = HELP.edits.filter((e) => e.slug === 'theme');
-    expect(puts.map((e) => `${e.op} ${e.revision}`)).toEqual(['put 0', 'put 1']);
+    expect(puts.map((e) => `${e.op} ${e.revision}`)).toEqual(['put 0', 'put 1', 'put 2']);
     expect(puts[0]?.file).toMatch(/^\d{4}_theme_settings\.sql$/);
     expect(puts[1]?.file).toMatch(/^\d{4}_theme_shapes\.sql$/);
-    expect(HELP.revisions.get('theme')).toBe(2);
-    const file = MIGRATION_FILES.find((f) => f.name.endsWith('_theme_shapes.sql'))!;
+    expect(puts[2]?.file).toMatch(/^\d{4}_theme_fonts\.sql$/);
+    expect(HELP.revisions.get('theme')).toBe(3);
+    const file = MIGRATION_FILES.find((f) => f.name.endsWith('_theme_fonts.sql'))!;
     const filed = readFileSync('docs/admin-v2/guides/theme.json', 'utf8').replace(/\r?\n$/, '');
     expect(source(`supabase/migrations/${file.name}`)).toContain(
-      `select app.put_help_guide($guide$\n${filed}\n$guide$::jsonb, 1);`,
+      `select app.put_help_guide($guide$\n${filed}\n$guide$::jsonb, 2);`,
     );
+  });
+
+  it('names the Fonts card in the words the editor uses, and no longer says the fonts are fixed (E13)', () => {
+    const en = text('en');
+    const ar = text('ar');
+    const screen = source(`${SCREEN}/ThemeScreen.tsx`);
+    const model = source(`${SCREEN}/model.ts`);
+    expect(screen).toMatch(/id="theme-fonts">\s+Fonts\s+<\/h2>/);
+    for (const label of ['English pages', 'Arabic pages']) {
+      expect(en, label).toContain(label);
+      expect(model, label).toContain(`label: '${label}' }`);
+    }
+    expect(en).toContain('Archivo for English and Almarai for Arabic');
+    expect(en).toContain('A developer adds a new font once its licence is checked');
+    expect(en).toContain("brand's own colours, shapes, headings, fonts and motion");
+    expect(en).not.toContain('fonts are fixed');
+    expect(ar).toContain('الخطوط');
+    expect(ar).not.toContain('والخطوط ثابتة');
   });
 
   it('names the shapes and type in the words the editor uses (E12)', () => {

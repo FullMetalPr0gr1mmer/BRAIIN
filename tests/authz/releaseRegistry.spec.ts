@@ -22,6 +22,7 @@ const ROUTE_CAPS: Record<string, Capability> = {
   page_visibility: 'maintenance.manage', // src/pages/api/admin/page-visibility/index.ts
   form_settings: 'settings.general', // src/lib/admin/singletons/formSettings.ts (Admin v2 E8)
   site_appearance: 'theme.edit', // src/lib/admin/singletons/siteAppearance.ts (Admin v2 E5)
+  template_copy: 'pages.write', // src/lib/admin/singletons/templateCopy.ts (Admin v2 E3)
 };
 
 /** Route-edited entities keyed by their own `id` (the rest are per-tenant singletons). */
@@ -35,9 +36,9 @@ const configOf = (row: RegistryRow) =>
 describe('the release registry (app.release_entities) equals ROLE_CAPS', () => {
   const rows = registryRows();
 
-  it('parses the twenty-four rows the migrations seed (0038, 0057 page visibility, 0098 the FAQ, E8 the forms config, E5 the header)', () => {
-    expect(rows).toHaveLength(24);
-    expect(new Set(rows.map((r) => r.entityType)).size).toBe(24);
+  it('parses the twenty-five rows the migrations seed (0038, 0057 page visibility, 0098 the FAQ, E8 the forms config, E5 the header, E3 the templates’ shared text)', () => {
+    expect(rows).toHaveLength(25);
+    expect(new Set(rows.map((r) => r.entityType)).size).toBe(25);
   });
 
   it('every entity type is a resource config or a route with a stated capability', () => {
@@ -86,6 +87,7 @@ describe('the release registry (app.release_entities) equals ROLE_CAPS', () => {
       'seo_defaults',
       'site_appearance',
       'site_profile',
+      'template_copy',
     ]);
   });
 

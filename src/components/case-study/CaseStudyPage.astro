@@ -11,6 +11,7 @@ import { PAGE_META } from '@/lib/seo/pageMeta';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import { caseSchemaDescription, type CaseStudyPage } from '@/lib/portfolio/casePage';
 import { caseKeywords } from '@/lib/portfolio/caseStudy';
+import { TEMPLATE_PART_IDS } from '@/lib/templates/parts';
 import CaseBanner from './CaseBanner.astro';
 import CaseTitle from './CaseTitle.astro';
 import CaseOverview from './CaseOverview.astro';
@@ -31,6 +32,11 @@ import NextProject from './NextProject.astro';
 // Under the overlay header, over the banner — or over the black title band when the
 // project has no image at all. Route stylesheets: banner.css (the banner + caption,
 // shared with Our Work) and case-study.css.
+//
+// The words around the project's own content are the template's shared text (Admin v2 E3,
+// `page.copy`: the built-in words with the stored ones over them, src/lib/templates/copy.ts).
+// In a releases preview only, each part carries `data-pv-section` (its template part id), so
+// the template editor's preview can move to it; a public page's markup is unchanged.
 
 interface Props {
   locale: Locale;
@@ -40,6 +46,10 @@ interface Props {
 const { locale, page } = Astro.props;
 const { study, next, quote, head } = page;
 const { seo, identity } = head;
+const copy = page.copy[locale];
+const preview = Astro.locals.preview !== undefined;
+const part = (id: keyof typeof TEMPLATE_PART_IDS.project) =>
+  preview ? { previewId: TEMPLATE_PART_IDS.project[id] } : {};
 
 // The banner: the project's hero frame and loop, else its card poster and preview (the
 // mockup's own fallback for projects without a written case study). It needs a frame: a
@@ -99,32 +109,48 @@ const hasStills = study.breakdown.length > 0 || study.gallery.length > 0;
   <main class="case-study">
     {
       hasBanner && (
-        <SectionBoundary type="caseBanner">
-          <CaseBanner locale={locale} study={study} image={bannerImage} clip={bannerClip} />
+        <SectionBoundary type="caseBanner" {...part('banner')}>
+          <CaseBanner
+            locale={locale}
+            study={study}
+            image={bannerImage}
+            clip={bannerClip}
+            copy={copy}
+          />
         </SectionBoundary>
       )
     }
-    <SectionBoundary type="caseTitle">
-      <CaseTitle locale={locale} study={study} hasBanner={hasBanner} />
+    <SectionBoundary type="caseTitle" {...part('title')}>
+      <CaseTitle locale={locale} study={study} hasBanner={hasBanner} copy={copy} />
     </SectionBoundary>
-    <SectionBoundary type="caseOverview">
-      <CaseOverview locale={locale} study={study} />
+    <SectionBoundary type="caseOverview" {...part('overview')}>
+      <CaseOverview locale={locale} study={study} copy={copy} />
     </SectionBoundary>
-    <SectionBoundary type="caseQuote">
+    <SectionBoundary type="caseQuote" {...part('quote')}>
       <CaseQuote locale={locale} quote={quote} />
     </SectionBoundary>
-    <SectionBoundary type="caseBreakdown">
-      <CaseBreakdown locale={locale} items={study.breakdown} />
+    <SectionBoundary type="caseBreakdown" {...part('breakdown')}>
+      <CaseBreakdown
+        locale={locale}
+        items={study.breakdown}
+        copy={copy}
+        accent={page.copy.breakdownAccent}
+      />
     </SectionBoundary>
-    <SectionBoundary type="caseGallery">
-      <CaseGallery locale={locale} items={study.gallery} />
+    <SectionBoundary type="caseGallery" {...part('gallery')}>
+      <CaseGallery
+        locale={locale}
+        items={study.gallery}
+        copy={copy}
+        accent={page.copy.galleryAccent}
+      />
     </SectionBoundary>
-    <SectionBoundary type="caseNext">
-      <NextProject locale={locale} card={next} />
+    <SectionBoundary type="caseNext" {...part('next')}>
+      <NextProject locale={locale} card={next} copy={copy} />
     </SectionBoundary>
-    <SectionBoundary type="cta">
+    <SectionBoundary type="cta" {...part('cta')}>
       <LeadBand locale={locale} />
     </SectionBoundary>
   </main>
-  {hasStills && <Lightbox locale={locale} />}
+  {hasStills && <Lightbox locale={locale} copy={copy} />}
 </BaseLayout>

@@ -1229,6 +1229,7 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
       form_settings: [
         { tenant_id: T, version: 1, inquiry: {}, application: {}, consent_revision: 0 },
       ],
+      template_copy: [{ tenant_id: T, version: 1, service: {}, project: {} }],
       // The version a rollback names: published, the tenant's.
       content_releases: [{ id: RESTORED, tenant_id: T, number: 1, status: 'published' }],
     };
@@ -1342,6 +1343,8 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
       change(23, 'site_appearance', T, { logoSize: 'l' }, { header_logo_size: 'm' }),
       // Admin v2 E8: the forms config, a singleton keyed by the tenant like the identity.
       change(24, 'form_settings', T, { inquiry: { button: BI('Send', 'أرسل') } }, { inquiry: {} }),
+      // Admin v2 E3: the templates' shared text, a singleton keyed by the tenant like the identity.
+      change(25, 'template_copy', T, { service: { fab: BI('Ask us', 'اسألنا') } }, { service: {} }),
     ];
     expect(new Set(drafts.map((d) => d['entity_type'])).size).toBe(
       Object.keys(RELEASE_REGISTRY).length,

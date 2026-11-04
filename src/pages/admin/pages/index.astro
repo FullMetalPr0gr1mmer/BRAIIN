@@ -20,9 +20,10 @@ export const prerender = false;
 // "Unpublished changes" while releases are on and one waits, its title (a link to its editor,
 // stretched over the card), "<path> · N sections", "Edited <ago>", Open page in English and
 // Arabic, and the visibility setting for maintenance.manage. Then the two templates (the
-// service and the project page), which open the Services and Projects areas until the
-// template editors (E3). "New page" (Admin v2 E11) is the one island, for pages.write holders
-// (Admin, Content Creator): a dialog that makes a custom page and opens its editor; with
+// service and the project page), which open their template editors (Admin v2 E3) for a role
+// that edits pages, else the Services and Projects areas (SEO's way to their meta). "New
+// page" (Admin v2 E11) is the one island, for pages.write holders (Admin, Content Creator): a
+// dialog that makes a custom page and opens its editor; with
 // releases on its writes are staged (the list's own read of the flag, as the create form's).
 // A page made with it is listed like every other, by its slug after the site's own pages.
 //
@@ -159,8 +160,9 @@ const sections = (n: number) => `${n} ${n === 1 ? 'section' : 'sections'}`;
             Templates
           </h2>
           <p class="pg-tpl__s">
-            Every service and every project has its own page, built from one template each. Their
-            words are edited in Services and Projects.
+            {makePages
+              ? 'Every service and every project has its own page, built from one template each. Open one to edit a page beside its preview, and the shared text all of them show.'
+              : 'Every service and every project has its own page, built from one template each. Their words are edited in Services and Projects.'}
           </p>
           <ul class="pg-grid" aria-labelledby="pg-tpl-h">
             {list.templates.map((tpl) => (

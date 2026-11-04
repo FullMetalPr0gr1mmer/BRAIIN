@@ -14,6 +14,14 @@ import { z } from 'zod';
  *   shapes     (E12) the corner scale over the site's card, image and input radii (square 0,
  *              soft 0.5, round 1.5) and the buttons' radius (rounded 10px, square 0px)
  *   type       (E12) the headings' weight (bold 700) and case (as written: none)
+ *   fonts      (E13) the English and the Arabic pages' font stacks: exactly the stack of a
+ *              family of the font catalogue that is not the brand's (packages/theme/fonts.ts).
+ *              The brand's is the stylesheets' own `:root` stack and is never written. Owner
+ *              item O-21 is open, so the catalogue has no other family yet and each pattern is
+ *              `^(?!)`, which matches nothing (in Postgres too). Literals here, because this
+ *              module keeps to zod alone; tests/lib/fontCatalogue.spec.ts holds each equal to
+ *              fontTokenPattern() over the catalogue, so a family added there fails until its
+ *              stack is here (and in a migration that restates app.theme_row_ok).
  *
  * Each pattern takes only the values a theme can choose that differ from the brand's: the
  * brand's own is the stylesheets' fallback and is never written (packages/theme/compile.ts).
@@ -40,6 +48,8 @@ export const THEME_TOKEN_PATTERNS = {
   '--bs-btn-radius': /^(10px|0px)$/,
   '--bs-heading-weight': /^700$/,
   '--bs-heading-case': /^none$/,
+  '--bs-font-sans': /^(?!)/,
+  '--bs-font-ar': /^(?!)/,
 } as const;
 
 export type ThemeTokenName = keyof typeof THEME_TOKEN_PATTERNS;
@@ -61,10 +71,20 @@ export const THEME_TOKEN_NAMES: readonly ThemeTokenName[] = [
   '--bs-btn-radius',
   '--bs-heading-weight',
   '--bs-heading-case',
+  '--bs-font-sans',
+  '--bs-font-ar',
 ];
 
-/** One token's value: its key's shape, never longer than 60 characters, and optional. */
-const tokenValue = (pattern: RegExp) => z.string().max(60).regex(pattern).optional();
+/** The tokens whose value is a font stack: longer than the others (a whole stack). */
+export const FONT_STACK_TOKENS = ['--bs-font-sans', '--bs-font-ar'] as const;
+
+/** A token value's longest: 60 characters, a font stack 160. */
+export function tokenMax(name: ThemeTokenName): number {
+  return (FONT_STACK_TOKENS as readonly string[]).includes(name) ? 160 : 60;
+}
+
+/** One token's value: its key's shape, never longer than its limit (tokenMax), and optional. */
+const tokenValue = (pattern: RegExp, max: number) => z.string().max(max).regex(pattern).optional();
 
 type TokenShape = { [K in ThemeTokenName]: ReturnType<typeof tokenValue> };
 
@@ -75,7 +95,7 @@ type TokenShape = { [K in ThemeTokenName]: ReturnType<typeof tokenValue> };
 function tokenShape(): TokenShape {
   const shape = {} as TokenShape;
   for (const name of Object.keys(THEME_TOKEN_PATTERNS) as ThemeTokenName[]) {
-    shape[name] = tokenValue(THEME_TOKEN_PATTERNS[name]);
+    shape[name] = tokenValue(THEME_TOKEN_PATTERNS[name], tokenMax(name));
   }
   return shape;
 }

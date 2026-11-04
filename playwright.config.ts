@@ -25,6 +25,9 @@ const HEADER_SPEC = /[\\/]tests[\\/]admin[\\/]header\.e2e\.ts$/;
 // The footer (Admin v2 E6) saves its basics and a column every public page then draws: its own
 // project, after the header.
 const FOOTER_SPEC = /[\\/]tests[\\/]admin[\\/]footer\.e2e\.ts$/;
+// The loading screen (Admin v2 E7) saves a look the home page's intro then draws, and turns the
+// intro off and on: its own project, after the footer.
+const LOADING_SPEC = /[\\/]tests[\\/]admin[\\/]loading\.e2e\.ts$/;
 // Google Analytics 4 (Admin v2 U15) saves a measurement id, which puts the loader on every public
 // page the other specs read (the CI e2e build turns GA4_NOTICE_READY on): its own project, after
 // general settings and before maintenance.
@@ -32,6 +35,9 @@ const GA4_SPEC = /[\\/]tests[\\/]admin[\\/]ga4\.e2e\.ts$/;
 // The theme (Admin v2 E4) saves colours every public page then draws: its own project, after GA4
 // and before maintenance, and it puts the brand's own theme back when it ends.
 const THEME_SPEC = /[\\/]tests[\\/]admin[\\/]theme\.e2e\.ts$/;
+// The template editors (Admin v2 E3) save shared text every service page then shows: their own
+// project, after the theme and before maintenance, and they remove the row when they end.
+const TEMPLATES_SPEC = /[\\/]tests[\\/]admin[\\/]templates\.e2e\.ts$/;
 const MAINTENANCE_SPEC = /[\\/]tests[\\/]admin[\\/]maintenance\.e2e\.ts$/;
 // The section blocks (Admin v2 E10) put a Text block, a Gallery and a Video on About, a page
 // the public and the admin specs read (pages.e2e.ts counts its sections), and remove them when
@@ -110,8 +116,10 @@ export default defineConfig({
         GENERAL_SPEC,
         HEADER_SPEC,
         FOOTER_SPEC,
+        LOADING_SPEC,
         GA4_SPEC,
         THEME_SPEC,
+        TEMPLATES_SPEC,
         MAINTENANCE_SPEC,
         /maintenance\.teardown\.ts$/,
         RELEASES_MODE_SPEC,
@@ -173,6 +181,16 @@ export default defineConfig({
       dependencies: ['header'],
     },
     {
+      // The loading screen (Admin v2 E7): a black plate with a bar and a tagline, then a light
+      // one, on the home page while it runs, and the intro turned off and on; then the row
+      // removed and the home hero put back: alone, after the footer.
+      name: 'loading',
+      testDir: './tests/admin',
+      testMatch: LOADING_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['footer'],
+    },
+    {
       // GA4 (Admin v2 U15) saves an id, so every public page carries the loader and lists
       // Google's hosts while it runs: alone, after the specs that read those pages, and it
       // clears the id when it ends.
@@ -180,7 +198,7 @@ export default defineConfig({
       testDir: './tests/admin',
       testMatch: GA4_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['footer'],
+      dependencies: ['loading'],
     },
     {
       // The theme (Admin v2 E4) saves colours every public page draws, so the axe and CSP
@@ -193,13 +211,23 @@ export default defineConfig({
       dependencies: ['ga4'],
     },
     {
+      // The template editors (Admin v2 E3) save a line of the service template's shared text,
+      // which every service page shows while it runs: alone, after the theme, and the row is
+      // removed when it ends (no row: the templates as built).
+      name: 'templates',
+      testDir: './tests/admin',
+      testMatch: TEMPLATES_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      dependencies: ['theme'],
+    },
+    {
       // Maintenance (Admin v2 U9b) takes the shared preview down: last of all, and its
       // teardown switches it off whatever happened.
       name: 'maintenance',
       testDir: './tests/admin',
       testMatch: MAINTENANCE_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['theme'],
+      dependencies: ['templates'],
       teardown: 'maintenance-teardown',
     },
     {

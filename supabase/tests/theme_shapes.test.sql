@@ -7,7 +7,8 @@
 --   • Who writes it is E4's (theme_settings.test.sql): Admin and Developer, live. Here the
 --     admin writes, and the rules refuse with 23514.
 --   • anon reads the new tokens like the old (the column `tokens` of the active theme).
---   • The guide `theme` is at revision 2 and names the Shapes and type cards.
+--   • The guide `theme` is at revision 2 or later (E13 put it again) and names the Shapes and
+--     type cards.
 
 begin;
 select plan(20);
@@ -111,10 +112,10 @@ select _as(null);
 
 -- ---- the guide ---------------------------------------------------------------------------------
 select ok(exists (select 1 from app.help_guide_catalog
-                   where slug = 'theme' and revision = 2 and sort_order = 97
+                   where slug = 'theme' and revision >= 2 and sort_order = 97
                      and body::text like '%Shapes and type%'
                      and body::text not like '%the shapes are fixed%'),
-  'the theme guide is at revision 2 and names the Shapes and type cards');
+  'the theme guide is at revision 2 or later and names the Shapes and type cards');
 
 select * from finish();
 rollback;

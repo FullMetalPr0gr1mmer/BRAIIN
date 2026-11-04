@@ -316,7 +316,7 @@ export async function pendingSummary(ctx: Ctx): Promise<Row> {
       // where it is edited, and its fields in the editor's words (static per type).
       status,
       visible: flagOf(row['visible']),
-      href: editHref(entityType, String(row['entity_id'])),
+      href: editHref(entityType, String(row['entity_id']), fields),
       fieldLabels: fieldLabels(entityType, fields),
     });
     const tally = byArea[area];

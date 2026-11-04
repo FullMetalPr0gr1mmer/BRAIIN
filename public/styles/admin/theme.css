@@ -112,3 +112,78 @@
   border-radius: var(--ad-r-xs);
   font-family: Archivo, Almarai, sans-serif;
 }
+
+/* The Fonts card (Admin v2 E13): a group per script, a tile per family of the font catalogue,
+   its sample drawn in the family (an SVG font attribute; admin.css declares every family's
+   faces). The radio covers the tile, as the kit's segmented control does, so the whole tile is
+   the target and the browser keeps the state; the label shows it. */
+.theme__fonts {
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.theme__fonts > legend {
+  padding: 0;
+  margin-block-end: 6px;
+}
+
+.theme__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  gap: 10px;
+}
+
+.theme__font {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-inline-size: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ad-line-2);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  cursor: pointer;
+}
+
+.theme__font > input {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.theme__font:has(> input:checked) {
+  border-color: var(--ad-primary);
+  box-shadow: inset 0 0 0 1px var(--ad-primary);
+  background: var(--ad-primary-soft);
+}
+
+.theme__font:has(> input:focus-visible) {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: 2px;
+}
+
+.theme__sample {
+  flex: none;
+}
+
+.theme__font-name {
+  display: grid;
+  min-inline-size: 0;
+}
+
+/* Forced colours drop the tint and the shadow: the chosen tile keeps a system colour border. */
+@media (forced-colors: active) {
+  .theme__font:has(> input:checked) {
+    border: 2px solid Highlight;
+  }
+}

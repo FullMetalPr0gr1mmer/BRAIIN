@@ -2,12 +2,14 @@ import { randomBytes } from 'node:crypto';
 import { expect, test, type Frame, type Page, type Route } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
+import { previewLead } from '@/components/admin/screens/pagePreview/editorSide';
 import { expectCleanAtWidths } from './collectionLayout';
-import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
- * The page editor's live preview column (Admin v2 E2), signed in, through the real Worker,
- * releases off, so the preview is the live page (R9):
+ * The page editor's live preview column (Admin v2 E2), signed in, through the real Worker. With
+ * releases off the preview is the live page (R9); in the release-mode rehearsal (R14a) it is the
+ * site with the person's pending changes laid over it, and the column's lead says which:
  *
  *   Admin          About's preview in the third column: the open section outlined, another
  *                  section opened in the column followed, a click on a section in the preview
@@ -163,7 +165,9 @@ async function previewFrame(page: Page): Promise<Frame> {
 
 /**
  * Answers the section's PATCH here (its row, `patch` applied and one version on), so About is
- * never written; the stored version, read before, is checked unchanged by `done`.
+ * never written; the stored version, read before, is checked unchanged by `done`. With releases
+ * on a save is a pending change that never moves the live version, so `done` also checks that
+ * none was left on the section (a save that escaped the route would have made one).
  */
 async function routeSave(page: Page, type: string, patch: Record<string, unknown> = {}) {
   const path = `/api/admin/sections/${ids[type]}`;
@@ -187,6 +191,15 @@ async function routeSave(page: Page, type: string, patch: Record<string, unknown
       .single();
     expect(error).toBeNull();
     expect((data as { version: number }).version).toBe(version);
+    if (releasesOn()) {
+      const drafts = await service()
+        .from('content_drafts')
+        .select('id')
+        .eq('tenant_id', TENANT_ID)
+        .eq('entity_id', ids[type]!);
+      expect(drafts.error).toBeNull();
+      expect(drafts.data, 'no pending change was saved on the section').toEqual([]);
+    }
   };
 }
 
@@ -235,7 +248,9 @@ test.describe('as admin', () => {
     await openEditor(page, aboutId);
     const preview = previewRegion(page);
     await expect(preview).toBeVisible();
-    await expect(preview).toContainText('This is the page as visitors see it.');
+    // The lead says what the preview shows in this mode (the live page, or the pending changes
+    // laid over it).
+    await expect(preview).toContainText(previewLead(releasesOn()));
     const frame = preview.locator('iframe');
     await expect(frame).toHaveAttribute('src', '/admin/preview/about');
     await expect(frame).toHaveAttribute('title', 'Live preview of About');

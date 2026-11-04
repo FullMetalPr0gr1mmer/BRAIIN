@@ -179,11 +179,15 @@ const SINGLETONS: Readonly<Record<string, { noun: string; ui: string | readonly 
   // Admin v2 E6: the identity row's footer columns are edited by the Footer screen's form.
   site_profile: { noun: 'the public identity', ui: ['profile', 'footer'] },
   ai_config: { noun: 'the Style-Finder results and logic', ui: 'ai-config' },
-  // Admin v2 E5: the Header screen's form (SINGLETON_UI 'appearance').
-  site_appearance: { noun: 'the header', ui: 'appearance' },
+  // Admin v2 E5: the Header screen's form (SINGLETON_UI 'appearance'); E7: the Loading
+  // screen's form ('loading'), the same row's intro_ columns.
+  site_appearance: { noun: 'the header and loading screen', ui: ['appearance', 'loading'] },
   // Admin v2 E8: edited by its own island (no SINGLETON_UI entry): its two fields read as
   // their keys in plain words, "Inquiry" and "Application".
   form_settings: { noun: 'the forms', ui: 'forms' },
+  // Admin v2 E3: edited by the template editors' own island (no SINGLETON_UI entry): its two
+  // fields read as their keys in plain words, "Service" and "Project".
+  template_copy: { noun: 'the templates’ shared text', ui: 'templates' },
 };
 export const SINGLETON_ENTITIES: readonly string[] = Object.keys(SINGLETONS);
 

@@ -565,7 +565,11 @@ apply_release(p_actor uuid, p_role text, p_mode text /* publish|dry_run|schedule
   - [Publish] (primary; hidden when n = 0).
 - **Behaviour and accessibility:**
   - `role="region"` with `aria-label="Unpublished changes"`; a polite live region announces debounced count changes.
-  - Pages get `scroll-padding-bottom` so the bar never hides focus (WCAG 2.4.11).
+  - Pages get `scroll-padding-bottom` so the bar never hides focus (WCAG 2.4.11). Since R14a the
+    room is the bar's measured height plus its inset, kept for the main column's end, the scroll
+    padding, the sticky bulk bar and the toasts (`savebarSpace.ts`, admin.css); while a bulk bar
+    is stuck above the bar, the scroll padding also keeps the bulk bar's measured height
+    (`--ad-bulkbar-h`, DataTable's BulkBar), so a focused row is clear of both.
   - Reduced motion: no slide-in.
   - Styling through classes and `data-*` attributes only (CSP).
 

@@ -262,6 +262,18 @@ describe('the closure (every tag a release emits is stamped by a route)', () => 
     }
   });
 
+  it('the templates’ shared text purges template_copy:all, which both template routes stamp (E3)', () => {
+    // The service page and the case study both render template_copy; a route that dropped the
+    // tag would keep the old words after a publish, and the closure above would not notice
+    // while the other route still stamps it.
+    expect(RELEASE_REGISTRY.template_copy.entityTags(null)).toEqual(['template_copy:all']);
+    for (const route of ['service', 'portfolio-item']) {
+      expect(TIER_A_ROUTES.find((r) => r.route === route)?.entities, route).toContain(
+        'template_copy:all',
+      );
+    }
+  });
+
   it('every CMS page slug is stamped as page:<slug> by its route', () => {
     for (const slug of Object.keys(PAGE_PATHS)) {
       expect(stamped.has(`page:${slug}`), slug).toBe(true);

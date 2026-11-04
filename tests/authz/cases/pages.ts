@@ -100,4 +100,36 @@ export const cases: readonly Case[] = [
     body: { items: [{ id: UUID, sortOrder: 10 }] },
     allow: ['admin', 'content_creator'],
   },
+  // Admin v2 E3: the template pages' shared text (template_copy), §5 "Pages & sections":
+  // Admin + Content Creator read and write it; SEO, Developer and Sales neither.
+  {
+    name: 'template shared text read',
+    load: () => import('@/pages/api/admin/template-copy'),
+    method: 'GET',
+    url: '/api/admin/template-copy',
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'template shared text write',
+    load: () => import('@/pages/api/admin/template-copy'),
+    method: 'PATCH',
+    url: '/api/admin/template-copy',
+    body: {
+      service: {
+        seeCase: VALID_BILINGUAL,
+        valueHeading: VALID_BILINGUAL,
+        valueHeadingAccent: { en: { from: 0 }, ar: { from: 0 } },
+      },
+      version: 1,
+    },
+    allow: ['admin', 'content_creator'],
+  },
+  {
+    name: 'template shared text write, the project page',
+    load: () => import('@/pages/api/admin/template-copy'),
+    method: 'PATCH',
+    url: '/api/admin/template-copy',
+    body: { project: { nextProject: VALID_BILINGUAL }, version: 1 },
+    allow: ['admin', 'content_creator'],
+  },
 ];

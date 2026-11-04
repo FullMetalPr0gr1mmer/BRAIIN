@@ -6,7 +6,7 @@ import {
   RELEASE_ENTITY_TYPES,
   type ReleaseEntityType,
 } from '@schemas/release';
-import { headerColumnDefaults } from '@schemas/appearance';
+import { appearanceColumnDefaults } from '@schemas/appearance';
 import { mediaItemToRow } from '@/lib/admin/resources/portfolio';
 import type { AuthContext, Role } from '@/lib/auth/types';
 import { AuthorizationError } from '@/lib/authz/errors';
@@ -142,10 +142,10 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row
     value_points: [],
     deliverables: [],
   },
-  // Admin v2 E5: the header as built (the table's NOT NULL defaults: every option but the
-  // button's words and link, which have none).
+  // Admin v2 E5 and E7: the header and the intro as built (the table's NOT NULL defaults:
+  // every option but the button's words and link and the tagline, which have none).
   site_appearance: Object.fromEntries(
-    Object.entries(headerColumnDefaults()).filter(([, value]) => value !== null),
+    Object.entries(appearanceColumnDefaults()).filter(([, value]) => value !== null),
   ),
   site_profile: {
     address_country: 'SA',
@@ -164,6 +164,8 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row
     is_placeholder: false,
   },
   team_members: { status: 'draft', sort_order: 0, is_leadership: false, is_placeholder: false },
+  // Admin v2 E3: both templates as built.
+  template_copy: { service: {}, project: {} },
   testimonials: { status: 'draft', sort_order: 0, placements: [], is_placeholder: false },
 };
 

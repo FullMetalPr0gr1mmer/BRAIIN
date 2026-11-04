@@ -170,8 +170,10 @@ describe('playwright.config.ts', () => {
       'general',
       'header',
       'footer',
+      'loading',
       'ga4',
       'theme',
+      'templates',
       'maintenance',
       'maintenance-teardown',
     ]);
@@ -226,8 +228,10 @@ describe('playwright.config.ts', () => {
           spec('general'),
           spec('header'),
           spec('footer'),
+          spec('loading'),
           spec('ga4'),
           spec('theme'),
+          spec('templates'),
           spec('maintenance'),
           'maintenance\\.teardown\\.ts$',
           spec('releases-mode'),
@@ -245,12 +249,16 @@ describe('playwright.config.ts', () => {
       p('header', { testMatch: spec('header'), dependencies: ['general'] }),
       // Admin v2 E6: the footer, alone after the header.
       p('footer', { testMatch: spec('footer'), dependencies: ['header'] }),
-      p('ga4', { testMatch: spec('ga4'), dependencies: ['footer'] }),
+      // Admin v2 E7: the loading screen, alone after the footer.
+      p('loading', { testMatch: spec('loading'), dependencies: ['footer'] }),
+      p('ga4', { testMatch: spec('ga4'), dependencies: ['loading'] }),
       // Admin v2 E4: the theme, alone, between GA4 and maintenance.
       p('theme', { testMatch: spec('theme'), dependencies: ['ga4'] }),
+      // Admin v2 E3: the template editors, alone, between the theme and maintenance.
+      p('templates', { testMatch: spec('templates'), dependencies: ['theme'] }),
       p('maintenance', {
         testMatch: spec('maintenance'),
-        dependencies: ['theme'],
+        dependencies: ['templates'],
         teardown: 'maintenance-teardown',
       }),
       p('maintenance-teardown', { testMatch: 'maintenance\\.teardown\\.ts$' }),
@@ -355,5 +363,34 @@ describe('the switch the rehearsal sends', () => {
     expect(setup).toContain("execFileSync('psql', [conninfo, ");
     expect(setup).toContain('env: psqlEnv(process.env, password)');
     expect(setup).not.toMatch(/execFileSync\('psql', \[url/);
+  });
+});
+
+describe('the drill (tests/admin/releases-mode.e2e.ts, R14a)', () => {
+  const drill = readFileSync('tests/admin/releases-mode.e2e.ts', 'utf8');
+  const code = drill.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const migration = readFileSync('supabase/migrations/0112_release_schedule.sql', 'utf8');
+
+  it('fires the minute cron through miniflare’s own trigger, and fails on its answer', () => {
+    // wrangler's `/__scheduled` is a middleware it bundles into the Worker, and the Astro
+    // adapter's build is no_bundle, so that path reached the site (a 404) and the scheduled
+    // release never fired: the first rehearsal's poll timed out on it.
+    expect(code).toContain("page.request.get('/cdn-cgi/local/scheduled?cron=*+*+*+*+*')");
+    expect(code).toMatch(/expect\(fired\.status\(\), await fired\.text\(\)\)\.toBe\(200\)/);
+    expect(code).not.toContain('/__scheduled');
+  });
+
+  it('unschedules what is still scheduled before it starts and after it ends', () => {
+    // A release a failed attempt left is a second "Scheduled" card on the retry, and fires with
+    // the drill's own. The database's path, as the e2e Admin: 0112's signature.
+    expect(migration).toContain(
+      'create or replace function public.unschedule_release(p_actor uuid, p_role text, p_release uuid,',
+    );
+    expect(code).toMatch(/svc\.rpc\('unschedule_release', \{\s*p_actor: STAFF_IDS\.admin,/);
+    const before = /test\.beforeAll\(async \(\) => \{\s*await unscheduleAll\(\);/;
+    const after =
+      /test\.afterAll\(async \(\) => \{\s*if \(!staffEnv\(\)\) return;\s*await unscheduleAll\(\);/;
+    expect(code).toMatch(before);
+    expect(code).toMatch(after);
   });
 });

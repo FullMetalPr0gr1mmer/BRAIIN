@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { JsonLdNode } from '@/lib/seo/jsonld';
 import SeoHead from '@/components/SeoHead.astro';
-import { themedHeroFace, type HeroFace } from '@/lib/seo/fonts';
+import { heroFontPreload, themedHeroWeight, type HeroWeight } from '@/lib/seo/fonts';
 import type { OgImageCandidates } from '@/lib/seo/ogImage';
 import SiteHeader, { type HeaderVariant } from '@/components/SiteHeader.astro';
 import SiteFooter from '@/components/SiteFooter.astro';
@@ -42,9 +42,10 @@ interface Props {
       and the application form — on /join). A known name, never a URL —
       the sheet is same-origin, so the CSP's `style-src 'self'` covers it with no nonce. */
   styles?: readonly RouteStylesheet[];
-  /** The Arabic hero face SeoHead preloads — the weight the route's above-the-fold heading
-      renders in (default `almarai-800`, Home's hero). EN always preloads Archivo. */
-  heroFace?: HeroFace;
+  /** The CSS weight the route's above-the-fold heading is set in (default 800, Home's hero;
+      About's h1 is 600). SeoHead preloads the page's family's file for it (src/lib/seo/fonts.ts):
+      the brand's, or the theme's choice from the font catalogue. */
+  heroWeight?: HeroWeight;
 }
 
 /** Every route stylesheet in public/styles/ (a closed list: a typo fails `astro check`). */
@@ -64,7 +65,7 @@ const {
   header = 'solid',
   langHref,
   styles = [],
-  heroFace,
+  heroWeight,
 } = Astro.props;
 const direction = dir(locale);
 // The releases preview (Admin v2 R9): set only by the middleware's /admin/preview branch. A
@@ -82,9 +83,14 @@ const robotsValue = preview ? 'noindex,nofollow' : robots;
 // link, and the middleware keeps that page out of the edge cache (CR1).
 const theme = await getActiveTheme(Astro.locals);
 const previewTheme = preview && theme ? theme.css : '';
-// The one Arabic preload follows the theme's heading weight (Admin v2 E12): a Bold theme draws
-// the route's 800 heading with the 700 face, so that is the face preloaded.
-const face = themedHeroFace(heroFace ?? 'almarai-800', theme?.tokens['--bs-heading-weight']);
+// The one preload follows the theme: its heading weight (Admin v2 E12: a Bold theme draws the
+// route's 800 heading at 700, so the 700 face is preloaded) and its fonts (E13: the family the
+// page is set in, from the font catalogue; no font token is the brand's).
+const heroFont = heroFontPreload(
+  locale,
+  themedHeroWeight(heroWeight ?? 800, theme?.tokens['--bs-heading-weight']),
+  theme?.tokens,
+);
 ---
 
 <!doctype html>
@@ -99,7 +105,7 @@ const face = themedHeroFace(heroFace ?? 'almarai-800', theme?.tokens['--bs-headi
       robots={robotsValue}
       {...ogImages ? { ogImages } : {}}
       {...canonicalOverride ? { canonicalOverride } : {}}
-      heroFace={face}
+      heroFont={heroFont}
     />
     <link rel="stylesheet" href="/styles/global.css" />
     {styles.map((sheet) => <link rel="stylesheet" href={`/styles/${sheet}`} />)}

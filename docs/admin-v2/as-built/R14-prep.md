@@ -61,7 +61,8 @@ the History buttons item 1 adds (which only read).
    - `tests/admin/releases-mode.e2e.ts` (skipped unless releases are on): as the Admin, an edit
      saved as a pending change (the savebar), Publish (a version), the public page shows it; a
      scheduled release (the dialog's Schedule, the time passed, the minute cron fired through
-     wrangler's `/__scheduled`), the public page shows it; Restore of the earlier version on
+     wrangler's `/__scheduled`; R14a: that path never reaches a no_bundle build, so the drill
+     now uses miniflare's `/cdn-cgi/local/scheduled`), the public page shows it; Restore of the earlier version on
      Backups & versions, "Publish vN again", the public page shows the old words, the version
      a rollback; the history drawer offers Restore.
    - The specs that assert releases-off behaviour (a save that goes live at once, "isn't
@@ -199,14 +200,16 @@ everything.
   change" put it live ("Published vP"); its history and the identity's (no id) are restorable;
   a new wording PATCHed (`staged: true`) and scheduled through the publish route 150 seconds
   ahead shows on Backups & versions as Scheduled, then once due `GET /__scheduled?cron=*+*+*+*+*`
-  (the Worker's `scheduled`, `wrangler dev --test-scheduled`) fires it, polled until it is a
+  (the Worker's `scheduled`, `wrangler dev --test-scheduled`; R14a corrected it to
+  `GET /cdn-cgi/local/scheduled`, see [R14a](R14a.md)) fires it, polled until it is a
   published version and the live one, and `/contact` shows the new wording; Restore vP, its
   confirm and toast, then "Publish vP again" and its confirm publish a rollback naming vP
   ("Restored vP"), and `/contact` shows the first wording again; the dashboard's publish card
   names the live version. The question is removed by the service role at the end.
 - **The specs written for releases off** skip in the rehearsal (`RELEASES_OFF_ONLY`, in
   `tests/admin/staff.ts`): whole files blog, collections, faq, fields, general, pages, projects,
-  reorder, seo, services and visibility (their saves go live at once and they check the public
+  reorder, seo, services and visibility, and (added by their own slices) header, footer, theme,
+  section-blocks and loading (E7) (their saves go live at once and they check the public
   site, or the screen's live-mode controls); and the describes "releases off" of releases-ui and
   backups, backups' history drawers (the service's, the identity's, the SEO defaults' and a
   page's search settings': "no Restore while releases are off") and dashboard's

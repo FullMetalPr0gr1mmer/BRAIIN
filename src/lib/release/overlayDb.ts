@@ -82,6 +82,7 @@ export const RELEASE_SINGLETON_TABLES: readonly string[] = [
   'seo_defaults',
   'site_appearance',
   'site_profile',
+  'template_copy',
 ];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

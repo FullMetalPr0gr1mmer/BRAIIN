@@ -143,6 +143,17 @@ export const RELEASE_ENTITY_META: Readonly<Record<ReleaseEntityType, ReleaseEnti
     hasStatus: false,
     publishFlag: null,
   },
+  // The template pages' shared text (Admin v2 E3): page content (pages.write + content.publish,
+  // P-2: a content area); a singleton, never removed by a release.
+  template_copy: {
+    area: 'pages',
+    authorCaps: ['pages.write', 'content.publish'],
+    removeCap: null,
+    key: 'tenant_id',
+    applyOrder: 110,
+    hasStatus: false,
+    publishFlag: null,
+  },
 };
 
 /** The areas whose changes are content (write capability + `content.publish`). */

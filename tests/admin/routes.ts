@@ -233,6 +233,18 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     render: 'server',
     gate: 'const allowed = settings || nav;',
   },
+  // Admin v2 E7: the Loading screen opens for theme.edit (its look) or pages.write (its on/off
+  // switch), so SEO and Sales are refused: the page's own 403 and Refused.astro, having read
+  // nothing; its JSON twin is the look's read (the appearance singleton, theme.edit), which
+  // refuses both as well.
+  {
+    href: '/admin/appearance/loading',
+    api: '/api/admin/site-appearance',
+    cap: 'theme.edit',
+    anyOf: ['theme.edit', 'pages.write'],
+    render: 'server',
+    gate: 'const allowed = theme || pages;',
+  },
   // Admin v2 R13 (plan B7.3): Backups & versions, for any release read capability, so only
   // Sales is refused: the page's own 403 and Refused.astro, having read nothing; its JSON twin
   // is the versions list, behind the same capabilities.
@@ -408,6 +420,18 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   // in General" link and the consent version render only there. tests/lib/adminRoutes.spec.ts
   // holds every tab of the overview (formsTabHref) to this list.
   { href: '/admin/forms?tab=join', label: 'Forms, Join form', caps: ['settings.general'] },
+  // The template editors (Admin v2 E3): reached from the pages list's Templates cards, for the
+  // roles that edit pages. Each opens on its first published item with its preview column.
+  {
+    href: '/admin/pages/template/service',
+    label: 'Service page template',
+    caps: ['pages.write'],
+  },
+  {
+    href: '/admin/pages/template/project',
+    label: 'Project page template',
+    caps: ['pages.write'],
+  },
   // Backups & versions (Admin v2 R13): the notice a download that hit the hourly limit comes
   // back with, and a version's details asked for while none exists (releases off: no read, the
   // page as it is), for every role that opens it.

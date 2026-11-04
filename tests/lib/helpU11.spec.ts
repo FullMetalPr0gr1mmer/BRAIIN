@@ -24,7 +24,15 @@ import { helpSet, readMigrations } from '../fixtures/helpSet';
 const FILES = readMigrations();
 const HELP = helpSet(FILES);
 const MIGRATION = FILES.find((f) => /^\d{4}_integrations\.sql$/.test(f.name));
-const BEFORE = helpSet(FILES.filter((f) => f !== MIGRATION));
+// The set as the migrations before the integrations migration leave it, and as it leaves it. A
+// later migration may put one of its guides again (Admin v2 E3 rewords one sentence of
+// forms-and-spam): what this file says of the integrations migration is read at its own point.
+const AT = MIGRATION ? FILES.indexOf(MIGRATION) : FILES.length;
+const BEFORE = helpSet(FILES.slice(0, AT));
+const AFTER = helpSet(FILES.slice(0, AT + 1));
+/** A guide no later migration puts again: this file's text is still the one the site holds. */
+const lastPutHere = (slug: string) =>
+  HELP.edits.filter((e) => e.slug === slug).at(-1)?.file === MIGRATION?.name;
 
 const guide = (slug: string): HelpArticleRow =>
   HelpArticleSeedSchema.parse(HELP.set.find((g) => g.slug === slug));
@@ -41,7 +49,7 @@ const source = (path: string) => readFileSync(path, 'utf8');
 describe('the guides the integrations migration puts (Admin v2 U11)', () => {
   it('puts exactly four, each at the revision the migrations before it leave', () => {
     expect(MIGRATION, 'the integrations migration').toBeDefined();
-    expect(HELP.edits.filter((e) => e.file === MIGRATION!.name)).toEqual([
+    expect(AFTER.edits.filter((e) => e.file === MIGRATION!.name)).toEqual([
       { file: MIGRATION!.name, op: 'put', slug: 'integrations', revision: 0 },
       { file: MIGRATION!.name, op: 'put', slug: 'forms-and-spam', revision: 0 },
       {
@@ -57,17 +65,17 @@ describe('the guides the integrations migration puts (Admin v2 U11)', () => {
         revision: BEFORE.revisions.get('the-sales-role')!,
       },
     ]);
-    expect(HELP.revisions.get('integrations')).toBe(1);
-    expect(HELP.revisions.get('forms-and-spam')).toBe(1);
-    expect(HELP.revisions.get('your-account')).toBe(BEFORE.revisions.get('your-account')! + 1);
-    expect(HELP.revisions.get('the-sales-role')).toBe(BEFORE.revisions.get('the-sales-role')! + 1);
+    expect(AFTER.revisions.get('integrations')).toBe(1);
+    expect(AFTER.revisions.get('forms-and-spam')).toBe(1);
+    expect(AFTER.revisions.get('your-account')).toBe(BEFORE.revisions.get('your-account')! + 1);
+    expect(AFTER.revisions.get('the-sales-role')).toBe(BEFORE.revisions.get('the-sales-role')! + 1);
     // Nothing else moved.
     const mine = ['integrations', 'forms-and-spam', 'your-account', 'the-sales-role'];
     const others = (set: typeof HELP.set) => set.filter((g) => !mine.includes(g.slug));
-    expect(others(HELP.set)).toEqual(others(BEFORE.set));
+    expect(others(AFTER.set)).toEqual(others(BEFORE.set));
   });
 
-  it('each literal is its file in docs/admin-v2/guides, byte for byte', () => {
+  it('each literal no later migration replaces is its file in docs/admin-v2/guides, byte for byte', () => {
     const literals = [
       ...MIGRATION!.sql.matchAll(
         /^select app\.put_help_guide\(\$guide\$\r?\n([\s\S]*?)\r?\n\$guide\$::jsonb, \d+\);/gm,
@@ -76,6 +84,9 @@ describe('the guides the integrations migration puts (Admin v2 U11)', () => {
     expect(literals).toHaveLength(4);
     for (const literal of literals) {
       const slug = (JSON.parse(literal) as { slug: string }).slug;
+      // A guide put again later is held to its file by the later migration's spec
+      // (forms-and-spam: tests/lib/templateCopyGuides.spec.ts, Admin v2 E3).
+      if (!lastPutHere(slug)) continue;
       expect(literal, slug).toBe(
         readFileSync(`docs/admin-v2/guides/${slug}.json`, 'utf8').replace(/\r?\n$/, ''),
       );
@@ -290,16 +301,20 @@ describe('the forms guide gives the numbers the code holds', () => {
   });
 
   it('says where the words around each form are edited, place by place, as the overview does', () => {
-    // A service page's "Say hello" block has fixed words (tests/lib/formsOverview.spec.ts
-    // holds that to ServicePage.astro): the guide must not send anyone to Pages for it.
-    const fixed = 'On each service page those words are fixed, and the heading names the service.';
-    expect(formFacts().inquiry.wording).toContain(fixed);
-    expect(en()).toContain(fixed);
+    // A service page's "Say hello" block has the service template's shared text (Admin v2 E3;
+    // tests/lib/formsOverview.spec.ts holds that to ServicePage.astro): the guide and the
+    // overview say so in the same words.
+    const shared =
+      "On each service page those words are the service page template's shared text, edited in Pages, and the heading names the service.";
+    expect(formFacts().inquiry.wording).toContain(shared);
+    expect(en()).toContain(shared);
     expect(en()).toContain(
       'On the home page, the Contact page, the Services page and Join, the words around each form, such as its heading, are edited with that page, in Pages',
     );
     expect(en()).not.toContain('the page that holds it');
-    expect(ar()).toContain('أما في صفحة كل خدمة فهذه النصوص ثابتة، ويحمل العنوان اسم الخدمة.');
+    expect(ar()).toContain(
+      'أما في صفحة كل خدمة فهذه النصوص هي النص المشترك لقالب صفحة الخدمة، وتُحرَّر في Pages، ويحمل العنوان اسم الخدمة.',
+    );
   });
 
   it('the fail modes are the routes’ (EXC-004)', () => {

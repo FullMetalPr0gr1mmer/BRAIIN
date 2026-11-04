@@ -37,7 +37,12 @@ describe('requiredCaps', () => {
   });
 
   it('a content removal or archive adds content.archiveDelete', () => {
-    for (const entityType of CONTENT_TYPES) {
+    // Admin v2 E3: the templates' shared text is page content (a content area) but a per-tenant
+    // row, never removed by a release; it is the one content type with no removal.
+    const removable = CONTENT_TYPES.filter((t) => RELEASE_ENTITY_META[t].removeCap !== null);
+    expect(CONTENT_TYPES.filter((t) => !removable.includes(t))).toEqual(['template_copy']);
+    expect(requiredCaps({ entityType: 'template_copy', op: 'delete' })).toBeNull();
+    for (const entityType of removable) {
       const meta = RELEASE_ENTITY_META[entityType];
       const removal = [meta.authorCaps[0], 'content.publish', 'content.archiveDelete'];
       expect(requiredCaps({ entityType, op: 'delete' })).toEqual(removal);
@@ -166,11 +171,14 @@ describe('waitingFor: the roles that could publish it', () => {
     site_appearance: { edit: ['admin', 'developer'], remove: [] },
     // P-2 "Identity + footer + forms config": settings.general (Admin v2 E8); never removed.
     form_settings: { edit: ['admin', 'developer'], remove: [] },
+    // Page content: pages.write + content.publish (Admin v2 E3); a per-tenant row, never removed.
+    template_copy: { edit: ['admin', 'content_creator'], remove: [] },
   };
 
   for (const entityType of RELEASE_ENTITY_TYPES) {
     it(entityType, () => {
-      const expected = EXPECTED[CONTENT_TYPES.includes(entityType) ? 'content' : entityType]!;
+      const expected =
+        EXPECTED[entityType] ?? EXPECTED[CONTENT_TYPES.includes(entityType) ? 'content' : '']!;
       expect(waitingFor({ entityType, op: 'create' })).toEqual(expected.edit);
       expect(waitingFor({ entityType, op: 'update' })).toEqual(expected.edit);
       expect(waitingFor({ entityType, op: 'delete' })).toEqual(expected.remove);

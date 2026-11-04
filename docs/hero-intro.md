@@ -142,7 +142,7 @@ never lifts would be far worse than the bug it fixed:
 | Case | Behaviour |
 | --- | --- |
 | JS off | class never added, pure-CSS timeline runs as before |
-| Logo slow | `HOLD_CAP_MS = 3000` releases anyway (worst case 4.45s to content) |
+| Logo slow | `HOLD_CAP_MS = introHoldCap(hold)` releases anyway (worst case 4s + fade: 4.45s at the default timing, 4.6s at most) |
 | Logo broken | releases **immediately** |
 | Module runs late | the gate is **skipped** once the fade has begun (UI v2) |
 
@@ -150,6 +150,24 @@ The cap went from 2s to 3s with the 1.0s hold: CAP + hold must outlast the measu
 transform (~3.6s), or a cold edge lifts the plate before the logo exists. With the old 3.5s
 hold, 2s had slack to spare; with 1.0s it had none. The cost is only on a cold edge
 (content up to ~1s later); warm loads release on the image's own load event (~0.7s).
+
+**Since the loading screen's timing (Admin v2 E7, §7) the hold is a bucket, so the cap is
+derived from it** (`introHoldCap`, `src/lib/client/introGate.ts`): CAP = 4s minus the hold, so CAP +
+hold is 4s for every bucket, as it was at the 1.0s default (3s + 1s). The plate pauses at the
+moment the module runs and resumes there, so on a cold edge it starts to leave at CAP + hold
+whatever that moment was. A constant 3s cap would have lifted a 500ms hold's plate at 3.5s,
+before a cold logo (3.58s), and let a 1.5s hold with a 600ms fade reach 5.1s to content.
+
+| Hold | Cap | Plate starts to leave (cold edge) | Content, worst case (fade 300 to 600ms) |
+| --- | --- | --- | --- |
+| 500ms | 3.5s | 4s | 4.3 to 4.6s |
+| 1000ms (default) | 3s | 4s | 4.3 to 4.6s (4.45s at the default 450ms fade) |
+| 1500ms | 2.5s | 4s | 4.3 to 4.6s |
+
+The fade is its own bucket, independent of the hold, so every hold reaches 4.6s at the longest
+fade and no further. Times count from the start of the plate's timeline, as the as-built 4.45s
+did. With no hold (reduced motion zeroes it, and there is no plate) the cap stays 3s, as built.
+`tests/lib/introGate.spec.ts` holds every bucket and the gate's wiring.
 
 The fourth row is new with the 1.0s hold. The gate only works if the deferred module runs
 while the plate is still holding; on a slow device it can arrive mid-fade, and pausing
@@ -198,8 +216,9 @@ on purpose: an intentional retime shows up there as a one-line diff.
 rAF recorder: when it engaged, when it released, the lowest plate opacity while it was
 engaged). It used to sample from the test at a fixed delay, which raced the page under
 parallel load — the check could land after the 2s cap had already, correctly, released
-the gate. Its injected `/_image` delay must stay comfortably ABOVE the cap.
-`a slow logo is actually SEEN on the plate` delays the logo INSIDE cap + hold and requires
+the gate. Its injected `/_image` delay must stay comfortably ABOVE the cap (3s at the default
+1.0s hold these tests run with; the cap follows the hold, §3).
+`a slow logo is actually SEEN on the plate` delays the logo INSIDE cap + hold (4s) and requires
 a frame where the plate is up and the image has decoded (`complete && naturalWidth > 0`) —
 opacity alone is not proof, since a released gate fades the element in with or without
 its bytes.
@@ -260,7 +279,53 @@ bound. Past the last rung the stagger flattens into a simultaneous pop.
   **route** level, not baked into CMS content, so authoring the home page in the CMS
   cannot silently drop it and a `hero` section on any other page can never inherit an
   undismissable overlay. An explicit `intro` in CMS content still wins; that is the off
-  switch.
+  switch, and since Admin v2 E7 it is Appearance › Loading screen's "Show the loading
+  screen" (the home page's first visible hero; off stores `intro: false`, on removes the key).
+
+---
+
+## 7. The loading screen's look (Admin v2 E7)
+
+The plate's look is data: five `intro_` columns of `public.site_appearance` (`theme.edit`),
+edited on Appearance › Loading screen, read by the home routes (`getIntroSettings`) and handed
+to the hero as route data. Every option is a closed set; each one off its default is ONE
+`data-*` bucket on `.intro` (or an element under the logo), which `global.css` maps to a fixed
+rule. With no row, the plate is byte for byte what it was (`tests/render/introOptions.spec.ts`).
+
+| Option | Values (default first) | On the plate |
+| --- | --- | --- |
+| behind the logo | video, black, light | `data-backdrop="black"` / `"light"` (an opaque ground; on light the white logo is drawn black by a static `filter: brightness(0)`) |
+| progress bar | off, on | `<span class="intro__bar"><i></i></span>` under the logo |
+| tagline | none, `{en, ar}` 1 to 60 characters | `<p class="intro__tag">` under the logo, as text |
+| hold | 1000, then 500 to 1500 by 100 ms | `data-hold="800"` → `--bs-intro-hold: 0.8s` |
+| fade | 450, then 300 to 600 by 50 ms | `data-fade="300"` → `--bs-intro-fade: 0.3s` |
+
+**The two inputs stay the only knobs.** A bucket sets `--bs-intro-hold` or `--bs-intro-fade`
+on `body:has(.intro[data-hold='…'])`, and every other instant (§1) derives from them as before,
+so the strict order holds at every bucket (`tests/admin/loading.e2e.ts` seeks it). The bucket
+rules sit inside `@media (prefers-reduced-motion: no-preference)`: their selectors are more
+specific than the safety net's `body:has(.intro)`, which zeroes both for reduced motion, and
+must never outrank it. The logo wait follows the hold too: the gate reads the computed
+`--bs-intro-hold` (the bucket's value) and caps its wait at 4s minus the hold, so a cold logo
+is never outrun at any bucket (§3).
+
+**The logo never changes.** It is the home LCP element (CLAUDE.md §6): its markup, box, file
+and entrance (from opacity .01) are the same whatever the look. The tagline and the bar hang
+below it in `.intro__below`, absolutely positioned at half the logo's height (its box is
+520:266) plus a gap, so they never move the logo, and they enter from opacity 0 with the logo's
+FOUC guard (an element first painted at opacity 0 is not an LCP candidate). They leave with the
+plate, and they pause with it while the logo loads (`body.intro-waiting`). The bar is a
+`scaleX` (compositor-only) over the hold, from the guard; in Arabic it fills from the right.
+
+**An opaque plate and the consent banner.** The plate stays `pointer-events: none` (§2), so a
+click still reaches what is under it. Over the video that is fine: the plate is see-through and
+the banner shows through it. An opaque plate would hide the banner while its buttons still take
+the click, so `body:has(.intro[data-backdrop]) .consent-banner` lifts the banner (z-index 91)
+above the plate (90): a consent choice is never made on a banner nobody can see.
+
+**Lighthouse.** CI measures `/` and `/ar` with each style (the bar, a tagline and the longest
+timing) on the main run's budgets (`scripts/lhci-intro.mjs`, `lighthouserc.intro.json`), then
+puts the intro back as built before the themed run.
 
 ---
 

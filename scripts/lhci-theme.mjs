@@ -1,10 +1,10 @@
 // The themed Lighthouse run's set-up (Admin v2 E4, AV-27; README "Gates that stay green: lhci
-// (+ a themed run)"): saves the theme of tests/fixtures/themedRun.json (v2 since E12: colours,
-// motion, shapes and type) as the tenant's active theme in the job's LOCAL Supabase, then checks
-// the preview links it, so the run that follows (lighthouserc.themed.json) measures pages that
-// carry /styles/theme.css: one more same-origin stylesheet in the head, whose cost to LCP, CLS
-// and TBT is then gated like any page's, and whose colours Lighthouse's accessibility audit
-// (axe) reads.
+// (+ a themed run)"): saves the theme of tests/fixtures/themedRun.json (v3 since E13: colours,
+// motion, shapes, type and the brand's fonts) as the tenant's active theme in the job's LOCAL
+// Supabase, then checks the preview links it, so the run that follows (lighthouserc.themed.json)
+// measures pages that carry /styles/theme.css: one more same-origin stylesheet in the head,
+// whose cost to LCP, CLS and TBT is then gated like any page's, and whose colours Lighthouse's
+// accessibility audit (axe) reads.
 //
 // LOCAL ONLY. It writes with the service role key the CI job exports for its own stack, and
 // refuses any Supabase or preview that is not loopback, so it can never write to a hosted

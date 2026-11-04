@@ -2,11 +2,12 @@ import { upgradeThemeSettings } from '@theme/shapes';
 
 // Stored values in today's shape, for COMPARING only (Admin v2 E12 code review CR5). SERVER
 // ONLY. A later schema can read a stored column in a newer shape that means the same thing: a
-// theme's settings saved before E12 are v1, which today's save writes as v2 at the brand's
-// shapes and type. A pending change is derived by today's `toRow`, so it always holds the new
-// shape, while a live row, a change's base, a ledger image or a history snapshot can still hold
-// the old one. Every release-lane comparison of a stored value with a derived one (or of two
-// stored images) reads both through here, so the same meaning is the same value:
+// theme's settings saved before E12 are v1 and before E13 v2, which today's save writes as v3 at
+// the brand's shapes, type and fonts. A pending change is derived by today's `toRow`, so it
+// always holds the new shape, while a live row, a change's base, a ledger image or a history
+// snapshot can still hold the old one. Every release-lane comparison of a stored value with a
+// derived one (or of two stored images) reads both through here, so the same meaning is the
+// same value:
 //   • a pending change's no-op check (overlay.ts `dropNoOps`: equal to live and to its base);
 //   • a version's field list (versions.ts `versionDetail`: before and after);
 //   • a restore's columns that moved (revert.ts) and its round trip (rowPayload.ts).

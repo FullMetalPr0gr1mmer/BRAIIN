@@ -203,9 +203,18 @@ export const SAMPLE: Readonly<Record<string, unknown>> = {
   ctaShow: true,
   ctaLabel: BI('Start a project', 'ابدأ مشروعك'),
   ctaHref: '/contact#inquiry',
+  // ...and the loading screen's look (Admin v2 E7; `tagline` is the identity's sample above, a
+  // bilingual line that fits both), every option off its default
+  backdrop: 'black',
+  bar: true,
+  holdMs: 800,
+  fadeMs: 300,
   // singletons: form_settings (Admin v2 E8)
   inquiry: { button: BI('Send it', 'أرسل') },
   application: { consent: { futureRoles: BI('Keep me in mind', 'تذكّروني') } },
+  // singletons: template_copy (Admin v2 E3), one line of each template's shared text
+  service: { seeCase: BI('Read the story', 'اقرأ القصة') },
+  project: { nextProject: BI('Up next', 'التالي') },
   // entity SEO
   entityType: 'service',
   entityId: UUID_A,

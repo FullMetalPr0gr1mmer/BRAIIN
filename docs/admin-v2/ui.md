@@ -130,14 +130,18 @@ Every value below is asserted by `scripts/contrast-audit.mjs`. Contrast was comp
 - `Archivo Fallback`, per weight (docs/fonts.md 2c);
 - the per-weight, per-script `Almarai Fallback`, and its Linux family `Almarai Fallback Linux`.
 
-Today admin.css declares only Almarai 400 and 700 Arabic, under a range wider than the files.
+Since E13, admin.css follows that set with every other family of the font catalogue (none until owner item O-21), so the Theme editor's Fonts tiles and its site sample draw each family in itself. While the catalogue holds the brand's two families, the two sets are identical.
+
+Before F1, admin.css declared only Almarai 400 and 700 Arabic, under a range wider than the files.
 
 **Arabic stack.** `--ad-font-ar` is `'Almarai','Almarai Fallback','Almarai Fallback Linux','Archivo',system-ui`, which equals `--bs-font-ar`. Authors therefore proof Arabic, including 800 headings, in the face visitors see.
+
+Since E13 it equals the brand's `--bs-font-ar` only. The chrome keeps the brand's families (`--ad-font`, `--ad-font-ar` read no font token), whatever the Theme screen's Fonts card chooses. With another family chosen, authors proof it on the Fonts tiles, the site sample and the releases preview, not in the chrome (deviations.md, Theme).
 
 **Other rules**
 - No Google Fonts (Pillar 2; `font-src 'self'`).
 - No preloads: /admin is exempt from the font budget (§6).
-- A test asserts that the admin.css and global.css `@font-face` blocks are identical, matching docs/fonts.md's "both stylesheets change together".
+- A test asserts that the admin.css and global.css `@font-face` blocks are identical, matching docs/fonts.md's "both stylesheets change together". Since E13 it asserts global.css's blocks first, then the catalogue's other families (`tests/lib/adminStyles.spec.ts`, `tests/lib/fontCatalogue.spec.ts`).
 
 ### 1.4 Motion
 
@@ -676,7 +680,7 @@ Realtime and Team notes are omitted (deviations).
 - Open page (EN/AR);
 - an Edit link (stretched).
 
-**Template cards.** "Service page (template) · template for 28 services" and "Project page (template) · 12 projects" open AV-31.
+**Template cards.** "Service page (template) · template for 28 services" and "Project page (template) · 12 projects" open AV-31. (Built in E3: they open the template editors for a role that edits pages, else Services and Projects, SEO's way to the meta; [as-built E3](as-built/E3.md).)
 
 **"+ New page"**: built as E11 (AV-33; [as-built E11](as-built/E11.md)).
 
@@ -747,6 +751,8 @@ Also in this column:
 - "Shared text" is read-only, because the labels are code (SERVICE_PAGE_COPY and the case-study components), with a note.
 - "Full editor" links to the full editor.
 - The preview shows /services/<slug> or /portfolio/<slug>.
+
+**Resolved departure (E3, 2026-11-04): "Shared text" is editable.** The README's E3 row ("Template editors + editable shared text (`template_copy`, staged, AR required, code defaults)") wins over the read-only line above, as verification.md's challenge on UI deviation 11 asked. The words are a closed catalogue per template (`packages/schemas/templateCopyKeys.ts`; "Confidential client" stays code-owned, because the Our Work cards share it), stored as differences from the built-in words in one staged row per tenant (`public.template_copy`), English and Arabic both required, plain text, a cap per line; no row is the pages as built, byte for byte. The item's own words save through its full editor's PATCH, not entity drafts of their own (one write path; with releases on that save is the staged one). As built: [as-built/E3.md](as-built/E3.md).
 
 ### Services (AV-14)
 
@@ -2398,7 +2404,7 @@ Also:
 - /admin/pages/template/service|project with a 'Showing [item]' picker.
 - Fixed template parts as the sections list.
 - 'This service/project' field groups write the entity drafts.
-- 'Shared text' read-only (code-owned labels) with an explanation.
+- 'Shared text' read-only (code-owned labels) with an explanation. (Superseded by E3, 2026-11-04: editable, a staged `template_copy` row with code defaults; see "Template editors (AV-31)" above and [as-built/E3.md](as-built/E3.md).)
 - Full editor link; preview of the item's page.
 
 **Key files:**

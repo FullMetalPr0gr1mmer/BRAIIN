@@ -45,6 +45,8 @@ const SINGLETONS = [
   // Admin v2 E6: the Footer screen's basics (four columns of site_profile).
   'footer',
   'integrations',
+  // Admin v2 E7: the Loading screen's look (site_appearance's intro_ columns).
+  'loading',
   'maintenance',
   'profile',
   'seo',

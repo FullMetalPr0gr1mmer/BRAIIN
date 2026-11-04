@@ -6,9 +6,11 @@ import { DEFAULT_COLORS, THEME_SWATCHES } from '@theme/palette';
 import { upgradeThemeSettings } from '@theme/shapes';
 import { ThemeMotionSchema, ThemeSettingsSchema, type ThemeSettings } from '@schemas/theme';
 import {
+  FONT_STACK_TOKENS,
   THEME_TOKEN_NAMES,
   THEME_TOKEN_PATTERNS,
   ThemeTokensSchema,
+  tokenMax,
   type ThemeTokenName,
 } from '@schemas/themeTokens';
 
@@ -19,13 +21,28 @@ import {
 // strict, contrast-gated and can only reduce motion.
 
 const THEMED: ThemeSettings = {
-  v: 2,
+  v: 3,
   mode: 'advanced',
   colors: { primary: '#000000', hover: '#615757', accent: '#938A8D' },
   motion: { marquee: 'slower', reveal: false },
   shapes: { corners: 'brand', buttons: 'pill' },
   type: { headingWeight: 800, headingCase: 'uppercase' },
+  fonts: { latin: 'archivo', arabic: 'almarai' },
 };
+
+/** E12's settings, as a theme saved before E13 holds them. */
+const THEMED_V2 = {
+  v: 2,
+  mode: THEMED.mode,
+  colors: THEMED.colors,
+  motion: THEMED.motion,
+  shapes: THEMED.shapes,
+  type: THEMED.type,
+} as const;
+
+/** A font token is a whole stack; the catalogue's families (fontCatalogue.spec.ts) hold it. */
+const isFontToken = (name: ThemeTokenName) =>
+  (FONT_STACK_TOKENS as readonly string[]).includes(name);
 
 /** E4's settings, as a theme saved before E12 holds them. */
 const THEMED_V1 = {
@@ -58,17 +75,20 @@ describe('ThemeTokensSchema: a closed set, one shape a key', () => {
     expect(Object.keys(ThemeTokensSchema.shape)).toEqual([...THEME_TOKEN_NAMES]);
   });
 
-  it('one entry per pattern, each that pattern, at most 60 characters, optional (CR10)', () => {
+  it('one entry per pattern, each that pattern, at most 60 characters (160 a font stack), optional (CR10)', () => {
     // Built from THEME_TOKEN_PATTERNS (E12 code review CR10), so a key and its shape are written
     // once: a pattern added without a schema entry, or an entry reading another key's pattern,
     // cannot happen.
     expect(Object.keys(ThemeTokensSchema.shape)).toEqual(Object.keys(THEME_TOKEN_PATTERNS));
+    expect(THEME_TOKEN_NAMES.map(tokenMax)).toEqual(
+      THEME_TOKEN_NAMES.map((name) => (isFontToken(name) ? 160 : 60)),
+    );
     for (const name of Object.keys(THEME_TOKEN_PATTERNS) as ThemeTokenName[]) {
       const entry = ThemeTokensSchema.shape[name];
       expect(entry.isOptional(), name).toBe(true);
       const checks = (entry.unwrap()._def as { checks: { kind: string }[] }).checks;
       expect(checks, name).toEqual([
-        { kind: 'max', value: 60, message: undefined },
+        { kind: 'max', value: tokenMax(name), message: undefined },
         { kind: 'regex', regex: THEME_TOKEN_PATTERNS[name], message: undefined },
       ]);
     }
@@ -84,8 +104,11 @@ describe('ThemeTokensSchema: a closed set, one shape a key', () => {
     // The alphabet of each pattern: its character classes expanded and its literal characters,
     // after the anchors, the groups and the counted repeats are taken out. Anchored at both
     // ends, with no wildcard, no negated class and no shorthand class, a value can hold
-    // nothing but these.
-    for (const name of THEME_TOKEN_NAMES) {
+    // nothing but these. A font token (Admin v2 E13) is held otherwise: its pattern is the font
+    // catalogue's own, exactly one family's stack (quotes in pairs, no `;` `{` `}` `<` `>` or
+    // backslash: STACK_CHARS), and none at all while the catalogue holds only the brand's
+    // (tests/lib/fontCatalogue.spec.ts).
+    for (const name of THEME_TOKEN_NAMES.filter((n) => !isFontToken(n))) {
       const source = THEME_TOKEN_PATTERNS[name].source;
       expect(source.startsWith('^') && source.endsWith('$'), name).toBe(true);
       expect(source, name).not.toMatch(/(^|[^\\])\.|\[\^|\\[sSwWdDbB]|[*+?]/);
@@ -240,7 +263,7 @@ describe('themeCss: one :root rule of the closed set, nothing else', () => {
   });
 
   it('every token a valid theme can hold, alone, makes one declaration', () => {
-    const one: Record<ThemeTokenName, string> = {
+    const one: Record<Exclude<ThemeTokenName, (typeof FONT_STACK_TOKENS)[number]>, string> = {
       '--bs-klein': '#000000',
       '--bs-cobalt': '#615757',
       '--bs-sky': '#938a8d',
@@ -258,8 +281,14 @@ describe('themeCss: one :root rule of the closed set, nothing else', () => {
       '--bs-heading-case': 'none',
     };
     for (const name of THEME_TOKEN_NAMES) {
-      expect(themeCss({ [name]: one[name] })).toBe(`:root{${name}:${one[name]};}`);
+      if (isFontToken(name)) continue;
+      const value = one[name as keyof typeof one];
+      expect(themeCss({ [name]: value })).toBe(`:root{${name}:${value};}`);
     }
+    // The font tokens: no value at all while the catalogue holds only the brand's families
+    // (O-21), so a theme can hold neither, the brand's own stacks included.
+    expect(themeCss({ '--bs-font-sans': "'Archivo', 'Archivo Fallback', system-ui" })).toBe('');
+    expect(themeCss({ '--bs-font-ar': 'serif' })).toBe('');
   });
 });
 
@@ -278,8 +307,14 @@ describe('ThemeSettingsSchema', () => {
       { ...THEMED, customCss: 'body{}' },
       { ...THEMED, colors: { ...THEMED.colors, dark: '#000000' } },
       { ...THEMED, motion: { ...THEMED.motion, parallax: true } },
-      { ...THEMED, v: 3 },
+      { ...THEMED, v: 4 },
+      { ...THEMED, v: 2 },
       { ...THEMED_V1, shapes: THEMED.shapes },
+      { ...THEMED_V2, fonts: THEMED.fonts },
+      { ...THEMED, fonts: { ...THEMED.fonts, latin: 'inter' } },
+      { ...THEMED, fonts: { ...THEMED.fonts, arabic: 'archivo' } },
+      { ...THEMED, fonts: { latin: 'archivo' } },
+      { ...THEMED, fonts: { ...THEMED.fonts, heading: 'archivo' } },
       { ...THEMED, shapes: { ...THEMED.shapes, radius: 4 } },
       { ...THEMED, shapes: { ...THEMED.shapes, corners: 'huge' } },
       { ...THEMED, shapes: { ...THEMED.shapes, buttons: 'ghost' } },
@@ -332,13 +367,14 @@ describe('settings v2: shapes and type (Admin v2 E12, AV-32)', () => {
     type: { headingWeight: 700, headingCase: 'as-written' },
   };
 
-  it("reads a v1 theme (E4's) as v2 at the brand's shapes and type, so it compiles as before", () => {
+  it("reads a v1 theme (E4's) as v3 at the brand's shapes, type and fonts, so it compiles as before", () => {
     const read = ThemeSettingsSchema.parse(THEMED_V1);
     expect(read).toEqual({
       ...THEMED_V1,
-      v: 2,
+      v: 3,
       shapes: { corners: 'brand', buttons: 'pill' },
       type: { headingWeight: 800, headingCase: 'uppercase' },
+      fonts: { latin: 'archivo', arabic: 'almarai' },
     });
     expect(compileTheme(read)).toEqual(compileTheme(THEMED));
     // Parsing what it answered changes nothing (the resource parses twice: route, then toRow).
@@ -346,7 +382,18 @@ describe('settings v2: shapes and type (Admin v2 E12, AV-32)', () => {
     // The restore's round trip upgrades a stored v1 the same way (src/lib/release/rowPayload.ts).
     expect(upgradeThemeSettings(THEMED_V1)).toEqual(read);
     expect(upgradeThemeSettings(read)).toBe(read);
-    for (const other of [null, 'x', [], { v: 3 }]) expect(upgradeThemeSettings(other)).toBe(other);
+    for (const other of [null, 'x', [], { v: 3 }, { v: 4 }]) {
+      expect(upgradeThemeSettings(other)).toBe(other);
+    }
+  });
+
+  it("reads a v2 theme (E12's) as v3 at the brand's fonts (Admin v2 E13), compiling as before", () => {
+    const read = ThemeSettingsSchema.parse(THEMED_V2);
+    expect(read).toEqual({ ...THEMED_V2, v: 3, fonts: { latin: 'archivo', arabic: 'almarai' } });
+    expect(read).toEqual(THEMED);
+    expect(compileTheme(THEMED_V2)).toEqual(compileTheme(THEMED));
+    expect(upgradeThemeSettings(THEMED_V2)).toEqual(read);
+    expect(ThemeSettingsSchema.parse(read)).toEqual(read);
   });
 
   it("the brand's shapes and type write no token; each other choice writes its one", () => {

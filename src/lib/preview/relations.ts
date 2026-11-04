@@ -33,6 +33,7 @@ export const PREVIEW_TABLES = [
   'site_profile',
   'statistics',
   'team_members',
+  'template_copy',
   'testimonials',
 ] as const;
 export type PreviewTable = (typeof PREVIEW_TABLES)[number];
@@ -82,6 +83,7 @@ export const TABLE_KEYS: Readonly<Record<DatasetTable, readonly string[]>> = {
   site_profile: ['tenant_id'],
   statistics: ['id'],
   team_members: ['id'],
+  template_copy: ['tenant_id'],
   testimonials: ['id'],
 };
 

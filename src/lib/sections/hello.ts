@@ -21,8 +21,12 @@ const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
  * v.helloH: "Let's talk <em>{s}</em>" / "خلّنا نتكلم عن <em>{s}</em>" — the accent runs from
  * the first word of the service's name to the end.
  */
-export function serviceHelloHeading(service: string, locale: Locale): HelloHeading {
-  const lead = SERVICE_PAGE_COPY[locale].helloLeadIn;
+export function serviceHelloHeading(
+  service: string,
+  locale: Locale,
+  /** The page's own lead-in (Admin v2 E3: editable), the built-in one by default. */
+  lead: string = SERVICE_PAGE_COPY[locale].helloLeadIn,
+): HelloHeading {
   const range = { from: words(lead) };
   return {
     text: `${lead} ${service.trim()}`,

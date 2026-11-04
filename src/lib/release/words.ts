@@ -26,8 +26,8 @@ const SINGLETON_UI_OF: Partial<Record<ReleaseEntityType, string | readonly strin
   // Admin v2 E6: the identity row's footer columns are the Footer screen's form.
   site_profile: ['profile', 'footer'],
   seo_defaults: 'seo',
-  // Admin v2 E5: the Header screen's form.
-  site_appearance: 'appearance',
+  // Admin v2 E5: the Header screen's form; E7: the Loading screen's form (the intro_ columns).
+  site_appearance: ['appearance', 'loading'],
 };
 
 /** Where each non-resource type is edited (its screen, which opens on the row itself). */
@@ -40,19 +40,45 @@ const SCREEN_OF: Partial<Record<ReleaseEntityType, string>> = {
   site_appearance: '/admin/appearance/header',
   // Admin v2 E8: the Forms screen edits both forms of the one row.
   form_settings: '/admin/forms',
+  // Admin v2 E3: the service template's editor (its Shared text; the project template's is
+  // one click away on the pages list).
+  template_copy: '/admin/pages/template/service',
+};
+
+/**
+ * A row two screens edit, each its own columns (Admin v2 E7): a change that names only the
+ * second screen's columns opens that screen; any other opens SCREEN_OF's.
+ */
+const SCREEN_OF_FIELDS: Partial<
+  Record<ReleaseEntityType, { readonly prefix: string; readonly screen: string }>
+> = {
+  site_appearance: { prefix: 'intro_', screen: '/admin/appearance/loading' },
 };
 
 /** Words for a type edited by its own island rather than a UI config (Admin v2 E8). */
 const OWN_WORDS: Partial<Record<ReleaseEntityType, Readonly<Record<string, string>>>> = {
   form_settings: { inquiry: 'Inquiry form', application: 'Join form' },
+  // Admin v2 E3: the two templates' shared text, by the template.
+  template_copy: { service: 'Service page shared text', project: 'Project page shared text' },
 };
 
-/** Where a pending change of this entity is edited, or null when no screen edits it. */
-export function editHref(entityType: ReleaseEntityType, entityId: string): string | null {
+/**
+ * Where a pending change of this entity is edited, or null when no screen edits it. `fields`
+ * (the change's stored columns) picks between two screens of one row (SCREEN_OF_FIELDS).
+ */
+export function editHref(
+  entityType: ReleaseEntityType,
+  entityId: string,
+  fields: readonly string[] = [],
+): string | null {
   const entry = RELEASE_REGISTRY[entityType];
   if (entry.resource) {
     const slug = SLUG_OF.get(entry.resource);
     return slug ? `/admin/${slug}/${entityId}` : null;
+  }
+  const split = SCREEN_OF_FIELDS[entityType];
+  if (split && fields.length > 0 && fields.every((f) => f.startsWith(split.prefix))) {
+    return split.screen;
   }
   return SCREEN_OF[entityType] ?? null;
 }

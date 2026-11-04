@@ -31,9 +31,9 @@ const resources = entries.filter((e) => e.kind === 'resource');
 describe('the staged live select covers the writable allowlist', () => {
   it('finds the entries it checks (the scan is not vacuous)', () => {
     expect(resources.length).toBeGreaterThanOrEqual(17);
-    // four singletons (the identity, the SEO defaults, the forms config: E8, the header: E5),
-    // entity SEO, visibility
-    expect(entries.length).toBe(resources.length + 6);
+    // five singletons (the identity, the SEO defaults, the forms config: E8, the header: E5,
+    // the templates' shared text: E3), entity SEO, visibility
+    expect(entries.length).toBe(resources.length + 7);
   });
 
   it.each(resources.map((e) => [e.entityType, e] as const))(

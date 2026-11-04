@@ -474,6 +474,8 @@ describe('serviceTitle / serviceDescription / disciplineOf / cache tags', () => 
       'media:all',
       // Admin v2 E8: the "Say hello" form, as the forms config words it.
       'forms:all',
+      // Admin v2 E3: the template's shared text.
+      'template_copy:all',
     ]);
   });
 });
@@ -504,6 +506,12 @@ describe('service page copy (service.html v.*)', () => {
     expect(moreTag('Branding', 'en')).toBe('More in Branding');
     expect(moreTag('الهوية البصرية', 'ar')).toBe('المزيد في الهوية البصرية');
     expect(moreTag('Save $& now', 'en')).toBe('More in Save $& now');
+  });
+
+  it('an edited "More in" line fills every {c}, not only the first (E3 review)', () => {
+    expect(moreTag('Branding', 'en', '{c} and all of {c}')).toBe('Branding and all of Branding');
+    expect(moreTag('Save $& now', 'en', '{c}, {c}')).toBe('Save $& now, Save $& now');
+    expect(moreTag('Branding', 'en', 'More from us')).toBe('More from us');
   });
 
   it('both languages carry every label', () => {
