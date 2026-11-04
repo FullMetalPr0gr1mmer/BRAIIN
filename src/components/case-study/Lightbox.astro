@@ -1,5 +1,6 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import type { CasePageCopy } from '@/lib/portfolio/pageCopy';
 
 // The case study's image viewer (UI v2 PR11 — the mockup's `.lb`): ONE server-rendered
 // <dialog>, driven by src/lib/client/lightbox.ts for every breakdown and gallery still.
@@ -11,18 +12,20 @@ import type { Locale } from '@schemas/primitives';
 
 interface Props {
   locale: Locale;
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: CasePageCopy;
 }
 
-const { locale } = Astro.props;
-
-const STR = {
-  en: { label: 'Image viewer', close: 'Close', prev: 'Previous', next: 'Next' },
-  ar: { label: 'عارض الصور', close: 'إغلاق', prev: 'السابق', next: 'التالي' },
-}[locale];
+const { copy } = Astro.props;
 ---
 
-<dialog class="lightbox" aria-label={STR.label} data-lightbox>
-  <button class="lightbox__btn lightbox__x" type="button" aria-label={STR.close} data-lb-close>
+<dialog class="lightbox" aria-label={copy.viewer} data-lightbox>
+  <button
+    class="lightbox__btn lightbox__x"
+    type="button"
+    aria-label={copy.viewerClose}
+    data-lb-close
+  >
     <svg viewBox="0 0 16 16" aria-hidden="true">
       <path
         d="M3 3l10 10M13 3L3 13"
@@ -33,7 +36,12 @@ const STR = {
     </svg>
   </button>
   <div class="lightbox__stage" data-lb-stage></div>
-  <button class="lightbox__btn lightbox__p" type="button" aria-label={STR.prev} data-lb-prev>
+  <button
+    class="lightbox__btn lightbox__p"
+    type="button"
+    aria-label={copy.viewerPrevious}
+    data-lb-prev
+  >
     <svg viewBox="0 0 16 16" aria-hidden="true">
       <path
         d="M14 8H2M7 3L2 8l5 5"
@@ -44,7 +52,7 @@ const STR = {
         stroke-linejoin="round"></path>
     </svg>
   </button>
-  <button class="lightbox__btn lightbox__n" type="button" aria-label={STR.next} data-lb-next>
+  <button class="lightbox__btn lightbox__n" type="button" aria-label={copy.viewerNext} data-lb-next>
     <svg viewBox="0 0 16 16" aria-hidden="true">
       <path
         d="M2 8h12M9 3l5 5-5 5"

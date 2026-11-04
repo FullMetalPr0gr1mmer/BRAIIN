@@ -1,6 +1,7 @@
 ---
 import { getImage } from 'astro:assets';
 import type { Locale } from '@schemas/primitives';
+import type { CasePageCopy } from '@/lib/portfolio/pageCopy';
 import type { Accent } from '@schemas/media';
 import type { CaseMedia } from '@/lib/data/portfolio';
 import { galleryLayout, type GalleryCell } from '@/lib/portfolio/gallery';
@@ -22,17 +23,13 @@ import AccentText from '@/components/ui/AccentText.astro';
 interface Props {
   locale: Locale;
   items: CaseMedia[];
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: CasePageCopy;
+  /** The heading's accent (the built-in one with the built-in words; Admin v2 E3). */
+  accent: Accent | undefined;
 }
 
-const { locale, items } = Astro.props;
-
-const STR = {
-  en: { tag: 'Gallery', heading: 'Stills from the final' },
-  ar: { tag: 'المعرض', heading: 'لقطات من العمل النهائي' },
-}[locale];
-
-/** "the final" / "العمل النهائي" — the mockup's <em>. */
-const ACCENT: Accent = { en: { from: 2 }, ar: { from: 2 } };
+const { locale, items, copy, accent } = Astro.props;
 
 // Six columns on wide screens, two-up on phones (a wide still, or a half left alone, is
 // the full width there).
@@ -70,10 +67,10 @@ const stills = await Promise.all(
         <div>
           <p class="tag tag--sky rv">
             <span class="dot" />
-            {STR.tag}
+            {copy.galleryTag}
           </p>
           <h2 class="rv" id="cs-gal-heading">
-            <AccentText text={STR.heading} locale={locale} accent={ACCENT} />
+            <AccentText text={copy.galleryHeading} locale={locale} accent={accent} />
           </h2>
         </div>
         <span class="cs-gal__count rv">{stillsCount(stills.length, locale)}</span>

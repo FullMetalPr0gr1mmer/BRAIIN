@@ -6,6 +6,8 @@ import {
   type PortfolioCard,
 } from '@/lib/data/portfolio';
 import { getTestimonials, type Testimonial } from '@/lib/data/taxonomy';
+import { getCaseCopy } from '@/lib/data/templateCopy';
+import type { CaseCopy } from '@/lib/templates/copy';
 import { loadHead, type Head } from '@/lib/seo/head';
 import { CASE_STUDY_META } from '@/lib/seo/pageMeta';
 import { pickLocale, pickLocaleStrict } from '@/lib/i18n';
@@ -15,7 +17,8 @@ import { nextProject } from './caseStudy';
 // one loader shared by both twins so they cannot drift.
 //
 // Everything starts in ONE round: the case study, the published cards (for "Next
-// project"), the head (identity + SEO defaults) — and, chained only on the case-study
+// project"), the head (identity + SEO defaults), the template's shared text (Admin v2 E3,
+// `template_copy`, never failing) — and, chained only on the case-study
 // query, the project's quote and its `entity_seo` override. Nothing waits on anything it
 // does not need, so the page costs the case-study query plus one dependent read.
 //
@@ -28,6 +31,8 @@ export interface CaseStudyPage {
   /** The project's own published testimonial; null hides the quote band. */
   quote: Testimonial | null;
   head: Head;
+  /** The template's shared text (Admin v2 E3): the built-in words with the stored ones over them. */
+  copy: CaseCopy;
 }
 
 type Locals = Parameters<typeof loadHead>[0];
@@ -73,7 +78,7 @@ export async function loadCaseStudyPage(
   locale: Locale,
 ): Promise<CaseStudyPage | null> {
   const studyQuery = getCaseStudy(slug);
-  const [study, cards, quotes, head] = await Promise.all([
+  const [study, cards, quotes, head, copy] = await Promise.all([
     studyQuery,
     getPortfolioCards(),
     studyQuery.then((s) => (s ? getTestimonials({ portfolioId: s.id, limit: 1 }) : [])),
@@ -83,6 +88,7 @@ export async function loadCaseStudyPage(
       fallbackDescription: studyQuery.then((s) => (s ? caseDescription(s, locale) : '')),
       entity: studyQuery.then((s) => (s ? { type: 'portfolio' as const, id: s.id } : null)),
     }),
+    getCaseCopy(),
   ]);
   if (!study) return null;
   return {
@@ -90,5 +96,6 @@ export async function loadCaseStudyPage(
     next: nextProject(cards, study),
     quote: quotes[0] ?? null,
     head,
+    copy,
   };
 }

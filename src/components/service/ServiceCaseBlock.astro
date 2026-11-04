@@ -5,7 +5,7 @@ import type { ImageRef } from '@/lib/media/resolve';
 import { localizedHref, pickLocale } from '@/lib/i18n';
 import { pad2 } from '@/lib/portfolio/caseStudy';
 import { facetQuery } from '@/lib/portfolio/catalog';
-import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
+import type { ServicePageCopy } from '@/lib/services/pageCopy';
 import { caseFigure } from '@/lib/services/caseFigure';
 import MediaImage from '@/components/media/MediaImage.astro';
 
@@ -34,10 +34,11 @@ interface Props {
   serviceName: string;
   /** The image when the case has no (published) project, or the project no poster. */
   fallbackImage: ImageRef | null;
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: ServicePageCopy;
 }
 
-const { locale, serviceCase, serviceName, fallbackImage } = Astro.props;
-const copy = SERVICE_PAGE_COPY[locale];
+const { locale, serviceCase, serviceName, fallbackImage, copy } = Astro.props;
 const project = serviceCase.project;
 
 const allProjects = (facet: 'client' | 'sector', value: string) =>

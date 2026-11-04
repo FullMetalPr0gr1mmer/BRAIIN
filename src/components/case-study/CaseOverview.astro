@@ -1,5 +1,6 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import type { CasePageCopy } from '@/lib/portfolio/pageCopy';
 import type { CaseStudy } from '@/lib/data/portfolio';
 import { pickLocale } from '@/lib/i18n';
 import { pad2 } from '@/lib/portfolio/caseStudy';
@@ -22,26 +23,11 @@ import MediaFrame from '@/components/media/MediaFrame.astro';
 interface Props {
   locale: Locale;
   study: CaseStudy;
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: CasePageCopy;
 }
 
-const { locale, study } = Astro.props;
-
-const STR = {
-  en: {
-    overview: 'Overview',
-    scope: 'Scope of work',
-    goal: 'The goal',
-    result: 'The result',
-    final: 'Final film',
-  },
-  ar: {
-    overview: 'نظرة عامة',
-    scope: 'نطاق العمل',
-    goal: 'الهدف',
-    result: 'النتيجة',
-    final: 'الفيلم النهائي',
-  },
-}[locale];
+const { locale, study, copy } = Astro.props;
 
 const lead = study.lead ? pickLocale(study.lead, locale) : '';
 const summary = study.summary ? pickLocale(study.summary, locale) : '';
@@ -68,7 +54,7 @@ const hasText = hasOverview || scope.length > 0 || Boolean(goal) || hasResult;
           <div class="cs-ov__text">
             {hasOverview && (
               <div class="cs-ov__blk rv">
-                <h2 class="cs-ov__h">{STR.overview}</h2>
+                <h2 class="cs-ov__h">{copy.overview}</h2>
                 {lead && <p class="cs-ov__lead">{lead}</p>}
                 {summary && <p class="cs-ov__p">{summary}</p>}
                 {bodyHtml && <div class="cs-ov__body" set:html={bodyHtml} />}
@@ -76,7 +62,7 @@ const hasText = hasOverview || scope.length > 0 || Boolean(goal) || hasResult;
             )}
             {scope.length > 0 && (
               <div class="cs-ov__blk rv">
-                <h2 class="cs-ov__h">{STR.scope}</h2>
+                <h2 class="cs-ov__h">{copy.scope}</h2>
                 <ol class="cs-scope" role="list">
                   {scope.map((item, i) => (
                     <li>
@@ -91,13 +77,13 @@ const hasText = hasOverview || scope.length > 0 || Boolean(goal) || hasResult;
             )}
             {goal && (
               <div class="cs-ov__blk rv">
-                <h2 class="cs-ov__h">{STR.goal}</h2>
+                <h2 class="cs-ov__h">{copy.goal}</h2>
                 <p class="cs-ov__p">{goal}</p>
               </div>
             )}
             {hasResult && (
               <div class="cs-ov__blk rv">
-                <h2 class="cs-ov__h">{STR.result}</h2>
+                <h2 class="cs-ov__h">{copy.result}</h2>
                 {result && <p class="cs-ov__p">{result}</p>}
                 {results.length > 0 && (
                   <ul class="cs-res" role="list">
@@ -128,7 +114,7 @@ const hasText = hasOverview || scope.length > 0 || Boolean(goal) || hasResult;
               sizes="(min-width: 56.25rem) 52vw, 100vw"
             />
             <figcaption class="cs-final__cap">
-              <b>{STR.final}</b>
+              <b>{copy.final}</b>
               {film.durationLabel && (
                 <span>
                   · <bdi>{film.durationLabel}</bdi>

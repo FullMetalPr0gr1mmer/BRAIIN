@@ -10,8 +10,10 @@ import type { Accent } from '@schemas/media';
 // `confidential` is FacetTags' wording, so a hidden client reads the same everywhere.
 //
 // The template's whole shared text is here, the "Say hello" lines it hands Hello included,
-// so the template editor finds it in one place (Admin v2 E3 makes it editable, with these
-// values as its defaults). The sections' own built-in copy is src/lib/sections/copy/.
+// so the template editor finds it in one place. Admin v2 E3 made it editable: these are the
+// BUILT-IN words, which `public.template_copy` overrides key by key (the catalogue,
+// packages/schemas/templateCopy.ts; the page's resolved words, src/lib/templates/copy.ts). The
+// sections' own built-in copy is src/lib/sections/copy/.
 
 export interface ServicePageCopy {
   home: string;
@@ -34,6 +36,8 @@ export interface ServicePageCopy {
   did: string;
   /** v.moreTag "More in {c}". */
   moreTag: string;
+  /** v.moreH "Everything in <em>{c}</em>": the words before the discipline's name (moreHeading). */
+  moreLeadIn: string;
   all: string;
   fab: string;
   confidential: string;
@@ -61,6 +65,7 @@ export const SERVICE_PAGE_COPY: Record<Locale, ServicePageCopy> = {
     problem: 'The problem',
     did: 'What we did',
     moreTag: 'More in {c}',
+    moreLeadIn: 'Everything in',
     all: 'All services',
     fab: 'Skip to inquiry',
     confidential: 'Confidential client',
@@ -85,6 +90,7 @@ export const SERVICE_PAGE_COPY: Record<Locale, ServicePageCopy> = {
     problem: 'المشكلة',
     did: 'وش سوّينا',
     moreTag: 'المزيد في {c}',
+    moreLeadIn: 'كل خدمات',
     all: 'كل الخدمات',
     fab: 'انتقل للطلب',
     confidential: 'عميل غير مُعلَن',
@@ -96,10 +102,6 @@ export const SERVICE_PAGE_COPY: Record<Locale, ServicePageCopy> = {
 
 // "Why it's <em>worth it</em>" / "ليش <em>تستاهل</em>".
 export const VALUE_ACCENT: Accent = { en: { from: 2 }, ar: { from: 1 } };
-
-// v.moreH: "Everything in <em>{c}</em>" / "كل خدمات <em>{c}</em>" — the lead-in, then the
-// discipline's name as the accent.
-const MORE_LEAD: Record<Locale, string> = { en: 'Everything in', ar: 'كل خدمات' };
 
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
@@ -117,12 +119,27 @@ function tailHeading(lead: string, tail: string, locale: Locale): TailHeading {
   };
 }
 
-/** "Everything in *Branding*" — the "More in {Discipline}" heading. */
-export function moreHeading(discipline: string, locale: Locale): TailHeading {
-  return tailHeading(MORE_LEAD[locale], discipline, locale);
+/**
+ * "Everything in *Branding*" — the "More in {Discipline}" heading (v.moreH: the lead-in, then
+ * the discipline's name as the accent). `lead` is the page's own words (E3: editable), the
+ * built-in lead-in by default.
+ */
+export function moreHeading(
+  discipline: string,
+  locale: Locale,
+  lead: string = SERVICE_PAGE_COPY[locale].moreLeadIn,
+): TailHeading {
+  return tailHeading(lead, discipline, locale);
 }
 
-/** "More in Branding" — the section's kicker. A function replacement: never `$&` expansion. */
-export function moreTag(discipline: string, locale: Locale): string {
-  return SERVICE_PAGE_COPY[locale].moreTag.replace('{c}', () => discipline.trim());
+/**
+ * "More in Branding" — the section's kicker: `{c}` is the discipline's name (E3: the words are
+ * editable, the built-in ones by default). A function replacement: never `$&` expansion.
+ */
+export function moreTag(
+  discipline: string,
+  locale: Locale,
+  words: string = SERVICE_PAGE_COPY[locale].moreTag,
+): string {
+  return words.replace('{c}', () => discipline.trim());
 }

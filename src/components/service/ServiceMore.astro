@@ -3,7 +3,7 @@ import type { Locale } from '@schemas/primitives';
 import type { Discipline } from '@/lib/data/disciplines';
 import { localizedHref, localizedPath, pickLocale } from '@/lib/i18n';
 import { pad2 } from '@/lib/portfolio/caseStudy';
-import { SERVICE_PAGE_COPY, moreHeading, moreTag } from '@/lib/services/pageCopy';
+import { moreHeading, moreTag, type ServicePageCopy } from '@/lib/services/pageCopy';
 import AccentText from '@/components/ui/AccentText.astro';
 
 // "More in {Discipline}" (Round 2 — service.html `.more`), on paper: the kicker, the h2
@@ -21,12 +21,13 @@ interface Props {
   discipline: Discipline;
   /** The page's own service. */
   current: string;
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: ServicePageCopy;
 }
 
-const { locale, discipline, current } = Astro.props;
-const copy = SERVICE_PAGE_COPY[locale];
+const { locale, discipline, current, copy } = Astro.props;
 const name = pickLocale(discipline.name, locale);
-const heading = moreHeading(name, locale);
+const heading = moreHeading(name, locale, copy.moreLeadIn);
 const rows = discipline.services.map((s, i) => ({
   n: pad2(i + 1),
   href: localizedPath(`/services/${s.slug}`, locale),
@@ -39,7 +40,9 @@ const rows = discipline.services.map((s, i) => ({
   <div class="svc-wrap">
     <div class="svc-more__head">
       <div>
-        <div class="tag rv"><span class="dot"></span><span>{moreTag(name, locale)}</span></div>
+        <div class="tag rv">
+          <span class="dot"></span><span>{moreTag(name, locale, copy.moreTag)}</span>
+        </div>
         <h2 class="rv" id="svc-more-heading">
           <AccentText text={heading.text} locale={locale} accent={heading.accent} />
         </h2>

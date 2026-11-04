@@ -1,5 +1,6 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import type { CasePageCopy } from '@/lib/portfolio/pageCopy';
 import type { PortfolioCard } from '@/lib/data/portfolio';
 import { pickLocale, localizedHref } from '@/lib/i18n';
 import MediaImage from '@/components/media/MediaImage.astro';
@@ -17,14 +18,11 @@ import MediaImage from '@/components/media/MediaImage.astro';
 interface Props {
   locale: Locale;
   card: PortfolioCard | null;
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: CasePageCopy;
 }
 
-const { locale, card } = Astro.props;
-
-const STR = {
-  en: { next: 'Next project' },
-  ar: { next: 'المشروع التالي' },
-}[locale];
+const { locale, card, copy } = Astro.props;
 
 const name = card ? pickLocale(card.title, locale) : '';
 ---
@@ -34,7 +32,7 @@ const name = card ? pickLocale(card.title, locale) : '';
     <a
       class="cs-next"
       href={localizedHref(`/portfolio/${card.slug}`, locale)}
-      aria-label={`${STR.next}: ${name}`}
+      aria-label={`${copy.nextProject}: ${name}`}
     >
       {card.poster && (
         <MediaImage
@@ -48,7 +46,7 @@ const name = card ? pickLocale(card.title, locale) : '';
       )}
       <span class="cs-next__in">
         <span>
-          <span class="cs-next__k">{STR.next}</span>
+          <span class="cs-next__k">{copy.nextProject}</span>
           <span class="cs-next__t">{name}</span>
         </span>
         <span class="cs-next__go" aria-hidden="true">

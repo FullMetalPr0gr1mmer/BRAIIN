@@ -8,6 +8,12 @@ import type { CaseMedia, CaseStudy, PortfolioCard } from '@/lib/data/portfolio';
 import type { ServiceCase } from '@/lib/data/serviceCases';
 import type { ServiceDetail } from '@/lib/data/services';
 import type { Head } from '@/lib/seo/head';
+import {
+  BUILT_IN_CASE_COPY,
+  BUILT_IN_SERVICE_COPY,
+  caseCopyFrom,
+  serviceCopyFrom,
+} from '@/lib/templates/copy';
 import { PUBLIC_SITE_URL } from '../stubs/astro-env-client';
 import { CARDS, DISCIPLINES, IDENTITY, POSTER, TESTIMONIALS } from './fixtures';
 import { normalise } from './harness';
@@ -96,6 +102,8 @@ const servicePage = (serviceCase: ServiceCase | null) => ({
   disciplines: DISCIPLINES,
   serviceCase,
   head: HEAD,
+  // No template_copy row: the reader's answer is every key's built-in words.
+  copy: BUILT_IN_SERVICE_COPY,
 });
 
 const still = (
@@ -139,6 +147,7 @@ const casePage = {
   next: CARDS[1] ?? null,
   quote: TESTIMONIALS[0] ?? null,
   head: { ...HEAD, seo: { ...HEAD.seo, title: 'The Rider | Brand film' } },
+  copy: BUILT_IN_CASE_COPY,
 };
 
 const LOCALES: readonly Locale[] = ['en', 'ar'];
@@ -154,5 +163,93 @@ describe('the template pages, to the byte, with no template_copy row', () => {
   });
   test.each(LOCALES)('a case study, %s', async (locale) => {
     expect(await renderPage(CaseStudyPage, { locale, page: casePage })).toMatchSnapshot();
+  });
+});
+
+// With stored differences, the page changes exactly those words: the render with no row, with
+// each old wording swapped for the stored one, is the render with the row, to the byte. An
+// accented heading stored with its own accent colours the words it names.
+const swapAll = (html: string, swaps: readonly (readonly [string, string])[]) =>
+  swaps.reduce((out, [from, to]) => {
+    expect(out, `"${from}" is on the page`).toContain(from);
+    return out.split(from).join(to);
+  }, html);
+
+describe('the template pages with stored shared text', () => {
+  test('a service page: the stored lines, the stored accent, {c} for the discipline', async () => {
+    const stored = {
+      seeCase: t('Read the story', 'اقرأ القصة'),
+      fab: t('Ask us', 'اسألنا'),
+      valueHeading: t('Why us', 'ليش نحن'),
+      valueHeadingAccent: { en: { from: 1 }, ar: { from: 1 } },
+      moreTag: t('{c} and more', '{c} وأكثر'),
+      helloLeadIn: t('Talk to us about', 'كلمنا عن'),
+    };
+    const page = { ...servicePage(SERVICE_CASE), copy: serviceCopyFrom(stored) };
+    const before = await renderPage(ServicePage, { locale: 'en', page: servicePage(SERVICE_CASE) });
+    const after = await renderPage(ServicePage, { locale: 'en', page });
+    expect(after).toBe(
+      swapAll(before, [
+        ['See the case study', 'Read the story'],
+        ['Skip to inquiry<', 'Ask us<'],
+        ['Why it&#39;s <em>worth it</em>', 'Why <em>us</em>'],
+        ['More in Branding', 'Branding and more'],
+        ['Let&#39;s talk <em>', 'Talk to us about <em>'],
+      ]),
+    );
+    const arBefore = await renderPage(ServicePage, {
+      locale: 'ar',
+      page: servicePage(SERVICE_CASE),
+    });
+    const arAfter = await renderPage(ServicePage, { locale: 'ar', page });
+    expect(arAfter).toBe(
+      swapAll(arBefore, [
+        ['شوف دراسة الحالة', 'اقرأ القصة'],
+        ['انتقل للطلب<', 'اسألنا<'],
+        ['ليش <em>تستاهل</em>', 'ليش <em>نحن</em>'],
+        ['المزيد في الهوية البصرية', 'الهوية البصرية وأكثر'],
+        ['خلّنا نتكلم عن <em>', 'كلمنا عن <em>'],
+      ]),
+    );
+  });
+
+  test('a stored heading with no stored accent has no accent; a bad key keeps its built-in words', async () => {
+    const page = {
+      ...servicePage(null),
+      copy: serviceCopyFrom({
+        valueHeading: t('Why us', 'ليش نحن'),
+        // Written around the Worker: no Arabic, so the key is dropped, never the page.
+        valueLead: { en: 'Only English' },
+        nonsense: t('x', 'y'),
+      }),
+    };
+    const before = await renderPage(ServicePage, { locale: 'en', page: servicePage(null) });
+    const after = await renderPage(ServicePage, { locale: 'en', page });
+    expect(after).toBe(swapAll(before, [['Why it&#39;s <em>worth it</em>', 'Why us']]));
+  });
+
+  test('a case study: the stored lines and the two accented headings', async () => {
+    const page = {
+      ...casePage,
+      copy: caseCopyFrom({
+        breakdownHeading: t('How it was made', 'كيف انصنع'),
+        breakdownHeadingAccent: { en: { from: 3 }, ar: { from: 1 } },
+        galleryHeading: t('The stills', 'اللقطات'),
+        viewerClose: t('Close the image', 'أغلق الصورة'),
+        nextProject: t('Up next', 'التالي'),
+        sketch: t('Drawing', 'رسم'),
+      }),
+    };
+    const before = await renderPage(CaseStudyPage, { locale: 'en', page: casePage });
+    const after = await renderPage(CaseStudyPage, { locale: 'en', page });
+    expect(after).toBe(
+      swapAll(before, [
+        ['From the <em>first sketch</em> to set', 'How it was <em>made</em>'],
+        ['Stills from <em>the final</em>', 'The stills'],
+        ['aria-label="Close"', 'aria-label="Close the image"'],
+        ['Next project', 'Up next'],
+        ['>Sketch<', '>Drawing<'],
+      ]),
+    );
   });
 });
