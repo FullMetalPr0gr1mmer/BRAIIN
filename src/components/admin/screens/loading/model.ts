@@ -27,7 +27,8 @@ export interface HomeHero {
  * The section that carries the plate: the home page's first VISIBLE hero, in the site's order,
  * as the home route picks it (withHomeIntro gives the plate to the first hero it renders, and
  * the route renders visible sections only). Null when the home page shows no hero: then there
- * is no loading screen to switch.
+ * is no loading screen to switch. Only for a published home page that shows a section
+ * (introTarget): otherwise the route renders the built-in one.
  */
 export function homeHero(rows: readonly Row[]): HomeHero | null {
   const heroes = rows
@@ -46,6 +47,41 @@ export function homeHero(rows: readonly Row[]): HomeHero | null {
     pending: pendingOf(first),
   };
 }
+
+/** Why visitors see the built-in home page, which always opens with its loading screen. */
+export type BuiltinWhy = 'nohome' | 'unpublished' | 'empty';
+
+/** What the switch stands for on the home page as visitors get it. */
+export type IntroTarget =
+  { kind: 'builtin'; why: BuiltinWhy } | { kind: 'nohero' } | { kind: 'hero'; hero: HomeHero };
+
+/**
+ * The home route's own fallback, mirrored (src/pages/index.astro and ar/index.astro; E7 review,
+ * E7-C2): the route renders a PUBLISHED home page's VISIBLE sections (getPageComposition reads
+ * `status = 'published'`, and a visitor reads visible sections only) and, when there is no
+ * published home page or it shows no section, the built-in composition (DEFAULT_HOME_SECTIONS),
+ * whose hero always carries the plate. Then nothing here turns the intro off: the switch shows
+ * on and stays disabled, and says why. Otherwise the switch is the first visible hero's, or
+ * there is no loading screen when no hero shows. `page` is the home page's row (its status, as
+ * the pages kernel reads it), null when the tenant has none; `rows` its sections.
+ */
+export function introTarget(page: Row | null, rows: readonly Row[]): IntroTarget {
+  if (!page) return { kind: 'builtin', why: 'nohome' };
+  if (page['status'] !== 'published') return { kind: 'builtin', why: 'unpublished' };
+  if (!rows.some((row) => row['visible'] !== false)) return { kind: 'builtin', why: 'empty' };
+  const hero = homeHero(rows);
+  return hero ? { kind: 'hero', hero } : { kind: 'nohero' };
+}
+
+/** What the switch says when visitors see the built-in home page (it is on, and disabled). */
+export const BUILTIN_HINTS: Readonly<Record<BuiltinWhy, string>> = {
+  nohome:
+    'This site has no home page in Pages yet, so it shows the built-in one, with its loading screen.',
+  unpublished:
+    'The home page in Pages is not published yet, so the site shows the built-in one, with its loading screen. Once yours is published, you can switch it here.',
+  empty:
+    'The home page in Pages has no section showing, so the site shows the built-in one, with its loading screen. Once yours shows a section, you can switch it here.',
+};
 
 /** A section's stored content, as an object ({} for anything else). */
 export function contentOf(row: Row): Record<string, unknown> {

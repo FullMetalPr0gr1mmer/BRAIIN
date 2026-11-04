@@ -18,13 +18,17 @@ import { SITE_APPEARANCE_INTRO_COLUMNS } from '@/lib/data/appearance';
 import { siteAppearanceSingleton } from '@/lib/admin/singletons/siteAppearance';
 import { loadingUi } from '@/lib/admin/ui/loading';
 import { editHref } from '@/lib/release/words';
+import { DEFAULT_HOME_SECTIONS, withHomeIntro, type SectionData } from '@/lib/sections/types';
 import {
+  BUILTIN_HINTS,
   contentOf,
   homeHero,
   introShown,
+  introTarget,
   previewLine,
   previewLook,
   switchedContent,
+  type IntroTarget,
 } from '@/components/admin/screens/loading/model';
 
 // The loading screen's look (Admin v2 E7, site_appearance's intro_ columns): the closed sets
@@ -357,5 +361,129 @@ describe('the screen’s model', () => {
     ).toBe(
       'The logo on a light ground, a progress bar and the tagline “Hello”. It holds 500 ms, then fades in 300 ms.',
     );
+  });
+});
+
+describe('the switch follows the home route’s fallback (E7 review, E7-C2)', () => {
+  type Row = Record<string, unknown>;
+  const section = (id: string, type: string, sort: number, extra: Row = {}): Row => ({
+    id,
+    type,
+    visible: true,
+    sort_order: sort,
+    version: 1,
+    ...extra,
+  });
+  const published = { id: 'home', status: 'published' };
+
+  /**
+   * Whether `/` opens with the plate for this page and these sections, as the route decides it:
+   * getPageComposition reads a PUBLISHED page's sections as a visitor (visible ones only, in
+   * order), and src/pages/index.astro falls back to DEFAULT_HOME_SECTIONS when that gives
+   * none; withHomeIntro gives the plate to the first hero unless its content says `intro: false`.
+   */
+  function routeShowsPlate(page: Row | null, rows: readonly Row[]): boolean {
+    const shown: SectionData[] =
+      page?.['status'] === 'published'
+        ? [...rows]
+            .filter((row) => row['visible'] !== false)
+            .sort(
+              (a, b) =>
+                Number(a['sort_order']) - Number(b['sort_order']) ||
+                String(a['id']).localeCompare(String(b['id'])),
+            )
+            .map((row) => ({ type: String(row['type']), props: contentOf(row) }))
+        : [];
+    const composed = shown.length ? shown : DEFAULT_HOME_SECTIONS;
+    const hero = withHomeIntro(composed).find((s) => s.type === 'hero');
+    return hero?.props?.['intro'] === true;
+  }
+
+  /** What the switch shows for a target: on for the built-in home page, the hero's own state. */
+  function switchShows(target: IntroTarget, rows: readonly Row[]): boolean {
+    if (target.kind === 'builtin') return true;
+    if (target.kind === 'nohero') return false;
+    return introShown(contentOf(rows.find((row) => row['id'] === target.hero.id) ?? {}));
+  }
+
+  const hero = section('h', 'hero', 10);
+  const heroOff = section('h', 'hero', 10, { content: { intro: false } });
+  const cases: [string, Row | null, Row[], IntroTarget['kind']][] = [
+    ['no home page in Pages', null, [], 'builtin'],
+    [
+      'a draft home page, its hero switched off',
+      { ...published, status: 'draft' },
+      [heroOff],
+      'builtin',
+    ],
+    ['a scheduled home page', { ...published, status: 'scheduled' }, [hero], 'builtin'],
+    ['an archived home page', { ...published, status: 'archived' }, [heroOff], 'builtin'],
+    ['a published home page with no section', published, [], 'builtin'],
+    [
+      'a published home page whose every section is hidden',
+      published,
+      [
+        section('h', 'hero', 10, { visible: false, content: { intro: false } }),
+        section('s', 'slogan', 20, { visible: false }),
+      ],
+      'builtin',
+    ],
+    [
+      'a published home page with no hero showing',
+      published,
+      [section('s', 'slogan', 10), section('h', 'hero', 20, { visible: false })],
+      'nohero',
+    ],
+    ['a published home page, its hero on', published, [hero, section('s', 'slogan', 20)], 'hero'],
+    [
+      'a published home page, its hero off',
+      published,
+      [heroOff, section('s', 'slogan', 20)],
+      'hero',
+    ],
+    [
+      'two heroes: the first visible one carries the plate',
+      published,
+      [
+        section('b', 'hero', 30, { content: { intro: false } }),
+        section('a', 'hero', 20),
+        section('z', 'hero', 5, { visible: false, content: { intro: false } }),
+      ],
+      'hero',
+    ],
+    [
+      'two heroes, the first visible one off',
+      published,
+      [section('b', 'hero', 30), section('a', 'hero', 20, { content: { intro: false } })],
+      'hero',
+    ],
+  ];
+
+  for (const [name, page, rows, kind] of cases) {
+    it(`${name}: the switch shows what the route renders`, () => {
+      const target = introTarget(page, rows);
+      expect(target.kind).toBe(kind);
+      expect(switchShows(target, rows)).toBe(routeShowsPlate(page, rows));
+    });
+  }
+
+  it('says why the built-in home page is what visitors see, and the hero it writes otherwise', () => {
+    expect(introTarget(null, [])).toEqual({ kind: 'builtin', why: 'nohome' });
+    expect(introTarget({ status: 'draft' }, [hero])).toEqual({
+      kind: 'builtin',
+      why: 'unpublished',
+    });
+    expect(introTarget(published, [section('s', 'slogan', 1, { visible: false })])).toEqual({
+      kind: 'builtin',
+      why: 'empty',
+    });
+    expect(introTarget(published, [hero])).toEqual({
+      kind: 'hero',
+      hero: { id: 'h', version: 1, pending: null },
+    });
+    for (const words of Object.values(BUILTIN_HINTS)) {
+      expect(words).toContain('built-in one, with its loading screen');
+      expect(words).not.toMatch(/[\u2013\u2014]/);
+    }
   });
 });

@@ -17,12 +17,14 @@ import { BACKDROP_LABELS, loadingUi } from '@/lib/admin/ui/loading';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
 import { pendingOf, rowWrite } from '../header/menu';
 import {
+  BUILTIN_HINTS,
   contentOf,
-  homeHero,
   introShown,
+  introTarget,
   previewLine,
   previewLook,
   switchedContent,
+  type BuiltinWhy,
   type HomeHero,
   type PreviewLook,
 } from './model';
@@ -33,7 +35,9 @@ import {
 //   - On the home page (pages.write: Admin, Content Creator): "Show the loading screen", the
 //     home page's first visible hero section's `intro`, one versioned PATCH of the section
 //     kernel (in release mode it names the section's pending change or carries the marker,
-//     R12b), exactly what the page editor's Advanced JSON wrote before;
+//     R12b), exactly what the page editor's Advanced JSON wrote before; when visitors get the
+//     built-in home page instead (none published, or none showing a section), on and disabled,
+//     as the route renders it (introTarget, E7-C2);
 //   - the look (theme.edit: Admin, Developer): the Style card (what sits behind the logo, as
 //     tiles; the bar; the tagline) and the Timing card (the hold and the fade, in the site's
 //     buckets) over `site_appearance`'s intro_ columns, saved through the Header's singleton
@@ -72,8 +76,8 @@ const SECTION_PAGE = 100;
 
 type SwitchState =
   | { kind: 'loading' }
-  | { kind: 'nohome' }
-  | { kind: 'nohero' }
+  | { kind: 'builtin'; why: BuiltinWhy; staged: boolean }
+  | { kind: 'nohero'; staged: boolean }
   | { kind: 'failed' }
   | { kind: 'ready'; hero: HomeHero; content: Row; staged: boolean };
 
@@ -91,19 +95,31 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
       return;
     }
     if (!homePageId) {
-      setState({ kind: 'nohome' });
+      setState({ kind: 'builtin', why: 'nohome', staged: false });
       return;
     }
     try {
-      const list = await adminFetch<Row>(
-        `/api/admin/sections?page_id=${encodeURIComponent(homePageId)}&limit=${SECTION_PAGE}`,
-      );
+      // The page (its status) and its sections, together, each through its kernel (live, or
+      // with its pending change laid over it in release mode).
+      const [page, list] = await Promise.all([
+        adminFetch<Row>(`/api/admin/pages/${encodeURIComponent(homePageId)}`),
+        adminFetch<Row>(
+          `/api/admin/sections?page_id=${encodeURIComponent(homePageId)}&limit=${SECTION_PAGE}`,
+        ),
+      ]);
       const rows = Array.isArray(list['rows']) ? (list['rows'] as Row[]) : [];
-      const hero = homeHero(rows);
-      if (!hero) {
-        setState({ kind: 'nohero' });
+      const throughRelease = readsThroughRelease(list);
+      const target = introTarget(page, rows);
+      if (target.kind !== 'hero') {
+        setState(
+          target.kind === 'builtin'
+            ? { kind: 'builtin', why: target.why, staged: throughRelease }
+            : { kind: 'nohero', staged: throughRelease },
+        );
+        setError('');
         return;
       }
+      const hero = target.hero;
       // The list carries no content: the hero's own read does (live, or with its pending
       // change laid over it in release mode).
       const row = await adminFetch<Row>(`/api/admin/sections/${encodeURIComponent(hero.id)}`);
@@ -115,7 +131,7 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
           pending: pendingOf(row) ?? hero.pending,
         },
         content: contentOf(row),
-        staged: readsThroughRelease(list),
+        staged: throughRelease,
       });
       setError('');
     } catch (err) {
@@ -129,7 +145,7 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
   }, [load]);
 
   // Releases on: a pending change settled or thrown away elsewhere moved what the switch reads.
-  const staged = state.kind === 'ready' && state.staged;
+  const staged = 'staged' in state && state.staged;
   useEffect(() => (staged ? onDraftsMoved(() => void load()) : undefined), [staged, load]);
 
   async function toggle() {
@@ -157,12 +173,13 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
     setBusy(false);
   }
 
-  const on = state.kind === 'ready' ? introShown(state.content) : false;
+  // The built-in home page always opens with its loading screen: on, and nothing to switch.
+  const on = state.kind === 'ready' ? introShown(state.content) : state.kind === 'builtin';
   const hint =
     state.kind === 'nohero'
       ? 'The home page shows no hero section, so it has no loading screen. Add a hero to the home page in Pages.'
-      : state.kind === 'nohome'
-        ? 'This site has no home page in Pages yet, so it shows the built-in one, with its loading screen.'
+      : state.kind === 'builtin'
+        ? BUILTIN_HINTS[state.why]
         : 'The logo plays before the home page appears, in English and Arabic. Saved with the home page, like any edit of it.';
   return (
     <section className="card" aria-labelledby={`${base}-title`}>
