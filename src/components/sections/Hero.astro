@@ -322,6 +322,7 @@ const src = videoUid ? undefined : videoSrc;
 </section>
 
 <script>
+  import { introHoldCap } from '@/lib/client/introGate';
   import { mountLazyVideo, setVideoInView } from '@/lib/client/lazyVideo';
 
   // Intro: once per tab session; any navigation intent cuts straight to the page.
@@ -375,11 +376,12 @@ const src = videoUid ? undefined : videoSrc;
     const fading = typeof fade?.currentTime === 'number' && fade.currentTime >= holdMs;
     if (logo && !fading) {
       // Bounds the wait so time-to-content stays honest even on a cold edge: worst case
-      // is CAP + hold + fade (4.45s with the UI v2 1.0s hold). Warm (the overwhelming
-      // majority) releases in ~0.7s. 3s, not the 2s it was: CAP + hold must outlast the
-      // measured cold transform (~3.6s) or the plate lifts before the logo exists — with
-      // the old 3.5s hold, 2s had slack to spare; with a 1.0s hold it had none.
-      const HOLD_CAP_MS = 3000;
+      // is CAP + hold + fade. Warm (the overwhelming majority) releases in ~0.7s. CAP + hold
+      // must outlast the measured cold transform (~3.6s) or the plate lifts before the logo
+      // exists, so the cap is DERIVED from the hold (the loading screen's bucket, Admin v2
+      // E7): CAP + hold is 4s for every bucket, 3s at the UI v2 1.0s hold as before, and the
+      // worst case is 4s + fade (4.6s at most). src/lib/client/introGate.ts has the numbers.
+      const HOLD_CAP_MS = introHoldCap(holdMs);
       document.body.classList.add('intro-waiting');
       let released = false;
       const release = () => {
