@@ -63,6 +63,19 @@ describe('the code map', () => {
     expect(appearanceProblem('cta', { reveal: 'rise' })).toBeNull();
   });
 
+  it('says why in words true of the kind: the Slogan opens nothing, it moves on its own (E9-C2)', () => {
+    for (const type of ['hero', 'aboutWho', 'pageHead', 'workHero', 'aboutStory']) {
+      expect(appearanceProblem(type, { reveal: 'fade' })?.message, type).toContain('opens a page');
+    }
+    const slogan = appearanceProblem('slogan', { reveal: 'fade' })?.message ?? '';
+    expect(slogan).toContain('moves on its own as you scroll');
+    expect(slogan).not.toContain('opens a page');
+    // The database's refusal cannot tell the kinds apart, so it names both reasons.
+    const db = sectionResource.constraintFields?.['page_sections_reveal_bucket']?.message ?? '';
+    expect(db).toContain('opens a page');
+    expect(db).toContain('moves on its own');
+  });
+
   it('offers a background and a spacing to the blocks only', () => {
     expect(appearanceProblem('textBlock', { background: 'ink', spacing: 'roomy' })).toBeNull();
     expect(appearanceProblem('gallery', { background: 'klein' })).toBeNull();

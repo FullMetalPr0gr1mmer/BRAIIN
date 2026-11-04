@@ -213,6 +213,23 @@ describe('the card’s first paint', () => {
     );
   });
 
+  it('the reveal’s hint says it follows the scroll, never that it plays once (E9-C1)', () => {
+    // global.css: a view() timeline, fill both, so scrolling back up past a section undoes it
+    // and scrolling down plays it again (as-built E9, Departures).
+    const html = card('cta');
+    expect(html).toContain('id="f-reveal"');
+    expect(html).toContain('It follows the scroll');
+    expect(html).toContain('plays again on the way down');
+    expect(html).not.toMatch(/plays once/i);
+  });
+
+  it('the Slogan is told it moves on its own, not that it opens a page (E9-C2)', () => {
+    const html = card('slogan');
+    expect(html).not.toContain('id="f-reveal"');
+    expect(html).toContain('This section moves on its own as you scroll');
+    expect(html).not.toContain('opens a page');
+  });
+
   it('the hero takes no reveal, and its anchor is not offered', () => {
     const html = card('hero');
     expect(html).toContain('it takes no reveal');

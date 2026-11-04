@@ -25,7 +25,7 @@ const HINTS: Readonly<Record<Choice, string>> = {
     'Every colour on it is checked for contrast, and follows your theme’s primary colour.',
   spacing: 'The space above and below the section.',
   reveal:
-    'Plays once as the section scrolls into view, only for visitors whose device has not asked for less motion. Everyone else sees it at once.',
+    'Plays as the section scrolls into view. It follows the scroll: scrolling back up fades the section as it leaves, and it plays again on the way down. Only for visitors whose device has not asked for less motion; everyone else sees it at once.',
 };
 
 export interface AppearanceCardProps {

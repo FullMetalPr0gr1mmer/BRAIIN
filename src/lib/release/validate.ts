@@ -14,7 +14,12 @@ import { ENTITY_SEO } from '@/lib/admin/entitySeo';
 import { isLive } from '@/lib/admin/resource';
 import { liveRouteCheck } from '@/lib/admin/redirectRules';
 import { mediaItemToRow } from '@/lib/admin/resources/portfolio';
-import { sectionPageQuery } from '@/lib/admin/resources/sections';
+import {
+  anchorDisciplineQuery,
+  anchorToCheck,
+  sectionAnchorQuery,
+  sectionPageQuery,
+} from '@/lib/admin/resources/sections';
 import { HOME_REFUSAL } from '@/lib/admin/visibilityCopy';
 import { HOME_SLUG } from '@/lib/visibility/routes';
 import { serviceClient } from '@/lib/supabase/server';
@@ -586,6 +591,54 @@ async function primeRoutes(db: MemoDb, items: readonly Derived[]): Promise<void>
   );
 }
 
+/**
+ * The section anchor rule's reads (Admin v2 E9, P-15), primed: for every change that moves an
+ * anchor (`anchorToCheck`, the rule's own test), whether another section of its page holds it
+ * and whether a discipline's slug is it. Two reads over the state the release leaves, sent
+ * together, however many anchors move; the rule then reads nothing (before: two requests per
+ * change, so about 24 moved anchors would pass the Free plan's 50). Each answer is cut to what
+ * the rule's own query returns (its columns, its limit).
+ */
+async function primeAnchors(db: MemoDb, items: readonly Derived[]): Promise<void> {
+  const checks = new Map<string, { pageId: string; anchor: string }>();
+  for (const item of items) {
+    if (item.draft.entity_type !== 'page_section' || !item.merged) continue;
+    const check = anchorToCheck(item.merged, item.patch, item.live);
+    if (check) checks.set(JSON.stringify([check.pageId, check.anchor]), check);
+  }
+  if (checks.size === 0) return;
+  const pages = [...new Set([...checks.values()].map((c) => c.pageId))];
+  const anchors = [...new Set([...checks.values()].map((c) => c.anchor))];
+  const [sections = [], disciplines = []] = await db.listMany([
+    {
+      table: 'page_sections',
+      query: { columns: 'id,page_id,anchor', in: { page_id: pages, anchor: anchors } },
+    },
+    { table: 'disciplines', query: { columns: 'id,slug', in: { slug: anchors } } },
+  ]);
+  for (const { pageId, anchor } of checks.values()) {
+    const query = sectionAnchorQuery(pageId, anchor);
+    db.primeList(
+      'page_sections',
+      query,
+      sections
+        .filter((row) => String(row['page_id']) === pageId && row['anchor'] === anchor)
+        .slice(0, query.limit)
+        .map((row) => ({ id: row['id'] })),
+    );
+    // A slug is citext: the rule's `eq` matches it whatever its case, so the cut does too.
+    const named = anchorDisciplineQuery(anchor);
+    db.primeList(
+      'disciplines',
+      named,
+      disciplines
+        .filter((row) => String(row['slug']).toLowerCase() === anchor)
+        .slice(0, named.limit)
+        .map((row) => ({ id: row['id'] })),
+    );
+  }
+}
+
 /** Pending new items (outside the selection) that the missing links name. */
 async function pendingCreates(
   sb: SupabaseClient,
@@ -747,6 +800,7 @@ export async function checkSelection(
   }
 
   await primeRoutes(db, items);
+  await primeAnchors(db, items);
 
   // The entity's own rules, over the state the release leaves (and live alone, read once, for
   // a rule that must see the state the apply passes through: E6's footer columns).

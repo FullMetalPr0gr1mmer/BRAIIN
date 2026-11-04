@@ -10,6 +10,7 @@ import {
   ANCHOR_CODE_OWNED,
   ANCHOR_DISCIPLINE,
   ANCHOR_TAKEN,
+  REVEAL_REFUSED,
   appearanceProblem,
   takesAnchor,
 } from '@schemas/sectionAppearance';
@@ -57,6 +58,37 @@ export function sectionPageQuery(pageId: string): DbListQuery {
   return { columns: 'id,slug', eq: { id: pageId }, limit: 1 };
 }
 
+/**
+ * The anchor rule's two reads (Admin v2 E9): another section of the page holding the anchor,
+ * and a discipline whose slug is the anchor. Exported so a publish answers both for every
+ * change at once (validate.ts primeAnchors, P-15) with the very queries the rule asks.
+ */
+export function sectionAnchorQuery(pageId: string, anchor: string): DbListQuery {
+  return { columns: 'id', eq: { page_id: pageId, anchor }, limit: 2 };
+}
+export function anchorDisciplineQuery(anchor: string): DbListQuery {
+  return { columns: 'id', eq: { slug: anchor }, limit: 1 };
+}
+
+/**
+ * The page and anchor a section save must check (unique on the page, never a discipline's
+ * slug), or null: only a save that could change them (the form sends `type` and `content` with
+ * every save) AND moves the anchor or its page reads anything. One function for the rule and
+ * the publish's primer, so they always agree on which changes read.
+ */
+export function anchorToCheck(
+  merged: Readonly<Record<string, unknown>>,
+  changed: Readonly<Record<string, unknown>>,
+  before: Readonly<Record<string, unknown>> | null | undefined,
+): { pageId: string; anchor: string } | null {
+  const anchor = merged['anchor'];
+  const pageId = merged['page_id'];
+  if (typeof anchor !== 'string' || typeof pageId !== 'string') return null;
+  if (!['anchor', 'type', 'content', 'page_id'].some((key) => key in changed)) return null;
+  const moved = !before || before['anchor'] !== anchor || before['page_id'] !== pageId;
+  return moved ? { pageId, anchor } : null;
+}
+
 export const sectionResource: ResourceConfig = {
   table: 'page_sections',
   // A visible section on a published page is live copy, so turning `visible` on is gated
@@ -86,10 +118,7 @@ export const sectionResource: ResourceConfig = {
       field: 'spacing',
       message: 'This kind of section keeps its own spacing: it is part of its layout.',
     },
-    page_sections_reveal_bucket: {
-      field: 'reveal',
-      message: 'This kind of section opens a page, so it always shows at once: it takes no reveal.',
-    },
+    page_sections_reveal_bucket: { field: 'reveal', message: REVEAL_REFUSED },
     page_sections_anchor_shape: {
       field: 'anchor',
       message:
@@ -188,7 +217,9 @@ export const sectionResource: ResourceConfig = {
     // Services explorer's panels are ids named by them): read only when the anchor or its page
     // MOVES (a save that restates them reads nothing), through the overlay-aware database, so a
     // staged save sees the pending anchors of the tenant and a publish the ones its release
-    // leaves; the two reads go together (listMany), only for a save that moves the anchor.
+    // leaves (anchorToCheck says when). On a single save the two reads go together (listMany)
+    // but cost a request each (a filtered, limited read is not one the batched read serves); a
+    // publish answers them for all its changes from two reads (validate.ts primeAnchors, P-15).
     // The database's deferred UNIQUE (tenant, page, anchor) is the second net; a discipline
     // renamed later onto an anchor is dropped at render (src/lib/sections/appearance.ts),
     // never a duplicate id.
@@ -200,15 +231,11 @@ export const sectionResource: ResourceConfig = {
       if (!takesAnchor(String(merged['type']), variantOfContent(merged['content']))) {
         throw new ValidationError(ANCHOR_CODE_OWNED, 'anchor');
       }
-      const moved =
-        !before || before['anchor'] !== anchor || before['page_id'] !== merged['page_id'];
-      if (moved && typeof merged['page_id'] === 'string') {
+      const check = anchorToCheck(merged, changed, before);
+      if (check) {
         const [sections = [], disciplines = []] = await (db ?? liveDb(sb, auth)).listMany([
-          {
-            table: 'page_sections',
-            query: { columns: 'id', eq: { page_id: merged['page_id'], anchor }, limit: 2 },
-          },
-          { table: 'disciplines', query: { columns: 'id', eq: { slug: anchor }, limit: 1 } },
+          { table: 'page_sections', query: sectionAnchorQuery(check.pageId, check.anchor) },
+          { table: 'disciplines', query: anchorDisciplineQuery(check.anchor) },
         ]);
         if (sections.some((row) => row['id'] !== merged['id'])) {
           throw new ValidationError(ANCHOR_TAKEN, 'anchor');

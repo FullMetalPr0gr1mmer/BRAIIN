@@ -4,6 +4,7 @@ import {
   SECTION_REVEALS,
   SECTION_SPACINGS,
   codeAnchored,
+  revealRefusal,
   takesAnchor,
   takesBackground,
   takesReveal,
@@ -141,9 +142,8 @@ export function notOffered(type: string): string | null {
 
 /** The words for a reveal in the page's opening, or a kind that never takes one. */
 export function revealNote(type: string, opening: boolean): string | null {
-  if (!takesReveal(type)) {
-    return 'This kind of section opens a page, so it always shows at once: it takes no reveal.';
-  }
+  const refused = revealRefusal(type);
+  if (refused) return refused;
   if (opening) {
     return 'This section is among the first two the page shows, so it always shows at once. A reveal plays only further down the page.';
   }

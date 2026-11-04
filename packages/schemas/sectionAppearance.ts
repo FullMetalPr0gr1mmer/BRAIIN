@@ -198,6 +198,25 @@ export const takesSpacing = (type: string): boolean => has(SPACING_TYPES, type);
 /** Whether a kind takes a reveal. */
 export const takesReveal = (type: string): boolean => !has(NO_REVEAL_TYPES, type);
 
+/** Why a page-opening kind takes no reveal (§6). */
+export const REVEAL_OPENS_PAGE =
+  'This kind of section opens a page, so it always shows at once: it takes no reveal.';
+/** Why the Slogan takes no reveal: it opens nothing, but runs its own scroll animation. */
+export const REVEAL_MOVES_ITSELF =
+  'This section moves on its own as you scroll: it takes no reveal.';
+/**
+ * The database's refusal (0127's reveal CHECK), which cannot say which kind it refused: true of
+ * every kind NO_REVEAL_TYPES names.
+ */
+export const REVEAL_REFUSED =
+  'This kind of section takes no reveal: it opens a page, or moves on its own as you scroll.';
+
+/** Why a kind takes no reveal, in its own words, or null when it takes one. */
+export function revealRefusal(type: string): string | null {
+  if (takesReveal(type)) return null;
+  return type === 'slogan' ? REVEAL_MOVES_ITSELF : REVEAL_OPENS_PAGE;
+}
+
 /**
  * The anchor a kind's component names itself in a look, or null. Only whether it has one is
  * read here (the editor's library names it, `anchorOf`).
@@ -237,11 +256,7 @@ export function appearanceProblem(
       message: 'This kind of section keeps its own spacing: it is part of its layout.',
     };
   }
-  if (chosen.reveal != null && !takesReveal(type)) {
-    return {
-      field: 'reveal',
-      message: 'This kind of section opens a page, so it always shows at once: it takes no reveal.',
-    };
-  }
+  const noReveal = chosen.reveal != null ? revealRefusal(type) : null;
+  if (noReveal) return { field: 'reveal', message: noReveal };
   return null;
 }
