@@ -82,6 +82,31 @@ export const BUILTIN_HINTS: Readonly<Record<BuiltinWhy, string>> = {
   empty:
     'The home page in Pages has no section showing, so the site shows the built-in one, with its loading screen. Once yours shows a section, you can switch it here.',
 };
+const NO_HERO_HINT =
+  'The home page shows no hero section, so it has no loading screen. Add a hero to the home page in Pages.';
+const SWITCH_HINT =
+  'The logo plays before the home page appears, in English and Arabic. Saved with the home page, like any edit of it.';
+
+/**
+ * Whether the switch shows on, for what the read found (`content` is the hero's, when there is
+ * one): the built-in home page always opens with its loading screen; a home page with no hero
+ * showing has none; otherwise the hero's own `intro`.
+ */
+export function switchOn(target: IntroTarget, content: Readonly<Record<string, unknown>>): boolean {
+  if (target.kind === 'builtin') return true;
+  if (target.kind === 'nohero') return false;
+  return introShown(content);
+}
+
+/** Whether the switch can be moved: only over a hero of the home page visitors see. */
+export const switchMovable = (target: IntroTarget): boolean => target.kind === 'hero';
+
+/** The switch's hint for what the read found (null while it reads, or when it failed). */
+export function switchHint(target: IntroTarget | null): string {
+  if (target?.kind === 'builtin') return BUILTIN_HINTS[target.why];
+  if (target?.kind === 'nohero') return NO_HERO_HINT;
+  return SWITCH_HINT;
+}
 
 /** A section's stored content, as an object ({} for anything else). */
 export function contentOf(row: Row): Record<string, unknown> {

@@ -27,6 +27,9 @@ import {
   introTarget,
   previewLine,
   previewLook,
+  switchHint,
+  switchMovable,
+  switchOn,
   switchedContent,
   type IntroTarget,
 } from '@/components/admin/screens/loading/model';
@@ -399,11 +402,10 @@ describe('the switch follows the home route’s fallback (E7 review, E7-C2)', ()
     return hero?.props?.['intro'] === true;
   }
 
-  /** What the switch shows for a target: on for the built-in home page, the hero's own state. */
+  /** What the switch shows for a target: the model's, over the content of the hero it names. */
   function switchShows(target: IntroTarget, rows: readonly Row[]): boolean {
-    if (target.kind === 'builtin') return true;
-    if (target.kind === 'nohero') return false;
-    return introShown(contentOf(rows.find((row) => row['id'] === target.hero.id) ?? {}));
+    const row = target.kind === 'hero' ? rows.find((r) => r['id'] === target.hero.id) : undefined;
+    return switchOn(target, contentOf(row ?? {}));
   }
 
   const hero = section('h', 'hero', 10);
@@ -464,6 +466,8 @@ describe('the switch follows the home route’s fallback (E7 review, E7-C2)', ()
       const target = introTarget(page, rows);
       expect(target.kind).toBe(kind);
       expect(switchShows(target, rows)).toBe(routeShowsPlate(page, rows));
+      // It can be moved only where it changes what visitors see: over the hero they get.
+      expect(switchMovable(target)).toBe(kind === 'hero');
     });
   }
 
@@ -481,9 +485,14 @@ describe('the switch follows the home route’s fallback (E7 review, E7-C2)', ()
       kind: 'hero',
       hero: { id: 'h', version: 1, pending: null },
     });
-    for (const words of Object.values(BUILTIN_HINTS)) {
+    for (const why of ['nohome', 'unpublished', 'empty'] as const) {
+      const words = switchHint({ kind: 'builtin', why });
+      expect(words).toBe(BUILTIN_HINTS[why]);
       expect(words).toContain('built-in one, with its loading screen');
       expect(words).not.toMatch(/[\u2013\u2014]/);
     }
+    expect(switchHint({ kind: 'nohero' })).toContain('no hero section');
+    expect(switchHint(null)).toContain('Saved with the home page');
+    expect(switchHint(introTarget(published, [hero]))).toBe(switchHint(null));
   });
 });

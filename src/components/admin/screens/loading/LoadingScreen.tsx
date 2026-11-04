@@ -17,15 +17,16 @@ import { BACKDROP_LABELS, loadingUi } from '@/lib/admin/ui/loading';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
 import { pendingOf, rowWrite } from '../header/menu';
 import {
-  BUILTIN_HINTS,
   contentOf,
   introShown,
   introTarget,
   previewLine,
   previewLook,
+  switchHint,
+  switchMovable,
+  switchOn,
   switchedContent,
-  type BuiltinWhy,
-  type HomeHero,
+  type IntroTarget,
   type PreviewLook,
 } from './model';
 
@@ -37,7 +38,7 @@ import {
 //     kernel (in release mode it names the section's pending change or carries the marker,
 //     R12b), exactly what the page editor's Advanced JSON wrote before; when visitors get the
 //     built-in home page instead (none published, or none showing a section), on and disabled,
-//     as the route renders it (introTarget, E7-C2);
+//     as the route renders it (introTarget, switchOn, E7-C2);
 //   - the look (theme.edit: Admin, Developer): the Style card (what sits behind the logo, as
 //     tiles; the bar; the tagline) and the Timing card (the hold and the fade, in the site's
 //     buckets) over `site_appearance`'s intro_ columns, saved through the Header's singleton
@@ -74,12 +75,11 @@ const SECTION_PAGE = 100;
 
 // ── On the home page (pages.write) ─────────────────────────────────────────────────────────
 
+/** What the switch read: its target (model.ts) and, over a hero, that hero's content. */
 type SwitchState =
   | { kind: 'loading' }
-  | { kind: 'builtin'; why: BuiltinWhy; staged: boolean }
-  | { kind: 'nohero'; staged: boolean }
   | { kind: 'failed' }
-  | { kind: 'ready'; hero: HomeHero; content: Row; staged: boolean };
+  | { kind: 'read'; target: IntroTarget; content: Row; staged: boolean };
 
 function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; homeError: boolean }) {
   const base = useId();
@@ -95,7 +95,7 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
       return;
     }
     if (!homePageId) {
-      setState({ kind: 'builtin', why: 'nohome', staged: false });
+      setState({ kind: 'read', target: introTarget(null, []), content: {}, staged: false });
       return;
     }
     try {
@@ -111,11 +111,7 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
       const throughRelease = readsThroughRelease(list);
       const target = introTarget(page, rows);
       if (target.kind !== 'hero') {
-        setState(
-          target.kind === 'builtin'
-            ? { kind: 'builtin', why: target.why, staged: throughRelease }
-            : { kind: 'nohero', staged: throughRelease },
-        );
+        setState({ kind: 'read', target, content: {}, staged: throughRelease });
         setError('');
         return;
       }
@@ -124,11 +120,14 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
       // change laid over it in release mode).
       const row = await adminFetch<Row>(`/api/admin/sections/${encodeURIComponent(hero.id)}`);
       setState({
-        kind: 'ready',
-        hero: {
-          id: hero.id,
-          version: Number(row['version'] ?? hero.version),
-          pending: pendingOf(row) ?? hero.pending,
+        kind: 'read',
+        target: {
+          kind: 'hero',
+          hero: {
+            id: hero.id,
+            version: Number(row['version'] ?? hero.version),
+            pending: pendingOf(row) ?? hero.pending,
+          },
         },
         content: contentOf(row),
         staged: throughRelease,
@@ -136,7 +135,7 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
       setError('');
     } catch (err) {
       setError(`The home page could not be read. ${describeError(err)}`);
-      setState((current) => (current.kind === 'ready' ? current : { kind: 'failed' }));
+      setState((current) => (current.kind === 'read' ? current : { kind: 'failed' }));
     }
   }, [homePageId, homeError]);
 
@@ -145,21 +144,18 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
   }, [load]);
 
   // Releases on: a pending change settled or thrown away elsewhere moved what the switch reads.
-  const staged = 'staged' in state && state.staged;
+  const staged = state.kind === 'read' && state.staged;
   useEffect(() => (staged ? onDraftsMoved(() => void load()) : undefined), [staged, load]);
 
   async function toggle() {
-    if (state.kind !== 'ready') return;
+    if (state.kind !== 'read' || state.target.kind !== 'hero') return;
+    const hero = state.target.hero;
     const on = !introShown(state.content);
     setBusy(true);
     let failure = '';
     try {
-      const write = rowWrite(
-        { content: switchedContent(state.content, on) },
-        state.hero,
-        state.staged,
-      );
-      const answer = await adminFetch<Row>(`/api/admin/sections/${state.hero.id}`, {
+      const write = rowWrite({ content: switchedContent(state.content, on) }, hero, state.staged);
+      const answer = await adminFetch<Row>(`/api/admin/sections/${hero.id}`, {
         method: 'PATCH',
         body: stagedBody(write.body, write.mark),
       });
@@ -174,13 +170,9 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
   }
 
   // The built-in home page always opens with its loading screen: on, and nothing to switch.
-  const on = state.kind === 'ready' ? introShown(state.content) : state.kind === 'builtin';
-  const hint =
-    state.kind === 'nohero'
-      ? 'The home page shows no hero section, so it has no loading screen. Add a hero to the home page in Pages.'
-      : state.kind === 'builtin'
-        ? BUILTIN_HINTS[state.why]
-        : 'The logo plays before the home page appears, in English and Arabic. Saved with the home page, like any edit of it.';
+  const target = state.kind === 'read' ? state.target : null;
+  const on = state.kind === 'read' ? switchOn(state.target, state.content) : false;
+  const hint = switchHint(target);
   return (
     <section className="card" aria-labelledby={`${base}-title`}>
       <div className="card__h">
@@ -201,7 +193,7 @@ function IntroSwitch({ homePageId, homeError }: { homePageId: string | null; hom
           aria-checked={on}
           aria-labelledby={`${id}-label`}
           aria-describedby={describedBy(id, { hint })}
-          disabled={busy || state.kind !== 'ready'}
+          disabled={busy || target === null || !switchMovable(target)}
           onClick={() => void toggle()}
         />
       </FieldShell>
