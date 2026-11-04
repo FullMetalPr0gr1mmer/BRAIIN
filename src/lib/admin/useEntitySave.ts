@@ -79,6 +79,12 @@ export interface EntitySave {
   draft?: EditorDraft | null;
   /** Admin v2 R12: the record is staged for removal (read only until "Undo removal"). */
   pendingRemoval?: boolean;
+  /**
+   * Admin v2 R14b: a NEW record added from a screen in release mode (its target says `staged`,
+   * R12b). No answer has said `draft` yet, but its create is a pending change, so the form is
+   * the release form too: no per-item schedule, "Visible on the site" for its status.
+   */
+  stagedCreate?: boolean;
   /** Admin v2 R12: the pending change went live or was thrown away under the form. */
   gone?: DraftGone | null;
   /** Admin v2 R12: releases were switched off under the form; it offers a reload. */
@@ -402,6 +408,7 @@ export function useEntitySave(
     mode: state.draft !== undefined ? 'draft' : (options.mode ?? 'live'),
     draft: state.draft ?? null,
     pendingRemoval: state.pendingRemoval,
+    stagedCreate: isNew && target.kind === 'resource' && target.staged === true,
     gone: state.gone,
     releasesOff: state.releasesOff,
     flush,
