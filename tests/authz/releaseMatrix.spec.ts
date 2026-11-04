@@ -6,8 +6,8 @@ import { CONTENT_AREAS, RELEASE_ENTITY_META } from '@/lib/release/areas';
 import { canPublish, type ReleaseItemRef } from '@/lib/release/caps';
 import { RELEASE_ENTITY_TYPES, type ReleaseEntityType } from '@schemas/release';
 
-// The derived release publish matrix (architecture.md §3.4, Admin v2 R2) equals what
-// `requiredCaps` makes of ROLE_CAPS. The table is documentation of a derivation, so it is
+// The derived release publish matrix (CLAUDE.md §5 since Admin v2 R14b, and architecture.md
+// §3.4 since R2: the same table, line for line) equals what `requiredCaps` makes of ROLE_CAPS. The table is documentation of a derivation, so it is
 // parsed and checked here cell by cell, for every registry type and kind of change in the
 // row: a capability change that moves who can publish fails until the table says so, and
 // a registry type no row covers fails too. The "Release —" labels keep these rows apart
@@ -71,8 +71,17 @@ function items(entityType: ReleaseEntityType, kind: Kind): ReleaseItemRef[] {
 
 const ROLE_ORDER: Role[] = ['admin', 'content_creator', 'seo', 'developer', 'sales'];
 
-function parseReleaseMatrix(): Map<string, boolean[]> {
-  const md = readFileSync(join(process.cwd(), 'docs', 'architecture.md'), 'utf8');
+const DOCS = ['CLAUDE.md', 'docs/architecture.md'] as const;
+
+/** The documented table's own lines, in order ("| Release —" rows only). */
+function releaseLines(file: string): string[] {
+  return readFileSync(join(process.cwd(), file), 'utf8')
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('| Release —'));
+}
+
+function parseReleaseMatrix(file: string): Map<string, boolean[]> {
+  const md = readFileSync(join(process.cwd(), file), 'utf8');
   const out = new Map<string, boolean[]>();
   for (const line of md.split('\n')) {
     if (!line.startsWith('| Release —')) continue;
@@ -92,46 +101,62 @@ function parseReleaseMatrix(): Map<string, boolean[]> {
   return out;
 }
 
-describe('the release publish matrix (architecture.md §3.4) equals ROLE_CAPS', () => {
-  const doc = parseReleaseMatrix();
-
-  it('documents exactly the eight derived rows', () => {
-    expect([...doc.keys()].sort()).toEqual(Object.keys(ROWS).sort());
+describe('the two documented release matrices are one table (CLAUDE.md §5, architecture §3.4)', () => {
+  it('line for line, eight rows each', () => {
+    expect(releaseLines('CLAUDE.md')).toHaveLength(Object.keys(ROWS).length);
+    expect(releaseLines('CLAUDE.md')).toEqual(releaseLines('docs/architecture.md'));
   });
 
-  for (const [label, row] of Object.entries(ROWS)) {
-    it(label, () => {
-      const cells = doc.get(label)!;
-      expect(row.types.length).toBeGreaterThan(0);
-      ROLE_ORDER.forEach((role, i) => {
-        for (const entityType of row.types) {
-          for (const kind of row.kinds) {
-            for (const item of items(entityType, kind)) {
-              expect(
-                canPublish(role, item),
-                `${role} · ${entityType} · ${item.op} ${JSON.stringify(item.patch ?? {})}`,
-              ).toBe(cells[i]);
-            }
-          }
-        }
-      });
-    });
-  }
-
-  it('covers every registry type: each edit, and each removal a release can make', () => {
-    for (const entityType of RELEASE_ENTITY_TYPES) {
-      const covering = (kind: Kind) =>
-        Object.values(ROWS).filter((r) => r.types.includes(entityType) && r.kinds.includes(kind));
-      expect(covering('edit'), `${entityType} edit`).toHaveLength(1);
-      expect(covering('removal'), `${entityType} removal`).toHaveLength(
-        meta(entityType).removeCap === null ? 0 : 1,
-      );
-    }
-  });
-
-  it('every role is a column, and Sales publishes nothing (P-2: never Sales)', () => {
-    expect([...ROLES].sort()).toEqual([...ROLE_ORDER].sort());
-    const sales = ROLE_ORDER.indexOf('sales');
-    for (const [label, cells] of doc) expect(cells[sales], label).toBe(false);
+  it('CLAUDE.md keeps it in §5, after the role matrix and before §6', () => {
+    const md = readFileSync(join(process.cwd(), 'CLAUDE.md'), 'utf8');
+    const first = md.indexOf('| Release —');
+    expect(first).toBeGreaterThan(md.indexOf('## 5. ROLE × PERMISSION MATRIX'));
+    expect(first).toBeGreaterThan(md.indexOf('| Backup export (`export-backup`)'));
+    expect(first).toBeLessThan(md.indexOf('## 6. PERFORMANCE BUDGETS'));
   });
 });
+
+for (const file of DOCS)
+  describe(`the release publish matrix (${file}) equals ROLE_CAPS`, () => {
+    const doc = parseReleaseMatrix(file);
+
+    it('documents exactly the eight derived rows', () => {
+      expect([...doc.keys()].sort()).toEqual(Object.keys(ROWS).sort());
+    });
+
+    for (const [label, row] of Object.entries(ROWS)) {
+      it(label, () => {
+        const cells = doc.get(label)!;
+        expect(row.types.length).toBeGreaterThan(0);
+        ROLE_ORDER.forEach((role, i) => {
+          for (const entityType of row.types) {
+            for (const kind of row.kinds) {
+              for (const item of items(entityType, kind)) {
+                expect(
+                  canPublish(role, item),
+                  `${role} · ${entityType} · ${item.op} ${JSON.stringify(item.patch ?? {})}`,
+                ).toBe(cells[i]);
+              }
+            }
+          }
+        });
+      });
+    }
+
+    it('covers every registry type: each edit, and each removal a release can make', () => {
+      for (const entityType of RELEASE_ENTITY_TYPES) {
+        const covering = (kind: Kind) =>
+          Object.values(ROWS).filter((r) => r.types.includes(entityType) && r.kinds.includes(kind));
+        expect(covering('edit'), `${entityType} edit`).toHaveLength(1);
+        expect(covering('removal'), `${entityType} removal`).toHaveLength(
+          meta(entityType).removeCap === null ? 0 : 1,
+        );
+      }
+    });
+
+    it('every role is a column, and Sales publishes nothing (P-2: never Sales)', () => {
+      expect([...ROLES].sort()).toEqual([...ROLE_ORDER].sort());
+      const sales = ROLE_ORDER.indexOf('sales');
+      for (const [label, cells] of doc) expect(cells[sales], label).toBe(false);
+    });
+  });
