@@ -26,6 +26,8 @@ const HELPER_CAPABILITY: Record<string, Capability> = {
   // Admin v2 E5 (site_appearance) and E4 (E4-SEC-3: the live check on every staff write to
   // custom_themes) each define it, byte-identical: one helper, its last definition checked.
   role_edits_theme: 'theme.edit',
+  // Admin v2 E3 (template_copy): pages.write.
+  role_edits_pages: 'pages.write',
 };
 
 const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');

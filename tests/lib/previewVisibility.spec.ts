@@ -36,7 +36,8 @@ async function visible(tables: Record<string, Row[]>, drafts: Row[] = []) {
             table === 'seo_defaults' ||
             table === 'site_integrations' ||
             table === 'site_appearance' ||
-            table === 'form_settings'
+            table === 'form_settings' ||
+            table === 'template_copy'
           ? 'tenant_id'
           : // Admin v2 E4: a visitor reads a theme's tokens only, never its id or version.
             table === 'custom_themes'
@@ -67,6 +68,7 @@ describe('the mirror over the fixture tenant', () => {
     expect(ids['site_integrations']).toHaveLength(1);
     expect(ids['site_appearance']).toHaveLength(1);
     expect(ids['form_settings']).toHaveLength(1);
+    expect(ids['template_copy']).toHaveLength(1);
     // Admin v2 E4: the active v1 theme (its primary, black), never the active legacy one.
     expect(ids['custom_themes']).toEqual(['#000000']);
     expect(report.unsupported).toEqual([]);

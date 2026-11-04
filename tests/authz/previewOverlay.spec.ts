@@ -53,6 +53,8 @@ const CHANGE: Record<ReleaseEntityType, () => Record<string, unknown>> = {
   site_appearance: () => draft('site_appearance', 'update', TENANT, { logoSize: 'l' }),
   form_settings: () =>
     draft('form_settings', 'update', TENANT, { inquiry: { button: BI('Go', 'اذهب') } }),
+  template_copy: () =>
+    draft('template_copy', 'update', TENANT, { service: { fab: BI('Ask us', 'اسألنا') } }),
 };
 
 const O: Outcome = 'overlaid';
@@ -71,7 +73,8 @@ const N: Outcome = 'not shown';
  * live mode; docs/admin-v2/as-built/R8.md says why). The FAQ (Admin v2 U7) is Contact-page
  * content: Admin and Content Creator (pages.write) only. The header's options (Admin v2 E5)
  * are the theme's: Admin and Developer (theme.edit). The forms config (Admin v2 E8) is
- * General's: Admin and Developer (settings.general).
+ * General's: Admin and Developer (settings.general). The templates' shared text (Admin v2 E3)
+ * is page content: Admin and Content Creator (pages.write).
  */
 const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Outcome>> = {
   admin: {
@@ -99,6 +102,7 @@ const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Out
     faq_item: O,
     site_appearance: O,
     form_settings: O,
+    template_copy: O,
   },
   content_creator: {
     category: O,
@@ -125,6 +129,7 @@ const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Out
     faq_item: O,
     site_appearance: N,
     form_settings: N,
+    template_copy: O,
   },
   seo: {
     category: O,
@@ -151,6 +156,7 @@ const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Out
     faq_item: N,
     site_appearance: N,
     form_settings: N,
+    template_copy: N,
   },
   developer: {
     category: N,
@@ -177,6 +183,7 @@ const EXPECTED: Record<(typeof CMS_ROLES)[number], Record<ReleaseEntityType, Out
     faq_item: N,
     site_appearance: O,
     form_settings: O,
+    template_copy: N,
   },
 };
 
@@ -194,7 +201,8 @@ async function outcome(role: Role, type: ReleaseEntityType): Promise<Outcome> {
       table === 'site_profile' ||
         table === 'seo_defaults' ||
         table === 'site_appearance' ||
-        table === 'form_settings'
+        table === 'form_settings' ||
+        table === 'template_copy'
         ? 'tenant_id'
         : table === 'custom_themes'
           ? 'version'
@@ -225,9 +233,10 @@ describe('pending changes a preview shows, per role and entity type', () => {
     });
   }
 
-  // 22: E5 (site_appearance) and E4 (custom_theme) each made one more type previewable.
-  it('admin previews all 22 previewable types', () => {
-    expect(Object.values(EXPECTED.admin).filter((o) => o === O)).toHaveLength(22);
+  // 23: E5 (site_appearance), E4 (custom_theme) and E3 (template_copy) each made one more type
+  // previewable.
+  it('admin previews all 23 previewable types', () => {
+    expect(Object.values(EXPECTED.admin).filter((o) => o === O)).toHaveLength(23);
   });
 });
 

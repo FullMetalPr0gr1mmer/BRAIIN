@@ -474,6 +474,8 @@ describe('serviceTitle / serviceDescription / disciplineOf / cache tags', () => 
       'media:all',
       // Admin v2 E8: the "Say hello" form, as the forms config words it.
       'forms:all',
+      // Admin v2 E3: the template's shared text.
+      'template_copy:all',
     ]);
   });
 });

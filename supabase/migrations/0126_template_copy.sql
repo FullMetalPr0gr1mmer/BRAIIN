@@ -303,7 +303,7 @@ select app.put_help_guide($guide$
         "t": "p",
         "x": "لكل خدمة ولكل مشروع صفحة خاصة، مبنية من قالب واحد لكل منهما. افتح Service page أو Project page تحت Templates في Pages لترى إحدى تلك الصفحات بجانب النصوص التي تصنعها."
       },
-      { "t": "h", "x": "Showing" },
+      { "t": "h", "x": "ما تعرضه المعاينة (Showing)" },
       {
         "t": "p",
         "x": "يحدّد Showing الخدمة أو المشروع الذي تعرضه المعاينة. وتُجمَّع الخدمات حسب مجالها. وتظهر أجزاء القالب بترتيبها في الصفحة: اختر جزءًا لتنتقل المعاينة إليه. والأجزاء نفسها ثابتة."
@@ -387,7 +387,7 @@ select app.put_help_guide($guide$
       },
       {
         "t": "p",
-        "x": "On the home page, the Contact page, the Services page and Join, the words around each form, such as its heading, are edited with that page, in Pages, by the roles that edit pages. On each service page those words are the service page template's shared text, which the same roles edit in Pages, and the heading names the service. Admins open and close job applications in General settings."
+        "x": "On the home page, the Contact page, the Services page and Join, the words around each form, such as its heading, are edited with that page, in Pages, by the roles that edit pages. On each service page those words are the service page template's shared text, edited in Pages, and the heading names the service. Admins open and close job applications in General settings."
       }
     ],
     "ar": [
@@ -433,7 +433,7 @@ select app.put_help_guide($guide$
       },
       {
         "t": "p",
-        "x": "في الصفحة الرئيسية وصفحة التواصل وصفحة الخدمات وصفحة الانضمام تُحرَّر النصوص حول كل نموذج، ومنها عنوانه، مع تلك الصفحة في Pages، وذلك للأدوار التي تحرر الصفحات. أما في صفحة كل خدمة فهذه النصوص هي النص المشترك لقالب صفحة الخدمة، وتحررها الأدوار نفسها في Pages، ويحمل العنوان اسم الخدمة. ويفتح المسؤولون (Admin) التقديم على الوظائف ويغلقونه من General settings."
+        "x": "في الصفحة الرئيسية وصفحة التواصل وصفحة الخدمات وصفحة الانضمام تُحرَّر النصوص حول كل نموذج، ومنها عنوانه، مع تلك الصفحة في Pages، وذلك للأدوار التي تحرر الصفحات. أما في صفحة كل خدمة فهذه النصوص هي النص المشترك لقالب صفحة الخدمة، وتُحرَّر في Pages، ويحمل العنوان اسم الخدمة. ويفتح المسؤولون (Admin) التقديم على الوظائف ويغلقونه من General settings."
       }
     ]
   }

@@ -824,6 +824,16 @@ export function fixtureTables(): Record<string, Row[]> {
         updated_at: '2026-01-01T00:00:00+00:00',
       },
     ],
+    // Admin v2 E3: the templates' shared text, a visitor reads all but the version, stamps and actors.
+    template_copy: [
+      {
+        tenant_id: TENANT,
+        service: { fab: BI('Ask us', 'اسألنا') },
+        project: {},
+        version: 1,
+        updated_at: '2026-01-01T00:00:00+00:00',
+      },
+    ],
     seo_defaults: [
       {
         tenant_id: TENANT,

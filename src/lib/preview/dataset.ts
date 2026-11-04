@@ -164,6 +164,8 @@ export const CREATE_DEFAULTS: Readonly<Partial<Record<DatasetTable, Readonly<Row
     is_placeholder: false,
   },
   team_members: { status: 'draft', sort_order: 0, is_leadership: false, is_placeholder: false },
+  // Admin v2 E3: both templates as built.
+  template_copy: { service: {}, project: {} },
   testimonials: { status: 'draft', sort_order: 0, placements: [], is_placeholder: false },
 };
 

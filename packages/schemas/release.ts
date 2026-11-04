@@ -39,6 +39,8 @@ export const RELEASE_ENTITY_TYPES = [
   'form_settings',
   // Admin v2 E5: the site's appearance settings (the header).
   'site_appearance',
+  // Admin v2 E3: the template pages' shared text.
+  'template_copy',
 ] as const;
 export type ReleaseEntityType = (typeof RELEASE_ENTITY_TYPES)[number];
 export const ReleaseEntityTypeSchema = z.enum(RELEASE_ENTITY_TYPES);
@@ -991,6 +993,7 @@ export const SINGLETON_ENTITY_TYPES = [
   'seo_defaults',
   'form_settings',
   'site_appearance',
+  'template_copy',
 ] as const;
 
 /** A singleton names no entity (the server reads the tenant); every other type names one. */

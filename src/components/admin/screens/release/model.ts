@@ -96,6 +96,7 @@ const PLURAL: Readonly<Record<ReleaseEntityType, string>> = {
   page_visibility: 'Page visibility',
   faq_item: 'Questions',
   site_appearance: 'Header',
+  template_copy: 'Template shared text',
   form_settings: 'Forms',
 };
 
