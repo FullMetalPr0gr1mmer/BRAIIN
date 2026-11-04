@@ -1975,6 +1975,16 @@ save writes E4's settings and tokens, which the restated function accepts; save 
 purge `site:chrome`. The migration stays (forward only). `docs/admin-v2/as-built/E12.md`,
 Rollback.
 
+0125 (Admin v2 E13, the font catalogue) does not move the line either: it is expand only
+(`app.theme_row_ok` restated to accept a v1, v2 or v3 theme, v3 adding a font family per
+script, the CHECK keeping its name, the `theme` guide put again), and it revokes nothing. A
+Worker rollback across E13's PR needs **no step** while the catalogue holds only the brand's
+families (owner item O-21): no theme can hold a font token, so an older Worker reads every
+theme's tokens as before, and its editor reads a v3 row's colours, motion, shapes and type and
+saves v2, which the restated function accepts. The slice that adds a family inherits E12's
+step (save the theme at the brand's fonts, then purge `site:chrome`). The migration stays
+(forward only). `docs/admin-v2/as-built/E13.md`, Rollback.
+
 R14-prep carries no migration, so it does not move the line either, and a Worker rollback across
 it is safe while releases are off. **Once releases are switched on (§6p), roll the Worker back
 only to a build that contains R13** (`42b61c6f`: `git merge-base --is-ancestor 42b61c6f <sha>`),
