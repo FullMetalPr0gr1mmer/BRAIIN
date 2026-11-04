@@ -247,6 +247,26 @@ const PAIRS = [
   ['muted', 'dropBg', 4.5, 'join CV dropzone: the rules line, the size'],
   ['errSoft', 'dropBg', 4.5, 'join CV dropzone: a refused file'],
   ['errSoft', 'bg', 4.5, 'join form: field errors, a refused consent'],
+  // Admin v2 E9: the section backgrounds a Text block or a Gallery may choose (global.css "E9"),
+  // each with the text, link and focus colours it carries (the blocks hold no button). A pair
+  // with a theme colour (Klein, Cobalt, sky, the sky tint) is one the theme gate already checks
+  // on every save (packages/theme/pairs.json), so no theme can break a background.
+  ['ink', 'mist', 4.5, 'E9 light grey: heading, body headings and quotes'],
+  ['dim', 'mist', 4.5, 'E9 light grey: body copy'],
+  ['klein', 'mist', 4.5, 'E9 light grey: kicker, heading accent and links'],
+  ['ink', 'paper', 4.5, 'E9 light grey: a code block on its white'],
+  ['cobalt', 'mist', 3.0, 'E9 light grey: the focus ring (UI)'],
+  ['fg', 'bg', 4.5, 'E9 black: heading, body headings and quotes'],
+  ['muted', 'bg', 4.5, 'E9 black: body copy'],
+  ['accent', 'bg', 4.5, 'E9 black: kicker, heading accent and links (sky)'],
+  ['fg', 'surface', 4.5, 'E9 black: a code block'],
+  ['cobalt', 'bg', 3.0, 'E9 black: the focus ring (UI)'],
+  ['paper', 'klein', 4.5, 'E9 primary: heading, body headings, quotes and links'],
+  ['kleinLead', 'klein', 4.5, 'E9 primary: body copy (white .88)'],
+  ['kleinTag', 'klein', 4.5, 'E9 primary: kicker (white .80)'],
+  ['skySoft', 'klein', 4.5, 'E9 primary: heading accent (the sky tint)'],
+  ['paper', 'kleinBox', 4.5, 'E9 primary: a code block (white .06 ground)'],
+  ['paper', 'klein', 3.0, 'E9 primary: the focus ring, white (UI)'],
 ];
 
 // ---- Admin palette — READ from public/styles/admin.css :root (Admin v2 F1) ----
