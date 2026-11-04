@@ -185,6 +185,9 @@ const SINGLETONS: Readonly<Record<string, { noun: string; ui: string | readonly 
   // Admin v2 E8: edited by its own island (no SINGLETON_UI entry): its two fields read as
   // their keys in plain words, "Inquiry" and "Application".
   form_settings: { noun: 'the forms', ui: 'forms' },
+  // Admin v2 E3: edited by the template editors' own island (no SINGLETON_UI entry): its two
+  // fields read as their keys in plain words, "Service" and "Project".
+  template_copy: { noun: 'the templates’ shared text', ui: 'templates' },
 };
 export const SINGLETON_ENTITIES: readonly string[] = Object.keys(SINGLETONS);
 

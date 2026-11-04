@@ -41,6 +41,9 @@
 --   9. site_appearance (Admin v2 E5) is the public header's options (and, from E7, the loading
 --      screen's look): anon reads its eighteen columns (item 3), every CMS role reads the launch tenant's row (the non-staff block reads
 --      the claim's role, no profile), and a sales claim and another tenant read none.
+--  10. template_copy (Admin v2 E3) is the template pages' shared text: anon reads its three
+--      columns (item 3), every CMS role reads the launch tenant's row (the non-staff block reads
+--      the claim's role, no profile), and a sales claim and another tenant read none.
 -- The literals are held equal to ANON_COLUMNS, DATASET_ONLY_COLUMNS, CREATE_DEFAULTS and MIRRORED_POLICIES
 -- by tests/lib/previewMirror.spec.ts, which parses this file: a grant, default or policy
 -- that moves fails one side until the other follows.
@@ -54,7 +57,7 @@
 -- Run with `supabase test db`. CLAUDE.md §3 (Pillar 1), §8, §9.
 
 begin;
-select plan(32);
+select plan(36);
 
 -- ── The literals (parsed by tests/lib/previewMirror.spec.ts; keep one row per line) ──────
 create function _anon_columns() returns table (tbl text, cols text) language sql immutable as $$
@@ -67,6 +70,7 @@ create function _anon_columns() returns table (tbl text, cols text) language sql
     ('service_cases', 'id,tenant_id,service_id,portfolio_id,title,context,problems,results,status,published_at,updated_at'),
     ('site_appearance', 'tenant_id,header_logo_position,header_logo_size,header_menu_align,header_sticky,header_hide_on_scroll,header_solid_after_hero,header_tint,header_blur,header_mobile_menu,header_cta_show,header_cta_label,header_cta_href,intro_backdrop,intro_bar,intro_tagline,intro_hold_ms,intro_fade_ms'),
     ('site_integrations', 'tenant_id,search_console_token,ga4_measurement_id'),
+    ('template_copy', 'tenant_id,service,project'),
     ('testimonials', 'id,tenant_id,slug,quote,author_name,author_role,client_id,portfolio_id,avatar_media_id,placements,status,sort_order,published_at,updated_at')
 $$;
 
@@ -161,6 +165,8 @@ create function _create_defaults() returns table (tbl text, col text, dflt text)
     ('team_members', 'is_placeholder', $d$false$d$),
     ('team_members', 'sort_order', $d$0$d$),
     ('team_members', 'status', $d$'draft'::content_status$d$),
+    ('template_copy', 'project', $d$'{}'::jsonb$d$),
+    ('template_copy', 'service', $d$'{}'::jsonb$d$),
     ('testimonials', 'is_placeholder', $d$false$d$),
     ('testimonials', 'placements', $d$'{}'::text[]$d$),
     ('testimonials', 'sort_order', $d$0$d$),
@@ -194,6 +200,7 @@ create function _anon_policies() returns table (tbl text, policies text) languag
     ('site_profile', 'site_profile_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54'),
     ('statistics', 'statistics_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,statistics_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
     ('team_members', 'team_members_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,team_members_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060'),
+    ('template_copy', 'template_copy_read:PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54'),
     ('testimonials', 'testimonials_read:PERMISSIVE:a3adeda401046be963dd172ac14b795c,testimonials_write:PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060')
 $$;
 
@@ -462,10 +469,10 @@ select is(
             (select string_agg(x, ',' order by x collate "C") from unnest(string_to_array(a.cols, ',')) x)),
           E'\n' order by a.tbl collate "C")
      from _anon_columns() a),
-  'anon''s SELECT columns on the nine column-granted tables equal ANON_COLUMNS');
+  'anon''s SELECT columns on the ten column-granted tables equal ANON_COLUMNS');
 select ok(
   (select bool_and(not has_table_privilege('anon', format('public.%I', tbl), 'SELECT')) from _anon_columns()),
-  'the nine column-granted tables have no table-level anon SELECT');
+  'the ten column-granted tables have no table-level anon SELECT');
 select is(
   (select string_agg(t, ',' order by t collate "C")
      from unnest(array['blog_posts', 'categories', 'certifications', 'clients', 'disciplines',
@@ -621,6 +628,34 @@ select _as_other();
 select is((select count(*)::int from public.site_appearance
             where tenant_id::text = current_setting('pv.launch')), 0,
   'other_tenant reads no site_appearance row of the launch tenant');
+reset role;
+
+-- ── 10. template_copy (Admin v2 E3) ────────────────────────────────────────────────────
+-- The template pages' shared text is public: anon reads its columns of the launch tenant's row
+-- (item 3), every CMS role reads the row (the registry contract), a sales claim reads none (the
+-- non-staff block) and another tenant none.
+insert into public.template_copy (tenant_id, service)
+values (current_setting('pv.launch')::uuid, '{"fab":{"en":"Ask us","ar":"اسألنا"}}');
+create function _template_rows(p_role text) returns int language plpgsql as $$
+begin
+  perform _as(p_role);
+  return (select count(*)::int from public.template_copy
+           where tenant_id::text = current_setting('pv.launch'));
+end $$;
+set local role anon;
+select _as(null);
+select is((select service #>> '{fab,en}' from public.template_copy), 'Ask us',
+  'anon reads the launch tenant''s shared text, the dataset''s projection of template_copy');
+reset role;
+set local role authenticated;
+select is(_template_rows('admin') + _template_rows('content_creator') + _template_rows('seo') + _template_rows('developer'), 4,
+  'every CMS role reads the launch tenant''s template_copy row (registry contract #1)');
+select is(_template_rows('sales'), 0,
+  'a sales claim reads no template_copy row (0097''s non-staff block)');
+select _as_other();
+select is((select count(*)::int from public.template_copy
+            where tenant_id::text = current_setting('pv.launch')), 0,
+  'other_tenant reads no template_copy row of the launch tenant');
 reset role;
 
 select * from finish();

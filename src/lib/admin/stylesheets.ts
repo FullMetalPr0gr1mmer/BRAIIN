@@ -37,6 +37,8 @@ export const ADMIN_STYLESHEETS = [
   'seo.css',
   'services.css',
   'stats.css',
+  // Admin v2 E3: the template editors (the Showing picker, the fixed parts), over pages.css.
+  'templates.css',
   // Admin v2 E4: the theme editor.
   'theme.css',
   'two-step.css',

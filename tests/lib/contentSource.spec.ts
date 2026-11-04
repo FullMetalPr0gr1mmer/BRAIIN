@@ -88,6 +88,8 @@ const CONTENT_LOADERS = [
   'src/lib/data/statistics.ts',
   'src/lib/data/taxonomy.ts',
   'src/lib/data/team.ts',
+  // Admin v2 E3: the template pages' shared text.
+  'src/lib/data/templateCopy.ts',
   'src/lib/data/theme.ts',
 ];
 

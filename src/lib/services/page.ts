@@ -2,6 +2,8 @@ import type { Locale } from '@schemas/primitives';
 import { getServiceBySlug, toServiceDetail, type ServiceDetail } from '@/lib/data/services';
 import { getPublishedDisciplines, type Discipline } from '@/lib/data/disciplines';
 import { getServiceCase, type ServiceCase } from '@/lib/data/serviceCases';
+import { getServiceCopy } from '@/lib/data/templateCopy';
+import type { ServiceCopy } from '@/lib/templates/copy';
 import { loadHead, type Head } from '@/lib/seo/head';
 import { SERVICE_PAGE_META } from '@/lib/seo/pageMeta';
 import { pickLocale, pickLocaleStrict } from '@/lib/i18n';
@@ -14,7 +16,8 @@ import { retiredRedirect } from './retired';
 // Everything starts in ONE round: the service (published, with its discipline embedded
 // for the crumb and the title), the published disciplines with their services (the
 // "More in {Discipline}" siblings AND the inquiry form's grouped select — one read serves
-// both), and the head (identity + SEO defaults). Chained only on the service query: its
+// both), the head (identity + SEO defaults) and the template's shared text (Admin v2 E3,
+// `template_copy`, never failing). Chained only on the service query: its
 // case block and its `entity_seo` override, which need the service's id. So the page costs
 // the service query plus one dependent read.
 //
@@ -31,6 +34,8 @@ export interface ServicePage {
   /** The published case block; null hides the band (and the hero CTA skips to the form). */
   serviceCase: ServiceCase | null;
   head: Head;
+  /** The template's shared text (Admin v2 E3): the built-in words with the stored ones over them. */
+  copy: ServiceCopy;
 }
 
 type Locals = Parameters<typeof loadHead>[0];
@@ -48,6 +53,8 @@ export function serviceCacheEntities(slug: string): string[] {
     'media:all',
     // The "Say hello" form, as the forms config words it (Admin v2 E8).
     'forms:all',
+    // The template's shared text (Admin v2 E3, `template_copy`).
+    'template_copy:all',
   ];
 }
 
@@ -109,7 +116,7 @@ export async function loadServicePage(
   // stored body it refuses as nothing and logs it. Before H15 a deep body threw a RangeError
   // here, outside the loader's try, and the page answered 500 on every request.
   const serviceQuery = getServiceBySlug(slug).then((row) => (row ? toServiceDetail(row) : null));
-  const [service, disciplines, serviceCase, head] = await Promise.all([
+  const [service, disciplines, serviceCase, head, copy] = await Promise.all([
     serviceQuery,
     getPublishedDisciplines(),
     serviceQuery.then((s) => (s ? getServiceCase(s.id) : null)),
@@ -119,6 +126,7 @@ export async function loadServicePage(
       fallbackDescription: serviceQuery.then((s) => (s ? serviceDescription(s, locale) : '')),
       entity: serviceQuery.then((s) => (s ? { type: 'service' as const, id: s.id } : null)),
     }),
+    getServiceCopy(),
   ]);
   if (!service) return null;
   return {
@@ -127,6 +135,7 @@ export async function loadServicePage(
     disciplines,
     serviceCase,
     head,
+    copy,
   };
 }
 

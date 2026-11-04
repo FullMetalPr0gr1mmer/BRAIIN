@@ -420,6 +420,18 @@ export const EXTRA_LINKS: readonly NavTab[] = [
   // in General" link and the consent version render only there. tests/lib/adminRoutes.spec.ts
   // holds every tab of the overview (formsTabHref) to this list.
   { href: '/admin/forms?tab=join', label: 'Forms, Join form', caps: ['settings.general'] },
+  // The template editors (Admin v2 E3): reached from the pages list's Templates cards, for the
+  // roles that edit pages. Each opens on its first published item with its preview column.
+  {
+    href: '/admin/pages/template/service',
+    label: 'Service page template',
+    caps: ['pages.write'],
+  },
+  {
+    href: '/admin/pages/template/project',
+    label: 'Project page template',
+    caps: ['pages.write'],
+  },
   // Backups & versions (Admin v2 R13): the notice a download that hit the hourly limit comes
   // back with, and a version's details asked for while none exists (releases off: no read, the
   // page as it is), for every role that opens it.

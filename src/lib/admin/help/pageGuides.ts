@@ -73,6 +73,13 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
   // revision 0). For the roles that edit pages: SEO opens Pages for SEO only, which the SEO
   // guide covers, so it gets no Guide there.
   { slug: 'editing-pages', caps: ['pages.write'], screens: ['/admin/pages'] },
+  // Admin v2 E3: the two template editors open their own guide (put by the template_copy
+  // migration, revision 0), for the roles that open them: pages.write (Admin, Content Creator).
+  {
+    slug: 'page-templates',
+    caps: ['pages.write'],
+    screens: ['/admin/pages/template/service', '/admin/pages/template/project'],
+  },
   // Admin v2 E5: the Header screen opens its own guide (put by the site_appearance migration,
   // revision 0), for the roles that open it: theme.edit (the options) or nav.edit (the menu).
   {

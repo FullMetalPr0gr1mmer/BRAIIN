@@ -1,0 +1,60 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminTemplateEditor from '@/components/admin/islands/AdminTemplateEditor';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { loadTemplateEditor, mayEditTemplates } from '@/lib/admin/pages/templates';
+import { writeSystemLog } from '@/lib/data/systemLog';
+import type { TemplateEditorSetup } from '@/components/admin/screens/templateEditor/types';
+
+export const prerender = false;
+
+// The Service page template's editor (Admin v2 E3, docs/admin-v2/ui.md "Template editors (AV-31)";
+// the prototype's template pages): Showing [service], the template's fixed parts, the
+// service's own words (saved as its full editor saves them) and the shared text every service
+// page shows (`template_copy`), beside the live preview of the service's page. Its twin is
+// project.astro; both are this file with the kind changed.
+//
+// Who opens it: a role that edits pages (pages.write: Admin, Content Creator). Anyone else gets
+// the layout with the refusal and a 403, having read nothing (tests/admin/templates.e2e.ts,
+// the server's refusals; not a LOCKED_SCREENS entry, which holds menu screens). Every read is
+// the person's own (RLS decides); the island reads the rest through the routes, which check
+// the capabilities again.
+
+const KIND = 'service';
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = Boolean(session && sb && mayEditTemplates(session.role));
+if (!allowed) Astro.response.status = 403;
+
+let setup: TemplateEditorSetup | null = null;
+if (allowed && session && sb) {
+  try {
+    setup = await loadTemplateEditor(sb, session, KIND, Astro.url.searchParams.get('item'));
+  } catch (err) {
+    await writeSystemLog({
+      level: 'error',
+      source: 'admin:pages.template',
+      message: err instanceof Error ? err.message : 'template editor read failed',
+      detail: { path: Astro.url.pathname },
+    });
+  }
+}
+---
+
+<AdminLayout
+  title="Service page"
+  subtitle="Template. Every service has a page built from it: its own words, and the shared text every one of them shows."
+  styles={['pages.css', 'templates.css']}
+>
+  {
+    !allowed ? (
+      <Refused />
+    ) : !setup ? (
+      <p class="msg" data-kind="error" role="alert">
+        The template could not be read just now. Reload the page to try again.
+      </p>
+    ) : (
+      <AdminTemplateEditor client:load {...setup} />
+    )
+  }
+</AdminLayout>

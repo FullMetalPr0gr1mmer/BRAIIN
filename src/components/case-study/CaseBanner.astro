@@ -1,5 +1,6 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import type { CasePageCopy } from '@/lib/portfolio/pageCopy';
 import type { VideoClip } from '@schemas/media';
 import type { ImageRef } from '@/lib/media/resolve';
 import type { CaseStudy } from '@/lib/data/portfolio';
@@ -21,14 +22,11 @@ interface Props {
   study: CaseStudy;
   image: ImageRef | null;
   clip: VideoClip | null;
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: CasePageCopy;
 }
 
-const { locale, study, image, clip } = Astro.props;
-
-const STR = {
-  en: { tag: 'Case study', confidential: 'Confidential client' },
-  ar: { tag: 'دراسة حالة', confidential: 'عميل غير مُعلَن' },
-}[locale];
+const { locale, study, image, clip, copy } = Astro.props;
 
 const name = pickLocale(study.title, locale);
 const type = study.projectType ? pickLocale(study.projectType, locale) : null;
@@ -36,7 +34,7 @@ const blurb = study.blurb ? pickLocale(study.blurb, locale) : '';
 const client = study.client
   ? pickLocale(study.client.name, locale)
   : study.confidentialClient
-    ? STR.confidential
+    ? copy.confidential
     : null;
 ---
 
@@ -44,7 +42,7 @@ const client = study.client
   <a class="work-cap" href="#title">
     <span class="work-cap__tag">
       <span class="work-cap__live" aria-hidden="true"></span>
-      <span>{STR.tag}</span>
+      <span>{copy.bannerTag}</span>
     </span>
     <span class="work-cap__t">{type ? `${name} | ${type}` : name}</span>
     {blurb && <span class="work-cap__d">{blurb}</span>}

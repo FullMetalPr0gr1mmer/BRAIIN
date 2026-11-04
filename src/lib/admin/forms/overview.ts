@@ -99,13 +99,14 @@ const INQUIRY_VARIANTS = Object.keys(CONTACT_FORM_FIELDS) as ContactFormVariant[
  * Contact, `hello` closing the Services page, `joinApply` on Join), so its words (the heading,
  * and the lead where the section has one) are edited with that page, with one exception: each
  * service page renders the Hello block itself (src/components/service/ServicePage.astro), with
- * fixed words and a heading that names the service (`headingOverride`, `leadOverride`: never
- * CMS content). tests/lib/formsOverview.spec.ts holds both to the code.
+ * the service template's shared text (Admin v2 E3: `template_copy`, edited in Pages, Service
+ * page) and a heading that names the service (`headingOverride`, `leadOverride`: never section
+ * content). tests/lib/formsOverview.spec.ts holds both to the code.
  */
 export const FORM_WORDING = {
   inquiry: [
     'On the home page, the Contact page and the Services page, the words around the form, such as its heading, are edited with that page, in Pages.',
-    'On each service page those words are fixed, and the heading names the service.',
+    "On each service page those words are the service page template's shared text, edited in Pages, and the heading names the service.",
   ],
   join: [
     'The words around the form, such as its heading and lead line, are edited with the Join page, in Pages.',

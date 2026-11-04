@@ -2693,6 +2693,7 @@ describe('which guides each role is shown (the server’s filter, from ROLE_CAPS
       'header-and-menu',
       'loading-screen',
       'media-library',
+      'page-templates',
       'previewing-changes',
       'roles-and-access',
       'saving-and-publishing',

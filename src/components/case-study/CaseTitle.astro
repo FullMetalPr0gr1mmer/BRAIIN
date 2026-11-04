@@ -1,5 +1,6 @@
 ---
 import type { Locale } from '@schemas/primitives';
+import type { CasePageCopy } from '@/lib/portfolio/pageCopy';
 import type { CaseStudy } from '@/lib/data/portfolio';
 import { pickLocale, localizedHref } from '@/lib/i18n';
 import { caseKeywords } from '@/lib/portfolio/caseStudy';
@@ -21,14 +22,11 @@ interface Props {
   study: CaseStudy;
   /** The page opens on a banner above this band. */
   hasBanner: boolean;
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: CasePageCopy;
 }
 
-const { locale, study, hasBanner } = Astro.props;
-
-const STR = {
-  en: { back: 'All projects', keywords: 'Keywords' },
-  ar: { back: 'كل المشاريع', keywords: 'الكلمات المفتاحية' },
-}[locale];
+const { locale, study, hasBanner, copy } = Astro.props;
 
 const keywords = caseKeywords(study).map((k) => pickLocale(k, locale));
 ---
@@ -44,13 +42,13 @@ const keywords = caseKeywords(study).map((k) => pickLocale(k, locale));
         stroke-linecap="round"
         stroke-linejoin="round"></path>
     </svg>
-    <span>{STR.back}</span>
+    <span>{copy.back}</span>
   </a>
   <h1 class:list={{ rv: hasBanner }}>{pickLocale(study.title, locale)}</h1>
   <div class="cs-title__row">
     {
       keywords.length > 0 && (
-        <ul class="cs-kw rv" role="list" aria-label={STR.keywords}>
+        <ul class="cs-kw rv" role="list" aria-label={copy.keywords}>
           {keywords.map((k) => (
             <li>{k}</li>
           ))}

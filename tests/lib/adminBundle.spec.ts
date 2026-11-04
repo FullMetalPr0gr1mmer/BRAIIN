@@ -854,11 +854,19 @@ describe('the page editor has its own group (Admin v2 E1)', () => {
   };
   const priority = (name: string) => groups.find((g) => g.name === name)!.priority;
 
+  // Admin v2 E3: the template editors are the same family (their island and screen code).
+  const DIRS = [
+    'src/components/admin/screens/pageEditor',
+    'src/components/admin/screens/templateEditor',
+  ];
+
   it('claims its island and every module of its screen for admin-pages', () => {
-    const dir = 'src/components/admin/screens/pageEditor';
     const paths = [
       'src/components/admin/islands/AdminPageEditor.tsx',
-      ...readdirSync(join(process.cwd(), dir)).map((name) => `${dir}/${name}`),
+      'src/components/admin/islands/AdminTemplateEditor.tsx',
+      ...DIRS.flatMap((dir) =>
+        readdirSync(join(process.cwd(), dir)).map((name) => `${dir}/${name}`),
+      ),
     ];
     for (const path of paths) expect(claim(path), path).toBe('admin-pages');
     // What it shares with the SEO and collection screens is the field kit's, so neither family
@@ -874,9 +882,10 @@ describe('the page editor has its own group (Admin v2 E1)', () => {
   });
 
   it('imports no module another screen family claims', () => {
-    const dir = 'src/components/admin/screens/pageEditor';
     const offenders: string[] = [];
-    for (const name of readdirSync(join(process.cwd(), dir))) {
+    for (const [dir, name] of DIRS.flatMap((dir) =>
+      readdirSync(join(process.cwd(), dir)).map((name) => [dir, name] as const),
+    )) {
       const source = readFileSync(join(process.cwd(), dir, name), 'utf8');
       for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
         const spec = m[1] as string;
@@ -911,6 +920,8 @@ describe('the page editor has its own group (Admin v2 E1)', () => {
       'admin-screens.S1.js': 'import"./admin-ui.U1.js";import"./admin-fields.F1.js";',
       'admin-pages.P1.js': 'import"./admin-ui.U1.js";import"./admin-fields.F1.js";',
       'AdminPageEditor.I1.js': 'import"./admin-pages.P1.js";',
+      // Admin v2 E3: the template editors' island, the same family.
+      'AdminTemplateEditor.T1.js': 'import"./admin-pages.P1.js";',
     };
     expect(check(build(PAGES)).problems).toEqual([]);
     const problems = (files: Record<string, string>) =>
@@ -1005,6 +1016,8 @@ describe('the live preview column is its own lazy group (Admin v2 E2)', () => {
         'import"./admin-pages.P1.js";import"./admin-preview.B1.js";export const c=1;',
       'admin-preview.B1.js': 'export const b=1;',
       'AdminPageEditor.I1.js': 'import"./admin-pages.P1.js";',
+      // Admin v2 E3: the template editors' island, the same family.
+      'AdminTemplateEditor.T1.js': 'import"./admin-pages.P1.js";',
     };
     expect(check(build(PAGES)).problems).toEqual([]);
     const problems = (files: Record<string, string>) =>

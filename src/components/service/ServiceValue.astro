@@ -3,7 +3,8 @@ import type { Locale } from '@schemas/primitives';
 import type { ValuePoint } from '@schemas/content';
 import { pickLocale } from '@/lib/i18n';
 import { pad2 } from '@/lib/portfolio/caseStudy';
-import { SERVICE_PAGE_COPY, VALUE_ACCENT } from '@/lib/services/pageCopy';
+import type { Accent } from '@schemas/media';
+import type { ServicePageCopy } from '@/lib/services/pageCopy';
 import AccentText from '@/components/ui/AccentText.astro';
 
 // "The value we add" (Round 2 — service.html `.val`), a mist band: the kicker, "Why it's
@@ -16,10 +17,13 @@ import AccentText from '@/components/ui/AccentText.astro';
 interface Props {
   locale: Locale;
   points: readonly ValuePoint[];
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: ServicePageCopy;
+  /** The heading's accent (the built-in one with the built-in words; Admin v2 E3). */
+  accent: Accent | undefined;
 }
 
-const { locale, points } = Astro.props;
-const copy = SERVICE_PAGE_COPY[locale];
+const { locale, points, copy, accent } = Astro.props;
 const cards = points.map((p, i) => ({
   n: pad2(i + 1),
   title: pickLocale(p.title, locale),
@@ -38,7 +42,7 @@ const cards = points.map((p, i) => ({
               <span>{copy.valueTag}</span>
             </div>
             <h2 class="rv" id="svc-val-heading">
-              <AccentText text={copy.valueHeading} locale={locale} accent={VALUE_ACCENT} />
+              <AccentText text={copy.valueHeading} locale={locale} accent={accent} />
             </h2>
           </div>
           <p class="rv">{copy.valueLead}</p>

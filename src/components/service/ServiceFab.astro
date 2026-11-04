@@ -1,6 +1,6 @@
 ---
 import type { Locale } from '@schemas/primitives';
-import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
+import type { ServicePageCopy } from '@/lib/services/pageCopy';
 
 // The floating "Skip to inquiry" (Round 2 — service.html `.fab`) → #inquiry. Served
 // HIDDEN (inert, aria-hidden, out of the tab order, parked off-screen by a transform);
@@ -13,10 +13,11 @@ import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
 
 interface Props {
   locale: Locale;
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: ServicePageCopy;
 }
 
-const { locale } = Astro.props;
-const copy = SERVICE_PAGE_COPY[locale];
+const { copy } = Astro.props;
 ---
 
 <div class="svc-fab__mark" aria-hidden="true"></div>

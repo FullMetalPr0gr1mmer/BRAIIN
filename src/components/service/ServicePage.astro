@@ -11,7 +11,7 @@ import { shareImageUrl } from '@/lib/seo/shareImage';
 import { localizedPath, pickLocale } from '@/lib/i18n';
 import { serviceHelloHeading } from '@/lib/sections/hello';
 import { serviceDescription, serviceHeroSub, type ServicePage } from '@/lib/services/page';
-import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
+import { TEMPLATE_PART_IDS } from '@/lib/templates/parts';
 import ServiceWhat from './ServiceWhat.astro';
 import ServiceValue from './ServiceValue.astro';
 import ServiceCaseBlock from './ServiceCaseBlock.astro';
@@ -31,6 +31,11 @@ import ServiceFab from './ServiceFab.astro';
 // The LCP element is the h1 (no intro plate, and the hero's backdrop is a CSS background)
 // — CLAUDE.md §6. Route stylesheet: services.css (the "Say hello" block, the hero's crumb
 // and skip pill, and this page's blocks).
+//
+// The words around the service's own content are the template's shared text (Admin v2 E3,
+// `page.copy`: the built-in words with the stored ones over them, src/lib/templates/copy.ts).
+// In a releases preview only, each part carries `data-pv-section` (its template part id), so
+// the template editor's preview can move to it; a public page's markup is unchanged.
 
 interface Props {
   locale: Locale;
@@ -40,7 +45,10 @@ interface Props {
 const { locale, page } = Astro.props;
 const { service, discipline, disciplines, serviceCase, head } = page;
 const { seo, identity } = head;
-const copy = SERVICE_PAGE_COPY[locale];
+const copy = page.copy[locale];
+const preview = Astro.locals.preview !== undefined;
+const part = (id: keyof typeof TEMPLATE_PART_IDS.service) =>
+  preview ? { previewId: TEMPLATE_PART_IDS.service[id] } : {};
 
 const base = PUBLIC_SITE_URL.replace(/\/$/, '');
 const logicalPath = `/services/${service.slug}`;
@@ -108,14 +116,14 @@ const jsonLd = [
   {...seo.canonicalOverride ? { canonicalOverride: seo.canonicalOverride } : {}}
 >
   <main class="svc-page">
-    <SectionBoundary type="serviceHero">
+    <SectionBoundary type="serviceHero" {...part('hero')}>
       <Hero
         locale={locale}
         headline={service.title}
         {...sub ? { sub } : {}}
         ctaLabel={serviceCase
-          ? { en: SERVICE_PAGE_COPY.en.seeCase, ar: SERVICE_PAGE_COPY.ar.seeCase }
-          : { en: SERVICE_PAGE_COPY.en.skip, ar: SERVICE_PAGE_COPY.ar.skip }}
+          ? { en: page.copy.en.seeCase, ar: page.copy.ar.seeCase }
+          : { en: page.copy.en.skip, ar: page.copy.ar.skip }}
         {...clip?.path ? { videoSrc: clip.path } : {}}
         data={{
           banner: true,
@@ -127,41 +135,47 @@ const jsonLd = [
         }}
       />
     </SectionBoundary>
-    <SectionBoundary type="serviceWhat">
-      <ServiceWhat locale={locale} service={service} />
+    <SectionBoundary type="serviceWhat" {...part('what')}>
+      <ServiceWhat locale={locale} service={service} copy={copy} />
     </SectionBoundary>
-    <SectionBoundary type="serviceValue">
-      <ServiceValue locale={locale} points={service.valuePoints} />
+    <SectionBoundary type="serviceValue" {...part('value')}>
+      <ServiceValue
+        locale={locale}
+        points={service.valuePoints}
+        copy={copy}
+        accent={page.copy.valueAccent}
+      />
     </SectionBoundary>
     {
       serviceCase && (
-        <SectionBoundary type="serviceCase">
+        <SectionBoundary type="serviceCase" {...part('case')}>
           <ServiceCaseBlock
             locale={locale}
             serviceCase={serviceCase}
             serviceName={name}
             fallbackImage={poster}
+            copy={copy}
           />
         </SectionBoundary>
       )
     }
-    <SectionBoundary type="hello">
+    <SectionBoundary type="hello" {...part('hello')}>
       <Hello
         locale={locale}
         groups={disciplines}
         selected={service.slug}
-        headingOverride={serviceHelloHeading(name, locale)}
+        headingOverride={serviceHelloHeading(name, locale, copy.helloLeadIn)}
         leadOverride={copy.helloLead}
       />
     </SectionBoundary>
     {
       discipline && (
-        <SectionBoundary type="serviceMore">
-          <ServiceMore locale={locale} discipline={discipline} current={service.slug} />
+        <SectionBoundary type="serviceMore" {...part('more')}>
+          <ServiceMore locale={locale} discipline={discipline} current={service.slug} copy={copy} />
         </SectionBoundary>
       )
     }
-    <ServiceFab locale={locale} />
+    <ServiceFab locale={locale} copy={copy} />
   </main>
   <script>
     // A `#inquiry` / `#case` arrival lands on its target at once, not through the site's

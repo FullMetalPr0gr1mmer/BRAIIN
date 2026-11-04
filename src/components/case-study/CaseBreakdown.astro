@@ -1,6 +1,7 @@
 ---
 import { getImage } from 'astro:assets';
 import type { Locale } from '@schemas/primitives';
+import type { CasePageCopy } from '@/lib/portfolio/pageCopy';
 import type { Accent } from '@schemas/media';
 import type { CaseMedia } from '@/lib/data/portfolio';
 import { pickLocale } from '@/lib/i18n';
@@ -22,27 +23,13 @@ import AccentText from '@/components/ui/AccentText.astro';
 interface Props {
   locale: Locale;
   items: CaseMedia[];
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: CasePageCopy;
+  /** The heading's accent (the built-in one with the built-in words; Admin v2 E3). */
+  accent: Accent | undefined;
 }
 
-const { locale, items } = Astro.props;
-
-const STR = {
-  en: {
-    tag: 'Breakdown',
-    heading: 'From the first sketch to set',
-    lead: 'How the idea got made: the sketches, the tests, and the days on set.',
-    kind: { sketch: 'Sketch', bts: 'Behind the scenes', process: 'Process' },
-  },
-  ar: {
-    tag: 'كواليس العمل',
-    heading: 'من أول رسمة إلى موقع التصوير',
-    lead: 'كيف انصنعت الفكرة: الرسومات والتجارب وأيام التصوير.',
-    kind: { sketch: 'رسمة', bts: 'خلف الكواليس', process: 'مراحل العمل' },
-  },
-}[locale];
-
-/** "first sketch" / "أول رسمة" — the mockup's <em>, as a word range per locale. */
-const ACCENT: Accent = { en: { from: 2, to: 4 }, ar: { from: 1, to: 3 } };
+const { locale, items, copy, accent } = Astro.props;
 
 // Rendered widths per layout: the grid spans the content width (100vw less the page
 // gutters), so a half is ~50vw and a third ~33vw; on phones every still is full width.
@@ -79,13 +66,13 @@ const stills = await Promise.all(
         <div>
           <p class="tag rv">
             <span class="dot" />
-            {STR.tag}
+            {copy.breakdownTag}
           </p>
           <h2 class="rv" id="cs-bd-heading">
-            <AccentText text={STR.heading} locale={locale} accent={ACCENT} />
+            <AccentText text={copy.breakdownHeading} locale={locale} accent={accent} />
           </h2>
         </div>
-        <p class="cs-bd__lead rv">{STR.lead}</p>
+        <p class="cs-bd__lead rv">{copy.breakdownLead}</p>
       </div>
       <div class="cs-bd__grid">
         {stills.map((s) => (
@@ -103,7 +90,7 @@ const stills = await Promise.all(
             </a>
             {(s.kind || s.caption) && (
               <figcaption class="cs-bdi__cap">
-                {s.kind && <span class="cs-bdi__tag">{STR.kind[s.kind]}</span>}
+                {s.kind && <span class="cs-bdi__tag">{copy[s.kind]}</span>}
                 {s.caption && <span class="cs-bdi__t">{s.caption}</span>}
               </figcaption>
             )}

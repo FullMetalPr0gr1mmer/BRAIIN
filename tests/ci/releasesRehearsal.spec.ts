@@ -173,6 +173,7 @@ describe('playwright.config.ts', () => {
       'loading',
       'ga4',
       'theme',
+      'templates',
       'maintenance',
       'maintenance-teardown',
     ]);
@@ -230,6 +231,7 @@ describe('playwright.config.ts', () => {
           spec('loading'),
           spec('ga4'),
           spec('theme'),
+          spec('templates'),
           spec('maintenance'),
           'maintenance\\.teardown\\.ts$',
           spec('releases-mode'),
@@ -249,9 +251,11 @@ describe('playwright.config.ts', () => {
       p('ga4', { testMatch: spec('ga4'), dependencies: ['loading'] }),
       // Admin v2 E4: the theme, alone, between GA4 and maintenance.
       p('theme', { testMatch: spec('theme'), dependencies: ['ga4'] }),
+      // Admin v2 E3: the template editors, alone, between the theme and maintenance.
+      p('templates', { testMatch: spec('templates'), dependencies: ['theme'] }),
       p('maintenance', {
         testMatch: spec('maintenance'),
-        dependencies: ['theme'],
+        dependencies: ['templates'],
         teardown: 'maintenance-teardown',
       }),
       p('maintenance-teardown', { testMatch: 'maintenance\\.teardown\\.ts$' }),

@@ -96,6 +96,13 @@ export interface FieldDef {
   relation?: RelationDef;
   /** `repeater`: the fields of one item; `object`: the fields of the object. */
   itemFields?: readonly FieldDef[];
+  /**
+   * `object` (Admin v2 E3): its `itemFields` drawn in titled groups, in this order (the
+   * template editors' shared text, one group per part of the page); an item field no group
+   * names is drawn after them. Presentation only: the value and its payload are the object's,
+   * as before. Unset, the object is one list, as before.
+   */
+  itemGroups?: readonly { id: string; title: string; fields: readonly string[] }[];
   /** `repeater` / `multiRelation` / `multiSelect`: the most items the schema accepts. */
   maxItems?: number;
   /** `sectionContent`: the sibling field holding the section type (default 'type'). */

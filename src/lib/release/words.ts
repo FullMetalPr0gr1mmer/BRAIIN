@@ -40,6 +40,9 @@ const SCREEN_OF: Partial<Record<ReleaseEntityType, string>> = {
   site_appearance: '/admin/appearance/header',
   // Admin v2 E8: the Forms screen edits both forms of the one row.
   form_settings: '/admin/forms',
+  // Admin v2 E3: the service template's editor (its Shared text; the project template's is
+  // one click away on the pages list).
+  template_copy: '/admin/pages/template/service',
 };
 
 /**
@@ -55,6 +58,8 @@ const SCREEN_OF_FIELDS: Partial<
 /** Words for a type edited by its own island rather than a UI config (Admin v2 E8). */
 const OWN_WORDS: Partial<Record<ReleaseEntityType, Readonly<Record<string, string>>>> = {
   form_settings: { inquiry: 'Inquiry form', application: 'Join form' },
+  // Admin v2 E3: the two templates' shared text, by the template.
+  template_copy: { service: 'Service page shared text', project: 'Project page shared text' },
 };
 
 /**

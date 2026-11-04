@@ -104,6 +104,8 @@ export const ANON_COLUMNS: Readonly<Partial<Record<DatasetTable, readonly string
   // Admin v2 E5: the header's options, and E7 the loading screen's; never the version, the
   // stamps or the actors.
   site_appearance: ['tenant_id', ...Object.values(APPEARANCE_COLUMNS)],
+  // Admin v2 E3: the two templates' shared text; never the version, the stamps or the actors.
+  template_copy: ['tenant_id', 'service', 'project'],
   // 0028: never is_placeholder, the schedule, version or the actors.
   service_cases: [
     'id',
@@ -243,6 +245,11 @@ export const MIRRORED_POLICIES: Readonly<
     team_members_read: 'PERMISSIVE:a3adeda401046be963dd172ac14b795c',
     team_members_write: 'PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060',
   },
+  // Admin v2 E3: the anon read, the tenant fence alone; the non-staff block and the writes are
+  // TO authenticated, so none applies to a visitor.
+  template_copy: {
+    template_copy_read: 'PERMISSIVE:b6eed1472f5bbc22900b86ccd832dc54',
+  },
   testimonials: {
     testimonials_read: 'PERMISSIVE:a3adeda401046be963dd172ac14b795c',
     testimonials_write: 'PERMISSIVE:e9df5a2a577f93c55a35e5f7bc235060',
@@ -303,6 +310,7 @@ export const VISIBILITY_DEPS: Readonly<Record<DatasetTable, readonly DatasetTabl
   site_profile: [],
   statistics: [],
   team_members: [],
+  template_copy: [],
   testimonials: [],
 };
 
@@ -502,13 +510,15 @@ export function createMirror(data: MirrorData): Mirror {
         );
       // 0001 categories_read, 0019 site_profile_read, 0009 seo_defaults_read, 0105
       // site_integrations_public_read (U11; anon's two columns), E8 form_settings_read (anon's
-      // four columns), E5 site_appearance_read (anon's thirteen columns): the tenant fence only.
+      // four columns), E5 site_appearance_read (anon's thirteen columns), E3 template_copy_read
+      // (anon's three columns): the tenant fence only.
       case 'categories':
       case 'site_profile':
       case 'seo_defaults':
       case 'site_integrations':
       case 'form_settings':
       case 'site_appearance':
+      case 'template_copy':
         return true;
       // 0009 entity_seo_read (tenant) AND 0011 entity_seo_published_only (RESTRICTIVE: its
       // parent published, under the parent's RLS; an orphan or another entity type never).

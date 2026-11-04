@@ -2,7 +2,7 @@
 import type { Locale } from '@schemas/primitives';
 import type { ServiceDetail } from '@/lib/data/services';
 import { pickLocale } from '@/lib/i18n';
-import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
+import type { ServicePageCopy } from '@/lib/services/pageCopy';
 
 // "What it is" (Round 2 — service.html `.what`), on paper: the kicker, the service's intro
 // line as the section's h2, then its body and the "What you get" checklist.
@@ -18,10 +18,11 @@ import { SERVICE_PAGE_COPY } from '@/lib/services/pageCopy';
 interface Props {
   locale: Locale;
   service: ServiceDetail;
+  /** The page's words in its language (Admin v2 E3: the template's shared text). */
+  copy: ServicePageCopy;
 }
 
-const { locale, service } = Astro.props;
-const copy = SERVICE_PAGE_COPY[locale];
+const { locale, service, copy } = Astro.props;
 
 const intro = service.intro ? pickLocale(service.intro, locale) : '';
 const bodyHtml = service.bodyHtml ? pickLocale(service.bodyHtml, locale) : '';

@@ -1860,8 +1860,8 @@ describe('the Free plan’s 50 subrequests (P-15)', () => {
     const SESSION = 2;
     expect(db.calls.length + SESSION).toBeLessThanOrEqual(50);
     // Pinned, so a new type, link or address shows here before it shows on the Free plan.
-    // 45 since Admin v2 E8 and E5 added the forms config and the header (one more singleton
-    // each to read).
-    expect(db.calls.length).toBe(45);
+    // 46 since Admin v2 E8, E5 and E3 added the forms config, the header and the templates'
+    // shared text (one more singleton each to read).
+    expect(db.calls.length).toBe(46);
   });
 });

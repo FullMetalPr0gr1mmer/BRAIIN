@@ -25,6 +25,7 @@ import { seoDefaultsSingleton } from '@/lib/admin/singletons/seoDefaults';
 import { siteProfileSingleton } from '@/lib/admin/singletons/siteProfile';
 import { formSettingsSingleton } from '@/lib/admin/singletons/formSettings';
 import { siteAppearanceSingleton } from '@/lib/admin/singletons/siteAppearance';
+import { templateCopySingleton } from '@/lib/admin/singletons/templateCopy';
 import { RELEASE_ENTITY_TYPES, type ReleaseArea, type ReleaseEntityType } from '@schemas/release';
 import { RELEASE_ENTITY_META } from './areas';
 
@@ -461,6 +462,12 @@ export const RELEASE_REGISTRY: Readonly<Record<ReleaseEntityType, RegistryEntry>
   site_appearance: fromSingleton('site_appearance', siteAppearanceSingleton, {
     label: () => ({ en: 'Header and loading screen' }),
     entityTags: tags('tenant:default'),
+  }),
+  // The template pages' shared text (Admin v2 E3): every service page and case study carries
+  // template_copy:all (serviceCacheEntities, caseStudyCacheEntities).
+  template_copy: fromSingleton('template_copy', templateCopySingleton, {
+    label: () => ({ en: 'Template shared text' }),
+    entityTags: tags('template_copy:all'),
   }),
 };
 

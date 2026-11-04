@@ -62,6 +62,7 @@ const siteVerification = await import('@/lib/data/siteVerification');
 const statistics = await import('@/lib/data/statistics');
 const taxonomy = await import('@/lib/data/taxonomy');
 const team = await import('@/lib/data/team');
+const templateCopy = await import('@/lib/data/templateCopy');
 const theme = await import('@/lib/data/theme');
 
 const MODULES = {
@@ -86,6 +87,7 @@ const MODULES = {
   statistics,
   taxonomy,
   team,
+  templateCopy,
   theme,
 };
 
@@ -160,6 +162,21 @@ const CASES: Record<string, () => Promise<void>> = {
     expect(value.backdrop).toBe('black');
     expect(value.holdMs).toBe(800);
     expect(value.tagline).toBeNull();
+    clean(report);
+  },
+  'templateCopy.getServiceCopy': async () => {
+    // Admin v2 E3: anon's columns of the row; the fixture rewords the floating button only.
+    const { value, report } = await inPreview(() => templateCopy.getServiceCopy());
+    expect(value.en.fab).toBe('Ask us');
+    expect(value.ar.fab).toBe('اسألنا');
+    expect(value.en.seeCase).toBe('See the case study');
+    clean(report);
+  },
+  'templateCopy.getCaseCopy': async () => {
+    // Admin v2 E3: the same row's project template, which the fixture leaves as built.
+    const { value, report } = await inPreview(() => templateCopy.getCaseCopy());
+    expect(value.en.nextProject).toBe('Next project');
+    expect(value.breakdownAccent).toEqual({ en: { from: 2, to: 4 }, ar: { from: 1, to: 3 } });
     clean(report);
   },
   'faq.getFaq': async () => {

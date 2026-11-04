@@ -54,6 +54,8 @@ export function caseStudyCacheEntities(slug: string): string[] {
     'services:all',
     'testimonials:all',
     'media:all',
+    // The template's shared text (Admin v2 E3, `template_copy`).
+    'template_copy:all',
   ];
 }
 

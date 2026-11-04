@@ -231,6 +231,11 @@ const APPEARANCE_VERSION = restorable(
   { tenant_id: TENANT, version: 1, header_logo_size: 'm' },
   { header_logo_size: 'l' },
 );
+// Admin v2 E3: the templates' shared text, keyed by the tenant like the identity.
+const TEMPLATE_COPY_VERSION = restorable(
+  { tenant_id: TENANT, version: 1, service: {}, project: {} },
+  { service: { fab: VALID_BILINGUAL } },
+);
 const ENTITY_SEO_VERSION = restorable(
   {
     id: UUID,
@@ -378,6 +383,15 @@ const versions: readonly Case[] = [
     row: VERSION_ROW,
   },
   {
+    // Admin v2 E3: the template editors' History of the shared text (pages.write reads it).
+    name: 'history: the templates’ shared text (no id)',
+    load: () => import('@/pages/api/admin/history/index'),
+    method: 'GET',
+    url: '/api/admin/history?entityType=template_copy',
+    allow: ['admin', 'content_creator'],
+    row: VERSION_ROW,
+  },
+  {
     name: "history: a page's search settings",
     load: () => import('@/pages/api/admin/history/index'),
     method: 'GET',
@@ -418,6 +432,19 @@ const versions: readonly Case[] = [
     releases: true,
     row: APPEARANCE_VERSION,
     rpcs: { write_drafts: staged('site_appearance', TENANT) },
+  },
+  {
+    // Admin v2 E3: page content (pages.write + content.publish, P-2), so Admin and Content
+    // Creator restore it.
+    name: 'history restore: the templates’ shared text (no id)',
+    load: () => import('@/pages/api/admin/history/restore'),
+    method: 'POST',
+    url: '/api/admin/history/restore',
+    body: { entityType: 'template_copy', seq: 1 },
+    allow: ['admin', 'content_creator'],
+    releases: true,
+    row: TEMPLATE_COPY_VERSION,
+    rpcs: { write_drafts: staged('template_copy', TENANT) },
   },
   {
     // A Content Creator reads a page's search settings (view) but cannot publish them: the
@@ -736,6 +763,16 @@ export const cases: readonly Case[] = [
     url: '/api/admin/site-appearance',
     body: { logoSize: 'l', version: 1 },
     allow: ['admin', 'developer'],
+    releases: true,
+  },
+  {
+    // Admin v2 E3: staged like the pages, under the same capability (P-2).
+    name: 'template shared text write (releases on)',
+    load: () => import('@/pages/api/admin/template-copy'),
+    method: 'PATCH',
+    url: '/api/admin/template-copy',
+    body: { service: { fab: VALID_BILINGUAL }, version: 1 },
+    allow: ['admin', 'content_creator'],
     releases: true,
   },
   {
