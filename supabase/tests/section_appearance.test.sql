@@ -50,7 +50,7 @@ create function _as(p_role text, p_tid text) returns void language sql as $$
 $$;
 
 -- How many rows the CURRENT role changed by setting one appearance column of one section.
-create function _set(p_id uuid, p_column text, p_value text) returns int language plpgsql as $$
+create function _set_look(p_id uuid, p_column text, p_value text) returns int language plpgsql as $$
 declare n int;
 begin
   execute format('update public.page_sections set %I = $1 where id = $2', p_column)
@@ -73,7 +73,7 @@ select is((select count(*)::int from public.page_sections
 -- ---- who writes them -------------------------------------------------------------------------
 set local role authenticated;
 select _as('admin', app.default_tenant_id()::text);
-select is(_set('e9000000-0000-0000-0000-0000000051a1', 'background', 'ink'), 1,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a1', 'background', 'ink'), 1,
   'admin gives a Text block a background');
 select is((select background from public.page_sections where id = 'e9000000-0000-0000-0000-0000000051a1'),
   'ink', 'and it reads back');
@@ -83,80 +83,80 @@ select ok(exists (select 1 from public.content_versions
                      and snapshot ->> 'background' = 'ink'),
   'the change is history: the snapshot keeps the background');
 select _as('content_creator', app.default_tenant_id()::text);
-select is(_set('e9000000-0000-0000-0000-0000000051a1', 'spacing', 'roomy'), 1,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a1', 'spacing', 'roomy'), 1,
   'content_creator sets a spacing (pages.write)');
-select is(_set('e9000000-0000-0000-0000-0000000051a1', 'anchor', 'our-story'), 1,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a1', 'anchor', 'our-story'), 1,
   'content_creator sets an anchor');
 select _as('seo', app.default_tenant_id()::text);
-select is(_set('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'fade'), 0,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'fade'), 0,
   'seo changes no section (no pages.write)');
 select _as('developer', app.default_tenant_id()::text);
-select is(_set('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'fade'), 0,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'fade'), 0,
   'developer changes no section');
 select _as('sales', app.default_tenant_id()::text);
-select is(_set('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'fade'), 0,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'fade'), 0,
   'a sales token changes no section');
 select _as('admin', 'e9000000-0000-0000-0000-0000000000ff');
-select is(_set('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'fade'), 0,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'fade'), 0,
   'another tenant''s admin changes no section of T1');
 
 -- ---- the buckets and the kinds (the CHECKs), as the admin --------------------------------------
 select _as('admin', app.default_tenant_id()::text);
-select is(_set('e9000000-0000-0000-0000-0000000051a1', 'background', 'mist'), 1, 'mist is a background');
-select is(_set('e9000000-0000-0000-0000-0000000051a1', 'background', 'klein'), 1, 'klein is a background');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a1', 'background', 'paper') $$,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a1', 'background', 'mist'), 1, 'mist is a background');
+select is(_set_look('e9000000-0000-0000-0000-0000000051a1', 'background', 'klein'), 1, 'klein is a background');
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a1', 'background', 'paper') $$,
   '23514', null, 'a background outside the bucket is refused');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'background', 'ink') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'background', 'ink') $$,
   '23514', null, 'a call to action keeps its own background (only the Text block and the Gallery take one)');
-select is(_set('e9000000-0000-0000-0000-0000000051a4', 'spacing', 'compact'), 1, 'a Video takes a spacing');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'spacing', 'compact') $$,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a4', 'spacing', 'compact'), 1, 'a Video takes a spacing');
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'spacing', 'compact') $$,
   '23514', null, 'a call to action keeps its own spacing');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a1', 'spacing', 'huge') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a1', 'spacing', 'huge') $$,
   '23514', null, 'a spacing outside the bucket is refused');
-select is(_set('e9000000-0000-0000-0000-0000000051a2', 'reveal', 'rise'), 1, 'a call to action takes a reveal');
-select is(_set('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'fade'), 1, 'a Text block takes a reveal');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a3', 'reveal', 'fade') $$,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a2', 'reveal', 'rise'), 1, 'a call to action takes a reveal');
+select is(_set_look('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'fade'), 1, 'a Text block takes a reveal');
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a3', 'reveal', 'fade') $$,
   '23514', null, 'a hero opens a page: it takes no reveal');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'slide') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a1', 'reveal', 'slide') $$,
   '23514', null, 'a reveal outside the bucket is refused');
 select throws_ok($$ update public.page_sections set type = 'cta'
                     where id = 'e9000000-0000-0000-0000-0000000051a1' $$,
   '23514', null, 'a kind change that leaves a background its new kind does not take is refused');
-select is(_set('e9000000-0000-0000-0000-0000000051a1', 'background', null), 1,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a1', 'background', null), 1,
   'null puts the section''s own background back');
 
 -- ---- the anchor's shape ------------------------------------------------------------------------
-select is(_set('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'next-step-2'), 1,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'next-step-2'), 1,
   'an anchor of words, digits and single hyphens is taken');
-select is(_set('e9000000-0000-0000-0000-0000000051a2', 'anchor', repeat('a', 40)), 1,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', repeat('a', 40)), 1,
   'an anchor of 40 characters is taken');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'anchor', repeat('a', 41)) $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', repeat('a', 41)) $$,
   '23514', null, 'an anchor of 41 characters is refused');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'Our-Story') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'Our-Story') $$,
   '23514', null, 'capitals are refused');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'our--story') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'our--story') $$,
   '23514', null, 'a double hyphen is refused');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'anchor', '2-story') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', '2-story') $$,
   '23514', null, 'an anchor starting with a digit is refused');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'anchor', '') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', '') $$,
   '23514', null, 'an empty anchor is refused (null is none)');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'main') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'main') $$,
   '23514', null, '#main (the skip link''s target) is refused');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'inquiry') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'inquiry') $$,
   '23514', null, 'a code anchor (#inquiry) is refused');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'story-heading') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'story-heading') $$,
   '23514', null, 'a heading''s id pattern (-heading) is refused');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'cf-name') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'cf-name') $$,
   '23514', null, 'a form control''s id pattern (cf-) is refused');
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'svc-tab-events') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'svc-tab-events') $$,
   '23514', null, 'the explorer''s id pattern (svc-) is refused');
 
 -- ---- one anchor, one section of its page -------------------------------------------------------
-select is(_set('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'next-step'), 1, 'the call to action takes next-step');
-select is(_set('e9000000-0000-0000-0000-0000000051a4', 'anchor', 'next-step'), 1,
+select is(_set_look('e9000000-0000-0000-0000-0000000051a2', 'anchor', 'next-step'), 1, 'the call to action takes next-step');
+select is(_set_look('e9000000-0000-0000-0000-0000000051a4', 'anchor', 'next-step'), 1,
   'a section of ANOTHER page takes the same anchor');
 set constraints public.page_sections_anchor_unique immediate;
-select throws_ok($$ select _set('e9000000-0000-0000-0000-0000000051a1', 'anchor', 'next-step') $$,
+select throws_ok($$ select _set_look('e9000000-0000-0000-0000-0000000051a1', 'anchor', 'next-step') $$,
   '23505', null, 'a second section of the same page cannot take it');
 set constraints public.page_sections_anchor_unique deferred;
 select lives_ok($$
