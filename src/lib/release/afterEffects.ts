@@ -1,6 +1,7 @@
 import { env as workerEnv } from 'cloudflare:workers';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ApplyResult, PurgeStatus } from '@schemas/release';
+import { isCustomPageSlug } from '@schemas/customPages';
 import type { AuthContext } from '@/lib/auth/types';
 import { writeAudit } from '@/lib/admin/audit';
 import { syncRedirectsOfTenant } from '@/lib/admin/redirectSync';
@@ -23,7 +24,8 @@ import { releaseTags, type SlugLookup, type SlugTable } from './tags';
 //      question 2): the redirect map when the release changed a redirect, the page-visibility
 //      snapshot when it changed page visibility or renamed or removed a page (the snapshot
 //      names pages by slug, so a renamed hidden page would otherwise be public at the edge
-//      until the daily re-sync). Whoever published, the rebuild reads the whole tenant: a
+//      until the daily re-sync), or moved a custom page's status (a redirect to one is kept
+//      only while it is published, E11 code review CR1). Whoever published, the rebuild reads the whole tenant: a
 //      Content Creator's rename moves a snapshot they cannot edit. And (R14-prep, R7's hand-off
 //      from U9) the maintenance page's contact buttons when the release changed the identity's
 //      brand, e-mail or WhatsApp number while maintenance is on, as an identity save does at once
@@ -78,6 +80,15 @@ export function snapshotNeeds(items: readonly Item[] | null): SnapshotNeeds {
       const before = 'before' in item ? item.before : null;
       const after = 'after' in item ? item.after : null;
       if (item.op === 'update' && before?.['slug'] !== after?.['slug']) visibility = true;
+      // A custom page that starts or stops rendering may be a hidden page's redirect target,
+      // which the snapshot keeps only while it is published (E11 code review, CR1).
+      const slug = String(after?.['slug'] ?? before?.['slug'] ?? '').toLowerCase();
+      if (
+        item.op === 'update' &&
+        isCustomPageSlug(slug) &&
+        before?.['status'] !== after?.['status']
+      )
+        visibility = true;
     }
   }
   return maintenance ? { redirects, visibility, maintenance } : { redirects, visibility };

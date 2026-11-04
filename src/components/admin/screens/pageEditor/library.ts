@@ -5,7 +5,12 @@ import {
   SECTION_TYPES,
   type SectionType,
 } from '@schemas/sectionTypes';
-import { isVisibilityPageSlug, type VisibilityPageSlug } from '@/lib/visibility/routes';
+import {
+  CUSTOM_PAGE_TYPE_REFUSED,
+  isCustomPageSectionType,
+  isCustomPageSlug,
+} from '@schemas/customPages';
+import { isRoutePageSlug, type RoutePageSlug } from '@/lib/visibility/routes';
 import type { IconName } from '@/lib/admin/icons';
 
 // The page editor's section library (Admin v2 E1, docs/admin-v2/ui.md AV-25): what each
@@ -27,7 +32,7 @@ import type { IconName } from '@/lib/admin/icons';
 //   projects  the two project lists (both are the #projects anchor).
 
 /** A CMS page the site routes (`pages.slug`), with its name in the admin. */
-export const PAGE_NAMES: Readonly<Record<VisibilityPageSlug, string>> = {
+export const PAGE_NAMES: Readonly<Record<RoutePageSlug, string>> = {
   home: 'Home',
   about: 'About',
   contact: 'Contact',
@@ -46,7 +51,7 @@ export interface SectionKind {
   description: string;
   icon: IconName;
   /** The pages that take it; every routed page when left out. */
-  pages?: readonly VisibilityPageSlug[];
+  pages?: readonly RoutePageSlug[];
   /** At most one a page. */
   once?: boolean;
   /** A group a page takes one member of (see the header). */
@@ -267,9 +272,14 @@ export const SECTION_KINDS: Readonly<Record<SectionType, SectionKind>> = {
   },
 };
 
-/** The routed page a slug is, or null (a page no route renders: E11 builds those). */
-export function routedPage(slug: string): VisibilityPageSlug | null {
-  return isVisibilityPageSlug(slug) ? slug : null;
+/** The routed page a slug is, or null (a custom page, or a page no route renders). */
+export function routedPage(slug: string): RoutePageSlug | null {
+  return isRoutePageSlug(slug) ? slug : null;
+}
+
+/** Whether a slug is a custom page's (Admin v2 E11): it renders at `/<slug>`. */
+export function customPage(slug: string): boolean {
+  return routedPage(slug) === null && isCustomPageSlug(slug);
 }
 
 const GROUP_WORDS: Readonly<Record<Group, (name: string) => string>> = {
@@ -278,7 +288,7 @@ const GROUP_WORDS: Readonly<Record<Group, (name: string) => string>> = {
   projects: (name) => `This page already lists the projects, in ${name}.`,
 };
 
-function pagesInWords(pages: readonly VisibilityPageSlug[]): string {
+function pagesInWords(pages: readonly RoutePageSlug[]): string {
   const names = pages.map((page) => PAGE_NAMES[page]);
   const last = names.pop();
   return names.length === 0 ? `the ${last} page` : `the ${names.join(', ')} and ${last} pages`;
@@ -301,17 +311,23 @@ export interface Availability {
  */
 export function availability(slug: string, present: readonly string[]): Availability[] {
   const page = routedPage(slug);
+  const custom = customPage(slug);
   const has = new Set(present);
   return SECTION_TYPES.map((type): Availability => {
     const kind = SECTION_KINDS[type];
-    if (!page) {
+    if (!page && !custom) {
       return {
         type,
         ok: false,
         reason: 'No route shows this page yet, so a section added here would show nowhere.',
       };
     }
-    if (kind.pages && !kind.pages.includes(page)) {
+    // A custom page (Admin v2 E11) takes the custom set only; the section routes refuse the
+    // rest too (src/lib/admin/resources/sections.ts), and the page never renders one.
+    if (custom && !isCustomPageSectionType(type)) {
+      return { type, ok: false, reason: CUSTOM_PAGE_TYPE_REFUSED };
+    }
+    if (page && kind.pages && !kind.pages.includes(page)) {
       return { type, ok: false, reason: `Made for ${pagesInWords(kind.pages)}.` };
     }
     if (kind.once && has.has(type)) {
@@ -414,6 +430,17 @@ export function alwaysShown(type: string, page: string): string | null {
 }
 
 /**
+ * The page details' line about the page's address (E1; Admin v2 E11 for a custom page, whose
+ * address was chosen in the New page dialog and is not changed here).
+ */
+export function addressNote(slug: string, path: string | null): string {
+  if (!path) return 'No route of the site shows this page yet.';
+  return customPage(slug)
+    ? `Address ${path}, chosen when the page was made.`
+    : `Address ${path}, set by the site’s routes.`;
+}
+
+/**
  * What the route decides around a section, said plainly (ui.md: "honest notes on route data"),
  * or null. `firstOfType`: the section is the first of its type on the page (hidden ones count),
  * which is the one a preset dresses.
@@ -435,6 +462,9 @@ export function routeNote(type: string, page: string, firstOfType: boolean): str
     }
     if (page === 'join') {
       return 'On this page the hero is the Join banner, with its own built-in words. Its button goes to the application.';
+    }
+    if (customPage(page)) {
+      return 'On this page the hero is a short banner. Its button goes to Our Work. Hidden or removed, the page opens with a banner of its own title instead, so it always has a heading.';
     }
   }
   if (type === 'serviceExplorer' && page === 'services') {

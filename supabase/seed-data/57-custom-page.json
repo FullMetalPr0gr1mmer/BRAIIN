@@ -1,0 +1,119 @@
+{
+  "blocks": [
+    {
+      "table": "pages",
+      "conflict": ["tenant_id", "slug"],
+      "rows": [
+        {
+          "id": "5eed5700-0000-4000-8000-0000000000a0",
+          "slug": "how-we-work",
+          "title": {
+            "en": "How we work",
+            "ar": "كيف نشتغل"
+          },
+          "status": "published",
+          "__placeholder": true
+        }
+      ]
+    },
+    {
+      "table": "page_sections",
+      "conflict": ["id"],
+      "unlessAuthored": ["page_id"],
+      "requires": {
+        "table": "pages",
+        "by": {
+          "id": "5eed5700-0000-4000-8000-0000000000a0"
+        }
+      },
+      "rows": [
+        {
+          "id": "5eed5700-0000-4000-8000-000000000001",
+          "page_id": "5eed5700-0000-4000-8000-0000000000a0",
+          "type": "hero",
+          "content": {
+            "headline": {
+              "en": "How we work",
+              "ar": "كيف نشتغل"
+            },
+            "sub": {
+              "en": "One team, from the first sketch to the day it goes live.",
+              "ar": "فريق واحد، من أول رسمة إلى يوم الإطلاق."
+            }
+          },
+          "visible": true,
+          "sort_order": 10,
+          "is_placeholder": true,
+          "__placeholder": true
+        },
+        {
+          "id": "5eed5700-0000-4000-8000-000000000002",
+          "page_id": "5eed5700-0000-4000-8000-0000000000a0",
+          "type": "textBlock",
+          "content": {
+            "tag": {
+              "en": "Our process",
+              "ar": "طريقتنا"
+            },
+            "heading": {
+              "en": "Every project starts with a conversation",
+              "ar": "كل مشروع يبدأ بحوار"
+            },
+            "body": {
+              "en": {
+                "type": "doc",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "We start by listening: what you need, who it is for, and what a good result looks like to you."
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Then one team plans it, makes it and stays with it after it goes live, so nothing is lost between hands."
+                      }
+                    ]
+                  }
+                ]
+              },
+              "ar": {
+                "type": "doc",
+                "content": [
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "نبدأ بالاستماع: وش تحتاج، ولمين، وكيف تشوف النتيجة الناجحة."
+                      }
+                    ]
+                  },
+                  {
+                    "type": "paragraph",
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "بعدها فريق واحد يخطط ويصنع ويبقى معك بعد الإطلاق، عشان ما يضيع شيء بين الأيادي."
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "visible": true,
+          "sort_order": 20,
+          "is_placeholder": true,
+          "__placeholder": true
+        }
+      ]
+    }
+  ]
+}

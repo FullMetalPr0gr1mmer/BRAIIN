@@ -1,5 +1,6 @@
 ---
 import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminNewPage from '@/components/admin/islands/AdminNewPage';
 import Badge from '@/components/admin/ui/Badge.astro';
 import Icon from '@/components/admin/ui/Icon.astro';
 import Refused from '@/components/admin/ui/Refused.astro';
@@ -9,6 +10,7 @@ import { loadPagesList, type PagesList } from '@/lib/admin/pages/list';
 import { studioClock } from '@/lib/admin/studioTimeZone';
 import { MODE_COPY } from '@/lib/admin/visibilityCopy';
 import { writeSystemLog } from '@/lib/data/systemLog';
+import { createReleaseMode } from '@/lib/admin/releasesFlag';
 
 export const prerender = false;
 
@@ -19,7 +21,10 @@ export const prerender = false;
 // stretched over the card), "<path> · N sections", "Edited <ago>", Open page in English and
 // Arabic, and the visibility setting for maintenance.manage. Then the two templates (the
 // service and the project page), which open the Services and Projects areas until the
-// template editors (E3). "New page" waits for E11 (custom pages).
+// template editors (E3). "New page" (Admin v2 E11) is the one island, for pages.write holders
+// (Admin, Content Creator): a dialog that makes a custom page and opens its editor; with
+// releases on its writes are staged (the list's own read of the flag, as the create form's).
+// A page made with it is listed like every other, by its slug after the site's own pages.
 //
 // Who opens it: a role that edits pages or reads their SEO (Admin, Content Creator, SEO). Any
 // other role (Developer, Sales) gets the layout with the refusal and a 403, and nothing is
@@ -30,6 +35,9 @@ const sb = Astro.locals.supabase;
 const allowed = Boolean(session && sb && mayOpenPages(session.role));
 if (!allowed) Astro.response.status = 403;
 const manageVisibility = Boolean(session && can(session.role, 'maintenance.manage') === 'full');
+const makePages = Boolean(allowed && session && can(session.role, 'pages.write') === 'full');
+const releaseMode = makePages ? await createReleaseMode(Astro.locals, 'pages') : false;
+const startOpen = makePages && Astro.url.searchParams.get('new') === '1';
 
 let list: PagesList | null = null;
 if (allowed && session && sb) {
@@ -56,6 +64,13 @@ const sections = (n: number) => `${n} ${n === 1 ? 'section' : 'sections'}`;
   subtitle="Every page of the site. Open one to edit its sections, their order, and every word in two languages."
   styles={['pages.css']}
 >
+  <Fragment slot="actions">
+    {
+      makePages && list && (
+        <AdminNewPage client:load releaseMode={releaseMode} startOpen={startOpen} />
+      )
+    }
+  </Fragment>
   {
     !allowed ? (
       <Refused />

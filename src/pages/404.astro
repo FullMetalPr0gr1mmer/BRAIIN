@@ -10,6 +10,10 @@ Astro.response.status = 404;
 // redirects only when the render answered 404, so a 404 that stuck in the edge cache
 // would shadow a rule authored afterwards for that URL. It had no Cache-Control at all.
 noEdgeCache(Astro.response);
+// No GA4 on a 404 (src/lib/http/ga4.ts: nothing to measure). A detail route that misses
+// rewrites here with the read it was given still in `locals`: drop it, so the layout renders
+// no loader (the middleware's step 5 lists no Google host on a 404 either).
+delete Astro.locals.ga4;
 
 // siteTitle, not loadHead: a 404 is noindex and answers every mistyped or probing URL,
 // so it skips the seo_defaults read. The identity is shared with the header and footer.

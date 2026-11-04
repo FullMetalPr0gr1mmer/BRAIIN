@@ -7,7 +7,11 @@ import {
   GATED_ROUTES,
   PAGE_PATHS,
   TEMPLATE_ROUTES,
+  CUSTOM_PAGE_ROUTES,
+  isRoutePageSlug,
+  isVisibilityPageSlug,
   localizedPagePath,
+  pagePathOf,
   targetForPath,
   targetForRoute,
 } from '@/lib/visibility/routes';
@@ -94,8 +98,8 @@ describe('the route map is the files in src/pages', () => {
     for (const route of ALL_NOT_GATEABLE) expect(PUBLIC_ROUTES, route).toContain(route);
   });
 
-  it('gates the seven CMS pages and the two templates, each in English and Arabic', () => {
-    expect(GATED_ROUTES).toHaveLength(2 * (Object.keys(PAGE_PATHS).length + 2));
+  it('gates the seven CMS pages, the two templates and the custom pages, each in English and Arabic', () => {
+    expect(GATED_ROUTES).toHaveLength(2 * (Object.keys(PAGE_PATHS).length + 2 + 1));
     expect(targetForRoute('/')).toEqual({ kind: 'page', slug: 'home' });
     expect(targetForRoute('/ar')).toEqual({ kind: 'page', slug: 'home' });
     expect(targetForRoute('/about')).toEqual({ kind: 'page', slug: 'about' });
@@ -149,7 +153,15 @@ describe('paths, for the readers that hold paths', () => {
       kind: 'template',
       template: 'case_study',
     });
-    for (const path of ['/services/logo/x', '/creative-knowledge/x', '/privacy', '/search', '/x']) {
+    for (const path of [
+      '/services/logo/x',
+      '/creative-knowledge/x',
+      '/privacy',
+      '/search',
+      '/X',
+      '/admin',
+      '/x/y',
+    ]) {
       expect(targetForPath(path), path).toBeNull();
     }
   });
@@ -159,6 +171,41 @@ describe('paths, for the readers that hold paths', () => {
     expect(localizedPagePath('home', 'ar')).toBe('/ar');
     expect(localizedPagePath('contact', 'ar')).toBe('/ar/contact');
     expect(localizedPagePath('portfolio-all', 'en')).toBe('/portfolio/all');
+  });
+});
+
+describe('custom pages (Admin v2 E11)', () => {
+  it('the two [slug] routes render the page their param names, and only a custom page’s address', () => {
+    expect(GATED_ROUTES).toEqual(expect.arrayContaining([...CUSTOM_PAGE_ROUTES]));
+    expect(targetForRoute('/[slug]', { slug: 'our-story' })).toEqual({
+      kind: 'page',
+      slug: 'our-story',
+    });
+    expect(targetForRoute('/ar/[slug]', { slug: 'our-story' })).toEqual({
+      kind: 'page',
+      slug: 'our-story',
+    });
+    // Not a custom page's address: the route answers its own 404, so there is nothing to gate.
+    for (const slug of ['Our-Story', 'home', 'about', 'admin', 'a_b', '', undefined]) {
+      expect(targetForRoute('/[slug]', { slug }), String(slug)).toBeNull();
+    }
+    expect(targetForRoute('/[slug]')).toBeNull();
+    // A param on another route never makes it a custom page.
+    expect(targetForRoute('/services/[slug]', { slug: 'our-story' })).toEqual({
+      kind: 'template',
+      template: 'service',
+    });
+  });
+
+  it('a path of one custom segment is that page, and its paths are /<slug> and /ar/<slug>', () => {
+    expect(targetForPath('/our-story')).toEqual({ kind: 'page', slug: 'our-story' });
+    expect(targetForPath('/our-story/')).toEqual({ kind: 'page', slug: 'our-story' });
+    expect(pagePathOf('our-story')).toBe('/our-story');
+    expect(pagePathOf('about')).toBe('/about');
+    expect(localizedPagePath('our-story', 'ar')).toBe('/ar/our-story');
+    expect(isVisibilityPageSlug('our-story')).toBe(true);
+    expect(isVisibilityPageSlug('search')).toBe(false);
+    expect(isRoutePageSlug('our-story')).toBe(false);
   });
 });
 

@@ -19,7 +19,9 @@
         "http://localhost:8788/services/logo",
         "http://localhost:8788/ar/services/logo",
         "http://localhost:8788/join",
-        "http://localhost:8788/ar/join"
+        "http://localhost:8788/ar/join",
+        "http://localhost:8788/how-we-work",
+        "http://localhost:8788/ar/how-we-work"
       ],
       "numberOfRuns": 3
     },

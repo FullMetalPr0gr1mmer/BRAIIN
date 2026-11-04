@@ -56,6 +56,14 @@ const PageRowSchema = z.object({
 export interface PageComposition {
   /** The page row — `id` keys the page's SEO override (`loadHead`, entity type 'page'). */
   page: { id: string; slug: string; title: { en: string; ar: string }; updatedAt: string | null };
+  /**
+   * Each carries its row's `updated_at` (`updatedAt`) when the read returned one, so a route
+   * can date what it RENDERS (Admin v2 E11 review E11-C2, code review CR6: a custom page's
+   * `dateModified` is the later of the page row and the sections it shows, never a row it
+   * dropped). A section edit never moves `pages.updated_at`. A removed or hidden section leaves
+   * no date behind (anon reads visible sections only); the password page's unlocked read
+   * carries none.
+   */
   sections: SectionData[];
 }
 
@@ -104,6 +112,7 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
     const page = pageData ? parseRow(PageRowSchema, pageData, 'page') : null;
     if (!page) return null;
     const pageRef = { id: page.id, slug: page.slug, title: page.title, updatedAt: page.updated_at };
+    const pageOnly = { page: pageRef, sections: [] };
 
     const unlocked =
       access !== undefined && access.pageId === page.id && access.tenantId.length > 0
@@ -113,7 +122,7 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
       unlocked === null
         ? await contentClient()
             .from('page_sections')
-            .select('id,type,content,visible,sort_order')
+            .select('id,type,content,visible,sort_order,updated_at')
             .eq('page_id', page.id)
             .order('sort_order', { ascending: true })
             .order('id', { ascending: true })
@@ -123,12 +132,20 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
           });
     if (error) {
       reportLoadError('page_section', error);
-      return { page: pageRef, sections: [] };
+      return pageOnly;
     }
 
-    const sections = parseRows(PageSectionRowSchema, data ?? [], 'page_section').flatMap((row) => {
-      const section = toSection(row);
-      return section ? [section] : [];
+    // One row at a time, so a section keeps its own row's date (a dropped row takes its date
+    // with it, CR6).
+    const sections = ((data ?? []) as unknown[]).flatMap((raw) => {
+      const [row] = parseRows(PageSectionRowSchema, [raw], 'page_section');
+      const section = row ? toSection(row) : null;
+      if (!section) return [];
+      const edited =
+        typeof raw === 'object' && raw !== null
+          ? (raw as Record<string, unknown>)['updated_at']
+          : undefined;
+      return [typeof edited === 'string' ? { ...section, updatedAt: edited } : section];
     });
     return { page: pageRef, sections };
   } catch (err) {

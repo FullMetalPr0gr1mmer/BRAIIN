@@ -6,6 +6,7 @@ import {
   loadBlocks,
   rowForMode as rowForModeRaw,
   OUTPUTS,
+  TENANT_ID as TENANT,
 } from '../../scripts/gen-seeds.mjs';
 import { IDENTITY_FALLBACK } from '@/lib/identity/fallback';
 import { HEADER_FALLBACK, FOOTER_FALLBACK } from '@/lib/nav/fallback';
@@ -620,5 +621,42 @@ describe('Round 2 catalogue seed (0028): five disciplines, 28 services, sample c
     const delta = onlyBlocks(['08-disciplines.json', '45-service-cases.json']);
     expect([...new Set(delta.map((b) => b.table))]).toEqual(['disciplines', 'service_cases']);
     expect(() => onlyBlocks(['99-nope.json'])).toThrow();
+  });
+});
+
+// Admin v2 E11 code review, CR5: the sample custom page's sections join only the page THIS
+// seed made. Its page insert does nothing when an editor already has a page at
+// /how-we-work (conflict on the address), and the sections used to find their page by that
+// address, so the sample's placeholders landed on the editor's own page. The page now carries
+// the seed's own id, the sections name it, and they go in only while that page exists.
+describe('the sample custom page', () => {
+  const SOURCE = '57-custom-page.json';
+  const page = blocks.find((b) => b.source === SOURCE && b.table === 'pages')?.rows[0];
+  const sections = blocks.find((b) => b.source === SOURCE && b.table === 'page_sections');
+
+  it('names its own page by the seed’s id, never by the address', () => {
+    expect(page?.['id']).toMatch(/^5eed5700-/);
+    expect(sections?.rows.map((r) => r['page_id'])).toEqual(sections?.rows.map(() => page?.['id']));
+    for (const mode of ['published', 'production'] as const) {
+      const sql = generate(mode);
+      const block = sql.slice(sql.indexOf(`-- page_sections (${SOURCE})`));
+      expect(block.slice(0, block.indexOf('end $seed$;'))).toContain(
+        `  if exists (select 1 from public.pages where tenant_id = '${TENANT}' and id = '${String(page?.['id'])}') and not exists`,
+      );
+      expect(block.slice(0, block.indexOf('end $seed$;'))).not.toContain("slug = 'how-we-work'");
+    }
+  });
+
+  it('`requires` is a slice’s guard, refused on a block without one', () => {
+    const bad = [
+      {
+        table: 'x',
+        conflict: ['id'],
+        requires: { table: 'pages', by: { id: 'a' } },
+        rows: [{ id: 'a' }],
+        source: 'bad.json',
+      },
+    ];
+    expect(() => generate('production', bad as never)).toThrow(/requires only with unlessAuthored/);
   });
 });

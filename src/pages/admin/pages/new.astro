@@ -1,17 +1,10 @@
 ---
-import AdminLayout from '@/layouts/AdminLayout.astro';
-import AdminResourceForm from '@/components/admin/islands/AdminResourceForm';
-import { uiFor } from '@/lib/admin/uiSchema';
-import { createReleaseMode } from '@/lib/admin/releasesFlag';
-
 export const prerender = false;
 
-const ui = uiFor('pages');
-// R12b: in release mode the create says so (createReleaseMode: the shell's own read of
-// the flag, shared). A resource outside the release is false without asking.
-const releaseMode = await createReleaseMode(Astro.locals, 'pages');
+// Making a page is the pages list's "New page" dialog now (Admin v2 E11, AV-33): this address
+// opens the list with the dialog open. The old form asked for a page's address and title with
+// nothing to say which addresses the site already answers, and made a page no route rendered
+// (E11 renders them, and its dialog holds the rules). A 302, not a 301: an admin route is never
+// cached, and a later screen may take the address back. The list decides who may make a page.
+return Astro.redirect('/admin/pages?new=1', 302);
 ---
-
-<AdminLayout title={`New ${ui.singular.toLowerCase()}`} subtitle={ui.title}>
-  <AdminResourceForm client:load releaseMode={releaseMode} resource="pages" id={null} />
-</AdminLayout>

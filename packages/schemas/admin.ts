@@ -7,6 +7,7 @@ import {
   SlugSchema,
   UuidSchema,
 } from './primitives';
+import { CUSTOM_PAGE_SLUG_MAX, isReservedPageSlug } from './customPages';
 import {
   ADMIN_MAX_CASE_PROBLEMS,
   ADMIN_MAX_VALUE_POINTS,
@@ -403,8 +404,19 @@ export type PortfolioWrite = z.infer<typeof PortfolioWriteSchema>;
 
 // ── Pages & sections ────────────────────────────────────────────────────────────
 
+/**
+ * A page's address (Admin v2 E11): lowercase kebab-case, at most CUSTOM_PAGE_SLUG_MAX
+ * characters, never a word the site already answers (packages/schemas/customPages.ts; 0123's
+ * trigger refuses the same for every writer). A route page's own slug passes: the unique key
+ * refuses it while that page exists, and recreating a missing one makes that route's page again.
+ */
+export const PageSlugSchema = SlugSchema.max(CUSTOM_PAGE_SLUG_MAX).refine(
+  (s) => !isReservedPageSlug(s),
+  { message: 'The site already uses this address. Choose another one.' },
+);
+
 export const PageWriteSchema = z.object({
-  slug: SlugSchema,
+  slug: PageSlugSchema,
   title: BilingualTextSchema,
   status: ContentStatusSchema.default('draft'),
   navVisible: z.boolean().default(true),

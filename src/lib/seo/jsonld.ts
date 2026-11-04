@@ -228,6 +228,33 @@ export function buildFaqSchema(items: { question: string; answer: string }[]): J
   };
 }
 
+/**
+ * WebPage — a custom page (Admin v2 E11): its name, its own URL in its language, the site it is
+ * part of and, only when it really has them, its description and its truthful last change (the
+ * row's `updated_at`, never "now": CLAUDE.md Pillar 3). `inLanguage` is defined on CreativeWork,
+ * which WebPage is.
+ */
+export function buildWebPageSchema(opts: {
+  name: string;
+  url: string;
+  siteUrl: string;
+  locale: Locale;
+  description?: string;
+  dateModified?: string;
+}): JsonLdNode {
+  const node: JsonLdNode = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: opts.name,
+    url: opts.url,
+    inLanguage: opts.locale,
+    isPartOf: { '@type': 'WebSite', url: opts.siteUrl.replace(/\/$/, '') },
+  };
+  if (opts.description) node.description = opts.description;
+  if (opts.dateModified) node.dateModified = opts.dateModified;
+  return node;
+}
+
 export function buildBreadcrumbSchema(items: { name: string; url: string }[]): JsonLdNode {
   return {
     '@context': 'https://schema.org',

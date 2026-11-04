@@ -25,7 +25,6 @@
 
 import {
   HOME_SLUG,
-  PAGE_PATHS,
   isVisibilityPageSlug,
   isVisibilityTemplate,
   type VisibilityPageSlug,
@@ -352,7 +351,7 @@ export function decide(
   const to = entry?.target ?? null;
   if (
     to === null ||
-    !Object.hasOwn(PAGE_PATHS, to) ||
+    !isVisibilityPageSlug(to) ||
     (target.kind === 'page' && to === target.slug) ||
     modeOf(snapshot, { kind: 'page', slug: to }, now) === 'hidden'
   ) {

@@ -25,6 +25,8 @@ export const PATHS = [
   // Join, plus a no-JS answer (?status= — its own response: private, same markup rules)
   '/join',
   '/join?status=ok',
+  // Admin v2 E11: the seeded custom page (a banner hero and a text block), at /<slug>.
+  '/how-we-work',
   '/privacy',
   '/terms',
   '/cookie-policy',

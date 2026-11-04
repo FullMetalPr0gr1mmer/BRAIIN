@@ -58,7 +58,17 @@ function session() {
     from(table: string) {
       tables.push(table);
       const b: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'neq', 'match', 'order', 'limit', 'insert', 'update']) {
+      for (const m of [
+        'select',
+        'eq',
+        'neq',
+        'match',
+        'order',
+        'limit',
+        'in',
+        'insert',
+        'update',
+      ]) {
         b[m] = () => b;
       }
       b['maybeSingle'] = async () => ({ data: null, error: null });

@@ -8,6 +8,12 @@ import { HERO_COPY, HERO_LABELS } from './copy/hero';
 export interface SectionData {
   /** The `page_sections` row's id, when the section came from one (the preview's marker). */
   id?: string;
+  /**
+   * When its row was last written (`page_sections.updated_at`), when the read carried it: a
+   * custom page dates its WebPage by the sections it renders (Admin v2 E11 code review, CR6).
+   * Never rendered.
+   */
+  updatedAt?: string;
   type: string;
   visible?: boolean;
   /** Per-instance overrides; section components also localise their own copy. */

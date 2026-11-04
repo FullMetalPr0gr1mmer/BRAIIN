@@ -648,4 +648,19 @@ do $seed$ begin
   end if;
 end $seed$;
 
+-- pages (57-custom-page.json)
+insert into public.pages (tenant_id, id, slug, title, status) values
+  ('00000000-0000-0000-0000-0000000000b1', '5eed5700-0000-4000-8000-0000000000a0', 'how-we-work', '{"en":"How we work","ar":"كيف نشتغل"}'::jsonb, 'published')
+on conflict (tenant_id, slug) do nothing;
+
+-- page_sections (57-custom-page.json)
+do $seed$ begin
+  if exists (select 1 from public.pages where tenant_id = '00000000-0000-0000-0000-0000000000b1' and id = '5eed5700-0000-4000-8000-0000000000a0') and not exists (select 1 from public.page_sections where tenant_id = '00000000-0000-0000-0000-0000000000b1' and page_id = '5eed5700-0000-4000-8000-0000000000a0') then
+    insert into public.page_sections (tenant_id, id, page_id, type, content, visible, sort_order, is_placeholder) values
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5700-0000-4000-8000-000000000001', '5eed5700-0000-4000-8000-0000000000a0', 'hero', '{"headline":{"en":"How we work","ar":"كيف نشتغل"},"sub":{"en":"One team, from the first sketch to the day it goes live.","ar":"فريق واحد، من أول رسمة إلى يوم الإطلاق."}}'::jsonb, true, 10, true),
+      ('00000000-0000-0000-0000-0000000000b1', '5eed5700-0000-4000-8000-000000000002', '5eed5700-0000-4000-8000-0000000000a0', 'textBlock', '{"tag":{"en":"Our process","ar":"طريقتنا"},"heading":{"en":"Every project starts with a conversation","ar":"كل مشروع يبدأ بحوار"},"body":{"en":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"We start by listening: what you need, who it is for, and what a good result looks like to you."}]},{"type":"paragraph","content":[{"type":"text","text":"Then one team plans it, makes it and stays with it after it goes live, so nothing is lost between hands."}]}]},"ar":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"نبدأ بالاستماع: وش تحتاج، ولمين، وكيف تشوف النتيجة الناجحة."}]},{"type":"paragraph","content":[{"type":"text","text":"بعدها فريق واحد يخطط ويصنع ويبقى معك بعد الإطلاق، عشان ما يضيع شيء بين الأيادي."}]}]}}}'::jsonb, true, 20, true)
+    on conflict (id) do nothing;
+  end if;
+end $seed$;
+
 commit;
