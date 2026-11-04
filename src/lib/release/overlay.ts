@@ -177,7 +177,7 @@ function refuseSchedule(entry: RegistryEntry, parsed: Payload): void {
  * column `live` does not carry is kept: an absent value is unknown, not null. Live and the
  * base are stored values, read in today's shape (`inCurrentShape`, Admin v2 E12 code review
  * CR5): the patch is today's `toRow`, so a theme saved before E12 (v1) and the same theme as
- * the editor saves it now (v2 at the brand's shapes and type) are the same, not a change.
+ * the editor saves it now (v3 at the brand's shapes, type and fonts) are the same, not a change.
  */
 export function dropNoOps(
   entityType: string,

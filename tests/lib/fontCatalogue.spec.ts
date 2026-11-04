@@ -23,13 +23,22 @@ import {
   fontFaceCss,
   heroFile,
   matchWeight,
+  type FallbackFace,
   type FamilyFaces,
+  type WebFace,
 } from '@theme/fontFaces';
 import { themeStylesheet } from '@theme/stylesheet';
 import { ThemeSettingsSchema } from '@schemas/theme';
 import { THEME_TOKEN_PATTERNS, ThemeTokensSchema, tokenMax } from '@schemas/themeTokens';
 import { HERO_WEIGHTS, heroFontPreload, themedHeroWeight } from '@/lib/seo/fonts';
-import { catalogueProblems, ROUTE_BUDGET, type CatalogueInput } from './fontCatalogueRules';
+import {
+  catalogueProblems,
+  FACE_NAME,
+  PERCENT,
+  ROUTE_BUDGET,
+  UNICODE_RANGE,
+  type CatalogueInput,
+} from './fontCatalogueRules';
 
 // The font catalogue (Admin v2 E13; README "a curated self-hosted font catalogue"; CLAUDE.md
 // §6; docs/fonts.md "The catalogue"). The mechanism is whole while owner item O-21 keeps the
@@ -301,6 +310,140 @@ describe('the rules catch a family that breaks them (a family built to break eac
       }),
       /latin: 2 brand families/,
     );
+    has(
+      catalogueProblems({ ...WITH_TEST, families: [FONT_FAMILIES[1]!, TEST_SANS] }),
+      /latin: 0 brand families/,
+    );
+  });
+
+  it('an id that is taken or not lower case letters and hyphens, no recorded licence, a stack of other characters', () => {
+    has(
+      catalogueProblems({ ...WITH_TEST, families: [...FONT_FAMILIES, TEST_SANS, TEST_SANS] }),
+      /test-sans: the id is taken/,
+    );
+    has(broken({ id: 'Test_Sans' }, {}), /Test_Sans: the id is not lower case letters/);
+    has(broken({ licence: { name: '', notice: '' } }, {}), /test-sans: no licence/);
+    has(broken({ licence: { name: 'SIL Open Font License 1.1', notice: ' ' } }, {}), /no licence/);
+    has(
+      broken({ stack: "'Test Sans', 'Test Sans Fallback', sans-serif;}" }, {}),
+      /test-sans: the stack holds other characters/,
+    );
+  });
+
+  it('a family with no faces, no web face, or none in its own script', () => {
+    has(catalogueProblems({ ...WITH_TEST, faces: FONT_FACES }), /^test-sans: no faces$/);
+    const none = broken({}, { web: [] });
+    has(none, /^test-sans: no web face$/);
+    has(none, /^test-sans: no latin web face$/);
+    has(
+      broken({}, { web: TEST_SANS_FACES.web.map((f) => ({ ...f, subset: 'arabic' as const })) }),
+      /^test-sans: no latin web face$/,
+    );
+  });
+
+  it('a web face with no unicode-range, and an Arabic fallback with none', () => {
+    has(
+      broken({}, { web: TEST_SANS_FACES.web.map((f) => ({ ...f, unicodeRange: ' ' })) }),
+      /test-sans-400-latin\.woff2 has no unicode-range/,
+    );
+    const almarai = FONT_FACES.almarai;
+    has(
+      catalogueProblems({
+        ...REAL,
+        faces: {
+          ...FONT_FACES,
+          almarai: {
+            ...almarai,
+            fallbacks: almarai.fallbacks.map(({ unicodeRange: _range, ...f }) => f),
+          },
+        },
+      }),
+      /the Almarai Fallback 800 Arabic fallback has no unicode-range/,
+    );
+  });
+});
+
+describe('every string the renderer writes holds only its descriptor’s characters', () => {
+  // theme.css carries a chosen family's faces unchanged, and the releases preview puts theme.css
+  // in BaseLayout's nonced `<style>`: no string may close a quote, a descriptor, the rule or
+  // the element (E13 security review L1). Each rule fires on a family built to break it.
+  const ESCAPE = "Arial'); } </style><script>alert(1)</script><style>@font-face{src:local('x";
+  const broken = (family: Partial<FontFamily>, faces: Partial<FamilyFaces>) => {
+    const f = { ...TEST_SANS, ...family };
+    return catalogueProblems({
+      ...WITH_TEST,
+      families: [...FONT_FAMILIES, f],
+      faces: { ...FONT_FACES, [f.id]: { ...TEST_SANS_FACES, ...faces } },
+    });
+  };
+  const has = (problems: string[], pattern: RegExp) =>
+    expect(
+      problems.some((p) => pattern.test(p)),
+      problems.join('\n'),
+    ).toBe(true);
+  const firstFallback = (change: Partial<FallbackFace>) => ({
+    fallbacks: TEST_SANS_FACES.fallbacks.map((f, i) => (i === 0 ? { ...f, ...change } : f)),
+  });
+  const firstWeb = (change: Partial<WebFace>) => ({
+    web: TEST_SANS_FACES.web.map((f, i) => (i === 0 ? { ...f, ...change } : f)),
+  });
+
+  it('a family’s name, a fallback family’s name, a local font’s name', () => {
+    has(broken({ name: "Test Sans'}" }, {}), /test-sans: the name holds other characters/);
+    has(
+      broken({}, firstFallback({ family: 'Test Sans Fallback</style>' })),
+      /fallback: the family holds other characters/,
+    );
+    has(
+      broken({}, firstFallback({ local: [ESCAPE, 'Arial'] })),
+      /the Test Sans Fallback 400 latin fallback: a local font name holds other characters/,
+    );
+    has(broken({}, firstFallback({ local: [] })), /400 latin fallback names no local font/);
+  });
+
+  it('a unicode-range, on a web face or a fallback', () => {
+    for (const range of ['U+0020-007E} body{display:none', 'U+0020-007E;', 'all', 'U+GG']) {
+      has(
+        broken({}, firstWeb({ unicodeRange: range })),
+        /test-sans-400-latin\.woff2: the unicode-range is not a list of U\+ ranges/,
+      );
+      has(
+        broken({}, firstFallback({ unicodeRange: range })),
+        /400 latin fallback: the unicode-range is not a list of U\+ ranges/,
+      );
+    }
+  });
+
+  it('a size or an override, and a stretch', () => {
+    const bad = '100%;color:red';
+    for (const change of [
+      { sizeAdjust: bad },
+      { ascentOverride: bad },
+      { descentOverride: bad },
+      { lineGapOverride: bad },
+    ]) {
+      has(
+        broken({}, firstFallback(change)),
+        /400 latin fallback: a size or override is not a percentage/,
+      );
+    }
+    for (const stretch of ['100%}', 'condensed', '']) {
+      has(
+        broken({}, firstWeb({ stretch })),
+        /test-sans-400-latin\.woff2: the stretch is not a percentage/,
+      );
+    }
+  });
+
+  it('no pattern takes a character that could close a quote, a descriptor, the rule or the element', () => {
+    expect(FACE_NAME.test('Arial-BoldMT')).toBe(true);
+    expect(UNICODE_RANGE.test('U+0020-007E, U+00A0,U+20AC')).toBe(true);
+    expect(PERCENT.test('100.75%')).toBe(true);
+    for (const value of ["'", '"', '<', '>', '\\', '{', '}', ';', ':', '(', ')', '/', '\n']) {
+      expect(FACE_NAME.test(`Arial${value}`), JSON.stringify(value)).toBe(false);
+      expect(UNICODE_RANGE.test(`U+0020${value}`), JSON.stringify(value)).toBe(false);
+      expect(PERCENT.test(`100%${value}`), JSON.stringify(value)).toBe(false);
+    }
   });
 });
 

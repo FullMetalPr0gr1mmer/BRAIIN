@@ -130,14 +130,18 @@ Every value below is asserted by `scripts/contrast-audit.mjs`. Contrast was comp
 - `Archivo Fallback`, per weight (docs/fonts.md 2c);
 - the per-weight, per-script `Almarai Fallback`, and its Linux family `Almarai Fallback Linux`.
 
+Since E13, admin.css follows that set with every other family of the font catalogue (none until owner item O-21), so the Theme editor's Fonts tiles and its site sample draw each family in itself. While the catalogue holds the brand's two families, the two sets are identical.
+
 Today admin.css declares only Almarai 400 and 700 Arabic, under a range wider than the files.
 
 **Arabic stack.** `--ad-font-ar` is `'Almarai','Almarai Fallback','Almarai Fallback Linux','Archivo',system-ui`, which equals `--bs-font-ar`. Authors therefore proof Arabic, including 800 headings, in the face visitors see.
 
+Since E13 it equals the brand's `--bs-font-ar` only. The chrome keeps the brand's families (`--ad-font`, `--ad-font-ar` read no font token), whatever the Theme screen's Fonts card chooses. With another family chosen, authors proof it on the Fonts tiles, the site sample and the releases preview, not in the chrome (deviations.md, Theme).
+
 **Other rules**
 - No Google Fonts (Pillar 2; `font-src 'self'`).
 - No preloads: /admin is exempt from the font budget (§6).
-- A test asserts that the admin.css and global.css `@font-face` blocks are identical, matching docs/fonts.md's "both stylesheets change together".
+- A test asserts that the admin.css and global.css `@font-face` blocks are identical, matching docs/fonts.md's "both stylesheets change together". Since E13 it asserts global.css's blocks first, then the catalogue's other families (`tests/lib/adminStyles.spec.ts`, `tests/lib/fontCatalogue.spec.ts`).
 
 ### 1.4 Motion
 

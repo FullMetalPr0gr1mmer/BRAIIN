@@ -313,6 +313,7 @@ the brand's, and the brand's choice writes no token.
 | Hero files at 600, 700 and 800 within 35 KB (Latin) or 45 KB (Arabic) | CLAUDE.md §6 |
 | A route set in the family within 180 KB: its files, plus those of any family an Arabic stack names (Almarai's names Archivo) | CLAUDE.md §6; the public stylesheets name no family but through the two stacks (checked) |
 | A licence name and the copyright notice its files carry | each asset needs a recorded licence (docs/legal/review-register.md, L-1) |
+| Every string the renderer writes holds only its descriptor's characters: a family's, a fallback family's and a `local()` font's name letters, digits, spaces and hyphens; a unicode-range `U+` ranges; size-adjust, the overrides and a stretch a percentage | theme.css carries a chosen family's faces unchanged, and the releases preview puts theme.css in a nonced `<style>`: no string may close a quote, a rule or the element |
 
 **Adding a family (once O-21 names it and its licence is checked).**
 
