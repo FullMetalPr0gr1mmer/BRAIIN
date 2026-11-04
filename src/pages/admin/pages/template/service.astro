@@ -15,9 +15,10 @@ export const prerender = false;
 // project.astro; both are this file with the kind changed.
 //
 // Who opens it: a role that edits pages (pages.write: Admin, Content Creator). Anyone else gets
-// the layout with the refusal and a 403, having read nothing (tests/admin/routes.ts
-// LOCKED_SCREENS). Every read is the person's own (RLS decides); the island reads the rest
-// through the routes, which check the capabilities again.
+// the layout with the refusal and a 403, having read nothing (tests/admin/templates.e2e.ts,
+// the server's refusals; not a LOCKED_SCREENS entry, which holds menu screens). Every read is
+// the person's own (RLS decides); the island reads the rest through the routes, which check
+// the capabilities again.
 
 const KIND = 'service';
 const session = Astro.locals.session;

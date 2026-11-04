@@ -17,10 +17,12 @@ import { previewable } from './editor';
 //   mayEditTemplates   who opens them: the holders of pages.write (Admin, Content Creator);
 //   templateAccess     what the role may do there (pure; UX only);
 //   templateGroups     the picker's groups from the rows read (pure): services by discipline in
-//                      the site's order (a service in no discipline last, under "No
-//                      discipline"), projects one flat list in the catalogue's order;
+//                      the site's order, an archived discipline's after the live ones (its
+//                      label says so), a service in no discipline last, under "No
+//                      discipline"; projects one flat list in the catalogue's order;
 //   pickItem           the item shown first: the address's, else the first published one;
-//   loadTemplateEditor the rows, read under the person's RLS, archived ones left out.
+//   loadTemplateEditor the rows, read under the person's RLS: archived items left out, every
+//                      discipline read (an archived one only to name its services' group).
 // The item's own fields, its history and the shared text are read by the island through the
 // resource and singleton routes, which lay pending changes over live while releases are on.
 
@@ -78,8 +80,15 @@ export function templateGroups(
     const flat = items.flatMap((row) => templateItem(kind, row) ?? []);
     return flat.length > 0 ? [{ label: null, items: flat }] : [];
   }
-  const groups: TemplateItemGroup[] = disciplines.map((d) => ({
-    label: bi(d['name'], 'Discipline').en,
+  // A service keeps its discipline's group when the discipline is archived (E3 review): it is
+  // still that discipline's, not one in "No discipline". Live disciplines first, in the site's
+  // order; then the archived ones, labelled so.
+  const ordered = [
+    ...disciplines.filter((d) => d['status'] !== 'archived'),
+    ...disciplines.filter((d) => d['status'] === 'archived'),
+  ];
+  const groups: TemplateItemGroup[] = ordered.map((d) => ({
+    label: `${bi(d['name'], 'Discipline').en}${d['status'] === 'archived' ? ' (archived)' : ''}`,
     items: items
       .filter((row) => row['discipline_id'] === d['id'])
       .flatMap((row) => templateItem(kind, row) ?? []),
@@ -126,9 +135,8 @@ export async function loadTemplateEditor(
     kind === 'service'
       ? sb
           .from('disciplines')
-          .select('id,name')
+          .select('id,name,status')
           .eq('tenant_id', auth.tenantId)
-          .neq('status', 'archived')
           .order('sort_order', { ascending: true })
       : Promise.resolve({ data: [] as Row[], error: null }),
   ]);

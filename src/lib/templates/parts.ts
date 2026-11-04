@@ -7,8 +7,9 @@ import type { ProjectCopyKey, ServiceCopyKey, TemplateKind } from '@schemas/temp
 // do ServicePage.astro and CaseStudyPage.astro.
 //
 // `copy` names the shared text keys each part shows, in the page's order: the editor draws the
-// Shared text form as one card per part (tests/lib/templateParts.spec.ts holds every catalogue
-// key to exactly one part). `own` says, in words, what of the item's own content the part shows.
+// Shared text form as one card per part (tests/lib/templateEditor.spec.ts, "the template
+// parts", holds every catalogue key to exactly one part). `own` says, in words, what of the
+// item's own content the part shows.
 // A part with no marker (`id: null`) is not one block of the page (the floating button).
 
 export interface TemplatePart<K extends string = string> {

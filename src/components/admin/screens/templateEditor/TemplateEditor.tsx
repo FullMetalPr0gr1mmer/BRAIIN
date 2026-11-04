@@ -244,11 +244,27 @@ function Editor({ kind, groups, selected, builtIn, access }: TemplateEditorSetup
       </div>
 
       {!item ? (
-        <Note tone="info">
-          {kind === 'service'
-            ? 'There is no service to show yet. Add one in Services, then come back to edit its page here.'
-            : 'There is no project to show yet. Add one in Projects, then come back to edit its page here.'}
-        </Note>
+        // No item yet (E3 review): the shared text is every page's, not one item's, so it
+        // stays editable; only the item's own words and the preview wait for one.
+        <>
+          <Note tone="info">
+            {kind === 'service'
+              ? 'There is no service to show yet. Add one in Services to edit its own words and see its page here.'
+              : 'There is no project to show yet. Add one in Projects to edit its own words and see its page here.'}
+          </Note>
+          {access.shared && (
+            <div className="pe__fields">
+              <SharedPanel
+                kind={kind}
+                builtIn={builtIn}
+                path={null}
+                formRef={form}
+                onSaved={saved}
+                onMode={setRelease}
+              />
+            </div>
+          )}
+        </>
       ) : (
         <div className="pe__cols" data-view={hasPreview ? view : undefined}>
           {hasPreview && (

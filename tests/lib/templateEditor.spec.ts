@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   TEMPLATE_COPY_KEYS,
@@ -37,6 +39,9 @@ import {
   sharedField,
   unpublishedNote,
 } from '@/components/admin/screens/templateEditor/model';
+import TemplateEditor from '@/components/admin/screens/templateEditor/TemplateEditor';
+import type { TemplateEditorSetup } from '@/components/admin/screens/templateEditor/types';
+import { LOCKED_SCREENS } from '../admin/routes';
 
 // The template editors (Admin v2 E3, /admin/pages/template/service and /project): the server
 // half (who opens them, the picker's groups, the item shown first, the reads) and the island's
@@ -125,6 +130,22 @@ describe('the picker', () => {
     ]);
   });
 
+  it('a service whose discipline is archived stays under that discipline, labelled so, after the live ones (E3 review)', () => {
+    const groups = templateGroups(
+      'service',
+      [service(1, 'd1'), service(2, 'd2'), service(3, null)],
+      [
+        { id: 'd2', name: BI('Gaming'), status: 'archived' },
+        { id: 'd1', name: BI('Branding'), status: 'published' },
+      ],
+    );
+    expect(groups.map((g) => [g.label, g.items.map((i) => i.slug)])).toEqual([
+      ['Branding', ['s1']],
+      ['Gaming (archived)', ['s2']],
+      ['No discipline', ['s3']],
+    ]);
+  });
+
   it('projects one flat list in the order read; none is no group', () => {
     const groups = templateGroups('project', [
       { id: ID(2), slug: 'b', title: BI('B'), status: 'draft' },
@@ -157,7 +178,10 @@ describe('the picker', () => {
         const chain = {
           select: (cols: string) => (calls.push(`select ${cols}`), chain),
           eq: (col: string, val: unknown) => (calls.push(`eq ${col}=${String(val)}`), chain),
-          neq: (col: string, val: unknown) => (calls.push(`neq ${col}=${String(val)}`), chain),
+          neq: (col: string, val: unknown) => (
+            calls.push(`neq ${col}=${String(val)}`, `${table} neq ${col}=${String(val)}`),
+            chain
+          ),
           order: (col: string) => (calls.push(`order ${col}`), chain),
           limit: (n: number) => (calls.push(`limit ${n}`), chain),
           then: (resolve: (v: unknown) => void) =>
@@ -178,6 +202,11 @@ describe('the picker', () => {
     expect(calls).toContain('eq tenant_id=T1');
     expect(calls).toContain('neq status=archived');
     expect(calls).toContain('from disciplines');
+    // Items: archived ones left out. Disciplines: every one, so an archived discipline still
+    // names its services' group (E3 review).
+    expect(calls).toContain('services neq status=archived');
+    expect(calls.filter((c) => c.startsWith('disciplines neq'))).toEqual([]);
+    expect(calls).toContain('select id,name,status');
     expect(setup.selected).toBe(ID(2));
     expect(setup.access).toEqual({ item: true, shared: true });
     expect(setup.builtIn).toEqual(builtInTemplateCopy('service'));
@@ -320,5 +349,70 @@ describe('the screen’s small decisions', () => {
     expect(unpublishedNote('service', 'published')).toBeNull();
     expect(unpublishedNote('project', 'draft')).toMatch(/^This project is not published/);
     expect(unpublishedNote('service', 'scheduled')).toMatch(/^This service is not published/);
+  });
+});
+
+describe('a tenant with no service or project yet (E3 review)', () => {
+  const setup = (kind: 'service' | 'project', shared: boolean): TemplateEditorSetup => ({
+    kind,
+    groups: [],
+    selected: null,
+    builtIn: builtInTemplateCopy(kind),
+    access: { item: true, shared },
+  });
+
+  it('still offers the shared text (every page’s, not one item’s); the note says why the rest waits', () => {
+    for (const kind of TEMPLATE_KINDS) {
+      const html = renderToStaticMarkup(createElement(TemplateEditor, setup(kind, true)));
+      expect(html, kind).toContain(`There is no ${kind} to show yet.`);
+      expect(html, kind).toContain('id="tpl-shared-h"');
+      expect(html, kind).toContain('Shared text');
+      // No item: no item form and no preview column.
+      expect(html, kind).not.toContain('pe__cols');
+    }
+  });
+
+  it('a role without pages.write gets the note alone', () => {
+    const html = renderToStaticMarkup(createElement(TemplateEditor, setup('service', false)));
+    expect(html).toContain('There is no service to show yet.');
+    expect(html).not.toContain('id="tpl-shared-h"');
+  });
+});
+
+describe('the files’ pointers to their tests (E3 review)', () => {
+  const FILES = [
+    'src/lib/templates/parts.ts',
+    'src/lib/templates/copy.ts',
+    'src/lib/admin/pages/templates.ts',
+    'src/lib/data/templateCopy.ts',
+    'src/lib/services/pageCopy.ts',
+    'src/lib/portfolio/pageCopy.ts',
+    'packages/schemas/templateCopy.ts',
+    'packages/schemas/templateCopyKeys.ts',
+    'src/pages/admin/pages/template/service.astro',
+    'src/pages/admin/pages/template/project.astro',
+    ...readdirSync('src/components/admin/screens/templateEditor').map(
+      (name) => `src/components/admin/screens/templateEditor/${name}`,
+    ),
+  ];
+
+  it('every test file a comment names exists', () => {
+    for (const file of FILES) {
+      for (const [path] of readFileSync(file, 'utf8').matchAll(/\btests\/[\w./-]+\.ts\b/g)) {
+        expect(existsSync(path), `${file} names ${path}`).toBe(true);
+      }
+    }
+  });
+
+  it('an editor page that names LOCKED_SCREENS as its gate is in it; each names its real negative check', () => {
+    const locked = new Set(LOCKED_SCREENS.map((screen) => screen.href));
+    for (const kind of TEMPLATE_KINDS) {
+      const href = TEMPLATE_EDITOR_PATHS[kind];
+      const page = readFileSync(`src/pages${href}.astro`, 'utf8');
+      expect(page, href).toContain('tests/admin/templates.e2e.ts');
+      if (/\(tests\/admin\/routes\.ts\s*\/\/\s*LOCKED_SCREENS\)/.test(page)) {
+        expect(locked.has(href), `${href} claims LOCKED_SCREENS`).toBe(true);
+      }
+    }
   });
 });

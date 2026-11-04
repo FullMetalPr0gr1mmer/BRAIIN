@@ -508,6 +508,12 @@ describe('service page copy (service.html v.*)', () => {
     expect(moreTag('Save $& now', 'en')).toBe('More in Save $& now');
   });
 
+  it('an edited "More in" line fills every {c}, not only the first (E3 review)', () => {
+    expect(moreTag('Branding', 'en', '{c} and all of {c}')).toBe('Branding and all of Branding');
+    expect(moreTag('Save $& now', 'en', '{c}, {c}')).toBe('Save $& now, Save $& now');
+    expect(moreTag('Branding', 'en', 'More from us')).toBe('More from us');
+  });
+
   it('both languages carry every label', () => {
     for (const key of Object.keys(SERVICE_PAGE_COPY.en) as (keyof typeof SERVICE_PAGE_COPY.en)[]) {
       expect(SERVICE_PAGE_COPY.ar[key].length, key).toBeGreaterThan(0);

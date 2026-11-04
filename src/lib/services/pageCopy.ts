@@ -134,12 +134,13 @@ export function moreHeading(
 
 /**
  * "More in Branding" — the section's kicker: `{c}` is the discipline's name (E3: the words are
- * editable, the built-in ones by default). A function replacement: never `$&` expansion.
+ * editable, the built-in ones by default). Every `{c}` is replaced (an editor may write it twice),
+ * by a function replacement: never `$&` expansion.
  */
 export function moreTag(
   discipline: string,
   locale: Locale,
   words: string = SERVICE_PAGE_COPY[locale].moreTag,
 ): string {
-  return words.replace('{c}', () => discipline.trim());
+  return words.replaceAll('{c}', () => discipline.trim());
 }
