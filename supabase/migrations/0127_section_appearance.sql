@@ -9,7 +9,7 @@
 -- The design is the README's E9 row ("background/spacing/reveal variants, editable anchors
 -- (slug rules, unique per page); contrast pairs + visual baselines"); what was built and every
 -- departure is docs/admin-v2/as-built/E9.md. The code map is packages/schemas/sectionAppearance.ts,
--- and tests/lib/sectionAppearanceSql.spec.ts holds every list below equal to it.
+-- and tests/lib/sectionAppearance.spec.ts holds every list below equal to it.
 --
 --   1. Four nullable columns on public.page_sections, each a closed bucket; null is the
 --      section's own look, so every existing row renders as before:

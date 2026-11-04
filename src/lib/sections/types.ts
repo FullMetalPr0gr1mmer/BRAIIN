@@ -3,6 +3,7 @@
 // default compositions below so the site looks real before content is authored.
 
 import type { HeroText } from '@/lib/text/heroLinks';
+import type { SectionAppearance } from '@schemas/sectionAppearance';
 import { HERO_COPY, HERO_LABELS } from './copy/hero';
 
 export interface SectionData {
@@ -24,6 +25,12 @@ export interface SectionData {
    * content can never replace it.
    */
   data?: Record<string, unknown>;
+  /**
+   * Admin v2 E9: the background, spacing, reveal and anchor its row chose, present only when
+   * one is set (a section with none renders byte for byte as before). SectionRenderer applies
+   * each where the kind takes it (src/lib/sections/appearance.ts).
+   */
+  appearance?: SectionAppearance;
 }
 
 /**

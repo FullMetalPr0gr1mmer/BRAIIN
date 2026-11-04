@@ -8,7 +8,7 @@ import type { SectionType } from './sectionTypes';
 // ONE code map, dependency-free (no zod), so the write schema (packages/schemas/admin.ts), the
 // Worker's rules (src/lib/admin/resources/sections.ts), the renderer (SectionRenderer through
 // src/lib/sections/appearance.ts) and the page editor's Appearance card all read the same lists.
-// The E9 migration's CHECKs hold the same values and kinds; tests/lib/sectionAppearanceSql.spec.ts
+// The E9 migration's CHECKs hold the same values and kinds; tests/lib/sectionAppearance.spec.ts
 // reads them out of the migration and holds them equal to these.
 //
 // Which kinds take which choice, and why:

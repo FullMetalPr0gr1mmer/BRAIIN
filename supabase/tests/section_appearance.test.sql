@@ -2,7 +2,7 @@
 --
 --   • page_sections.background, .spacing, .reveal and .anchor: nullable text, no default, each
 --     held by its CHECK to its bucket and the kinds that take it (packages/schemas/
---     sectionAppearance.ts; tests/lib/sectionAppearanceSql.spec.ts holds the lists equal).
+--     sectionAppearance.ts; tests/lib/sectionAppearance.spec.ts holds the lists equal).
 --   • The anchor's shape: lower-case words joined by single hyphens, 1 to 40 characters, never
 --     an id the site's code renders (by name, prefix or ending); unique on its page (a deferred
 --     UNIQUE: a swap inside one transaction passes, a duplicate fails at its check).

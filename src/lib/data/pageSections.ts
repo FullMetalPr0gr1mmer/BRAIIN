@@ -6,6 +6,7 @@ import {
   type SectionType,
 } from '@schemas/sections';
 import { LocalizedTextSchema } from '@schemas/content';
+import type { SectionAppearance } from '@schemas/sectionAppearance';
 import { supabaseConfigured } from '@/lib/supabase/client';
 import type { SectionData } from '@/lib/sections/types';
 import { parseRow, parseRows, reportLoadError } from './parse';
@@ -29,7 +30,8 @@ import { pageAccess } from '@/lib/visibility/scope';
 // `withPageAccess`, and only then, and only for that one page, does this loader read the
 // sections through `public.page_sections_unlocked` as the service role. That function
 // returns exactly the rows and columns anon would have read without the fence (a visible
-// section of a published page; type, content, visible, sort_order), and the images those
+// section of a published page; type, content, visible, sort_order and, since E9, the four
+// appearance columns), and the images those
 // sections name come back the same way (public.page_media_unlocked, sectionMedia.ts), so an
 // unlocked page renders what a public one would and nothing more. The scope is read BEFORE any query is
 // awaited: workerd does not carry an AsyncLocalStorage scope into a thenable's then(), and
@@ -70,6 +72,18 @@ export interface PageComposition {
 const KNOWN = new Set<string>(SECTION_TYPES);
 const isSectionType = (t: string): t is SectionType => KNOWN.has(t);
 
+/** The appearance a row chose (Admin v2 E9), or nothing when it chose none. */
+function appearanceOf(row: z.infer<typeof PageSectionRowSchema>): {
+  appearance?: SectionAppearance;
+} {
+  const out: SectionAppearance = {};
+  if (row.background) out.background = row.background;
+  if (row.spacing) out.spacing = row.spacing;
+  if (row.reveal) out.reveal = row.reveal;
+  if (row.anchor) out.anchor = row.anchor;
+  return Object.keys(out).length > 0 ? { appearance: out } : {};
+}
+
 function toSection(row: z.infer<typeof PageSectionRowSchema>): SectionData | null {
   // A type the renderer does not know would be skipped at render anyway; dropping it here
   // keeps the composition honest and logs it.
@@ -82,7 +96,8 @@ function toSection(row: z.infer<typeof PageSectionRowSchema>): SectionData | nul
   // data comes from their own tables, and a stray key would overwrite it (the write path
   // refuses one too — sectionContentIssues).
   const id = row.id ? { id: row.id } : {};
-  if (!schema) return { ...id, type: row.type, visible: row.visible, props: {} };
+  const look = appearanceOf(row);
+  if (!schema) return { ...id, type: row.type, visible: row.visible, props: {}, ...look };
   // Invalid JSON degrades to the component's built-in copy rather than breaking render
   // (SectionBoundary is the second net).
   const parsed = schema.safeParse(row.content);
@@ -91,6 +106,7 @@ function toSection(row: z.infer<typeof PageSectionRowSchema>): SectionData | nul
     type: row.type,
     visible: row.visible,
     props: parsed.success ? (parsed.data as Record<string, unknown>) : {},
+    ...look,
   };
 }
 
@@ -122,7 +138,9 @@ export async function getPageComposition(pageSlug: string): Promise<PageComposit
       unlocked === null
         ? await contentClient()
             .from('page_sections')
-            .select('id,type,content,visible,sort_order,updated_at')
+            .select(
+              'id,type,content,visible,sort_order,background,spacing,reveal,anchor,updated_at',
+            )
             .eq('page_id', page.id)
             .order('sort_order', { ascending: true })
             .order('id', { ascending: true })
