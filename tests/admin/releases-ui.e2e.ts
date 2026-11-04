@@ -164,9 +164,7 @@ test.describe('releases on, as admin: a new post', () => {
   test.use({ storageState: authFile('admin') });
   test.skip(!releasesOn(), 'releases are off: a create page draws the live form');
 
-  test('the create form draws the visibility switch and no per-item schedule', async ({
-    page,
-  }) => {
+  test('the create form draws the visibility switch and no per-item schedule', async ({ page }) => {
     await open(page, '/admin/blog/new');
     const form = page.locator('form.editor').first();
     await expect(form).toBeAttached();
