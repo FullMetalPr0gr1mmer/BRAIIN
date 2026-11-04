@@ -132,7 +132,7 @@ Every value below is asserted by `scripts/contrast-audit.mjs`. Contrast was comp
 
 Since E13, admin.css follows that set with every other family of the font catalogue (none until owner item O-21), so the Theme editor's Fonts tiles and its site sample draw each family in itself. While the catalogue holds the brand's two families, the two sets are identical.
 
-Today admin.css declares only Almarai 400 and 700 Arabic, under a range wider than the files.
+Before F1, admin.css declared only Almarai 400 and 700 Arabic, under a range wider than the files.
 
 **Arabic stack.** `--ad-font-ar` is `'Almarai','Almarai Fallback','Almarai Fallback Linux','Archivo',system-ui`, which equals `--bs-font-ar`. Authors therefore proof Arabic, including 800 headings, in the face visitors see.
 

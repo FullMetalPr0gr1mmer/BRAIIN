@@ -26,6 +26,10 @@ const LINUX = /^(Liberation ?Sans|DejaVu ?Sans)/;
 // character cannot ship.
 /** A family's name, a fallback family's name, a local() font's name: quoted by the renderer. */
 export const FACE_NAME = /^[A-Za-z0-9 -]+$/;
+/** One entry of a family's stack: a quoted name (its quotes paired), or a bare keyword such as
+ *  system-ui or -apple-system. theme.css writes the stack on one line, where an unpaired quote
+ *  would run on over the rest of the rule. */
+export const STACK_ENTRY = /^(?:'[A-Za-z0-9 -]+'|-?[A-Za-z][A-Za-z0-9-]*)$/;
 /** A unicode-range: U+hex or U+hex-hex, comma separated. */
 export const UNICODE_RANGE =
   /^U\+[0-9A-Fa-f]{1,6}(?:-[0-9A-Fa-f]{1,6})?(?:, ?U\+[0-9A-Fa-f]{1,6}(?:-[0-9A-Fa-f]{1,6})?)*$/;
@@ -61,6 +65,9 @@ export function catalogueProblems(input: CatalogueInput): string[] {
     if (!/^[a-z][a-z-]*$/.test(family.id)) say('the id is not lower case letters and hyphens');
     if (!family.licence.name.trim() || !family.licence.notice.trim()) say('no licence');
     if (!/^[A-Za-z0-9 ',-]+$/.test(family.stack)) say('the stack holds other characters');
+    else if (!family.stack.split(',').every((s) => STACK_ENTRY.test(s.trim()))) {
+      say('the stack is not a list of quoted names and keywords');
+    }
     if (!FACE_NAME.test(family.name)) say('the name holds other characters');
     const faces = input.faces[family.id];
     if (!faces) {

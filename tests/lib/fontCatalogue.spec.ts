@@ -328,6 +328,13 @@ describe('the rules catch a family that breaks them (a family built to break eac
       broken({ stack: "'Test Sans', 'Test Sans Fallback', sans-serif;}" }, {}),
       /test-sans: the stack holds other characters/,
     );
+    for (const stack of [
+      "'Test Sans, 'Test Sans Fallback', sans-serif",
+      "'Test Sans', 'Test Sans Fallback', sans serif",
+      "'Test Sans', 'Test Sans Fallback',, sans-serif",
+    ]) {
+      has(broken({ stack }, {}), /test-sans: the stack is not a list of quoted names/);
+    }
   });
 
   it('a family with no faces, no web face, or none in its own script', () => {
