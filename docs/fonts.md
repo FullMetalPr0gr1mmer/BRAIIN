@@ -309,7 +309,7 @@ the brand's, and the brand's choice writes no token.
 | Fallback faces at every weight the site paints (a variable family: 400 to 800; a static one: its own weights, and every site weight resolves to the same weight in both) | a swap must not re-wrap (2b, 2c) |
 | An Arabic family's fallbacks per script, the Arabic ones range-limited and never on Liberation Sans | Arabic glyphs are 26 to 33% wider than Arial's (2b) |
 | An Arial face and a Linux face (Liberation Sans, DejaVu Sans) at each weight and script | the CI runner is Linux (2c) |
-| The stack names the family, then its own fallback families, each declared | the fallbacks are what the swap is measured against |
+| The stack names the family, then its own fallback families, each declared; each entry a quoted name (its quotes paired) or a keyword | the fallbacks are what the swap is measured against; theme.css writes the stack on one line, where an unpaired quote would run on over the rest of the rule |
 | Hero files at 600, 700 and 800 within 35 KB (Latin) or 45 KB (Arabic) | CLAUDE.md §6 |
 | A route set in the family within 180 KB: its files, plus those of any family an Arabic stack names (Almarai's names Archivo) | CLAUDE.md §6; the public stylesheets name no family but through the two stacks (checked) |
 | A licence name and the copyright notice its files carry | each asset needs a recorded licence (docs/legal/review-register.md, L-1) |
