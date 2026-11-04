@@ -175,8 +175,13 @@ test.describe('as SEO, end to end', () => {
 
     drawer = await drawerOf(page, 'Google Search Console');
     await drawer.getByRole('button', { name: 'Remove' }).click();
-    const confirm = page.locator('dialog.admin-dialog');
-    await expect(confirm).toContainText('Remove the Google Search Console setting?');
+    // By role and words, never by class: with releases on every admin page also holds the
+    // savebar's closed "Publish to the website" dialog (an `admin-dialog` too), which a role
+    // query skips because a closed dialog is not in the accessibility tree.
+    const confirm = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Remove the Google Search Console setting?' });
+    await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: 'Remove' }).click();
     await expect(drawer).toBeHidden();
     await expect(tile(page, 'searchConsole').locator('.badge')).toHaveText('Not set up');

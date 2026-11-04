@@ -10,6 +10,7 @@ import { disciplinesUi } from './disciplines';
 import { faqUi } from './faq';
 import { footerUi } from './footer';
 import { integrationsUi } from './integrations';
+import { loadingUi } from './loading';
 import { maintenanceUi } from './maintenance';
 import { mediaUi } from './media';
 import { navigationUi } from './navigation';
@@ -113,6 +114,9 @@ export const SINGLETON_UI: Record<string, SingletonUi> = {
   // Admin v2 E6: the footer's basics, four columns of the identity row (site_profile).
   footer: footerUi,
   integrations: integrationsUi,
+  // Admin v2 E7: the loading screen's look (site_appearance's intro_ columns), the Loading
+  // screen's form, on the Header's endpoint.
+  loading: loadingUi,
   maintenance: maintenanceUi,
   profile: profileUi,
   seo: seoUi,

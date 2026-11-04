@@ -29,6 +29,14 @@ export const appearance: NavArea = {
       icon: 'link',
       caps: ['settings.general', 'nav.edit'],
     },
+    // Admin v2 E7: the loading screen's look (theme.edit) and its on/off switch on the home
+    // hero (pages.write), each card for its own capability.
+    {
+      href: '/admin/appearance/loading',
+      label: 'Loading screen',
+      icon: 'loader',
+      caps: ['theme.edit', 'pages.write'],
+    },
     { href: '/admin/navigation', label: 'Menus', icon: 'list', caps: ['nav.edit'] },
   ],
 };

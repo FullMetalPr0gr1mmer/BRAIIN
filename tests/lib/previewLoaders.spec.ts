@@ -154,6 +154,14 @@ const CASES: Record<string, () => Promise<void>> = {
     expect(value.ctaShow).toBe(false);
     clean(report);
   },
+  'appearance.getIntroSettings': async () => {
+    // Admin v2 E7: anon's intro columns of the same row; the fixture sets a black plate.
+    const { value, report } = await inPreview(() => appearance.getIntroSettings());
+    expect(value.backdrop).toBe('black');
+    expect(value.holdMs).toBe(800);
+    expect(value.tagline).toBeNull();
+    clean(report);
+  },
   'faq.getFaq': async () => {
     // Published only, in order, in the reader's language (Admin v2 U7).
     const { value, report } = await inPreview(() => faq.getFaq('ar'));

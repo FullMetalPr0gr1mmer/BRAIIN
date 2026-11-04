@@ -152,6 +152,8 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'integrations.css',
       'kit.css',
       'leads.css',
+      // Admin v2 E7: the Loading screen.
+      'loading.css',
       'login.css',
       'maintenance.css',
       'media.css',
@@ -337,6 +339,95 @@ describe('admin.css: the sticky topbar never hides focus (WCAG 2.4.11)', () => {
     expect(ADMIN).toMatch(/\.admin-main > \.admin-topbar\s*\{[^}]*position:\s*sticky/);
     expect(ADMIN).toMatch(/scroll-padding-block-start:\s*calc\(var\(--ad-top-h, var\(--ad-top\)\)/);
     expect(read('src/layouts/AdminLayout.astro')).toMatch(/setProperty\('--ad-top-h'/);
+  });
+});
+
+describe('admin.css: the shown savebar never covers a control or focus (R14a, WCAG 2.4.11)', () => {
+  // The bar's measured height (--ad-savebar-h, src/components/admin/screens/release/
+  // savebarSpace.ts) plus its inset is the room kept under it. Every rule that reserves room is
+  // under the shown, fixed bar, which AdminLayout renders only with releases on, so with them
+  // off nothing moves. tests/lib/savebarSpace.spec.ts holds the measure; the browser half is
+  // tests/admin/releases-mode.e2e.ts.
+  const GATE = ':has(.savebar[data-shown]:not([data-inline]))';
+  const ROOM = 'calc(var(--ad-savebar-h, var(--ad-savebar)) + var(--ad-savebar-gap) + ';
+  /** Every plain rule (selector, body), media blocks included. */
+  const rules = [...ADMIN.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+    selector: (m[1] ?? '').trim().replace(/\s+/g, ' '),
+    // One space between tokens, none inside a bracket's edges (prettier breaks a long calc).
+    body: (m[2] ?? '').replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')'),
+  }));
+  const declared = (selector: string, prop: string) =>
+    rules
+      .filter((r) => r.selector === selector)
+      .flatMap((r) => [...r.body.matchAll(new RegExp(`(?:^|;)\\s*${prop}:\\s*([^;]+)`, 'g'))])
+      .map((m) => (m[1] ?? '').trim());
+  const extra = (value: string | undefined) => {
+    expect(value?.startsWith(ROOM), value).toBe(true);
+    return Number(/\+ (\d+)px\)$/.exec(value!)?.[1]);
+  };
+
+  it('keeps the measured room plus the inset: the main column, the scroll port, the bulk bar, the toasts', () => {
+    expect(extra(declared(`:root${GATE}`, 'scroll-padding-block-end')[0])).toBeGreaterThanOrEqual(
+      8,
+    );
+    expect(
+      extra(declared(`.admin-body${GATE} .admin-main`, 'padding-block-end')[0]),
+    ).toBeGreaterThanOrEqual(16);
+    expect(extra(declared(`.admin-body${GATE} .bulkbar`, 'inset-block-end')[0])).toBeGreaterThan(0);
+    expect(extra(declared(`.admin-body${GATE} .toasts`, 'inset-block-end')[0])).toBeGreaterThan(0);
+    // The inset the room adds is the bar's own.
+    expect(declared('.savebar', 'inset-block-end')).toEqual(['var(--ad-savebar-gap)']);
+  });
+
+  it('keeps a stuck bulk bar’s measured room too, so a focused row is clear of both bars', () => {
+    // The bulk bar sits on the band right above the shown bar (h + gap + 8px). Scroll padding
+    // that ended where the bulk bar starts left a row's focused control behind it (R14a review,
+    // CR-1): while a bulk bar shows, the scroll port also ends above the bulk bar.
+    const both = declared(`:root${GATE}:has(.bulkbar)`, 'scroll-padding-block-end');
+    expect(both).toHaveLength(1);
+    const bulkAt = declared(`.admin-body${GATE} .bulkbar`, 'inset-block-end')[0];
+    expect(bulkAt).toBe(`${ROOM}8px)`);
+    // The bulk bar's own place (its inset over the savebar), then its measured height, then a gap.
+    const value = both[0]!;
+    expect(value.startsWith(`${ROOM}8px + var(--ad-bulkbar-h, var(--ad-bulkbar)) + `), value).toBe(
+      true,
+    );
+    expect(Number(/\+ (\d+)px\)$/.exec(value)?.[1])).toBeGreaterThanOrEqual(8);
+    // A stand-in before BulkBar's first measure, and the measure read only under the shown bar.
+    expect(ADMIN).toMatch(/--ad-bulkbar:\s*\d+px;/);
+    for (const rule of rules) {
+      if (/var\(--ad-bulkbar(-h)?[,)]/.test(rule.body)) {
+        expect(rule.selector, rule.body).toContain(GATE);
+      }
+    }
+  });
+
+  it('stands in with the worst bar measured until the first measure', () => {
+    const px = (value: string | undefined) => Number(/^(\d+)px$/.exec(value ?? '')?.[1]);
+    const wide = rules
+      .filter((r) => r.selector === ':root')
+      .flatMap((r) => {
+        const m = /--ad-savebar:\s*([^;]+)/.exec(r.body);
+        return m ? [m[1]!.trim()] : [];
+      });
+    // Two rows on a wide screen (about 109 px), three on a phone (about 177 px).
+    expect(wide).toHaveLength(2);
+    expect(px(wide[0])).toBeGreaterThanOrEqual(109);
+    expect(px(wide[1])).toBeGreaterThanOrEqual(177);
+    expect(ADMIN).toMatch(/--ad-savebar-gap:\s*22px;/);
+  });
+
+  it('reads the bar’s room only under the shown bar, and keeps releases off as it was', () => {
+    for (const rule of rules) {
+      if (/var\(--ad-savebar(-h)?[,)]/.test(rule.body)) {
+        expect(rule.selector, rule.body).toContain(GATE);
+      }
+    }
+    expect(rules.filter((r) => r.selector.includes(GATE))).toHaveLength(5);
+    // What a page has with no bar: main's own values.
+    expect(declared('.admin-main', 'padding')).toEqual(['var(--ad-pad-b) var(--ad-pad-i) 60px']);
+    expect(declared('.bulkbar', 'inset-block-end')).toEqual(['16px']);
+    expect(declared('.toasts', 'inset-block-end')).toEqual(['22px']);
   });
 });
 

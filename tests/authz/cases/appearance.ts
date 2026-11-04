@@ -1,8 +1,10 @@
 import { UUID, VALID_BILINGUAL, type Case } from '../harness';
 
 // Appearance: the theme (§5 "Theme editor", Admin + Developer), the header's options (Admin v2
-// E5, site_appearance, the same row of §5) and the site menus (§5 "Navigation editor", Admin +
-// Content Creator).
+// E5, site_appearance, the same row of §5), the loading screen's look (Admin v2 E7, the same
+// row's intro_ columns) and the site menus (§5 "Navigation editor", Admin + Content Creator).
+// The loading screen's on/off switch is the home hero section's `intro`, a write of the section
+// kernel (pages.write), whose cases are the sections' own.
 
 /** The brand's own theme, which passes the contrast gate (Admin v2 E4). */
 const THEME_SETTINGS = {
@@ -40,6 +42,23 @@ export const cases: readonly Case[] = [
       ctaShow: true,
       ctaLabel: VALID_BILINGUAL,
       ctaHref: '/contact#inquiry',
+      version: 1,
+    },
+    allow: ['admin', 'developer'],
+  },
+  {
+    // Admin v2 E7: the Loading screen's look, through the Header's endpoint (theme.edit);
+    // Content Creator keeps the on/off switch (the home hero section) and is refused here.
+    name: 'loading screen look write',
+    load: () => import('@/pages/api/admin/site-appearance'),
+    method: 'PATCH',
+    url: '/api/admin/site-appearance',
+    body: {
+      backdrop: 'black',
+      bar: true,
+      tagline: VALID_BILINGUAL,
+      holdMs: 800,
+      fadeMs: 300,
       version: 1,
     },
     allow: ['admin', 'developer'],

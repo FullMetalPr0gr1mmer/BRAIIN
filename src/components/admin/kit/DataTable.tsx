@@ -1,8 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import EmptyState from './EmptyState';
 import Pager from './Pager';
 import type { IconName } from '@/lib/admin/icons';
 import { pageInfo, rangeText, PAGE_SIZE } from '@/lib/admin/pager';
+import { reserveBoxHeight } from '@/lib/admin/client/boxHeight';
 
 // The admin's data table (Admin v2 F4b, docs/admin-v2/ui.md §2.4, the prototype's .tbl):
 // one page of a server-paged list, for islands. What it guarantees, so screens do not each
@@ -346,14 +347,31 @@ export interface BulkBarProps {
   children: ReactNode;
 }
 
+/** The bulk bar's measured height, which admin.css adds to the room kept under a shown savebar. */
+export const BULKBAR_HEIGHT_PROPERTY = '--ad-bulkbar-h';
+
 /**
  * The bulk bar (the prototype's midnight bar): how many rows are chosen, the actions for
  * them, and a way to clear the choice. A region, so it can be found by landmark; the
  * count is announced by the table's own live region, which exists before the bar does.
+ * While it shows, its height is measured (before paint) for admin.css: stuck above a shown
+ * savebar, it is part of the band the page's scroll padding keeps a focused row out of
+ * (R14a, WCAG 2.2 2.4.11). With releases off nothing reads the measure.
  */
 export function BulkBar({ count, onClear, children }: BulkBarProps) {
+  const barRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    if (!bar || typeof ResizeObserver === 'undefined') return;
+    return reserveBoxHeight(
+      bar,
+      document.documentElement.style,
+      ResizeObserver,
+      BULKBAR_HEIGHT_PROPERTY,
+    );
+  }, []);
   return (
-    <div className="bulkbar" role="region" aria-label="Bulk actions">
+    <div ref={barRef} className="bulkbar" role="region" aria-label="Bulk actions">
       <p className="bulkbar__n">{count === 1 ? '1 selected' : `${count} selected`}</p>
       {children}
       <button type="button" data-variant="ghost" onClick={onClear}>
