@@ -734,7 +734,7 @@ Also in this column:
 - Preview and "Restore as a draft". Restore goes back through the resource kernel and is gated at publish.
 
 **Deviations**
-- No mobile-visibility setting (content parity for mobile). Background, spacing and reveal are offered since E9 as closed buckets per kind, not as generic settings on every section: a background and a spacing only on the blocks whose every colour and padding the variants were built and contrast-gated for, a reveal never on a section that opens a page ([as-built/E9.md](as-built/E9.md)).
+- No mobile-visibility setting (content parity for mobile). Background, spacing and reveal are offered since E9 as closed buckets per kind, not as generic settings on every section: a background and a spacing only on the blocks whose every colour and padding the variants were built and contrast-gated for, a reveal never on a section that opens a page nor on the Slogan, which moves on its own ([as-built/E9.md](as-built/E9.md)).
 - Editable anchors are offered since E9, where the section's component names no anchor of its own; the code anchors stay read-only, since other links point at them.
 - No Custom HTML block. (Superseded for the others by E10, 2026-10-31: the Text block, the Gallery and the Video are built as typed section types; [as-built/E10.md](as-built/E10.md).)
 
