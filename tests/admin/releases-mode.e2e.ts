@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
-import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { STAFF_IDS, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The release drill in CI (Admin v2 R14-prep; plan B5: "rehearsed first in CI ... then a
@@ -22,8 +22,8 @@ import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
  *              the site identity's, asked with no id (R14-prep);
  *   scheduled  a new wording, scheduled through the publish route about two and a half minutes
  *              ahead, is listed on Backups & versions as Scheduled; once due, the minute cron
- *              (wrangler dev --test-scheduled: GET /__scheduled) fires it as a version of its
- *              own, and /contact shows the new wording;
+ *              (miniflare's own trigger, GET /cdn-cgi/local/scheduled) fires it as a version of
+ *              its own, and /contact shows the new wording;
  *   rollback   on Backups & versions, Restore vP stages the question as it was, "Publish vP
  *              again" (its confirm) publishes it as a rollback naming vP, and /contact shows the
  *              first wording again;
@@ -33,7 +33,10 @@ import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
  * session's CSRF token, as the samples do), so their timing is exact; the dialog's own schedule
  * controls are driven on the kit (tests/admin/releases-ui.e2e.ts). The question is removed by
  * the service role at the end, whatever failed; pending changes other specs left behind are
- * removed first (this suite publishes everything it selects).
+ * removed first (this suite publishes everything it selects), and named in an annotation so a
+ * leak points at its spec. Every release still scheduled on the e2e tenant is unscheduled before
+ * the drill and after it (R14a): a release a failed attempt left would otherwise be a second
+ * "Scheduled" card on the retry, and would fire with the drill's own.
  */
 
 test.skip(!releasesOn(), 'releases are off: the rehearsal sets E2E_RELEASES=on');
@@ -57,10 +60,57 @@ let faqId = '';
 let published = 0;
 let scheduledNumber = 0;
 
+/**
+ * Unschedules every release still scheduled on the e2e tenant, through the database's own path
+ * (`public.unschedule_release` as the e2e Admin: its drafts released back to pending, the
+ * release cancelled, an audit row), so the drill starts and ends with none.
+ */
+async function unscheduleAll() {
+  const svc = service();
+  const { data, error } = await svc
+    .from('content_releases')
+    .select('id,version')
+    .eq('tenant_id', TENANT_ID)
+    .eq('status', 'scheduled');
+  expect(error).toBeNull();
+  for (const release of (data ?? []) as { id: string; version: number }[]) {
+    const cancelled = await svc.rpc('unschedule_release', {
+      p_actor: STAFF_IDS.admin,
+      p_role: 'admin',
+      p_release: release.id,
+      p_version: release.version,
+    });
+    expect(cancelled.error, `unschedule ${release.id}`).toBeNull();
+  }
+}
+
 test.beforeAll(async () => {
+  await unscheduleAll();
   // This suite publishes every change it selects: a change another spec left pending would go
-  // live with it. Unclaimed pending changes only (the draft table is the service role's).
-  const { error } = await service()
+  // live with it. Unclaimed pending changes only (the draft table is the service role's). What
+  // is found is named first, so a spec that leaks one can be found from the report.
+  const svc = service();
+  const left = await svc
+    .from('content_drafts')
+    .select('entity_type,entity_id,created_by')
+    .eq('tenant_id', TENANT_ID)
+    .is('release_id', null);
+  expect(left.error).toBeNull();
+  const rows = (left.data ?? []) as {
+    entity_type: string;
+    entity_id: string;
+    created_by: string | null;
+  }[];
+  if (rows.length > 0) {
+    const named = rows.map((r) => `${r.entity_type} ${r.entity_id} by ${r.created_by ?? '?'}`);
+    // In the report (an annotation) and in the job's log (the line reporter prints stderr).
+    test.info().annotations.push({
+      type: 'pending changes other specs left',
+      description: named.join('; '),
+    });
+    console.warn(`releases-mode: removing pending changes other specs left: ${named.join('; ')}`);
+  }
+  const { error } = await svc
     .from('content_drafts')
     .delete()
     .eq('tenant_id', TENANT_ID)
@@ -70,6 +120,8 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (!staffEnv()) return;
+  // A drill that stopped between its schedule and the fire leaves a scheduled release.
+  await unscheduleAll();
   const svc = service();
   if (faqId) await svc.from('content_drafts').delete().eq('entity_id', faqId);
   await svc.from('faq_items').delete().like('question->>en', `${MARK}%`);
@@ -201,13 +253,16 @@ test('scheduled: a new wording goes live from the minute cron once due', async (
   await expect(upcoming.getByText('Scheduled', { exact: true })).toBeVisible();
   await expect(upcoming.getByRole('button', { name: 'Unschedule' })).toBeVisible();
 
-  // Due: the minute cron fires it (wrangler dev --test-scheduled runs the Worker's `scheduled`
-  // for GET /__scheduled; the job runs after the answer, so the version is polled for).
+  // Due: the minute cron fires it. Miniflare's own trigger runs the Worker's `scheduled` for
+  // GET /cdn-cgi/local/scheduled and answers its outcome ("ok"); wrangler's `/__scheduled` is a
+  // bundling middleware that a no_bundle build (the Astro adapter's) never gets, so it would
+  // reach the site and 404 (R14a). The job runs in waitUntil, so the version is polled for.
   await page.waitForTimeout(Math.max(0, due - Date.now()) + 2_000);
   await expect
     .poll(
       async () => {
-        await page.request.get('/__scheduled?cron=*+*+*+*+*');
+        const fired = await page.request.get('/cdn-cgi/local/scheduled?cron=*+*+*+*+*');
+        expect(fired.status(), await fired.text()).toBe(200);
         await page.waitForTimeout(3_000);
         const list = await data<Versions>(await page.request.get('/api/admin/releases'));
         return list.versions.find((v) => v.id === releaseId)?.number ?? null;
