@@ -495,4 +495,25 @@ describe('the switch follows the home route’s fallback (E7 review, E7-C2)', ()
     expect(switchHint(null)).toContain('Saved with the home page');
     expect(switchHint(introTarget(published, [hero]))).toBe(switchHint(null));
   });
+
+  it('the island renders with these functions: it reads the page with its sections and asks introTarget', () => {
+    // The cases above hold the model; this holds the island to it, so the switch cannot go back
+    // to reading the sections alone (homeHero) and miss the route's fallback.
+    const island = readFileSync('src/components/admin/screens/loading/LoadingScreen.tsx', 'utf8');
+    // The page's status, through the pages kernel, beside the section list.
+    expect(island).toMatch(
+      /adminFetch<Row>\(`\/api\/admin\/pages\/\$\{encodeURIComponent\(homePageId\)\}`\)/,
+    );
+    expect(island).toContain('const target = introTarget(page, rows);');
+    expect(island).toContain('target: introTarget(null, [])');
+    // On, movable and the hint are the model's, never worked out in the island.
+    expect(island).toMatch(
+      /const on = state\.kind === 'read' \? switchOn\(state\.target, state\.content\) : false;/,
+    );
+    expect(island).toContain('const hint = switchHint(target);');
+    expect(island).toMatch(/disabled=\{busy \|\| target === null \|\| !switchMovable\(target\)\}/);
+    // The toggle writes only over a hero of the home page visitors see.
+    expect(island).toContain("if (state.kind !== 'read' || state.target.kind !== 'hero') return;");
+    expect(island).not.toMatch(/\bhomeHero\(/);
+  });
 });
