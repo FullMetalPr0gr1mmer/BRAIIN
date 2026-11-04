@@ -1,7 +1,7 @@
 {
-  "$comment": "The theme CI's themed Lighthouse run sets (Admin v2 E4, E12; scripts/lhci-theme.mjs, lighthouserc.themed.json): Simple mode from a dark green main, its Hover and Accent settled by the gate, the marquee slower and the reveal off, and since E12 soft corners, rounded buttons and Bold headings as written (so the Arabic routes preload the 700 face). A far cry from Klein, with a much lighter accent than the brand's sky. The tokens are what packages/theme/compile.ts makes of the settings (tests/lib/lhciTheme.spec.ts holds them equal).",
+  "$comment": "The theme CI's themed Lighthouse run sets (Admin v2 E4, E12; scripts/lhci-theme.mjs, lighthouserc.themed.json): Simple mode from a dark green main, its Hover and Accent settled by the gate, the marquee slower and the reveal off, since E12 soft corners, rounded buttons and Bold headings as written (so the Arabic routes preload the 700 face), and since E13 the settings are v3 with the brand's fonts: the font catalogue holds no other family until owner item O-21, so no font token can be set yet. A far cry from Klein, with a much lighter accent than the brand's sky. The tokens are what packages/theme/compile.ts makes of the settings (tests/lib/lhciTheme.spec.ts holds them equal).",
   "settings": {
-    "v": 2,
+    "v": 3,
     "mode": "simple",
     "colors": {
       "primary": "#095A34",
@@ -19,6 +19,10 @@
     "type": {
       "headingWeight": 700,
       "headingCase": "as-written"
+    },
+    "fonts": {
+      "latin": "archivo",
+      "arabic": "almarai"
     }
   },
   "tokens": {

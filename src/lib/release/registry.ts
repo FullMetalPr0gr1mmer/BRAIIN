@@ -456,10 +456,11 @@ export const RELEASE_REGISTRY: Readonly<Record<ReleaseEntityType, RegistryEntry>
     label: () => ({ en: 'Forms' }),
     entityTags: tags('forms:all'),
   }),
-  // The site's appearance settings (Admin v2 E5): the header is on every page, so a change
-  // purges them all, as the theme does (`tenant:default`).
+  // The site's appearance settings (Admin v2 E5, E7): the header is on every page, so a change
+  // purges them all, as the theme does (`tenant:default`); the loading screen's look is on the
+  // home page, which that purge covers.
   site_appearance: fromSingleton('site_appearance', siteAppearanceSingleton, {
-    label: () => ({ en: 'Header' }),
+    label: () => ({ en: 'Header and loading screen' }),
     entityTags: tags('tenant:default'),
   }),
   // The template pages' shared text (Admin v2 E3): every service page and case study carries

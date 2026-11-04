@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import Icon from '@/components/admin/kit/Icon';
 import { savebarLead, savebarShown, savebarSub, type SavebarCounts } from './model';
+import { reserveSavebarSpace } from './savebarSpace';
 
 // The savebar (Admin v2 R12; releases.md §7, ui.md §2.10, the prototype's .savebar): a fixed
 // midnight pill at the bottom centre while there is anything unpublished the person may read.
@@ -10,8 +11,10 @@ import { savebarLead, savebarShown, savebarSub, type SavebarCounts } from './mod
 //     pending change, a new tab), and Publish (a role that may publish something) or Review;
 //   - a region named "Unpublished changes"; its count is announced politely, debounced, by a
 //     status line that is in the page from the first render (a live region announces changes,
-//     not its own arrival); the page gets scroll padding so the bar never hides focus (WCAG
-//     2.2 2.4.11, admin.css); reduced motion drops the slide-in.
+//     not its own arrival); the page keeps room for the bar's measured height (the main
+//     column's end, the scroll padding, the bulk bar and the toasts, admin.css) so it never
+//     hides a control or focus (WCAG 2.2 2.4.11, R14a: savebarSpace.ts); reduced motion drops
+//     the slide-in.
 // Classes and data attributes only (CSP: no style attribute).
 
 export interface SavebarProps {
@@ -46,7 +49,17 @@ export default function Savebar({
   const menuRef = useRef<HTMLDivElement>(null);
   const [heard, setHeard] = useState('');
   const first = useRef(true);
+  const barRef = useRef<HTMLDivElement>(null);
   const said = announcement(counts);
+
+  // While the fixed bar shows, its measured height is the room the page keeps under it (before
+  // paint, so no frame has a control under the bar). The kit's inline bar sits in the page and
+  // reserves nothing.
+  useLayoutEffect(() => {
+    const bar = barRef.current;
+    if (!shown || inline || !bar || typeof ResizeObserver === 'undefined') return;
+    return reserveSavebarSpace(bar, document.documentElement.style, ResizeObserver);
+  }, [shown, inline]);
 
   // Announce a change of count after a second of quiet (an autosave every few seconds is one
   // announcement); never on the first render (the page already shows it).
@@ -88,6 +101,7 @@ export default function Savebar({
       </p>
       {shown && (
         <div
+          ref={barRef}
           className="savebar"
           role="region"
           aria-label="Unpublished changes"

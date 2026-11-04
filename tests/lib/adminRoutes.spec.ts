@@ -391,6 +391,7 @@ describe('the locked screens the refusals e2e opens', () => {
       '/admin/analytics/search',
       '/admin/appearance/footer',
       '/admin/appearance/header',
+      '/admin/appearance/loading',
       '/admin/appearance/theme',
       '/admin/audit',
       '/admin/backups',
@@ -504,6 +505,7 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'Theme /admin/appearance/theme',
       'Header /admin/appearance/header',
       'Footer /admin/appearance/footer',
+      'Loading screen /admin/appearance/loading',
       'Menus /admin/navigation',
     ],
     Settings: [
@@ -536,10 +538,11 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
     ],
     Growth: ['Website stats /admin/analytics', 'Style-Finder /admin/ai-questions'],
     // Admin v2 E5: the Header screen's menu card (nav.edit). E6: the Footer screen's columns
-    // card (nav.edit).
+    // card (nav.edit). E7: the Loading screen's on/off switch (pages.write).
     Appearance: [
       'Header /admin/appearance/header',
       'Footer /admin/appearance/footer',
+      'Loading screen /admin/appearance/loading',
       'Menus /admin/navigation',
     ],
     // Admin v2 U11: the bell's settings, every member's own. R13: Backups & versions.
@@ -570,11 +573,12 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
     CRM: ['Leads /admin/leads'],
     Growth: ['Website stats /admin/analytics', 'Site health /admin/site-health'],
     // Admin v2 E5: the Header screen's options (theme.edit). E6: the Footer screen's basics
-    // (settings.general).
+    // (settings.general). E7: the Loading screen's look (theme.edit).
     Appearance: [
       'Theme /admin/appearance/theme',
       'Header /admin/appearance/header',
       'Footer /admin/appearance/footer',
+      'Loading screen /admin/appearance/loading',
     ],
     Settings: [
       'General /admin/settings',

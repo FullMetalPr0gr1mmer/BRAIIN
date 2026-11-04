@@ -95,6 +95,13 @@ export const PAGE_GUIDES: readonly PageGuide[] = [
     caps: ['nav.edit', 'settings.general'],
     screens: ['/admin/appearance/footer'],
   },
+  // Admin v2 E7: the Loading screen opens its own guide (put by the loading screen migration,
+  // revision 0), for the roles that open it: pages.write (the switch) or theme.edit (the look).
+  {
+    slug: 'loading-screen',
+    caps: ['pages.write', 'theme.edit'],
+    screens: ['/admin/appearance/loading'],
+  },
   // Admin v2 U7: the collection screens and the FAQ (the FAQ migration's put, revision 0).
   {
     slug: 'collections-and-faq',

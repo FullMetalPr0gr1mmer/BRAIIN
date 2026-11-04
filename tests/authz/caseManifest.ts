@@ -23,6 +23,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'appearance: header options read',
   'appearance: header options write',
   'appearance: header options write, the button',
+  'appearance: loading screen look write',
   'appearance: navigation create',
   'appearance: navigation create, a footer column',
   'appearance: navigation delete',

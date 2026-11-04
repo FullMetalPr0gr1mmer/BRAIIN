@@ -1,4 +1,5 @@
 import type { ThemeTokenName } from '../schemas/themeTokens';
+import { DEFAULT_FONTS, type ThemeFonts } from './fonts';
 
 // Shapes and type (Admin v2 E12, AV-32; ui.md "AV-32: Theme v2 (later): shapes and type
 // tokens"): the closed choices a theme makes about the site's corners, buttons and headings,
@@ -143,25 +144,42 @@ export function shapeTokens(
   return out;
 }
 
-/** What v2 adds to E4's v1 settings (and the version it moves to). */
+/** What v2 adds to E4's v1 settings. */
 export interface ThemeV2Parts {
-  v: 2;
   shapes: ThemeShapes;
   type: ThemeType;
 }
 
+/** What v3 (Admin v2 E13) adds to v2, and the version a theme's settings move to. */
+export interface ThemeV3Parts extends ThemeV2Parts {
+  v: 3;
+  fonts: ThemeFonts;
+}
+
 /**
- * A theme's settings in today's version: E4's v1 is v2 at the brand's shapes and type;
- * anything else as it is (the same value). No validation. The ONE place a v1 theme is
- * upgraded (E12 code review CR7): the schema's transform (ThemeSettingsSchema), the compiler
- * (compileTheme), the editor's settingsOf and the release lane's comparisons
- * (src/lib/release/currentShape.ts, where a stored v1 row meets what today's save writes) all
- * call it.
+ * A theme's settings in today's version (v3): E4's v1 is v3 at the brand's shapes, type and
+ * fonts; E12's v2 is v3 at the brand's fonts (packages/theme/fonts.ts); anything else as it is
+ * (the same value). No validation. The ONE place an older theme is upgraded (E12 code review
+ * CR7): the schema's transform (ThemeSettingsSchema), the compiler (compileTheme), the editor's
+ * settingsOf and the release lane's comparisons (src/lib/release/currentShape.ts, where a stored
+ * older row meets what today's save writes) all call it.
  */
-export function upgradeThemeSettings<T extends { v: 1 }>(stored: T): Omit<T, 'v'> & ThemeV2Parts;
+export function upgradeThemeSettings<T extends { v: 1 } | ({ v: 2 } & ThemeV2Parts)>(
+  stored: T,
+): Omit<T, 'v' | 'shapes' | 'type'> & ThemeV3Parts;
 export function upgradeThemeSettings(stored: unknown): unknown;
 export function upgradeThemeSettings(stored: unknown): unknown {
   if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return stored;
-  if ((stored as { v?: unknown }).v !== 1) return stored;
-  return { ...stored, v: 2, shapes: { ...DEFAULT_SHAPES }, type: { ...DEFAULT_TYPE } };
+  const v = (stored as { v?: unknown }).v;
+  if (v === 1) {
+    return {
+      ...stored,
+      v: 3,
+      shapes: { ...DEFAULT_SHAPES },
+      type: { ...DEFAULT_TYPE },
+      fonts: { ...DEFAULT_FONTS },
+    };
+  }
+  if (v === 2) return { ...stored, v: 3, fonts: { ...DEFAULT_FONTS } };
+  return stored;
 }

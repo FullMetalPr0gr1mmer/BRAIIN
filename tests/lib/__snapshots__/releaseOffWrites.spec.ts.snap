@@ -3607,6 +3607,10 @@ exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
         "hover": "#615757",
         "primary": "#000000",
       },
+      "fonts": {
+        "arabic": "almarai",
+        "latin": "archivo",
+      },
       "mode": "advanced",
       "motion": {
         "marquee": "slower",
@@ -3620,7 +3624,7 @@ exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
         "headingCase": "uppercase",
         "headingWeight": 800,
       },
-      "v": 2,
+      "v": 3,
     },
     "tokens": {
       "--bs-cobalt": "#615757",
@@ -3650,6 +3654,10 @@ exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
           "hover": "#615757",
           "primary": "#000000",
         },
+        "fonts": {
+          "arabic": "almarai",
+          "latin": "archivo",
+        },
         "mode": "advanced",
         "motion": {
           "marquee": "slower",
@@ -3663,7 +3671,7 @@ exports[`resource configs: toRow is what it was before R2 > themes 1`] = `
           "headingCase": "uppercase",
           "headingWeight": 800,
         },
-        "v": 2,
+        "v": 3,
       },
       "tokens": {
         "--bs-cobalt": "#615757",

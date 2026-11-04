@@ -1,5 +1,14 @@
 import { normalizeColour } from '@theme/colour';
 import { DEFAULT_THEME_SETTINGS } from '@theme/compile';
+import {
+  ARABIC_FAMILY_IDS,
+  FONT_SAMPLE,
+  LATIN_FAMILY_IDS,
+  familiesOf,
+  type FontFamily,
+  type FontScript,
+  type ThemeFonts,
+} from '@theme/fonts';
 import { gate, paletteOf, simplePalette, type GateResult, type Palette } from '@theme/gate';
 import { THEME_ROLES, type ThemeColors, type ThemeRole } from '@theme/palette';
 import {
@@ -29,10 +38,10 @@ function oneOf<T>(list: readonly T[], value: unknown, fallback: T): T {
 }
 
 /**
- * The settings a form holds, from whatever was loaded: a theme as saved (v2, or E4's v1, which
- * has the brand's shapes and type), else (no theme yet, or a value of another shape) the brand's
- * own. Colours are kept as typed, so a half typed hex stays in the box; the gate and the server
- * judge them. Always v2: the next save stores the version the server writes.
+ * The settings a form holds, from whatever was loaded: a theme as saved (v3, or an older one,
+ * which has the brand's shapes, type and fonts), else (no theme yet, or a value of another
+ * shape) the brand's own. Colours are kept as typed, so a half typed hex stays in the box; the
+ * gate and the server judge them. Always v3: the next save stores the version the server writes.
  */
 export function settingsOf(loaded: unknown): ThemeSettings {
   const base = DEFAULT_THEME_SETTINGS;
@@ -47,17 +56,18 @@ export function settingsOf(loaded: unknown): ThemeSettings {
     }
   }
   if (!value || typeof value !== 'object' || Array.isArray(value)) return cloneSettings(base);
-  // A v1 theme (E4's) is v2 at the brand's shapes and type: the one upgrade. What is still off
-  // a list after it (a value no save wrote) is the brand's, below.
+  // An older theme (E4's v1, E12's v2) is v3 at the brand's shapes, type and fonts: the one
+  // upgrade. What is still off a list after it (a value no save wrote) is the brand's, below.
   const v = upgradeThemeSettings(value) as Row;
   const colors = (v['colors'] && typeof v['colors'] === 'object' ? v['colors'] : {}) as Row;
   const motion = (v['motion'] && typeof v['motion'] === 'object' ? v['motion'] : {}) as Row;
   const shapes = (v['shapes'] && typeof v['shapes'] === 'object' ? v['shapes'] : {}) as Row;
   const type = (v['type'] && typeof v['type'] === 'object' ? v['type'] : {}) as Row;
+  const fonts = (v['fonts'] && typeof v['fonts'] === 'object' ? v['fonts'] : {}) as Row;
   const colour = (role: ThemeRole) =>
     typeof colors[role] === 'string' ? (colors[role] as string) : base.colors[role];
   return {
-    v: 2,
+    v: 3,
     mode: v['mode'] === 'advanced' ? 'advanced' : 'simple',
     colors: { primary: colour('primary'), hover: colour('hover'), accent: colour('accent') },
     motion: {
@@ -78,6 +88,10 @@ export function settingsOf(loaded: unknown): ThemeSettings {
       ),
       headingCase: oneOf<HeadingCase>(HEADING_CASES, type['headingCase'], base.type.headingCase),
     },
+    fonts: {
+      latin: oneOf<ThemeFonts['latin']>(LATIN_FAMILY_IDS, fonts['latin'], base.fonts.latin),
+      arabic: oneOf<ThemeFonts['arabic']>(ARABIC_FAMILY_IDS, fonts['arabic'], base.fonts.arabic),
+    },
   };
 }
 
@@ -88,6 +102,7 @@ export function cloneSettings(s: ThemeSettings): ThemeSettings {
     motion: { ...s.motion },
     shapes: { ...s.shapes },
     type: { ...s.type },
+    fonts: { ...s.fonts },
   };
 }
 
@@ -215,6 +230,48 @@ export const CASE_OPTIONS = [
   { value: 'uppercase', label: 'Capitals' },
   { value: 'as-written', label: 'As written' },
 ] as const satisfies readonly { value: HeadingCase; label: string }[];
+
+/** The two groups of the Fonts card: the pages each script's family sets (E13). */
+export const FONT_GROUPS = [
+  { script: 'latin', label: 'English pages' },
+  { script: 'arabic', label: 'Arabic pages' },
+] as const satisfies readonly { script: FontScript; label: string }[];
+
+/** A tile of the Fonts card: a family of the catalogue, drawn in itself (FONT_SAMPLE). */
+export interface FontOption {
+  value: FontFamily['id'];
+  name: string;
+  /** The family's stack: the tile's sample and the site sample are drawn in it. */
+  stack: string;
+  sample: string;
+  /** Its licence, in words. */
+  licence: string;
+  brand: boolean;
+}
+
+/** One script's tiles, the brand's first (the catalogue's order). */
+export function fontOptions(script: FontScript): FontOption[] {
+  return familiesOf(script).map((f) => ({
+    value: f.id,
+    name: f.name,
+    stack: f.stack,
+    sample: FONT_SAMPLE[script],
+    licence: f.licence.name,
+    brand: f.brand,
+  }));
+}
+
+/** The stack a theme's family for a script is drawn in (the brand's for an id off the list). */
+export function fontStack(fonts: ThemeFonts, script: FontScript): string {
+  const options = fontOptions(script);
+  return (options.find((o) => o.value === fonts[script]) ?? options[0]!).stack;
+}
+
+/** The settings with a script's family chosen: one of that script's, else unchanged. */
+export function withFont(settings: ThemeSettings, script: FontScript, id: string): ThemeSettings {
+  if (!fontOptions(script).some((o) => o.value === id)) return settings;
+  return { ...settings, fonts: { ...settings.fonts, [script]: id } as ThemeFonts };
+}
 
 export const REVEAL_OPTIONS = [
   { value: 'on', label: 'Fade in as you scroll' },

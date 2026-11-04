@@ -8,6 +8,7 @@ import {
   BUTTON_OPTIONS,
   CASE_OPTIONS,
   CORNER_OPTIONS,
+  FONT_GROUPS,
   MARQUEE_OPTIONS,
   REVEAL_OPTIONS,
   WEIGHT_OPTIONS,
@@ -15,15 +16,24 @@ import {
   failureLines,
   gateView,
   settingsOf,
+  fontOptions,
+  fontStack,
   typedMain,
   validColors,
+  withFont,
   withMain,
 } from '@/components/admin/screens/theme/model';
 import { formToPayload, rowToForm } from '@/lib/admin/formPayload';
 import { DEFAULT_THEME_SETTINGS } from '@theme/compile';
+import { FONT_FAMILIES, FONT_SAMPLE, brandFamily } from '@theme/fonts';
 import { paletteOf, simplePalette, type GateResult } from '@theme/gate';
 import { DEFAULT_COLORS } from '@theme/palette';
-import { ThemeMotionSchema, ThemeShapesSchema, ThemeTypeSchema } from '@schemas/theme';
+import {
+  ThemeFontsSchema,
+  ThemeMotionSchema,
+  ThemeShapesSchema,
+  ThemeTypeSchema,
+} from '@schemas/theme';
 import { THEME_TOKEN_NAMES } from '@schemas/themeTokens';
 
 // The theme editor (/admin/appearance/theme, Admin v2 E4): its pure half (model.ts) and its
@@ -34,17 +44,21 @@ import { THEME_TOKEN_NAMES } from '@schemas/themeTokens';
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 
 const SAVED = {
-  v: 2,
+  v: 3,
   mode: 'advanced',
   colors: { primary: '#000000', hover: '#615757', accent: '#938A8D' },
   motion: { marquee: 'slowest', reveal: false },
   shapes: { corners: 'soft', buttons: 'square' },
   type: { headingWeight: 700, headingCase: 'as-written' },
+  fonts: { latin: 'archivo', arabic: 'almarai' },
 };
 /** E4's shape: a theme saved before E12. */
 const SAVED_V1 = { v: 1, mode: SAVED.mode, colors: SAVED.colors, motion: SAVED.motion };
+/** E12's shape: a theme saved before E13. */
+const SAVED_V2 = { ...SAVED_V1, v: 2, shapes: SAVED.shapes, type: SAVED.type };
 const BRAND_SHAPES = { corners: 'brand', buttons: 'pill' };
 const BRAND_TYPE = { headingWeight: 800, headingCase: 'uppercase' };
+const BRAND_FONTS = { latin: 'archivo', arabic: 'almarai' };
 
 describe('the form holds the settings the theme was saved with', () => {
   it('a saved theme, loaded through the field kit, is the theme the editor shows', () => {
@@ -59,17 +73,26 @@ describe('the form holds the settings the theme was saved with', () => {
     expect(formToPayload({ ...form, settings: SAVED }, THEME_FIELDS)['settings']).toEqual(SAVED);
   });
 
-  it('a theme saved before E12 (v1) opens at the brand’s shapes and type, and saves as v2', () => {
+  it('a theme saved before E12 (v1) opens at the brand’s shapes, type and fonts, and saves as v3', () => {
     const form = rowToForm(
       { id: 'x', name: 'Site theme', settings: SAVED_V1, version: 3 },
       THEME_FIELDS,
     );
     expect(settingsOf(form['settings'])).toEqual({
       ...SAVED_V1,
-      v: 2,
+      v: 3,
       shapes: BRAND_SHAPES,
       type: BRAND_TYPE,
+      fonts: BRAND_FONTS,
     });
+  });
+
+  it('a theme saved before E13 (v2) opens at the brand’s fonts, and saves as v3', () => {
+    const form = rowToForm(
+      { id: 'x', name: 'Site theme', settings: SAVED_V2, version: 3 },
+      THEME_FIELDS,
+    );
+    expect(settingsOf(form['settings'])).toEqual(SAVED);
   });
 
   it('anything else is the brand’s own settings, a fresh copy each time', () => {
@@ -88,6 +111,7 @@ describe('the form holds the settings the theme was saved with', () => {
       motion: { marquee: 'faster', reveal: 'no' },
       shapes: { corners: 'huge', buttons: 999 },
       type: { headingWeight: 900, headingCase: 'lowercase' },
+      fonts: { latin: 'inter', arabic: 'archivo' },
       extra: true,
     });
     expect(settings.colors).toEqual({ primary: '#00', hover: '#024CFF', accent: '#938A8D' });
@@ -95,8 +119,11 @@ describe('the form holds the settings the theme was saved with', () => {
     // A shape or type off its list is the brand's (the editor offers only the closed choices).
     expect(settings.shapes).toEqual(BRAND_SHAPES);
     expect(settings.type).toEqual(BRAND_TYPE);
+    // A family off the catalogue, or of the other script, is the brand's.
+    expect(settings.fonts).toEqual(BRAND_FONTS);
     expect(Object.keys(settings).sort()).toEqual([
       'colors',
+      'fonts',
       'mode',
       'motion',
       'shapes',
@@ -176,6 +203,29 @@ describe('what the screen draws from the settings', () => {
     expect(CASE_OPTIONS.map((o) => o.label)).toEqual(['Capitals', 'As written']);
   });
 
+  it('the Fonts card: a group per script, a tile per family of the catalogue (E13)', () => {
+    expect(FONT_GROUPS.map((g) => [g.script, g.label])).toEqual([
+      ['latin', 'English pages'],
+      ['arabic', 'Arabic pages'],
+    ]);
+    for (const { script } of FONT_GROUPS) {
+      expect(fontOptions(script).map((o) => o.value)).toEqual([
+        ...ThemeFontsSchema.shape[script].options,
+      ]);
+      expect(fontOptions(script)[0]).toMatchObject({
+        value: brandFamily(script).id,
+        brand: true,
+        sample: FONT_SAMPLE[script],
+        stack: brandFamily(script).stack,
+      });
+    }
+    // Choosing: only a family of that script.
+    expect(withFont(DEFAULT_THEME_SETTINGS, 'latin', 'archivo')).toEqual(DEFAULT_THEME_SETTINGS);
+    expect(withFont(DEFAULT_THEME_SETTINGS, 'latin', 'almarai')).toBe(DEFAULT_THEME_SETTINGS);
+    expect(withFont(DEFAULT_THEME_SETTINGS, 'arabic', 'inter')).toBe(DEFAULT_THEME_SETTINGS);
+    expect(fontStack(DEFAULT_THEME_SETTINGS.fonts, 'arabic')).toBe(brandFamily('arabic').stack);
+  });
+
   it('previews the admin in the three tokens admin.css reads, and only those', () => {
     expect(Object.values(ADMIN_PREVIEW_TOKENS)).toEqual(['--bs-klein', '--bs-cobalt', '--bs-sky']);
     for (const name of Object.values(ADMIN_PREVIEW_TOKENS)) {
@@ -192,6 +242,7 @@ describe('the screen’s server markup', () => {
       'Brand colours',
       'Shapes',
       'Typography',
+      'Fonts',
       'Motion',
       'What stays the same',
       'Preview',
@@ -206,6 +257,22 @@ describe('the screen’s server markup', () => {
     );
     expect(html).toContain('<legend class="visually-hidden">Clients marquee speed</legend>');
     expect(html).toContain('<legend class="visually-hidden">Sections</legend>');
+    // The Fonts card (E13): a visible legend per script, a radio per family, chosen.
+    for (const { label } of FONT_GROUPS) {
+      expect(html, label).toContain(`<legend class="theme__label">${label}</legend>`);
+    }
+    for (const family of FONT_FAMILIES) {
+      const input = new RegExp(
+        `<label class="theme__font" data-font="${family.id}"><input type="radio"([^>]*)/>`,
+      ).exec(html)?.[1];
+      expect(input, family.id).toBeDefined();
+      expect(input, family.id).toContain(`value="${family.id}"`);
+      expect(input, family.id).toContain('checked=""');
+      expect(html, family.id).toContain(`<b>${family.name}</b>`);
+    }
+    // The facts no longer say the fonts are fixed: the card says how a font joins.
+    expect(html).not.toContain('<dt>Fonts</dt>');
+    expect(html).toContain('A developer adds a font to this list once its licence is checked.');
     expect(html).toContain('Simple: one colour');
     expect(html).toContain('Advanced: every colour');
     expect(html).toMatch(/<label[^>]*for="theme-primary"[^>]*>Main colour/);
@@ -219,7 +286,7 @@ describe('the screen’s server markup', () => {
   it('draws no empty card: the form’s own fields are all hidden (CR4)', () => {
     expect(html).not.toMatch(/<div class="card"><\/div>/);
     // Every card the screen draws has its heading.
-    expect(html.match(/class="card"/g)).toHaveLength(6);
+    expect(html.match(/class="card"/g)).toHaveLength(7);
   });
 
   it('sets no style attribute: colours are SVG attributes (CSP, ui.md §1.6)', () => {
@@ -260,5 +327,62 @@ describe('the screen’s server markup', () => {
     expect(themed).not.toContain('font-weight="800"');
     expect(themed).toContain('From the brain to the');
     expect(themed).not.toMatch(/\sstyle=/);
+  });
+
+  it('the sample and the tiles draw each family in itself, by attribute (E13)', () => {
+    const palette = paletteOf(DEFAULT_COLORS);
+    const brand = renderToStaticMarkup(createElement(SitePreview, { palette }));
+    const attr = (stack: string) => `font-family="${stack.replace(/'/g, '&#x27;')}"`;
+    expect(brand).toContain('data-latin="archivo"');
+    expect(brand).toContain('data-arabic="almarai"');
+    expect(brand).toContain(`<g ${attr(brandFamily('latin').stack)}>`);
+    const arabicLine = /<text [^>]*direction="rtl"[^>]*>/.exec(brand)?.[0] ?? '';
+    expect(arabicLine).toContain(attr(brandFamily('arabic').stack));
+    expect(html).toContain(attr(brandFamily('latin').stack));
+    expect(html).toContain(attr(brandFamily('arabic').stack));
+    expect(html).toContain('>Aa</text>');
+    expect(html).toContain('>أب</text>');
+  });
+
+  // SVG's text-anchor is relative to the text's direction: `start` is the right edge of a
+  // right-to-left run, so `end` with `rtl` pins the LEFT edge at x and the text runs right
+  // (E13-CR-1: the Arabic tile drew its sample from x=62 out of its 64-wide box, clipped). A
+  // tile's sample, and the site sample's right-to-left line, must grow from the edge they stand
+  // at into their box: a line that grows left stands in the right half, one that grows right in
+  // the left half, a centred one at the middle. (The site sample's other lines are short labels
+  // placed in its columns, outside this rule.)
+  it('the tiles’ samples and the Arabic line grow into their box (E13-CR-1)', () => {
+    const preview = renderToStaticMarkup(
+      createElement(SitePreview, { palette: paletteOf(DEFAULT_COLORS) }),
+    );
+    const lines = (markup: string) =>
+      [...markup.matchAll(/<svg [^>]*viewBox="0 0 (\d+) \d+"[^>]*>([\s\S]*?)<\/svg>/g)].flatMap(
+        ([, width, body]) =>
+          [...(body ?? '').matchAll(/<text ([^>]*)>([^<]*)<\/text>/g)].map(([, attrs, words]) => {
+            const read = (name: string) =>
+              new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(attrs ?? '')?.[1];
+            return {
+              words: words ?? '',
+              width: Number(width),
+              x: Number(read('x')),
+              anchor: read('text-anchor') ?? 'start',
+              direction: read('direction') ?? 'ltr',
+            };
+          }),
+      );
+    const tiles = lines(html).filter((l) => l.words === 'Aa' || l.words === 'أب');
+    expect(tiles.map((l) => l.words).sort()).toEqual(['Aa', 'أب']);
+    const arabic = lines(preview).filter((l) => l.direction === 'rtl');
+    expect(arabic).toHaveLength(1);
+    for (const line of [...tiles, ...arabic]) {
+      expect(line.width, line.words).toBeGreaterThan(0);
+      const half = line.width / 2;
+      const growsLeft =
+        (line.anchor === 'start' && line.direction === 'rtl') ||
+        (line.anchor === 'end' && line.direction === 'ltr');
+      if (line.anchor === 'middle') expect(line.x, line.words).toBe(half);
+      else if (growsLeft) expect(line.x, line.words).toBeGreaterThan(half);
+      else expect(line.x, line.words).toBeLessThan(half);
+    }
   });
 });

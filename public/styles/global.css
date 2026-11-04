@@ -1227,6 +1227,8 @@ html:has(:focus-visible) .intro {
    adds the class, so the pure-CSS timeline below remains the default. */
 body.intro-waiting .intro,
 body.intro-waiting .intro img,
+body.intro-waiting .intro__below,
+body.intro-waiting .intro__bar i,
 body.intro-waiting .letter,
 body.intro-waiting .hero__sub,
 body.intro-waiting .hero__cta,
@@ -1246,6 +1248,165 @@ html:has(:focus-visible) .hero__cta,
 html:has(:focus-visible) .hero__scroll,
 html:has(:focus-visible) .site-header--overlay {
   animation: none;
+}
+
+/* ---- The loading screen's look (Admin v2 E7, site_appearance's intro_ columns) -----------
+   Each option off its default is a data-* bucket on the plate (Hero.astro); each bucket maps
+   to ONE fixed rule here, and with none set the plate is the intro as built, byte for byte.
+   docs/hero-intro.md "The loading screen's buckets" is the record. */
+
+/* Timing: the two INPUTS every instant above derives from (§1 of hero-intro.md), one rule
+   per step (hold 500 to 1500 ms by 100, fade 300 to 600 ms by 50; 1000 and 450 are the
+   defaults above and carry no attribute). Inside no-preference, so a bucket's more specific
+   selector can never outrank the motion safety net, which zeroes both for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  body:has(.intro[data-hold='500']) {
+    --bs-intro-hold: 0.5s;
+  }
+  body:has(.intro[data-hold='600']) {
+    --bs-intro-hold: 0.6s;
+  }
+  body:has(.intro[data-hold='700']) {
+    --bs-intro-hold: 0.7s;
+  }
+  body:has(.intro[data-hold='800']) {
+    --bs-intro-hold: 0.8s;
+  }
+  body:has(.intro[data-hold='900']) {
+    --bs-intro-hold: 0.9s;
+  }
+  body:has(.intro[data-hold='1100']) {
+    --bs-intro-hold: 1.1s;
+  }
+  body:has(.intro[data-hold='1200']) {
+    --bs-intro-hold: 1.2s;
+  }
+  body:has(.intro[data-hold='1300']) {
+    --bs-intro-hold: 1.3s;
+  }
+  body:has(.intro[data-hold='1400']) {
+    --bs-intro-hold: 1.4s;
+  }
+  body:has(.intro[data-hold='1500']) {
+    --bs-intro-hold: 1.5s;
+  }
+  body:has(.intro[data-fade='300']) {
+    --bs-intro-fade: 0.3s;
+  }
+  body:has(.intro[data-fade='350']) {
+    --bs-intro-fade: 0.35s;
+  }
+  body:has(.intro[data-fade='400']) {
+    --bs-intro-fade: 0.4s;
+  }
+  body:has(.intro[data-fade='500']) {
+    --bs-intro-fade: 0.5s;
+  }
+  body:has(.intro[data-fade='550']) {
+    --bs-intro-fade: 0.55s;
+  }
+  body:has(.intro[data-fade='600']) {
+    --bs-intro-fade: 0.6s;
+  }
+}
+
+/* An opaque plate: the logo on black, or on a light ground (the white logo drawn black: a
+   STATIC filter, rasterised once, as the drop shadow is; the image and its box never change,
+   so the logo stays the home LCP element). Still `pointer-events: none`. */
+.intro[data-backdrop='black'] {
+  background: var(--bs-black);
+}
+.intro[data-backdrop='light'] {
+  background: var(--bs-paper);
+}
+.intro[data-backdrop='light'] img {
+  filter: brightness(0);
+}
+/* An opaque plate would hide the consent banner (z-80) under it for the whole intro while its
+   buttons still take a click through the plate: a choice made on a banner nobody can see is
+   no choice (PDPL). So the banner rises above an opaque plate; over the video the plate is
+   see-through and the banner shows through it, as built. */
+body:has(.intro[data-backdrop]) .consent-banner {
+  z-index: 91;
+}
+
+/* The tagline and the bar hang BELOW the logo, out of flow: the logo is centred by the grid
+   and never moves for them (its box is 520:266, so half its height is 0.2558 of its width,
+   whose bound is `.intro img`'s). They enter from opacity 0, never the .01 the logo uses: an
+   element first painted at opacity 0 is never an LCP candidate, so the logo stays the LCP
+   element. The same FOUC guard and curve as the logo; they leave with the plate. */
+.intro__below {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(50% + min(46vw, 520px, 66svh) * 0.2558 + 1rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  padding-inline: 16px;
+  text-align: center;
+  animation: intro-extra-in 0.45s var(--bs-ease) both;
+  animation-delay: var(--bs-intro-guard);
+}
+@keyframes intro-extra-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.intro__tag {
+  margin: 0;
+  max-inline-size: 36em;
+  font-size: clamp(0.875rem, 0.8rem + 0.3vw, 1.0625rem);
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  color: var(--bs-paper);
+  /* Over the moving loop there is no single ground to measure: the shadow keeps the white
+     words off the bright sky the loop opens on, as the logo's does. */
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6);
+}
+html[dir='rtl'] .intro__tag {
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.intro[data-backdrop='light'] .intro__tag {
+  color: var(--bs-ink-2);
+  text-shadow: none;
+}
+/* The bar fills over the hold, from the FOUC guard: compositor-only (a scale, never a width),
+   paused with the plate while the logo loads (body.intro-waiting above). */
+.intro__bar {
+  display: block;
+  inline-size: min(160px, 40vw);
+  block-size: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.22);
+}
+.intro__bar i {
+  display: block;
+  block-size: 100%;
+  background: var(--bs-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: intro-bar calc(var(--bs-intro-hold) - var(--bs-intro-guard)) linear both;
+  animation-delay: var(--bs-intro-guard);
+}
+html[dir='rtl'] .intro__bar i {
+  transform-origin: right center;
+}
+.intro[data-backdrop='light'] .intro__bar {
+  background: rgba(0, 0, 0, 0.12);
+}
+.intro[data-backdrop='light'] .intro__bar i {
+  background: var(--bs-klein);
+}
+@keyframes intro-bar {
+  to {
+    transform: scaleX(1);
+  }
 }
 
 /* ============================================================

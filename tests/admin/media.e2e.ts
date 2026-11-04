@@ -1,7 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
-import { SKIP_REASON, authFile, staffEnv } from './staff';
+import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The media library and the picker with upload (Admin v2 U4), signed in, through the real
@@ -20,7 +22,10 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *   roles     Content Creator and Developer see Upload and Replace, not Delete; SEO sees
  *             none of them and still saves a picture's words (the meta door);
  *   picker    a service's Poster: Choose, search, select and Use image; Upload in place
- *             chooses the new picture; leaving without saving keeps the stored poster.
+ *             chooses the new picture; leaving without saving publishes nothing (the live
+ *             poster, read with the service role, is the one it was). With releases on (the
+ *             rehearsal) the editor keeps a change as a pending one when focus leaves it (P-5),
+ *             so the test removes its own pending change on this service, before and after.
  *
  * Uploaded rows are left in place (the per-role sweep opens the newest media row's edit
  * screen, U3's reason); deleting is covered by tests/lib/mediaUploadApi.spec.ts. Four upload
@@ -38,6 +43,41 @@ const VIEWPORTS = [320, 390, 1280];
  * sit on its last row or past it.
  */
 const USED_STILL = 'A person in a black head wrap';
+
+/** The local stack's service role (staffEnv admits loopback only). */
+function serviceRole() {
+  const env = staffEnv()!;
+  return createClient(env.url, env.serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+/** A service's LIVE poster: the row itself, never the editor's view of it. */
+async function livePoster(id: string): Promise<string | null> {
+  const { data, error } = await serviceRole()
+    .from('services')
+    .select('poster_media_id')
+    .eq('id', id)
+    .single();
+  expect(error).toBeNull();
+  return (data as { poster_media_id: string | null }).poster_media_id;
+}
+
+/**
+ * Release mode only: throws away the pending change this spec's editor left on the service
+ * (unclaimed ones only, the drill's rule), so nothing it did waits in every later spec's
+ * savebar. With releases off there are none to throw away.
+ */
+async function dropPendingChange(id: string) {
+  if (!releasesOn()) return;
+  const { error } = await serviceRole()
+    .from('content_drafts')
+    .delete()
+    .eq('tenant_id', TENANT_ID)
+    .eq('entity_id', id)
+    .is('release_id', null);
+  expect(error).toBeNull();
+}
 
 async function jpeg(width: number, height: number, tint: number): Promise<Buffer> {
   return sharp({ create: { width, height, channels: 3, background: { r: tint, g: 90, b: 160 } } })
@@ -286,9 +326,7 @@ test.describe('as seo', () => {
 test.describe('the picker, as content_creator', () => {
   test.use({ storageState: authFile('content_creator') });
 
-  test('Choose, Use image, and Upload in place; leaving keeps the stored poster', async ({
-    page,
-  }) => {
+  test('Choose, Use image, and Upload in place; leaving publishes nothing', async ({ page }) => {
     page.on('dialog', (dialog) => void dialog.accept());
     const list = await page.request.get('/api/admin/services?limit=100');
     const body = (await list.json()) as { data?: { rows?: unknown[] } };
@@ -296,53 +334,69 @@ test.describe('the picker, as content_creator', () => {
       (r) => r.slug === 'brand-guidelines',
     );
     expect(service, 'the seeded service brand-guidelines').toBeTruthy();
-    const stored = (await (
-      await page.request.get(`/api/admin/services/${service!.id}`)
-    ).json()) as {
-      data: { poster_media_id: string | null };
-    };
+    const id = service!.id;
+    // A pending change an earlier attempt left would be laid over what the editor reads.
+    await dropPendingChange(id);
+    try {
+      const live = await livePoster(id);
+      expect(live, 'brand-guidelines has its seeded poster').toBeTruthy();
+      const stored = (await (await page.request.get(`/api/admin/services/${id}`)).json()) as {
+        data: { poster_media_id: string | null };
+      };
+      expect(stored.data.poster_media_id).toBe(live);
 
-    await page.goto(`/admin/services/${service!.id}`, { waitUntil: 'networkidle' });
-    await ready(page);
-    const poster = page.getByRole('group', { name: 'Poster' });
-    await poster.getByRole('button', { name: /^(Choose|Change)…$/ }).click();
-    const picker = page.getByRole('dialog', { name: 'Poster: choose' });
-    await expect(picker).toBeVisible();
-    await picker.getByLabel('Search media').fill('head wrap');
-    const still = picker.getByRole('button', { name: new RegExp(`^${USED_STILL}`) });
-    await still.click();
-    await expect(still).toHaveAttribute('aria-pressed', 'true');
-    await picker.getByRole('button', { name: 'Use image' }).click();
-    await expect(picker).toBeHidden();
-    await expect(poster).toContainText(USED_STILL);
+      await page.goto(`/admin/services/${id}`, { waitUntil: 'networkidle' });
+      await ready(page);
+      const poster = page.getByRole('group', { name: 'Poster' });
+      await poster.getByRole('button', { name: /^(Choose|Change)…$/ }).click();
+      const picker = page.getByRole('dialog', { name: 'Poster: choose' });
+      await expect(picker).toBeVisible();
+      await picker.getByLabel('Search media').fill('head wrap');
+      const still = picker.getByRole('button', { name: new RegExp(`^${USED_STILL}`) });
+      await still.click();
+      await expect(still).toHaveAttribute('aria-pressed', 'true');
+      await picker.getByRole('button', { name: 'Use image' }).click();
+      await expect(picker).toBeHidden();
+      await expect(poster).toContainText(USED_STILL);
 
-    // Upload in place: one file, described, sent, and chosen.
-    await poster.getByRole('button', { name: 'Change…' }).click();
-    await expect(picker).toBeVisible();
-    const chooser = page.waitForEvent('filechooser');
-    await picker.getByRole('button', { name: 'Upload', exact: true }).click();
-    const name = `u4-picker-${Date.now().toString(36)}.jpg`;
-    await (
-      await chooser
-    ).setFiles({
-      name,
-      mimeType: 'image/jpeg',
-      buffer: await jpeg(800, 600, 90),
-    });
-    const describe = page.getByRole('dialog', { name: 'Describe your images' });
-    await describe.getByLabel(/^Alt text \(English\)/).fill('A picker e2e picture');
-    await describe.getByLabel(/^Alt text \(Arabic\)/).fill('صورة اختبار من المنتقي');
-    await describe.getByRole('button', { name: 'Upload picture' }).click();
-    await expect(describe).toBeHidden();
-    await expect(picker).toBeHidden();
-    await expect(poster).toContainText(name);
+      // Upload in place: one file, described, sent, and chosen.
+      await poster.getByRole('button', { name: 'Change…' }).click();
+      await expect(picker).toBeVisible();
+      const chooser = page.waitForEvent('filechooser');
+      await picker.getByRole('button', { name: 'Upload', exact: true }).click();
+      const name = `u4-picker-${Date.now().toString(36)}.jpg`;
+      await (
+        await chooser
+      ).setFiles({
+        name,
+        mimeType: 'image/jpeg',
+        buffer: await jpeg(800, 600, 90),
+      });
+      const describe = page.getByRole('dialog', { name: 'Describe your images' });
+      await describe.getByLabel(/^Alt text \(English\)/).fill('A picker e2e picture');
+      await describe.getByLabel(/^Alt text \(Arabic\)/).fill('صورة اختبار من المنتقي');
+      await describe.getByRole('button', { name: 'Upload picture' }).click();
+      await expect(describe).toBeHidden();
+      await expect(picker).toBeHidden();
+      await expect(poster).toContainText(name);
 
-    // Leaving without saving: the stored poster is unchanged.
-    await page.reload({ waitUntil: 'networkidle' });
-    const now = (await (await page.request.get(`/api/admin/services/${service!.id}`)).json()) as {
-      data: { poster_media_id: string | null };
-    };
-    expect(now.data.poster_media_id).toBe(stored.data.poster_media_id);
+      // Leaving without saving publishes nothing: the live poster is the one it was (neither
+      // the still nor the upload, both of which the form showed).
+      await page.reload({ waitUntil: 'networkidle' });
+      expect(await livePoster(id)).toBe(live);
+      if (!releasesOn()) {
+        // Releases off the editor saves only on Save, and the API answers the live row.
+        const now = (await (await page.request.get(`/api/admin/services/${id}`)).json()) as {
+          data: { poster_media_id: string | null };
+        };
+        expect(now.data.poster_media_id).toBe(stored.data.poster_media_id);
+      }
+      // Releases on, the editor kept the still as a pending change when focus left the poster
+      // for the picker (P-5), which the API lays over live: not asserted (when a focus change
+      // flushes is the editor's timing), and thrown away below so no later spec meets it.
+    } finally {
+      await dropPendingChange(id);
+    }
   });
 });
 

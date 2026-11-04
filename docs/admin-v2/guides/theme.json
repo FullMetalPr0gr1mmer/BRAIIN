@@ -17,7 +17,7 @@
     "en": [
       {
         "t": "p",
-        "x": "Appearance › Theme sets the site's colours, its shapes, its headings and how much it moves. The admin wears the same colours, so you see a change here as soon as it is live."
+        "x": "Appearance › Theme sets the site's colours, its shapes, its headings, its fonts and how much it moves. The admin wears the same colours, so you see a change here as soon as it is live."
       },
       {
         "t": "h",
@@ -47,6 +47,17 @@
       },
       {
         "t": "h",
+        "x": "Fonts"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "English pages and Arabic pages each have a font, chosen from the site's own list. Each font is served from the site itself, trimmed to the letters the site uses, and measured so the page does not jump while it loads.",
+          "Today the list holds the brand's fonts: Archivo for English and Almarai for Arabic. A developer adds a new font once its licence is checked, and it then shows here as a choice."
+        ]
+      },
+      {
+        "t": "h",
         "x": "Motion"
       },
       {
@@ -59,17 +70,17 @@
       },
       {
         "t": "p",
-        "x": "Press Save theme, or Ctrl+S. Reset to brand defaults puts the brand's own colours, shapes, headings and motion back in the form after you confirm; press Save theme to apply them. Only an Admin or a Developer can change the theme."
+        "x": "Press Save theme, or Ctrl+S. Reset to brand defaults puts the brand's own colours, shapes, headings, fonts and motion back in the form after you confirm; press Save theme to apply them. Only an Admin or a Developer can change the theme."
       },
       {
         "t": "tip",
-        "x": "The dark background, the light sections and the fonts are fixed in this version."
+        "x": "The dark background and the light sections are fixed in this version."
       }
     ],
     "ar": [
       {
         "t": "p",
-        "x": "تحدّد شاشة Appearance › Theme ألوان الموقع وأشكاله وعناوينه ومقدار حركته. وتتبع لوحة الإدارة الألوان نفسها، فترى التغيير هنا حالما يصبح مباشرًا."
+        "x": "تحدّد شاشة Appearance › Theme ألوان الموقع وأشكاله وعناوينه وخطوطه ومقدار حركته. وتتبع لوحة الإدارة الألوان نفسها، فترى التغيير هنا حالما يصبح مباشرًا."
       },
       {
         "t": "h",
@@ -99,6 +110,17 @@
       },
       {
         "t": "h",
+        "x": "الخطوط"
+      },
+      {
+        "t": "ol",
+        "x": [
+          "لكلٍّ من الصفحات الإنجليزية والصفحات العربية خطٌّ يُختار من قائمة خطوط الموقع نفسه. ويُقدَّم كل خط من الموقع ذاته، مقتصرًا على الحروف التي يستخدمها الموقع، ومقيسًا بحيث لا تتحرك الصفحة أثناء تحميله.",
+          "تضم القائمة اليوم خطَّي العلامة: Archivo للإنجليزية وAlmarai للعربية. ويضيف المطوّر خطًّا جديدًا بعد التحقق من ترخيصه، فيظهر هنا خيارًا."
+        ]
+      },
+      {
+        "t": "h",
         "x": "الحركة"
       },
       {
@@ -111,11 +133,11 @@
       },
       {
         "t": "p",
-        "x": "اضغط Save theme أو Ctrl+S. ويعيد Reset to brand defaults ألوان العلامة وأشكالها وعناوينها وحركتها الأصلية إلى النموذج بعد أن تؤكد، ثم اضغط Save theme لتطبيقها. ولا يغيّر المظهر إلا المسؤول (Admin) أو المطوّر (Developer)."
+        "x": "اضغط Save theme أو Ctrl+S. ويعيد Reset to brand defaults ألوان العلامة وأشكالها وعناوينها وخطوطها وحركتها الأصلية إلى النموذج بعد أن تؤكد، ثم اضغط Save theme لتطبيقها. ولا يغيّر المظهر إلا المسؤول (Admin) أو المطوّر (Developer)."
       },
       {
         "t": "tip",
-        "x": "الخلفية الداكنة والأقسام الفاتحة والخطوط ثابتة في هذا الإصدار."
+        "x": "الخلفية الداكنة والأقسام الفاتحة ثابتة في هذا الإصدار."
       }
     ]
   }

@@ -6,8 +6,10 @@ name: Releases rehearsal
 # releases ON for the e2e tenant (tests/admin/releases.setup.ts runs `app.enable_releases` as the
 # owner on this job's local database, after the sample rows) and runs the release drill
 # (tests/admin/releases-mode.e2e.ts: a publish, a scheduled release fired by the minute cron, a
-# rollback); and `wrangler dev --test-scheduled`, so the drill can fire that cron
-# (GET /__scheduled). Plus the psql client the switch is sent with. No design capture.
+# rollback); and `wrangler dev --test-scheduled`. The drill fires that cron through miniflare's
+# own trigger, GET /cdn-cgi/local/scheduled (R14a): wrangler's /__scheduled is a middleware it
+# bundles into the Worker, which the adapter's no_bundle build never gets. Plus the psql client
+# the switch is sent with. No design capture.
 #
 # BY HAND ONLY (Actions → Releases rehearsal → Run workflow, on the branch to rehearse): it is
 # never started by a push or a pull request, no required check names it and the deploy does not

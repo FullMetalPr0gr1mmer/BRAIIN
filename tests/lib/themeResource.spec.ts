@@ -34,15 +34,19 @@ const SETTINGS = {
   colors: { primary: '#000000', hover: '#615757', accent: '#938a8d' },
   motion: { marquee: 'slower', reveal: false },
 };
-// What the server stores: since Admin v2 E12 a v1 save (the deployed editor's, during a deploy)
-// is stored as v2 at the brand's shapes and type, and compiles the same tokens.
+// What the server stores: since Admin v2 E13 an older save (the deployed editor's, during a
+// deploy: v1 before E12, v2 before E13) is stored as v3 at the brand's shapes, type and fonts,
+// and compiles the same tokens.
 const SAVED = {
   ...SETTINGS,
-  v: 2,
+  v: 3,
   colors: { ...SETTINGS.colors, accent: '#938A8D' },
   shapes: { corners: 'brand', buttons: 'pill' },
   type: { headingWeight: 800, headingCase: 'uppercase' },
+  fonts: { latin: 'archivo', arabic: 'almarai' },
 };
+/** E12's save, as the editor deployed before E13 sends it. */
+const SAVED_V2 = (({ fonts: _fonts, ...rest }) => ({ ...rest, v: 2 }))(SAVED);
 
 interface Write {
   op: 'insert' | 'update';
@@ -127,7 +131,15 @@ describe('a theme save compiles its tokens on the server', () => {
     expect(update.values['tokens']).toEqual(compileTheme(SAVED as never));
   });
 
-  it('a v2 save writes its shape and type tokens with the rest (Admin v2 E12)', async () => {
+  it('a v2 save (the deployed E12 editor) is stored as v3 at the brand’s fonts (Admin v2 E13)', async () => {
+    const { status, writes } = await call('admin', 'PATCH', { settings: SAVED_V2, version: 1 });
+    expect(status).toBe(200);
+    const update = writes.find((w) => w.op === 'update' && 'settings' in w.values)!;
+    expect(update.values['settings']).toEqual(SAVED);
+    expect(update.values['tokens']).toEqual(compileTheme(SAVED as never));
+  });
+
+  it('a v3 save writes its shape and type tokens with the rest, and no font token (E12, E13)', async () => {
     const shaped = {
       ...SAVED,
       shapes: { corners: 'square', buttons: 'square' },
@@ -145,6 +157,9 @@ describe('a theme save compiles its tokens on the server', () => {
       '--bs-heading-case': 'none',
     });
     expect(update.values['tokens']).toEqual(compileTheme(shaped as never));
+    expect(
+      Object.keys(update.values['tokens'] as object).filter((k) => k.startsWith('--bs-font')),
+    ).toEqual([]);
   });
 
   it('a rename alone touches neither', async () => {
@@ -187,7 +202,10 @@ describe('what a save refuses, before anything is written', () => {
     ['a half-typed colour', { ...SETTINGS, colors: { ...SETTINGS.colors, primary: '#00' } }],
     ['custom CSS', { ...SETTINGS, css: 'body{display:none}' }],
     ['a faster marquee', { ...SETTINGS, motion: { marquee: 'faster', reveal: true } }],
-    ['another version', { ...SETTINGS, v: 3 }],
+    ['another version', { ...SAVED, v: 4 }],
+    ['v2 with fonts', { ...SAVED_V2, fonts: SAVED.fonts }],
+    ['a font off the catalogue', { ...SAVED, fonts: { latin: 'inter', arabic: 'almarai' } }],
+    ['a font of the other script', { ...SAVED, fonts: { latin: 'almarai', arabic: 'almarai' } }],
     ['v1 with shapes', { ...SETTINGS, shapes: { corners: 'square', buttons: 'pill' } }],
     ['a free radius', { ...SAVED, shapes: { corners: 'brand', buttons: 'pill', radius: 4 } }],
     ['a black heading', { ...SAVED, type: { headingWeight: 900, headingCase: 'uppercase' } }],
