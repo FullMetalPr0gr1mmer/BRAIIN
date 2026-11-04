@@ -533,3 +533,24 @@ describe('the E9 migration holds the code map', () => {
     );
   });
 });
+
+describe('the visual spec’s theme palette', () => {
+  // tests/visual/sectionAppearance.e2e.ts sets a theme's colours to check each background under
+  // a theme: they must be a palette the theme gate takes, or the check proves nothing.
+  it('is one packages/theme/gate.ts takes, with the sky tint it derives', async () => {
+    const { gate, skySoftFor } = await import('@theme/gate');
+    const spec = readFileSync(join(process.cwd(), 'tests/visual/sectionAppearance.e2e.ts'), 'utf8');
+    const pick = (token: string) => {
+      const m = new RegExp(`'${token}': '(#[0-9A-F]{6})'`).exec(spec);
+      expect(m, token).not.toBeNull();
+      return m![1]!;
+    };
+    const colors = {
+      primary: pick('--bs-klein'),
+      hover: pick('--bs-cobalt'),
+      accent: pick('--bs-sky'),
+    };
+    expect(gate(colors).ok).toBe(true);
+    expect(skySoftFor(colors).toUpperCase()).toBe(pick('--bs-sky-soft'));
+  });
+});
