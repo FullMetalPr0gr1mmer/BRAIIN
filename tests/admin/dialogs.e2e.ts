@@ -149,13 +149,19 @@ for (const role of STAFF_ROLES) {
           // ---- Escape closes it; focus comes back to the page --------------------------
           await page.keyboard.press('Escape');
           await expect(opened, `${c.id}: Escape closes it`).toHaveCount(0);
-          const focus = await page.evaluate(() => {
-            const el = document.activeElement;
-            if (!el || el === document.body) return 'body';
-            const shown = (el as HTMLElement).getClientRects().length > 0;
-            return shown ? 'shown' : `hidden ${el.tagName.toLowerCase()}`;
-          });
-          expect.soft(focus, `${c.id}: focus after Escape`).toBe('shown');
+          // Polled: a dialog whose opener is gone hands focus on a task after `close`.
+          await expect
+            .poll(
+              () =>
+                page.evaluate(() => {
+                  const el = document.activeElement;
+                  if (!el || el === document.body) return 'body';
+                  const shown = (el as HTMLElement).getClientRects().length > 0;
+                  return shown ? 'shown' : `hidden ${el.tagName.toLowerCase()}`;
+                }),
+              { message: `${c.id}: focus after Escape` },
+            )
+            .toBe('shown');
         });
       }
     }
