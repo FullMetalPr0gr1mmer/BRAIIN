@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
 import type { Role } from '@/lib/auth/types';
@@ -24,6 +25,16 @@ test.skip(!staffEnv(), SKIP_REASON);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
 const RUN = Date.now().toString(36);
+const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
+/** Axe WCAG 2.2 A/AA with a goal dialog open (Admin v2 Z1, the dialog matrix's closure). */
+async function axeClean(page: Page, where: string) {
+  const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+  expect(
+    violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`),
+    `axe with ${where} open`,
+  ).toEqual([]);
+}
 
 async function open(page: Page, path: string) {
   const res = await page.goto(path, { waitUntil: 'networkidle' });
@@ -134,6 +145,7 @@ test.describe('Goals', () => {
     await page.getByRole('button', { name: 'Add goal' }).click();
     const drawer = page.getByRole('dialog', { name: 'New goal' });
     await expect(drawer).toBeVisible();
+    await axeClean(page, 'the New goal drawer');
     // The form refuses an empty name before asking the server.
     await drawer.getByRole('button', { name: 'Add goal' }).click();
     await expect(drawer.getByText('Name the goal').first()).toBeVisible();
@@ -150,6 +162,8 @@ test.describe('Goals', () => {
 
     await row.getByRole('button', { name: `Edit ${name}` }).click();
     const edit = page.getByRole('dialog', { name: 'Edit goal' });
+    await expect(edit).toBeVisible();
+    await axeClean(page, 'the Edit goal drawer');
     await edit.getByLabel('Target').fill('80');
     await edit.getByRole('button', { name: 'Save goal' }).click();
     await expect(page.locator('#admin-toasts')).toContainText('Goal saved');
@@ -160,6 +174,8 @@ test.describe('Goals', () => {
       .getByRole('button', { name: `Delete ${name}` })
       .click();
     const confirm = page.getByRole('dialog', { name: 'Delete this goal?' });
+    await expect(confirm).toBeVisible();
+    await axeClean(page, 'the delete confirm');
     await confirm.getByRole('button', { name: 'Delete goal' }).click();
     await expect(page.locator('#admin-toasts')).toContainText('Goal deleted');
     await expect(page.locator('.goal', { hasText: name })).toHaveCount(0);

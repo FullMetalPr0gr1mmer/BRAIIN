@@ -198,6 +198,13 @@ test('the screen: Turn on through the confirmation, the banner says so, Turn off
   const dialog = page.getByRole('dialog', { name: 'Put the site in maintenance mode?' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  // Axe with the confirmation open (Admin v2 Z1: the dialog matrix leaves this one here, in the
+  // project that may take the site down).
+  const withDialog = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+  expect(
+    withDialog.violations.map((v) => v.id),
+    'axe with the confirmation open',
+  ).toEqual([]);
   await dialog.getByRole('button', { name: 'Turn on' }).click();
   await expect(page.getByRole('heading', { name: 'Maintenance mode is on' })).toBeVisible();
 

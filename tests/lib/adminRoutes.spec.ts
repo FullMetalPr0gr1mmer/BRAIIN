@@ -252,10 +252,24 @@ describe('the sweep route map', () => {
         );
       }
     }
-    // Both specs that open an edit screen ask through it, so neither can drift back to a GET.
-    for (const spec of ['tests/admin/sweep.e2e.ts', 'tests/admin/capture.e2e.ts']) {
+    // Every spec that opens an edit screen asks through it, so none can drift back to a GET:
+    // the capture itself, and since Admin v2 Z1 the sweep, the dialog matrix and the admin
+    // visual baselines through openRoute.ts's resolvePath.
+    for (const spec of ['tests/admin/openRoute.ts', 'tests/admin/capture.e2e.ts']) {
       const source = readFileSync(spec, 'utf8');
       expect(source, spec).toContain('editRowRequest(route)');
+      expect(source, spec).not.toMatch(/listApi\}\?limit=1/);
+    }
+    for (const spec of [
+      'tests/admin/sweep.e2e.ts',
+      'tests/admin/dialogs.e2e.ts',
+      'tests/visual/admin.visual.ts',
+    ]) {
+      const source = readFileSync(spec, 'utf8');
+      expect(source, spec).toMatch(
+        /import \{[^}]*\bresolvePath\b[^}]*\} from '\.\.?\/(admin\/)?openRoute'/,
+      );
+      expect(source, spec).toContain('resolvePath(page, route)');
       expect(source, spec).not.toMatch(/listApi\}\?limit=1/);
     }
   });
