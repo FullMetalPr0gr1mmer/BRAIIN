@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { discardDrafts, publishOwn, savedPattern, systemClient } from './releaseSteps';
+import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 // The Footer screen (Admin v2 E6), end to end through the real Worker, session and database:
 // Admin saves the footer's basics through the screen (a copyright template, the dark style,
@@ -19,10 +19,15 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
 //
 // Its own project (playwright.config.ts `footer`), after `header`: it changes the footer every
 // public spec reads, served-html's bytes included.
+//
+// Both modes (Admin v2 R14b). With releases on the links, the column and the basics are pending
+// changes (the screen says "Saved as an unpublished change"; the column count and the fifth
+// column's 422 count the pending headings, assertNavWritable); the extra columns are thrown away
+// as pending creates; one publish of this run's own identity and footer rows comes before the
+// public footer is read. The clean-up throws this run's unclaimed pending changes away first,
+// then removes what went live, as the system.
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
 
 const PROFILE = '/api/admin/site-profile';
@@ -49,13 +54,6 @@ const FOOTER_KEYS = [
   'footer_show_email',
   'footer_show_social',
 ] as const;
-
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 async function csrf(page: Page): Promise<string> {
   if (!page.url().includes('/admin')) await page.goto('/admin', { waitUntil: 'networkidle' });
@@ -104,7 +102,12 @@ const columns: string[] = [];
 
 test.afterAll(async () => {
   if (!staffEnv() || !tenant) return;
-  const db = service();
+  // Releases on: this run's own unclaimed pending changes first (the system's to clean).
+  await discardDrafts([
+    { entityType: 'nav_item', entityIds: [...made, ...columns] },
+    { entityType: 'site_profile' },
+  ]);
+  const db = systemClient();
   // The links first, then the columns: a column's removal takes its links with it
   // (parent_id on delete cascade), and these are all this run's own.
   if (made.length) await db.from('navigation').delete().eq('tenant_id', tenant).in('id', made);
@@ -186,11 +189,9 @@ test.describe('as admin', () => {
     expect(await page.locator('.ftr-pv__icons i').count()).toBeGreaterThan(0);
 
     await page.getByRole('button', { name: 'Save the footer' }).click();
+    // "Saved at 14:05", or with releases on "Saved as an unpublished change at 14:05".
     await expect(
-      page
-        .getByRole('status')
-        .filter({ hasText: /Saved at \d\d:\d\d/ })
-        .first(),
+      page.getByRole('status').filter({ hasText: savedPattern() }).first(),
     ).toBeVisible();
     expect(await readProfile(page)).toMatchObject({
       footer_copyright: TEMPLATE,
@@ -261,10 +262,12 @@ test.describe('as admin', () => {
     await page.goto(SCREEN, { waitUntil: 'networkidle' });
     await expect(card).toContainText('4 of 4 columns');
     await expect(card.getByRole('button', { name: 'Add a column', exact: true })).toBeDisabled();
-    // The extra columns go again (they hold no link, so nothing goes with them).
+    // The extra columns go again (they hold no link, so nothing goes with them). With releases
+    // on they are pending creates: thrown away as the system, never published.
     const extras = columns.slice(1);
     if (extras.length) {
-      const { error } = await service()
+      await discardDrafts([{ entityType: 'nav_item', entityIds: extras }]);
+      const { error } = await systemClient()
         .from('navigation')
         .delete()
         .eq('tenant_id', tenant!)
@@ -275,6 +278,15 @@ test.describe('as admin', () => {
   });
 
   test('the public footer renders it server-side, in both languages', async ({ page }) => {
+    // Releases on: this run's own identity change, links and column go live together.
+    await publishOwn(
+      page,
+      [
+        { entityType: 'site_profile' },
+        { entityType: 'nav_item', entityIds: [...made, ...columns] },
+      ],
+      4,
+    );
     const profile = await readProfile(page);
     const brand = profile['brand_name'] as Bilingual;
     const place = profile['location'] as Bilingual;

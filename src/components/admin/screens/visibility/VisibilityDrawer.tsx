@@ -5,6 +5,8 @@ import Note from '@/components/admin/kit/Note';
 import type { IconName } from '@/lib/admin/icons';
 import {
   APPLIES_WITHIN,
+  RELEASE_NOTE_KEPT,
+  STAGED_APPLIES,
   HIDDEN_NOTE,
   HOME_REFUSAL,
   MODE_COPY,
@@ -89,6 +91,8 @@ export default function VisibilityDrawer({
   choices,
   busy,
   error,
+  release = false,
+  passwordOffered = true,
   onClose,
   onApply,
 }: {
@@ -96,6 +100,14 @@ export default function VisibilityDrawer({
   choices: readonly RedirectChoice[];
   busy: boolean;
   error: string | null;
+  /** Admin v2 R14b: the screen is in release mode (a save is a pending change). */
+  release?: boolean;
+  /**
+   * Admin v2 R14b: whether "Behind a password" is offered. Releases off, always (a page's
+   * drawer); in release mode only on a page that asks for one live with nothing pending, since
+   * a password is set at once (the screen's passwordOffered).
+   */
+  passwordOffered?: boolean;
   onClose: () => void;
   onApply: (draft: VisibilityDraft) => void;
 }) {
@@ -125,7 +137,11 @@ export default function VisibilityDrawer({
   // template-wide password would need a fence on `services` and `portfolio`, which the
   // listing pages read.
   const modes: VisibilityMode[] =
-    item?.kind === 'template' ? ['public', 'hidden'] : ['public', 'hidden', 'link', 'password'];
+    item?.kind === 'template'
+      ? ['public', 'hidden']
+      : passwordOffered
+        ? ['public', 'hidden', 'link', 'password']
+        : ['public', 'hidden', 'link'];
   const set = (patch: Partial<VisibilityDraft>) =>
     setDraft((current) => (current ? { ...current, ...patch } : current));
   const ordered = Boolean(draft?.hideFrom && draft.showOn && draft.showOn <= draft.hideFrom);
@@ -159,7 +175,10 @@ export default function VisibilityDrawer({
     >
       {item && draft && (
         <div className="vis-drawer">
-          <p className="admin-sub">{APPLIES_WITHIN}</p>
+          <p className="admin-sub">
+            {release && draft.mode !== 'password' ? STAGED_APPLIES : APPLIES_WITHIN}
+          </p>
+          {release && draft.mode === 'password' && <Note>{RELEASE_NOTE_KEPT}</Note>}
           {error && (
             <Note tone="err" role="alert">
               {error}

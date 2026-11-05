@@ -238,7 +238,7 @@
   - the route is `/admin/backups` (plan B7.3), for every CMS role holding a release read capability, not `/admin/settings/versions`.
 - **Copy corrected** where untrue:
   - maintenance "…after you publish";
-  - page visibility "Takes effect when you publish" / "Hidden from the site after you publish" → "Applies to the live site within a few minutes" until releases switch on (U14a, D7);
+  - page visibility "Takes effect when you publish" / "Hidden from the site after you publish" → "Applies to the live site within a few minutes" until releases switch on (U14a, D7); with releases on a setting is a pending change and the drawer says "Goes live when it is published." (R14b), while a page's password stays immediate (P-3) and a page newly behind one waits for owner item B1 ([as-built/R14B.md](as-built/R14B.md));
   - "Kept for 90 days";
   - "Backups cover everything, including leads";
   - "nothing is saved until you publish" → "nothing goes live until you publish";

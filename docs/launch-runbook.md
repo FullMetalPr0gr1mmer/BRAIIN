@@ -1643,8 +1643,11 @@ select app.disable_releases('<tenant id>', '<operator profile id>', p_discard_pe
 ### 6p. Releases: the switch-on, the drill, and the way back (Admin v2 R14, owner item O-5)
 
 From this switch on, an edit in a release-managed area (pages and sections, services, our work,
-collections, blog, navigation, the site identity, SEO, redirects, themes) is saved as an
-unpublished change and goes live only when someone publishes it. §6o says what the two functions
+collections, blog, navigation, the site identity, the forms, the header and loading screen, the
+template pages' shared text, SEO, redirects, themes, page visibility) is saved as an unpublished
+change and goes live only when someone publishes it. A page's password stays immediate (it can be
+changed at once only on a page that already asks for one; R14b), and so do maintenance, users,
+integrations, leads, job applications and media details. §6o says what the two functions
 do; this section is the order to run them in. Nothing here is automated: the owner (or the
 operator the owner names) runs every step by hand. Owner item O-5 names the window, the operator
 and the fallback scheduler.
@@ -1653,15 +1656,22 @@ and the fallback scheduler.
 
 1. **Code and database.** Production holds every migration through the newest on `main` (the
    deploy guard says so on every deploy) and runs a Worker built from a `main` that contains
-   R14-prep. R14-prep adds no migration: the switch needs only R11's (0112).
-2. **A green rehearsal.** In GitHub: Actions → *Releases rehearsal* → Run workflow, on `main`.
+   R14b: the release-mode create form (no per-item schedule), page visibility staged (before
+   R14b the guard refused its saves once releases were on), and R14b's migration (the
+   publishing and page-visibility guides for both modes; its number is the one the merge train
+   gave it). The switch itself needs only R11's (0112).
+2. **The required e2e job in release mode (R14c).** The owner's go for the switch-on is also the
+   go for R14c, the CI change that seeds releases on and makes the required e2e job run every
+   spec in release mode (the change list is in `docs/admin-v2/as-built/R14B.md`). It merges, and
+   its required checks pass, before production's switch.
+3. **A green rehearsal.** In GitHub: Actions → *Releases rehearsal* → Run workflow, on `main`.
    It runs the whole e2e suite with releases ON for a throwaway local database, including the
    drill below (`tests/admin/releases-mode.e2e.ts`). The owner's final go (decision 2026-10-28)
    comes after a green run of the commit production is about to run. A red run stops here.
-3. **Staging first** (README, "Before R14"): run steps 2 to 6 below on `braiin-staging` with the
+4. **Staging first** (README, "Before R14"): run steps 2 to 6 below on `braiin-staging` with the
    same SQL, walk the editors' flows there, and measure the Worker's CPU for a publish of many
    changes and for the scheduled release's fire (owner item O-16; Workers Free plan: 10 ms).
-4. **Name the people** (O-5): the **operator**, who runs the switch, and the **fallback
+5. **Name the people** (O-5): the **operator**, who runs the switch, and the **fallback
    scheduler**, who becomes the scheduler of any old scheduled item whose last editor can no
    longer publish it. Both must be active, unlocked Admins of the site; they may be the same
    person. Their profile ids:
@@ -1672,7 +1682,7 @@ and the fallback scheduler.
       and (p.locked_until is null or p.locked_until <= now());
    ```
 
-5. **Announce the freeze**: a window of about 15 minutes, at a quiet hour, to everyone who edits
+6. **Announce the freeze**: a window of about 15 minutes, at a quiet hour, to everyone who edits
    the site. During it nobody saves anything in the admin and every editor tab is closed (a form
    left open across the switch saves into the new path on its next save, which is safe, but the
    person would not expect it). The public site stays up throughout: there is no maintenance
@@ -1719,6 +1729,9 @@ and the fallback scheduler.
       minutes). One due sooner: wait until it is listed under *Published versions*, then start.
    2. *FAQ* (in the menu's content group): add a question, "Release drill", in both languages,
       with *Visible on the site* left **off** (a draft, so it is never on the site), and save.
+      (In release mode a new item's form shows that switch and no Scheduled for field, R14b; a
+      form that still shows a Status list and Scheduled for was opened before the switch: reload
+      it.)
       The bar at the bottom says there is an unpublished change.
    3. **Publish** (the bar's *Publish…*, then *Publish 1 change*). The toast names the drill's
       version, **vD** (v2 when nothing else has been published since the switch). Backups &
@@ -1743,7 +1756,17 @@ and the fallback scheduler.
       with step 5), plus any `legacy_fired` added since, and `live_version` equals
       `published_versions`.
 6. **End the freeze** and tell the editors: Save now keeps a change; *Publish…* puts it live;
-   History on every editor and Backups & versions show and restore earlier versions.
+   History on every editor and Backups & versions show and restore earlier versions; page
+   visibility waits for *Publish…* too. The guide *Saving, publishing and scheduling* (the
+   *Guide* button on every content screen) says all of it, and *Page visibility* says what
+   changed there.
+7. **Watch the first day**: the dashboard's release rows (a release that could not go live, a
+   cache that was not refreshed, changes waiting more than 30 days) and `system_logs` under
+   `cron:releases` and `release:*`. Anything a person reports as "my save did not show" is the
+   expected release mode until it is published; "my save was refused" with "Live content changes
+   only through a release" names a write path the static test missed
+   (`tests/lib/releaseWritePaths.spec.ts`): switch off (the way back) if it blocks work, and
+   report it.
 
 **The way back** (any time before the contract slice, R15): switching off returns every editor
 to saving live, and nothing published is undone.
@@ -1771,6 +1794,13 @@ to saving live, and nothing published is undone.
 3. Read back: `releases_on` false, `release_tenants`, `pending_changes` and `scheduled_releases`
    0. The `publish-scheduled` job (pg_cron) publishes old-style scheduled items again from the
    switch-off on.
+4. Tell the editors: Save goes live at once again, and every screen open across the switch-off
+   must be reloaded (a save it sends marked as made in release mode is refused with "Publishing
+   was switched off. Reload to edit the live site.", so nothing is written live by surprise).
+   CI needs no change: after R14c the required e2e job proves release mode, and the unit suites
+   hold every route's releases-off path (`releaseOffWrites.spec.ts`, `stagedKernel.spec.ts`,
+   `stagedPageVisibility.spec.ts`); to prove releases off end to end again, run the e2e job with
+   `E2E_RELEASES` unset (R14c keeps that switch).
 
 **A Worker rollback while releases are on** (§10): roll back only to a build that contains R13
 (#117, merged as `42b61c6f`), the first with the whole release interface

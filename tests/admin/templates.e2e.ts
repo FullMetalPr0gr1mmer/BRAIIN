@@ -1,12 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { discardDrafts, publishOwn, savedPattern, systemClient } from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The template editors (Admin v2 E3), signed in, through the real Worker, session and database,
- * releases off (every save is live):
+ * in both modes (Admin v2 R14b: with releases on a save is a pending change, the status says
+ * "Saved as an unpublished change", and this spec publishes its own change, the service's or
+ * the shared text's, before it reads the public pages; releaseSteps.ts):
  *
  *   Admin          Pages' Templates card opens the Service page template on its first published
  *                  service; Showing lists the services by discipline; the parts are listed, read
@@ -24,14 +26,13 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *                  403 from the pages and from the shared text's API (read and write).
  *
  * Its own project (playwright.config.ts `templates`), after `theme`: the shared text it saves
- * shows on every service page the public specs read. Everything is put back: the tagline, and
- * the template_copy row is removed (no row is the templates as built, byte for byte:
+ * shows on every service page the public specs read. Everything is put back: this run's own
+ * unclaimed pending changes are thrown away (releases on), then the tagline, and the
+ * template_copy row is removed (no row is the templates as built, byte for byte:
  * tests/render/templatePages.spec.ts).
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
@@ -40,19 +41,12 @@ const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const FAB = { en: 'Jump to the form', ar: 'انتقل إلى النموذج' };
 const TAGLINE = 'A mark that works everywhere, from a sign to a stamp.';
 
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
 const ids: Record<string, string> = {};
 let blurb: unknown = null;
 
 test.beforeAll(async () => {
   if (!staffEnv()) return;
-  const svc = service();
+  const svc = systemClient();
   const rows = await svc
     .from('services')
     .select('id,slug,blurb')
@@ -68,8 +62,13 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (!staffEnv()) return;
-  const svc = service();
-  // The service role, outside any release (releases are off for this spec).
+  // Releases on: this run's own unclaimed pending changes first (the system's to clean).
+  await discardDrafts([
+    { entityType: 'template_copy' },
+    ...(ids['logo'] ? [{ entityType: 'service', entityIds: [ids['logo']] }] : []),
+  ]);
+  const svc = systemClient();
+  // The service role, which the release guard lets through (an out-of-band system change).
   await svc.from('template_copy').delete().eq('tenant_id', TENANT_ID);
   if (blurb !== null) await svc.from('services').update({ blurb }).eq('id', ids['logo']!);
 });
@@ -132,13 +131,9 @@ function writes(page: Page): string[] {
   return seen;
 }
 
+// "Saved at 14:05", or with releases on "Saved as an unpublished change at 14:05".
 const saved = (page: Page) =>
-  expect(
-    page
-      .getByRole('status')
-      .filter({ hasText: /Saved at \d\d:\d\d/ })
-      .first(),
-  ).toBeVisible();
+  expect(page.getByRole('status').filter({ hasText: savedPattern() }).first()).toBeVisible();
 
 test.describe('as admin', () => {
   test.use({ storageState: authFile('admin') });
@@ -211,7 +206,15 @@ test.describe('as admin', () => {
     await page.locator('#f-blurb-en').fill(TAGLINE);
     await page.getByRole('button', { name: 'Save changes' }).click();
     await saved(page);
-    expect(sent).toEqual([`PATCH /api/admin/services/${ids['logo']}`]);
+    if (releasesOn()) {
+      // The editor also saves by itself when focus leaves the field (P-5): every write is the
+      // full editor's own PATCH, and nothing else.
+      expect(new Set(sent)).toEqual(new Set([`PATCH /api/admin/services/${ids['logo']}`]));
+    } else {
+      expect(sent).toEqual([`PATCH /api/admin/services/${ids['logo']}`]);
+    }
+    // Releases on: the service's own change goes live before its page is read.
+    await publishOwn(page, [{ entityType: 'service', entityIds: [ids['logo']!] }]);
 
     const html = await (await page.request.get('/services/logo')).text();
     expect(html).toContain(TAGLINE);
@@ -253,6 +256,8 @@ test.describe('as admin', () => {
       .data;
     expect(row['service']).toEqual({ fab: FAB });
     expect(row['project']).toEqual({});
+    // Releases on: the shared text goes live before the service pages are read.
+    await publishOwn(page, [{ entityType: 'template_copy' }]);
 
     for (const slug of ['logo', 'business-cards']) {
       const en = await (await page.request.get(`/services/${slug}`)).text();
