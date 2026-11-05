@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
 import { discardDrafts, publishOwn, savedPattern, withDraft } from './releaseSteps';
 import { SKIP_REASON, authFile, staffEnv } from './staff';
 
