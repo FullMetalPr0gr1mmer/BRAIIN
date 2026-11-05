@@ -58,6 +58,39 @@ async function run(page: Page, step: Step): Promise<void> {
   await control.click();
 }
 
+/**
+ * Until no request of the page has been in flight for half a second (at most ten): the
+ * load-state `networkidle` fires once per navigation, so it cannot wait for what a dialog asks
+ * for after it opens.
+ */
+async function quiet(page: Page): Promise<void> {
+  let inFlight = 0;
+  let last = Date.now();
+  const start = () => {
+    inFlight += 1;
+    last = Date.now();
+  };
+  const end = () => {
+    inFlight = Math.max(0, inFlight - 1);
+    last = Date.now();
+  };
+  page.on('request', start);
+  page.on('requestfinished', end);
+  page.on('requestfailed', end);
+  try {
+    const deadline = Date.now() + 10_000;
+    // The first tick lets a request the open just started be counted.
+    await page.waitForTimeout(100);
+    while (Date.now() < deadline && (inFlight > 0 || Date.now() - last < 500)) {
+      await page.waitForTimeout(100);
+    }
+  } finally {
+    page.off('request', start);
+    page.off('requestfinished', end);
+    page.off('requestfailed', end);
+  }
+}
+
 async function pathOf(page: Page, route: SweepRoute, c: DialogCase): Promise<string | null> {
   if (route.kind === 'edit' && c.slug) return pathForSlug(page, route, c.slug);
   return resolvePath(page, route);
@@ -97,6 +130,9 @@ for (const role of STAFF_ROLES) {
           if (!c.popover) {
             await expect(opened, `${c.id}: the dialog's name`).toHaveAccessibleName(c.name ?? /\S/);
           }
+          // What the dialog reads as it opens (a picker's pictures, a drawer's record), so axe
+          // sees it loaded. Not with the page editor's live preview frame, which stays busy.
+          if (!c.slow) await quiet(page);
 
           // ---- axe with it open --------------------------------------------------------
           const { violations } = await new AxeBuilder({ page }).withTags(WCAG).analyze();
