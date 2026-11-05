@@ -115,8 +115,10 @@ export const VISIBILITY_CONSTRAINTS: ConstraintFields = {
   },
 };
 
-const ROW_COLUMNS =
+/** The columns a setting is read with (the staged branch reads them too, Admin v2 R14b). */
+export const VISIBILITY_ROW_COLUMNS =
   'id,page_id,template,mode,redirect_page_id,hide_from,show_on,note,password_version,version,updated_at';
+const ROW_COLUMNS = VISIBILITY_ROW_COLUMNS;
 
 /** A setting as the screen reads it: the dates as Riyadh days. */
 export interface VisibilitySetting {
@@ -147,7 +149,10 @@ export interface VisibilityPageItem {
    * published custom page. The drawer offers only these (E11 code review, CR1).
    */
   redirectable: boolean;
+  /** The live setting, or null for a page that has none (visible to everyone). */
   setting: VisibilitySetting | null;
+  /** Release mode only (Admin v2 R14b): the setting's unpublished change, or null. */
+  pending?: VisibilityPending | null;
 }
 
 export interface VisibilityTemplateItem {
@@ -157,7 +162,27 @@ export interface VisibilityTemplateItem {
   path: string;
   /** Published pages it renders now, or null when the count could not be read. */
   count: number | null;
+  /** The live setting, or null for a template that has none (visible to everyone). */
   setting: VisibilitySetting | null;
+  /** Release mode only (Admin v2 R14b): the setting's unpublished change, or null. */
+  pending?: VisibilityPending | null;
+}
+
+/**
+ * A setting's unpublished change (Admin v2 R14b, src/lib/release/stagedPageVisibility.ts):
+ * what the setting will be once it is published (live with the change laid over it), and the
+ * change the next save names. Never on an answer while releases are off.
+ */
+export interface VisibilityPending {
+  /** The setting as published would leave it; null when the stored change cannot be read. */
+  setting: VisibilitySetting | null;
+  draftId: string;
+  draftVersion: number;
+  op: 'create' | 'update' | 'delete';
+  /** A scheduled release holds it: it cannot change until it goes live or is unscheduled. */
+  scheduled: boolean;
+  /** Columns the live setting moved in since the change was made. */
+  conflict: string[];
 }
 
 type Row = Record<string, unknown>;
@@ -302,6 +327,21 @@ export async function listVisibility(
   sb: SupabaseClient,
   auth: AuthContext,
 ): Promise<{ pages: VisibilityPageItem[]; templates: VisibilityTemplateItem[] }> {
+  return (await listVisibilityWithRows(sb, auth)).list;
+}
+
+/**
+ * The listing, and the live rows it was built from (Admin v2 R14b: the staged branch lays each
+ * row's pending change over it, src/lib/release/stagedPageVisibility.ts). The same reads as the
+ * listing alone: nothing more is asked.
+ */
+export async function listVisibilityWithRows(
+  sb: SupabaseClient,
+  auth: AuthContext,
+): Promise<{
+  list: { pages: VisibilityPageItem[]; templates: VisibilityTemplateItem[] };
+  rows: Row[];
+}> {
   const [pages, rowsResult, services, projects] = await Promise.all([
     readVisibilityPages(sb, auth),
     sb.from('page_visibility').select(ROW_COLUMNS).eq('tenant_id', auth.tenantId).limit(50),
@@ -314,9 +354,9 @@ export async function listVisibility(
   const byTemplate = new Map(
     rows.filter((r) => r['template']).map((r) => [String(r['template']), r]),
   );
-  return {
+  const list = {
     pages: pages.map((page) => ({
-      kind: 'page',
+      kind: 'page' as const,
       id: page.id,
       slug: page.slug,
       title: titleOf(page.title, page.slug),
@@ -325,7 +365,7 @@ export async function listVisibility(
       setting: settingOf(byPage.get(page.id)),
     })),
     templates: (['service', 'case_study'] as const).map((template) => ({
-      kind: 'template',
+      kind: 'template' as const,
       template,
       title: TEMPLATE_LABELS[template].title,
       path: TEMPLATE_LABELS[template].path,
@@ -333,6 +373,7 @@ export async function listVisibility(
       setting: settingOf(byTemplate.get(template)),
     })),
   };
+  return { list, rows };
 }
 
 export interface VisibilitySaveResult {
@@ -363,6 +404,20 @@ export async function saveVisibility(
   auth: AuthContext,
   input: PageVisibilityWrite,
 ): Promise<VisibilitySaveResult> {
+  const target = await checkVisibilityWrite(sb, auth, input);
+  return writeVisibility(sb, auth, input, target);
+}
+
+/**
+ * The rules a setting is held to before anything is written, live or staged (Admin v2 R14b:
+ * the staged branch runs them too, at stage time): the page exists, the homepage stays
+ * visible, a redirect goes to another page that renders. Returns what the change touches.
+ */
+export async function checkVisibilityWrite(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  input: PageVisibilityWrite,
+): Promise<VisibilitySaveResult['target']> {
   // Only the pages this save names: its own and its redirect's (CR2: one read, never a bound).
   const pages = await readVisibilityPages(sb, auth, [
     ...('pageId' in input.target ? [input.target.pageId] : []),
@@ -393,7 +448,16 @@ export async function saveVisibility(
       throw new ValidationError(REDIRECT_UNPUBLISHED, 'redirectPageId');
     }
   }
+  return target;
+}
 
+/** The live write of a checked setting (releases off). */
+async function writeVisibility(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  input: PageVisibilityWrite,
+  target: VisibilitySaveResult['target'],
+): Promise<VisibilitySaveResult> {
   const values = PAGE_VISIBILITY.toRow(input);
   const key = PAGE_VISIBILITY.target(input);
 

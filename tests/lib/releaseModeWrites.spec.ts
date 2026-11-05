@@ -67,10 +67,17 @@ const source = (path: string) => {
   return text;
 };
 
-/** The API slugs whose kernel routes stage with releases on (and so refuse the marker off). */
-const RELEASE_SLUGS = Object.entries(RESOURCES)
-  .filter(([, config]) => stagedEntry(config) !== undefined)
-  .map(([slug]) => slug);
+/**
+ * The API slugs whose routes stage with releases on (and so refuse the marker off): the
+ * kernel's release-managed resources, and (Admin v2 R14b) page visibility, which stages through
+ * its own route (src/lib/release/stagedPageVisibility.ts).
+ */
+const RELEASE_SLUGS = [
+  ...Object.entries(RESOURCES)
+    .filter(([, config]) => stagedEntry(config) !== undefined)
+    .map(([slug]) => slug),
+  'page-visibility',
+];
 
 interface Write {
   file: string;
@@ -245,19 +252,23 @@ describe('the scan reads what it must (R12b review)', () => {
     );
   });
 
-  it('the constants it reads as addresses are outside the release', () => {
-    const read = writes()
-      .filter((w) =>
-        [
-          'src/components/admin/screens/integrations/IntegrationDrawer.tsx',
-          'src/components/admin/screens/visibility/VisibilityScreen.tsx',
-        ].includes(w.file),
-      )
-      .map((w) => w.url);
-    expect(read).toEqual(
-      expect.arrayContaining(["'/api/admin/integrations'", "'/api/admin/page-visibility'"]),
+  it('the constants it reads as addresses: integrations outside the release, page visibility in it', () => {
+    const urls = (file: string) =>
+      writes()
+        .filter((w) => w.file === file)
+        .map((w) => w.url);
+    const integrations = urls('src/components/admin/screens/integrations/IntegrationDrawer.tsx');
+    expect(integrations).toEqual(expect.arrayContaining(["'/api/admin/integrations'"]));
+    expect(integrations.some(releaseManaged)).toBe(false);
+    // Admin v2 R14b: page visibility stages with releases on, so its PUT carries the marker.
+    const visibility = urls('src/components/admin/screens/visibility/VisibilityScreen.tsx');
+    // Its other two writes are addressed from the constant (`${API}/…`): the password door
+    // (marked with stagedUrl all the same) and Sync to edge, which rebuilds the edge's copy and
+    // writes no content.
+    expect(visibility.filter(releaseManaged)).toEqual(["'/api/admin/page-visibility'"]);
+    expect(visibility).toEqual(
+      expect.arrayContaining(['stagedUrl(`${API}/password`, release)', '`${API}/sync`']),
     );
-    expect(read.some(releaseManaged)).toBe(false);
   });
 });
 
@@ -321,6 +332,9 @@ describe('each screen takes its mode from its own answer, never from a row', () 
     // E1's page editor: its sections list (merge train).
     'src/components/admin/screens/pageEditor/PageEditor.tsx':
       /setRelease\(readsThroughRelease\(answer\)\)/,
+    // Admin v2 R14b: page visibility, from its own list answer.
+    'src/components/admin/screens/visibility/VisibilityScreen.tsx':
+      /const release = list !== null && readsThroughRelease\(list\);/,
   };
 
   it('the lists: from their answer’s `draftsInvalid`', () => {

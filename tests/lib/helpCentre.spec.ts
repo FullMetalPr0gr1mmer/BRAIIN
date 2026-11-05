@@ -3284,6 +3284,21 @@ describe('saving-and-publishing describes both ways of publishing (Admin v2 R14b
     expect(en).toContain('Backups & versions in Settings');
   });
 
+  it('page-visibility says a setting waits for a release, and the password stays immediate', () => {
+    const vis = SET.find((a) => a.slug === 'page-visibility')!;
+    const visEn = textsOf(vis, 'en').join('\n');
+    expect(visEn).toContain(
+      'Until publishing in releases is switched on for your site, a change applies',
+    );
+    expect(visEn).toContain('Once publishing in releases is switched on, a change here waits');
+    expect(source('src/components/admin/kit/PendingBadge.tsx')).toContain(
+      "changed: 'Unpublished changes',",
+    );
+    expect(visEn).toContain('the list marks it Unpublished changes');
+    expect(visEn).toContain('A password is still set at once');
+    expect(textsOf(vis, 'ar').join('\n')).toContain('وبعد تفعيل النشر عبر الإصدارات');
+  });
+
   it('lists what stays immediate as the design does (releases.md §1.2)', () => {
     expect(en).toContain(
       'Maintenance mode, users, integrations, leads, job applications and media details still save at once.',

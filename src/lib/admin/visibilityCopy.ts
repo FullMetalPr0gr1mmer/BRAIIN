@@ -76,3 +76,33 @@ export const TEMPLATE_NOTE = {
 
 /** The save landed, the edge did not take it. */
 export const EDGE_MISSED = 'Saved, but the live site has not picked it up. Use Sync to edge.';
+
+// ---- release mode (Admin v2 R14b) ------------------------------------------------------------
+// With releases on, a setting is staged like every other change to the live site: it waits as
+// an unpublished change and goes live when it is published (releases.md §1.1, P-3). A password
+// is a secret, so it stays immediate (0061's exempt `password_version`): a page already behind
+// one can have it changed at once; anything else about it travels with a release.
+
+/** The drawer's line in release mode (APPLIES_WITHIN's twin). */
+export const STAGED_APPLIES = 'Goes live when it is published.';
+
+/** The confirm in release mode (CONFIRM_SUB's twin). */
+export const STAGED_CONFIRM_SUB =
+  'This is saved as an unpublished change. The live site changes when it is published.';
+
+/** The toast after a staged save. */
+export function stagedSaved(title: string): string {
+  return `${title}: saved as an unpublished change. It goes live when it is published.`;
+}
+
+/** Release mode: a password is set at once, so only on a page that already asks for one. */
+export const RELEASE_PASSWORD_ONLY =
+  'While publishing in releases is on, a password can be changed only on a page that already asks for one, with nothing unpublished on it. To put a page behind a password, ask whoever runs the site.';
+
+/** Release mode: changing the password keeps the message as it is. */
+export const RELEASE_NOTE_KEPT =
+  'While publishing in releases is on, the message above the password box stays as it is. Change only the password here.';
+
+/** Release mode: the page has an unpublished visibility change. */
+export const RELEASE_PASSWORD_PENDING =
+  'This page has an unpublished change to who can see it. Publish it or discard it first.';

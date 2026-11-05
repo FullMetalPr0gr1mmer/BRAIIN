@@ -6,8 +6,16 @@ import VisibilityDrawer, {
   draftOf,
   draftReady,
 } from '@/components/admin/screens/visibility/VisibilityDrawer';
-import { edgeLine } from '@/components/admin/screens/visibility/VisibilityScreen';
-import type { VisibilityItem } from '@/components/admin/screens/visibility/types';
+import {
+  edgeLine,
+  passwordOffered,
+  shownItem,
+  visibilityPut,
+} from '@/components/admin/screens/visibility/VisibilityScreen';
+import type {
+  VisibilityItem,
+  VisibilityPending,
+} from '@/components/admin/screens/visibility/types';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -19,7 +27,13 @@ import {
   PASSWORD_HINT,
   PASSWORD_NOTE,
   PASSWORD_REQUIRED,
+  RELEASE_NOTE_KEPT,
+  RELEASE_PASSWORD_ONLY,
+  RELEASE_PASSWORD_PENDING,
+  STAGED_APPLIES,
+  STAGED_CONFIRM_SUB,
   TEMPLATE_NOTE,
+  stagedSaved,
 } from '@/lib/admin/visibilityCopy';
 import { VISIBILITY_KV_CACHE_TTL_S, VISIBILITY_MEMO_MS } from '@/lib/http/visibility';
 
@@ -306,6 +320,166 @@ describe('the copy keeps the client’s rules (P-12)', () => {
       HIDDEN_NOTE,
     ];
     for (const text of texts) {
+      expect(text).not.toMatch(/[–—]/);
+      expect(text.toLowerCase()).not.toMatch(/braii?n|statii?on/);
+    }
+  });
+});
+
+// Admin v2 R14b: the screen in release mode. Its mode is its own list answer's; a row shows the
+// setting its pending change leaves, with a pending badge; the PUT's body names the change and
+// the live version; the password is offered only where it can be set at once. Releases off,
+// nothing here changes what the screen draws or sends.
+describe('release mode (Admin v2 R14b)', () => {
+  const pending = (mode: 'public' | 'hidden' | 'link', over: Partial<VisibilityPending> = {}) =>
+    ({
+      setting: {
+        ...hiddenAbout.setting!,
+        mode,
+        redirectPageId: null,
+        hideFrom: null,
+        showOn: null,
+      },
+      draftId: '77777777-7777-4777-8777-000000000001',
+      draftVersion: 4,
+      op: 'update',
+      scheduled: false,
+      conflict: [],
+      ...over,
+    }) as VisibilityPending;
+  const withPending = (item: VisibilityItem, p: VisibilityPending) =>
+    ({ ...item, pending: p }) as VisibilityItem;
+  const draft = {
+    mode: 'link' as const,
+    redirect: '',
+    hideFrom: '',
+    showOn: '',
+    password: '',
+    noteEn: '',
+    noteAr: '',
+  };
+
+  it('a row shows the setting its pending change leaves, and says it is unpublished', () => {
+    const item = withPending(hiddenAbout, pending('link'));
+    expect(shownItem(item).setting?.mode).toBe('link');
+    // A change that cannot be read shows live.
+    expect(
+      shownItem(withPending(hiddenAbout, pending('link', { setting: null }))).setting?.mode,
+    ).toBe('hidden');
+    const html = renderToStaticMarkup(
+      createElement(VisibilityList, { items: [shownItem(item)], onOpen: () => undefined }),
+    );
+    expect(html).toContain(MODE_COPY.link.badge);
+    expect(html).toContain('Unpublished changes');
+    const scheduled = renderToStaticMarkup(
+      createElement(VisibilityList, {
+        items: [withPending(hiddenAbout, pending('link', { scheduled: true }))],
+        onOpen: () => undefined,
+      }),
+    );
+    expect(scheduled).toContain('Scheduled');
+  });
+
+  it('releases off, a row draws no pending badge (no answer carries one)', () => {
+    const html = renderToStaticMarkup(
+      createElement(VisibilityList, { items: [hiddenAbout], onOpen: () => undefined }),
+    );
+    expect(html).not.toContain('badge--pending');
+  });
+
+  it('the PUT body: the live version, and in release mode the change it names', () => {
+    const live = withPending(hiddenAbout, pending('public'));
+    expect(visibilityPut(live, draft, true)).toEqual({
+      target: { pageId: ABOUT },
+      mode: 'link',
+      redirectPageId: null,
+      hideFrom: null,
+      showOn: null,
+      version: 2,
+      draftId: '77777777-7777-4777-8777-000000000001',
+      draftVersion: 4,
+    });
+    // Releases off: exactly main's body.
+    expect(visibilityPut(hiddenAbout, draft, false)).toEqual({
+      target: { pageId: ABOUT },
+      mode: 'link',
+      redirectPageId: null,
+      hideFrom: null,
+      showOn: null,
+      version: 2,
+    });
+  });
+
+  it('the password: always offered releases off; in release mode only live and unpending', () => {
+    expect(passwordOffered(hiddenAbout, false)).toBe(true);
+    expect(passwordOffered(hiddenAbout, true)).toBe(false);
+    expect(passwordOffered(passwordAbout, true)).toBe(true);
+    expect(passwordOffered(withPending(passwordAbout, pending('public')), true)).toBe(false);
+    expect(passwordOffered(template, true)).toBe(false);
+    const offered = (on: boolean) =>
+      renderToStaticMarkup(
+        createElement(VisibilityDrawer, {
+          item: hiddenAbout,
+          choices,
+          busy: false,
+          error: null,
+          release: true,
+          passwordOffered: on,
+          onClose: () => undefined,
+          onApply: () => undefined,
+        }),
+      );
+    expect(offered(true)).toContain('value="password"');
+    expect(offered(false)).not.toContain('value="password"');
+  });
+
+  it('the drawer and the confirm say when it goes live; releases off they are unchanged', () => {
+    const on = renderToStaticMarkup(
+      createElement(VisibilityDrawer, {
+        item: hiddenAbout,
+        choices,
+        busy: false,
+        error: null,
+        release: true,
+        onClose: () => undefined,
+        onApply: () => undefined,
+      }),
+    );
+    expect(on).toContain(STAGED_APPLIES);
+    expect(on).not.toContain(APPLIES_WITHIN);
+    expect(drawer(hiddenAbout)).toContain(APPLIES_WITHIN);
+    const rotate = renderToStaticMarkup(
+      createElement(VisibilityDrawer, {
+        item: passwordAbout,
+        choices,
+        busy: false,
+        error: null,
+        release: true,
+        onClose: () => undefined,
+        onApply: () => undefined,
+      }),
+    );
+    // A password is set at once, so its line is the live one, and the message stays.
+    expect(rotate).toContain(APPLIES_WITHIN);
+    expect(rotate).toContain(RELEASE_NOTE_KEPT);
+    const screen = readFileSync(
+      join(process.cwd(), 'src/components/admin/screens/visibility/VisibilityScreen.tsx'),
+      'utf8',
+    );
+    expect(screen).toContain(
+      "sub={release && pending?.mode !== 'password' ? STAGED_CONFIRM_SUB : CONFIRM_SUB}",
+    );
+  });
+
+  it('the release words keep the client’s rules (P-12)', () => {
+    for (const text of [
+      STAGED_APPLIES,
+      STAGED_CONFIRM_SUB,
+      stagedSaved('About'),
+      RELEASE_PASSWORD_ONLY,
+      RELEASE_NOTE_KEPT,
+      RELEASE_PASSWORD_PENDING,
+    ]) {
       expect(text).not.toMatch(/[–—]/);
       expect(text.toLowerCase()).not.toMatch(/braii?n|statii?on/);
     }

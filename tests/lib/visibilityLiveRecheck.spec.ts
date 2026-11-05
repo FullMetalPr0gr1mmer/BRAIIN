@@ -20,6 +20,8 @@ const { state } = vi.hoisted(() => ({
     /** What liveRecheck's service-role read of the caller's profile finds. */
     live: { data: null, error: null } as Read,
     audits: [] as unknown[],
+    /** Admin v2 R14b: what `public.releases_enabled` answers for the caller's tenant. */
+    releases: false,
   },
 }));
 
@@ -55,6 +57,11 @@ function session() {
   const tables: string[] = [];
   const client = {
     tables,
+    // Admin v2 R14b: the routes read the release flag (a function, not a table).
+    rpc: async (fn: string) =>
+      fn === 'releases_enabled'
+        ? { data: state.releases, error: null }
+        : { data: null, error: { message: `unexpected rpc ${fn}` } },
     from(table: string) {
       tables.push(table);
       const b: Record<string, unknown> = {};
@@ -153,6 +160,7 @@ const STALE: [string, Read][] = [
 beforeEach(() => {
   state.live = live({ role: 'developer', is_active: true, locked_until: null });
   state.audits = [];
+  state.releases = false;
   __kv.clear();
   clearVisibilityMemo();
 });
@@ -180,4 +188,23 @@ describe.each([
     expect(res.status).toBe(404);
     expect(sb.tables).toContain('pages');
   });
+});
+
+// Admin v2 R14b: with releases on both routes stage, and the recheck still comes first.
+describe.each([
+  ['PUT /api/admin/page-visibility', save],
+  ['PATCH /api/admin/pages/visibility/[id] (the alias)', toggle],
+])('%s with releases on re-reads the person before it stages', (_name, run) => {
+  it.each(STALE)(
+    'a Developer %s gets a 403, and nothing is read or staged',
+    async (_label, read) => {
+      state.releases = true;
+      state.live = read;
+      const sb = session();
+      const res = await run(sb);
+      expect(res.status).toBe(403);
+      expect(sb.tables).toEqual([]);
+      expect(state.audits).toEqual([]);
+    },
+  );
 });

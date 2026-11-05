@@ -1,4 +1,5 @@
 import Icon from '@/components/admin/kit/Icon';
+import PendingBadge from '@/components/admin/kit/PendingBadge';
 import { Badge } from '@/components/admin/kit/StatusBadge';
 import { clockFor } from '@/lib/admin/relTime';
 import { MODE_COPY } from '@/lib/admin/visibilityCopy';
@@ -82,6 +83,18 @@ export default function VisibilityList({
               <Badge tone={TONE[mode]}>{MODE_COPY[mode].badge}</Badge>
               {range && <span className="vis-row__window">{range}</span>}
               {isHome && <span className="vis-row__window">Always visible</span>}
+              {/* R14b: release mode only (no answer carries `pending` while releases are off). */}
+              {item.pending && (
+                <PendingBadge
+                  kind={
+                    item.pending.scheduled
+                      ? 'scheduled'
+                      : item.pending.conflict.length > 0
+                        ? 'conflict'
+                        : 'changed'
+                  }
+                />
+              )}
             </div>
             <button
               type="button"
