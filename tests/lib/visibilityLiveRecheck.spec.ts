@@ -47,6 +47,7 @@ vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 
 const screen = await import('@/pages/api/admin/page-visibility/index');
 const alias = await import('@/pages/api/admin/pages/visibility/[id]');
+const door = await import('@/pages/api/admin/page-visibility/password');
 
 const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const DEVELOPER = '11111111-1111-4111-8111-111111111111';
@@ -90,7 +91,7 @@ function session() {
 
 function call(
   route: APIRoute,
-  method: 'PUT' | 'PATCH',
+  method: 'PUT' | 'PATCH' | 'POST',
   path: string,
   sb: ReturnType<typeof session>,
   body: unknown,
@@ -140,6 +141,16 @@ const toggle = (sb: ReturnType<typeof session>) =>
     { id: ABOUT },
   );
 
+// The password door (Admin v2 R14b review): in release mode the screen sends it marked.
+const password = (sb: ReturnType<typeof session>) =>
+  call(
+    door.POST as APIRoute,
+    'POST',
+    `/api/admin/page-visibility/password${state.releases ? '?staged=1' : ''}`,
+    sb,
+    { pageId: ABOUT, password: 'a long test passphrase', note: null, version: 0 },
+  );
+
 const live = (profile: Record<string, unknown> | null): Read => ({ data: profile, error: null });
 
 const STALE: [string, Read][] = [
@@ -168,6 +179,7 @@ beforeEach(() => {
 describe.each([
   ['PUT /api/admin/page-visibility', save],
   ['PATCH /api/admin/pages/visibility/[id] (the alias)', toggle],
+  ['POST /api/admin/page-visibility/password (the password door)', password],
 ])('%s re-reads the person before it writes', (_name, run) => {
   it.each(STALE)(
     'a Developer %s gets a 403, and nothing is read, written or synced',
@@ -190,10 +202,12 @@ describe.each([
   });
 });
 
-// Admin v2 R14b: with releases on both routes stage, and the recheck still comes first.
+// Admin v2 R14b: with releases on both routes stage, and the recheck still comes first; the
+// password door re-reads the person before it reads the setting it checks (R14b review).
 describe.each([
   ['PUT /api/admin/page-visibility', save],
   ['PATCH /api/admin/pages/visibility/[id] (the alias)', toggle],
+  ['POST /api/admin/page-visibility/password (the password door)', password],
 ])('%s with releases on re-reads the person before it stages', (_name, run) => {
   it.each(STALE)(
     'a Developer %s gets a 403, and nothing is read or staged',

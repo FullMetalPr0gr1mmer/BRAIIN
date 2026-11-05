@@ -36,9 +36,14 @@ export const POST = defineAdminRoute({
   input: PagePasswordWriteSchema,
   handler: async (ctx) => {
     const { auth, sb, input } = ctx;
-    if (await ctx.releasesEnabled()) await assertPasswordImmediate(ctx, input);
-    else refuseStagedQuery(ctx.url, 'page_visibility');
-    await liveRecheck(auth);
+    if (await ctx.releasesEnabled()) {
+      // The person first (§9 b): a stale token is refused before the setting is read.
+      await liveRecheck(auth);
+      await assertPasswordImmediate(ctx, input);
+    } else {
+      refuseStagedQuery(ctx.url, 'page_visibility');
+      await liveRecheck(auth);
+    }
     const { setting, slug } = await savePagePassword(sb, auth, input);
     const sync = await syncVisibilityToEdge(sb, auth);
     // A page behind a password leaves the menus, the sitemap and llms.txt of every cached page

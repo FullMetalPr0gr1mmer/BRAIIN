@@ -15,27 +15,45 @@ import { RELEASE_REGISTRY } from '@/lib/release/registry';
 //   • every `.from(<table>)` chain that inserts, updates, upserts or deletes, where <table> is a
 //     guarded table or not a literal (a kernel's `config.table`, a helper's `table`);
 //   • every `.rpc('<fn>')` whose function, as the migrations last define it, writes a guarded
-//     table (read from the SQL, so a function that starts writing one is found too).
+//     table (read from the SQL, so a function that starts writing one is found too);
+//   • every call of crud.ts's row writers (`insertRow`, `updateRow`, `deleteRow`: the exported
+//     helpers that write the table they are handed, read from crud.ts itself) whose table
+//     argument is a guarded table or not a literal (R14b review). A helper elsewhere that writes
+//     a table it is handed is found by the first rule (its `.from(table)` is not a literal), so it
+//     cannot be added without a sanction, which is where its callers get scanned too.
 // Each must be one of SANCTIONED below, with why it never writes live content while releases
 // are on and the line its file must hold for that to stay true. An unlisted write fails, and so
-// does a listed one the scan no longer finds (the list cannot go stale).
+// does a listed one the scan no longer finds (the list cannot go stale). What the scan cannot
+// see: a write through a function value or a table name built at runtime from other strings
+// (no source does either today), and the behaviour behind each guard, which the behavioural
+// specs hold (stagedKernel, stagedPageVisibility, the staged singletons).
 
 type Kind = 'insert' | 'update' | 'upsert' | 'delete' | 'rpc';
 
+/** How the write is made: a `.from` chain, an RPC, or a call of a crud.ts row writer. */
+type Via = 'from' | 'rpc' | 'helper';
+
 interface Found {
   file: string;
-  /** The table (`from`) or the function (`rpc`) as written. */
+  /** The table (`from`, a row writer's table argument) or the function (`rpc`) as written. */
   target: string;
   kind: Kind;
+  via: Via;
+}
+
+interface Guard {
+  file?: string;
+  holds: string | RegExp;
 }
 
 interface Sanction {
   file: string;
   target: string;
   kinds: readonly Kind[];
+  via: Via;
   why: string;
-  /** A line the file (or the named file) must hold for `why` to stay true. */
-  guard: { file?: string; holds: string | RegExp };
+  /** Lines the file (or the named files) must hold for `why` to stay true. */
+  guard: Guard | readonly Guard[];
 }
 
 const ROOT = process.cwd();
@@ -102,23 +120,80 @@ export function writesGuarded(sql: string): string[] {
   return [...out];
 }
 
+// ---- the row writers: crud.ts's helpers that write the table they are handed ------------------
+
+const CRUD = 'src/lib/admin/crud.ts';
+const WRITES = ['insert', 'update', 'upsert', 'delete'] as const;
+
+/**
+ * The exported functions of a module that take a `table` argument and write it with a
+ * `.from(table)` chain, with the kind of write. Read from the source, so a new writer in crud.ts
+ * is scanned for without anyone remembering to list it.
+ */
+export function tableWriters(text: string): Map<string, Kind> {
+  const out = new Map<string, Kind>();
+  const heads = [...text.matchAll(/export\s+(?:async\s+)?function\s+(\w+)\s*(?:<[^>]*>)?\s*\(/g)];
+  heads.forEach((head, i) => {
+    const body = text.slice(head.index!, heads[i + 1]?.index ?? text.length);
+    const params = body.slice(0, body.indexOf(')'));
+    if (!/\btable\s*:/.test(params)) return;
+    for (const match of body.matchAll(/\.from\(\s*table\s*\)/g)) {
+      const chain = body.slice(match.index! + match[0].length).split(';')[0]!;
+      for (const kind of WRITES) {
+        if (new RegExp(`\\.${kind}\\(`).test(chain)) out.set(head[1]!, kind);
+      }
+    }
+  });
+  return out;
+}
+
+const ROW_WRITERS = tableWriters(read(CRUD));
+
 // ---- the scan ---------------------------------------------------------------------------------
 
+/** A table argument as written, and the table it names when it is a literal. */
+function tableArg(arg: string): { target: string; literal: string | undefined } {
+  const target = arg.trim();
+  return { target, literal: /^(['"`])([a-z_]+)\1$/.exec(target)?.[2] };
+}
+
 /** Every write the scan finds in one file. */
-export function scan(path: string, text: string, writingRpcs: ReadonlySet<string>): Found[] {
+export function scan(
+  path: string,
+  text: string,
+  writingRpcs: ReadonlySet<string>,
+  rowWriters: ReadonlyMap<string, Kind> = ROW_WRITERS,
+): Found[] {
   const out: Found[] = [];
   for (const match of text.matchAll(/\.from\(\s*([^)]*?)\s*\)/g)) {
-    const arg = match[1]!;
-    const literal = /^(['"`])([a-z_]+)\1$/.exec(arg)?.[2];
+    const { target, literal } = tableArg(match[1]!);
     if (literal !== undefined && !GUARDED.includes(literal)) continue;
     // The chain this `.from` starts, up to the statement's end.
     const chain = text.slice(match.index! + match[0].length).split(';')[0]!;
-    for (const kind of ['insert', 'update', 'upsert', 'delete'] as const) {
-      if (new RegExp(`\\.${kind}\\(`).test(chain)) out.push({ file: path, target: arg, kind });
+    for (const kind of WRITES) {
+      if (new RegExp(`\\.${kind}\\(`).test(chain)) {
+        out.push({ file: path, target, kind, via: 'from' });
+      }
     }
   }
   for (const match of text.matchAll(/\.rpc\(\s*['"]([a-z_]+)['"]/g)) {
-    if (writingRpcs.has(match[1]!)) out.push({ file: path, target: match[1]!, kind: 'rpc' });
+    if (writingRpcs.has(match[1]!)) {
+      out.push({ file: path, target: match[1]!, kind: 'rpc', via: 'rpc' });
+    }
+  }
+  // A call of a row writer, never its definition: `updateRow<Row>(sb, 'services', ...)`, across
+  // lines too. The table is the second argument.
+  const names = [...rowWriters.keys()].join('|');
+  if (names.length > 0) {
+    const call = new RegExp(
+      `(?<!function\\s+)\\b(${names})\\s*(?:<[^>()]*>)?\\(\\s*[^,()]+,\\s*([^,()]+?)\\s*[,)]`,
+      'g',
+    );
+    for (const match of text.matchAll(call)) {
+      const { target, literal } = tableArg(match[2]!);
+      if (literal !== undefined && !GUARDED.includes(literal)) continue;
+      out.push({ file: path, target, kind: rowWriters.get(match[1]!)!, via: 'helper' });
+    }
   }
   return out;
 }
@@ -146,21 +221,55 @@ const FOUND = SOURCES.flatMap(({ path, text }) => scan(path, text, new Set(WRITI
 
 const KERNEL_STAGES = { file: 'src/lib/admin/resource.ts', holds: 'stagedEntry(config)' };
 
+/** Both visibility routes stage first with releases on (R14b): the screen's PUT and the alias. */
+const VISIBILITY_STAGES: readonly Guard[] = [
+  {
+    file: 'src/pages/api/admin/page-visibility/index.ts',
+    holds: 'return stagedVisibilityWrite(ctx, ctx.input);',
+  },
+  {
+    file: 'src/pages/api/admin/pages/visibility/[id].ts',
+    holds: 'return stagedVisibilityWrite(ctx, {',
+  },
+];
+
 const SANCTIONED: readonly Sanction[] = [
   {
-    file: 'src/lib/admin/crud.ts',
+    file: CRUD,
     target: 'table',
     kinds: ['insert', 'update', 'delete'],
+    via: 'from',
     why:
-      'the generic row helpers of the live (releases-off) path: the resource kernel hands every ' +
-      'write to a release-managed table to src/lib/release/staged.ts first when releases are on ' +
-      '(R3a), and page visibility reaches updateRow only through its legacy branch',
+      'the generic row helpers of the live (releases-off) path. They write the table they are ' +
+      'handed, so every call of them is scanned as well (via helper), and each guarded or ' +
+      'dynamic table a caller hands them is sanctioned below on its own',
+    guard: { holds: 'export async function updateRow<T>(' },
+  },
+  {
+    file: 'src/lib/admin/resource.ts',
+    target: 'config.table',
+    kinds: ['insert', 'update', 'delete'],
+    via: 'helper',
+    why:
+      "the resource kernel's live create, edit and delete: with releases on it hands every " +
+      'write to a release-managed table to src/lib/release/staged.ts first (R3a)',
     guard: KERNEL_STAGES,
+  },
+  {
+    file: 'src/lib/admin/pageVisibility.ts',
+    target: "'page_visibility'",
+    kinds: ['update'],
+    via: 'helper',
+    why:
+      'the live branch of a visibility save to an existing row (writeVisibility): both routes ' +
+      'stage first when releases are on (R14b, stagedPageVisibility.ts)',
+    guard: VISIBILITY_STAGES,
   },
   {
     file: 'src/lib/admin/resource.ts',
     target: 'config.table',
     kinds: ['update'],
+    via: 'from',
     why:
       'the live reorder, reached only with releases off: with them on the kernel stages a move ' +
       '(R3a), and a move marked as made in release mode is refused (409 releases-off, R12b)',
@@ -170,6 +279,7 @@ const SANCTIONED: readonly Sanction[] = [
     file: 'src/lib/admin/singleton.ts',
     target: 'config.table',
     kinds: ['insert', 'update'],
+    via: 'from',
     why:
       "the singleton kernel's live save: a release-managed singleton stages through " +
       'stagedSingleton.ts when releases are on (R3b); the others are outside the registry',
@@ -179,6 +289,7 @@ const SANCTIONED: readonly Sanction[] = [
     file: 'src/pages/api/admin/entity-seo.ts',
     target: "'entity_seo'",
     kinds: ['insert', 'update'],
+    via: 'from',
     why: 'the live branch of the entity-SEO PUT; with releases on it stages first (R3b)',
     guard: {
       holds: 'if (await ctx.releasesEnabled()) return stagedEntitySeoWrite(ctx, ctx.input);',
@@ -188,31 +299,33 @@ const SANCTIONED: readonly Sanction[] = [
     file: 'src/lib/admin/pageVisibility.ts',
     target: "'page_visibility'",
     kinds: ['insert'],
+    via: 'from',
     why:
-      'the live branch of a visibility save (writeVisibility): both routes stage first when ' +
-      'releases are on (R14b, stagedPageVisibility.ts)',
-    guard: {
-      file: 'src/pages/api/admin/page-visibility/index.ts',
-      holds: 'return stagedVisibilityWrite(ctx, ctx.input);',
-    },
+      'the live branch of a visibility save making a first row (writeVisibility): both routes ' +
+      'stage first when releases are on (R14b, stagedPageVisibility.ts)',
+    guard: VISIBILITY_STAGES,
   },
   {
     file: 'src/lib/admin/pageVisibility.ts',
     target: 'set_page_password',
     kinds: ['rpc'],
+    via: 'rpc',
     why:
       'the password door: a secret is immediate (P-3). With releases on it is reached only for a ' +
       'page already behind a password, its message unchanged and nothing pending, which moves ' +
       "only 0061's exempt password_version past the guard (R14b)",
     guard: {
       file: 'src/pages/api/admin/page-visibility/password.ts',
-      holds: 'if (await ctx.releasesEnabled()) await assertPasswordImmediate(ctx, input);',
+      // The person re-read first (§9 b), then only the immediate change (R14b review).
+      holds:
+        /if \(await ctx\.releasesEnabled\(\)\) \{\s*(?:\/\/[^\n]*\s*)*await liveRecheck\(auth\);\s*await assertPasswordImmediate\(ctx, input\);/,
     },
   },
   {
     file: 'src/lib/admin/resources/portfolio.ts',
     target: 'save_portfolio',
     kinds: ['rpc'],
+    via: 'rpc',
     why:
       "the portfolio config's `persist`, which the kernel never runs when staged (R3a; held by " +
       'stagedKernel.spec.ts "persist and afterWrite never run when staged")',
@@ -225,6 +338,7 @@ const SANCTIONED: readonly Sanction[] = [
     file: 'src/lib/admin/resources/themes.ts',
     target: "'custom_themes'",
     kinds: ['update'],
+    via: 'from',
     why:
       "the themes config's `afterWrite` (one active theme), which never runs when staged; with " +
       'releases on the apply clears the other themes in its own transaction (0051)',
@@ -237,6 +351,7 @@ const SANCTIONED: readonly Sanction[] = [
     file: 'src/pages/api/admin/site-profile/intake.ts',
     target: "'site_profile'",
     kinds: ['insert', 'update'],
+    via: 'from',
     why:
       'the job-application switch, an immediate column (accepting_applications, 0038) the guard ' +
       'lets an update change alone; the insert runs only where the tenant has no identity row, ' +
@@ -245,7 +360,9 @@ const SANCTIONED: readonly Sanction[] = [
   },
 ];
 
-const key = (f: Pick<Found, 'file' | 'target'>) => `${f.file} :: ${f.target}`;
+const key = (f: Pick<Found, 'file' | 'target' | 'via'>) => `${f.file} :: ${f.target} (${f.via})`;
+const matches = (s: Sanction, f: Found) =>
+  s.file === f.file && s.target === f.target && s.via === f.via && s.kinds.includes(f.kind);
 
 describe('no route or library writes a registry table outside the release (Admin v2 R14b)', () => {
   it('knows the guarded tables: every registry table and the two link tables', () => {
@@ -263,13 +380,18 @@ describe('no route or library writes a registry table outside the release (Admin
     expect(SOURCES.some(({ text }) => /\.rpc\(\s*['"]apply_release['"]/.test(text))).toBe(false);
   });
 
+  it('reads crud.ts’s row writers from its source: insertRow, updateRow, deleteRow', () => {
+    expect(Object.fromEntries(ROW_WRITERS)).toEqual({
+      insertRow: 'insert',
+      updateRow: 'update',
+      deleteRow: 'delete',
+    });
+  });
+
   it('every write it finds is sanctioned, with its kind', () => {
-    const unsanctioned = FOUND.filter(
-      (f) =>
-        !SANCTIONED.some(
-          (s) => s.file === f.file && s.target === f.target && s.kinds.includes(f.kind),
-        ),
-    ).map((f) => `${key(f)} (${f.kind})`);
+    const unsanctioned = FOUND.filter((f) => !SANCTIONED.some((s) => matches(s, f))).map(
+      (f) => `${key(f)} ${f.kind}`,
+    );
     expect(unsanctioned).toEqual([]);
   });
 
@@ -277,8 +399,8 @@ describe('no route or library writes a registry table outside the release (Admin
     for (const s of SANCTIONED) {
       for (const kind of s.kinds) {
         expect(
-          FOUND.some((f) => f.file === s.file && f.target === s.target && f.kind === kind),
-          `${key(s)} (${kind})`,
+          FOUND.some((f) => matches({ ...s, kinds: [kind] }, f)),
+          `${key(s)} ${kind}`,
         ).toBe(true);
       }
     }
@@ -286,9 +408,12 @@ describe('no route or library writes a registry table outside the release (Admin
 
   it('every sanction’s guard holds', () => {
     for (const s of SANCTIONED) {
-      const text = read(s.guard.file ?? s.file);
-      if (typeof s.guard.holds === 'string') expect(text, key(s)).toContain(s.guard.holds);
-      else expect(text, key(s)).toMatch(s.guard.holds);
+      const guards: readonly Guard[] = Array.isArray(s.guard) ? s.guard : [s.guard as Guard];
+      for (const guard of guards) {
+        const text = read(guard.file ?? s.file);
+        if (typeof guard.holds === 'string') expect(text, key(s)).toContain(guard.holds);
+        else expect(text, key(s)).toMatch(guard.holds);
+      }
       expect(s.why.length, key(s)).toBeGreaterThan(40);
     }
   });
@@ -305,10 +430,49 @@ describe('the scan itself', () => {
       "await sb.rpc('search_content', { q });",
     ].join('\n');
     expect(scan('x.ts', text, new Set(['save_portfolio']))).toEqual([
-      { file: 'x.ts', target: "'services'", kind: 'update' },
-      { file: 'x.ts', target: 'config.table', kind: 'delete' },
-      { file: 'x.ts', target: 'save_portfolio', kind: 'rpc' },
+      { file: 'x.ts', target: "'services'", kind: 'update', via: 'from' },
+      { file: 'x.ts', target: 'config.table', kind: 'delete', via: 'from' },
+      { file: 'x.ts', target: 'save_portfolio', kind: 'rpc', via: 'rpc' },
     ]);
+  });
+
+  it('finds a row writer called on a guarded or dynamic table, across lines; skips the rest', () => {
+    const text = [
+      "await updateRow(sb, 'redirects', auth, id, version, values, COLUMNS);",
+      "await updateRow(sb, 'leads', auth, id, version, values, COLUMNS);",
+      "await updateRow<Row>(sb, 'services', auth, id, version, { title }, COLUMNS);",
+      'const row = await insertRow<Row>(',
+      '  sb,',
+      "  'page_visibility',",
+      '  auth,',
+      '  values,',
+      ');',
+      "await deleteRow(sb, 'media_assets', auth, id);",
+      'await deleteRow(sb, config.table, auth, id, { constraints });',
+      "await getRow(sb, 'services', auth, id, 'id');",
+      'export async function updateRow<T>(sb: SupabaseClient, table: string) {}',
+    ].join('\n');
+    expect(scan('x.ts', text, new Set())).toEqual([
+      { file: 'x.ts', target: "'redirects'", kind: 'update', via: 'helper' },
+      { file: 'x.ts', target: "'services'", kind: 'update', via: 'helper' },
+      { file: 'x.ts', target: "'page_visibility'", kind: 'insert', via: 'helper' },
+      { file: 'x.ts', target: 'config.table', kind: 'delete', via: 'helper' },
+    ]);
+  });
+
+  it('reads which exported functions write the table they are handed', () => {
+    const text = [
+      'export async function getIt(sb: S, table: string) {',
+      "  return sb.from(table).select('id');",
+      '}',
+      'export async function putIt<T>(sb: S, table: string, v: T) {',
+      '  const { error } = await sb.from(table).upsert(v);',
+      '}',
+      'export function other(sb: S, name: string) {',
+      '  return sb.from(name).delete();',
+      '}',
+    ].join('\n');
+    expect(Object.fromEntries(tableWriters(text))).toEqual({ putIt: 'upsert' });
   });
 
   it('reads a function’s last definition and what it writes', () => {
