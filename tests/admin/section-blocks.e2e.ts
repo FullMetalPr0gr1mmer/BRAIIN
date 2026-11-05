@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import {
   collectVideo,
@@ -11,14 +10,19 @@ import {
   testMountsOnIntersection,
 } from '../e2e/videoBytes';
 import { expectCleanAtWidths } from './collectionLayout';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { discardDrafts, publishOwn, systemClient } from './releaseSteps';
+import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 /*
- * The section blocks (Admin v2 E10), through the real Worker and the seeded local database,
- * releases off. The service role puts a Text block, a Gallery and a Video, visible, at the end
- * of About (a published page), and removes them afterwards whatever failed; the project runs
- * alone (playwright.config.ts `blocks`), after the public and the admin specs, because those
- * read About.
+ * The section blocks (Admin v2 E10), through the real Worker and the seeded local database, in
+ * both modes (Admin v2 R14b). The service role puts a Text block, a Gallery and a Video,
+ * visible, at the end of About (a published page; the release guard lets the system's own
+ * writes through), and removes them afterwards whatever failed, after throwing away the
+ * blocks' unclaimed pending changes (releases on); the project runs alone
+ * (playwright.config.ts `blocks`, in both modes), after the public and the admin specs (and,
+ * releases on, the drill), because those read About. With releases on the editor's heading save
+ * is a pending change, which this spec publishes alone (its own section) before it reads the
+ * stored row (releaseSteps.ts).
  *
  *   served HTML   /about and /ar/about: each block in its language, the body as the allowlist
  *                 renderer writes it, the gallery's pictures lazy and sized, and no <video>;
@@ -41,7 +45,6 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
 
 const MARK = randomBytes(4).toString('hex');
@@ -94,15 +97,10 @@ const ids: Record<'textBlock' | 'gallery' | 'video', string> = {
   video: '',
 };
 
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+const service = systemClient;
 
 test.beforeAll(async () => {
-  if (!staffEnv() || releasesOn()) return;
+  if (!staffEnv()) return;
   const svc = service();
   const about = await svc
     .from('pages')
@@ -140,8 +138,10 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  if (!staffEnv() || releasesOn()) return;
+  if (!staffEnv()) return;
   const made = Object.values(ids).filter(Boolean);
+  // Releases on: the blocks' own unclaimed pending changes first (the system's to clean).
+  await discardDrafts([{ entityType: 'page_section', entityIds: made }]);
   if (made.length > 0) await service().from('page_sections').delete().in('id', made);
 });
 
@@ -387,6 +387,9 @@ test.describe('the page editor, as admin', () => {
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     expect((await saved).status()).toBe(200);
     await expect(page.locator('.save-status[data-state="saved"]')).toBeVisible();
+    // Releases on: the heading is a pending change; this spec publishes its own section alone,
+    // so the stored row below is what went live (releases off it is already).
+    await publishOwn(page, [{ entityType: 'page_section', entityIds: [ids.textBlock] }]);
     const { data, error } = await service()
       .from('page_sections')
       .select('content')

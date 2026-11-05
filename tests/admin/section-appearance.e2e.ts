@@ -1,13 +1,18 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import { expectCleanAtWidths } from './collectionLayout';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { discardDrafts, publishOwn, systemClient, withDraft } from './releaseSteps';
+import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 /*
  * Section appearance (Admin v2 E9), stored and served, through the real Worker and the seeded
- * local database, releases off. The service role makes a published custom page of the run's own
+ * local database, in both modes (Admin v2 R14b: with releases on each save that should go live
+ * is a pending change this spec publishes alone, its own section only, before the stored row
+ * is read; a save the server refuses stages nothing; a change left unsaved can still be saved
+ * by the page editor's own autosave as a pending change, never live, so "left unsaved" is
+ * checked on the live row; releaseSteps.ts). The service role makes a published custom page of
+ * the run's own
  * (a banner hero, a Text block, a call to action and a second Text block, each named) and
  * removes it afterwards whatever failed; the project runs after the public and the admin specs
  * (playwright.config.ts `blocks`), because a published page is in the sitemap and the link
@@ -28,7 +33,6 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
 
 const MARK = randomBytes(4).toString('hex');
@@ -52,12 +56,11 @@ const block = (en: string, ar: string) => ({
 let pageId = '';
 const ids: Record<Key, string> = { hero: '', first: '', cta: '', second: '' };
 
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+const service = systemClient;
+
+/** Releases on: publishes one section's own pending change alone (releases off: nothing). */
+const publishSection = (page: Page, key: Key) =>
+  publishOwn(page, [{ entityType: 'page_section', entityIds: [ids[key]] }]);
 
 /** The CSRF double-submit token the layout hands the page, for a hand-made mutation. */
 async function csrfOf(page: Page): Promise<string> {
@@ -83,7 +86,7 @@ async function stored(id: string) {
 }
 
 test.beforeAll(async () => {
-  if (!staffEnv() || releasesOn()) return;
+  if (!staffEnv()) return;
   const svc = service();
   const made = await svc
     .from('pages')
@@ -121,7 +124,13 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  if (!staffEnv() || releasesOn() || !pageId) return;
+  if (!staffEnv() || !pageId) return;
+  // Releases on: the page's and its sections' unclaimed pending changes first (the system's to
+  // clean): an autosave may have left one.
+  await discardDrafts([
+    { entityType: 'page_section', entityIds: Object.values(ids).filter(Boolean) },
+    { entityType: 'page', entityIds: [pageId] },
+  ]);
   // The page's sections go with it (page_sections.page_id cascades).
   await service().from('pages').delete().eq('id', pageId);
 });
@@ -180,6 +189,7 @@ test.describe('the page editor, as admin', () => {
     await expect(card).not.toContainText('among the first two');
     expect((await saveSection(page, 'second')).status()).toBe(200);
     await expect(page.locator('.save-status[data-state="saved"]')).toBeVisible();
+    await publishSection(page, 'second');
     expect(await stored(ids.second)).toMatchObject({
       background: 'ink',
       spacing: 'roomy',
@@ -209,6 +219,8 @@ test.describe('the page editor, as admin', () => {
       'The reveal you chose waits until the section is further down.',
     );
     expect((await saveSection(page, 'first')).status()).toBe(200);
+    await expect(page.locator('.save-status[data-state="saved"]')).toBeVisible();
+    await publishSection(page, 'first');
     expect((await stored(ids.first)).reveal).toBe('rise');
   });
 
@@ -258,12 +270,17 @@ test.describe('who may change it (both server layers)', () => {
     test.use({ storageState: authFile('content_creator') });
     test('a Content Creator saves an appearance (pages.write)', async ({ page }) => {
       await page.goto('/admin', { waitUntil: 'load' });
-      const { version } = await stored(ids.cta);
+      // The section as the API answers it (with releases on, its pending change named).
+      const read = await page.request.get(`/api/admin/sections/${ids.cta}`);
+      expect(read.status()).toBe(200);
+      const row = ((await read.json()) as { data: Record<string, unknown> }).data;
       const res = await page.request.patch(`/api/admin/sections/${ids.cta}`, {
         headers: { 'x-csrf-token': await csrfOf(page), origin: new URL(page.url()).origin },
-        data: { version, reveal: 'rise' },
+        data: withDraft(row, { reveal: 'rise' }),
       });
       expect(res.status()).toBe(200);
+      // Releases on: a Content Creator publishes its own change (pages.write, content.publish).
+      await publishSection(page, 'cta');
       expect((await stored(ids.cta)).reveal).toBe('rise');
     });
   });
