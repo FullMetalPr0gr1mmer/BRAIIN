@@ -178,6 +178,8 @@ export interface VisibilityPending {
   setting: VisibilitySetting | null;
   draftId: string;
   draftVersion: number;
+  /** The setting's id: its row's, or the id a pending create will publish under. */
+  entityId: string;
   op: 'create' | 'update' | 'delete';
   /** A scheduled release holds it: it cannot change until it goes live or is unscheduled. */
   scheduled: boolean;

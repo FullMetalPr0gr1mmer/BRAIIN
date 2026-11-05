@@ -342,6 +342,7 @@ describe('release mode (Admin v2 R14b)', () => {
       },
       draftId: '77777777-7777-4777-8777-000000000001',
       draftVersion: 4,
+      entityId: 'row-a',
       op: 'update',
       scheduled: false,
       conflict: [],

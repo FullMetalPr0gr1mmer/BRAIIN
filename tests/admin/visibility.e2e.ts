@@ -1,6 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import {
+  CONFIRM_SUB,
+  RELEASE_PASSWORD_ONLY,
+  STAGED_CONFIRM_SUB,
+  stagedSaved,
+} from '@/lib/admin/visibilityCopy';
+import { discardDrafts, publishOwn } from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 // Page visibility (Admin v2 U14a) end to end, through the real Worker, middleware and KV:
 // an Admin sets a page through the API and the public site answers for it (a 302 to the
@@ -13,11 +20,21 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
 // admin spec, because it hides real pages on the one preview they all share; and it puts
 // every setting back to public at the end, so a spec run after it (a retry) finds the site
 // as seeded.
+//
+// Both modes (Admin v2 R14b: page visibility stages with releases on). Each setting this spec
+// saves is a pending change, published right after, alone (its own setting only:
+// releaseSteps.ts), before the public site is read; the screen's confirm and toast say so in
+// their release-mode words (visibilityCopy.ts). A page newly behind a password cannot be set
+// while releases are on (a secret no release carries yet, blocker B1 in
+// docs/admin-v2/as-built/R14B.md): those three tests skip in release mode with that reason, and
+// the refusal itself is tested instead.
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
+
+const VISIBILITY = [{ entityType: 'page_visibility' }] as const;
+const PASSWORD_GATE_B1 =
+  'with releases on a page cannot newly go behind a password (R14B blocker B1: a secret no release carries yet); the refusal is tested instead';
 test.use({ storageState: authFile('admin'), contextOptions: { reducedMotion: 'reduce' } });
 
 const API = '/api/admin/page-visibility';
@@ -29,12 +46,20 @@ interface Setting {
   mode: 'public' | 'hidden' | 'link' | 'password';
   version: number;
 }
+/** Releases on only (R14b): the setting's pending change. */
+interface Pending {
+  draftId: string;
+  draftVersion: number;
+  entityId: string;
+  setting: Setting | null;
+}
 interface Item {
   kind: 'page' | 'template';
   id?: string;
   slug?: string;
   template?: string;
   setting: Setting | null;
+  pending?: Pending | null;
 }
 interface List {
   pages: Item[];
@@ -59,7 +84,26 @@ async function list(request: APIRequestContext): Promise<List> {
   return ((await res.json()) as { data: List }).data;
 }
 
-/** Sets one page (by slug) or template, at its current version. */
+/**
+ * Releases on: publishes the pending change of one page (by slug) or template, read from the
+ * list, alone. Releases off: nothing (the save was live).
+ */
+async function publishSetting(page: Page, target: { slug: string } | { template: string }) {
+  if (!releasesOn()) return;
+  const current = await list(page.request);
+  const item =
+    'slug' in target
+      ? current.pages.find((p) => p.slug === target.slug)
+      : current.templates.find((t) => t.template === target.template);
+  if (!item?.pending) return;
+  await publishOwn(page, [{ entityType: 'page_visibility', entityIds: [item.pending.entityId] }]);
+}
+
+/**
+ * Sets one page (by slug) or template, at its current version; with releases on, names its
+ * pending change and publishes the result alone, so the public site answers for it as it does
+ * with releases off.
+ */
 async function setVisibility(
   page: Page,
   target: { slug: string } | { template: string },
@@ -85,11 +129,20 @@ async function setVisibility(
       hideFrom: extras.hideFrom ?? null,
       showOn: extras.showOn ?? null,
       version: item!.setting?.version ?? 0,
+      ...(releasesOn()
+        ? {
+            staged: true,
+            ...(item!.pending
+              ? { draftId: item!.pending.draftId, draftVersion: item!.pending.draftVersion }
+              : {}),
+          }
+        : {}),
     },
   });
   expect(res.status(), `PUT ${JSON.stringify(target)} ${mode}: ${await res.text()}`).toBe(
     expectStatus,
   );
+  if (res.status() === 200) await publishSetting(page, target);
   return res;
 }
 
@@ -168,6 +221,9 @@ const GATED = [
 ];
 
 test.afterAll(async ({ browser }) => {
+  // Releases on: this spec's own unclaimed pending settings first (the system's to clean), so
+  // the list below is live and every write-back is published alone.
+  await discardDrafts(VISIBILITY);
   // Every page and template back to public, whatever a failed test left behind.
   const context = await browser.newContext({ storageState: authFile('admin') });
   const page = await context.newPage();
@@ -300,11 +356,26 @@ test('the screen: the drawer, the confirm and the toast, with no axe violation o
 
   const confirm = page.getByRole('dialog', { name: 'Only people with the link?' });
   await expect(confirm).toBeVisible();
-  await expect(confirm).toContainText('This changes the live site within a few minutes.');
+  // When it goes live, in the screen's own words for the mode.
+  await expect(confirm).toContainText(releasesOn() ? STAGED_CONFIRM_SUB : CONFIRM_SUB);
   await expectNoAxe(page, 'the confirm');
   await confirm.getByRole('button', { name: 'Apply change' }).click();
-  await expect(page.locator('#admin-toasts')).toContainText('Join us is open only to people');
+  await expect(page.locator('#admin-toasts')).toContainText(
+    releasesOn() ? stagedSaved('Join us') : 'Join us is open only to people',
+  );
+  // The row shows what the setting is now (with releases on, as publishing will leave it).
   await expect(page.locator('.vis-row', { hasText: 'Join us' })).toContainText('Link only');
+  if (releasesOn()) {
+    await expect(page.locator('.vis-row', { hasText: 'Join us' })).toContainText(
+      'Unpublished changes',
+    );
+    await publishSetting(page, { slug: 'join' });
+    // Published from outside this screen: read it again, as after publishing from another tab.
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(page.locator('.vis-row', { hasText: 'Join us' })).not.toContainText(
+      'Unpublished changes',
+    );
+  }
   await until(request, '/join', 200);
   expect((await answer(request, '/join')).headers['x-robots-tag']).toBe('noindex');
 
@@ -326,6 +397,7 @@ test('the screen: the drawer, the confirm and the toast, with no axe violation o
     })
     .click();
   await expect(page.locator('.vis-row', { hasText: 'Join us' })).toContainText('Visible');
+  await publishSetting(page, { slug: 'join' });
 });
 
 test.describe('as developer', () => {
@@ -372,12 +444,27 @@ test.describe('behind a password (U14b)', () => {
   const PASSWORD = 'open-sesame-77';
   const NOTE = { en: 'Ask the studio for the password.', ar: 'اطلب كلمة المرور من الاستوديو.' };
 
+  test('releases on: a page newly behind a password is refused in words, on the screen and the API', async ({
+    page,
+  }) => {
+    test.skip(!releasesOn(), 'releases are off: the password door sets a new gate at once');
+    const { res } = await setPassword(page, 'about', PASSWORD, NOTE, 422);
+    expect(JSON.stringify(await res.json())).toContain(RELEASE_PASSWORD_ONLY);
+    await page.goto('/admin/visibility', { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: 'Change who can see About', exact: true }).click();
+    const drawer = page.getByRole('dialog', { name: 'Who can see About?' });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole('radio', { name: /Behind a password/ })).toHaveCount(0);
+    await drawer.getByRole('button', { name: 'Cancel' }).click();
+  });
+
   test('the gate, the unlock, and the words that stay closed until it', async ({
     page,
     request,
     browser,
     baseURL,
   }) => {
+    test.skip(releasesOn(), PASSWORD_GATE_B1);
     const origin = new URL(baseURL!).origin;
     const openHtml = (await answer(request, '/about')).body;
     const { pageId } = await setPassword(page, 'about', PASSWORD, NOTE);
@@ -478,6 +565,7 @@ test.describe('behind a password (U14b)', () => {
     browser,
     baseURL,
   }) => {
+    test.skip(releasesOn(), PASSWORD_GATE_B1);
     await setPassword(page, 'about', PASSWORD, NOTE);
     const visitor = await browser.newContext({ baseURL: baseURL! });
     const visiting = await visitor.newPage();
@@ -494,6 +582,7 @@ test.describe('behind a password (U14b)', () => {
   test('the drawer asks for a password, keeps it out of the markup, and refuses the homepage', async ({
     page,
   }) => {
+    test.skip(releasesOn(), PASSWORD_GATE_B1);
     // The page's title is the seeded "Contact us" (supabase/seed-data/20-pages.json), and the
     // row button, the drawer and the toast all name it whole.
     await page.goto('/admin/visibility', { waitUntil: 'networkidle' });

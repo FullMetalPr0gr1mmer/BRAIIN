@@ -113,6 +113,7 @@ function pendingOf(live: Row | null, draft: DraftInput): VisibilityPending {
   const ref = {
     draftId: draft.id,
     draftVersion: draft.version,
+    entityId: draft.entity_id,
     op: draft.op,
     scheduled: draft.release_id !== null,
   };

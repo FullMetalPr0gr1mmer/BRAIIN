@@ -127,6 +127,7 @@ describe('GET with releases on: each setting with its pending change', () => {
     expect(about['pending']).toMatchObject({
       draftId: '77777777-7777-4777-8777-000000000001',
       draftVersion: 1,
+      entityId: ABOUT_ROW,
       op: 'update',
       scheduled: false,
       conflict: [],
