@@ -121,6 +121,11 @@ create function _claims(p_role text, p_tid text) returns void language sql as $$
   )
 $$;
 
+-- The other tenant the other_tenant token names, created so that token is a live Admin of its
+-- own tenant: the deny assertions below then test the tenant predicate, not a missing profile.
+insert into public.tenants (id, name) values ('00000000-0000-0000-0000-0000000000ff', 'Other tenant')
+  on conflict (id) do nothing;
+
 -- H16 (0129): every staff write is live-checked against the profile the token's `sub` names,
 -- so each role token this helper mints names a live profile: one per staff role and tenant,
 -- its id derived from both.
@@ -255,13 +260,12 @@ select is(
      '{"folder":"stale"}'::jsonb)),
   0, 'a stale version returns no row (the route answers 409)');
 select _claims('seo', '00000000-0000-0000-0000-0000000000ff');
--- No profile stands behind this token (the tenant is not even created), so since H16 (0129)
--- the function refuses it outright; live_staff_writes.test.sql holds the live other-tenant
--- Admin to zero rows.
-select throws_ok(
-  $$ select * from public.update_media_meta('65000000-0000-0000-0000-0000000000a3', 2,
-     '{"folder":"xt"}'::jsonb) $$,
-  '42501', null, 'other_tenant: an seo of another tenant writes nothing');
+-- A live SEO of its own tenant (its profile is made above): it passes the live check and the
+-- function's tenant fence leaves it nothing to change.
+select is(
+  (select count(*)::int from public.update_media_meta('65000000-0000-0000-0000-0000000000a3', 2,
+     '{"folder":"xt"}'::jsonb)),
+  0, 'other_tenant: an seo of another tenant writes nothing');
 
 -- ── structural ───────────────────────────────────────────────────────────────
 reset role;

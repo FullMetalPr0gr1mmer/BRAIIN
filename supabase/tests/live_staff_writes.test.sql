@@ -10,9 +10,9 @@
 --   stale     for each staff role X of A C S D L: Xd demoted (the profile now holds another
 --             role, the token the old one), Xo switched off, Xl locked.
 -- For every one of the 28 tables, an UPDATE (a no-op on one fixture row), a DELETE (of that
--- row) and an INSERT (a copy of it) are tried by every persona, each attempt rolled back on
--- its own, and each answers as a word: the rows it touched, `x` refused (42501), `u` admitted
--- by RLS and stopped by the table's key (a singleton or a link pair copied onto itself).
+-- row) and an INSERT (a copy of it, sent as a literal row) are tried by every persona, each
+-- attempt rolled back on its own, and each answers as a word: the rows it touched, `x` refused
+-- (42501), `u` admitted by RLS and stopped by the table's key (a singleton copied onto itself).
 --   • live: the writers write exactly what the JWT policies allow, unchanged by H16;
 --   • stale: no stale token touches a row, with any command, on any table.
 -- Then: each table carries exactly H16's three policies of the one shape; the rule that every
@@ -167,13 +167,17 @@ insert into h16_target (t, key_sql, copy_over, insert_sql) values
 
 -- The statement each command runs on a table, as text (built here, as the migration role, so
 -- the column list leaves out what an INSERT may not name: generated columns, identity columns
--- and a defaulted `id`).
-create function h16_statement(p_t text, p_cmd text) returns text language plpgsql stable as $f$
+-- and a defaulted `id`). The INSERT carries its row as a LITERAL, read here, as the migration
+-- role: a copy SELECTed by the persona would find nothing for a persona that cannot read T1's
+-- draft (another tenant's Admin, Sales) and insert 0 rows before any WITH CHECK ran, so the
+-- tenant fence and Sales' missing write would go untested (review H16-SEC-1).
+create function h16_statement(p_t text, p_cmd text) returns text language plpgsql volatile as $f$
 declare
   v_key text;
   v_over jsonb;
   v_cols text;
   v_insert text;
+  v_row jsonb;
 begin
   select key_sql, copy_over, insert_sql into v_key, v_over, v_insert from h16_target where t = p_t;
   if p_cmd = 'update' then
@@ -188,11 +192,11 @@ begin
    where a.attrelid = format('public.%I', p_t)::regclass
      and a.attnum > 0 and not a.attisdropped and a.attgenerated = '' and a.attidentity = ''
      and not (a.attname = 'id' and a.atthasdef);
+  execute format('select to_jsonb(f) || %L::jsonb from public.%I f where %s', v_over, p_t, v_key)
+    into strict v_row;
   return format(
-    'insert into public.%1$I (%2$s) select %2$s from jsonb_populate_record(null::public.%1$I, '
-    || '(select to_jsonb(f) || %3$L::jsonb from public.%1$I f where %4$s)) where exists '
-    || '(select 1 from public.%1$I f where %4$s)',
-    p_t, v_cols, v_over, v_key);
+    'insert into public.%1$I (%2$s) select %2$s from jsonb_populate_record(null::public.%1$I, %3$L::jsonb)',
+    p_t, v_cols, v_row);
 end $f$;
 
 -- One attempt, as the CURRENT role, rolled back on its own: the rows it touched, `x` when it
@@ -273,26 +277,28 @@ reset role;
 -- ── 2. every table, every command, every persona ──────────────────────────────────────────
 -- The live strings are what the JWT policies allowed before H16, unchanged (the same run without
 -- 0129 answers them word for word, and there the stale tokens write). Unless a table says
--- otherwise: content, where Admin and Content Creator write and Admin alone deletes; a role that
--- can read a row but not write it is refused its copy (x), one that cannot read it copies nothing (0).
--- ai_config: ai.config: Admin alone; one row per tenant, so a copy meets the key (u).
+-- otherwise: content, where Admin and Content Creator write and Admin alone deletes. An UPDATE or
+-- DELETE by a role that cannot see the row matches nothing (0); an INSERT carries its row as a
+-- literal, so every persona's reaches WITH CHECK: a role without the write is refused (x), and so
+-- is another tenant's Admin, whose copy names T1 (the tenant fence, O x on every table).
+-- ai_config: ai.config: Admin alone; one row per tenant, so Admin's copy meets the key (u).
 select is(h16_live('ai_config', 'update'), 'A1 C0 S0 D0 L0 O0 Nx', 'ai_config: update, the live personas');
 select is(h16_stale('ai_config', 'update'), '', 'ai_config: update, no stale token writes a row');
 select is(h16_live('ai_config', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'ai_config: delete, the live personas');
 select is(h16_stale('ai_config', 'delete'), '', 'ai_config: delete, no stale token writes a row');
-select is(h16_live('ai_config', 'insert'), 'Au C0 S0 D0 L0 O0 Nx', 'ai_config: insert, the live personas');
+select is(h16_live('ai_config', 'insert'), 'Au Cx Sx Dx Lx Ox Nx', 'ai_config: insert, the live personas');
 select is(h16_stale('ai_config', 'insert'), '', 'ai_config: insert, no stale token writes a row');
 select is(h16_live('ai_questions', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'ai_questions: update, the live personas');
 select is(h16_stale('ai_questions', 'update'), '', 'ai_questions: update, no stale token writes a row');
 select is(h16_live('ai_questions', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'ai_questions: delete, the live personas');
 select is(h16_stale('ai_questions', 'delete'), '', 'ai_questions: delete, no stale token writes a row');
-select is(h16_live('ai_questions', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'ai_questions: insert, the live personas');
+select is(h16_live('ai_questions', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'ai_questions: insert, the live personas');
 select is(h16_stale('ai_questions', 'insert'), '', 'ai_questions: insert, no stale token writes a row');
 select is(h16_live('ai_styles', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'ai_styles: update, the live personas');
 select is(h16_stale('ai_styles', 'update'), '', 'ai_styles: update, no stale token writes a row');
 select is(h16_live('ai_styles', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'ai_styles: delete, the live personas');
 select is(h16_stale('ai_styles', 'delete'), '', 'ai_styles: delete, no stale token writes a row');
-select is(h16_live('ai_styles', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'ai_styles: insert, the live personas');
+select is(h16_live('ai_styles', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'ai_styles: insert, the live personas');
 select is(h16_stale('ai_styles', 'insert'), '', 'ai_styles: insert, no stale token writes a row');
 -- audit_log: any member inserts a row naming itself; no API role updates or deletes.
 select is(h16_live('audit_log', 'update'), 'Ax Cx Sx Dx Lx Ox Nx', 'audit_log: update, the live personas');
@@ -305,133 +311,133 @@ select is(h16_live('blog_posts', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'blog_posts:
 select is(h16_stale('blog_posts', 'update'), '', 'blog_posts: update, no stale token writes a row');
 select is(h16_live('blog_posts', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'blog_posts: delete, the live personas');
 select is(h16_stale('blog_posts', 'delete'), '', 'blog_posts: delete, no stale token writes a row');
-select is(h16_live('blog_posts', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'blog_posts: insert, the live personas');
+select is(h16_live('blog_posts', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'blog_posts: insert, the live personas');
 select is(h16_stale('blog_posts', 'insert'), '', 'blog_posts: insert, no stale token writes a row');
 select is(h16_live('categories', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'categories: update, the live personas');
 select is(h16_stale('categories', 'update'), '', 'categories: update, no stale token writes a row');
 select is(h16_live('categories', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'categories: delete, the live personas');
 select is(h16_stale('categories', 'delete'), '', 'categories: delete, no stale token writes a row');
-select is(h16_live('categories', 'insert'), 'A1 C1 Sx Dx Lx O0 Nx', 'categories: insert, the live personas');
+select is(h16_live('categories', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'categories: insert, the live personas');
 select is(h16_stale('categories', 'insert'), '', 'categories: insert, no stale token writes a row');
 select is(h16_live('certifications', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'certifications: update, the live personas');
 select is(h16_stale('certifications', 'update'), '', 'certifications: update, no stale token writes a row');
 select is(h16_live('certifications', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'certifications: delete, the live personas');
 select is(h16_stale('certifications', 'delete'), '', 'certifications: delete, no stale token writes a row');
-select is(h16_live('certifications', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'certifications: insert, the live personas');
+select is(h16_live('certifications', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'certifications: insert, the live personas');
 select is(h16_stale('certifications', 'insert'), '', 'certifications: insert, no stale token writes a row');
 select is(h16_live('clients', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'clients: update, the live personas');
 select is(h16_stale('clients', 'update'), '', 'clients: update, no stale token writes a row');
 select is(h16_live('clients', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'clients: delete, the live personas');
 select is(h16_stale('clients', 'delete'), '', 'clients: delete, no stale token writes a row');
-select is(h16_live('clients', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'clients: insert, the live personas');
+select is(h16_live('clients', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'clients: insert, the live personas');
 select is(h16_stale('clients', 'insert'), '', 'clients: insert, no stale token writes a row');
 select is(h16_live('disciplines', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'disciplines: update, the live personas');
 select is(h16_stale('disciplines', 'update'), '', 'disciplines: update, no stale token writes a row');
 select is(h16_live('disciplines', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'disciplines: delete, the live personas');
 select is(h16_stale('disciplines', 'delete'), '', 'disciplines: delete, no stale token writes a row');
-select is(h16_live('disciplines', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'disciplines: insert, the live personas');
+select is(h16_live('disciplines', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'disciplines: insert, the live personas');
 select is(h16_stale('disciplines', 'insert'), '', 'disciplines: insert, no stale token writes a row');
 -- entity_seo: per-entity SEO: Admin and SEO.
 select is(h16_live('entity_seo', 'update'), 'A1 C0 S1 D0 L0 O0 Nx', 'entity_seo: update, the live personas');
 select is(h16_stale('entity_seo', 'update'), '', 'entity_seo: update, no stale token writes a row');
 select is(h16_live('entity_seo', 'delete'), 'A1 C0 S1 D0 L0 O0 Nx', 'entity_seo: delete, the live personas');
 select is(h16_stale('entity_seo', 'delete'), '', 'entity_seo: delete, no stale token writes a row');
-select is(h16_live('entity_seo', 'insert'), 'A1 Cx S1 Dx L0 O0 Nx', 'entity_seo: insert, the live personas');
+select is(h16_live('entity_seo', 'insert'), 'A1 Cx S1 Dx Lx Ox Nx', 'entity_seo: insert, the live personas');
 select is(h16_stale('entity_seo', 'insert'), '', 'entity_seo: insert, no stale token writes a row');
 select is(h16_live('faq_items', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'faq_items: update, the live personas');
 select is(h16_stale('faq_items', 'update'), '', 'faq_items: update, no stale token writes a row');
 select is(h16_live('faq_items', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'faq_items: delete, the live personas');
 select is(h16_stale('faq_items', 'delete'), '', 'faq_items: delete, no stale token writes a row');
-select is(h16_live('faq_items', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'faq_items: insert, the live personas');
+select is(h16_live('faq_items', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'faq_items: insert, the live personas');
 select is(h16_stale('faq_items', 'insert'), '', 'faq_items: insert, no stale token writes a row');
 -- media_assets: media: Admin, Content Creator and Developer write, Admin hard-deletes.
 select is(h16_live('media_assets', 'update'), 'A1 C1 S0 D1 L0 O0 Nx', 'media_assets: update, the live personas');
 select is(h16_stale('media_assets', 'update'), '', 'media_assets: update, no stale token writes a row');
 select is(h16_live('media_assets', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'media_assets: delete, the live personas');
 select is(h16_stale('media_assets', 'delete'), '', 'media_assets: delete, no stale token writes a row');
-select is(h16_live('media_assets', 'insert'), 'A1 C1 Sx D1 L0 O0 Nx', 'media_assets: insert, the live personas');
+select is(h16_live('media_assets', 'insert'), 'A1 C1 Sx D1 Lx Ox Nx', 'media_assets: insert, the live personas');
 select is(h16_stale('media_assets', 'insert'), '', 'media_assets: insert, no stale token writes a row');
 select is(h16_live('navigation', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'navigation: update, the live personas');
 select is(h16_stale('navigation', 'update'), '', 'navigation: update, no stale token writes a row');
 select is(h16_live('navigation', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'navigation: delete, the live personas');
 select is(h16_stale('navigation', 'delete'), '', 'navigation: delete, no stale token writes a row');
-select is(h16_live('navigation', 'insert'), 'A1 C1 Sx Dx Lx O0 Nx', 'navigation: insert, the live personas');
+select is(h16_live('navigation', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'navigation: insert, the live personas');
 select is(h16_stale('navigation', 'insert'), '', 'navigation: insert, no stale token writes a row');
 select is(h16_live('page_sections', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'page_sections: update, the live personas');
 select is(h16_stale('page_sections', 'update'), '', 'page_sections: update, no stale token writes a row');
 select is(h16_live('page_sections', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'page_sections: delete, the live personas');
 select is(h16_stale('page_sections', 'delete'), '', 'page_sections: delete, no stale token writes a row');
-select is(h16_live('page_sections', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'page_sections: insert, the live personas');
+select is(h16_live('page_sections', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'page_sections: insert, the live personas');
 select is(h16_stale('page_sections', 'insert'), '', 'page_sections: insert, no stale token writes a row');
 select is(h16_live('pages', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'pages: update, the live personas');
 select is(h16_stale('pages', 'update'), '', 'pages: update, no stale token writes a row');
 select is(h16_live('pages', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'pages: delete, the live personas');
 select is(h16_stale('pages', 'delete'), '', 'pages: delete, no stale token writes a row');
-select is(h16_live('pages', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'pages: insert, the live personas');
+select is(h16_live('pages', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'pages: insert, the live personas');
 select is(h16_stale('pages', 'insert'), '', 'pages: insert, no stale token writes a row');
 select is(h16_live('partner_logos', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'partner_logos: update, the live personas');
 select is(h16_stale('partner_logos', 'update'), '', 'partner_logos: update, no stale token writes a row');
 select is(h16_live('partner_logos', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'partner_logos: delete, the live personas');
 select is(h16_stale('partner_logos', 'delete'), '', 'partner_logos: delete, no stale token writes a row');
-select is(h16_live('partner_logos', 'insert'), 'A1 C1 Sx Dx Lx O0 Nx', 'partner_logos: insert, the live personas');
+select is(h16_live('partner_logos', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'partner_logos: insert, the live personas');
 select is(h16_stale('partner_logos', 'insert'), '', 'partner_logos: insert, no stale token writes a row');
 select is(h16_live('portfolio', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'portfolio: update, the live personas');
 select is(h16_stale('portfolio', 'update'), '', 'portfolio: update, no stale token writes a row');
 select is(h16_live('portfolio', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'portfolio: delete, the live personas');
 select is(h16_stale('portfolio', 'delete'), '', 'portfolio: delete, no stale token writes a row');
-select is(h16_live('portfolio', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'portfolio: insert, the live personas');
+select is(h16_live('portfolio', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'portfolio: insert, the live personas');
 select is(h16_stale('portfolio', 'insert'), '', 'portfolio: insert, no stale token writes a row');
 -- portfolio_media: a project's media links: whoever writes projects, deletes included.
 select is(h16_live('portfolio_media', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'portfolio_media: update, the live personas');
 select is(h16_stale('portfolio_media', 'update'), '', 'portfolio_media: update, no stale token writes a row');
 select is(h16_live('portfolio_media', 'delete'), 'A1 C1 S0 D0 L0 O0 Nx', 'portfolio_media: delete, the live personas');
 select is(h16_stale('portfolio_media', 'delete'), '', 'portfolio_media: delete, no stale token writes a row');
-select is(h16_live('portfolio_media', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'portfolio_media: insert, the live personas');
+select is(h16_live('portfolio_media', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'portfolio_media: insert, the live personas');
 select is(h16_stale('portfolio_media', 'insert'), '', 'portfolio_media: insert, no stale token writes a row');
 -- portfolio_services: a project's service links: whoever writes projects, deletes included.
 select is(h16_live('portfolio_services', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'portfolio_services: update, the live personas');
 select is(h16_stale('portfolio_services', 'update'), '', 'portfolio_services: update, no stale token writes a row');
 select is(h16_live('portfolio_services', 'delete'), 'A1 C1 S0 D0 L0 O0 Nx', 'portfolio_services: delete, the live personas');
 select is(h16_stale('portfolio_services', 'delete'), '', 'portfolio_services: delete, no stale token writes a row');
-select is(h16_live('portfolio_services', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'portfolio_services: insert, the live personas');
+select is(h16_live('portfolio_services', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'portfolio_services: insert, the live personas');
 select is(h16_stale('portfolio_services', 'insert'), '', 'portfolio_services: insert, no stale token writes a row');
 -- redirects: redirects: Admin and SEO.
 select is(h16_live('redirects', 'update'), 'A1 C0 S1 D0 L0 O0 Nx', 'redirects: update, the live personas');
 select is(h16_stale('redirects', 'update'), '', 'redirects: update, no stale token writes a row');
 select is(h16_live('redirects', 'delete'), 'A1 C0 S1 D0 L0 O0 Nx', 'redirects: delete, the live personas');
 select is(h16_stale('redirects', 'delete'), '', 'redirects: delete, no stale token writes a row');
-select is(h16_live('redirects', 'insert'), 'A1 Cx S1 Dx L0 O0 Nx', 'redirects: insert, the live personas');
+select is(h16_live('redirects', 'insert'), 'A1 Cx S1 Dx Lx Ox Nx', 'redirects: insert, the live personas');
 select is(h16_stale('redirects', 'insert'), '', 'redirects: insert, no stale token writes a row');
 select is(h16_live('sectors', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'sectors: update, the live personas');
 select is(h16_stale('sectors', 'update'), '', 'sectors: update, no stale token writes a row');
 select is(h16_live('sectors', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'sectors: delete, the live personas');
 select is(h16_stale('sectors', 'delete'), '', 'sectors: delete, no stale token writes a row');
-select is(h16_live('sectors', 'insert'), 'A1 C1 Sx Dx Lx O0 Nx', 'sectors: insert, the live personas');
+select is(h16_live('sectors', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'sectors: insert, the live personas');
 select is(h16_stale('sectors', 'insert'), '', 'sectors: insert, no stale token writes a row');
 -- seo_defaults: global SEO defaults: Admin and SEO; one row per tenant; no staff delete.
 select is(h16_live('seo_defaults', 'update'), 'A1 C0 S1 D0 L0 O0 Nx', 'seo_defaults: update, the live personas');
 select is(h16_stale('seo_defaults', 'update'), '', 'seo_defaults: update, no stale token writes a row');
 select is(h16_live('seo_defaults', 'delete'), 'Ax Cx Sx Dx Lx Ox Nx', 'seo_defaults: delete, the live personas');
 select is(h16_stale('seo_defaults', 'delete'), '', 'seo_defaults: delete, no stale token writes a row');
-select is(h16_live('seo_defaults', 'insert'), 'Au Cx Su Dx Lx O0 Nx', 'seo_defaults: insert, the live personas');
+select is(h16_live('seo_defaults', 'insert'), 'Au Cx Su Dx Lx Ox Nx', 'seo_defaults: insert, the live personas');
 select is(h16_stale('seo_defaults', 'insert'), '', 'seo_defaults: insert, no stale token writes a row');
 select is(h16_live('service_cases', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'service_cases: update, the live personas');
 select is(h16_stale('service_cases', 'update'), '', 'service_cases: update, no stale token writes a row');
 select is(h16_live('service_cases', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'service_cases: delete, the live personas');
 select is(h16_stale('service_cases', 'delete'), '', 'service_cases: delete, no stale token writes a row');
-select is(h16_live('service_cases', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'service_cases: insert, the live personas');
+select is(h16_live('service_cases', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'service_cases: insert, the live personas');
 select is(h16_stale('service_cases', 'insert'), '', 'service_cases: insert, no stale token writes a row');
 select is(h16_live('services', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'services: update, the live personas');
 select is(h16_stale('services', 'update'), '', 'services: update, no stale token writes a row');
 select is(h16_live('services', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'services: delete, the live personas');
 select is(h16_stale('services', 'delete'), '', 'services: delete, no stale token writes a row');
-select is(h16_live('services', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'services: insert, the live personas');
+select is(h16_live('services', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'services: insert, the live personas');
 select is(h16_stale('services', 'insert'), '', 'services: insert, no stale token writes a row');
 select is(h16_live('statistics', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'statistics: update, the live personas');
 select is(h16_stale('statistics', 'update'), '', 'statistics: update, no stale token writes a row');
 select is(h16_live('statistics', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'statistics: delete, the live personas');
 select is(h16_stale('statistics', 'delete'), '', 'statistics: delete, no stale token writes a row');
-select is(h16_live('statistics', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'statistics: insert, the live personas');
+select is(h16_live('statistics', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'statistics: insert, the live personas');
 select is(h16_stale('statistics', 'insert'), '', 'statistics: insert, no stale token writes a row');
 -- system_logs: staff insert log lines, Admin clears them; no policy updates one.
 select is(h16_live('system_logs', 'update'), 'A0 C0 S0 D0 L0 O0 Nx', 'system_logs: update, the live personas');
@@ -444,13 +450,13 @@ select is(h16_live('team_members', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'team_memb
 select is(h16_stale('team_members', 'update'), '', 'team_members: update, no stale token writes a row');
 select is(h16_live('team_members', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'team_members: delete, the live personas');
 select is(h16_stale('team_members', 'delete'), '', 'team_members: delete, no stale token writes a row');
-select is(h16_live('team_members', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'team_members: insert, the live personas');
+select is(h16_live('team_members', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'team_members: insert, the live personas');
 select is(h16_stale('team_members', 'insert'), '', 'team_members: insert, no stale token writes a row');
 select is(h16_live('testimonials', 'update'), 'A1 C1 S0 D0 L0 O0 Nx', 'testimonials: update, the live personas');
 select is(h16_stale('testimonials', 'update'), '', 'testimonials: update, no stale token writes a row');
 select is(h16_live('testimonials', 'delete'), 'A1 C0 S0 D0 L0 O0 Nx', 'testimonials: delete, the live personas');
 select is(h16_stale('testimonials', 'delete'), '', 'testimonials: delete, no stale token writes a row');
-select is(h16_live('testimonials', 'insert'), 'A1 C1 Sx Dx L0 O0 Nx', 'testimonials: insert, the live personas');
+select is(h16_live('testimonials', 'insert'), 'A1 C1 Sx Dx Lx Ox Nx', 'testimonials: insert, the live personas');
 select is(h16_stale('testimonials', 'insert'), '', 'testimonials: insert, no stale token writes a row');
 
 -- ── 3. the policies, and the rule ─────────────────────────────────────────────────────────

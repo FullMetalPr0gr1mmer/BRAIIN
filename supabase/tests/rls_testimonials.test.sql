@@ -48,6 +48,11 @@ create function _claims(p_role text, p_tid text) returns void language sql as $$
   )
 $$;
 
+-- The other tenant the other_tenant token names, created so that token is a live Admin of its
+-- own tenant: the deny assertions below then test the tenant predicate, not a missing profile.
+insert into public.tenants (id, name) values ('00000000-0000-0000-0000-0000000000ff', 'Other tenant')
+  on conflict (id) do nothing;
+
 -- H16 (0129): every staff write is live-checked against the profile the token's `sub` names,
 -- so each role token this helper mints names a live profile: one per staff role and tenant,
 -- its id derived from both.
