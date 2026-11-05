@@ -418,13 +418,21 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     catalog: every public table where `authenticated` holds a write privilege has a
     RESTRICTIVE live policy for each command it can run, so a later table without one fails CI
     (the migration's postconditions check the same). A stale token's audit insert is now
-    refused as well. Docs: [as-built/H16.md](as-built/H16.md).
+    refused as well; the one row a request writes after its own token stopped being live (the
+    password form's fifth wrong try locks the account) is written by the service role, naming
+    the account the Worker verified (`writeAuditAsService`). Docs:
+    [as-built/H16.md](as-built/H16.md).
   - *Left after them.* READS. Until it expires, the issued token reads at PostgREST what its
-    old role could on the tables with no live read check: drafts and unpublished content,
-    media metadata, redirects, the SEO rows, `system_logs` (scrubbed of personal data),
-    `ai_config`, the read-only rollups. The personal and sensitive tables already read live
-    (leads and the CRM, job applications, profiles, `audit_log`, `site_integrations`, the admin
-    settings). A lock (the sign-in lockout) ends no session (U12a's decision, kept by H16:
+    old role could on the tables with no live read check: content with its drafts, versions
+    and releases, media metadata, redirects, the SEO rows, `system_logs` (scrubbed of personal
+    data), `ai_config`, `site_settings` (technical keys, the maintenance IP allowlist among
+    them), the appearance, form, template and page-visibility settings (`site_appearance`,
+    `custom_themes`, `form_settings`, `template_copy`, `page_visibility`), the CRM's stages and
+    scoring points (`lead_stages`, `crm_settings`), the consent, notification and search
+    ledgers and the read-only rollups. These read live: leads and the lead timeline
+    (`lead_events`), job applications, other people's profiles, `audit_log`,
+    `site_integrations`, the role defaults and security settings, user preferences, analytics
+    goals, team notes and the help guides. A lock (the sign-in lockout) ends no session (U12a's decision, kept by H16:
     anyone who knows a staff address can trip it); the locked token writes nothing and the
     admin signs it out at its next request, but an idle session's refresh token works again
     once the lock passes. The owner may also shorten `jwt_expiry` to 900 s (the dashboard and

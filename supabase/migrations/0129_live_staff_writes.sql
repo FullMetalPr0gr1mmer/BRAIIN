@@ -39,10 +39,16 @@
 --          is unchanged, and no anon policy changes.
 --      Not affected: the service role (BYPASSRLS: the Worker's server-side writes, the public
 --      forms), SECURITY DEFINER functions and triggers (they run as their owner, which these
---      TO authenticated policies do not name: apply_release, publish_scheduled, the snapshot
---      and capture triggers, update_my_profile), the access-token hook and pg_cron. Invoker
---      RPCs (save_portfolio, apply_portfolio_children, write_drafts) are held by the policies
---      of the tables they write, which is the point.
+--      TO authenticated policies do not name: publish_scheduled, the snapshot and capture
+--      triggers, update_my_profile), the access-token hook and pg_cron. Invoker RPCs
+--      (save_portfolio, apply_portfolio_children, write_drafts) are held by the policies of the
+--      tables they write, which is the point. So is public.apply_release: an INVOKER (0051
+--      requires it) that writes every change after `set local role authenticated` with the
+--      publisher's claims, so these policies apply to every release. It passes them because
+--      its own publisher check (0112) asks the profile what app.live_role() asks (active,
+--      unlocked, the role named, the profile's own tenant) before any write;
+--      supabase/tests/live_staff_writes.test.sql section 5 pins both, so neither changes alone
+--      (a release admitted by a weaker check would be refused by RLS mid-way).
 --   2. public.update_media_meta (0020: SEO's "meta only" media write, a SECURITY DEFINER that
 --      checked the token's role alone) restated: a stale token is refused as a non-staff one
 --      is (42501). Its search_path is pinned to '' with every name qualified; its body is
@@ -64,8 +70,13 @@
 -- Rule 5 (the deployed Worker between this push and the deploy): no shape changes. Every write
 -- the deployed Worker makes passes resolveAuthContext first, which refuses a session whose
 -- profile is inactive, locked, of another tenant or of another role than its token, exactly the
--- tokens live_role() turns away, so no live session's write changes. update_media_meta keeps its
--- signature, result columns and error codes.
+-- tokens live_role() turns away, so no live session's write changes, with one exception: the
+-- password form's fifth wrong current password locks the account inside the request, and the
+-- deployed Worker then writes that refusal's audit row with the same token, which
+-- audit_log_live_insert now refuses (writeAudit reports it to system_logs; the request still
+-- answers). This slice's Worker writes that row with the service role (src/lib/admin/audit.ts
+-- writeAuditAsService), so the row can be lost only between this push and the deploy.
+-- update_media_meta keeps its signature, result columns and error codes.
 --
 -- Production as of 2026-11-05: PostgreSQL 17.6, one tenant; main holds every migration through
 -- 0127. CLAUDE.md §2 (session invalidation), §3 (Pillar 1), §8, §9 (b).
