@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { greeting } from '@/lib/admin/dashboard/greeting';
+import { GREETING_HOLDERS, STEADY_GREETING, steadyGreeting } from '../visual/adminVisualSteady';
 
 /*
  * The admin visual baselines (Admin v2 Z1, ui.md AV-34) stay out of every required gate:
@@ -24,6 +26,7 @@ interface Step {
 }
 interface Job {
   name?: string;
+  permissions?: unknown;
   uses?: string;
   env?: Record<string, unknown>;
   'timeout-minutes'?: number;
@@ -36,7 +39,8 @@ interface Workflow {
   jobs: Record<string, Job>;
 }
 
-const load = (file: string) => parse(readFileSync(`.github/workflows/${file}`, 'utf8')) as Workflow;
+const text = (file: string) => readFileSync(`.github/workflows/${file}`, 'utf8');
+const load = (file: string) => parse(text(file)) as Workflow;
 const visual = load('admin-visual.yml');
 const gates = load('perf-seo-a11y.yml');
 const ci = load('ci.yml');
@@ -55,6 +59,14 @@ const acts = (step: Step) => ({
 
 const SPEC = 'tests/visual/admin.visual.ts';
 
+/** `{ contents: 'read' }` or a narrower grant: no scope above `read`. */
+const isReadOnly = (grant: unknown) =>
+  grant !== null &&
+  typeof grant === 'object' &&
+  Object.values(grant as Record<string, unknown>).every(
+    (level) => level === 'read' || level === 'none',
+  );
+
 describe('.github/workflows/admin-visual.yml', () => {
   it('runs only by hand (a mode to choose), read-only, one job with a timeout', () => {
     const on = visual.on as Record<string, { inputs?: Record<string, { options?: string[] }> }>;
@@ -69,6 +81,18 @@ describe('.github/workflows/admin-visual.yml', () => {
     expect(job['timeout-minutes']).toBeLessThanOrEqual(60);
     expect(visual.env).toEqual(gates.env);
     expect(job.env).toEqual(e2e.env);
+  });
+
+  it('gives the job no rights of its own and no repository secret, in any step', () => {
+    // The top-level read-only grant is the job's: a job-level `permissions` would replace it.
+    expect(job.permissions === undefined || isReadOnly(job.permissions), 'job permissions').toBe(
+      true,
+    );
+    // The stack runs on the ci-dummy keys (the env above); nothing reads a repository secret,
+    // nor the token's write scopes, in the steps after the preview either.
+    expect(text('admin-visual.yml')).not.toMatch(/\bsecrets\s*\./);
+    expect(text('admin-visual.yml')).not.toMatch(/\bsecrets\s*\[/);
+    expect(text('admin-visual.yml')).not.toMatch(/github\.token|GITHUB_TOKEN/);
   });
 
   it('is the e2e job step for step up to the preview, the same pins included', () => {
@@ -163,5 +187,35 @@ describe('playwright.config.ts and the admin-visual project', () => {
       const match = project.testMatch;
       if (match instanceof RegExp) expect(match.test(`/repo/${SPEC}`), project.name).toBe(false);
     }
+  });
+});
+
+describe('the dashboard greeting in the baselines (tests/visual/adminVisualSteady.ts)', () => {
+  // The greeting is written on the server by the studio's hour, so a baseline made in the
+  // morning would fail a compare run in the evening unless the picture holds it steady.
+  it('reads the same at every hour of the day', () => {
+    const seen = new Set<string>();
+    for (let hour = 0; hour < 24; hour += 1) {
+      const now = new Date(Date.UTC(2026, 10, 5, hour, 30));
+      const said = greeting(now, 'Amal Example', 'e2e-admin@example.com', 'UTC');
+      expect(said).toMatch(/^Good (?:morning|afternoon|evening), Amal$/);
+      seen.add(steadyGreeting(said));
+    }
+    expect([...seen]).toEqual([`${STEADY_GREETING}, Amal`]);
+  });
+
+  it('is rewritten where the dashboard prints it, before every picture', () => {
+    expect(GREETING_HOLDERS).toContain('.admin-header h1');
+    expect(GREETING_HOLDERS).toContain('.crumbs [aria-current="page"]');
+    const head = readFileSync('src/components/admin/ui/PageHead.astro', 'utf8');
+    expect(head).toMatch(
+      /<header class="admin-header">[\s\S]*?<h1\b[^>]*>\{heading \?\? title\}<\/h1>/,
+    );
+    const top = readFileSync('src/components/admin/ui/Topbar.astro', 'utf8');
+    expect(top).toMatch(/<nav class="crumbs"[\s\S]*?<li aria-current="page">\{title\}<\/li>/);
+    const spec = readFileSync(SPEC, 'utf8');
+    const steady = spec.indexOf('await steadyText(page);');
+    expect(steady).toBeGreaterThan(0);
+    expect(steady).toBeLessThan(spec.indexOf('toHaveScreenshot('));
   });
 });

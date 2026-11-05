@@ -308,7 +308,10 @@ export const DIALOG_CASES: readonly DialogCase[] = [
   // ---- Services and projects (U5, U6; services.e2e.ts, projects.e2e.ts, backups.e2e.ts) --
   {
     id: 'services-add',
-    screen: '/admin/services',
+    // Add service is the page head's link on a discipline's page (src/pages/admin/disciplines/
+    // [id].astro, drawn for services.write), not on the Services overview, whose only add
+    // control is Add discipline; services.e2e.ts presses it there too.
+    screen: '/admin/disciplines/[id]',
     who: full('services.write'),
     open: [{ click: { role: 'link', name: 'Add service' } }],
     name: 'Add a service',

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { STAFF_ROLES, authFile, staffEnv } from '../admin/staff';
 import { CAPTURE_VIEWPORTS, captureName, captureRoutes } from '../admin/routes';
 import { resolvePath } from '../admin/openRoute';
+import { GREETING_HOLDERS, GREETING_SOURCE, STEADY_GREETING } from './adminVisualSteady';
 
 /*
  * Admin visual baselines (Admin v2 Z1, ui.md AV-34: "turns [the admin capture] into
@@ -51,6 +52,25 @@ function masks(page: Page) {
   return [page.locator(MASKED), page.getByText(WHEN)];
 }
 
+/**
+ * The dashboard's greeting ("Good evening, …") as one part of the day, wherever it is printed
+ * (tests/visual/adminVisualSteady.ts says why a mask or a pinned clock cannot do this).
+ */
+async function steadyText(page: Page): Promise<void> {
+  await page.evaluate(
+    ({ holders, source, steady }) => {
+      const pattern = new RegExp(source, 'g');
+      for (const holder of document.querySelectorAll(holders)) {
+        const walker = document.createTreeWalker(holder, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          node.nodeValue = (node.nodeValue ?? '').replace(pattern, steady);
+        }
+      }
+    },
+    { holders: GREETING_HOLDERS, source: GREETING_SOURCE, steady: STEADY_GREETING },
+  );
+}
+
 test.describe('admin visual baselines', () => {
   test.skip(
     !MODE || !staffEnv(),
@@ -77,6 +97,7 @@ test.describe('admin visual baselines', () => {
             // picture is masked anyway.
             await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
             await page.evaluate(() => document.fonts.ready);
+            await steadyText(page);
             await expect(page).toHaveScreenshot(`${name}.png`, {
               fullPage: true,
               animations: 'disabled',

@@ -1,8 +1,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ROLES } from '@/lib/auth/types';
-import { routeKey, sweepRoutes } from '../admin/routes';
+import { pageFileFor, routeKey, sweepRoutes } from '../admin/routes';
 import {
   DIALOG_CASES,
   DIALOG_PRIMITIVES,
@@ -10,6 +10,7 @@ import {
   LAPTOP,
   PHONE,
   casesFor,
+  type Target,
 } from '../admin/dialogs';
 
 /*
@@ -44,6 +45,62 @@ function code(source: string): string {
 const rendering = ROOTS.flatMap(files).filter((path) =>
   DIALOG.test(code(readFileSync(path, 'utf8'))),
 );
+
+/*
+ * A screen's markup: its page file and every component, page or layout it imports, followed
+ * through `@/` and relative imports (src/lib is left out: the help guides, the palette and the
+ * quick actions name controls of other screens, so their words prove nothing about this one).
+ */
+const UI = /^src\/(?:components|pages|layouts)\//;
+
+function resolveImport(from: string, spec: string): string | null {
+  let base: string;
+  if (spec.startsWith('@/')) base = `src/${spec.slice(2)}`;
+  else if (spec.startsWith('.')) base = join(dirname(from), spec).split(sep).join('/');
+  else return null;
+  const tries = [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`];
+  return tries.find((path) => /\.(?:tsx?|astro)$/.test(path) && existsSync(path)) ?? null;
+}
+
+function screenMarkup(entry: string): string {
+  const seen = new Set<string>();
+  const todo = [entry];
+  const parts: string[] = [];
+  while (todo.length > 0) {
+    const file = todo.pop()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const source = readFileSync(file, 'utf8');
+    parts.push(code(source));
+    for (const match of source.matchAll(/\b(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)) {
+      const path = resolveImport(file, match[1]!);
+      if (path && UI.test(path)) todo.push(path);
+    }
+  }
+  return parts.join(' ').replace(/\s+/g, ' ');
+}
+
+/** The literal accessible names a target is found by (a regex or CSS names none). */
+function literalNames(target: Target): string[] {
+  const own = 'role' in target && typeof target.name === 'string' ? [target.name] : [];
+  return [...own, ...(target.within ? literalNames(target.within) : [])];
+}
+
+/**
+ * Trigger names the markup builds at run time, so no source spells them out; each traced by
+ * hand to where it is made (`<case id>: <name>`).
+ */
+const BUILT_NAMES: Readonly<Record<string, string>> = {
+  'kit-link-dialog: Sample body English':
+    'FormField names a rich-text editor by its field label and language',
+  'kit-link-dialog: Sample body English formatting':
+    'RichText names its toolbar by its editor’s label and “formatting”',
+  'service-poster-picker: Poster':
+    'MediaField is a fieldset named by its field label (src/lib/admin/ui/services.ts)',
+  'seo-new-redirect: New redirect': 'ResourceTable’s button is “New” and the resource’s singular',
+  'visibility-drawer: Change who can see Join us':
+    'VisibilityList names each row’s button by its page title',
+};
 
 const named = new Set([
   ...DIALOG_CASES.flatMap((c) => c.sources),
@@ -86,6 +143,28 @@ describe('the dialog matrix registry (tests/admin/dialogs.ts)', () => {
       ),
     );
     expect(DIALOG_CASES.map((c) => c.id).filter((id) => !met.has(id))).toEqual([]);
+  });
+
+  it('finds every trigger it names on the case’s own screen (its page and its imports)', () => {
+    const fileOf = new Map(
+      ROLES.flatMap((role) => sweepRoutes(role).map((r) => [routeKey(r), r.path] as const)),
+    );
+    const missing: string[] = [];
+    const built = new Set<string>();
+    for (const c of DIALOG_CASES) {
+      const markup = screenMarkup(pageFileFor(fileOf.get(c.screen)!));
+      for (const step of c.open) {
+        const target = 'click' in step ? step.click : 'press' in step ? step.press : null;
+        for (const name of target ? literalNames(target) : []) {
+          const key = `${c.id}: ${name}`;
+          if (key in BUILT_NAMES) built.add(key);
+          else if (!markup.includes(name)) missing.push(`${key} (on ${c.screen})`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
+    // Every built name is still a case's trigger: the list cannot outlive what it excuses.
+    expect(Object.keys(BUILT_NAMES).filter((key) => !built.has(key))).toEqual([]);
   });
 
   it('opens an edit screen on a named row only through its list API', () => {
