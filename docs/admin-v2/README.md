@@ -434,7 +434,7 @@ The TDD's *product* requirements are the spec. Its *stack* suggestions are mappe
 
 | # | Slice | Depends | Status (Z1, 2026-11-05) |
 |---|---|---|---|
-| Z1 | Admin visual baselines (1440/390), full per-role axe matrix with dialogs open, docs + TDD coverage closure [AV-34] | E1, E4, E5, U12, U13, C10 | Built: [Z1](as-built/Z1.md) |
+| Z1 | Admin visual baselines (1440/390), full per-role axe matrix with dialogs open, docs + TDD coverage closure [AV-34] | E1, E4, E5, U12, U13, C10 | Built: [Z1](as-built/Z1.md); the first admin visual baselines wait for the operator's `update` run |
 | R15 | Release contract | R14 + one stable cycle | Not built (after R14 and one stable cycle) |
 | R16 | PDPL history redaction — **legal-gated (O-12)** | R4, R14 | Not built: waits on O-12 (legal) |
 
@@ -584,7 +584,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
   - admin static rules: no style props, no runtime `<style>`, no admin `<script>`, no colour literals, sprite and font-face parity, nav hrefs resolve;
   - chunk contents.
 - **E2E (EN+AR)**:
-  - per-role admin sweep, and every dialog its screens open (the Z1 matrix);
+  - per-role admin sweep, and each dialog component its screens use, on one representative screen (the Z1 matrix);
   - releases: draft → preview → publish → public, rollback, conflict, schedule;
   - preview parity (every Tier A route) and isolation;
   - CRM round trip and Sales negative paths;
@@ -605,7 +605,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
 
    | Acceptance item | Slice | Status | As built (Z1, 2026-11-05) |
    |---|---|---|---|
-   | Every route for every role: no errors, no overflow, sidebar per role | F0/Z1 | ✓ per-role sessions replace View as; https, not `file://` | Built: the F0 sweep (`tests/admin/sweep.e2e.ts`, every screen each role's sidebar offers, axe included), Z1's dialog matrix (`tests/admin/dialogs.e2e.ts`: every dialog those screens open, per role, axe with it open) and the admin visual baselines at 1440 and 390 (`tests/visual/admin.visual.ts`, made and checked by the hand-run `admin-visual.yml`, [Z1](as-built/Z1.md)) |
+   | Every route for every role: no errors, no overflow, sidebar per role | F0/Z1 | ✓ per-role sessions replace View as; https, not `file://` | Built: the F0 sweep (`tests/admin/sweep.e2e.ts`, every screen each role's sidebar offers, axe included), Z1's dialog matrix (`tests/admin/dialogs.e2e.ts`: each dialog component those screens use, opened per role on one representative screen, axe with it open), and the admin visual baselines' spec and hand-run workflow at 1440 and 390 (`tests/visual/admin.visual.ts`, `admin-visual.yml`); the first baselines wait for the operator's `update` run and their commit ([Z1](as-built/Z1.md), "Making the baselines") |
    | Homepage headline visible after Publish, not before | R14 | ✓ | Built in the release-mode rehearsal ([R14-prep](as-built/R14-prep.md), [R14a](as-built/R14a.md)): `tests/admin/releases-mode.e2e.ts` publishes a pending change and reads it on the public page, then a scheduled release and a rollback. Production waits on R14's switch-on (O-5) |
    | Hidden page returns 404 and leaves the menu | U14 | ✓ incl. sitemap/llms and KV re-sync after rollback | Built: `tests/admin/visibility.e2e.ts` ([U14a](as-built/U14a.md), [U14b](as-built/U14b.md)) |
    | 503 for visitors, signed-in admin passes | U9 | ✓ fail-closed (built: `tests/admin/maintenance.e2e.ts`) | Built: `tests/admin/maintenance.e2e.ts` ([U9](as-built/U9.md)) |
@@ -830,4 +830,4 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [W0-d](as-built/W0-d.md): the `contentClient()` seam and the cron job registry
 
 **Closure**
-- [Z1](as-built/Z1.md): the closing pass (AV-34): the per-role axe matrix with every dialog open (`tests/admin/dialogs.ts`, held complete by `adminDialogs.spec`; the shared confirm named by its question), the admin visual baselines at 1440 and 390 made and checked only by the hand-run `admin-visual.yml` (never a required gate), the TDD table and the acceptance scripts as built, the slice statuses, and the open owner items and legal holds in one list; no migration (PR number at review)
+- [Z1](as-built/Z1.md): the closing pass (AV-34): the per-role axe matrix with each dialog component open on a representative screen (`tests/admin/dialogs.ts`, held complete by `adminDialogs.spec`; the shared confirm named by its question), the admin visual baselines' spec at 1440 and 390 (the first pictures wait for the operator's `update` run), made and checked only by the hand-run `admin-visual.yml` (never a required gate), the TDD table and the acceptance scripts as built, the slice statuses, and the open owner items and legal holds in one list; no migration (PR number at review)
