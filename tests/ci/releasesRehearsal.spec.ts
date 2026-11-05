@@ -271,10 +271,29 @@ describe('playwright.config.ts', () => {
     expect(on.get('chromium')!.dependencies).toEqual(['releases-on']);
     expect(on.get('admin')!.dependencies).toEqual(['releases-on']);
     expect(on.get('releases-mode')!.dependencies).toEqual(['chromium', 'admin']);
-    // The projects that change the whole site wait for the drill.
-    expect(on.get('visibility')!.dependencies).toEqual(['releases-mode']);
-    // The section blocks (Admin v2 E10) are written for releases off: no project here.
-    expect(on.has('blocks')).toBe(false);
+    // The projects that change the whole site wait for the drill: the section blocks first
+    // (Admin v2 R14b: in both modes), then page visibility and the rest of the chain.
+    expect(on.get('blocks')!.dependencies).toEqual(['releases-mode']);
+    expect(on.get('visibility')!.dependencies).toEqual(['blocks']);
+    expect([...on.keys()]).toEqual([
+      'chromium',
+      'admin-setup',
+      'admin-samples',
+      'admin',
+      'releases-on',
+      'releases-mode',
+      'blocks',
+      'visibility',
+      'general',
+      'header',
+      'footer',
+      'loading',
+      'ga4',
+      'theme',
+      'templates',
+      'maintenance',
+      'maintenance-teardown',
+    ]);
   });
 
   it('the drill is never one of the admin project’s specs', async () => {

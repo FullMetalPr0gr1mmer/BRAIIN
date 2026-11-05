@@ -147,7 +147,7 @@ let q = db.from(opts.table).select(opts.select ?? '*')
 
 **(a) Live Content Collections** (`src/live.config.ts`) feed Server-Island holes via `getLiveCollection`, returning explicit error objects (never throwing) and `cacheHint.tags` reusing the §1.6 namespace.
 
-**(b) On-demand revalidation via tag purge — the authoritative Tier-A freshness model (resolves the §1.4/§8.5 ambiguity):** Tier-A routes are **on-demand-rendered-then-edge-cached, not deploy-frozen SSG** — SSR served from a long-`s-maxage` cache (`public, s-maxage=31536000, stale-while-revalidate=86400`). A publish purges the route's cache tags; the next request re-renders current HTML at the Worker (a single targeted render, not a build) and re-populates the edge. Where this document says "prerendered/static," read it as "edge-cached SSR refreshed on publish."
+**(b) On-demand revalidation via tag purge — the authoritative Tier-A freshness model (resolves the §1.4/§8.5 ambiguity):** Tier-A routes are **on-demand-rendered-then-edge-cached, not deploy-frozen SSG** — SSR served from a long-`s-maxage` cache (`public, s-maxage=31536000, stale-while-revalidate=86400`). A publish purges the route's cache tags; the next request re-renders current HTML at the Worker (a single targeted render, not a build) and re-populates the edge. **Publish = a release (Admin v2 A3; built, switched off per tenant until the owner switches them on, launch runbook §6p):** with releases on, an edit is a pending change and a publish applies the selected changes in one transaction (`public.apply_release`), records a numbered site version and then purges the union of their tags through `src/lib/http/purge.ts`; with them off, a save is the live write and purges its own tags. Where this document says "prerendered/static," read it as "edge-cached SSR refreshed on publish."
 
 > **Mechanism-per-tier (authoritative).** Tier A = cache-backed SSR (long `s-maxage` + purge). Tier B = Server Islands (`server:defer`, per-island `Cache-Control` + `cacheHint.tags`). Tier C = uncached SSR (`private, no-store`). §8.5's `Astro.cache.set`/`getEntry()` dependency-tracing is an **optional optimisation** on top of Tier A's tag purge, **not** a second mechanism — version-uncertain (R43, launch-blocking); the guaranteed path is the explicit purge, fallback `POST /api/revalidate`.
 
@@ -155,7 +155,7 @@ let q = db.from(opts.table).select(opts.select ?? '*')
 `SectionRenderer.astro` isolates unknown types / Zod-parse failures to a collapsed fallback + `system_logs` entry; Server Islands fail to inline fallback; React-island sections use a React error boundary. The Style-Finder is a deferred island whose failure cannot take down the host page.
 
 ### 1.6 Tag-based edge cache + purge-on-publish
-Deterministic `Cache-Tag` (`tenant:<tid>`, `route:<name>`, `<entity>:<slug>`, `<entity>:all`, `locale:<en|ar>`) stamped in `src/middleware.ts` (same chain as security headers §4.2 + redirects §7.2 + maintenance §4.5a). Publish Edge Function calls Cloudflare purge-by-tag with the minimal tag set. Constraints: purge-by-tag is Enterprise-only, 30 tags/call, 30k calls/24h (R1, launch-blocking).
+Deterministic `Cache-Tag` (`tenant:<tid>`, `route:<name>`, `<entity>:<slug>`, `<entity>:all`, `locale:<en|ar>`) stamped in `src/middleware.ts` (same chain as security headers §4.2 + redirects §7.2 + maintenance §4.5a). A publish purges by tag with the minimal set through the one purge seam, `src/lib/http/purge.ts` (Admin v2 R7: at most 30 tags a request, more collapse to `tenant:default`; 30,000 tags in 24 hours, taken in the database before anything is sent; retried by the Worker's minute cron). **R1 resolved:** purge by tag is available on every Cloudflare plan (Free: 5 purge requests a minute, which the seam coalesces around), and entries the Worker stores through the Cache API are purgeable by `Cache-Tag`. Until the zone and its token exist (O-3, KAN-20) the purge is a logged no-op recorded `skipped`.
 
 ---
 
@@ -187,6 +187,8 @@ Scalar SEO/identity field → sibling `_ar` column; document/array/rich-text →
 `disciplines` (0028) → `services` (+ `service_cases`, one per service, 0028), `portfolio` + `portfolio_services` (M:N), `blog_categories`, `blog_posts` (with `author_id uuid references team_members(id)` — public Person identity, §7.6), `pages`, `page_sections` (section_type list includes `stat_counters`→statistics, `team`→team_members, `certifications`→certifications, `partner_logos`; unknown types isolated by §1.5).
 
 **Versioning — ONE polymorphic table (resolves R52):** Braiin Station standardises on a single polymorphic `content_versions(entity_type versioned_entity, entity_id, version_no, snapshot jsonb, …)` for pages, services, portfolio, and blog. **`page_versions` is removed** — page history is a `content_versions` row (snapshot = full `{page + ordered page_sections}`) exactly like every other type. Each entity carries `version_token` for optimistic locking (§8.7). One table, one rollback mechanism, no per-type version tables.
+
+**Releases (Admin v2 A3):** `content_drafts` (one shared pending change per entity, an untrusted payload re-parsed by every consumer), `content_releases` (the site versions, numbered per tenant when they go live, a baseline v1 at switch-on, scheduled releases dated, not numbered) and append-only `content_release_items` (before and after images captured by trigger, cascades included). Every release-managed table but `team_members` (O-12) snapshots into `content_versions`, each snapshot carrying its `release_id`; a page's history is the release items of the page and its sections. The registry of release-managed tables is `app.release_entities`, mirrored in `src/lib/release/registry.ts`.
 
 ### 2.5 Leads (PII)
 `lead_kind`(`contact`,`project_inquiry`,`style_finder`), `budget_band`, `timeline_band`; `internal_notes`, `ip_inet`, `consent_marketing`, `retention_delete_after`. `budget`/`timeline`/`internal_notes`/`ip_inet` restricted to **Admin + Developer** server-side (§3.6/§4.7). *(Admin v2: the leads contract, C14b, dropped `status`, `timeline_band`, `internal_notes` and `ip_inet`. The timeline is encrypted, the notes are the `lead_notes` thread, the pipeline is `stage_id`; CLAUDE.md §8 "Leads v2" holds the current model.)*
@@ -299,7 +301,7 @@ Who may publish a pending change once releases are on (docs/admin-v2/releases.md
 | Release — redirects (removals included) | ✅ | ❌ | ✅ | ❌ | ❌ |
 | Release — page visibility | ✅ | ❌ | ❌ | ✅ | ❌ |
 
-Derived, not authored: each cell equals what that role can already make live by saving (P-2); `tests/authz/releaseMatrix.spec.ts` evaluates `requiredCaps` for every registry type in the row's area against `ROLE_CAPS`. anon, other_tenant and Sales are ❌ on every row (P-2: never Sales). R14 copies it into CLAUDE.md §5.
+Derived, not authored: each cell equals what that role can already make live by saving (P-2); `tests/authz/releaseMatrix.spec.ts` evaluates `requiredCaps` for every registry type in the row's area against `ROLE_CAPS`, and holds this table equal, line for line, to CLAUDE.md §5's copy (Admin v2 R14b). anon, other_tenant and Sales are ❌ on every row (P-2: never Sales). The table describes releases on; with releases off (every tenant until the owner switches them on) each role saves live exactly what §3.4's matrix above lets it write.
 
 ### 3.5 Session / cookies / CSRF
 `httpOnly; Secure; SameSite=Lax` (`__Host-`) cookies; `getUser()` signature verification; double-submit `__Host-csrf` or same-origin check on all mutations.
@@ -325,6 +327,8 @@ One policy; the **primary** enforcement point is `src/middleware.ts`, with two b
 
 ### 4.3 Theme-editor `postMessage` bridge
 Explicit `targetOrigin`; receiver validates `event.origin` against allowlist AND `event.source === window.parent`; versioned Zod envelope; theme tokens applied as CSS custom properties only.
+
+**The preview bridge (Admin v2 R9, A3-12)** is this bridge: the page editor frames `/admin/preview/**` (Tier C, `private, no-store`, noindex, `Cache-Tag` stripped), and `frame-src 'self'` is added on `/admin/**` responses only; public responses never frame same-origin. The bridge script (`src/lib/admin/preview/bridge.ts`, the `admin-preview` chunk) ships only on preview renders, posts to `location.origin`, checks origin and source, speaks `packages/schemas/previewMessage.ts`, and applies theme tokens as CSS custom properties only; a preview render's `connect-src` lists only its read-only endpoints.
 
 ### 4.4 Output sanitisation + form input
 `sanitize-html` allowlist on write AND render; **`style` is NOT in any allowedAttributes set** and **`allowedSchemesByTag.img: ['https']`** (no `data:`/`blob:`) — this is what lets `style-src` ship without `'unsafe-inline'`. `ContactLead` Zod schema (length-bounded, E.164). **`SearchQuery`** Zod cap (≤64 chars, no control chars); **search uses `websearch_to_tsquery` (never raw `to_tsquery`)** + per-query `statement_timeout` + capped rows; a test feeds tsquery metacharacters/overlong input and asserts safe handling.
@@ -419,7 +423,7 @@ update partman.part_config
 Tenant predicate first in every policy and composite index. **§8.5 freshness mechanism:** the authoritative, guaranteed mechanism is the explicit edge tag purge (§1.4(b)/§1.6) on cache-backed-SSR Tier-A routes; `Astro.cache.set` dependency-tracing is an optional optimisation enabled only after staging verification (R43, launch-blocking; fallback `POST /api/revalidate`).
 
 ### 8.6–8.8 Media egress; optimistic locking; third-party resilience
-`version_token` optimistic lock (`WHERE version_token=$expected` → 409). **Shared resilience helper** (backoff + full jitter, capped retries, circuit breaker, idempotency keys, `provider_quota`) wraps every external call; AI provider enforces per-IP+session limits and a strongly-consistent spend cap; degrades to cached/rule-based on breaker-open.
+`version_token` optimistic lock (`WHERE version_token=$expected` → 409). **Column-level conflicts (Admin v2 A3-2):** with releases on, a pending change carries its own version and a `base` (each column's live value when first changed); publish compares each live column the change writes with its base, as the column's own type, before any write, and answers 409 `conflict` naming the fields, which the editor resolves per column (Keep mine / Use live). **Shared resilience helper** (backoff + full jitter, capped retries, circuit breaker, idempotency keys, `provider_quota`) wraps every external call; AI provider enforces per-IP+session limits and a strongly-consistent spend cap; degrades to cached/rule-based on breaker-open.
 
 ---
 

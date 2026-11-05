@@ -1410,3 +1410,62 @@ contract (`packages/schemas/application.ts`, `packages/consent/recruitment.ts`).
   Developer can still edit them without a deploy, so the rule is procedural (runbook §6h);
   making them Admin-only in both layers (as `accepting_applications` is) is the owner's
   option.
+
+## Admin v2 — Releases (A3)
+
+Publishing as site-wide releases (docs/admin-v2/releases.md, slices R1 to R14b). Built, and
+switched off for every tenant until the owner switches them on (launch runbook §6p, owner item
+O-5): with them off every save goes live at once, as before. These are the program's decisions,
+recorded here by the per-port convention; the design document holds the reasoning in full.
+
+- **A3-1. Stage everything in release-managed areas.** Every admin write to a release-managed
+  table creates or amends a pending change in `content_drafts`; live tables change only inside a
+  release. One rule and one code path make "editing never changes the live site" true.
+- **A3-2. One shared pending change per entity**, with its own optimistic lock
+  (`content_drafts.version`) and a `base` (the live values it started from) for column-level
+  three-way conflict detection at publish.
+- **A3-3. Publish is one atomic release.** The default selection is every pending item the
+  person may publish (site-wide, as in the mockup); the dialog lets them untick items and pulls
+  in dependencies. If any item fails, the whole release aborts.
+- **A3-4. No new capability.** An item is publishable by holders of its area's capabilities
+  (CLAUDE.md §5, the derived release publish matrix). Releases add a review step and never widen
+  who can change the live site. Sales: nothing here.
+- **A3-5. `public.apply_release` is SECURITY INVOKER, EXECUTE for the service role only.** It
+  impersonates the publisher's live profile, so RLS, every RESTRICTIVE gate, CHECKs and guard
+  triggers bind as that person, and the Worker validates every item before calling it.
+- **A3-6. A release guard trigger** on every release-managed table refuses a staff token's
+  direct write outside a release once the tenant's releases are on, closing the PostgREST bypass
+  of the Worker's Zod checks and sanitizers.
+- **A3-7. The ledger.** `content_releases` is numbered per tenant when a release goes live;
+  `content_release_items` holds before and after images written by trigger, cascades included;
+  `content_versions` stays the per-entity history and carries `release_id`.
+- **A3-8. Rollback is "Restore vN".** The state at vN is staged as pending changes, previewed,
+  and published as a new release (`kind = 'rollback'`); per-item History restore works the same
+  way. The mockup's copy is kept: "vN restored. Publish to make it live."
+- **A3-9. Scheduling moves from rows to releases.** A scheduled release freezes a validated
+  item list and locks its drafts; the Worker's minute cron fires it as its scheduler, re-checked
+  live. Legacy scheduled rows are converted at switch-on, and the per-item Scheduled for field is
+  not drawn in release mode (editors and creates alike).
+- **A3-10. Immediate, never staged:** maintenance (the Pillar 1 kill switch), users and roles,
+  integrations and secrets, `ai_config`, technical settings, the job-application intake switch,
+  leads and the CRM, job applications, media binaries and metadata, Style-Finder authoring
+  (until the quiz ships). The mockup staged maintenance behind Publish; the site does not
+  ("Maintenance mode is on. Visitors see the maintenance page now.").
+- **A3-11. One purge seam** (`src/lib/http/purge.ts`). A release's tag set is the union of its
+  items' tags, old and new slugs included; more than 30 collapse to `tenant:default`; a logged
+  no-op until a zone exists; the minute cron retries failures.
+- **A3-12. Preview is Tier C** (`/admin/preview/**`): the real loaders and page components
+  over a request-scoped client that serves live rows plus re-validated drafts, filtered by a
+  mirror of the public RLS rules; never cached, noindex.
+- **A3-13. Drafts are untrusted input**, stored as the editor's payload and re-parsed by the
+  overlay, the preview and the publish.
+- **A3-14. Switched on per tenant by the runbook** (`app.enable_releases`): a baseline v1, the
+  legacy schedule converted, the guard armed. Expand, flag, contract: reversible
+  (`app.disable_releases`) until the contract slice (R15).
+
+Where the site departs from the mockup's publish flow (releases.md "Deviations from the
+prototype"): Publish is role-scoped ("N waiting for someone who can publish"); the dialog lists
+its items; Discard never resets the database; version numbers start at a baseline v1 assigned at
+switch-on; Restore stages the old version for review; preview is a real server render that
+refreshes about a second after an autosaved edit ("nothing goes live until you publish");
+scheduling is per release, set in the publish dialog.

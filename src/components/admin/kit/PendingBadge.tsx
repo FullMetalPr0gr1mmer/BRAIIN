@@ -1,5 +1,6 @@
 import { Badge } from './StatusBadge';
 import type { BadgeTone } from '@/lib/admin/tones';
+import { PENDING_WORDS, type PendingKind } from './pendingWords';
 
 // The pending-change badge (Admin v2 R12; releases.md §7 "Per-item badges"): beside a row's
 // live status in the lists, and at the head of an editor, so a change waiting for a release is
@@ -7,15 +8,8 @@ import type { BadgeTone } from '@/lib/admin/tones';
 // pending change, which only happens with releases on (the list and item reads add `draft`,
 // R3a), so with releases off no list or editor draws one.
 
-export type PendingKind = 'changed' | 'new' | 'removal' | 'scheduled' | 'conflict';
-
-export const PENDING_WORDS: Readonly<Record<PendingKind, string>> = {
-  changed: 'Unpublished changes',
-  new: 'New · not live yet',
-  removal: 'Will be removed',
-  scheduled: 'Scheduled',
-  conflict: 'Changed on the live site',
-};
+// Its words live in pendingWords.ts (a pure module the e2e specs read).
+export { PENDING_WORDS, type PendingKind };
 
 const TONES: Readonly<Record<PendingKind, BadgeTone>> = {
   changed: 'klein',

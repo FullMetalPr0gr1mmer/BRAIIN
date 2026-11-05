@@ -410,12 +410,15 @@ export default function EditorForm({
   // are `f-…` and move onto the prefix.
   const errors = local ?? withIdPrefix(save.errors, idPrefix);
   // R12: in release mode the per-item schedule goes (a release is scheduled, never one item).
+  // R14b: a create made in release mode too (its target is staged, R12b), which no answer has
+  // put in draft mode yet; its staged create refuses a schedule anyway.
   // E1: a hidden field is carried by the save, never drawn.
+  const releaseForm = draftMode || save.stagedCreate === true;
   const drawn =
     hidden && hidden.length > 0 ? fields.filter((f) => !hidden.includes(f.name)) : fields;
-  const shownFields = draftMode ? drawn.filter((f) => !isItemSchedule(f)) : drawn;
+  const shownFields = releaseForm ? drawn.filter((f) => !isItemSchedule(f)) : drawn;
   const renderField = (field: FieldDef) =>
-    draftMode && isLifecycleStatus(field) ? (
+    releaseForm && isLifecycleStatus(field) ? (
       <VisibilityField
         key={field.name}
         field={field}

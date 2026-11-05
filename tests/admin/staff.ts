@@ -135,8 +135,11 @@ export function releasesOn(env: Record<string, string | undefined> = process.env
 /**
  * Why a spec written for releases off skips in the rehearsal: its saves go live at once, or it
  * asserts what releases off looks like. tests/admin/releases-mode.e2e.ts drives the release
- * path end to end instead; R14 converts each of these to release mode before the switch-on
- * makes it the default (docs/admin-v2/as-built/R14-prep.md lists them).
+ * path end to end instead. R14b converted the specs that change the whole site (visibility,
+ * general, header, footer, loading, theme, templates, and the section blocks' project) to run
+ * in both modes (tests/admin/releaseSteps.ts); the ones that still skip are listed, with what
+ * each needs, in docs/admin-v2/as-built/R14B.md, and are converted before R14c makes release
+ * mode the required e2e job's default.
  */
 export const RELEASES_OFF_ONLY =
   'written for releases off (a save goes live at once, or the releases-off screens); the release-mode rehearsal covers this through tests/admin/releases-mode.e2e.ts until R14 converts it';

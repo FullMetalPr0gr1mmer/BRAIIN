@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { discardDrafts, publishOwn, savedPattern, systemClient, withDraft } from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 // The Loading screen (Admin v2 E7), end to end through the real Worker, session and database:
 // Admin saves a look through the screen (logo on black, the bar, a tagline in both languages,
@@ -19,11 +19,18 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
 //
 // Its own project (playwright.config.ts `loading`), after `footer`: it changes the home page
 // every public spec reads (hero-intro.e2e.ts pins the intro as built).
+//
+// Both modes (Admin v2 R14b). With releases on the look (site_appearance) and the switch (the
+// home hero's page section) are pending changes: each save names its pending change, the
+// screen says "Saved as an unpublished change", and this spec publishes its own change (the
+// look, or the home hero) right after, before the home page is read (releaseSteps.ts). The
+// clean-up throws this run's unclaimed pending changes away first, then puts the row and the
+// hero back as the system.
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
+
+const APPEARANCE = [{ entityType: 'site_appearance' }] as const;
 
 const API = '/api/admin/site-appearance';
 const SCREEN = '/admin/appearance/loading';
@@ -31,13 +38,6 @@ const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const TAGLINE = { en: 'From the brain to the real world.', ar: 'من الفكرة إلى الواقع.' };
 
 type Row = Record<string, unknown> & { version: number };
-
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 async function csrf(page: Page): Promise<string> {
   if (!page.url().includes('/admin')) await page.goto('/admin', { waitUntil: 'networkidle' });
@@ -52,14 +52,19 @@ async function read(page: Page): Promise<Row> {
   return ((await res.json()) as { data: Row }).data;
 }
 
-/** Saves the look through the screen's API, on top of the stored version; the status. */
+/**
+ * Saves the look through the screen's API, on top of what is stored (with releases on, naming
+ * the pending change, and then publishing this spec's own change when the save took); the
+ * status.
+ */
 async function save(page: Page, values: Record<string, unknown>): Promise<number> {
   const token = await csrf(page);
   const row = await read(page);
   const res = await page.request.patch(API, {
     headers: { 'x-csrf-token': token, origin: new URL(page.url()).origin },
-    data: { ...values, version: row.version },
+    data: withDraft(row, values),
   });
+  if (res.status() === 200) await publishOwn(page, APPEARANCE, 0);
   return res.status();
 }
 
@@ -116,7 +121,7 @@ let heroBefore: { id: string; content: unknown } | null = null;
 
 async function homeHero(): Promise<{ id: string; content: unknown } | null> {
   if (!tenant) return null;
-  const db = service();
+  const db = systemClient();
   const { data: page } = await db
     .from('pages')
     .select('id')
@@ -136,13 +141,24 @@ async function homeHero(): Promise<{ id: string; content: unknown } | null> {
   return (data as { id: string; content: unknown } | null) ?? null;
 }
 
+test.beforeAll(async () => {
+  // Releases on: no pending look of an earlier run under this one's saves.
+  await discardDrafts(APPEARANCE);
+});
+
 test.afterAll(async () => {
   if (!staffEnv()) return;
+  // Releases on: this run's own unclaimed pending changes first (the system's to clean).
+  await discardDrafts([
+    ...APPEARANCE,
+    ...(heroBefore ? [{ entityType: 'page_section', entityIds: [heroBefore.id] }] : []),
+  ]);
   // No row is the intro (and the header) as built: remove what this run saved, and put the
-  // home hero's content back (the service role, outside any release; releases are off here).
-  if (tenant) await service().from('site_appearance').delete().eq('tenant_id', tenant);
+  // home hero's content back (the service role, which the release guard lets through: an
+  // out-of-band system change, recorded as one).
+  if (tenant) await systemClient().from('site_appearance').delete().eq('tenant_id', tenant);
   if (heroBefore) {
-    await service()
+    await systemClient()
       .from('page_sections')
       .update({ content: heroBefore.content })
       .eq('id', heroBefore.id);
@@ -210,11 +226,9 @@ test.describe('as admin', () => {
     await expect(page.locator('.ld-pv__plate[data-play]')).toHaveCount(1);
 
     await page.getByRole('button', { name: 'Save the loading screen' }).click();
+    // "Saved at 14:05", or with releases on "Saved as an unpublished change at 14:05".
     await expect(
-      page
-        .getByRole('status')
-        .filter({ hasText: /Saved at \d\d:\d\d/ })
-        .first(),
+      page.getByRole('status').filter({ hasText: savedPattern() }).first(),
     ).toBeVisible();
     const row = await read(page);
     tenant = String(row['tenant_id']);
@@ -230,6 +244,8 @@ test.describe('as admin', () => {
     });
     heroBefore = await homeHero();
     expect(heroBefore, 'the seeded home page has a visible hero').not.toBeNull();
+    // Releases on: the screen saved a pending change; the home page needs it live.
+    await publishOwn(page, APPEARANCE);
   });
 
   test('the home page renders the saved look, server-side, in both languages', async ({ page }) => {
@@ -413,17 +429,30 @@ test.describe('as content_creator', () => {
 
     const toggle = page.getByRole('switch', { name: 'Show the loading screen' });
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    // Releases on: the switch is the home hero's own change, published by this spec alone.
+    const hero = await homeHero();
+    expect(hero, 'the home page has a visible hero').not.toBeNull();
+    const HERO = [{ entityType: 'page_section', entityIds: [hero!.id] }];
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-checked', 'false');
     await expect(toggle).toBeEnabled();
+    await publishOwn(page, HERO);
     for (const path of ['/', '/ar']) {
       const html = await (await page.request.get(path)).text();
       expect(html, `${path} still renders its hero`).toContain('<section class="hero');
       expect(html, `${path} has no plate`).not.toContain('class="intro"');
     }
+    if (releasesOn()) {
+      // The publish went out through the route, not this screen's own savebar, so the screen
+      // still names the change it saved, which is now published: read it again, as a person
+      // would after publishing from another tab.
+      await page.goto(SCREEN, { waitUntil: 'networkidle' });
+      await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    }
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
     await expect(toggle).toBeEnabled();
+    await publishOwn(page, HERO);
     expect(await plateTag(page, '/')).toContain('class="intro"');
   });
 });
