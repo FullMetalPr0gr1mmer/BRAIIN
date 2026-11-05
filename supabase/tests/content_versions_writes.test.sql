@@ -14,6 +14,19 @@ select plan(19);
 
 insert into public.tenants (id, name) values ('68000000-0000-0000-0000-000000000001', 'HistT');
 
+-- H16 (0129): staff writes are live-checked against the profile the token's `sub` names, so
+-- each persona below is a live profile of its role.
+insert into auth.users (id, email) values
+  ('68000000-0000-0000-0000-0000000000a1', 'hist-admin@example.test'),
+  ('68000000-0000-0000-0000-0000000000c1', 'hist-creator@example.test'),
+  ('68000000-0000-0000-0000-0000000000e1', 'hist-seo@example.test'),
+  ('68000000-0000-0000-0000-0000000000d1', 'hist-developer@example.test');
+insert into public.profiles (id, tenant_id, role) values
+  ('68000000-0000-0000-0000-0000000000a1', '68000000-0000-0000-0000-000000000001', 'admin'),
+  ('68000000-0000-0000-0000-0000000000c1', '68000000-0000-0000-0000-000000000001', 'content_creator'),
+  ('68000000-0000-0000-0000-0000000000e1', '68000000-0000-0000-0000-000000000001', 'seo'),
+  ('68000000-0000-0000-0000-0000000000d1', '68000000-0000-0000-0000-000000000001', 'developer');
+
 create function _as(p_role text, p_sub text) returns void language sql as $$
   select set_config(
     'request.jwt.claims',

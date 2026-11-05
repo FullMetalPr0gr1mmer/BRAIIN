@@ -195,12 +195,17 @@ insert into public.navigation (id, tenant_id, location, label, href) values
 insert into public.site_profile (tenant_id, brand_name, contact_email, location) values
   ('38100000-0000-0000-0000-00000000000a', '{"en":"Studio","ar":"استوديو"}',
    'hello@example.com', '{"en":"Riyadh","ar":"الرياض"}');
--- The Developer who edits the profile below holds a live profile: since 0102 a write to
--- site_profile needs app.live_role() to hold settings.general (RESTRICTIVE).
+-- Every editor below holds a live profile: since 0102 a write to site_profile needs
+-- app.live_role() to hold settings.general, and since H16 (0129) every staff write to the
+-- content, navigation and SEO tables needs a live role (RESTRICTIVE).
 insert into auth.users (id, email) values
-  ('38100000-0000-0000-0000-0000000000d1', 'pg-history-developer@example.test');
+  ('38100000-0000-0000-0000-0000000000d1', 'pg-history-developer@example.test'),
+  ('38100000-0000-0000-0000-0000000000c1', 'pg-history-creator@example.test'),
+  ('38100000-0000-0000-0000-0000000000e5', 'pg-history-seo@example.test');
 insert into public.profiles (id, tenant_id, role, is_active) values
-  ('38100000-0000-0000-0000-0000000000d1', '38100000-0000-0000-0000-00000000000a', 'developer', true);
+  ('38100000-0000-0000-0000-0000000000d1', '38100000-0000-0000-0000-00000000000a', 'developer', true),
+  ('38100000-0000-0000-0000-0000000000c1', '38100000-0000-0000-0000-00000000000a', 'content_creator', true),
+  ('38100000-0000-0000-0000-0000000000e5', '38100000-0000-0000-0000-00000000000a', 'seo', true);
 
 create function _as(p_role text, p_sub text) returns void language sql as $$
   select set_config(

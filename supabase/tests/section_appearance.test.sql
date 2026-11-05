@@ -43,11 +43,25 @@ create function _as(p_role text, p_tid text) returns void language sql as $$
     'request.jwt.claims',
     case when p_role is null then ''
          else jsonb_build_object(
-                'sub', 'e9000000-0000-0000-0000-0000000000a1',
-                'app_metadata', jsonb_build_object('role', p_role, 'tenant_id', p_tid))::text end,
+                'sub', md5('live:' || p_role || ':' || coalesce(p_tid, ''))::uuid, 'app_metadata', jsonb_build_object('role', p_role, 'tenant_id', p_tid))::text end,
     true
   )
 $$;
+
+-- H16 (0129): every staff write is live-checked against the profile the token's `sub` names,
+-- so each role token this helper mints names a live profile: one per staff role and tenant,
+-- its id derived from both.
+insert into auth.users (id, email)
+  select md5('live:' || r || ':' || t.id::text)::uuid,
+         'live-' || md5('live:' || r || ':' || t.id::text) || '@example.test'
+    from public.tenants t
+   cross join unnest(array['admin', 'content_creator', 'seo', 'developer', 'sales']) as r
+  on conflict (id) do nothing;
+insert into public.profiles (id, tenant_id, role)
+  select md5('live:' || r || ':' || t.id::text)::uuid, t.id, r::app_role
+    from public.tenants t
+   cross join unnest(array['admin', 'content_creator', 'seo', 'developer', 'sales']) as r
+  on conflict (id) do nothing;
 
 -- How many rows the CURRENT role changed by setting one appearance column of one section.
 create function _set_look(p_id uuid, p_column text, p_value text) returns int language plpgsql as $$
