@@ -3,10 +3,23 @@ import Modal from '@/components/admin/kit/Modal';
 import Note from '@/components/admin/kit/Note';
 import Icon from '@/components/admin/kit/Icon';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import {
+  announcePending,
+  readsThroughRelease,
+  stagedBody,
+  stagedUrl,
+} from '@/lib/admin/releaseEvents';
 import { toast } from '@/lib/admin/toast';
 import { pageTimeZone } from '@/components/admin/kit/clock';
 import { clockFor, type Clock } from '@/lib/admin/relTime';
-import { CONFIRM_SUB, EDGE_MISSED, MODE_COPY } from '@/lib/admin/visibilityCopy';
+import {
+  CONFIRM_SUB,
+  EDGE_MISSED,
+  MODE_COPY,
+  NOTHING_TO_PUBLISH,
+  STAGED_CONFIRM_SUB,
+  stagedSaved,
+} from '@/lib/admin/visibilityCopy';
 import { visibilityRevision } from '@/lib/http/visibility';
 import VisibilityList, { itemTitle } from './VisibilityList';
 import VisibilityDrawer, { type RedirectChoice, type VisibilityDraft } from './VisibilityDrawer';
@@ -16,6 +29,14 @@ import type { VisibilityItem, VisibilityList as ListAnswer, VisibilitySaveAnswer
 // manage` (Admin + Developer); the server refuses everyone else (the island shows the API's
 // 403). The list, "Who can see <page>?" in a drawer, a confirm before the live site changes,
 // and the edge's own status with "Sync to edge" for when a save did not reach it.
+//
+// Release mode (Admin v2 R14b): the screen's mode is its own list answer's (`draftsInvalid`,
+// readsThroughRelease), never a row's. Each row then shows its setting as publishing would leave
+// it, with a pending badge; a save is a pending change, marked as made in release mode
+// (`staged`, and the change it names), so once releases are switched off under the screen the
+// live route refuses it (409 `releases-off`). The line about the live site still compares the
+// LIVE settings with the edge. The password stays immediate: offered only on a page that asks
+// for one live with nothing pending (the server checks the same, stagedPageVisibility.ts).
 
 const API = '/api/admin/page-visibility';
 
@@ -68,12 +89,67 @@ export function redirectChoices(pages: ListAnswer['pages']): RedirectChoice[] {
     .map((page) => ({ id: page.id, label: page.title.en }));
 }
 
-function saved(item: VisibilityItem, mode: VisibilityDraft['mode']): string {
+/** A row's key: its page's id, or its template. */
+export function itemKey(item: VisibilityItem): string {
+  return item.kind === 'page' ? `page:${item.id}` : `template:${item.template}`;
+}
+
+/**
+ * The row as the screen shows it: in release mode, the setting its pending change leaves (a
+ * change that could not be read shows the live setting). Releases off, the row as answered.
+ */
+export function shownItem(item: VisibilityItem): VisibilityItem {
+  return item.pending?.setting ? { ...item, setting: item.pending.setting } : item;
+}
+
+/** Release mode: the password is immediate, so only a page that asks for one live, unpending. */
+export function passwordOffered(live: VisibilityItem | null, release: boolean): boolean {
+  if (!release) return true;
+  return live?.kind === 'page' && live.setting?.mode === 'password' && !live.pending;
+}
+
+/**
+ * The PUT's body, from the LIVE row: the version the live setting has (0 with none) and, in
+ * release mode, the pending change it names. Releases off it is exactly main's body.
+ */
+export function visibilityPut(live: VisibilityItem, draft: VisibilityDraft, release: boolean) {
+  const hidden = draft.mode === 'hidden';
+  const pending = release ? (live.pending ?? null) : null;
+  return {
+    target: live.kind === 'page' ? { pageId: live.id } : { template: live.template },
+    mode: draft.mode,
+    redirectPageId: hidden && draft.redirect ? draft.redirect : null,
+    hideFrom: hidden && draft.hideFrom ? draft.hideFrom : null,
+    showOn: hidden && draft.showOn ? draft.showOn : null,
+    version: live.setting?.version ?? 0,
+    ...(pending ? { draftId: pending.draftId, draftVersion: pending.draftVersion } : {}),
+  };
+}
+
+export function saved(item: VisibilityItem, mode: VisibilityDraft['mode']): string {
   const title = itemTitle(item);
   if (mode === 'public') return `${title} is visible to everyone.`;
   if (mode === 'link') return `${title} is open only to people with the link.`;
   if (mode === 'password') return `${title} now asks for a password.`;
   return `${title} is hidden from the site.`;
+}
+
+/**
+ * What the screen says after a save, and whether the savebar should count again. A staged save
+ * with a pending change says it waits for publishing; a staged save that left nothing pending
+ * (the setting equals live, or "visible to everyone" on a page with no setting) says the live
+ * words and that there is nothing to publish (R14b review), and still asks the savebar to count
+ * again, because it may have discarded the page's earlier pending change. A live save says the
+ * live words.
+ */
+export function afterSave(
+  item: VisibilityItem,
+  mode: VisibilityDraft['mode'],
+  answer: Pick<VisibilitySaveAnswer, 'staged' | 'pending'>,
+): { text: string; recount: boolean } {
+  if (!answer.staged) return { text: saved(item, mode), recount: false };
+  if (answer.pending) return { text: stagedSaved(itemTitle(item)), recount: true };
+  return { text: `${saved(item, mode)} ${NOTHING_TO_PUBLISH}`, recount: true };
 }
 
 /** The message above the password box, as the save sends it: absent lines are left out. */
@@ -106,24 +182,29 @@ export default function VisibilityScreen() {
     void load();
   }, [load]);
 
+  // R14b: the screen's mode is its own list answer's.
+  const release = list !== null && readsThroughRelease(list);
   const items: VisibilityItem[] = useMemo(
     () => (list ? [...list.pages, ...list.templates] : []),
     [list],
   );
+  const shown: VisibilityItem[] = useMemo(() => items.map(shownItem), [items]);
+  const liveOf = (item: VisibilityItem | null) =>
+    item ? (items.find((i) => itemKey(i) === itemKey(item)) ?? item) : null;
   const choices: RedirectChoice[] = useMemo(() => redirectChoices(list?.pages ?? []), [list]);
 
   async function apply(item: VisibilityItem, draft: VisibilityDraft) {
     setBusy(true);
     setSaveError(null);
     try {
-      const hidden = draft.mode === 'hidden';
-      const version = item.setting?.version ?? 0;
+      const live = liveOf(item) ?? item;
+      const version = live.setting?.version ?? 0;
       // The password has its own door: the list's PUT takes the three modes that need no
       // secret, and this one hands the password straight to the database, which hashes it.
       // Nothing of it is kept here, and the drawer closes with the field empty.
       const answer =
         draft.mode === 'password' && item.kind === 'page'
-          ? await adminFetch<VisibilitySaveAnswer>(`${API}/password`, {
+          ? await adminFetch<VisibilitySaveAnswer>(stagedUrl(`${API}/password`, release), {
               method: 'POST',
               body: {
                 pageId: item.id,
@@ -134,18 +215,14 @@ export default function VisibilityScreen() {
             })
           : await adminFetch<VisibilitySaveAnswer>(API, {
               method: 'PUT',
-              body: {
-                target: item.kind === 'page' ? { pageId: item.id } : { template: item.template },
-                mode: draft.mode,
-                redirectPageId: hidden && draft.redirect ? draft.redirect : null,
-                hideFrom: hidden && draft.hideFrom ? draft.hideFrom : null,
-                showOn: hidden && draft.showOn ? draft.showOn : null,
-                version,
-              },
+              body: stagedBody(visibilityPut(live, draft, release), release),
             });
       setOpen(null);
       setNotice(answer.kvSynced ? null : { tone: 'err', text: EDGE_MISSED });
-      toast(saved(item, draft.mode), 'ok');
+      const said = afterSave(item, draft.mode, answer);
+      // R14b: the savebar counts the pending changes again after a staged save.
+      if (said.recount) announcePending();
+      toast(said.text, 'ok');
       await load();
     } catch (err) {
       setSaveError(describeError(err));
@@ -207,7 +284,7 @@ export default function VisibilityScreen() {
       )}
 
       <VisibilityList
-        items={items}
+        items={shown}
         onOpen={(item) => {
           setSaveError(null);
           setOpen(item);
@@ -219,6 +296,8 @@ export default function VisibilityScreen() {
         choices={choices}
         busy={busy}
         error={saveError}
+        release={release}
+        passwordOffered={passwordOffered(liveOf(open), release)}
         onClose={() => setOpen(null)}
         onApply={(draft) => setPending(draft)}
       />
@@ -227,7 +306,7 @@ export default function VisibilityScreen() {
         open={pending !== null && open !== null}
         onClose={() => setPending(null)}
         title={pending ? `${MODE_COPY[pending.mode].title}?` : ''}
-        sub={CONFIRM_SUB}
+        sub={release && pending?.mode !== 'password' ? STAGED_CONFIRM_SUB : CONFIRM_SUB}
         footer={
           <>
             <button

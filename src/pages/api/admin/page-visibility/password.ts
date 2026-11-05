@@ -4,6 +4,8 @@ import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { savePagePassword } from '@/lib/admin/pageVisibility';
 import { syncVisibilityToEdge, visibilityPurgeTags } from '@/lib/admin/visibilitySync';
 import { purgeAfterSave } from '@/lib/http/purge';
+import { refuseStagedQuery } from '@/lib/release/releasesOff';
+import { assertPasswordImmediate } from '@/lib/release/stagedPageVisibility';
 
 // POST /api/admin/page-visibility/password — put one page behind a password (Admin v2
 // U14b), `maintenance.manage` (Admin + Developer, §5 "Maintenance / hidden pages / page
@@ -17,6 +19,13 @@ import { purgeAfterSave } from '@/lib/http/purge';
 // screen now reads it, with the message and the version count but never the password, and
 // `kvSynced` for the edge.
 //
+// With releases on (Admin v2 R14b) the password stays immediate, a secret (P-3): the door
+// changes the password of a page that already asks for one, with nothing pending on its setting
+// and its message unchanged, which moves only the exempt `password_version` past 0066's guard;
+// anything else is refused in words (`assertPasswordImmediate`). The screen sends it marked
+// (`?staged=1`) in release mode, and with releases off such a request is refused (409
+// `releases-off`) rather than taken as a live mode change the screen never offered.
+//
 // There is no audit row written HERE on purpose: the database writes `page_visibility
 // .password_set` inside the same transaction as the change, so a change whose audit row
 // cannot be chained does not happen at all.
@@ -25,8 +34,16 @@ export const prerender = false;
 export const POST = defineAdminRoute({
   cap: 'maintenance.manage',
   input: PagePasswordWriteSchema,
-  handler: async ({ auth, sb, input }) => {
-    await liveRecheck(auth);
+  handler: async (ctx) => {
+    const { auth, sb, input } = ctx;
+    if (await ctx.releasesEnabled()) {
+      // The person first (§9 b): a stale token is refused before the setting is read.
+      await liveRecheck(auth);
+      await assertPasswordImmediate(ctx, input);
+    } else {
+      refuseStagedQuery(ctx.url, 'page_visibility');
+      await liveRecheck(auth);
+    }
     const { setting, slug } = await savePagePassword(sb, auth, input);
     const sync = await syncVisibilityToEdge(sb, auth);
     // A page behind a password leaves the menus, the sitemap and llms.txt of every cached page

@@ -144,10 +144,10 @@ describe('playwright.config.ts and the admin-visual project', () => {
     vi.resetModules();
   });
 
-  async function projects(mode: string) {
+  async function projects(mode: string, releases = false) {
     vi.resetModules();
     vi.stubEnv('ADMIN_VISUAL', mode);
-    vi.stubEnv('E2E_RELEASES', '');
+    vi.stubEnv('E2E_RELEASES', releases ? 'on' : '');
     const { default: config } = await import('../../playwright.config');
     return { config, list: config.projects ?? [] };
   }
@@ -177,15 +177,38 @@ describe('playwright.config.ts and the admin-visual project', () => {
     }
   });
 
+  it('releases on as well (R14b; the workflow takes the e2e job’s env): after the switch, never beside it', async () => {
+    for (const mode of ['update', 'compare']) {
+      const { list } = await projects(mode, true);
+      const names = list.map((p) => p.name);
+      const project = list.find((p) => p.name === 'admin-visual');
+      expect(project, mode).toBeDefined();
+      // releases-on (tests/admin/releases.setup.ts) runs after the sample rows itself.
+      expect(project!.dependencies).toEqual(['releases-on']);
+      expect(names.indexOf('releases-on')).toBeGreaterThan(-1);
+      expect(project!.snapshotPathTemplate).toBe('{testDir}/admin-baselines/{platform}/{arg}{ext}');
+      // Every other project is the release-mode chain's, field for field.
+      const { list: on } = await projects('', true);
+      expect(list.filter((p) => p.name !== 'admin-visual')).toEqual(on);
+      // And the drill, the section blocks and the chain after them are never its dependencies.
+      expect(on.find((p) => p.name === 'blocks')!.dependencies).toEqual(['releases-mode']);
+    }
+  });
+
   it('the spec is a file the required job never collects', async () => {
     expect(existsSync(SPEC)).toBe(true);
-    const { config } = await projects('');
-    expect(config.testMatch).toBe('**/*.e2e.ts');
-    expect(SPEC.endsWith('.e2e.ts')).toBe(false);
-    // Nor does any project of the required job match it by its own pattern.
-    for (const project of config.projects ?? []) {
-      const match = project.testMatch;
-      if (match instanceof RegExp) expect(match.test(`/repo/${SPEC}`), project.name).toBe(false);
+    // Nor does any project of the required job match it by its own pattern, in either release
+    // mode (R14b: the section blocks' project exists in both).
+    for (const releases of [false, true]) {
+      const { config } = await projects('', releases);
+      expect(config.testMatch).toBe('**/*.e2e.ts');
+      expect(SPEC.endsWith('.e2e.ts')).toBe(false);
+      for (const project of config.projects ?? []) {
+        const match = project.testMatch;
+        if (match instanceof RegExp) {
+          expect(match.test(`/repo/${SPEC}`), `${project.name} (releases ${releases})`).toBe(false);
+        }
+      }
     }
   });
 });

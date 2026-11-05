@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { writeSystemLog } from '@/lib/data/systemLog';
+import { serviceClient } from '@/lib/supabase/server';
 
 // Append-only audit trail (CLAUDE.md §3 / §10).
 //
@@ -61,6 +62,39 @@ export async function writeAudit(
 
   try {
     const { error } = await sb.from('audit_log').insert(auditRow(ctx, entry));
+    if (error) return await report('insert rejected', { code: error.code, message: error.message });
+    return true;
+  } catch (err) {
+    return await report('threw', { message: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+/**
+ * Writes one audit row with the SERVICE ROLE, naming the session's own account as the actor.
+ *
+ * For the one moment a request's own token stops being live while the request runs: the
+ * fifth wrong current password on the password form locks the account (register_failed_login
+ * stamps `profiles.locked_until`), and from then on the database refuses that token's writes,
+ * its audit insert included (H16: `audit_log_live_insert` reads the live profile). The row
+ * that records the lockout must not be lost with it, so it is written here, as the auth
+ * flows' rows are (src/lib/auth/recovery.ts writeAuthAudit): the actor is the account the
+ * Worker verified at the start of this request, not a value the browser sent. The chain
+ * trigger hashes it like any other row. Never throws; a failure is reported as writeAudit
+ * reports one.
+ */
+export async function writeAuditAsService(ctx: AuthContext, entry: AuditEntry): Promise<boolean> {
+  const report = async (reason: string, detail: Record<string, unknown>): Promise<false> => {
+    await writeSystemLog({
+      level: 'error',
+      source: 'audit',
+      message: `audit_log write failed (${reason}) for action "${entry.action}"`,
+      detail: { action: entry.action, entityType: entry.entityType ?? null, ...detail },
+    });
+    return false;
+  };
+
+  try {
+    const { error } = await serviceClient().from('audit_log').insert(auditRow(ctx, entry));
     if (error) return await report('insert rejected', { code: error.code, message: error.message });
     return true;
   } catch (err) {

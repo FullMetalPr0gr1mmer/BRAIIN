@@ -50,10 +50,24 @@ create function _as(p_role text, p_tid text) returns void language sql as $$
     'request.jwt.claims',
     case when p_role is null then ''
          else jsonb_build_object(
-                'sub', '7a000000-0000-4000-8000-0000000000f1',
-                'app_metadata', jsonb_build_object('role', p_role, 'tenant_id', p_tid))::text end,
+                'sub', md5('live:' || p_role || ':' || coalesce(p_tid, ''))::uuid, 'app_metadata', jsonb_build_object('role', p_role, 'tenant_id', p_tid))::text end,
     true)
 $$;
+
+-- H16 (0129): every staff write is live-checked against the profile the token's `sub` names,
+-- so each role token this helper mints names a live profile: one per staff role and tenant,
+-- its id derived from both.
+insert into auth.users (id, email)
+  select md5('live:' || r || ':' || t.id::text)::uuid,
+         'live-' || md5('live:' || r || ':' || t.id::text) || '@example.test'
+    from public.tenants t
+   cross join unnest(array['admin', 'content_creator', 'seo', 'developer', 'sales']) as r
+  on conflict (id) do nothing;
+insert into public.profiles (id, tenant_id, role)
+  select md5('live:' || r || ':' || t.id::text)::uuid, t.id, r::app_role
+    from public.tenants t
+   cross join unnest(array['admin', 'content_creator', 'seo', 'developer', 'sales']) as r
+  on conflict (id) do nothing;
 create function _a() returns text language sql as $$ select app.default_tenant_id()::text $$;
 -- The fixture rows of tenant A the caller reads.
 create function _seen() returns int language sql as $$
@@ -83,9 +97,11 @@ select is(
   (select string_agg(format('%s %s %s', policyname, cmd, permissive), ', ' order by policyname)
      from pg_policies where schemaname = 'public' and tablename = 'faq_items'),
   'faq_items_archive_admin UPDATE RESTRICTIVE, faq_items_delete_admin DELETE RESTRICTIVE, '
+  'faq_items_live_delete DELETE RESTRICTIVE, faq_items_live_insert INSERT RESTRICTIVE, '
+  'faq_items_live_update UPDATE RESTRICTIVE, '
   'faq_items_read SELECT PERMISSIVE, faq_items_staff_columns SELECT RESTRICTIVE, '
   'faq_items_write ALL PERMISSIVE',
-  'the policies are exactly the read, the write, the two Admin-only gates and the non-staff block');
+  'the policies are exactly the read, the write, the two Admin-only gates, the non-staff block and H16''s three live writes');
 select is(
   (select format('%s %s %s %s', cmd, permissive, roles, qual) from pg_policies
     where schemaname = 'public' and tablename = 'faq_items' and policyname = 'faq_items_staff_columns'
@@ -215,7 +231,8 @@ select is(_try($$ update public.faq_items set answer = '{"en":"Changed.","ar":"Ø
                   where id = '7a000000-0000-4000-8000-000000000002' $$),
   'ok:1', 'admin updates an answer');
 reset role;
-select ok((select version = 2 and updated_by = '7a000000-0000-4000-8000-0000000000f1'
+-- The actor is the admin token's live profile (H16: the helper derives it from role and tenant).
+select ok((select version = 2 and updated_by = md5('live:admin:' || _a())::uuid
                   and updated_at > now() - interval '1 hour'
              from public.faq_items where id = '7a000000-0000-4000-8000-000000000002'),
   'the update bumped the version, named the actor and moved updated_at');

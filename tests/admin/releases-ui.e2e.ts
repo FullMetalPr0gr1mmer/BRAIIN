@@ -156,6 +156,25 @@ for (const role of STAFF_ROLES) {
   });
 }
 
+// Admin v2 R14b: with releases on, a create made in release mode draws the release form too
+// (EditorForm's `stagedCreate`): the "Visible on the site" switch for its status and no
+// per-item schedule, which its staged create would refuse. Releases off, the create is main's
+// (the select and the schedule; tests/lib/editorForm.spec.ts holds both).
+test.describe('releases on, as admin: a new post', () => {
+  test.use({ storageState: authFile('admin') });
+  test.skip(!releasesOn(), 'releases are off: a create page draws the live form');
+
+  test('the create form draws the visibility switch and no per-item schedule', async ({ page }) => {
+    await open(page, '/admin/blog/new');
+    const form = page.locator('form.editor').first();
+    await expect(form).toBeAttached();
+    // Every field tab is mounted (U8), so the Publishing tab's fields are in the form.
+    await expect(form.locator('select#f-status')).toHaveCount(0);
+    await expect(form.locator('input#f-scheduledFor')).toHaveCount(0);
+    await expect(form.getByRole('switch', { name: 'Visible on the site' })).toHaveCount(1);
+  });
+});
+
 test.describe('the kit for Sales', () => {
   test.use({ storageState: authFile('sales') });
 

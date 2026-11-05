@@ -1,6 +1,7 @@
 import Icon from './Icon';
 import { clockFor, type Clock, type Instant } from '@/lib/admin/relTime';
 import { pageTimeZone, useClock } from './clock';
+import { savedWords } from './saveWords';
 
 // Where a save stands (Admin v2 F4b): "Unsaved changes", "Saving…", "Saved at 14:05",
 // "Not saved". Always words (the colour and the icon repeat them), in a status region that
@@ -41,9 +42,9 @@ export function saveStatusText(
 ) {
   if (state === 'saved' && savedAt) {
     const time = clock.formatTime(savedAt);
-    if (time) return staged ? `Saved as an unpublished change at ${time}` : `Saved at ${time}`;
+    if (time) return `${savedWords(staged)} at ${time}`;
   }
-  if (state === 'saved' && staged) return 'Saved as an unpublished change';
+  if (state === 'saved' && staged) return savedWords(true);
   if (state === 'error' && error) return error;
   return WORDS[state];
 }

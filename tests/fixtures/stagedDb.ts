@@ -84,7 +84,7 @@ const project = (row: Row, names: { as: string; from: string }[] | null): Row =>
 };
 
 type Filter = [
-  kind: 'eq' | 'neq' | 'is' | 'in' | 'ilike' | 'lt' | 'gte',
+  kind: 'eq' | 'neq' | 'is' | 'in' | 'notin' | 'ilike' | 'lt' | 'gte',
   column: string,
   value: unknown,
 ];
@@ -96,6 +96,8 @@ function matches(row: Row, filters: Filter[]): boolean {
     if (kind === 'neq') return v !== null && v !== undefined && String(v) !== String(value);
     if (kind === 'is') return v === value || (value === null && v === undefined);
     if (kind === 'in') return (value as unknown[]).map(String).includes(String(v));
+    // Admin v2 R14b: `.not(column, 'in', '(a,b)')`, as page visibility lists custom pages.
+    if (kind === 'notin') return !(value as unknown[]).map(String).includes(String(v));
     if (kind === 'lt') return v !== null && v !== undefined && (v as number) < (value as number);
     // R13: a time at or after a bound (ISO strings compare as times).
     if (kind === 'gte') return v !== null && v !== undefined && (v as number) >= (value as number);
@@ -168,6 +170,16 @@ function query(db: Db, table: string) {
     neq: (c: string, v: unknown) => (filters.push(['neq', c, v]), b),
     is: (c: string, v: unknown) => (filters.push(['is', c, v]), b),
     in: (c: string, v: unknown[]) => (filters.push(['in', c, v]), b),
+    // Admin v2 R14b: PostgREST's `match` (every key equal) and `not … in`.
+    match: (m: Row) => {
+      for (const [c, v] of Object.entries(m)) filters.push(['eq', c, v]);
+      return b;
+    },
+    not: (c: string, op: string, v: string) => {
+      if (op !== 'in') throw new Error(`stand-in: not.${op} is not modelled`);
+      filters.push(['notin', c, v.replace(/^\(|\)$/g, '').split(',')]);
+      return b;
+    },
     ilike: (c: string, v: unknown) => (filters.push(['ilike', c, v]), b),
     lt: (c: string, v: unknown) => (filters.push(['lt', c, v]), b),
     gte: (c: string, v: unknown) => (filters.push(['gte', c, v]), b),

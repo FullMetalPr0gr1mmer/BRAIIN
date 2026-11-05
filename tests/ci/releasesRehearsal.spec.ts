@@ -149,6 +149,8 @@ describe('playwright.config.ts', () => {
   async function projects(on: boolean) {
     vi.resetModules();
     vi.stubEnv('E2E_RELEASES', on ? 'on' : '');
+    // The admin visual baselines' project (Admin v2 Z1) is the hand-run workflow's alone.
+    vi.stubEnv('ADMIN_VISUAL', '');
     const { default: config } = await import('../../playwright.config');
     return new Map(
       (config.projects ?? []).map((p) => [
@@ -191,6 +193,7 @@ describe('playwright.config.ts', () => {
     // project between the admin specs and page visibility, its spec ignored by the admin one.
     vi.resetModules();
     vi.stubEnv('E2E_RELEASES', '');
+    vi.stubEnv('ADMIN_VISUAL', '');
     const { default: config } = await import('../../playwright.config');
     const { devices } = await import('@playwright/test');
     const src = (re: unknown) => (re instanceof RegExp ? re.source : re);
@@ -271,10 +274,29 @@ describe('playwright.config.ts', () => {
     expect(on.get('chromium')!.dependencies).toEqual(['releases-on']);
     expect(on.get('admin')!.dependencies).toEqual(['releases-on']);
     expect(on.get('releases-mode')!.dependencies).toEqual(['chromium', 'admin']);
-    // The projects that change the whole site wait for the drill.
-    expect(on.get('visibility')!.dependencies).toEqual(['releases-mode']);
-    // The section blocks (Admin v2 E10) are written for releases off: no project here.
-    expect(on.has('blocks')).toBe(false);
+    // The projects that change the whole site wait for the drill: the section blocks first
+    // (Admin v2 R14b: in both modes), then page visibility and the rest of the chain.
+    expect(on.get('blocks')!.dependencies).toEqual(['releases-mode']);
+    expect(on.get('visibility')!.dependencies).toEqual(['blocks']);
+    expect([...on.keys()]).toEqual([
+      'chromium',
+      'admin-setup',
+      'admin-samples',
+      'admin',
+      'releases-on',
+      'releases-mode',
+      'blocks',
+      'visibility',
+      'general',
+      'header',
+      'footer',
+      'loading',
+      'ga4',
+      'theme',
+      'templates',
+      'maintenance',
+      'maintenance-teardown',
+    ]);
   });
 
   it('the drill is never one of the admin project’s specs', async () => {

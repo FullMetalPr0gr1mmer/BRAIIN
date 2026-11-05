@@ -23,6 +23,12 @@ import { LAPTOP, casesFor, type DialogCase, type Step, type Target } from './dia
  *
  * Opening a dialog writes nothing: every case's trigger only opens, and Escape cancels. Never
  * `networkidle` after the load: the page editor's live preview frame (E2) keeps the network busy.
+ *
+ * Both release modes (Admin v2 R14b), no skip: every trigger, dialog name and Escape is the same
+ * with releases on (traced in docs/admin-v2/as-built/Z1.md, "Both release modes"). With releases
+ * on the admin project's other specs leave pending changes, so the savebar may sit at the foot of
+ * any screen here: it is a region, never a <dialog>, so "one open dialog" still counts the case's
+ * alone, and axe checks the bar with it.
  */
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];

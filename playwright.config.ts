@@ -42,9 +42,10 @@ const MAINTENANCE_SPEC = /[\\/]tests[\\/]admin[\\/]maintenance\.e2e\.ts$/;
 // The section blocks (Admin v2 E10) put a Text block, a Gallery and a Video on About, a page
 // the public and the admin specs read (pages.e2e.ts counts its sections), and remove them when
 // they end: their own project, after the public and the admin specs, before page visibility.
-// Written for releases off, so the rehearsal (E2E_RELEASES=on) has no such project. Admin v2 E9's
-// section appearance spec joins it, for the same reason: it publishes a page of its own, which
-// the sitemap and the link picker every other spec may read would then list.
+// Admin v2 E9's section appearance spec joins it, for the same reason: it publishes a page of its
+// own, which the sitemap and the link picker every other spec may read would then list. In both
+// modes since Admin v2 R14b: with E2E_RELEASES=on it runs after the drill (`releases-mode`), as
+// page visibility did, and publishes only its own sections.
 const BLOCKS_SPEC = /[\\/]tests[\\/]admin[\\/]section-(?:blocks|appearance)\.e2e\.ts$/;
 // The release-mode rehearsal (Admin v2 R14-prep; .github/workflows/releases-rehearsal.yml, plan
 // B5): with E2E_RELEASES=on the whole suite runs with releases switched ON for the e2e tenant.
@@ -79,7 +80,9 @@ const releaseProjects = RELEASES
 // `admin-visual`, takes tests/visual/admin.visual.ts's pictures right after the sample rows, before
 // any spec writes, against baselines under tests/visual/admin-baselines/<platform>/. The file
 // ends in `.ts`, so no other project collects it. Unset (the required e2e job, every PR) the
-// projects are exactly what they were (tests/ci/adminVisual.spec.ts holds both shapes).
+// projects are exactly what they were (tests/ci/adminVisual.spec.ts holds both shapes). With
+// E2E_RELEASES=on as well (the workflow's env is the e2e job's, so from R14c's flip) it waits for
+// the switch instead, so every picture is of release mode, never of a tenant switching on.
 const ADMIN_VISUAL = ['update', 'compare'].includes(process.env['ADMIN_VISUAL'] ?? '');
 const adminVisualProjects = ADMIN_VISUAL
   ? [
@@ -89,7 +92,7 @@ const adminVisualProjects = ADMIN_VISUAL
         testMatch: /admin\.visual\.ts$/,
         snapshotPathTemplate: '{testDir}/admin-baselines/{platform}/{arg}{ext}',
         use: { ...devices['Desktop Chrome'] },
-        dependencies: ['admin-samples'],
+        dependencies: [RELEASES ? 'releases-on' : 'admin-samples'],
       },
     ]
   : [];
@@ -150,17 +153,14 @@ export default defineConfig({
     },
     ...releaseProjects,
     ...adminVisualProjects,
-    ...(RELEASES
-      ? []
-      : [
-          {
-            name: 'blocks',
-            testDir: './tests/admin',
-            testMatch: BLOCKS_SPEC,
-            use: { ...devices['Desktop Chrome'] },
-            dependencies: ['chromium', 'admin'],
-          },
-        ]),
+    {
+      name: 'blocks',
+      testDir: './tests/admin',
+      testMatch: BLOCKS_SPEC,
+      use: { ...devices['Desktop Chrome'] },
+      // Releases on (the rehearsal): after the drill, which publishes every change it selects.
+      dependencies: RELEASES ? ['releases-mode'] : ['chromium', 'admin'],
+    },
     {
       // Page visibility (Admin v2 U14a) hides real pages on the one preview every spec
       // shares, so it runs alone, after the public and the admin specs (and restores every
@@ -169,7 +169,7 @@ export default defineConfig({
       testDir: './tests/admin',
       testMatch: VISIBILITY_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      dependencies: RELEASES ? ['releases-mode'] : ['blocks'],
+      dependencies: ['blocks'],
     },
     {
       // General settings (Admin v2 U9) edits the public identity (a tagline, a hidden social

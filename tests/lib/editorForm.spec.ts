@@ -409,6 +409,37 @@ describe('EditorForm in release mode (Admin v2 R12)', () => {
     expect(html).toContain('Saved as an unpublished change at');
   });
 
+  it('a create made in release mode (R14b): no schedule, the visibility switch, no notice', () => {
+    const create = (stagedCreate: boolean) =>
+      render(
+        fakeSave({
+          isNew: true,
+          version: 0,
+          values: { slug: '', title: { en: '', ar: '' }, status: 'draft' },
+          ...(stagedCreate ? { stagedCreate: true } : {}),
+        }),
+        LIFECYCLE,
+      );
+    const staged = create(true);
+    expect(staged).not.toContain('id="f-scheduledFor"');
+    expect(staged).not.toContain('<select');
+    expect(staged).toContain('Visible on the site');
+    expect(staged).toMatch(/role="switch"[^>]*aria-checked="false"/);
+    expect(staged).not.toContain('draft-note');
+    // Releases off (no staged target): the create is main's, the select and the schedule.
+    const live = create(false);
+    expect(live).toContain('id="f-scheduledFor"');
+    expect(live).toContain('<select');
+    expect(live).not.toContain('Visible on the site');
+  });
+
+  it('the hook says stagedCreate only for a new record whose target is staged', () => {
+    const source = readFileSync('src/lib/admin/useEntitySave.ts', 'utf8');
+    expect(source).toContain(
+      "stagedCreate: isNew && target.kind === 'resource' && target.staged === true,",
+    );
+  });
+
   it('nothing pending yet (draft null): no notice, the form saves a new change', () => {
     const html = render(staged({ draft: null }), LIFECYCLE);
     expect(html).not.toContain('draft-note');

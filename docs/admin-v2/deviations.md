@@ -238,7 +238,7 @@
   - the route is `/admin/backups` (plan B7.3), for every CMS role holding a release read capability, not `/admin/settings/versions`.
 - **Copy corrected** where untrue:
   - maintenance "…after you publish";
-  - page visibility "Takes effect when you publish" / "Hidden from the site after you publish" → "Applies to the live site within a few minutes" until releases switch on (U14a, D7);
+  - page visibility "Takes effect when you publish" / "Hidden from the site after you publish" → "Applies to the live site within a few minutes" until releases switch on (U14a, D7); with releases on a setting is a pending change and the drawer says "Goes live when it is published." (R14b), while a page's password stays immediate (P-3) and a page newly behind one waits for owner item B1 ([as-built/R14B.md](as-built/R14B.md));
   - "Kept for 90 days";
   - "Backups cover everything, including leads";
   - "nothing is saved until you publish" → "nothing goes live until you publish";
@@ -364,7 +364,7 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     show the inactivity timeout (and the time-box, if chosen).
 
 - **A stale access token keeps its old role for up to an hour** (hotfix H10, U12a and U13
-  close more of it; owner item: confirm the remainder).
+  close more of it, H16 closes every write; owner item: confirm the remainder, the reads).
   - *The gap.* RLS reads the role from the token, and an access token lives up to an hour
     (`jwt_expiry`, Supabase's default 3600 s; `supabase/config.toml` does not set it). PostgREST
     checks the token's signature and expiry, not whether its session still exists, so a token
@@ -381,8 +381,7 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     claims and auditing a change that never happened. And the actor of a staff token's audit
     row: `audit_log_actor` binds `actor_id`, `actor_role` and `created_at` to the caller,
     so a forged row naming a colleague, backdated, can no longer be chained. A stale token's
-    audit insert is still accepted, but names the stale account and the role its token
-    carries.
+    audit insert was still accepted then, naming the stale account (refused since H16).
   - *Closed by U12a (0055).* `resolveAuthContext` compares the profile with the claims of the
     token the request carries (no longer the auth server's current record, which the users
     screen rewrites with the profile), so the admin revokes a stale token at its next
@@ -406,18 +405,43 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     `app.role_edits_theme(app.live_role())`, so a demoted, deactivated or locked Admin or
     Developer token can no longer restyle the live site and the admin at PostgREST (E4 made the
     table public-facing). Its reads stay the token's role (the releases preview).
-  - *Left after them.* The issued token's old role at PostgREST, until it expires, on the
-    tables with no live check: `site_settings`, `ai_config`,
-    `media_assets`, `system_logs` and the content tables (the staged ones close when R5's
-    guard switches on at R14). The proposed follow-up: a catalog-driven pgTAP asserting a
-    RESTRICTIVE live companion on every policy that admits an `authenticated` write, and the
-    missing companions; the owner may also shorten `jwt_expiry` to 900 s (the dashboard and
-    `config.toml`), which shrinks the window to 15 minutes at four times the token refreshes.
-    Supabase Auth's own endpoints are the residual above (O-24): the session-length setting
-    (U12a) is enforced by the admin on every request it serves, not by Auth.
-  - *Owner:* Kareem. *Expiry:* the follow-up slice or R14, whichever is first, at the latest
-    2026-12-31. *Closes when* every policy admitting an `authenticated` write has a
-    RESTRICTIVE live companion, checked over the catalog.
+  - *Closed by H16 (0129).* Every staff WRITE. The 28 tables whose writes still read the
+    token's role alone (the content tables, `navigation`, `media_assets`, `entity_seo`,
+    `seo_defaults`, `redirects`, `ai_config`, `ai_questions`, `ai_styles`, `audit_log`,
+    `system_logs`…; `site_settings` had been closed by U9, 0102) each carry three RESTRICTIVE
+    policies, one per write command, `tenant_id = app.effective_tenant_id() and (select
+    app.live_role()) is not null`: where the live role is not null it IS the token's role, so
+    the existing capability rules decide on a role the database has just confirmed.
+    `public.update_media_meta` (SEO's metadata write, a definer) refuses a stale token too.
+    `supabase/tests/live_staff_writes.test.sql` tries every write on every one of the 28 tables
+    as every role, live and stale (demoted, switched off, locked), and holds the rule from the
+    catalog: every public table where `authenticated` holds a write privilege has a
+    RESTRICTIVE live policy for each command it can run, so a later table without one fails CI
+    (the migration's postconditions check the same). A stale token's audit insert is now
+    refused as well; the one row a request writes after its own token stopped being live (the
+    password form's fifth wrong try locks the account) is written by the service role, naming
+    the account the Worker verified (`writeAuditAsService`). Docs:
+    [as-built/H16.md](as-built/H16.md).
+  - *Left after them.* READS. Until it expires, the issued token reads at PostgREST what its
+    old role could on the tables with no live read check: content with its drafts, versions
+    and releases, media metadata, redirects, the SEO rows, `system_logs` (scrubbed of personal
+    data), `ai_config`, `site_settings` (technical keys, the maintenance IP allowlist among
+    them), the appearance, form, template and page-visibility settings (`site_appearance`,
+    `custom_themes`, `form_settings`, `template_copy`, `page_visibility`), the CRM's stages and
+    scoring points (`lead_stages`, `crm_settings`), the consent, notification and search
+    ledgers and the read-only rollups. These read live: leads and the lead timeline
+    (`lead_events`), job applications, other people's profiles, `audit_log`,
+    `site_integrations`, the role defaults and security settings, user preferences, analytics
+    goals and team notes. The help guides (`help_articles`) stay readable by a stale staff token
+    (their staff read policy reads the token's role; they hold no data). A lock (the sign-in lockout) ends no session (U12a's decision, kept by H16:
+    anyone who knows a staff address can trip it); the locked token writes nothing and the
+    admin signs it out at its next request, but an idle session's refresh token works again
+    once the lock passes. The owner may also shorten `jwt_expiry` to 900 s (the dashboard and
+    `config.toml`), which shrinks the read window to 15 minutes at four times the token
+    refreshes. Supabase Auth's own endpoints are the residual above (O-24): the session-length
+    setting (U12a) is enforced by the admin on every request it serves, not by Auth.
+  - *Owner:* Kareem. *Expiry:* 2026-12-31. *Closes when* the owner accepts the read window
+    (or a follow-up adds live reads where they matter); the writes closed with H16.
 
 - **Team members are guarded but not captured: an R14 blocker** (Admin v2 R5, 0066; owner
   item **O-12**).
@@ -468,16 +492,17 @@ the program does with it: the owner's full-fidelity decision (A6) turned every
 "Where" column uses design slice ids; README maps them to program slices.
 
 "As built" is the closing pass's reading ([Z1](as-built/Z1.md), against main d48e287d:
-everything merged through E9): where the row was built, by program slice (each slice's file is
-in README's "As built" index), or the deviation that stands and its reason, or what it waits on
-(an owner item, a legal gate, or a later phase under A1). Releases are built through R14a and
-stay off in production until R14's switch-on, so a row built on releases records versions and
-stages saves only after it; until then every save is live. The open owner items and legal
+everything merged through E9, plus R14b (#135, 0128) and H16 (0129), merged into its branch
+before it lands): where the row was built, by program slice (each slice's file is in README's
+"As built" index), or the deviation that stands and its reason, or what it waits on (an owner
+item, a legal gate, or a later phase under A1). Releases are built through R14b and stay off in
+production until R14c and the switch-on (owner items B1, B2 and O-5), so a row built on releases
+records versions and stages saves only after it; until then every save is live. The open owner items and legal
 holds are listed once, in README's "Open owner items and legal holds".
 
 | TDD § | Requirement | Verified (2026-10-03) | After A6 | Where (design ids) | Note | As built (Z1, 2026-11-05) |
 |---|---|---|---|---|---|---|
-| §2.1 | Every page, section, text, image, video window, order and visibility editable in EN+AR with live preview, draft and publish | covered | covered | AV-23, AV-25, AV-26, AV-31; R1-R12; P-3/P-4/P-5 | Core loop covered. Preview refreshes about 1 s after autosave (P-4, binding). The convenience gaps (section style settings, generic blocks, Shared text, New page) are separate rows below. | Built: F6 (built-in copy as data), E1 (pages and the page editor), E2 (preview), E3 (templates), U5, U6; releases R1 to R14a, off in production until R14's switch-on (O-5). Until then a save is live. |
+| §2.1 | Every page, section, text, image, video window, order and visibility editable in EN+AR with live preview, draft and publish | covered | covered | AV-23, AV-25, AV-26, AV-31; R1-R12; P-3/P-4/P-5 | Core loop covered. Preview refreshes about 1 s after autosave (P-4, binding). The convenience gaps (section style settings, generic blocks, Shared text, New page) are separate rows below. | Built: F6 (built-in copy as data), E1 (pages and the page editor), E2 (preview), E3 (templates), U5, U6; releases R1 to R14b, off in production until R14c and the switch-on (B1, B2, O-5). Until then a save is live. |
 | §2.2 | Services (5 disciplines, 28 services) and projects managed as records; public pages generated from them | covered | covered | existing disciplines/services/service_cases/portfolio + AV-14, AV-15, AV-31 | Public pages are Tier A SSR purged by tag, not generated files (§2). | Built: U5 and U6; the public pages are Tier A, purged by tag (R7). |
 | §2.3 | Theme, header, footer, loading screen, logo and general settings applied to the site | covered | covered | AV-18, AV-27-AV-30, MERGE:header-options, P-9 | Storage must follow P-9 (site_appearance + footer on site_profile), not AV-28's site_chrome. Logo stays a code asset (owner item 7). | Built: E4, E12 and E13 (theme, shapes and type, fonts), E5 (header), E6 (footer), E7 (loading), U9 (general). The logo stays a code asset (O-14). |
 | §2.4 | Leads into a CRM: contacts, companies, pipeline, tasks, PDPL consent | covered | covered | CRM-1-CRM-12, CRM-14 | Erasure, retention and audited reveal go further than the prototype on PDPL. | Partly built: leads, pipeline, board, settings and the Sales role (C1a-1 to C4c, C9a, C10a, C14a, C14b). Contacts, tasks, companies and merge (C5 to C8, C11, C12) are not built: C5 waits on O-11 (legal), the rest follow it. |
@@ -488,7 +513,7 @@ holds are listed once, in README's "Open owner items and legal holds".
 | §2.7 | Get connected centre with guided wizards | deferred | later phase (A1) or legal gate | A1 later phase | Consistent with A1. | Not built: later (A1). |
 | §2.7 | In-app help centre | missing | built (U16) | U16, migration 0046 | A1 defers 'Get connected', not help; TDD §13 groups them. Built with the articles in the DB, as the TDD asks, for built features only; staff read them and the migrations write them until an editor is built (TDD phase 7, a §5 capability). | Built: U16 (0046); guides through H11's catalog. Editing guides waits for phase 7. |
 | §3.2 | Keep the vanilla SPA; REST API; static regeneration on publish; job-queue workers | deviated-ok | deviation (standard or owner decision) | P-1; CLAUDE.md §2 locked stack | Islands + Tier C SSR + Supabase RLS + Worker cron; purge-by-tag replaces regeneration. | Deviation stands (P-1, §2). |
-| §3.2 | save() (operational, immediate) vs dirty() (visitor content, waits for Publish) | covered | covered | P-3, R3 staged kernel, CRM §0 | Slice text contradicts P-3: AV-13 page visibility 'immediate', AV-19 redirects 'immediate', UI §7 media alt/tags 'draft'. Style-Finder is in neither P-3 list. U10: redirects stay immediate (KV, "within a minute of saving") until R3/R12 stage them; the SEO screen's copy says so, and R12/R14 own it at switch-on. | Built: R3a and R3b (staged kernel), R12 and R12b (the savebar, every write marked). While releases are off (production) every save is live. |
+| §3.2 | save() (operational, immediate) vs dirty() (visitor content, waits for Publish) | covered | covered | P-3, R3 staged kernel, CRM §0 | Slice text contradicts P-3: AV-13 page visibility 'immediate', AV-19 redirects 'immediate', UI §7 media alt/tags 'draft'. Style-Finder is in neither P-3 list. U10: redirects stay immediate (KV, "within a minute of saving") until R3/R12 stage them; the SEO screen's copy says so, and R12/R14 own it at switch-on. | Built: R3a and R3b (staged kernel), R12 and R12b (the savebar, every write marked), R14b (page visibility staged; `releaseWritePaths.spec` fails on any unsanctioned write to a release-managed table). While releases are off (production) every save is live. |
 | §5.1 | buildSeed() becomes a one-time DB seed for a populated staging | covered | covered | scripts/gen-seeds.mjs, seed.sql (staging), seeds/production.sql (drafts) |  | Built: the seed generator and the two seed files (no Admin v2 change). |
 | §5.2 | Hash router; PERM_ROUTES longest prefix; server enforces the same table | deviated-ok | deviation (standard or owner decision) | AV-03 (server routes, nav/ from ROLE_CAPS, 302 stubs); defineAdminRoute + RLS | Locked stack; lock empty state kept. | Deviation stands: server routes from ROLE_CAPS with retired-route redirects (F2). |
 | §5.3 | Bilingual values stored as {en,ar} JSONB, never split into two columns | deviated-ok | deviation (standard or owner decision) | CLAUDE.md §8 bilingual rule; AV-08 bilingual field | Standard: scalar -> _ar column, rich/array -> JSONB (repo is mixed: 0028 uses {en,ar} JSONB). Pairs are still edited together. | Deviation stands (§8 bilingual rule). |
@@ -546,7 +571,7 @@ holds are listed once, in README's "Open owner items and legal holds".
 | §6.4 versions | One version per publish storing the full content snapshot for Restore | deviated-challenge | built under A6 | R1, R4, R10 | Row-level capture + as-of computation. Out-of-band writes are neither guarded nor captured, which breaks Restore (see missed details). | Built: R1, R4, R10 (0104), R13; versions are recorded once releases are on (R14). |
 | §6.4 notifications | In-app bell with read state | covered | covered | AV-05 | Derived feed; read state is one watermark, not per item. | Built: F8 (0044). |
 | §6.4/§15 backups | Daily automatic (keep 30), manual, downloadable, restorable | deviated-challenge | built under A6 | AV-24/R13 export-backup; DR runbook (§10) | No leads in admin backups (§7) is standard; scheduled content snapshots are not barred. | Partly built: R13 (Backups & versions, Download content under the export lockdown). Scheduled backups (R17) are not built (O-17). |
-| §7 | Every endpoint declares its permission; 403 server-side | covered | covered | defineAdminRoute/assertCap + RLS; endpoints.spec over all roles incl. sales, other_tenant |  | Built: defineAdminRoute and RLS; every route's cases checked by endpointCoverage.spec. |
+| §7 | Every endpoint declares its permission; 403 server-side | covered | covered | defineAdminRoute/assertCap + RLS; endpoints.spec over all roles incl. sales, other_tenant |  | Built: defineAdminRoute and RLS; every route's cases checked by endpointCoverage.spec. Since H16 (0129) a demoted, switched-off or locked token writes nothing at PostgREST (a RESTRICTIVE live policy on every write of every staff-writable table, held from the catalog); its reads until it expires are an owner question (README, "H16 reads"). |
 | §7 | An owner cannot be downgraded by an admin | missing | built (U12a) | U12a, migration 0055 | `profiles.is_owner` (one per tenant, set by the runbook, never claimable): nobody demotes, deactivates, moves or deletes the owner (`app.tg_profiles_owner_guard`, the users PATCH's 422 first); ownership moves only by the owner's own action (`public.transfer_ownership`, audited). No new role. | Built: U12a (0055). |
 | §7 | Email + password, session cookie, login rate limiting | covered | covered | existing lockout (5/15 min -> 423), AV-06 | The lockout is the Worker's, the password change's re-authentication included (F8); Supabase Auth's own endpoints are the residual risk above (O-24). | Built: F7 (sign-in v2, the lockout); Supabase Auth's own endpoints are O-24's residual. |
 | §7 | Sales = leads + stats | deviated-challenge | built under A6 | CRM-10 (no analytics.read) | §5 gives analytics.read to every current role; aggregates carry no PII. | Built: C10a (Sales holds analytics.read). |
@@ -555,10 +580,10 @@ holds are listed once, in README's "Open owner items and legal holds".
 | §8.1 | Preview updates at once while typing | deviated-ok | deviation (standard or owner decision) | P-4; R9; AV-26 | Binding. | Deviation stands (P-4): the preview reloads after a save. |
 | §8.1 | Template pages: 'Showing' picker + the record's own content | covered | covered | AV-31 |  | Built: E3. |
 | §8.1 | Template 'Shared text' (v.*, p.*) editable | deviated-challenge | built under A6 | AV-31 (read-only); built as E3 (`template_copy`: staged, Arabic required, the code's words as defaults) | Labels were code, not by rule; since E3 a closed catalogue per template is editable, "Confidential client" excepted (shared with the Our Work cards). | Built: E3 (0126). |
-| §8.2 | public / hidden (404, leaves menu) / link only; homepage cannot be hidden; per-item visible | covered | covered | AV-13 + MERGE:link-only; P-2/P-3 | AV-13 says immediate but P-3 stages it: the visibility KV snapshot must be re-synced after apply and rollback. After an apply, R7 rebuilds it as the system when the release changed page visibility or renamed or removed a page (and the redirect map when it changed a redirect); a rollback (R10) is a release through the same apply and after-effects, so the same rebuild follows it (`releasePublish.spec`, the all-types rollback). | Built: U14a (0057). |
-| §8.2 | Password gate, redirect to another page, hide-from/until dates, template-wide hide | deviated-challenge | built under A6 | none (AV-13: 404 or home only) | All feasible pre-cache in the Worker (see challenges). | Built: U14a and U14b (0061). |
+| §8.2 | public / hidden (404, leaves menu) / link only; homepage cannot be hidden; per-item visible | covered | covered | AV-13 + MERGE:link-only; P-2/P-3 | AV-13 says immediate but P-3 stages it: the visibility KV snapshot must be re-synced after apply and rollback. After an apply, R7 rebuilds it as the system when the release changed page visibility or renamed or removed a page (and the redirect map when it changed a redirect); a rollback (R10) is a release through the same apply and after-effects, so the same rebuild follows it (`releasePublish.spec`, the all-types rollback). | Built: U14a (0057); with releases on a setting is a pending change (R14b). |
+| §8.2 | Password gate, redirect to another page, hide-from/until dates, template-wide hide | deviated-challenge | built under A6 | none (AV-13: 404 or home only) | All feasible pre-cache in the Worker (see challenges). | Built: U14a and U14b (0061); with releases on a page cannot newly go behind a password until owner item B1 is decided (R14b). |
 | §8.2 | Maintenance for all visitors except signed-in team and allowed IPs; 503 + Retry-After | covered | covered | src/middleware.ts block 1, src/lib/http/maintenance.ts, src/lib/http/maintenanceBypass.ts (U9b); tests/lib/middlewareMaintenance.spec.ts, tests/admin/maintenance.e2e.ts | Immediate kill switch vs the prototype's 'after you publish' is a Pillar 1 call. Retry-After counts down to "Back on". | Built: U9 (U9b). |
-| §8.3 | Publish copies draft to live, bumps the version, refreshes site output | covered | covered | R4, R6, R7 | Purge by tag, never a rebuild (§2). | Built: R4, R6, R7; off in production until R14. |
+| §8.3 | Publish copies draft to live, bumps the version, refreshes site output | covered | covered | R4, R6, R7 | Purge by tag, never a rebuild (§2). | Built: R4, R6, R7; R14b prepared the switch (the standard, runbook §6p, the site-wide specs in both modes); off in production until R14c and the switch-on. |
 | §8.3 | Unsaved bar; Discard restores the draft from live | covered | covered | R3 draft endpoints, R12, AV-24 | Scopes: one / mine / chosen. AV-24 copy ('everything since the last publish') must match R12. | Built: R12 (one, mine, chosen). |
 | §8.3 | Page History restores one page's keys from a snapshot | deviated-challenge | built under A6 | R10 (per entity + site-level) | A page is a page row plus its sections; needs a page-scoped restore. | Built: R10 (page-scoped restore) and E1's History drawer. |
 | §8.4 | Static regeneration (option A) or runtime fetch (option B) | deviated-ok | deviation (standard or owner decision) | §2 Tier A + purge (R7) |  | Deviation stands (§2 Tier A and purge-by-tag). |
@@ -601,7 +626,7 @@ holds are listed once, in README's "Open owner items and legal holds".
 | §16 | Workers: rollups, backups, health checks, link crawl, senders, sheets sync | covered | covered | existing pg_cron rollups + AV-10 rollup_vitals; R7/R11 minute cron; §10 DR | Senders/sheets are A1; health from the external monitor; a crawl does not fit the free plan's 10 ms cron CPU. | Built: the rollups, R7 and R11's minute cron, G2's health schedule; senders are A1. |
 | §17 | Phases 1-3: foundation, CMS live, leads | covered | covered | R0-R16, AV-01-AV-31, CRM-1-CRM-14 | Phase-3 notifications/auto reply/inbox threads (A1) and import (O12) excluded. | Partly built: phases 1 and 2, and phase 3's leads core; contacts, tasks and companies wait on O-11. |
 | §17 | Phases 4-7: email, WhatsApp, automations, growth | deferred | later phase (A1) or legal gate | A1 (4-6); phase 7 partly outside A1 | GA4, Search Console, beacon enrichment, health worker and editable help need owner confirmation. | Not built (A1). |
-| §17 | Security basics (HTTPS, HttpOnly, CSRF, permission checks, rate limits, upload validation, masked secrets, audit, off-site backups, consent log, export audit, deletion on request) | covered | covered | existing standard + AV-11, CRM-3/CRM-5 | Image re-encoding built in U3; the marketing consent log is deferred (A1). | Built: the standard, U3 (re-encoding), C3 (erasure). |
+| §17 | Security basics (HTTPS, HttpOnly, CSRF, permission checks, rate limits, upload validation, masked secrets, audit, off-site backups, consent log, export audit, deletion on request) | covered | covered | existing standard + AV-11, CRM-3/CRM-5 | Image re-encoding built in U3; the marketing consent log is deferred (A1). | Built: the standard, U3 (re-encoding), C3 (erasure), H16 (a stale token's permission checks at the database: every write live). |
 | §17 | Admin English; content EN+AR; Almarai + dir=rtl on AR editors | covered | covered | AV-02, AV-08, UI §1.5 |  | Built: F1, F5a. |
 | §17 | Eastern Arabic digits in content are never transformed | missing | added as a slice | none | No design states it and no test guards it. | Built: F5a's Arabic-digit guard. |
 | §19 | Prototype shortcuts replaced (secrets, uploads, role checks, stats, login, placeholders) | covered | covered | AV-06, AV-11, AV-20, RLS + assertCap, rollups, 0025/0027/0028 guards | Placeholders: the replace-and-clear flow; production refuses live samples unless the owner override (runbook §6c). | Built. |
@@ -614,14 +639,14 @@ reading (Z1): the spec that holds each item now, or what it waits on.
 
 | Acceptance script item | Design slices | Passes as designed | What replaces it | As built (Z1, 2026-11-05) |
 |---|---|---|---|---|
-| adfull.mjs: every route for every role, zero page/console errors, no horizontal overflow, sidebar per role, state survives reload (plus editor live text, hide/reorder/add section, AR switch, mobile preview, publish, palette, notifications, View as, demo-chip login, file://) | R0/AV-01 (P-8), AV-03, AV-04, AV-05, AV-25, AV-26, R9, R12, AV-34, CRM-10 | partly | Per-role storageState sessions replace the View-as select and the demo chips (A2/A4, AV-06). Run on staging over https, not file://. 'State survives reload' becomes 'server drafts survive reload' (R3). Preview assertions wait for the post-autosave reload (about 1-2 s, P-4). 'Add section' picks an allowed typed type. Add zero console errors and scrollWidth <= clientWidth + 2 per admin route and role to the harness: AV-34 only plans axe and screenshots. | Built: the F0 sweep (every route for every role: no page or console error, no overflow, the role's sidebar, the server HTML, axe), Z1's dialog matrix (each dialog component each role's screens use, on one representative screen: named, axe, Escape, focus back), the hand-run admin visual baselines' spec and workflow (Z1; the first pictures wait for the operator's `update` run), and the editor journeys (pages.e2e, page-preview.e2e, releases-ui.e2e, palette.e2e, personal.e2e). |
+| adfull.mjs: every route for every role, zero page/console errors, no horizontal overflow, sidebar per role, state survives reload (plus editor live text, hide/reorder/add section, AR switch, mobile preview, publish, palette, notifications, View as, demo-chip login, file://) | R0/AV-01 (P-8), AV-03, AV-04, AV-05, AV-25, AV-26, R9, R12, AV-34, CRM-10 | partly | Per-role storageState sessions replace the View-as select and the demo chips (A2/A4, AV-06). Run on staging over https, not file://. 'State survives reload' becomes 'server drafts survive reload' (R3). Preview assertions wait for the post-autosave reload (about 1-2 s, P-4). 'Add section' picks an allowed typed type. Add zero console errors and scrollWidth <= clientWidth + 2 per admin route and role to the harness: AV-34 only plans axe and screenshots. | Built: the F0 sweep (every route for every role: no page or console error, no overflow, the role's sidebar, the server HTML, axe), Z1's dialog matrix (each dialog component each role's screens use, on one representative screen: named, axe, Escape, focus back, in both release modes), the hand-run admin visual baselines' spec and workflow (Z1; the first pictures wait for the operator's `update` run), and the editor journeys (pages.e2e, page-preview.e2e, releases-ui.e2e, palette.e2e, personal.e2e). |
 | crmall.mjs: inbox reply and template, contact merge and import, campaign wizard, automation builder, export with consent counts; lead-to-contact link; role nav; palette finds a contact and a campaign | CRM-4, CRM-7, CRM-10, CRM-12 | partly | A core-only script: leads list/board/detail, lead -> contact link, contact merge, tasks, Sales nav = Dashboard/Leads/Contacts/Tasks. Inbox, template, campaign, automation, export and import go to the later-phase acceptance. The marketer/account roles do not exist (A2). Palette contact search passes only if the ⌘K challenge is accepted. | Partly built: the leads list, board and lead page (leads.e2e) and the Sales menu (C10a's sweep). Contacts, merge and tasks wait on C5 (O-11). |
 | su.mjs: DNS verify, email connected, WhatsApp wizard, banners disappear, help centre search, automation rules, run log, editor cannot see setup | none (A1 later); help centre unassigned | no | Later-phase acceptance. Now: 'Content Creator sees no Integrations/Users/General nav and gets 403 by URL' (adminSecurity.spec + endpoints.spec). Help-centre search: tests/admin/help.e2e.ts (U16). | Built as the replacement: refusals.e2e (a 403 by URL for every role without the capability) and help.e2e. |
 | tpl2.mjs / pvchk.mjs / filechk.mjs: template page editor and live preview over http and from disk | AV-31, AV-26, R8, R9 | partly | https on staging only: an authenticated SSR admin cannot run from disk. The edit must appear in /admin/preview after the autosave reload (about 1-2 s), not after 400 ms. Switching the 'Showing' item reloads /admin/preview/services/<slug> or /portfolio/<slug>. | Built: templates.e2e and page-preview.e2e (E2, E3), on the CI preview. |
 | sitechk.mjs / allsite.mjs: every site page loads clean, with the preview hook present | R9 preview-isolation + existing e2e/lhci | partly | Inverted on purpose: public pages must load clean (no console errors or overflow, EN+AR) and must NOT reference the bridge. The /admin/preview route must carry it (preview-isolation.e2e). | Built: preview-isolation.e2e and preview-parity.e2e (R9), and the public e2e suites. |
 | A real form submission appears as a lead within 5 seconds, with notifications delivered | CRM-1 (crm_ingest_lead), CRM-4, AV-05, existing notify-lead | partly | The lead shows in /admin/leads within 5 s and in the bell count on the next render; a notification_log row is written ('queued'). No e-mail or WhatsApp delivery under A1 (CLAUDE.md §10: notify-lead sends nothing yet). | Built: C1b's ingest and the bell (F8); notify-lead writes notification_log (H9) and sends nothing (A1). |
-| An edit to the homepage headline is visible on the public site after Publish and not before | AV-25, R3, R6, R12, R14 switch-on | yes | Point releases-publish.e2e at the homepage headline literally. Valid only after app.enable_releases (flag on); before R14, a save goes live at once. | Built in the release-mode rehearsal (R14-prep, R14a): releases-mode.e2e publishes a pending FAQ question and reads it on /contact, then a scheduled release and a rollback. Production waits on R14's switch-on (O-5). |
-| A hidden page returns 404 and leaves the menu | AV-13 (staged per P-3, published under maintenance.manage per P-2), MERGE:link-only | yes | Under P-3 the hide takes effect when published. Also assert sitemap/llms exclusion and the visibility KV re-sync after the release and after a rollback. | Built: visibility.e2e (U14a, U14b), with the sitemap and llms.txt. |
+| An edit to the homepage headline is visible on the public site after Publish and not before | AV-25, R3, R6, R12, R14 switch-on | yes | Point releases-publish.e2e at the homepage headline literally. Valid only after app.enable_releases (flag on); before R14, a save goes live at once. | Built in the release-mode rehearsal (R14-prep, R14a): releases-mode.e2e publishes a pending FAQ question and reads it on /contact, then a scheduled release and a rollback; since R14b the site-wide specs publish their own changes in release mode too. Production waits on R14c and the switch-on (B1, B2, O-5). |
+| A hidden page returns 404 and leaves the menu | AV-13 (staged per P-3, published under maintenance.manage per P-2), MERGE:link-only | yes | Under P-3 the hide takes effect when published. Also assert sitemap/llms exclusion and the visibility KV re-sync after the release and after a rollback. | Built: visibility.e2e (U14a, U14b), with the sitemap and llms.txt, in both release modes (R14b). |
 | Maintenance returns 503 to visitors and lets a signed-in admin through | src/middleware.ts + src/lib/http/maintenance.ts (503, Retry-After) + src/lib/http/maintenanceBypass.ts (U9b) | yes | Built (U9b): tests/admin/maintenance.e2e.ts: anon gets 503 with Retry-After and no-store in both languages; the admin's session gets the public page, private; an altered token gets the 503 (fail closed); the bypass off refuses the admin too; the IP allowlist keeps working. | Built: maintenance.e2e (U9b). |
 | An email campaign to a test segment delivers with a working unsubscribe | none (A1 later) | no | Moves to the later-phase acceptance; nothing replaces it now. | Not built (A1). |
 | A WhatsApp reply outside 24 hours is blocked without a template and allowed with one | none (A1 later) | no | Moves to the later-phase acceptance. | Not built (A1). |

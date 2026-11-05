@@ -19,6 +19,13 @@ import { GREETING_HOLDERS, GREETING_SOURCE, STEADY_GREETING } from './adminVisua
  * so they are made there, never on a builder's machine, and committed by hand under
  * tests/visual/admin-baselines/linux/ (docs/admin-v2/as-built/Z1.md, "Making the baselines").
  * The run is on a freshly seeded database, before any spec writes, so the rows are the seed's.
+ *
+ * Both release modes (Admin v2 R14b): with E2E_RELEASES=on as well, the project waits for
+ * `releases-on` (playwright.config.ts), so every picture is of release mode (the dashboard's
+ * publish card, the editors' release forms) and nothing is pending yet. The baselines are of the
+ * mode the workflow runs in: its env is the e2e job's (tests/ci/adminVisual.spec.ts), so R14c's
+ * flip of that job to release mode is followed by an `update` run. The savebar's words, which
+ * count pending changes, are masked like every other count.
  */
 
 const MODE = process.env['ADMIN_VISUAL'];
@@ -28,8 +35,9 @@ const WHEN =
   /\b(?:just now|\d+ (?:min|h|d) ago|in \d+ (?:min|h|d)|tomorrow|yesterday|today)\b|\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b|\b\d{1,2}:\d{2}\b|\b20\d\d\b/i;
 
 /**
- * What changes from one run to the next: times and dates, counts, figures, charts, and the page
- * editor's live preview frame (the public page, with its own motion).
+ * What changes from one run to the next: times and dates, counts, figures, charts, the savebar's
+ * count of pending changes (release mode only), and the page editor's live preview frame (the
+ * public page, with its own motion).
  */
 const MASKED = [
   'time',
@@ -45,6 +53,7 @@ const MASKED = [
   '.goal__counts',
   '.crm-stage__count',
   '.chart-fig',
+  '.savebar__text',
   'iframe',
 ].join(', ');
 

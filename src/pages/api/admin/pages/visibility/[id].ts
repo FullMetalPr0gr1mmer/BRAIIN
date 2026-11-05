@@ -5,6 +5,7 @@ import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { saveVisibility, settingOfRow } from '@/lib/admin/pageVisibility';
 import { syncVisibilityToEdge, visibilityPurgeTags } from '@/lib/admin/visibilitySync';
 import { purgeAfterSave } from '@/lib/http/purge';
+import { stagedVisibilityWrite } from '@/lib/release/stagedPageVisibility';
 
 // The legacy page visibility toggle, `maintenance.manage` (Admin + Developer), kept as an
 // alias over `page_visibility` (Admin v2 U14a): `navVisible: true` is "visible to everyone",
@@ -16,6 +17,10 @@ import { purgeAfterSave } from '@/lib/http/purge';
 //
 // `version` is the setting's own (0 while the page has none), as on the screen's route: a
 // caller that held the page's version gets a 409 and reads the setting again.
+//
+// With releases on (Admin v2 R14b) the alias stages its change as the screen's route does
+// (src/lib/release/stagedPageVisibility.ts); it names no pending change, so a page that has one
+// is a 409 (`draft-conflict`): the screen is where a pending setting is changed.
 
 export const prerender = false;
 
@@ -29,11 +34,22 @@ const VisibilitySchema = z
 export const PATCH = defineAdminRoute({
   cap: 'maintenance.manage',
   input: VisibilitySchema,
-  handler: async ({ auth, sb, input, params, audit }) => {
+  handler: async (ctx) => {
+    const { auth, sb, input, params, audit } = ctx;
     const id = params['id'];
     if (!id || !z.string().uuid().safeParse(id).success) throw new NotFoundError('page');
     await liveRecheck(auth);
     const mode = input.navVisible ? 'public' : 'link';
+    if (await ctx.releasesEnabled()) {
+      return stagedVisibilityWrite(ctx, {
+        target: { pageId: id },
+        mode,
+        redirectPageId: null,
+        hideFrom: null,
+        showOn: null,
+        version: input.version,
+      });
+    }
     const { row, fields, target } = await saveVisibility(sb, auth, {
       target: { pageId: id },
       mode,

@@ -1,3 +1,4 @@
+import { savedWords } from '@/components/admin/kit/saveWords';
 import { readFileSync, readdirSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { createElement } from 'react';
@@ -246,11 +247,13 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
     // change or a switched-off account ends every session of that person in the database
     // (profiles_revoke_sessions), so the admin turns them away at their next click; but an
     // access token already issued keeps its role at the database directly until it expires
-    // (an hour) on the tables with no live check. People and roles (0050, 0055), the security
-    // settings (0055), leads and the CRM (app.live_role()), job applications
-    // (app.is_live_admin()) and the activity log (0054, U13's audit_log_live_read, applied
-    // before 0055) close at once. The guide an Admin reads says exactly that, and never
-    // promises the database forgets an issued pass at once.
+    // (an hour). Since Admin v2 H16 (0129) it writes nothing with it (every staff write is
+    // live-checked), but it still reads what its role could on the tables with no live read
+    // check. People and roles (0050, 0055), the security settings (0055), leads and the CRM
+    // (app.live_role()), job applications (app.is_live_admin()) and the activity log (0054,
+    // U13's audit_log_live_read, applied before 0055) close at once, reads included. The guide
+    // an Admin reads says exactly that, and never promises the database forgets an issued pass
+    // at once.
     const roles = SET.find((a) => a.slug === 'roles-and-access')!;
     const en = textsOf(roles, 'en').join('\n');
     const ar = textsOf(roles, 'ar').join('\n');
@@ -259,10 +262,15 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
     expect(en).toContain(
       'a sign-in pass already handed out keeps working for up to an hour when someone uses it directly against the database',
     );
-    expect(en).toContain('On settings, media, the system logs and content');
+    expect(en).toContain(
+      'It can no longer change anything with the role it was issued with: every save checks',
+    );
+    expect(en).toContain('it can still read what that role could read in settings, media');
+    expect(en).not.toContain('it still carries the role it was issued with');
     expect(en).toContain(
       'People and their roles, the security settings, leads, job applications and the activity log check',
     );
+    expect(ar).toContain('لكنه لم يعد يستطيع تغيير أي شيء بالدور الذي صدر به');
     expect(ar).toContain('وطلبات التوظيف، وسجل النشاط فتتحقق من حساب الشخص');
     expect(ar).toContain('وسجلات النظام');
     expect(en).toContain('Make account owner');
@@ -2581,7 +2589,10 @@ describe('the Sales guides (C10a): the-sales-role, and roles-and-access with fiv
     const before = parse(
       helpSet(MIGRATION_FILES.slice(0, at)).set.find((g) => g.slug === 'roles-and-access'),
     );
-    const after = SET.find((a) => a.slug === 'roles-and-access')!;
+    // As 0097 leaves it: a later put (H16's 0129) rewrites another block.
+    const after = parse(
+      helpSet(MIGRATION_FILES.slice(0, at + 1)).set.find((g) => g.slug === 'roles-and-access'),
+    );
     const { body: beforeBody, ...beforeRest } = before;
     const { body: afterBody, ...afterRest } = after;
     expect(afterRest).toEqual(beforeRest);
@@ -3242,5 +3253,106 @@ describe('theme (E4, E12, E13), a guide put by the theme migrations', () => {
     expect(model).toContain("{ value: 'slowest', label: 'Much slower' }");
     expect(en).toContain('Only an Admin or a Developer can change the theme');
     expect(text('ar')).toContain('Generate the rest from Primary');
+  });
+});
+
+describe('the roles guide after H16: a pass already handed out changes nothing', () => {
+  const at = () => MIGRATION_FILES.findIndex((f) => /_live_staff_writes\.sql$/.test(f.name));
+
+  it('the H16 migration puts roles-and-access alone, at the revision the migrations before it leave', () => {
+    const before = helpSet(MIGRATION_FILES.slice(0, at()));
+    const mine = HELP.edits.filter((e) => /_live_staff_writes\.sql$/.test(e.file));
+    expect(mine.map((e) => `${e.op} ${e.slug} ${e.revision}`)).toEqual([
+      `put roles-and-access ${before.revisions.get('roles-and-access') ?? 0}`,
+    ]);
+    expect(helpSet(MIGRATION_FILES.slice(0, at() + 1)).revisions.get('roles-and-access')).toBe(
+      (before.revisions.get('roles-and-access') ?? 0) + 1,
+    );
+  });
+
+  it('only the "One limit to know" paragraph changes, in both languages', () => {
+    const parse = (raw: unknown) => HelpArticleSeedSchema.parse(raw);
+    const beforeSet = helpSet(MIGRATION_FILES.slice(0, at())).set;
+    const afterSet = helpSet(MIGRATION_FILES.slice(0, at() + 1)).set;
+    // Every other guide is untouched.
+    expect(afterSet.filter((g) => g.slug !== 'roles-and-access')).toEqual(
+      beforeSet.filter((g) => g.slug !== 'roles-and-access'),
+    );
+    const before = parse(beforeSet.find((g) => g.slug === 'roles-and-access'));
+    const after = parse(afterSet.find((g) => g.slug === 'roles-and-access'));
+    const { body: beforeBody, ...beforeRest } = before;
+    const { body: afterBody, ...afterRest } = after;
+    expect(afterRest).toEqual(beforeRest);
+    for (const lang of ['en', 'ar'] as const) {
+      expect(afterBody[lang], lang).toHaveLength(beforeBody[lang].length);
+      const changed = afterBody[lang]
+        .map((block, i) => (JSON.stringify(block) === JSON.stringify(beforeBody[lang][i]) ? -1 : i))
+        .filter((i) => i >= 0);
+      expect(changed, lang).toHaveLength(1);
+      const [i] = changed;
+      expect(JSON.stringify(beforeBody[lang][i!]), lang).toMatch(
+        lang === 'en' ? /One limit to know/ : /وهناك حدّ ينبغي معرفته/,
+      );
+    }
+  });
+});
+
+// Admin v2 R14b: the publishing guide says what a save does in both ways of publishing, in the
+// words the screens use for release mode (so a renamed control fails here, not in a reader's
+// hands), and keeps every sentence that is still true while releases are off.
+describe('saving-and-publishing describes both ways of publishing (Admin v2 R14b)', () => {
+  const source = (path: string) => readFileSync(path, 'utf8');
+  const article = SET.find((a) => a.slug === 'saving-and-publishing')!;
+  const en = textsOf(article, 'en').join('\n');
+  const ar = textsOf(article, 'ar').join('\n');
+
+  it('says releases are off until switched on, and what a save does then', () => {
+    expect(en).toContain('Until it is, what you save is what the site shows');
+    expect(en).toContain('Once publishing in releases is switched on');
+    expect(en).toContain('Save no longer changes the site.');
+    expect(ar).toContain('بعد تفعيل النشر عبر الإصدارات');
+  });
+
+  it('names the release-mode controls as the screens draw them', () => {
+    expect(savedWords(true)).toBe('Saved as an unpublished change');
+    expect(source('src/components/admin/kit/SaveStatus.tsx')).toContain('savedWords(true)');
+    expect(en).toContain(savedWords(true));
+    expect(source('src/components/admin/fields/VisibilityField.tsx')).toContain(
+      "export const VISIBLE_LABEL = 'Visible on the site';",
+    );
+    expect(en).toContain('Visible on the site switch');
+    expect(source('src/components/admin/screens/release/model.ts')).toContain(
+      "whenSchedule: 'Schedule for',",
+    );
+    expect(en).toContain('Schedule for, in the same window');
+    const notice = source('src/components/admin/fields/DraftNotice.tsx');
+    for (const label of ['Keep my version', 'Use the live version']) {
+      expect(notice).toContain(label);
+      expect(en).toContain(label);
+      expect(ar).toContain(label);
+    }
+    expect(source('src/lib/admin/nav/settings.ts')).toContain("label: 'Backups & versions',");
+    expect(en).toContain('Backups & versions in Settings');
+  });
+
+  it('page-visibility says a setting waits for a release, and the password stays immediate', () => {
+    const vis = SET.find((a) => a.slug === 'page-visibility')!;
+    const visEn = textsOf(vis, 'en').join('\n');
+    expect(visEn).toContain(
+      'Until publishing in releases is switched on for your site, a change applies',
+    );
+    expect(visEn).toContain('Once publishing in releases is switched on, a change here waits');
+    expect(source('src/components/admin/kit/pendingWords.ts')).toContain(
+      "changed: 'Unpublished changes',",
+    );
+    expect(visEn).toContain('the list marks it Unpublished changes');
+    expect(visEn).toContain('A password is still set at once');
+    expect(textsOf(vis, 'ar').join('\n')).toContain('وبعد تفعيل النشر عبر الإصدارات');
+  });
+
+  it('lists what stays immediate as the design does (releases.md §1.2)', () => {
+    expect(en).toContain(
+      'Maintenance mode, users, integrations, leads, job applications and media details still save at once.',
+    );
   });
 });
