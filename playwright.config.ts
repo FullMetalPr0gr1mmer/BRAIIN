@@ -74,6 +74,26 @@ const releaseProjects = RELEASES
     ]
   : [];
 
+// Admin visual baselines (Admin v2 Z1, ui.md AV-34): with ADMIN_VISUAL set (`update` or
+// `compare`, only by the hand-run .github/workflows/admin-visual.yml) one more project,
+// `admin-visual`, takes tests/visual/admin.visual.ts's pictures right after the sample rows, before
+// any spec writes, against baselines under tests/visual/admin-baselines/<platform>/. The file
+// ends in `.ts`, so no other project collects it. Unset (the required e2e job, every PR) the
+// projects are exactly what they were (tests/ci/adminVisual.spec.ts holds both shapes).
+const ADMIN_VISUAL = ['update', 'compare'].includes(process.env['ADMIN_VISUAL'] ?? '');
+const adminVisualProjects = ADMIN_VISUAL
+  ? [
+      {
+        name: 'admin-visual',
+        testDir: './tests/visual',
+        testMatch: /admin\.visual\.ts$/,
+        snapshotPathTemplate: '{testDir}/admin-baselines/{platform}/{arg}{ext}',
+        use: { ...devices['Desktop Chrome'] },
+        dependencies: ['admin-samples'],
+      },
+    ]
+  : [];
+
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.e2e.ts',
@@ -129,6 +149,7 @@ export default defineConfig({
       dependencies: [RELEASES ? 'releases-on' : 'admin-samples'],
     },
     ...releaseProjects,
+    ...adminVisualProjects,
     ...(RELEASES
       ? []
       : [

@@ -1,0 +1,128 @@
+name: Admin visual baselines
+
+# Admin visual baselines (Admin v2 Z1, ui.md AV-34: the admin capture turned into
+# toHaveScreenshot baselines at 1440 and 390, with time and count regions masked). The pictures
+# are the Linux runner's rendering, so only this job makes them: a baseline made on a builder's
+# Windows machine would never match the runner's fonts and anti-aliasing.
+#
+# BY HAND ONLY (Actions → Admin visual baselines → Run workflow, on the branch to baseline): it is
+# never started by a push or a pull request, no required check names it and the deploy does not
+# wait for it (tests/ci/adminVisual.spec.ts and workflows.spec.ts hold all three). Its stack is
+# the e2e job's (perf-seo-a11y.yml) step for step up to the preview; then only the admin-visual
+# project runs (playwright.config.ts adds it while ADMIN_VISUAL is set), right after the staff
+# sessions and the sample rows, so the pictures are of the seed and nothing else.
+#
+#   update   make every baseline, then compare a second run against them (AV-34: "stable across
+#            two runs"), and upload them as the artifact `admin-visual-baselines`. The operator
+#            commits them under tests/visual/admin-baselines/linux/ (docs/admin-v2/as-built/Z1.md,
+#            "Making the baselines").
+#   compare  compare against the committed baselines; a difference uploads `admin-visual-report`
+#            (the expected, actual and diff pictures).
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'update (make the baselines) or compare (check the committed ones)'
+        required: true
+        default: compare
+        type: choice
+        options:
+          - compare
+          - update
+
+permissions:
+  contents: read
+
+env:
+  # As perf-seo-a11y.yml: a local origin, dummies where the stack has no counterpart.
+  PUBLIC_SITE_URL: http://localhost:8788
+  ALLOW_LOCAL_SITE_URL: '1'
+  PREVIEW_URL: http://localhost:8788
+  LEAD_PII_ENC_KEY: ci-dummy-lead-pii-enc-key
+  AUDIT_HMAC_KEY: ci-dummy-audit-hmac-key
+  NOTIFY_LEAD_SECRET: ci-dummy-notify-lead-secret
+  SUPABASE_EXCLUDE: studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta
+
+jobs:
+  admin-visual:
+    name: Admin visual baselines
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SUPABASE_EXCLUDE: studio,imgproxy,edge-runtime,logflare,vector,realtime,postgres-meta
+      GA4_NOTICE_READY: 'true'
+    steps:
+      # Pinned to the commits the e2e job pins (CLAUDE.md §3 supply chain; README O-26).
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        with:
+          version: 2.118.0
+      - run: npm ci
+      - name: Start Supabase (migrations + seed.sql)
+        run: supabase start -x "$SUPABASE_EXCLUDE"
+      - name: Export local Supabase into the build environment
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "PUBLIC_SUPABASE_URL=${API_URL}"
+            echo "PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY:-$PUBLISHABLE_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:-$SECRET_KEY}"
+            echo "SUPABASE_DB_POOL_URL=${DB_URL}"
+          } >> "$GITHUB_ENV"
+      - run: npm run build
+      - name: Preview config (local KV simulation, no Cloudflare credentials)
+        run: node scripts/local-preview-config.mjs
+      - name: Seed the authored-redirects snapshot into local KV
+        run: >-
+          npx wrangler kv key put site:redirects
+          '{"/e2e-old":{"to":"/about","status":301},"/e2e-temp":{"to":"/contact?from=e2e","status":302},"/e2e-anchor":{"to":"/services#e2e","status":308},"/api/e2e-old":{"to":"/about","status":301}}'
+          --binding SESSION --local --preview
+      - name: Install Playwright Chromium
+        timeout-minutes: 20
+        run: npx playwright install --with-deps chromium
+      - name: Start preview (wrangler dev)
+        run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env &
+      - name: Wait for preview
+        run: timeout 90 bash -c 'until curl -sf -o /dev/null http://localhost:8788; do sleep 2; done'
+      - name: Make the baselines
+        if: inputs.mode == 'update'
+        env:
+          ADMIN_VISUAL: update
+        run: npx playwright test --project=admin-visual --update-snapshots=all --retries=0
+      # The same pictures again, compared with the ones just made: a baseline that does not hold
+      # across two runs is a flaky one, and the job fails before anyone commits it.
+      - name: Compare a second run with them (stable across two runs)
+        if: inputs.mode == 'update'
+        env:
+          ADMIN_VISUAL: compare
+        run: npx playwright test --project=admin-visual --no-deps --update-snapshots=none --retries=0
+      - name: Compare with the committed baselines
+        if: inputs.mode == 'compare'
+        env:
+          ADMIN_VISUAL: compare
+        run: npx playwright test --project=admin-visual --update-snapshots=none --retries=0
+      - name: Upload the baselines
+        if: always() && inputs.mode == 'update'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: admin-visual-baselines
+          path: tests/visual/admin-baselines/linux
+          retention-days: 14
+          if-no-files-found: error
+          overwrite: true
+      - name: Upload the differences
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: admin-visual-report
+          path: test-results
+          retention-days: 14
+          if-no-files-found: ignore
+          overwrite: true
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop
