@@ -42,11 +42,25 @@ create function _as(p_role text, p_tid text) returns void language sql as $$
     'request.jwt.claims',
     case when p_role is null then ''
          else jsonb_build_object(
-                'sub', 'e1100000-0000-0000-0000-0000000000a1',
-                'app_metadata', jsonb_build_object('role', p_role, 'tenant_id', p_tid))::text end,
+                'sub', md5('live:' || p_role || ':' || coalesce(p_tid, ''))::uuid, 'app_metadata', jsonb_build_object('role', p_role, 'tenant_id', p_tid))::text end,
     true
   )
 $$;
+
+-- H16 (0129): every staff write is live-checked against the profile the token's `sub` names,
+-- so each role token this helper mints names a live profile: one per staff role and tenant,
+-- its id derived from both.
+insert into auth.users (id, email)
+  select md5('live:' || r || ':' || t.id::text)::uuid,
+         'live-' || md5('live:' || r || ':' || t.id::text) || '@example.test'
+    from public.tenants t
+   cross join unnest(array['admin', 'content_creator', 'seo', 'developer', 'sales']) as r
+  on conflict (id) do nothing;
+insert into public.profiles (id, tenant_id, role)
+  select md5('live:' || r || ':' || t.id::text)::uuid, t.id, r::app_role
+    from public.tenants t
+   cross join unnest(array['admin', 'content_creator', 'seo', 'developer', 'sales']) as r
+  on conflict (id) do nothing;
 
 -- A statement as the CURRENT role: 'ok:<rows>' or the SQLSTATE it raised.
 create function _run(p_sql text) returns text language plpgsql as $$
@@ -98,8 +112,8 @@ select ok(not has_function_privilege('authenticated', 'app.tg_pages_slug_rules()
 select is(
   (select string_agg(polname::text, ',' order by polname) from pg_policy
     where polrelid = 'public.pages'::regclass),
-  'pages_archive_admin,pages_delete_admin,pages_read,pages_write',
-  'the policies on pages are unchanged');
+  'pages_archive_admin,pages_delete_admin,pages_live_delete,pages_live_insert,pages_live_update,pages_read,pages_write',
+  'the policies on pages are unchanged (H16''s three live writes beside them, 0129)');
 
 -- ── 2. the shape and the reserved words, for every writer ─────────────────────
 select is(_refusal('Our-Story'), 'pages_slug_shape', 'an upper-case letter is refused');

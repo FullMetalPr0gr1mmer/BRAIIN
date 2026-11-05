@@ -27,6 +27,8 @@ const state = vi.hoisted(() => ({
   rpcs: [] as string[],
   storeUp: true,
   audits: [] as { action: string; entityId?: string; detail?: Record<string, unknown> }[],
+  /** Which client wrote each audit row, with the actor it named: the session's or the service role's. */
+  auditVia: [] as { via: 'session' | 'service'; actor: string }[],
   logs: [] as Record<string, unknown>[],
 }));
 
@@ -46,8 +48,18 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
 }));
 vi.mock('@/lib/admin/audit', () => ({
-  writeAudit: async (_sb: unknown, _ctx: unknown, entry: (typeof state.audits)[number]) => {
+  writeAudit: async (
+    _sb: unknown,
+    ctx: { userId: string },
+    entry: (typeof state.audits)[number],
+  ) => {
     state.audits.push(entry);
+    state.auditVia.push({ via: 'session', actor: ctx.userId });
+    return true;
+  },
+  writeAuditAsService: async (ctx: { userId: string }, entry: (typeof state.audits)[number]) => {
+    state.audits.push(entry);
+    state.auditVia.push({ via: 'service', actor: ctx.userId });
     return true;
   },
 }));
@@ -134,6 +146,7 @@ beforeEach(() => {
   state.rpcs.length = 0;
   state.storeUp = true;
   state.audits.length = 0;
+  state.auditVia.length = 0;
   state.logs.length = 0;
 });
 
@@ -219,6 +232,46 @@ describe('changeMyPassword', () => {
       action: 'auth.password_change_refused',
       detail: { reason: 'locked' },
     });
+  });
+
+  it('a lockout is audited with the service role: the locked token can no longer write its own row (H16)', async () => {
+    // Since H16 (0129, audit_log_live_insert) the database refuses a locked account's token
+    // its audit insert, and the fifth wrong try locks the account inside this request.
+    for (let i = 0; i < 5; i += 1) {
+      const { sb } = fakeClient();
+      await changeMyPassword(sb, session(), { current: 'wrong-password-99', next: NEXT }, null);
+    }
+    // Locked before the request: refused, and audited the same way.
+    const { sb } = fakeClient();
+    await changeMyPassword(sb, session(), { current: CURRENT, next: NEXT }, null);
+    // The auth server's own check (O-24) can trip the lock too, after the re-authentication.
+    state.failures.set(EMAIL, 4);
+    const o24 = fakeClient({
+      updateError: { code: 'current_password_invalid', status: 400, message: 'invalid' },
+    });
+    await changeMyPassword(o24.sb, session(), { current: CURRENT, next: NEXT }, null);
+
+    expect(state.audits.map((row) => row.detail?.['reason'])).toEqual([
+      'wrong-current',
+      'wrong-current',
+      'wrong-current',
+      'wrong-current',
+      'locked',
+      'locked',
+      'locked',
+    ]);
+    // A wrong try that locks nothing is the session's own row; every lockout row is the
+    // service role's, and names the verified account, never a value the browser sent.
+    expect(state.auditVia).toEqual([
+      { via: 'session', actor: 'u-1' },
+      { via: 'session', actor: 'u-1' },
+      { via: 'session', actor: 'u-1' },
+      { via: 'session', actor: 'u-1' },
+      { via: 'service', actor: 'u-1' },
+      { via: 'service', actor: 'u-1' },
+      { via: 'service', actor: 'u-1' },
+    ]);
+    expectNoPasswordRecorded();
   });
 
   it('shares its count with the sign-in form: failures there count here', async () => {

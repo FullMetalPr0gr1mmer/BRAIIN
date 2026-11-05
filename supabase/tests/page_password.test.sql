@@ -168,6 +168,9 @@ select is(
                               order by policyname), '')
      from pg_policies where schemaname = 'public' and tablename = 'page_sections'),
   'page_sections_delete_admin DELETE RESTRICTIVE {public}, '
+  'page_sections_live_delete DELETE RESTRICTIVE {authenticated}, '
+  'page_sections_live_insert INSERT RESTRICTIVE {authenticated}, '
+  'page_sections_live_update UPDATE RESTRICTIVE {authenticated}, '
   'page_sections_password_fence SELECT RESTRICTIVE {anon,authenticated}, '
   'page_sections_published_only SELECT RESTRICTIVE {public}, '
   'page_sections_read SELECT PERMISSIVE {public}, '

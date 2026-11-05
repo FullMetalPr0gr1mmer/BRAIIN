@@ -8,7 +8,26 @@ import type { AuthContext } from '@/lib/auth/types';
 // and the compliance trail was empty. These tests pin the half that was missing —
 // a failed audit write has to land somewhere a human will see.
 
-const { logged } = vi.hoisted(() => ({ logged: [] as Record<string, unknown>[] }));
+const { logged, service } = vi.hoisted(() => ({
+  logged: [] as Record<string, unknown>[],
+  /** What the service client's insert answers, and every insert it was given. */
+  service: {
+    outcome: { error: null } as { error: { code: string; message: string } | null } | Error,
+    inserts: [] as { table: string; row: unknown }[],
+  },
+}));
+
+vi.mock('@/lib/supabase/server', () => ({
+  serviceClient: () => ({
+    from: (table: string) => ({
+      insert: async (row: unknown) => {
+        service.inserts.push({ table, row });
+        if (service.outcome instanceof Error) throw service.outcome;
+        return service.outcome;
+      },
+    }),
+  }),
+}));
 
 vi.mock('@/lib/data/systemLog', () => ({
   writeSystemLog: async (entry: Record<string, unknown>) => {
@@ -17,7 +36,7 @@ vi.mock('@/lib/data/systemLog', () => ({
   },
 }));
 
-const { writeAudit, writeAuditMany } = await import('@/lib/admin/audit');
+const { writeAudit, writeAuditMany, writeAuditAsService } = await import('@/lib/admin/audit');
 
 const CTX = {
   tenantId: '00000000-0000-0000-0000-0000000000b1',
@@ -41,6 +60,8 @@ function stub(
 
 beforeEach(() => {
   logged.length = 0;
+  service.outcome = { error: null };
+  service.inserts.length = 0;
 });
 
 describe('writeAudit', () => {
@@ -91,6 +112,46 @@ describe('writeAudit', () => {
     expect(detail['action']).toBe('lead.export');
     expect(detail['entityType']).toBe('lead');
     expect(JSON.stringify(logged[0])).not.toContain('someone@example.com');
+  });
+});
+
+describe('writeAuditAsService (a row the session token can no longer write, H16)', () => {
+  it('inserts with the service role, the actor and tenant taken from the verified session', async () => {
+    const ok = await writeAuditAsService(CTX, {
+      action: 'auth.password_change_refused',
+      entityType: 'profile',
+      entityId: CTX.userId,
+      detail: { reason: 'locked' },
+    });
+    expect(ok).toBe(true);
+    expect(service.inserts).toEqual([
+      {
+        table: 'audit_log',
+        row: {
+          tenant_id: CTX.tenantId,
+          actor_id: CTX.userId,
+          actor_role: 'admin',
+          action: 'auth.password_change_refused',
+          entity_type: 'profile',
+          entity_id: CTX.userId,
+          detail: { reason: 'locked' },
+        },
+      },
+    ]);
+    expect(logged).toHaveLength(0);
+  });
+
+  it('reports a refused or failed insert to system_logs and never throws', async () => {
+    service.outcome = { error: { code: '42501', message: 'denied' } };
+    await expect(
+      writeAuditAsService(CTX, { action: 'auth.password_change_refused' }),
+    ).resolves.toBe(false);
+    service.outcome = new Error('socket hang up');
+    await expect(
+      writeAuditAsService(CTX, { action: 'auth.password_change_refused' }),
+    ).resolves.toBe(false);
+    expect(logged.map((entry) => entry['source'])).toEqual(['audit', 'audit']);
+    expect(String(logged[0]?.['message'])).toContain('auth.password_change_refused');
   });
 });
 

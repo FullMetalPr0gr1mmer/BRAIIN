@@ -165,3 +165,41 @@ describe('PATCH /api/admin/users/[id] when the database refuses the session (005
     expect(existenceReads).toEqual([]);
   });
 });
+
+// H16: a role or activity change ends every session of the person (0055's trigger, in the
+// same statement as the write), and the audit row says so; a rename ends none.
+describe('PATCH /api/admin/users/[id]: the audit row records the sessions it ended', () => {
+  it('a role change: sessionsEnded true', async () => {
+    updatedRows = [{ id: TARGET }];
+    const res = await call({ role: 'seo' });
+    expect(res.status).toBe(200);
+    expect(audits).toEqual([
+      expect.objectContaining({
+        action: 'user.update',
+        detail: { from: 'content_creator', to: 'seo', isActive: true, sessionsEnded: true },
+      }),
+    ]);
+  });
+
+  it('switching someone off: sessionsEnded true', async () => {
+    updatedRows = [{ id: TARGET }];
+    const res = await call({ isActive: false });
+    expect(res.status).toBe(200);
+    expect(audits).toEqual([
+      expect.objectContaining({
+        action: 'user.deactivate',
+        detail: expect.objectContaining({ isActive: false, sessionsEnded: true }),
+      }),
+    ]);
+  });
+
+  it('a rename, or the role the person already has: sessionsEnded false', async () => {
+    updatedRows = [{ id: TARGET }];
+    await call({ displayName: 'Renamed' });
+    await call({ role: 'content_creator' });
+    expect(audits).toEqual([
+      expect.objectContaining({ detail: expect.objectContaining({ sessionsEnded: false }) }),
+      expect.objectContaining({ detail: expect.objectContaining({ sessionsEnded: false }) }),
+    ]);
+  });
+});

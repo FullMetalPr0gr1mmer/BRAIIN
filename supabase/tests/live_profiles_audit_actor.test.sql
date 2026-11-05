@@ -15,8 +15,8 @@
 --     0001's, 0010's, 0050's three RESTRICTIVE ones and 0055's live read (whose rows are
 --     proven in users_security.test.sql).
 --   • audit_log: a staff token's row is stored as the caller, the token's role and now(),
---     whatever it sent (a forged actor, role and date included); a stale token's row names
---     the stale account and the role its token carries; another tenant and anon cannot
+--     whatever it sent (a forged actor, role and date included); a stale token cannot insert
+--     at all since H16 (0129, audit_log_live_insert); another tenant and anon cannot
 --     insert; the service role keeps the actor it names, its time bound; an operator keeps
 --     everything it writes; a definer (update_my_profile) names its caller; the chain still
 --     links every row in id order, and each hash is over the stored, bound values, so the
@@ -271,11 +271,12 @@ select lives_ok(
 
 -- Stale: the demoted account, its token still admin.
 select _as('50000000-0000-0000-0000-0000000000a2', 'admin', '50000000-0000-0000-0000-000000000001');
-select lives_ok(
+select throws_ok(
   $$ insert into public.audit_log (tenant_id, actor_id, actor_role, action, detail)
      values ('50000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-0000000000d1', 'developer',
              'h10.stale', '{}') $$,
-  'a stale token''s insert is let through (the Worker refuses stale sessions; the row is still bound)');
+  '42501', null,
+  'a stale token''s insert is refused since H16 (0129: audit_log_live_insert; the Worker refuses stale sessions too)');
 
 select _as('50000000-0000-0000-0000-0000000000f1', 'admin', '50000000-0000-0000-0000-0000000000ff');
 select throws_ok(
@@ -324,9 +325,9 @@ select is(
   '50000000-0000-0000-0000-0000000000c1/content_creator',
   'a row that names no actor is filled in with the caller');
 select is(
-  (select actor_id::text || '/' || actor_role from public.audit_log where action = 'h10.stale'),
-  '50000000-0000-0000-0000-0000000000a2/admin',
-  'a stale token''s row names the stale account and the role its token carries, not the one it named');
+  (select count(*)::int from public.audit_log where action = 'h10.stale'),
+  0,
+  'so no row of the stale token''s is stored');
 select is(
   (select count(*)::int from public.audit_log where action in ('h10.cross_tenant', 'h10.anon')),
   0, 'the refused inserts wrote nothing');
@@ -352,7 +353,7 @@ select is(
 
 -- ── 6. the chain ───────────────────────────────────────────────────────────────────
 select ok(
-  (select count(*) = 6
+  (select count(*) = 5
           and bool_and(a.hash ~ '^[0-9a-f]{64}$')
           and bool_and(a.prev_hash is not distinct from (
                 select b.hash from public.audit_log b

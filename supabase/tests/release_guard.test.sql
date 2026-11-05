@@ -327,8 +327,8 @@ reset role;
 set local role authenticated;
 select _a('66000000-0000-0000-0000-0000000000a9', 'admin');
 select is(_try($$ update public.services set sort_order = 1 where id = '66000000-0000-0000-0001-000000000001' $$),
-  '42501: Live content changes only through a release.',
-  'a stale token (claim admin, profile seo) is refused like any staff token');
+  'ok:0',
+  'a stale token (claim admin, profile seo) changes nothing: since H16 (0129) the live check matches it no row, before the guard');
 select _as(null, null, null);
 select is(_try($$ select _definer_touch() $$),
   '42501: Live content changes only through a release.',
