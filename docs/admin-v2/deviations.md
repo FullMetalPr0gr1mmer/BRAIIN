@@ -432,7 +432,8 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     ledgers and the read-only rollups. These read live: leads and the lead timeline
     (`lead_events`), job applications, other people's profiles, `audit_log`,
     `site_integrations`, the role defaults and security settings, user preferences, analytics
-    goals, team notes and the help guides. A lock (the sign-in lockout) ends no session (U12a's decision, kept by H16:
+    goals and team notes. The help guides (`help_articles`) stay readable by a stale staff token
+    (their staff read policy reads the token's role; they hold no data). A lock (the sign-in lockout) ends no session (U12a's decision, kept by H16:
     anyone who knows a staff address can trip it); the locked token writes nothing and the
     admin signs it out at its next request, but an idle session's refresh token works again
     once the lock passes. The owner may also shorten `jwt_expiry` to 900 s (the dashboard and
