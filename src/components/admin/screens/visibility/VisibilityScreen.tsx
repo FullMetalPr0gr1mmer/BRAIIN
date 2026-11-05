@@ -16,6 +16,7 @@ import {
   CONFIRM_SUB,
   EDGE_MISSED,
   MODE_COPY,
+  NOTHING_TO_PUBLISH,
   STAGED_CONFIRM_SUB,
   stagedSaved,
 } from '@/lib/admin/visibilityCopy';
@@ -125,12 +126,30 @@ export function visibilityPut(live: VisibilityItem, draft: VisibilityDraft, rele
   };
 }
 
-function saved(item: VisibilityItem, mode: VisibilityDraft['mode']): string {
+export function saved(item: VisibilityItem, mode: VisibilityDraft['mode']): string {
   const title = itemTitle(item);
   if (mode === 'public') return `${title} is visible to everyone.`;
   if (mode === 'link') return `${title} is open only to people with the link.`;
   if (mode === 'password') return `${title} now asks for a password.`;
   return `${title} is hidden from the site.`;
+}
+
+/**
+ * What the screen says after a save, and whether the savebar should count again. A staged save
+ * with a pending change says it waits for publishing; a staged save that left nothing pending
+ * (the setting equals live, or "visible to everyone" on a page with no setting) says the live
+ * words and that there is nothing to publish (R14b review), and still asks the savebar to count
+ * again, because it may have discarded the page's earlier pending change. A live save says the
+ * live words.
+ */
+export function afterSave(
+  item: VisibilityItem,
+  mode: VisibilityDraft['mode'],
+  answer: Pick<VisibilitySaveAnswer, 'staged' | 'pending'>,
+): { text: string; recount: boolean } {
+  if (!answer.staged) return { text: saved(item, mode), recount: false };
+  if (answer.pending) return { text: stagedSaved(itemTitle(item)), recount: true };
+  return { text: `${saved(item, mode)} ${NOTHING_TO_PUBLISH}`, recount: true };
 }
 
 /** The message above the password box, as the save sends it: absent lines are left out. */
@@ -200,13 +219,10 @@ export default function VisibilityScreen() {
             });
       setOpen(null);
       setNotice(answer.kvSynced ? null : { tone: 'err', text: EDGE_MISSED });
-      if (answer.staged) {
-        // R14b: a pending change; the savebar counts it.
-        announcePending();
-        toast(stagedSaved(itemTitle(item)), 'ok');
-      } else {
-        toast(saved(item, draft.mode), 'ok');
-      }
+      const said = afterSave(item, draft.mode, answer);
+      // R14b: the savebar counts the pending changes again after a staged save.
+      if (said.recount) announcePending();
+      toast(said.text, 'ok');
       await load();
     } catch (err) {
       setSaveError(describeError(err));

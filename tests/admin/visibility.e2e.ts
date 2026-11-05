@@ -6,6 +6,7 @@ import {
   STAGED_CONFIRM_SUB,
   stagedSaved,
 } from '@/lib/admin/visibilityCopy';
+import { PENDING_WORDS } from '@/components/admin/kit/pendingWords';
 import { discardDrafts, publishOwn } from './releaseSteps';
 import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
@@ -367,13 +368,13 @@ test('the screen: the drawer, the confirm and the toast, with no axe violation o
   await expect(page.locator('.vis-row', { hasText: 'Join us' })).toContainText('Link only');
   if (releasesOn()) {
     await expect(page.locator('.vis-row', { hasText: 'Join us' })).toContainText(
-      'Unpublished changes',
+      PENDING_WORDS.changed,
     );
     await publishSetting(page, { slug: 'join' });
     // Published from outside this screen: read it again, as after publishing from another tab.
     await page.reload({ waitUntil: 'networkidle' });
     await expect(page.locator('.vis-row', { hasText: 'Join us' })).not.toContainText(
-      'Unpublished changes',
+      PENDING_WORDS.changed,
     );
   }
   await until(request, '/join', 200);

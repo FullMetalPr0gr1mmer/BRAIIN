@@ -3291,7 +3291,7 @@ describe('saving-and-publishing describes both ways of publishing (Admin v2 R14b
       'Until publishing in releases is switched on for your site, a change applies',
     );
     expect(visEn).toContain('Once publishing in releases is switched on, a change here waits');
-    expect(source('src/components/admin/kit/PendingBadge.tsx')).toContain(
+    expect(source('src/components/admin/kit/pendingWords.ts')).toContain(
       "changed: 'Unpublished changes',",
     );
     expect(visEn).toContain('the list marks it Unpublished changes');

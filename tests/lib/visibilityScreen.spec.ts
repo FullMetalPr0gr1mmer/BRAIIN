@@ -7,6 +7,7 @@ import VisibilityDrawer, {
   draftReady,
 } from '@/components/admin/screens/visibility/VisibilityDrawer';
 import {
+  afterSave,
   edgeLine,
   passwordOffered,
   shownItem,
@@ -24,6 +25,7 @@ import {
   HIDDEN_NOTE,
   HOME_REFUSAL,
   MODE_COPY,
+  NOTHING_TO_PUBLISH,
   PASSWORD_HINT,
   PASSWORD_NOTE,
   PASSWORD_REQUIRED,
@@ -379,6 +381,27 @@ describe('release mode (Admin v2 R14b)', () => {
       }),
     );
     expect(scheduled).toContain('Scheduled');
+  });
+
+  it('after a save: pending says it waits; staged with nothing pending says so (R14b review)', () => {
+    // A staged save that left a pending change.
+    expect(afterSave(hiddenAbout, 'link', { staged: true, pending: pending('link') })).toEqual({
+      text: stagedSaved('About'),
+      recount: true,
+    });
+    // A staged save that staged nothing (equal to live, or public with no row): never "goes live
+    // when it is published", and the savebar still counts again (an earlier change was discarded).
+    const nothing = afterSave(hiddenAbout, 'hidden', { staged: true, pending: null });
+    expect(nothing).toEqual({
+      text: `About is hidden from the site. ${NOTHING_TO_PUBLISH}`,
+      recount: true,
+    });
+    expect(nothing.text).not.toContain('unpublished');
+    // Releases off: the live words, nothing to count.
+    expect(afterSave(hiddenAbout, 'link', {})).toEqual({
+      text: 'About is open only to people with the link.',
+      recount: false,
+    });
   });
 
   it('releases off, a row draws no pending badge (no answer carries one)', () => {

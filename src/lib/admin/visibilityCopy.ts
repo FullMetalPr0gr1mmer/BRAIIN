@@ -95,6 +95,9 @@ export function stagedSaved(title: string): string {
   return `${title}: saved as an unpublished change. It goes live when it is published.`;
 }
 
+/** After a staged save that left nothing pending: the setting is already the live one. */
+export const NOTHING_TO_PUBLISH = 'There is nothing to publish.';
+
 /** Release mode: a password is set at once, so only on a page that already asks for one. */
 export const RELEASE_PASSWORD_ONLY =
   'While publishing in releases is on, a password can be changed only on a page that already asks for one, with nothing unpublished on it. To put a page behind a password, ask whoever runs the site.';
