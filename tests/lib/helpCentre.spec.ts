@@ -246,11 +246,13 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
     // change or a switched-off account ends every session of that person in the database
     // (profiles_revoke_sessions), so the admin turns them away at their next click; but an
     // access token already issued keeps its role at the database directly until it expires
-    // (an hour) on the tables with no live check. People and roles (0050, 0055), the security
-    // settings (0055), leads and the CRM (app.live_role()), job applications
-    // (app.is_live_admin()) and the activity log (0054, U13's audit_log_live_read, applied
-    // before 0055) close at once. The guide an Admin reads says exactly that, and never
-    // promises the database forgets an issued pass at once.
+    // (an hour). Since Admin v2 H16 (0129) it writes nothing with it (every staff write is
+    // live-checked), but it still reads what its role could on the tables with no live read
+    // check. People and roles (0050, 0055), the security settings (0055), leads and the CRM
+    // (app.live_role()), job applications (app.is_live_admin()) and the activity log (0054,
+    // U13's audit_log_live_read, applied before 0055) close at once, reads included. The guide
+    // an Admin reads says exactly that, and never promises the database forgets an issued pass
+    // at once.
     const roles = SET.find((a) => a.slug === 'roles-and-access')!;
     const en = textsOf(roles, 'en').join('\n');
     const ar = textsOf(roles, 'ar').join('\n');
@@ -259,10 +261,15 @@ describe(`the guides the migrations seed (${SET_FILE})`, () => {
     expect(en).toContain(
       'a sign-in pass already handed out keeps working for up to an hour when someone uses it directly against the database',
     );
-    expect(en).toContain('On settings, media, the system logs and content');
+    expect(en).toContain(
+      'It can no longer change anything with the role it was issued with: every save checks',
+    );
+    expect(en).toContain('it can still read what that role could read in settings, media');
+    expect(en).not.toContain('it still carries the role it was issued with');
     expect(en).toContain(
       'People and their roles, the security settings, leads, job applications and the activity log check',
     );
+    expect(ar).toContain('لكنه لم يعد يستطيع تغيير أي شيء بالدور الذي صدر به');
     expect(ar).toContain('وطلبات التوظيف، وسجل النشاط فتتحقق من حساب الشخص');
     expect(ar).toContain('وسجلات النظام');
     expect(en).toContain('Make account owner');
@@ -2581,7 +2588,10 @@ describe('the Sales guides (C10a): the-sales-role, and roles-and-access with fiv
     const before = parse(
       helpSet(MIGRATION_FILES.slice(0, at)).set.find((g) => g.slug === 'roles-and-access'),
     );
-    const after = SET.find((a) => a.slug === 'roles-and-access')!;
+    // As 0097 leaves it: a later put (H16's 0129) rewrites another block.
+    const after = parse(
+      helpSet(MIGRATION_FILES.slice(0, at + 1)).set.find((g) => g.slug === 'roles-and-access'),
+    );
     const { body: beforeBody, ...beforeRest } = before;
     const { body: afterBody, ...afterRest } = after;
     expect(afterRest).toEqual(beforeRest);
@@ -3242,5 +3252,46 @@ describe('theme (E4, E12, E13), a guide put by the theme migrations', () => {
     expect(model).toContain("{ value: 'slowest', label: 'Much slower' }");
     expect(en).toContain('Only an Admin or a Developer can change the theme');
     expect(text('ar')).toContain('Generate the rest from Primary');
+  });
+});
+
+describe('the roles guide after H16: a pass already handed out changes nothing', () => {
+  const at = () => MIGRATION_FILES.findIndex((f) => /_live_staff_writes\.sql$/.test(f.name));
+
+  it('the H16 migration puts roles-and-access alone, at the revision the migrations before it leave', () => {
+    const before = helpSet(MIGRATION_FILES.slice(0, at()));
+    const mine = HELP.edits.filter((e) => /_live_staff_writes\.sql$/.test(e.file));
+    expect(mine.map((e) => `${e.op} ${e.slug} ${e.revision}`)).toEqual([
+      `put roles-and-access ${before.revisions.get('roles-and-access') ?? 0}`,
+    ]);
+    expect(helpSet(MIGRATION_FILES.slice(0, at() + 1)).revisions.get('roles-and-access')).toBe(
+      (before.revisions.get('roles-and-access') ?? 0) + 1,
+    );
+  });
+
+  it('only the "One limit to know" paragraph changes, in both languages', () => {
+    const parse = (raw: unknown) => HelpArticleSeedSchema.parse(raw);
+    const beforeSet = helpSet(MIGRATION_FILES.slice(0, at())).set;
+    const afterSet = helpSet(MIGRATION_FILES.slice(0, at() + 1)).set;
+    // Every other guide is untouched.
+    expect(afterSet.filter((g) => g.slug !== 'roles-and-access')).toEqual(
+      beforeSet.filter((g) => g.slug !== 'roles-and-access'),
+    );
+    const before = parse(beforeSet.find((g) => g.slug === 'roles-and-access'));
+    const after = parse(afterSet.find((g) => g.slug === 'roles-and-access'));
+    const { body: beforeBody, ...beforeRest } = before;
+    const { body: afterBody, ...afterRest } = after;
+    expect(afterRest).toEqual(beforeRest);
+    for (const lang of ['en', 'ar'] as const) {
+      expect(afterBody[lang], lang).toHaveLength(beforeBody[lang].length);
+      const changed = afterBody[lang]
+        .map((block, i) => (JSON.stringify(block) === JSON.stringify(beforeBody[lang][i]) ? -1 : i))
+        .filter((i) => i >= 0);
+      expect(changed, lang).toHaveLength(1);
+      const [i] = changed;
+      expect(JSON.stringify(beforeBody[lang][i!]), lang).toMatch(
+        lang === 'en' ? /One limit to know/ : /وهناك حدّ ينبغي معرفته/,
+      );
+    }
   });
 });

@@ -364,7 +364,7 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     show the inactivity timeout (and the time-box, if chosen).
 
 - **A stale access token keeps its old role for up to an hour** (hotfix H10, U12a and U13
-  close more of it; owner item: confirm the remainder).
+  close more of it, H16 closes every write; owner item: confirm the remainder, the reads).
   - *The gap.* RLS reads the role from the token, and an access token lives up to an hour
     (`jwt_expiry`, Supabase's default 3600 s; `supabase/config.toml` does not set it). PostgREST
     checks the token's signature and expiry, not whether its session still exists, so a token
@@ -381,8 +381,7 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     claims and auditing a change that never happened. And the actor of a staff token's audit
     row: `audit_log_actor` binds `actor_id`, `actor_role` and `created_at` to the caller,
     so a forged row naming a colleague, backdated, can no longer be chained. A stale token's
-    audit insert is still accepted, but names the stale account and the role its token
-    carries.
+    audit insert was still accepted then, naming the stale account (refused since H16).
   - *Closed by U12a (0055).* `resolveAuthContext` compares the profile with the claims of the
     token the request carries (no longer the auth server's current record, which the users
     screen rewrites with the profile), so the admin revokes a stale token at its next
@@ -406,18 +405,34 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     `app.role_edits_theme(app.live_role())`, so a demoted, deactivated or locked Admin or
     Developer token can no longer restyle the live site and the admin at PostgREST (E4 made the
     table public-facing). Its reads stay the token's role (the releases preview).
-  - *Left after them.* The issued token's old role at PostgREST, until it expires, on the
-    tables with no live check: `site_settings`, `ai_config`,
-    `media_assets`, `system_logs` and the content tables (the staged ones close when R5's
-    guard switches on at R14). The proposed follow-up: a catalog-driven pgTAP asserting a
-    RESTRICTIVE live companion on every policy that admits an `authenticated` write, and the
-    missing companions; the owner may also shorten `jwt_expiry` to 900 s (the dashboard and
-    `config.toml`), which shrinks the window to 15 minutes at four times the token refreshes.
-    Supabase Auth's own endpoints are the residual above (O-24): the session-length setting
-    (U12a) is enforced by the admin on every request it serves, not by Auth.
-  - *Owner:* Kareem. *Expiry:* the follow-up slice or R14, whichever is first, at the latest
-    2026-12-31. *Closes when* every policy admitting an `authenticated` write has a
-    RESTRICTIVE live companion, checked over the catalog.
+  - *Closed by H16 (0129).* Every staff WRITE. The 28 tables whose writes still read the
+    token's role alone (the content tables, `navigation`, `media_assets`, `entity_seo`,
+    `seo_defaults`, `redirects`, `ai_config`, `ai_questions`, `ai_styles`, `audit_log`,
+    `system_logs`…; `site_settings` had been closed by U9, 0102) each carry three RESTRICTIVE
+    policies, one per write command, `tenant_id = app.effective_tenant_id() and (select
+    app.live_role()) is not null`: where the live role is not null it IS the token's role, so
+    the existing capability rules decide on a role the database has just confirmed.
+    `public.update_media_meta` (SEO's metadata write, a definer) refuses a stale token too.
+    `supabase/tests/live_staff_writes.test.sql` tries every write on every one of the 28 tables
+    as every role, live and stale (demoted, switched off, locked), and holds the rule from the
+    catalog: every public table where `authenticated` holds a write privilege has a
+    RESTRICTIVE live policy for each command it can run, so a later table without one fails CI
+    (the migration's postconditions check the same). A stale token's audit insert is now
+    refused as well. Docs: [as-built/H16.md](as-built/H16.md).
+  - *Left after them.* READS. Until it expires, the issued token reads at PostgREST what its
+    old role could on the tables with no live read check: drafts and unpublished content,
+    media metadata, redirects, the SEO rows, `system_logs` (scrubbed of personal data),
+    `ai_config`, the read-only rollups. The personal and sensitive tables already read live
+    (leads and the CRM, job applications, profiles, `audit_log`, `site_integrations`, the admin
+    settings). A lock (the sign-in lockout) ends no session (U12a's decision, kept by H16:
+    anyone who knows a staff address can trip it); the locked token writes nothing and the
+    admin signs it out at its next request, but an idle session's refresh token works again
+    once the lock passes. The owner may also shorten `jwt_expiry` to 900 s (the dashboard and
+    `config.toml`), which shrinks the read window to 15 minutes at four times the token
+    refreshes. Supabase Auth's own endpoints are the residual above (O-24): the session-length
+    setting (U12a) is enforced by the admin on every request it serves, not by Auth.
+  - *Owner:* Kareem. *Expiry:* 2026-12-31. *Closes when* the owner accepts the read window
+    (or a follow-up adds live reads where they matter); the writes closed with H16.
 
 - **Team members are guarded but not captured: an R14 blocker** (Admin v2 R5, 0066; owner
   item **O-12**).
