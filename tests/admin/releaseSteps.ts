@@ -85,6 +85,28 @@ export async function pendingOf(page: Page, own: readonly Own[]): Promise<Pendin
 }
 
 /**
+ * The matching pending changes once they hold still: an editor in release mode may still be
+ * saving (a blur's save, then the button's), so the list is read until two reads 750 ms apart
+ * name the same changes at the same versions (at most about 15 s), and a publish never names a
+ * version that moves under it (409 `pending-changed`).
+ */
+async function settledPending(page: Page, own: readonly Own[]): Promise<PendingItem[]> {
+  const key = (items: readonly PendingItem[]) =>
+    items
+      .map((i) => `${i.draftId}:${i.draftVersion}`)
+      .sort()
+      .join(',');
+  let items = await pendingOf(page, own);
+  for (let round = 0; round < 20; round += 1) {
+    await page.waitForTimeout(750);
+    const again = await pendingOf(page, own);
+    if (key(again) === key(items)) return again;
+    items = again;
+  }
+  return items;
+}
+
+/**
  * Releases on: publishes exactly the spec's own pending changes (at least `atLeast`) and
  * answers the version they went live as. Releases off: nothing to publish (a save was live),
  * null. The publish is the route the dialog calls; the dialog itself is driven by
@@ -96,7 +118,7 @@ export async function publishOwn(
   atLeast = 1,
 ): Promise<number | null> {
   if (!releasesOn()) return null;
-  const items = await pendingOf(page, own);
+  const items = await settledPending(page, own);
   expect(items.length, `pending changes of ${JSON.stringify(own)}`).toBeGreaterThanOrEqual(atLeast);
   if (items.length === 0) return null;
   const res = await page.request.post('/api/admin/releases', {

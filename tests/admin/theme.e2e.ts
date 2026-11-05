@@ -1,11 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { discardDrafts, publishOwn, savedPattern, withDraft } from './releaseSteps';
+import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 /*
- * The theme (Admin v2 E4, AV-27), end to end through the real Worker, session and database,
- * releases off (a save is live):
+ * The theme (Admin v2 E4, AV-27), end to end through the real Worker, session and database, in
+ * both modes (Admin v2 R14b: with releases on a save is a pending change, which this spec
+ * publishes alone, its own change only, before the site is read; releaseSteps.ts):
  *   - the editor names a failing pair in words and offers a colour that passes; the server
  *     refuses the failing theme (422) whatever the screen does; zero axe violations, the error
  *     on screen included;
@@ -31,9 +32,9 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
+
+const THEME = [{ entityType: 'custom_theme' }] as const;
 
 const SCREEN = '/admin/appearance/theme';
 const API = '/api/admin/themes';
@@ -82,17 +83,21 @@ async function theme(page: Page): Promise<Row | null> {
   return null;
 }
 
-/** Saves settings as the page's person, through the route (live: releases are off). */
+/**
+ * Saves settings as the page's person, through the route: live with releases off; with them on
+ * a pending change (naming the one the row carries), which this spec then publishes alone.
+ */
 async function save(page: Page, settings: unknown, status = 200) {
   const headers = { 'x-csrf-token': await csrf(page), origin: new URL(page.url()).origin };
   const row = await theme(page);
   const res = row
     ? await page.request.patch(`${API}/${row.id}`, {
         headers,
-        data: { settings, version: row.version },
+        data: withDraft(row, { settings }),
       })
     : await page.request.post(API, { headers, data: { settings } });
   expect(res.status(), await res.text()).toBe(status);
+  if (res.status() === 200) await publishOwn(page, THEME, 0);
   return res;
 }
 
@@ -101,6 +106,8 @@ async function putBrandBack(browser: Browser) {
   const context = await browser.newContext({ storageState: authFile('admin') });
   const page = await context.newPage();
   try {
+    // Releases on: this spec's own unclaimed pending theme change first (the system's to clean).
+    await discardDrafts(THEME);
     await page.goto('/admin', { waitUntil: 'networkidle' });
     await save(page, BRAND);
   } finally {
@@ -228,12 +235,12 @@ test.describe('as admin', () => {
       page.getByRole('button', { name: 'Save theme', exact: true }).click(),
     ]);
     expect(saved.status(), await saved.text()).toBe(200);
+    // "Saved at 14:05", or with releases on "Saved as an unpublished change at 14:05".
     await expect(
-      page
-        .getByRole('status')
-        .filter({ hasText: /Saved at \d\d:\d\d/ })
-        .first(),
+      page.getByRole('status').filter({ hasText: savedPattern() }).first(),
     ).toBeVisible();
+    // Releases on: the site wears the theme once this spec's own change is published.
+    await publishOwn(page, THEME);
     const row = (await theme(page))!;
     expect(row['settings']).toEqual({
       v: 3,
@@ -381,6 +388,12 @@ test.describe('as admin', () => {
       page.getByRole('button', { name: 'Save theme', exact: true }).click(),
     ]);
     expect(saved.status(), await saved.text()).toBe(200);
+    // The status first: with releases on a blur may have saved before the press, and the
+    // press's own save is the one that holds every choice.
+    await expect(
+      page.getByRole('status').filter({ hasText: savedPattern() }).first(),
+    ).toBeVisible();
+    await publishOwn(page, THEME);
     const row = (await theme(page))!;
     expect(row['settings']).toMatchObject({
       v: 3,
@@ -550,6 +563,10 @@ test.describe('as admin', () => {
       page.getByRole('button', { name: 'Save theme', exact: true }).click(),
     ]);
     expect(saved.status(), await saved.text()).toBe(200);
+    await expect(
+      page.getByRole('status').filter({ hasText: savedPattern() }).first(),
+    ).toBeVisible();
+    await publishOwn(page, THEME);
     expect((await theme(page))?.['settings']).toEqual(BRAND);
     expect(await linksOn(page, '/')).toEqual([]);
     // No theme: the Arabic page preloads its own face again.
