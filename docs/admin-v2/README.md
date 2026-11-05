@@ -330,113 +330,113 @@ The TDD's *product* requirements are the spec. Its *stack* suggestions are mappe
 
 **Phase 0 — Foundation**
 
-| # | Slice | Depends |
-|---|---|---|
-| F0 | Harness + CI: local auth hook, CI-only staff per role, `loginAs`, per-role admin sweep (no console errors or overflow, from the client's `adfull.mjs`), admin CSP (server HTML) + axe baselines, `login.astro` grandfathered until F7; commit `docs/admin-v2/*` [R0, AV-01] | H4 |
-| F1 | Design system, verbatim-first from `app.css`, with the test-pin edits listed per file — **the whole admin takes the new look** [AV-02] | F0 |
-| F2 | Shell + IA + retired-route stubs + counts [AV-03] | F1 |
-| F3 | Overlays on `<dialog>`, toasts, ⌘K + `/api/admin/search` [AV-04] | F2 |
-| F4 | Component kit, rolldown chunk groups + chunk tests, bundle budget definition (O-15) [AV-07] | F1 |
-| F5 | Field kit v2 + `useEntitySave` + Arabic-digit round-trip test [AV-08] | F4 |
-| F6 | Built-in section copy as shared data (byte-identical public HTML) [AV-23] | — |
-| F7 | Sign-in v2, remember-me, forgot/reset; login stops downloading admin-ui (≈166 KB) [AV-06] | F1 |
-| F8 | Prefs, `staff_directory`, notifications bell, account (profile, password) [AV-05] | F3 |
+| # | Slice | Depends | Status (Z1, 2026-11-05) |
+|---|---|---|---|
+| F0 | Harness + CI: local auth hook, CI-only staff per role, `loginAs`, per-role admin sweep (no console errors or overflow, from the client's `adfull.mjs`), admin CSP (server HTML) + axe baselines, `login.astro` grandfathered until F7; commit `docs/admin-v2/*` [R0, AV-01] | H4 | Built: [F0](as-built/F0.md) |
+| F1 | Design system, verbatim-first from `app.css`, with the test-pin edits listed per file — **the whole admin takes the new look** [AV-02] | F0 | Built: [F1](as-built/F1.md) |
+| F2 | Shell + IA + retired-route stubs + counts [AV-03] | F1 | Built: [F2](as-built/F2.md) |
+| F3 | Overlays on `<dialog>`, toasts, ⌘K + `/api/admin/search` [AV-04] | F2 | Built: [F3](as-built/F3.md) |
+| F4 | Component kit, rolldown chunk groups + chunk tests, bundle budget definition (O-15) [AV-07] | F1 | Built: [F4a](as-built/F4a.md), [F4b](as-built/F4b.md) |
+| F5 | Field kit v2 + `useEntitySave` + Arabic-digit round-trip test [AV-08] | F4 | Built: [F5a](as-built/F5a.md), [F5b](as-built/F5b.md) |
+| F6 | Built-in section copy as shared data (byte-identical public HTML) [AV-23] | — | Built: [F6](as-built/F6.md) |
+| F7 | Sign-in v2, remember-me, forgot/reset; login stops downloading admin-ui (≈166 KB) [AV-06] | F1 | Built: [F7](as-built/F7.md) |
+| F8 | Prefs, `staff_directory`, notifications bell, account (profile, password) [AV-05] | F3 | Built: [F8](as-built/F8.md) |
 
 **Phase 1 — Screens on the kit (live save until R14)**
 
-| # | Slice | Depends |
-|---|---|---|
-| U1 | Dashboard + per-user layout + quick actions + owner role presets + team notes [AV-09+] | F8, F4 |
-| U2 | Website stats v1 + Site health v1 + `rollup_daily_vitals` [AV-10] | F4 |
-| U3 | Uploads pipeline (A5, re-encode, EXIF strip, 25 MB, schema widening) [AV-11+] | F0, H3 |
-| U4 | Media library + picker with upload [AV-12] | F5, U3 |
-| U5 | Services area (value cards ≤ 4, problems ≤ 5, after checking rows) [AV-14] | F5, U4 |
-| U6 | Projects area [AV-15] | F5, U4 |
-| U7 | Collections + `faq_items` (delta seed before `CONTACT_FAQ` goes; e2e keeps FAQ + JSON-LD) [AV-16] | F5 |
-| U8 | Creative Knowledge, Style-Finder, Job applications on the kit [AV-17] | F5 |
-| U9 | General: typed identity, favicon/manifest, footer columns, timezone (closed list); maintenance with bilingual copy, background, contact buttons, "Back on" auto-off, show date, a staff-bypass toggle (fail-closed), IP allowlist — all in the KV value; Retry-After from "Back on" [AV-18+] | F5 |
-| U10 | SEO [AV-19] | F5 |
-| U11 | Integrations (typed) + notification prefs [AV-20] | F8, F5 |
-| U12 | Users & roles: emails, invites (resend/cancel), **owner protection**, Security card (session ≤ 7 days, invite domain, invite message; "Require 2FA" arrives with U17), read-only matrix [AV-21+] | F8 |
-| U13 | Activity log: person/date/kind filters, names, plain language, export under the lockdown (`export.csv` holders; the §5 export row label is extended, no new cap) [AV-22+] | F8, F4 |
-| U14 | Page visibility (own table, Admin+Dev): public / hidden (404 or redirect to any page) / link only / **password** (pre-cache gate, private no-store, bcrypt via service RPC, signed per-page cookie, limiter) / hide-from–show-on dates; template-wide hide; KV snapshot; nav/sitemap/llms exclusion [AV-13+] | F4 |
-| U15 | GA4 behind `hasConsent('analytics')`: same-origin loader, CSP sources only while an id is set (Report-Only cycle), GA tab via the Data API | F5, U11 |
-| U16 | Help centre: `help_articles` (typed blocks, no HTML), the "?" drawer with search, per-screen guides filtered by caps; articles rewritten for built features | F3 |
-| U17 | 2FA: TOTP enrolment in Account, "Require 2FA" (aal2 in `resolveAuthContext`), Admin "Reset 2FA" (audited) | F8, U12 |
+| # | Slice | Depends | Status (Z1, 2026-11-05) |
+|---|---|---|---|
+| U1 | Dashboard + per-user layout + quick actions + owner role presets + team notes [AV-09+] | F8, F4 | Built: [U1](as-built/U1.md) |
+| U2 | Website stats v1 + Site health v1 + `rollup_daily_vitals` [AV-10] | F4 | Built: [U2](as-built/U2.md) |
+| U3 | Uploads pipeline (A5, re-encode, EXIF strip, 25 MB, schema widening) [AV-11+] | F0, H3 | Built: [U3](as-built/U3.md) |
+| U4 | Media library + picker with upload [AV-12] | F5, U3 | Built: [U4](as-built/U4.md) |
+| U5 | Services area (value cards ≤ 4, problems ≤ 5, after checking rows) [AV-14] | F5, U4 | Built: [U5-U6](as-built/U5-U6.md) |
+| U6 | Projects area [AV-15] | F5, U4 | Built: [U5-U6](as-built/U5-U6.md) |
+| U7 | Collections + `faq_items` (delta seed before `CONTACT_FAQ` goes; e2e keeps FAQ + JSON-LD) [AV-16] | F5 | Built: [U7](as-built/U7.md) |
+| U8 | Creative Knowledge, Style-Finder, Job applications on the kit [AV-17] | F5 | Built: [U8](as-built/U8.md) |
+| U9 | General: typed identity, favicon/manifest, footer columns, timezone (closed list); maintenance with bilingual copy, background, contact buttons, "Back on" auto-off, show date, a staff-bypass toggle (fail-closed), IP allowlist — all in the KV value; Retry-After from "Back on" [AV-18+] | F5 | Built: [U9](as-built/U9.md) |
+| U10 | SEO [AV-19] | F5 | Built: [U10](as-built/U10.md) |
+| U11 | Integrations (typed) + notification prefs [AV-20] | F8, F5 | Built: [U11](as-built/U11.md), [U11c](as-built/U11c.md) |
+| U12 | Users & roles: emails, invites (resend/cancel), **owner protection**, Security card (session ≤ 7 days, invite domain, invite message; "Require 2FA" arrives with U17), read-only matrix [AV-21+] | F8 | Built: [U12a](as-built/U12a.md), [U12b](as-built/U12b.md) (invites off until SMTP, O-2) |
+| U13 | Activity log: person/date/kind filters, names, plain language, export under the lockdown (`export.csv` holders; the §5 export row label is extended, no new cap) [AV-22+] | F8, F4 | Built: [U13](as-built/U13.md) |
+| U14 | Page visibility (own table, Admin+Dev): public / hidden (404 or redirect to any page) / link only / **password** (pre-cache gate, private no-store, bcrypt via service RPC, signed per-page cookie, limiter) / hide-from–show-on dates; template-wide hide; KV snapshot; nav/sitemap/llms exclusion [AV-13+] | F4 | Built: [U14a](as-built/U14a.md), [U14b](as-built/U14b.md) |
+| U15 | GA4 behind `hasConsent('analytics')`: same-origin loader, CSP sources only while an id is set (Report-Only cycle), GA tab via the Data API | F5, U11 | Built: [U15](as-built/U15.md) (held off until the notice sign-off; the GA tab waits on O-18) |
+| U16 | Help centre: `help_articles` (typed blocks, no HTML), the "?" drawer with search, per-screen guides filtered by caps; articles rewritten for built features | F3 | Built: [U16](as-built/U16.md) |
+| U17 | 2FA: TOTP enrolment in Account, "Require 2FA" (aal2 in `resolveAuthContext`), Admin "Reset 2FA" (audited) | F8, U12 | Built: [U17](as-built/U17.md) |
 
 **Phase 2 — Releases** (backend lane starts after F0)
 
-| # | Slice | Depends |
-|---|---|---|
-| R1 | Ledger schema, registry, protected flag table, snapshot coverage, `content_versions` hardening (inert; P-14 grants) | F0 |
-| R2 | Registry, caps and overlay core (TS) | R1 |
-| R3 | Staged writes in the kernel (behind the flag) | R2 |
-| R4 | `apply_release` (fail-fast, ~60-item cap, tenant from profile) + capture | R1 |
-| R5 | Guard (no depth exemption), cascade + out-of-band capture, `media_usage` v4, attention v4 | R4 |
-| R6 | Publish + validate endpoints | R3, R4 |
-| R7 | Purge seam (cache-layer aware + CI check), `SECTION_READS`, `media:all` on 8 routes, minute cron | R2, R6 |
-| R8 | Preview data seam (narrowed overlay, `range()` paging, fail-closed ribbon) | R2 |
-| R9 | Preview route, layout mode, bridge (in `src/lib/admin`), CSP `frame-src` | R8 |
-| R10 | Versions, history (+ page-scoped restore), Restore vN | R6, R9, R5 |
-| R11 | Scheduled releases + enable/disable functions | R6, R7, R5 |
-| R12 | Release UX I: savebar, review, publish dialog (per-item eligibility), conflicts, badges, draft autosave | R6, R7, R9, F5 |
-| R13 | Release UX II: Backups & versions page, history drawer, dashboard publish card | R10, R11, R12 |
-| R14 | **Switch-on**: amendments, runbook, e2e in release mode, static write-path test, CPU measurements (O-16) | R3–R13 + staged U screens |
-| R17 | Scheduled content backups: daily export-backup JSON to R2 (keep 30), "Back up now", download under the lockdown, restore as drafts through releases | R10, R14 |
+| # | Slice | Depends | Status (Z1, 2026-11-05) |
+|---|---|---|---|
+| R1 | Ledger schema, registry, protected flag table, snapshot coverage, `content_versions` hardening (inert; P-14 grants) | F0 | Built: [R1](as-built/R1.md) |
+| R2 | Registry, caps and overlay core (TS) | R1 | Built: [R2](as-built/R2.md) |
+| R3 | Staged writes in the kernel (behind the flag) | R2 | Built: [R3a](as-built/R3a.md), [R3b](as-built/R3b.md) |
+| R4 | `apply_release` (fail-fast, ~60-item cap, tenant from profile) + capture | R1 | Built: [R4](as-built/R4.md) |
+| R5 | Guard (no depth exemption), cascade + out-of-band capture, `media_usage` v4, attention v4 | R4 | Built: [R5](as-built/R5.md) |
+| R6 | Publish + validate endpoints | R3, R4 | Built: [R6](as-built/R6.md) |
+| R7 | Purge seam (cache-layer aware + CI check), `SECTION_READS`, `media:all` on 8 routes, minute cron | R2, R6 | Built: [R7](as-built/R7.md) |
+| R8 | Preview data seam (narrowed overlay, `range()` paging, fail-closed ribbon) | R2 | Built: [R8](as-built/R8.md) |
+| R9 | Preview route, layout mode, bridge (in `src/lib/admin`), CSP `frame-src` | R8 | Built: [R9](as-built/R9.md) |
+| R10 | Versions, history (+ page-scoped restore), Restore vN | R6, R9, R5 | Built: [R10](as-built/R10.md) |
+| R11 | Scheduled releases + enable/disable functions | R6, R7, R5 | Built: [R11](as-built/R11.md) |
+| R12 | Release UX I: savebar, review, publish dialog (per-item eligibility), conflicts, badges, draft autosave | R6, R7, R9, F5 | Built: [R12](as-built/R12.md), [R12b](as-built/R12b.md) |
+| R13 | Release UX II: Backups & versions page, history drawer, dashboard publish card | R10, R11, R12 | Built: [R13](as-built/R13.md) |
+| R14 | **Switch-on**: amendments, runbook, e2e in release mode, static write-path test, CPU measurements (O-16) | R3–R13 + staged U screens | Prepared and rehearsed: [R14-prep](as-built/R14-prep.md), [R14a](as-built/R14a.md). The switch-on waits on the owner (O-5, a final go after a green rehearsal) |
+| R17 | Scheduled content backups: daily export-backup JSON to R2 (keep 30), "Back up now", download under the lockdown, restore as drafts through releases | R10, R14 | Not built (after R14; O-17) |
 
 **Phase 3 — Page editing & appearance** (after R9 + R12)
 
-| # | Slice | Depends |
-|---|---|---|
-| E1 | Pages list + page editor core [AV-25] | R12, F6, U10 |
-| E2 | Live preview column [AV-26] | E1, R9 |
-| E3 | Template editors + editable shared text (`template_copy`, staged, AR required, code defaults) [AV-31+] | E2, U5, U6 |
-| E4 | Theme v1 + `theme.css` + contrast gate + motion-reducing settings [AV-27+] | R12, E2 |
-| E5 | Header + `site_appearance` (bucketed options, as in Track UI) [AV-28+] | R12, E2 |
-| E6 | Footer [AV-29] | E5, U9 |
-| E7 | Loading screen (all styles incl. bar and tagline; lhci re-gate) [AV-30+] | E5 |
-| E8 | Forms config: labels, visible/required for optional fields, order, button text, budget labels, consent-copy versions, captcha toggle (O-19); server validation follows the config | R12, U9 |
-| E9 | Section appearance: background/spacing/reveal variants, editable anchors (slug rules, unique per page); contrast pairs + visual baselines | E1 |
-| E10 | New section types: Text block, Gallery, Video (showreel window, zero bytes before intersection) | E1 |
-| E11 | Custom pages: New page + Tier A `[slug]` and `/ar/[slug]` routes with SeoHead, JSON-LD, sitemap, hreflang, tags [AV-33] | E10 |
-| E12 | Theme v2: radius, button style, heading weight/case tokens + visual regression [AV-32] | E4 |
-| E13 | Font catalogue: curated self-hosted families (pre-subset woff2 + per-weight/per-script metric fallbacks, ≤ 180 KB/route) | E12 |
+| # | Slice | Depends | Status (Z1, 2026-11-05) |
+|---|---|---|---|
+| E1 | Pages list + page editor core [AV-25] | R12, F6, U10 | Built: [E1](as-built/E1.md) |
+| E2 | Live preview column [AV-26] | E1, R9 | Built: [E2](as-built/E2.md) |
+| E3 | Template editors + editable shared text (`template_copy`, staged, AR required, code defaults) [AV-31+] | E2, U5, U6 | Built: [E3](as-built/E3.md) |
+| E4 | Theme v1 + `theme.css` + contrast gate + motion-reducing settings [AV-27+] | R12, E2 | Built: [E4](as-built/E4.md) |
+| E5 | Header + `site_appearance` (bucketed options, as in Track UI) [AV-28+] | R12, E2 | Built: [E5](as-built/E5.md) |
+| E6 | Footer [AV-29] | E5, U9 | Built: [E6](as-built/E6.md) |
+| E7 | Loading screen (all styles incl. bar and tagline; lhci re-gate) [AV-30+] | E5 | Built: [E7](as-built/E7.md) |
+| E8 | Forms config: labels, visible/required for optional fields, order, button text, budget labels, consent-copy versions, captcha toggle (O-19); server validation follows the config | R12, U9 | Built: [E8](as-built/E8.md) (the captcha waits on O-19) |
+| E9 | Section appearance: background/spacing/reveal variants, editable anchors (slug rules, unique per page); contrast pairs + visual baselines | E1 | Built: [E9](as-built/E9.md) |
+| E10 | New section types: Text block, Gallery, Video (showreel window, zero bytes before intersection) | E1 | Built: [E10](as-built/E10.md) |
+| E11 | Custom pages: New page + Tier A `[slug]` and `/ar/[slug]` routes with SeoHead, JSON-LD, sitemap, hreflang, tags [AV-33] | E10 | Built: [E11](as-built/E11.md) |
+| E12 | Theme v2: radius, button style, heading weight/case tokens + visual regression [AV-32] | E4 | Built: [E12](as-built/E12.md) |
+| E13 | Font catalogue: curated self-hosted families (pre-subset woff2 + per-weight/per-script metric fallbacks, ≤ 180 KB/route) | E12 | Built: [E13](as-built/E13.md) (the brand's families until O-21) |
 
 **Phase 4 — CRM core + Sales** (lane starts after F4/F5)
 
-| # | Slice | Depends |
-|---|---|---|
-| C1 | Leads v2 schema (all P-14 + DB-layer PII rules, spam, lead_number, ingest RPC) | F0, H1, H2 |
-| C2 | Leads read API (query/board/summary, audited reveal, notes path, directory) | C1 |
-| C3 | Leads write API (versioned PATCH, bulk with per-lead audit, manual add, erase, export filters) | C2 |
-| C4 | Leads UI (list + KPIs, board with keyboard "Move to…", detail, add drawer) | C3, F5 |
-| C5 | Contacts schema + ingest linking + phone link-and-flag + retention + person erase (**merge gated on O-11**) | C3 |
-| C6 | Contacts API | C5 |
-| C7 | Contacts UI + contacts in ⌘K | C6, C4 |
-| C8 | Tasks | C6, F5 |
-| C9 | CRM settings (stages with a colour picker + AA gate, scoring, custom fields, SLA, assignment) | C4, C7 |
-| C10 | **Sales role** (enum file alone, then helpers; `ROLE_CAPS`, §5, architecture §3.4 parsed by CI; catalog-driven exposure test; `analytics.read`) | C4, C7, C8, C9 |
-| C11 | Companies + find-or-create at ingest | C7, C10 |
-| C12 | Merge duplicates | C7, C10 |
-| C13 | Lead attribution (consent-gated) + privacy notice — **blocked on O-11** | C2 |
-| C14 | Contract (drop legacy status / internal_notes / ip_inet) | C4, C10 |
-| C15 | CSV import (`crm.import`, Admin): server parse, ≤ 5,000 rows / 2 MB, per-row lawful basis, blind-index dedupe, rate-limited, audited counts | C7 |
-| C16 | Contact files (private bucket, byte-sniffed, audited download) | C7 |
+| # | Slice | Depends | Status (Z1, 2026-11-05) |
+|---|---|---|---|
+| C1 | Leads v2 schema (all P-14 + DB-layer PII rules, spam, lead_number, ingest RPC) | F0, H1, H2 | Built: [C1a-1](as-built/C1a-1.md), [C1a-2](as-built/C1a-2.md), [C1b](as-built/C1b.md) |
+| C2 | Leads read API (query/board/summary, audited reveal, notes path, directory) | C1 | Built: [C2a](as-built/C2a.md), [C2b](as-built/C2b.md) |
+| C3 | Leads write API (versioned PATCH, bulk with per-lead audit, manual add, erase, export filters) | C2 | Built: [C3](as-built/C3.md) |
+| C4 | Leads UI (list + KPIs, board with keyboard "Move to…", detail, add drawer) | C3, F5 | Built: [C4a](as-built/C4a.md), [C4b](as-built/C4b.md), [C4c](as-built/C4c.md), [C4-star-race](as-built/C4-star-race.md) |
+| C5 | Contacts schema + ingest linking + phone link-and-flag + retention + person erase (**merge gated on O-11**) | C3 | Not built: its merge waits on O-11 (legal) |
+| C6 | Contacts API | C5 | Not built (after C5) |
+| C7 | Contacts UI + contacts in ⌘K | C6, C4 | Not built (after C6) |
+| C8 | Tasks | C6, F5 | Not built (after C6) |
+| C9 | CRM settings (stages with a colour picker + AA gate, scoring, custom fields, SLA, assignment) | C4, C7 | Lead settings built: [C9a](as-built/C9a.md); contact settings and custom fields come with C7 |
+| C10 | **Sales role** (enum file alone, then helpers; `ROLE_CAPS`, §5, architecture §3.4 parsed by CI; catalog-driven exposure test; `analytics.read`) | C4, C7, C8, C9 | Built for leads: [C10a](as-built/C10a.md); contacts and tasks for Sales come with C7 and C8 |
+| C11 | Companies + find-or-create at ingest | C7, C10 | Not built (after C7) |
+| C12 | Merge duplicates | C7, C10 | Not built (after C7) |
+| C13 | Lead attribution (consent-gated) + privacy notice — **blocked on O-11** | C2 | Not built: waits on O-11 (legal) |
+| C14 | Contract (drop legacy status / internal_notes / ip_inet) | C4, C10 | Built: [C14a](as-built/C14a.md), [C14b](as-built/C14b.md) |
+| C15 | CSV import (`crm.import`, Admin): server parse, ≤ 5,000 rows / 2 MB, per-row lawful basis, blind-index dedupe, rate-limited, audited counts | C7 | Not built (after C7) |
+| C16 | Contact files (private bucket, byte-sniffed, audited download) | C7 | Not built (after C7) |
 
 **Phase 5 — Growth within the standard**
 
-| # | Slice | Depends |
-|---|---|---|
-| G1 | Stats v2 on already-consented data: sessions, events (`cta_click`, `service_interest`), views→inquiry funnel, busiest hours (Riyadh), goals, realtime from a 1-minute rollup | U2 |
-| G2 | Health v2: uptime from the external monitor's API (O-20), SSL/domain expiry via RDAP in the daily cron, failing checks in the bell | U2, F8 |
+| # | Slice | Depends | Status (Z1, 2026-11-05) |
+|---|---|---|---|
+| G1 | Stats v2 on already-consented data: sessions, events (`cta_click`, `service_interest`), views→inquiry funnel, busiest hours (Riyadh), goals, realtime from a 1-minute rollup | U2 | Built: [G1](as-built/G1.md) |
+| G2 | Health v2: uptime from the external monitor's API (O-20), SSL/domain expiry via RDAP in the daily cron, failing checks in the bell | U2, F8 | Built: [G2](as-built/G2.md) (uptime needs O-20) |
 
 **Phase 6 — Closure**
 
-| # | Slice | Depends |
-|---|---|---|
-| Z1 | Admin visual baselines (1440/390), full per-role axe matrix with dialogs open, docs + TDD coverage closure [AV-34] | E1, E4, E5, U12, U13, C10 |
-| R15 | Release contract | R14 + one stable cycle |
-| R16 | PDPL history redaction — **legal-gated (O-12)** | R4, R14 |
+| # | Slice | Depends | Status (Z1, 2026-11-05) |
+|---|---|---|---|
+| Z1 | Admin visual baselines (1440/390), full per-role axe matrix with dialogs open, docs + TDD coverage closure [AV-34] | E1, E4, E5, U12, U13, C10 | Built: [Z1](as-built/Z1.md) |
+| R15 | Release contract | R14 + one stable cycle | Not built (after R14 and one stable cycle) |
+| R16 | PDPL history redaction — **legal-gated (O-12)** | R4, R14 | Not built: waits on O-12 (legal) |
 
 **Later** (each its own approval; gated by legal or A1):
 - L5: tracking that needs PDPL sign-off (referrer, UTM, device, country, a persistent visitor id).
@@ -584,7 +584,7 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
   - admin static rules: no style props, no runtime `<style>`, no admin `<script>`, no colour literals, sprite and font-face parity, nav hrefs resolve;
   - chunk contents.
 - **E2E (EN+AR)**:
-  - per-role admin sweep;
+  - per-role admin sweep, and every dialog its screens open (the Z1 matrix);
   - releases: draft → preview → publish → public, rollback, conflict, schedule;
   - preview parity (every Tier A route) and isolation;
   - CRM round trip and Sales negative paths;
@@ -603,18 +603,18 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
 2. **Before R14**: a staging rehearsal with releases on, the full e2e suite in release mode, CPU measured (O-16), and the owner walking the prototype's flows.
 3. **TDD §18 acceptance, mapped**:
 
-   | Acceptance item | Slice | Status |
-   |---|---|---|
-   | Every route for every role: no errors, no overflow, sidebar per role | F0/Z1 | ✓ per-role sessions replace View as; https, not `file://` |
-   | Homepage headline visible after Publish, not before | R14 | ✓ |
-   | Hidden page returns 404 and leaves the menu | U14 | ✓ incl. sitemap/llms and KV re-sync after rollback |
-   | 503 for visitors, signed-in admin passes | U9 | ✓ fail-closed (built: `tests/admin/maintenance.e2e.ts`) |
-   | Sales cannot open users by URL, API or PostgREST | C10 | ✓ |
-   | A deleted project comes back | R10 | ✓ Restore vN, with portfolio children |
-   | A form submission is a lead within 5 s | C1 | ✓ bell notification; email delivery is L6 |
-   | Template editor + preview | E2/E3 | ✓ after the autosave reload |
-   | Public pages clean | R9 | ✓ inverted: the bridge must *not* be on public pages |
-   | Campaign / WhatsApp 24 h / automation / Get connected | L6 | — |
+   | Acceptance item | Slice | Status | As built (Z1, 2026-11-05) |
+   |---|---|---|---|
+   | Every route for every role: no errors, no overflow, sidebar per role | F0/Z1 | ✓ per-role sessions replace View as; https, not `file://` | Built: the F0 sweep (`tests/admin/sweep.e2e.ts`, every screen each role's sidebar offers, axe included), Z1's dialog matrix (`tests/admin/dialogs.e2e.ts`: every dialog those screens open, per role, axe with it open) and the admin visual baselines at 1440 and 390 (`tests/visual/admin.visual.ts`, made and checked by the hand-run `admin-visual.yml`, [Z1](as-built/Z1.md)) |
+   | Homepage headline visible after Publish, not before | R14 | ✓ | Built in the release-mode rehearsal ([R14-prep](as-built/R14-prep.md), [R14a](as-built/R14a.md)): `tests/admin/releases-mode.e2e.ts` publishes a pending change and reads it on the public page, then a scheduled release and a rollback. Production waits on R14's switch-on (O-5) |
+   | Hidden page returns 404 and leaves the menu | U14 | ✓ incl. sitemap/llms and KV re-sync after rollback | Built: `tests/admin/visibility.e2e.ts` ([U14a](as-built/U14a.md), [U14b](as-built/U14b.md)) |
+   | 503 for visitors, signed-in admin passes | U9 | ✓ fail-closed (built: `tests/admin/maintenance.e2e.ts`) | Built: `tests/admin/maintenance.e2e.ts` ([U9](as-built/U9.md)) |
+   | Sales cannot open users by URL, API or PostgREST | C10 | ✓ | Built: [C10a](as-built/C10a.md) (`tests/admin/refusals.e2e.ts`, `endpoints.spec`, the catalog-driven pgTAP) |
+   | A deleted project comes back | R10 | ✓ Restore vN, with portfolio children | Built with releases on: [R10](as-built/R10.md)'s Restore vN (`tests/admin/backups.e2e.ts`, the rehearsal's rollback); a full restore is the quarterly DR drill |
+   | A form submission is a lead within 5 s | C1 | ✓ bell notification; email delivery is L6 | Built: [C1b](as-built/C1b.md)'s ingest and [F8](as-built/F8.md)'s bell; `notify-lead` writes `notification_log` ([H9](as-built/H9.md)) and sends nothing (A1) |
+   | Template editor + preview | E2/E3 | ✓ after the autosave reload | Built: [E2](as-built/E2.md), [E3](as-built/E3.md) (`tests/admin/templates.e2e.ts`, `page-preview.e2e.ts`) |
+   | Public pages clean | R9 | ✓ inverted: the bridge must *not* be on public pages | Built: [R9](as-built/R9.md) (`tests/admin/preview-isolation.e2e.ts`, `preview-parity.e2e.ts`) |
+   | Campaign / WhatsApp 24 h / automation / Get connected | L6 | — | Not built (A1) |
 
 ## Owner items
 
@@ -650,6 +650,53 @@ with the client's TDD checked row by row. O-13 asks the owner to approve it.
   - **O-24** Supabase Auth on staging and production (launch runbook §2a, F8): require the current password to change one, minimum password length 10, Secure password change on; and accept what remains (a direct call at the auth server counts no lockout, and a direct change is audited only in GoTrue's own log, as `user_updated_password`, never in the app's hash-chained `audit_log`). Until then a session token alone changes its owner's password at the auth server, and GoTrue signs out every other session of that user, the owner's own devices included ([deviations.md](deviations.md), residual risks, which also names a compensating alert the owner may choose). And for F7 (runbook §2c): a session inactivity timeout of 7 days, the session cookie's own, and optionally a time-box, so a copied session cookie stops working too (a paid-plan setting); until then the residual CLAUDE.md §3 states stands.
   - **O-25** Two factor sign in (U17, launch runbook §2d): confirm Supabase Auth's TOTP is enabled on staging and production (enrol and verify, at most 10 factors; the hosted default), and accept what stays open ([deviations.md](deviations.md), residual risks): a code typed at Supabase Auth's own verify endpoint counts no lockout, people who have not set 2FA up are protected by their password alone, a token minted before 2FA or Require was turned on keeps its role at PostgREST for up to an hour, and there are no recovery codes (a lost phone needs an Admin's Reset 2FA; the owner's needs the runbook, §3a). Also a product confirmation (with O-13): setup lives on its own page, `/admin/2fa`, not in the account drawer, and Require 2FA's hint says "at their next click", not the prototype's "at next sign-in".
   - **O-26** *Done 2026-10-31 (supply-chain hardening PR):* every action in every workflow is pinned to a commit (`actions/checkout` v4.3.1 and `actions/setup-node` v4.4.0 at the deploy job's commits, `supabase/setup-cli` at v1.7.3's), and the preview wait is a `curl` loop instead of `npx wait-on`, which fetched an unpinned package at run time. `tests/ci/workflows.spec.ts` holds both: a commit pin on every `uses`, one commit per action, and no `npx` of a package outside the lockfile. Renovate can move the pins (`helpers:pinGitHubActionDigests`).
+
+## Open owner items and legal holds (Z1, 2026-11-05)
+
+Everything still waiting on the owner or on a lawyer, in one place, as the closing pass found it
+on main d48e287d. "Built to the default" means a slice shipped the recommended answer and the
+owner's confirmation is what remains; the item's own text is under "Owner items" above.
+
+| Item | Waits for | What it holds back | State |
+|---|---|---|---|
+| O-1 | The `media` bucket on staging and production | Uploads (U3) in each project | Built to the default (U3's migration creates it); the owner confirms it in each project |
+| O-2 | SMTP for Supabase Auth, the recovery template, `AUTH_EMAIL_READY` | Invites (U12b), Forgot password (F7); the reset-token residual | Open |
+| O-3 | A Cloudflare zone and a purge-only token (KAN-20) | Edge caching of Tier A and every purge (R7 logs a no-op) | Open |
+| O-4 | Approval of the release semantics | R14's switch-on | Built to the default (R11, R12); approval open |
+| O-5 | The switch-on window, operator and fallback scheduler | R14 | Open: a final go after a green rehearsal (decided 2026-10-28) |
+| O-6 | Sales sees budget and timeline one lead at a time | The CRM's Sales posture | Built to the default (C10a); confirmation open |
+| O-7 | Developer gets no CRM contacts or tasks | C7, C8 | Default recorded; applies when they are built |
+| O-8 | Legacy "done" leads backfill to Lost | The leads contract | Built to the default (C1a-2, C14b); confirmation open |
+| O-9 | Reveal and erasure limits, Admin-only erasure, manual assignment, the Tasks badge | The CRM | Built to the defaults (C2b, C3, C9a); confirmation open |
+| O-10 | Stage presets and tones; the studio's time zone | The CRM | Built to the defaults (C9a; the zone is `site_settings.timezone` since U9); confirmation open |
+| O-11 | **Legal:** the privacy-notice updates | C5 (contacts) and C13 (attribution), so C6 to C8, C11, C12, C15, C16 after them | Open |
+| O-12 | **Legal:** history redaction and a retention period for release history | R16, and two R14 blockers in the residual-risks register ([deviations.md](deviations.md): team members not captured; a removed quote stays in history) | Open |
+| O-13 | Approval of the deviations register | The register as it stands | Open |
+| O-14 | The logo stays code, the FAQ's owner, "Keep me signed in" on, the intro switch | E7, U7, F7 | Built to the defaults; confirmation open |
+| O-15 | The admin bundle budget | — | Decided: the per-screen eager graph ≤ 300 KB is the gate, the sum a 450 KB tripwire (2026-10-18, 2026-10-28) |
+| O-16 | CPU and subrequest measurements on staging | The Workers plan (Free or Paid) | Open |
+| O-17 | An R2 bucket for scheduled content backups | R17 | Open |
+| O-18 | A GA4 property and a Data API service account | GA4's switch-on (with the notice, below) and the GA tab | Open |
+| O-19 | A captcha provider | The forms' captcha (shown as Not set up) | Open |
+| O-20 | The uptime monitor's API key | G2's uptime figures | Open |
+| O-21 | Font families with web licences | E13's catalogue beyond Archivo and Almarai | Open |
+| O-22 | Invites that last at most a day, with Resend | Invites | Built to the default (U12b); waits on O-2 too |
+| O-23 | Production checks: Postgres ≥ 15, the leads grants, pg_cron and RLS | Retention jobs on production | Open |
+| O-24 | Supabase Auth's password and session settings, and the residuals | F7, F8 | Open; the residuals expire 2026-11-30 and 2026-12-31 ([deviations.md](deviations.md)) |
+| O-25 | TOTP on staging and production, and what stays open | U17 | Open; the residual expires 2026-12-31 |
+| O-26 | Actions pinned to commits | — | Done 2026-10-31 |
+
+Legal holds outside the O-items:
+- **GA4's notice:** `GA4_NOTICE_READY` stays off in production until the owner signs off the
+  privacy notice that names Google (U15; launch runbook §2e), then O-18.
+- **Raw telemetry retention:** `RAW_TELEMETRY_RETENTION` (90 days) waits on PDPL sign-off and
+  may only go shorter (CLAUDE.md, Pillar 4).
+- **L5:** referrer, UTM, device, country and a persistent visitor id wait on PDPL sign-off.
+- **The legal review register** (`docs/legal/review-register.md`): L-1, the font licences'
+  notice (LOW, open). Go-live waits on every HIGH item; there is none open.
+
+The security exceptions the owner holds, each with its expiry, are in
+`docs/security-exceptions.md` (open: EXC-004, EXC-006 to EXC-013).
 
 ## Risks
 
@@ -781,3 +828,6 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [W0-b](as-built/W0-b.md): endpoint cases per feature, the route coverage check, the renumber script
 - [W0-c](as-built/W0-c.md): the admin registries, the screen stylesheets, the `Admin*` islands
 - [W0-d](as-built/W0-d.md): the `contentClient()` seam and the cron job registry
+
+**Closure**
+- [Z1](as-built/Z1.md): the closing pass (AV-34): the per-role axe matrix with every dialog open (`tests/admin/dialogs.ts`, held complete by `adminDialogs.spec`; the shared confirm named by its question), the admin visual baselines at 1440 and 390 made and checked only by the hand-run `admin-visual.yml` (never a required gate), the TDD table and the acceptance scripts as built, the slice statuses, and the open owner items and legal holds in one list; no migration (PR number at review)
