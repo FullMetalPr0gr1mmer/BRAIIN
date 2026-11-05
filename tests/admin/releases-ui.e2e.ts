@@ -168,10 +168,21 @@ test.describe('releases on, as admin: a new post', () => {
     await open(page, '/admin/blog/new');
     const form = page.locator('form.editor').first();
     await expect(form).toBeAttached();
-    // Every field tab is mounted (U8), so the Publishing tab's fields are in the form.
+    // The create opens on Content; the Publishing tab holds the status. Every field tab is
+    // mounted (U8), but a hidden panel is out of the accessibility tree, so a role query finds
+    // nothing in it: the tab is opened first (the rehearsal on c09daaed counted 0 switches
+    // here, the switch drawn but `hidden`; tests/lib/releaseCreateForms.spec.ts).
+    await page
+      .getByRole('tablist', { name: 'Post editor' })
+      .getByRole('tab', { name: 'Publishing', exact: true })
+      .click();
+    const visible = form.getByRole('switch', { name: 'Visible on the site' });
+    await expect(visible).toBeVisible();
+    await expect(visible).toHaveCount(1);
+    await expect(visible).toHaveAttribute('aria-checked', 'false');
+    // The CSS locators count a hidden panel's controls too: neither is drawn anywhere.
     await expect(form.locator('select#f-status')).toHaveCount(0);
     await expect(form.locator('input#f-scheduledFor')).toHaveCount(0);
-    await expect(form.getByRole('switch', { name: 'Visible on the site' })).toHaveCount(1);
   });
 });
 
