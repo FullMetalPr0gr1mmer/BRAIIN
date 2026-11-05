@@ -1,7 +1,8 @@
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 -- R14b (Admin v2, what the release switch-on needs) — the publishing guide, saving-and-publishing,
 -- and the page-visibility guide, for both ways of publishing. Forward-only and EXPAND only: two
--- guides change through H11's catalog. Nothing else changes. The number is a placeholder: numbers are assigned at the merge
+-- guides change through H11's catalog, and one partial unique index joins content_drafts (below).
+-- Nothing else changes. The number is a placeholder: numbers are assigned at the merge
 -- train (docs/admin-v2/migrations.md), and this file is renumbered with
 -- scripts/renumber-migration.mjs to the next free number above main's highest. Depends on the
 -- help centre (help_articles, U16) and H11's catalog (app.help_guide_catalog,
@@ -18,11 +19,30 @@
 -- same rule: R14b stages a visibility setting with releases on (the password stays immediate),
 -- and its guide says so, revision 1 to 2.
 --
+-- One pending visibility create per target (R14b review). R14b stages a page's first visibility
+-- setting as a create under a Worker-allocated id, found again by its target, so two first saves
+-- for the same page at the same moment could each stage a create; publishing both would then hit
+-- page_visibility's one-row-per-page key and abort the whole release. This index refuses the
+-- second, as content_drafts_one_seo_create (0038) does for entity SEO: write_drafts re-raises it
+-- (23505), and the Worker answers it as a draft conflict (src/lib/release/drafts.ts). The key is
+-- the target as the Worker keys it (targetKey: `page:<id>` or `template:<name>`, the page id
+-- lower-cased); a payload with neither stays NULL and is never refused here (the draft schema
+-- refuses it). content_drafts holds no visibility create in production (releases are off and the
+-- guard refused every staff visibility write), so the build cannot meet a duplicate.
+--
 -- No table, function, grant or policy is created or changed, so there is no privilege to
 -- state; each put re-seeds its one slug into every tenant and touches no other guide.
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 
 set local lock_timeout = '5s';
+
+create unique index if not exists content_drafts_one_visibility_create
+  on public.content_drafts (
+    tenant_id,
+    (coalesce('page:' || pg_catalog.lower(payload #>> '{target,pageId}'),
+              'template:' || (payload #>> '{target,template}')))
+  )
+  where entity_type = 'page_visibility' and op = 'create';
 
 select app.put_help_guide($guide$
 {
@@ -295,6 +315,15 @@ do $$
 declare
   v_bad text;
 begin
+  -- ---- 0. One pending visibility create per target: the partial unique index ---------------
+  if not exists (select 1 from pg_catalog.pg_indexes i
+                  where i.schemaname = 'public' and i.tablename = 'content_drafts'
+                    and i.indexname = 'content_drafts_one_visibility_create'
+                    and i.indexdef ilike 'create unique index%'
+                    and i.indexdef ilike '%page_visibility%') then
+    raise exception 'R14b: content_drafts_one_visibility_create is missing or not unique';
+  end if;
+
   -- ---- 1. The guide: in the catalog at revision 2, place 40, its six caps -----------------
   if not exists (select 1 from app.help_guide_catalog c
                   where c.slug = 'saving-and-publishing' and c.revision = 2 and c.sort_order = 40

@@ -173,6 +173,35 @@ describe('PUT with releases on: a pending change, nothing live', () => {
     expect(edge).toEqual({ syncs: 0, purges: 0 });
   });
 
+  it('two first saves at once: the database keeps one create per target, the second is a 409', async () => {
+    // The second save read no pending create (the first had not committed), so it stages its
+    // own under a new id; the partial unique index of 0128 refuses it and write_drafts
+    // re-raises 23505 (R14b review). The Worker answers it as the conflict it is.
+    db.fail = (call) =>
+      call.kind === 'rpc' && call.name === 'write_drafts'
+        ? {
+            code: '23505',
+            message:
+              'duplicate key value violates unique constraint "content_drafts_one_visibility_create"',
+          }
+        : null;
+    const res = await callRoute(db, (await screen()).PUT, 'PUT', API, {
+      body: { ...body(), staged: true },
+    });
+    expect([res.status, res.body['error']]).toEqual([409, 'draft-conflict']);
+    expect(liveWritesOf(db, 'page_visibility')).toEqual([]);
+    expect(auditsOf(db)).toEqual([]);
+    // Any other unique violation stays an error, never a conflict the screen would retry.
+    db.fail = (call) =>
+      call.kind === 'rpc' && call.name === 'write_drafts'
+        ? { code: '23505', message: 'duplicate key value violates unique constraint "other"' }
+        : null;
+    const other = await callRoute(db, (await screen()).PUT, 'PUT', API, {
+      body: { ...body(), staged: true },
+    });
+    expect(other.status).toBe(500);
+  });
+
   it('no row and "visible to everyone": nothing to stage', async () => {
     const res = await callRoute(db, (await screen()).PUT, 'PUT', API, {
       body: body({ mode: 'public' }),

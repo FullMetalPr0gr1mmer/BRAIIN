@@ -192,6 +192,11 @@ export async function writeDrafts(
         target.entity,
       );
     }
+    if (error.code === '23505' && error.message?.includes(ONE_VISIBILITY_CREATE)) {
+      // Two first saves of one page's visibility at the same moment: the second is the one that
+      // did not see the other's pending change (R14b review; 0038's SEO twin is BR409 in SQL).
+      throw new DraftConflictError('draft-conflict', target.entity);
+    }
     if (error.code === '23514') {
       throw new ValidationError('This change is too large to save. Shorten it and try again.');
     }
@@ -204,6 +209,9 @@ export async function writeDrafts(
   if (!result.success) throw new Error('write_drafts answered in the wrong shape');
   return result.data;
 }
+
+/** The index that allows one pending visibility create per target (R14b, migration 0128). */
+export const ONE_VISIBILITY_CREATE = 'content_drafts_one_visibility_create';
 
 function safeJson(text: unknown): unknown {
   if (typeof text !== 'string') return null;
