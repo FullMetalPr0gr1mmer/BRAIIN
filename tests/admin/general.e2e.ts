@@ -2,7 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
 import { encodeMediaMeta, MEDIA_META_HEADER } from '@schemas/media';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { discardDrafts, publishOwn, savedPattern, withDraft } from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 // General settings v2 (Admin v2 U9), end to end through the real Worker, session and database:
 // Admin saves the identity through the screen (a tagline, a social account hidden, a map link)
@@ -15,11 +16,17 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
 // Its own project (playwright.config.ts `general`), after the public and admin specs and page
 // visibility: it changes the public identity every other spec reads, served-html's bytes
 // included.
+//
+// Both modes (Admin v2 R14b). With releases on the identity is staged: a save names the pending
+// change (releaseSteps.ts `withDraft`), the screen says "Saved as an unpublished change", and
+// the spec publishes its own identity change before each public check (`publishOwn`). The
+// studio's zone is a technical setting, immediate in both modes. Cleanup throws the identity's
+// unclaimed pending change away as the system first, then writes the identity back.
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
+
+const IDENTITY = [{ entityType: 'site_profile' }] as const;
 
 const PROFILE = '/api/admin/site-profile';
 const SETTINGS = '/api/admin/settings';
@@ -49,6 +56,16 @@ async function save(page: Page, url: string, data: Record<string, unknown>, stat
   return res;
 }
 
+/**
+ * Saves the identity on top of what is stored (with releases on, naming its pending change),
+ * then, with releases on, publishes this spec's identity change so the public site has it.
+ */
+async function saveIdentity(page: Page, values: Record<string, unknown>) {
+  const row = await read(page, PROFILE);
+  await save(page, PROFILE, withDraft(row, values));
+  await publishOwn(page, IDENTITY, 0);
+}
+
 /** The identity as the form would send it back (the keys the restore needs). */
 function profileBody(row: Row): Record<string, unknown> {
   return {
@@ -70,6 +87,8 @@ test.describe('as admin', () => {
   test.use({ storageState: authFile('admin'), contextOptions: { reducedMotion: 'reduce' } });
 
   test.beforeAll(async ({ browser }) => {
+    // Releases on: start from the live identity, with no pending change of an earlier run.
+    await discardDrafts(IDENTITY);
     const context = await browser.newContext({ storageState: authFile('admin') });
     const page = await context.newPage();
     original = await read(page, PROFILE);
@@ -81,8 +100,10 @@ test.describe('as admin', () => {
     const context = await browser.newContext({ storageState: authFile('admin') });
     const page = await context.newPage();
     await page.goto('/admin', { waitUntil: 'networkidle' });
-    const now = await read(page, PROFILE);
-    await save(page, PROFILE, { ...profileBody(original), version: now.version });
+    // Releases on: the spec's own pending identity change goes first (as the system), so the
+    // write-back below starts from live and is published alone.
+    await discardDrafts(IDENTITY);
+    await saveIdentity(page, profileBody(original));
     const settings = await read(page, SETTINGS);
     await save(page, SETTINGS, { timezone: originalZone, version: settings.version });
     await context.close();
@@ -116,11 +137,9 @@ test.describe('as admin', () => {
     await switches.nth(1).click();
     await expect(switches.nth(1)).toHaveAttribute('aria-checked', 'false');
     await page.getByRole('button', { name: 'Save general settings' }).click();
+    // "Saved at 14:05", or with releases on "Saved as an unpublished change at 14:05".
     await expect(
-      page
-        .getByRole('status')
-        .filter({ hasText: /Saved at \d\d:\d\d/ })
-        .first(),
+      page.getByRole('status').filter({ hasText: savedPattern() }).first(),
     ).toBeVisible();
 
     await page.locator('#f-timezone').selectOption('Asia/Dubai');
@@ -133,6 +152,8 @@ test.describe('as admin', () => {
       ar: 'من الفكرة إلى الواقع',
     });
     expect((row['socials'] as { visible?: boolean }[])[1]?.visible).toBe(false);
+    // Releases on: the identity change waits; it goes live with this spec's own publish.
+    await publishOwn(page, IDENTITY);
   });
 
   test('the admin clock follows the zone, with no hydration error', async ({ page }) => {
@@ -193,8 +214,7 @@ test.describe('as admin', () => {
 
     // (A picture that is not square, or not an upload, is refused on its field by 0102's
     // trigger: supabase/tests/general_settings.test.sql and tests/lib/generalKit.spec.ts.)
-    const row = await read(page, PROFILE);
-    await save(page, PROFILE, { faviconMediaId: icon, appIconMediaId: icon, version: row.version });
+    await saveIdentity(page, { faviconMediaId: icon, appIconMediaId: icon });
 
     const head = await (await page.request.get('/')).text();
     const links = [
@@ -224,8 +244,9 @@ test.describe('as admin', () => {
     const other = await browser.newContext({ storageState: authFile('admin') });
     const second = await other.newPage();
     await second.goto('/admin', { waitUntil: 'networkidle' });
+    // With releases on, the other tab's save is the pending change this form never saw.
     const row = await read(second, PROFILE);
-    await save(second, PROFILE, { foundedYear: 2019, version: row.version });
+    await save(second, PROFILE, withDraft(row, { foundedYear: 2019 }));
     await other.close();
 
     await page.locator('#f-mapUrl').fill('https://maps.app.goo.gl/e2eConflict');
@@ -239,6 +260,9 @@ test.describe('as admin', () => {
 
 test.describe('as developer', () => {
   test.use({ storageState: authFile('developer') });
+  test.afterAll(async () => {
+    if (staffEnv()) await discardDrafts(IDENTITY);
+  });
 
   test('edits the identity, but the applications switch is off with the reason', async ({
     page,
@@ -248,14 +272,19 @@ test.describe('as developer', () => {
     await expect(toggle).toBeDisabled();
     await expect(page.getByText('Only an admin can open or close job applications.')).toBeVisible();
     const row = await read(page, PROFILE);
-    await save(page, PROFILE, {
-      phoneE164: '+966500000009',
-      phoneDisplay: '050 000 0009',
-      version: row.version,
-    });
+    await save(
+      page,
+      PROFILE,
+      withDraft(row, { phoneE164: '+966500000009', phoneDisplay: '050 000 0009' }),
+    );
+    // Releases on: the read lays the Developer's pending change over live.
     const after = await read(page, PROFILE);
     expect(after['phone_e164']).toBe('+966500000009');
-    await save(page, PROFILE, { phoneE164: null, phoneDisplay: null, version: after.version });
+    // Back as it was: with releases on the change then equals live, so nothing stays pending.
+    await save(page, PROFILE, withDraft(after, { phoneE164: null, phoneDisplay: null }));
+    if (releasesOn()) {
+      expect((await read(page, PROFILE))['draft']).toBeNull();
+    }
     // The server refuses the switch for a Developer whatever the screen shows.
     const res = await page.request.patch('/api/admin/site-profile/intake', {
       headers: { 'x-csrf-token': await csrf(page), origin: new URL(page.url()).origin },

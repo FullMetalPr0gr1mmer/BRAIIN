@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { discardDrafts, publishOwn, savedPattern, systemClient, withDraft } from './releaseSteps';
+import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 // The Header screen (Admin v2 E5), end to end through the real Worker, session and database:
 // Admin saves the header's options through the screen (a large logo, the links beside the
@@ -16,23 +16,22 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
 //
 // Its own project (playwright.config.ts `header`), after `general`: it changes the header every
 // public spec reads, served-html's bytes and the layout-shift measurements included.
+//
+// Both modes (Admin v2 R14b). With releases on the options are staged: each save names the
+// pending change and is published right after, alone (releaseSteps.ts; the project runs by
+// itself, so the many versions it makes are its own), and the screen says "Saved as an
+// unpublished change". The row is removed at the end as the system, after the spec's own
+// unclaimed pending change is thrown away.
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
+
+const APPEARANCE = [{ entityType: 'site_appearance' }] as const;
 
 const API = '/api/admin/site-appearance';
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 type Row = Record<string, unknown> & { version: number };
-
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 async function csrf(page: Page): Promise<string> {
   if (!page.url().includes('/admin')) await page.goto('/admin', { waitUntil: 'networkidle' });
@@ -69,15 +68,19 @@ const AS_BUILT = {
   ctaHref: '/contact#inquiry',
 } as const;
 
-/** Saves the header's options through the screen's API, on top of the stored version. */
+/**
+ * Saves the header's options through the screen's API, on top of what is stored (with releases
+ * on, naming the pending change), then, with releases on, publishes this spec's own change.
+ */
 async function save(page: Page, values: Record<string, unknown>): Promise<void> {
   const token = await csrf(page);
   const row = await read(page);
   const res = await page.request.patch(API, {
     headers: { 'x-csrf-token': token, origin: new URL(page.url()).origin },
-    data: { ...values, version: row.version },
+    data: withDraft(row, values),
   });
   expect(res.status(), await res.text()).toBe(200);
+  await publishOwn(page, APPEARANCE, 0);
 }
 
 /** The logo's width per preset at a viewport width (global.css; LOGO_SIZES). */
@@ -126,11 +129,18 @@ async function makeScrollable(page: Page): Promise<void> {
 
 let tenant: string | null = null;
 
+test.beforeAll(async () => {
+  // Releases on: no pending change of an earlier run under this one's saves.
+  await discardDrafts(APPEARANCE);
+});
+
 test.afterAll(async () => {
   if (!staffEnv()) return;
-  // No row is the header as built: remove what this run saved (the service role, outside any
-  // release; releases are off for this spec).
-  if (tenant) await service().from('site_appearance').delete().eq('tenant_id', tenant);
+  // Releases on: the spec's own unclaimed pending change first (the system's to clean).
+  await discardDrafts(APPEARANCE);
+  // No row is the header as built: remove what this run saved (the service role, which the
+  // release guard lets through: an out-of-band system change, recorded as one).
+  if (tenant) await systemClient().from('site_appearance').delete().eq('tenant_id', tenant);
 });
 
 test.describe('as admin', () => {
@@ -166,11 +176,9 @@ test.describe('as admin', () => {
     await expect(page.locator('.hdr-pv__cta').first()).toHaveText('Start a project');
 
     await page.getByRole('button', { name: 'Save the header' }).click();
+    // "Saved at 14:05", or with releases on "Saved as an unpublished change at 14:05".
     await expect(
-      page
-        .getByRole('status')
-        .filter({ hasText: /Saved at \d\d:\d\d/ })
-        .first(),
+      page.getByRole('status').filter({ hasText: savedPattern() }).first(),
     ).toBeVisible();
     const row = await read(page);
     tenant = String(row['tenant_id']);
@@ -182,6 +190,8 @@ test.describe('as admin', () => {
       header_cta_href: '/contact#inquiry',
       header_tint: 'none',
     });
+    // Releases on: the screen saved a pending change; the public pages need it live.
+    await publishOwn(page, APPEARANCE);
   });
 
   test('the public pages render the saved header, server-side, in both languages', async ({
@@ -288,16 +298,19 @@ test.describe('as admin', () => {
     page,
   }) => {
     const row = await read(page);
+    // The rule is the schema's, so it refuses at stage time too (releases on).
     const refused = await page.request.patch(API, {
       headers: { 'x-csrf-token': await csrf(page), origin: new URL(page.url()).origin },
-      data: { sticky: true, solidAfterHero: false, tint: 'medium', version: row.version },
+      data: withDraft(row, { sticky: true, solidAfterHero: false, tint: 'medium' }),
     });
     expect(refused.status(), await refused.text()).toBe(422);
     const taken = await page.request.patch(API, {
       headers: { 'x-csrf-token': await csrf(page), origin: new URL(page.url()).origin },
-      data: { sticky: true, solidAfterHero: false, tint: 'dark', version: row.version },
+      data: withDraft(row, { sticky: true, solidAfterHero: false, tint: 'dark' }),
     });
     expect(taken.status(), await taken.text()).toBe(200);
+    // Releases on: published, so the next save starts from live, as it does with them off.
+    await publishOwn(page, APPEARANCE);
     const tag = await headerTag(page, '/about');
     expect(tag).toContain('data-solid="off"');
     expect(tag).toContain('data-tint="dark"');

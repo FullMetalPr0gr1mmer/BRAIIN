@@ -1,3 +1,4 @@
+import { savedWords } from '@/components/admin/kit/saveWords';
 import { readFileSync, readdirSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { createElement } from 'react';
@@ -3262,10 +3263,9 @@ describe('saving-and-publishing describes both ways of publishing (Admin v2 R14b
   });
 
   it('names the release-mode controls as the screens draw them', () => {
-    expect(source('src/components/admin/kit/SaveStatus.tsx')).toContain(
-      "return 'Saved as an unpublished change'",
-    );
-    expect(en).toContain('Saved as an unpublished change');
+    expect(savedWords(true)).toBe('Saved as an unpublished change');
+    expect(source('src/components/admin/kit/SaveStatus.tsx')).toContain('savedWords(true)');
+    expect(en).toContain(savedWords(true));
     expect(source('src/components/admin/fields/VisibilityField.tsx')).toContain(
       "export const VISIBLE_LABEL = 'Visible on the site';",
     );
