@@ -21,7 +21,7 @@
 -- per row; update_media_meta refuses the stale tokens and still serves a live SEO.
 
 begin;
-select plan(186);
+select plan(193);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -593,6 +593,64 @@ select is(
   (select (alt ->> 'en') || '/' || coalesce(array_to_string(tags, ','), '')
      from public.media_assets where id = 'b1600000-0000-4000-8000-00000000b601'),
   'Alt/', 'only the live SEO''s change stuck');
+
+-- ── 5. a release runs under these policies (review H16-SEC-3) ──────────────────────────────
+-- public.apply_release is SECURITY INVOKER (0051 requires it: SET ROLE needs it). It writes
+-- every change after `set local role authenticated` with the publisher's claims, so the live
+-- policies above apply to a release too. It passes them because its own publisher check
+-- (0112, section 1) asks the profile what app.live_role() asks: active, unlocked, the role
+-- named, and the tenant (which apply_release takes from the profile and puts in the claims).
+-- If either side changed alone, a scheduled release could be admitted and then refused
+-- mid-way by RLS. release_apply.test.sql proves a demoted, switched-off or locked publisher
+-- is refused before any write (BR403:actor); these two pins fail when either check is
+-- rewritten, so the other is reviewed with it.
+select is(
+  (select md5(prosrc) from pg_proc where oid = 'app.live_role()'::regprocedure),
+  '713499558bfd764c4bfec05857c3f43b',
+  'app.live_role() is the body apply_release''s publisher check was matched to (change both, then this hash)');
+select ok(
+  (select count(*) = 1
+          and bool_and(not prosecdef
+            and prosrc ~ $re$where p\.id = p_actor\s+and p\.is_active\s+and \(p\.locked_until is null or p\.locked_until <= pg_catalog\.now\(\)\)\s+and p\.role::text = p_role$re$)
+     from pg_proc
+    where proname = 'apply_release' and pronamespace = 'public'::regnamespace),
+  'apply_release is an invoker whose publisher check still asks what app.live_role() asks');
+
+-- ── 6. the password form's lockout is still audited (review H16-C1) ─────────────────────────
+-- The fifth wrong current password locks the account inside the request (register_failed_login,
+-- called by the Worker with the service role), so the session's own token is no longer live
+-- and its audit insert is refused. The Worker writes that row with the service role instead,
+-- naming the account it verified (src/lib/admin/audit.ts writeAuditAsService).
+insert into auth.users (id, email) values ('b1600000-0000-4000-8000-0000000000c9', 'h16-lockout@example.test');
+insert into public.profiles (id, tenant_id, role, display_name)
+  values ('b1600000-0000-4000-8000-0000000000c9', 'b1600000-0000-4000-8000-000000000001', 'content_creator', 'H16 lockout');
+select public.register_failed_login('h16-lockout@example.test') from generate_series(1, 4);
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"b1600000-0000-4000-8000-0000000000c9","app_metadata":{"role":"content_creator","tenant_id":"b1600000-0000-4000-8000-000000000001"}}', true);
+select is(app.live_role(), 'content_creator', 'before the fifth wrong try the session is live');
+reset role;
+select ok(public.register_failed_login('h16-lockout@example.test'), 'the fifth locks the account');
+set local role authenticated;
+select throws_ok(
+  $$ insert into public.audit_log (tenant_id, action, entity_type, entity_id, detail)
+     values ('b1600000-0000-4000-8000-000000000001', 'auth.password_change_refused', 'profile',
+             'b1600000-0000-4000-8000-0000000000c9', '{"reason":"locked"}') $$,
+  '42501', null, 'so the same session''s token can no longer write the lockout''s audit row');
+select set_config('request.jwt.claims', '', true);
+reset role;
+set local role service_role;
+select lives_ok(
+  $$ insert into public.audit_log (tenant_id, actor_id, actor_role, action, entity_type, entity_id, detail)
+     values ('b1600000-0000-4000-8000-000000000001', 'b1600000-0000-4000-8000-0000000000c9',
+             'content_creator', 'auth.password_change_refused', 'profile',
+             'b1600000-0000-4000-8000-0000000000c9', '{"reason":"locked"}') $$,
+  'the service role writes it, naming the locked account');
+reset role;
+select is(
+  (select string_agg(actor_id::text || '/' || actor_role || '/' || (detail ->> 'reason'), ', ')
+     from public.audit_log where action = 'auth.password_change_refused'),
+  'b1600000-0000-4000-8000-0000000000c9/content_creator/locked',
+  'and the lockout is on the record once, under that account');
 
 select * from finish();
 rollback;

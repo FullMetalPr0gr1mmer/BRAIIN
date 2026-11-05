@@ -6,7 +6,7 @@ import { isLockedOut, registerFailure } from '@/lib/auth/lockout';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { ROLE_LABELS, capLinesFor } from '@/lib/authz/capLabels';
 import type { PasswordChangeInput } from '@schemas/adminPrefs';
-import { writeAudit } from './audit';
+import { writeAudit, writeAuditAsService } from './audit';
 import { ValidationError } from './errors';
 import { initialsOf } from './initials';
 import { writeSystemLog } from '@/lib/data/systemLog';
@@ -173,12 +173,18 @@ export async function changeMyPassword(
   ip: string | null,
 ): Promise<PasswordOutcome> {
   const refuse = async (reason: 'locked' | 'wrong-current'): Promise<PasswordOutcome> => {
-    await writeAudit(sb, auth, {
+    const entry = {
       action: 'auth.password_change_refused',
       entityType: 'profile',
       entityId: auth.userId,
       detail: { reason },
-    });
+    };
+    // A locked account's token is no longer live, so the database refuses its own insert
+    // (H16, audit_log_live_insert): the lockout's row is written with the service role,
+    // naming this verified account (writeAuditAsService). A wrong try that locks nothing
+    // stays the session's own row.
+    if (reason === 'locked') await writeAuditAsService(auth, entry);
+    else await writeAudit(sb, auth, entry);
     return { ok: false, reason };
   };
 
