@@ -503,6 +503,9 @@ test.describe('as admin', () => {
     // would say each step to no one. The list's region is inside the drawer.
     const live = drawer.locator('p[aria-live="assertive"]');
     await expect(live).toHaveCount(1);
+    // Axe with it open (Admin v2 Z1: the dialog matrix leaves the kit's samples to this suite).
+    const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
+    expect(results.violations, 'axe with the arrange drawer open').toEqual([]);
 
     await drawer.getByRole('button', { name: 'Reorder Pinned pages' }).focus();
     await page.keyboard.press('Space');

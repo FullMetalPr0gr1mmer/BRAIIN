@@ -215,6 +215,7 @@ test.describe('the Pages tab, end to end', () => {
     await index.click();
     const confirm = page.getByRole('dialog', { name: 'Hide this page from search engines?' });
     await expect(confirm).toBeVisible();
+    await axeClean(page, 'the hide-from-search confirm');
     await confirm.getByRole('button', { name: 'Hide from search' }).click();
     await expect(index).toHaveAttribute('aria-checked', 'false');
 
@@ -335,6 +336,7 @@ test.describe('the Site wide tab', () => {
     const ask = page.getByRole('dialog', { name: 'Hide the whole site from search engines?' });
     await expect(ask).toBeVisible();
     await expect(ask).toContainText('This hides every page of the site from search engines.');
+    await axeClean(page, 'the hide-the-site confirm');
     const hide = ask.getByRole('button', { name: 'Hide the site' });
     await expect(hide).toBeDisabled();
     await ask.getByLabel('Type noindex to confirm').fill('noinde');

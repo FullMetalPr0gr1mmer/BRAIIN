@@ -21,6 +21,9 @@ export interface ConfirmOptions {
   danger?: boolean;
 }
 
+/** The confirm's message element, which names the dialog. One confirm exists per page. */
+export const CONFIRM_MESSAGE_ID = 'admin-confirm-message';
+
 let dialog: HTMLDialogElement | null = null;
 let messageEl: HTMLParagraphElement | null = null;
 let confirmBtn: HTMLButtonElement | null = null;
@@ -34,6 +37,11 @@ function ensureDialog(): HTMLDialogElement {
 
   messageEl = document.createElement('p');
   messageEl.className = 'dialog-message';
+  // The dialog's accessible name is its question (Admin v2 Z1): a dialog must have a name
+  // (WCAG 4.1.2), and axe's rule for it is a best-practice one, outside the WCAG tags the
+  // admin's checks run, so nothing caught the nameless dialog before the dialog matrix.
+  messageEl.id = CONFIRM_MESSAGE_ID;
+  dialog.setAttribute('aria-labelledby', CONFIRM_MESSAGE_ID);
 
   // method="dialog" buttons close the dialog with their value as returnValue — no
   // click handlers, no state to desynchronise.

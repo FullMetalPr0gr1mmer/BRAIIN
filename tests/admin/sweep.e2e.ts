@@ -1,14 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { SKIP_REASON, STAFF_ROLES, authFile, staffEnv } from './staff';
-import {
-  UNSEEDED_LISTS,
-  editRowRequest,
-  expectedSidebar,
-  routeKey,
-  sweepRoutes,
-  type SweepRoute,
-} from './routes';
+import { UNSEEDED_LISTS, expectedSidebar, routeKey, sweepRoutes } from './routes';
+import { resolvePath } from './openRoute';
 
 /*
  * The per-role admin sweep (Admin v2 F0): the client's adfull.mjs acceptance run on the
@@ -42,43 +36,6 @@ const OVERFLOW_PX = 2;
 test.skip(!staffEnv(), SKIP_REASON);
 // Every element in its final state, as the public axe suite does (tests/a11y/axe.e2e.ts).
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
-
-/** The double-submit token the admin's own fetches send (the `__Host-csrf` cookie). */
-async function csrf(page: Page): Promise<string> {
-  const find = async () =>
-    (await page.context().cookies()).find((c) => c.name === '__Host-csrf')?.value ?? '';
-  if (!(await find())) await page.goto('/admin', { waitUntil: 'domcontentloaded' });
-  return find();
-}
-
-/**
- * The URL to open: an edit screen takes the first row its role's own list API returns.
- * Null only for a list the seed leaves empty (UNSEEDED_LISTS). A refused or failing list,
- * or an empty one the seed fills, fails the test: the role's menu offers that screen. An
- * edit screen with no resource config posts its sample's body instead (EDIT_SAMPLES, the F0
- * harness extension; its row is made by tests/admin/samples.setup.ts).
- */
-async function resolvePath(page: Page, route: SweepRoute): Promise<string | null> {
-  const request = editRowRequest(route);
-  if (!request) return route.path;
-  const listApi = route.listApi ?? '';
-  const res =
-    request.method === 'POST'
-      ? await page.request.post(request.url, {
-          headers: { 'x-csrf-token': await csrf(page) },
-          data: request.body,
-        })
-      : await page.request.get(request.url);
-  expect(res.status(), `${listApi} answers the signed-in role`).toBe(200);
-  const body = (await res.json()) as { data?: { rows?: { id?: unknown }[] } };
-  const id = body.data?.rows?.[0]?.id;
-  if (typeof id === 'string') return route.path.replace('[id]', id);
-  expect(
-    UNSEEDED_LISTS[listApi],
-    `${listApi} answered no row, but the seed has rows for it`,
-  ).toBeDefined();
-  return null;
-}
 
 for (const role of STAFF_ROLES) {
   test.describe(`as ${role}`, () => {
