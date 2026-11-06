@@ -119,6 +119,13 @@ export const PATCH = defineAdminRoute({
       if (claimError) throw new Error(`stamp claims: ${claimError.message}`);
     }
 
+    // A changed role or activity has ended every session of that person (0055: the
+    // profiles_revoke_sessions trigger ran in the statement above, so the write and the
+    // revocation stand or fall together): the audit row records it and the screen says so.
+    const signedOut =
+      (input.role !== undefined && input.role !== target.role) ||
+      (input.isActive !== undefined && input.isActive !== target.is_active);
+
     audit({
       action: input.isActive === false ? 'user.deactivate' : 'user.update',
       entityType: 'profile',
@@ -127,14 +134,10 @@ export const PATCH = defineAdminRoute({
         from: target.role,
         to: input.role ?? target.role,
         isActive: input.isActive ?? target.is_active,
+        sessionsEnded: signedOut,
       },
     });
 
-    // A changed role or activity has ended every session of that person (0055): the screen
-    // says so.
-    const signedOut =
-      (input.role !== undefined && input.role !== target.role) ||
-      (input.isActive !== undefined && input.isActive !== target.is_active);
     return { id, ...values, signedOut };
   },
 });

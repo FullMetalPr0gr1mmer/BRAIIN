@@ -149,6 +149,8 @@ describe('playwright.config.ts', () => {
   async function projects(on: boolean) {
     vi.resetModules();
     vi.stubEnv('E2E_RELEASES', on ? 'on' : '');
+    // The admin visual baselines' project (Admin v2 Z1) is the hand-run workflow's alone.
+    vi.stubEnv('ADMIN_VISUAL', '');
     const { default: config } = await import('../../playwright.config');
     return new Map(
       (config.projects ?? []).map((p) => [
@@ -191,6 +193,7 @@ describe('playwright.config.ts', () => {
     // project between the admin specs and page visibility, its spec ignored by the admin one.
     vi.resetModules();
     vi.stubEnv('E2E_RELEASES', '');
+    vi.stubEnv('ADMIN_VISUAL', '');
     const { default: config } = await import('../../playwright.config');
     const { devices } = await import('@playwright/test');
     const src = (re: unknown) => (re instanceof RegExp ? re.source : re);

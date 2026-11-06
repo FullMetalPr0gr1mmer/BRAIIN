@@ -7,9 +7,9 @@
 --     Content Creator and SEO read none; anon holds no privilege; each stale token reads
 --     none (audit_log_live_read), while the same Developer, live, reads them all; another
 --     tenant's Admin reads only its own tenant's;
---   • writing it is unchanged: a stale token's insert still lands, bound to the stale account
---     (0050's actor binding), and the chain links every row in id order, those written before
---     and after the new policy alike;
+--   • writing it: a live member's insert lands, bound to that account (0050's actor binding);
+--     since H16 (0129) a stale token's insert is refused (audit_log_live_insert); the chain
+--     links every row in id order, those written before and after the new policies alike;
 --   • public.audit_people names the tenant's people among the ids asked, former members
 --     included, for a live Admin or Developer only: nothing for Content Creator, SEO, a stale
 --     token, another tenant's Admin or a tenant that is not the token's; 22023 over 100 ids;
@@ -97,14 +97,17 @@ select is(
   (select string_agg(format('%s %s %s %s', policyname, cmd, permissive, roles), ', ' order by policyname)
      from pg_policies where schemaname = 'public' and tablename = 'audit_log'),
   'audit_insert INSERT PERMISSIVE {public}, '
+  'audit_log_live_delete DELETE RESTRICTIVE {authenticated}, '
+  'audit_log_live_insert INSERT RESTRICTIVE {authenticated}, '
   'audit_log_live_read SELECT RESTRICTIVE {authenticated}, '
+  'audit_log_live_update UPDATE RESTRICTIVE {authenticated}, '
   'audit_read SELECT PERMISSIVE {public}',
-  'audit_log carries exactly the staff insert, the JWT read and the RESTRICTIVE live read');
+  'audit_log carries exactly the staff insert, the JWT read, the RESTRICTIVE live read and H16''s three live writes');
 select is(
   (select count(*)::int from pg_policies
     where schemaname = 'public' and tablename = 'audit_log'
       and coalesce(qual, with_check) ~ '^\(\(tenant_id = (app\.)?effective_tenant_id\(\)\) AND '),
-  3, 'each policy names the tenant predicate first');
+  6, 'each policy names the tenant predicate first');
 select is(
   (select qual from pg_policies
     where schemaname = 'public' and tablename = 'audit_log' and policyname = 'audit_log_live_read')
@@ -183,13 +186,14 @@ select throws_ok($$ select count(*) from public.audit_log $$, '42501', null,
   'anon holds no privilege on the log');
 reset role;
 
--- ── 3. writing is unchanged ────────────────────────────────────────────────────
+-- ── 3. writing ─────────────────────────────────────────────────────────────────
 set local role authenticated;
 select _as('54000000-0000-0000-0000-0000000000d2', 'developer', '54000000-0000-0000-0000-000000000001');
-select lives_ok(
+select throws_ok(
   $$ insert into public.audit_log (tenant_id, action, entity_type, detail)
      values ('54000000-0000-0000-0000-000000000001', 'u13.stale_write', 'service', '{}') $$,
-  'a stale token''s insert still lands (the live read narrows SELECT only)');
+  '42501', null,
+  'a stale token''s insert is refused since H16 (0129: audit_log_live_insert)');
 select _as('54000000-0000-0000-0000-0000000000c1', 'content_creator', '54000000-0000-0000-0000-000000000001');
 select lives_ok(
   $$ insert into public.audit_log (tenant_id, actor_id, actor_role, action, entity_type, detail)
@@ -200,11 +204,10 @@ reset role;
 select is(
   (select string_agg(action || '=' || actor_id::text || '/' || actor_role, ', ' order by id)
      from public.audit_log where action like 'u13.%'),
-  'u13.stale_write=54000000-0000-0000-0000-0000000000d2/developer, '
   'u13.creator_write=54000000-0000-0000-0000-0000000000c1/content_creator',
-  'each is bound to the account that wrote it (0050), whatever it named');
+  'the live insert is bound to the account that wrote it (0050), whatever it named; the stale one is not there');
 select ok(
-  (select count(*) = 5
+  (select count(*) = 4
           and bool_and(a.hash ~ '^[0-9a-f]{64}$')
           and bool_and(a.prev_hash is not distinct from (
                 select b.hash from public.audit_log b
@@ -214,10 +217,10 @@ select ok(
     where a.tenant_id = '54000000-0000-0000-0000-000000000001'),
   'every T1 entry, written before and after by every kind of writer, links to the one before it');
 
--- A live Developer sees the stale and the Content Creator's entries too.
+-- A live Developer sees the Content Creator's entry too.
 set local role authenticated;
 select _as('54000000-0000-0000-0000-0000000000d1', 'developer', '54000000-0000-0000-0000-000000000001');
-select is(_seen(), '5/0', 'a live Developer reads every T1 entry, the ones it could not have written included');
+select is(_seen(), '4/0', 'a live Developer reads every T1 entry, the ones it could not have written included');
 reset role;
 
 -- ── 4. audit_people ────────────────────────────────────────────────────────────

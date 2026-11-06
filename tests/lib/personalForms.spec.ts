@@ -16,6 +16,7 @@ import { ROLES, type AuthContext, type Role } from '@/lib/auth/types';
 const state = vi.hoisted(() => ({
   failures: new Map<string, number>(),
   audits: [] as { action: string; detail?: Record<string, unknown> }[],
+  serviceAudits: [] as { action: string; detail?: Record<string, unknown> }[],
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -34,6 +35,12 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/admin/audit', () => ({
   writeAudit: async (_sb: unknown, _ctx: unknown, entry: (typeof state.audits)[number]) => {
     state.audits.push(entry);
+    return true;
+  },
+  // Since Admin v2 H16 a locked account's own token can no longer insert its audit row, so
+  // the lockout's row is written with the service role (accountPassword.spec.ts holds why).
+  writeAuditAsService: async (_ctx: unknown, entry: (typeof state.serviceAudits)[number]) => {
+    state.serviceAudits.push(entry);
     return true;
   },
 }));
@@ -138,6 +145,7 @@ function account(fields: Record<string, string>, db = fakeDb(), jar = cookies())
 beforeEach(() => {
   state.failures.clear();
   state.audits.length = 0;
+  state.serviceAudits.length = 0;
 });
 
 describe('who may post the personal pages', () => {
@@ -226,7 +234,14 @@ describe('/admin/account: changing your password', () => {
       detail: { reason: 'wrong-current' },
     });
     for (let i = 0; i < 3; i += 1) await account(wrong);
+    expect(state.serviceAudits).toEqual([]);
     expect(await account(wrong)).toMatchObject({ kind: 'render', status: 423 });
+    expect(state.serviceAudits).toEqual([
+      expect.objectContaining({
+        action: 'auth.password_change_refused',
+        detail: { reason: 'locked' },
+      }),
+    ]);
   });
 
   it('an auth server that cannot answer is a 502, as the JSON route answers, and counts nothing', async () => {
