@@ -625,3 +625,21 @@ describe('the History drawer’s rows', () => {
     expect(rows[1]!.iso).toBeNull();
   });
 });
+
+describe('the question before a section is removed (R14d: removeConfirm)', () => {
+  it('says what each mode does, and the editor asks it', async () => {
+    const { removeConfirm } = await import('@/components/admin/screens/pageEditor/model');
+    expect(removeConfirm('Slogan band', false)).toEqual({
+      message:
+        'Delete the section “Slogan band”? Its words go with it. To keep them, hide it instead.',
+      confirmLabel: 'Delete',
+    });
+    expect(removeConfirm('Slogan band', true)).toEqual({
+      message:
+        'Remove the section “Slogan band” from the page? The removal is saved as an unpublished change, and nothing leaves the site until it is published.',
+      confirmLabel: 'Remove',
+    });
+    const editor = readFileSync('src/components/admin/screens/pageEditor/PageEditor.tsx', 'utf8');
+    expect(editor).toContain('const ok = await confirmDialog(removeConfirm(name, release));');
+  });
+});

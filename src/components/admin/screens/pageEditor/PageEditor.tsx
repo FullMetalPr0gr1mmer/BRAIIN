@@ -55,6 +55,7 @@ import {
   pageMoved,
   previewSectionsOf,
   reloadsPreview,
+  removeConfirm,
   renameBody,
   rowMoved,
   rowStamp,
@@ -439,12 +440,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
 
   async function remove(row: SectionRow) {
     const name = sectionName(row);
-    const ok = await confirmDialog({
-      message: release
-        ? `Remove the section “${name}” from the page? The removal is saved as an unpublished change, and nothing leaves the site until it is published.`
-        : `Delete the section “${name}”? Its words go with it. To keep them, hide it instead.`,
-      confirmLabel: release ? 'Remove' : 'Delete',
-    });
+    const ok = await confirmDialog(removeConfirm(name, release));
     if (!ok || !rows) return;
     setWorking(true);
     setError('');

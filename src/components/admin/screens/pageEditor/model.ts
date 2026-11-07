@@ -137,6 +137,26 @@ export function builtInFor(
 export const SORT_ORDER_MAX = 10_000;
 
 /**
+ * The question before a section is removed, per mode (Admin v2 R14d: out of PageEditor so the
+ * e2e specs read the words from here). Releases on the removal is a pending change; off it is
+ * gone at once, with its words.
+ */
+export function removeConfirm(
+  name: string,
+  release: boolean,
+): { message: string; confirmLabel: string } {
+  return release
+    ? {
+        message: `Remove the section “${name}” from the page? The removal is saved as an unpublished change, and nothing leaves the site until it is published.`,
+        confirmLabel: 'Remove',
+      }
+    : {
+        message: `Delete the section “${name}”? Its words go with it. To keep them, hide it instead.`,
+        confirmLabel: 'Delete',
+      };
+}
+
+/**
  * A new section: hidden, at the end, with nothing of its own stored. Its number is one step
  * past the last, held to the route's bound (SORT_ORDER_MAX): a page whose last section already
  * stands at the bound gets the bound too, and the id breaks the tie, so the add is never
