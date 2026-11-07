@@ -398,7 +398,11 @@ describe('the password door with releases on: the secret at once, the mode and m
     expect(res.status, JSON.stringify(res.body)).toBe(200);
     const [d] = drafts();
     expect(d).toMatchObject({ op: 'create', base: {}, base_version: null });
-    expect(d!['payload']).toMatchObject({ target: { pageId: CONTACT }, mode: 'password', note: null });
+    expect(d!['payload']).toMatchObject({
+      target: { pageId: CONTACT },
+      mode: 'password',
+      note: null,
+    });
     expect(res.data).toMatchObject({ setting: null, pending: { op: 'create' } });
     expect(everyTable()).not.toContain(PASSWORD);
   });

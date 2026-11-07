@@ -401,7 +401,8 @@ const EXACT: Readonly<Record<string, Label>> = {
   // for the new one now. Never the password, the hash or the message.
   'page_visibility.password_stored': {
     kind: 'settings',
-    verb: (detail) => (detail['live'] === true ? 'Changed the password of' : 'Saved a password for'),
+    verb: (detail) =>
+      detail['live'] === true ? 'Changed the password of' : 'Saved a password for',
     noun: 'a page',
   },
   // CRM settings for leads (C9a): which card changed, never its values.
