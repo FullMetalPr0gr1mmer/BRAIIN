@@ -236,6 +236,37 @@ describe('PATCH with releases on: an edit of the row', () => {
     expect(auditsOf(db)).toEqual(['site_profile.draft_save', 'site_profile.draft_discard']);
   });
 
+  it('two tabs (R14d): a year equal to live leaves nothing to meet; a real change is the banner’s 409', async () => {
+    const { PATCH } = await profile();
+    // The second tab saves the year live already holds (the seed's 2019): nothing is staged,
+    // so the first tab, on what it loaded, saves without meeting anyone.
+    const same = await callRoute(db, PATCH, 'PATCH', '/api/admin/site-profile', {
+      body: { foundedYear: 2019, version: 4, staged: true },
+    });
+    expect(same.status, JSON.stringify(same.body)).toBe(200);
+    expect(same.data['draft']).toBeNull();
+    expect(drafts()).toEqual([]);
+
+    // A real change: the second tab's save is a pending change...
+    const theirs = await callRoute(db, PATCH, 'PATCH', '/api/admin/site-profile', {
+      body: { foundedYear: 2018, version: 4, staged: true },
+    });
+    expect(theirs.status, JSON.stringify(theirs.body)).toBe(200);
+    expect(theirs.data['draft']).toBeTruthy();
+    const pending = { ...drafts()[0]! };
+    // ...which the first tab never saw: its save names none, so it is refused as
+    // `draft-conflict` with no `detail` and no `live` (useEntitySave shows the banner,
+    // CONFLICT_WORDS, for exactly that answer), and the pending change is left as it was.
+    const mine = await callRoute(db, PATCH, 'PATCH', '/api/admin/site-profile', {
+      body: { mapUrl: 'https://maps.app.goo.gl/e2eConflict', version: 4, staged: true },
+    });
+    expect([mine.status, mine.body['error']]).toEqual([409, 'draft-conflict']);
+    expect(mine.body['detail']).toBeUndefined();
+    expect(mine.body['live']).toBeUndefined();
+    expect(drafts()).toEqual([pending]);
+    expect(liveWritesOf(db, 'site_profile')).toEqual([]);
+  });
+
   it('a claimed change is 409 scheduled; a vanished one is published or discarded, with live', async () => {
     const { PATCH } = await profile();
     db.tables['content_drafts'] = [

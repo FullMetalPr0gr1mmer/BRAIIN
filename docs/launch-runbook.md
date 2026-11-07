@@ -1662,8 +1662,9 @@ and the fallback scheduler.
    R14b the guard refused its saves once releases were on), and R14b's migration (the
    publishing and page-visibility guides for both modes; its number is the one the merge train
    gave it), and R14e: page passwords in release mode (owner item B1; its migration stores a
-   password at once and lets a release write the message above the box). The switch itself needs
-   only R11's (0112).
+   password at once and lets a release write the message above the box), and R14d: the
+   release-mode fixes to the editors' saves found converting the last nine specs (no migration).
+   The switch itself needs only R11's (0112).
 2. **The required e2e job in release mode (R14c).** The owner's go for the switch-on is also the
    go for R14c, the CI change that seeds releases on and makes the required e2e job run every
    spec in release mode (the change list is in `docs/admin-v2/as-built/R14B.md`). It merges, and

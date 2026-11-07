@@ -137,6 +137,46 @@ export function builtInFor(
 export const SORT_ORDER_MAX = 10_000;
 
 /**
+ * What a section's DELETE did (Admin v2 R14d): with releases on, a live section's removal is
+ * staged (`pendingRemoval`), and a pending new one is thrown away (the answer carries `draft`,
+ * null: it was never on the site); with releases off it is deleted. The editor used to say "the
+ * removal is saved as an unpublished change" for the throw-away too, and kept it selected.
+ */
+export type RemoveOutcome = 'deleted' | 'removal' | 'discarded';
+
+export function removeOutcome(answer: Readonly<Row>): RemoveOutcome {
+  if (answer['pendingRemoval'] === true) return 'removal';
+  return 'draft' in answer ? 'discarded' : 'deleted';
+}
+
+/** The toast for each outcome. */
+export function removeWords(name: string, outcome: RemoveOutcome): string {
+  if (outcome === 'removal') return `The removal of ${name} is saved as an unpublished change.`;
+  if (outcome === 'discarded') return `${name} is thrown away. It was never on the site.`;
+  return `${name} is deleted.`;
+}
+
+/**
+ * The question before a section is removed, per mode (Admin v2 R14d: out of PageEditor so the
+ * e2e specs read the words from here). Releases on the removal is a pending change; off it is
+ * gone at once, with its words.
+ */
+export function removeConfirm(
+  name: string,
+  release: boolean,
+): { message: string; confirmLabel: string } {
+  return release
+    ? {
+        message: `Remove the section “${name}” from the page? The removal is saved as an unpublished change, and nothing leaves the site until it is published.`,
+        confirmLabel: 'Remove',
+      }
+    : {
+        message: `Delete the section “${name}”? Its words go with it. To keep them, hide it instead.`,
+        confirmLabel: 'Delete',
+      };
+}
+
+/**
  * A new section: hidden, at the end, with nothing of its own stored. Its number is one step
  * past the last, held to the route's bound (SORT_ORDER_MAX): a page whose last section already
  * stands at the bound gets the bound too, and the id breaks the tie, so the add is never

@@ -10,6 +10,7 @@ import { uiFor } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
 import { countBy, projectsCount, textIn, type Row } from './model';
 import { historyTargetOf } from '@/lib/admin/historyTarget';
+import { editLanded } from '@/lib/admin/closeOnSave';
 
 // Manage tags (Admin v2 U6, AV-15; the prototype's taxonomyDrawer, "Tags and filters"): the wide
 // drawer the Projects list opens, with what powers the filters on Our Work and All projects.
@@ -260,7 +261,8 @@ function SectorForm({
   });
   const firstSavedAt = useRef(save.savedAt);
   useEffect(() => {
-    if (id !== null && save.savedAt && save.savedAt !== firstSavedAt.current) {
+    // Only the person's save, never release mode's save on leaving a field (R14d).
+    if (id !== null && editLanded(save.savedAt, firstSavedAt.current, save.savedByPerson)) {
       toast('Saved.', 'ok');
       onDone(true);
     }

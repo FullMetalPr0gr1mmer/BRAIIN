@@ -130,6 +130,13 @@ export interface EntitySaveState {
   gone: DraftGone | null;
   /** Releases were switched off under the form (409 `releases-off`): it waits for a reload. */
   releasesOff: boolean;
+  /**
+   * Admin v2 R14d: the last save that landed was the person's own (Save, Add, ⌘S), not an
+   * automatic one (a blur, a tab switch, the idle timer). A drawer that closes once an edit
+   * lands closes only then: in release mode the first field left would otherwise close it.
+   * Live mode saves only when asked, so there every save is the person's.
+   */
+  savedByPerson: boolean;
 }
 
 export type EntitySaveAction =
@@ -143,6 +150,8 @@ export type EntitySaveAction =
       fields: readonly FieldDef[];
       /** When it landed, ISO (the caller's clock: the reducer reads none). */
       at: string;
+      /** R14d: false for an automatic save the person did not ask for (default: theirs). */
+      byPerson?: boolean | undefined;
     }
   | {
       type: 'save-failed';
@@ -239,6 +248,7 @@ export function initialSaveState(
     autoBlocked: false,
     gone: null,
     releasesOff: false,
+    savedByPerson: false,
   };
 }
 
@@ -371,6 +381,7 @@ export function entitySaveReducer(
         edgeMissed: action.row['kvSynced'] === false,
         ...pending,
         sent: null,
+        savedByPerson: action.byPerson !== false,
       };
     }
     case 'created':
@@ -495,6 +506,13 @@ export function entitySaveReducer(
   }
 }
 
+/**
+ * The banner over a form whose save met someone else's (a 409): a newer live version, or, in
+ * release mode, a pending change the form never saw (`draft-conflict`). One sentence for both
+ * modes, which EditorForm renders and the e2e specs read (Admin v2 R14d).
+ */
+export const CONFLICT_WORDS = 'Someone else saved changes while you were editing.';
+
 /** What a change a scheduled release holds says (R12). */
 export const SCHEDULED_WORDS =
   'This change is scheduled to go live, so it cannot be edited now. Unschedule it to change it.';
@@ -543,6 +561,29 @@ export function autosaveDecision(
   if (inFlight) return 'later';
   if (state.phase !== 'ready' || !isDirty(state)) return 'no';
   return 'save';
+}
+
+/**
+ * What runs once a save on its way has landed, when another was asked for meanwhile (Admin v2
+ * R14d, review SEC-1): `person` (the person's press, sent as their own save), `auto` (the
+ * automatic save's own rules decide: autosaveDecision) or `none`.
+ *
+ * - A new record: `none`. The create that landed answered every press made while it was on its
+ *   way; a second POST would make a duplicate item (Ctrl/⌘+S pressed twice, or held).
+ * - Releases off (no `draft` key): `none`, as before R14d. Live mode saves only when asked, and
+ *   a press while a save is on its way is answered by that save.
+ * - Draft mode: `person` only when the person pressed and the form holds something the landed
+ *   save did not carry (typed since); with nothing new the landed save was the answer. Else
+ *   `auto`.
+ */
+export function queuedSaveDecision(
+  state: EntitySaveState,
+  isNew: boolean,
+  wanted: boolean,
+): 'person' | 'auto' | 'none' {
+  if (isNew || state.draft === undefined) return 'none';
+  if (wanted && state.phase === 'ready' && isDirty(state)) return 'person';
+  return 'auto';
 }
 
 /** Where an editor reads its row from. */

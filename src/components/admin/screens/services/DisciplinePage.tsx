@@ -14,7 +14,9 @@ import {
   bySort,
   clipWords,
   eyeLabel,
+  eyeBody,
   eyeRefusal,
+  eyeToast,
   eyeTarget,
   isShown,
   leadsCount,
@@ -200,11 +202,13 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
     setError('');
     let failure = '';
     try {
-      await adminFetch(`/api/admin/services/${row.id}`, {
+      const answer = await adminFetch<Record<string, unknown>>(`/api/admin/services/${row.id}`, {
         method: 'PATCH',
-        body: stagedBody({ status: next, version: Number(row['version'] ?? 1) }, staged),
+        // R14d: a row with a pending change names it (eyeBody).
+        body: stagedBody(eyeBody(row, next, staged), staged),
       });
-      toast(next === 'draft' ? `${name} is hidden.` : `${name} is on the site.`, 'ok');
+      // R14d review: the answer says whether the change waits or was thrown away.
+      toast(eyeToast(name, next, answer), 'ok');
     } catch (err) {
       failure = eyeRefusal(
         'service',

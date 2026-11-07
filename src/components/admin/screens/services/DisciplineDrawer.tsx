@@ -9,6 +9,7 @@ import { saveModeFor } from '@/lib/admin/saveMode';
 import { uiFor, type FieldDef } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
 import { historyTargetOf } from '@/lib/admin/historyTarget';
+import { editLanded } from '@/lib/admin/closeOnSave';
 
 // A discipline's drawer (Admin v2 U5, the prototype's editCat): add or edit one, from the
 // Services overview and from the discipline's own page. The kit Drawer (`dismissible={false}`:
@@ -86,7 +87,8 @@ export default function DisciplineDrawer({
   // An edit that landed closes the drawer (the prototype's "Saved", back to the list).
   const firstSavedAt = useRef(save.savedAt);
   useEffect(() => {
-    if (id !== null && save.savedAt && save.savedAt !== firstSavedAt.current) {
+    // Only the person's save, never release mode's save on leaving a field (R14d).
+    if (id !== null && editLanded(save.savedAt, firstSavedAt.current, save.savedByPerson)) {
       onSaved(save.values, false);
       setOpen(false);
     }

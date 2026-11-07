@@ -133,16 +133,16 @@ export function releasesOn(env: Record<string, string | undefined> = process.env
 }
 
 /**
- * Why a spec written for releases off skips in the rehearsal: its saves go live at once, or it
- * asserts what releases off looks like. tests/admin/releases-mode.e2e.ts drives the release
- * path end to end instead. R14b converted the specs that change the whole site (visibility,
- * general, header, footer, loading, theme, templates, and the section blocks' project) to run
- * in both modes (tests/admin/releaseSteps.ts); the ones that still skip are listed, with what
- * each needs, in docs/admin-v2/as-built/R14B.md, and are converted before R14c makes release
- * mode the required e2e job's default.
+ * Why a describe skips in the rehearsal: it asserts what releases off looks like (the screens
+ * and drawers that exist only while publishing in releases is off). R14b converted the specs
+ * that change the whole site, and R14d the other nine (blog, collections, faq, fields, pages,
+ * projects, reorder, seo, services), to run in both modes (tests/admin/releaseSteps.ts). What
+ * still skips is true releases-off behaviour (backups' and releases-ui's releases-off describes,
+ * backups' history drawers, the dashboard's arranging; tests/ci/releaseConversions.spec.ts holds
+ * the list), which the releases-off run that R14c keeps goes on covering.
  */
 export const RELEASES_OFF_ONLY =
-  'written for releases off (a save goes live at once, or the releases-off screens); the release-mode rehearsal covers this through tests/admin/releases-mode.e2e.ts until R14 converts it';
+  'releases-off behaviour (what the screens show while publishing in releases is off): the releases-off run covers it; the release path is tests/admin/releases-mode.e2e.ts';
 
 /** The service-role client of the local stack (never a hosted one: see staffEnv). */
 function adminClient(env: StaffEnv) {

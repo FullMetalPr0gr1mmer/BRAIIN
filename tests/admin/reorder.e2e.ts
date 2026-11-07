@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 import { MOVE_ARCHIVED } from '@/components/admin/screens/resources/reorder';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { discardDrafts, hasDrafts, publishOwn, systemClient } from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * Move up and Move down past an archived row (Admin v2 hotfix H12), signed in as
@@ -32,11 +32,17 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  * The rows are made by the service role with a random marker in the slug and removed by it
  * afterwards. They stay drafts or archived, so no public page shows them, and their numbers
  * sort after every seeded service, so the sweep's "first row" edit screen is never one of them.
+ *
+ * Both modes (Admin v2 R14d). With releases on a move is a pending change of each live row it
+ * names (the route answers what it staged), the list reads in the new order at once, and the
+ * database holds it once this run publishes those two rows (`publishOwn`); a move that names an
+ * archived row is refused whole before anything is staged (H12's stage-time rule), so nothing
+ * is pending after either refusal. The hand-sent request says it was made in release mode
+ * (`?staged=1`), as the screen's does. The clean-up throws this run's unclaimed pending changes
+ * away as the system before the rows go.
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.use({
   contextOptions: { reducedMotion: 'reduce' },
   storageState: authFile('content_creator'),
@@ -61,12 +67,9 @@ type Kind = keyof typeof ROWS;
 
 const ids: Partial<Record<Kind, string>> = {};
 
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+const service = systemClient;
+/** This run's rows, as release mode names their pending changes. */
+const own = () => [{ entityType: 'portfolio', entityIds: Object.values(ids) as string[] }];
 
 test.beforeAll(async () => {
   if (!staffEnv()) return;
@@ -83,6 +86,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (!staffEnv()) return;
+  await discardDrafts(own());
   await service().from('portfolio').delete().like('slug', `e2e-h12-%-${MARK}`);
 });
 
@@ -151,7 +155,11 @@ test('a Content Creator moves a project past an archived one; the archived row i
     ],
   });
   expect(response.status()).toBe(200);
-  expect(await response.json()).toEqual({ ok: true, data: { reordered: 2 } });
+  // Releases on: the route says what it staged (both live rows), and nothing went live yet.
+  expect(await response.json()).toEqual({
+    ok: true,
+    data: releasesOn() ? { reordered: 2, staged: 2, discarded: 0 } : { reordered: 2 },
+  });
 
   // The list re-reads in its new order, with no error on the screen.
   await expect(page.locator('table.data a.data-link')).toHaveText([
@@ -163,6 +171,11 @@ test('a Content Creator moves a project past an archived one; the archived row i
   await expect(moveButton(page, 'second', 'up')).toBeDisabled();
   await expect(moveButton(page, 'first', 'down')).toBeDisabled();
 
+  if (releasesOn()) {
+    expect(await stored()).toEqual(before);
+    // Exactly the two rows the move staged go live.
+    await publishOwn(page, [{ entityType: 'portfolio', entityIds: [ids.first!, ids.second!] }], 2);
+  }
   const after = await stored();
   expect(after.first.sort_order).toBe(ROWS.second.sort_order);
   expect(after.second.sort_order).toBe(ROWS.first.sort_order);
@@ -179,15 +192,19 @@ test('the server refuses a Content Creator move that names the archived row, wri
   const before = await stored();
 
   // A live row first: before H12 the route moved it, then the archive gate refused the next.
-  const res = await page.request.post('/api/admin/portfolio/reorder', {
-    headers: { 'x-csrf-token': token!, origin: new URL(page.url()).origin },
-    data: {
-      items: [
-        { id: ids.second, sortOrder: before.shelved.sort_order },
-        { id: ids.shelved, sortOrder: before.second.sort_order },
-      ],
+  // With releases on the request says it was made in release mode, as the screen's does.
+  const res = await page.request.post(
+    `/api/admin/portfolio/reorder${releasesOn() ? '?staged=1' : ''}`,
+    {
+      headers: { 'x-csrf-token': token!, origin: new URL(page.url()).origin },
+      data: {
+        items: [
+          { id: ids.second, sortOrder: before.shelved.sort_order },
+          { id: ids.shelved, sortOrder: before.second.sort_order },
+        ],
+      },
     },
-  });
+  );
   expect(res.status()).toBe(403);
   expect(await res.json()).toEqual({
     ok: false,
@@ -195,6 +212,8 @@ test('the server refuses a Content Creator move that names the archived row, wri
     capability: 'content.archiveDelete',
   });
   expect(await stored()).toEqual(before);
+  // Releases on: refused before the one writer call, so nothing is pending either.
+  if (releasesOn()) expect(await hasDrafts(own()[0]!)).toBe(false);
 });
 
 test('a move past a row archived since the list loaded: refused, the list re-read, the reason shown', async ({
@@ -240,6 +259,7 @@ test('a move past a row archived since the list loaded: refused, the list re-rea
   await expect(page.locator('main .msg[data-kind="error"]')).toHaveText(MOVE_ARCHIVED);
   await expect(moveButton(page, 'second', 'down')).toBeDisabled();
   await expect(moveButton(page, 'first', 'up')).toBeDisabled();
-  // Nothing was written: the pre-check refused the whole move.
+  // Nothing was written: the pre-check refused the whole move (nor staged, releases on).
   expect(await stored()).toEqual(before);
+  if (releasesOn()) expect(await hasDrafts(own()[0]!)).toBe(false);
 });

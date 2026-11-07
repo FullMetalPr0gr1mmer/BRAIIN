@@ -1,9 +1,17 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
+import { ORDER_STEP } from '../../src/components/admin/screens/collection/reorder';
 import { expectCleanAtWidths } from './collectionLayout';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import {
+  discardDrafts,
+  discardDraftsLike,
+  publishOwn,
+  reorderedIds,
+  systemClient,
+  tryPublishOwn,
+} from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The five collections on the AdminCollection island (Admin v2 U7b), signed in as
@@ -30,11 +38,23 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  * The public suites pin the seeded rows (eight marquee names, three quotes on Home), so this
  * suite never publishes beside them; what `visible` and a published quote do on the site is
  * tests/e2e/home-sections.e2e.ts's and pgTAP's.
+ *
+ * Both modes (Admin v2 R14d). With releases on every save is a pending change and live moves
+ * only when this run publishes its own (`publishOwn`): the sample quote's one save is staged
+ * (an item is never scheduled on its own, so it is "Visible on the site"), its publish is
+ * refused for want of consent (release mode checks consent when a change goes live), and with
+ * consent recorded and the quote kept off the site (not visible) the publish makes it real in
+ * one change; the client's copy is a pending create and its clearing goes live when published;
+ * the numbers' move is published by the ids its reorder named. Nothing here leaves the end of
+ * each list (sort order 9980 and up), so the first rows other specs open are never staged. A
+ * move renumbers the list in tens from 10 and the seed's numbers are 1 to 4 and 11 to 14, so
+ * before the run the system puts the seeded numbers in tens, in the order the list shows
+ * (`numbersInTens`, R14d review C2: the numbers releases off's first move always wrote); the
+ * move then names this run's two numbers and nothing else, which the test asserts. The
+ * clean-up throws this run's unclaimed pending changes away as the system before the rows go.
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.use({
   contextOptions: { reducedMotion: 'reduce' },
   storageState: authFile('content_creator'),
@@ -44,12 +64,14 @@ test.describe.configure({ mode: 'serial' });
 const MARK = randomBytes(4).toString('hex');
 const slug = (kind: string) => `e2e-${kind}-${MARK}`;
 
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+const service = systemClient;
+const TABLES = [
+  ['testimonials', 'testimonial'],
+  ['clients', 'client'],
+  ['statistics', 'statistic'],
+] as const;
+/** Rows a move of this run named that are not its own, for the clean-up. */
+const touched = new Set<string>();
 
 const SAMPLE_WORDS = { en: `Sample words ${MARK}.`, ar: `كلمات العينة ${MARK}.` };
 const AUTHOR = { en: `Sample Person ${MARK}`, ar: `شخص العينة ${MARK}` };
@@ -97,12 +119,60 @@ test.beforeAll(async () => {
     ]),
   ];
   for (const { error } of await Promise.all(inserts)) expect(error).toBeNull();
+  await numbersInTens();
 });
+
+/**
+ * The seeded numbers in tens, as the system (R14d review C2). A move renumbers every row it may
+ * write in tens from 10 (reorder.ts orderChanges) and the seed's are 1 to 4 and 11 to 14, so the
+ * first move named all eight, the first row other specs open included, and in release mode
+ * staged them and published them all. Here they take the numbers that move would give them, in
+ * the order the list shows them (an archived row is an Admin's and keeps its number, as the
+ * Content Creator's move leaves it), so the move names only this run's two. The rows a number
+ * lowers go first, front to back, then the rows it raises, back to front, so no row passes
+ * another on the way (as reorder.ts duplicateChanges orders them): a public page reading the
+ * numbers meanwhile shows them in the same order.
+ */
+async function numbersInTens(): Promise<void> {
+  const svc = service();
+  const { data, error } = await svc
+    .from('statistics')
+    .select('id, slug, sort_order')
+    .eq('tenant_id', TENANT_ID)
+    .neq('status', 'archived')
+    .order('sort_order');
+  expect(error).toBeNull();
+  const changes = (data ?? [])
+    .filter((r) => !String(r.slug).endsWith(MARK))
+    .map((r, index) => ({
+      id: String(r.id),
+      from: Number(r.sort_order),
+      to: (index + 1) * ORDER_STEP,
+    }))
+    .filter((c) => c.from !== c.to);
+  const lowered = changes.filter((c) => c.to < c.from);
+  const raised = changes.filter((c) => c.to > c.from).reverse();
+  for (const change of [...lowered, ...raised]) {
+    const { error: failed } = await svc
+      .from('statistics')
+      .update({ sort_order: change.to })
+      .eq('id', change.id);
+    expect(failed).toBeNull();
+  }
+}
 
 test.afterAll(async () => {
   if (!staffEnv()) return;
   const svc = service();
-  for (const table of ['testimonials', 'clients', 'statistics']) {
+  // Releases on: this run's unclaimed pending changes first (creates by their slug, edits by
+  // the rows' ids), as the system.
+  for (const [table, entityType] of TABLES) {
+    await discardDraftsLike(entityType, 'payload->>slug', `e2e-%-${MARK}%`);
+    const { data } = await svc.from(table).select('id').like('slug', `e2e-%-${MARK}%`);
+    const ids = (data ?? []).map((r) => String(r.id));
+    await discardDrafts([{ entityType, entityIds: [...ids, ...touched] }]);
+  }
+  for (const [table] of TABLES) {
     await svc.from(table).delete().like('slug', `e2e-%-${MARK}%`);
   }
 });
@@ -131,6 +201,19 @@ async function serviceRow(table: string, key: string) {
   const { data, error } = await service().from(table).select('*').eq('slug', key).single();
   expect(error).toBeNull();
   return data as Record<string, unknown>;
+}
+
+/**
+ * A row as the screen's own list reads it (releases on: live with the pending changes laid
+ * over it, so a pending create is there too), found by its slug.
+ */
+async function listed(page: Page, api: string, key: string) {
+  const res = await page.request.get(`${api}?limit=100`);
+  expect(res.status(), api).toBe(200);
+  const rows = ((await res.json()) as { data: { rows: Record<string, unknown>[] } }).data.rows;
+  const found = rows.find((r) => r['slug'] === key);
+  expect(found, `${api} lists ${key}`).toBeTruthy();
+  return found!;
 }
 
 test('a sample quote is made real in one save, consent first', async ({ page }) => {
@@ -162,30 +245,69 @@ test('a sample quote is made real in one save, consent first', async ({ page }) 
   const real = { en: `Real words ${MARK}.`, ar: `كلمات حقيقية ${MARK}.` };
   await drawer.locator('#f-quote-en').fill(real.en);
   await drawer.locator('#f-quote-ar').fill(real.ar);
-  await drawer.locator('#f-status').selectOption('scheduled');
-  await drawer.locator('#f-scheduledFor').fill('2099-01-01T09:00');
-  await drawer.getByRole('button', { name: 'Save changes', exact: true }).click();
-  // No consent recorded: refused, on the consent field, and nothing stored.
-  // The refusal's own words (the field's hint also says "agreed to be quoted"): the
-  // Worker's assertPublishable, or the CHECK's mapped message.
-  await expect(
-    drawer.getByText(/record when (the person agreed|consent was obtained)/i).first(),
-  ).toBeVisible();
-  expect((await serviceRow('testimonials', slug('sample')))['is_placeholder']).toBe(true);
+  // The sample's own row: its id names its pending change with releases on.
+  const sampleId = String((await serviceRow('testimonials', slug('sample')))['id']);
+  const own = [{ entityType: 'testimonial', entityIds: [sampleId] }];
 
-  await drawer.locator('#f-consentObtainedAt').fill('2026-10-01T10:00');
-  await drawer.locator('#f-consentReference').fill(`email ${MARK}`);
-  await drawer.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await expect(dialog(page)).toHaveCount(0);
+  if (!releasesOn()) {
+    await drawer.locator('#f-status').selectOption('scheduled');
+    await drawer.locator('#f-scheduledFor').fill('2099-01-01T09:00');
+    await drawer.getByRole('button', { name: 'Save changes', exact: true }).click();
+    // No consent recorded: refused, on the consent field, and nothing stored.
+    // The refusal's own words (the field's hint also says "agreed to be quoted"): the
+    // Worker's assertPublishable, or the CHECK's mapped message.
+    await expect(
+      drawer.getByText(/record when (the person agreed|consent was obtained)/i).first(),
+    ).toBeVisible();
+    expect((await serviceRow('testimonials', slug('sample')))['is_placeholder']).toBe(true);
+
+    await drawer.locator('#f-consentObtainedAt').fill('2026-10-01T10:00');
+    await drawer.locator('#f-consentReference').fill(`email ${MARK}`);
+    await drawer.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(dialog(page)).toHaveCount(0);
+  } else {
+    // An item is never scheduled on its own: the status is "Visible on the site". The save is
+    // a pending change (the drawer stayed open while the fields above saved on leaving them),
+    // and live is still the sample.
+    await expect(drawer.locator('#f-scheduledFor')).toHaveCount(0);
+    const visible = drawer.getByRole('switch', { name: 'Visible on the site' });
+    await visible.click();
+    await expect(visible).toHaveAttribute('aria-checked', 'true');
+    await drawer.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(dialog(page)).toHaveCount(0);
+    expect((await serviceRow('testimonials', slug('sample')))['is_placeholder']).toBe(true);
+    // No consent recorded: the publish is refused, naming consent, and live keeps the sample.
+    const refused = await tryPublishOwn(page, own);
+    expect(refused!.status, refused!.text).toBe(422);
+    expect(refused!.text).toMatch(/record when (the person agreed|consent was obtained)/i);
+    expect((await serviceRow('testimonials', slug('sample')))['is_placeholder']).toBe(true);
+
+    // Consent recorded, and the quote kept off the site (no visible: it has no placement, and
+    // a quote with none may still be listed where a section names no placement).
+    await openScreen(page, '/admin/testimonials');
+    await row(page, AUTHOR.en).locator('a.li__t').click();
+    await expect(dialog(page).getByRole('heading', { name: 'Edit quote' })).toBeVisible();
+    await expect(dialog(page).locator('#f-quote-en')).toHaveValue(real.en);
+    await dialog(page).locator('#f-consentObtainedAt').fill('2026-10-01T10:00');
+    await dialog(page).locator('#f-consentReference').fill(`email ${MARK}`);
+    const shown = dialog(page).getByRole('switch', { name: 'Visible on the site' });
+    await shown.click();
+    await expect(shown).toHaveAttribute('aria-checked', 'false');
+    await dialog(page).getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(dialog(page)).toHaveCount(0);
+    // The one change that makes it real: the words, the consent and the cleared flag at once.
+    await publishOwn(page, own);
+    await openScreen(page, '/admin/testimonials');
+  }
 
   const stored = await serviceRow('testimonials', slug('sample'));
   expect(stored['is_placeholder']).toBe(false);
   expect(stored['quote']).toEqual(real);
   expect(stored['consent_obtained_at']).toBeTruthy();
   expect(stored['consent_reference']).toBe(`email ${MARK}`);
-  expect(stored['status']).toBe('scheduled');
+  expect(stored['status']).toBe(releasesOn() ? 'draft' : 'scheduled');
   // Its badges: the status only (no Sample, and no Needs consent: consent is recorded).
-  await expect(badges(row(page, AUTHOR.en))).toHaveText(['Scheduled']);
+  await expect(badges(row(page, AUTHOR.en))).toHaveText([releasesOn() ? 'Draft' : 'Scheduled']);
 });
 
 test('a client: hidden until cleared, copied hidden, cleared with one switch', async ({ page }) => {
@@ -196,9 +318,13 @@ test('a client: hidden until cleared, copied hidden, cleared with one switch', a
   await pressRowAction(client.getByRole('button', { name: `Duplicate ${CLIENT.en}` }));
   await expect(page.locator('.toast', { hasText: 'Copied as a draft.' }).first()).toBeVisible();
   await expect(row(page, CLIENT.en)).toHaveCount(2);
-  const copy = await serviceRow('clients', `${slug('client')}-copy`);
+  // Releases on the copy is a pending create: the screen's own list has it.
+  const copy = releasesOn()
+    ? await listed(page, '/api/admin/clients', `${slug('client')}-copy`)
+    : await serviceRow('clients', `${slug('client')}-copy`);
   expect(copy['visible']).toBe(false);
-  expect(copy['is_placeholder']).toBe(false);
+  // (A pending create carries only what it writes: no flag is no sample.)
+  expect(copy['is_placeholder'] ?? false).toBe(false);
   const texts = await page.locator('ul.coll__list > li').allTextContents();
   const at = texts.findIndex((t) => t.includes(CLIENT.en));
   expect(texts[at + 1]).toContain(CLIENT.en);
@@ -212,8 +338,12 @@ test('a client: hidden until cleared, copied hidden, cleared with one switch', a
   await visible.click();
   await drawer.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(dialog(page)).toHaveCount(0);
-  expect((await serviceRow('clients', slug('client')))['visible']).toBe(true);
   await expect(row(page, CLIENT.en).first()).not.toContainText('Not cleared to name');
+  // Releases on: the clearing goes live with this run's own publish (the client alone; its
+  // pending copy stays unpublished and is thrown away by the clean-up).
+  const clientId = String((await serviceRow('clients', slug('client')))['id']);
+  await publishOwn(page, [{ entityType: 'client', entityIds: [clientId] }]);
+  expect((await serviceRow('clients', slug('client')))['visible']).toBe(true);
 });
 
 /** The seed's archived legacy numbers (30-legacy-demo.json), slug to `sort_order`. */
@@ -241,6 +371,7 @@ test('numbers: a keyboard move reorders them', async ({ page }) => {
   const archivedBefore = await archivedNumbers();
   expect(Object.keys(archivedBefore).sort()).toEqual(['projects', 'services', 'years']);
 
+  // The reorder's address carries ?staged=1 with releases on: matched by its path.
   const reorder = page.waitForResponse(
     (res) =>
       new URL(res.url()).pathname === '/api/admin/statistics/reorder' &&
@@ -253,6 +384,18 @@ test('numbers: a keyboard move reorders them', async ({ page }) => {
   const response = await reorder;
   expect(response.status(), await response.text()).toBe(200);
   await expect(page.locator('.toast', { hasText: 'Order updated.' }).first()).toBeVisible();
+  // Releases on: exactly the rows the move named go live (this run's two numbers).
+  const moved = reorderedIds(response.request().postData());
+  const ownIds = await Promise.all(
+    [slug('n1'), slug('n2')].map(async (key) =>
+      String((await serviceRow('statistics', key))['id']),
+    ),
+  );
+  for (const id of moved) if (!ownIds.includes(id)) touched.add(id);
+  // The move named this run's numbers alone (R14d review C2): no seeded row is staged or
+  // published (the clean-up still throws away any other a failure here left pending).
+  expect([...moved].sort()).toEqual([...ownIds].sort());
+  await publishOwn(page, [{ entityType: 'statistic', entityIds: moved }]);
 
   const one = Number((await serviceRow('statistics', slug('n1')))['sort_order']);
   const two = Number((await serviceRow('statistics', slug('n2')))['sort_order']);

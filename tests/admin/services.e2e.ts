@@ -1,9 +1,16 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
+import { eyeToast } from '@/components/admin/screens/services/model';
 import { expectCleanAtWidths } from './collectionLayout';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import {
+  discardDrafts,
+  discardDraftsLike,
+  hasDrafts,
+  publishOwn,
+  systemClient,
+} from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The Services area (Admin v2 U5, AV-14), signed in, through the real Worker and this job's
@@ -30,11 +37,17 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *
  * Every row is made by the service role with a random marker in its slug and removed by it
  * afterwards. Nothing here publishes the discipline: the public suites count the seeded ones.
+ *
+ * Both modes (Admin v2 R14d). With releases on every write is a pending change of this run's
+ * own rows: the move goes live when this run publishes the two services it named; the eye's
+ * Show is a pending status the list lays over live, and its Hide names that change (eyeBody)
+ * and so throws it away, nothing published; the case study's one save goes live with this run's
+ * publish of that case; Add service and Duplicate are pending creates, read back through the
+ * API (live has no row yet), and Delete throws the copy away. The clean-up throws this run's
+ * unclaimed pending changes away as the system before the rows go.
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 test.describe.configure({ mode: 'serial' });
 
@@ -65,11 +78,13 @@ const CASE = { en: `Sample case ${MARK}`, ar: `حالة العينة ${MARK}` };
 
 const ids: { discipline?: string } & Partial<Record<Kind, string>> = {};
 
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+const service = systemClient;
+
+/** A service as the API answers it (releases on: live with its pending change laid over it). */
+async function apiService(page: Page, id: string) {
+  const res = await page.request.get(`/api/admin/services/${id}`);
+  expect(res.status(), await res.text()).toBe(200);
+  return ((await res.json()) as { data: Record<string, unknown> }).data;
 }
 
 test.beforeAll(async () => {
@@ -117,6 +132,14 @@ test.afterAll(async () => {
   const svc = service();
   const { data } = await svc.from('services').select('id').like('slug', `%${MARK}%`);
   const serviceIds = (data ?? []).map((r) => r.id as string);
+  // Releases on: this run's unclaimed pending changes first (its creates by their slug, the
+  // rows' and the case's changes by id), as the system.
+  await discardDraftsLike('service', 'payload->>slug', `%${MARK}%`);
+  const { data: cases } = await svc.from('service_cases').select('id').in('service_id', serviceIds);
+  await discardDrafts([
+    { entityType: 'service', entityIds: serviceIds },
+    { entityType: 'service_case', entityIds: (cases ?? []).map((r) => String(r.id)) },
+  ]);
   if (serviceIds.length > 0) {
     await svc.from('service_cases').delete().in('service_id', serviceIds);
     await svc.from('services').delete().in('id', serviceIds);
@@ -202,6 +225,8 @@ test.describe('as content_creator', () => {
       ],
     });
     await expect(page.locator('.toast', { hasText: 'Order updated.' }).first()).toBeVisible();
+    // Releases on: the two services the move named go live with this run's own publish.
+    await publishOwn(page, [{ entityType: 'service', entityIds: [ids.second!, ids.first!] }], 2);
     expect((await stored('second')).sort_order).toBe(S.first.sort_order);
     expect((await stored('first')).sort_order).toBe(S.second.sort_order);
     expect(await stored('shelved')).toEqual(shelvedBefore);
@@ -221,6 +246,28 @@ test.describe('as content_creator', () => {
     await expect(list.getByRole('button', { name: `Hide ${S.shelved.title.en}` })).toHaveCount(0);
 
     await press(list.getByRole('button', { name: `Show ${S.second.title.en}` }));
+    if (releasesOn()) {
+      // The toast says the change waits for a publish (eyeToast, read from the PATCH's answer).
+      // Read first: a toast lasts four seconds.
+      const waits = eyeToast(S.second.title.en, 'published', { draft: { fields: ['status'] } });
+      await expect(page.locator('.toast', { hasText: waits }).first()).toBeVisible();
+      // A pending status: the list lays it over live, and live keeps the draft.
+      const own = { entityType: 'service', entityIds: [ids.second!] };
+      await expect(list.getByRole('button', { name: `Hide ${S.second.title.en}` })).toBeVisible();
+      expect((await stored('second')).status).toBe('draft');
+      expect(await hasDrafts(own)).toBe(true);
+      // Hide names that change (eyeBody), so it lands: equal to live, it is thrown away, and the
+      // toast says so (review C1): nothing waits, the service is hidden as it is on the site.
+      await press(list.getByRole('button', { name: `Hide ${S.second.title.en}` }));
+      const undone = eyeToast(S.second.title.en, 'draft', { draft: null });
+      expect(undone).toBe(`${S.second.title.en} stays hidden. Nothing is waiting to publish.`);
+      await expect(page.locator('.toast', { hasText: undone }).first()).toBeVisible();
+      await expect(list.getByRole('button', { name: `Show ${S.second.title.en}` })).toBeVisible();
+      await expect(page.locator('main .msg[data-kind="error"]')).toHaveCount(0);
+      await expect.poll(() => hasDrafts(own)).toBe(false);
+      expect((await stored('second')).status).toBe('draft');
+      return;
+    }
     await expect.poll(async () => (await stored('second')).status).toBe('published');
     await expect(list.getByRole('button', { name: `Hide ${S.second.title.en}` })).toBeVisible();
     await press(list.getByRole('button', { name: `Hide ${S.second.title.en}` }));
@@ -271,6 +318,16 @@ test.describe('as content_creator', () => {
     await page.getByRole('button', { name: 'Save case study', exact: true }).click();
     const savedRes = await saved;
     expect(savedRes.status(), await savedRes.text()).toBe(200);
+    await expect(page.getByText('This is a design sample.', { exact: false })).toHaveCount(0);
+    if (releasesOn()) {
+      // The case's one change (its words and the cleared flag) goes live with this run's publish.
+      const { data: kase } = await service()
+        .from('service_cases')
+        .select('id')
+        .eq('service_id', ids.first!)
+        .single();
+      await publishOwn(page, [{ entityType: 'service_case', entityIds: [String(kase!.id)] }]);
+    }
     const { data, error } = await service()
       .from('service_cases')
       .select('title,is_placeholder')
@@ -292,13 +349,19 @@ test.describe('as content_creator', () => {
     await expect(modal.locator('#f-slug')).toHaveValue(`added-${MARK}`);
     await modal.getByRole('button', { name: 'Create service', exact: true }).click();
     await page.waitForURL((url) => /^\/admin\/services\/[0-9a-f-]{36}$/.test(url.pathname));
-    const { data, error } = await service()
-      .from('services')
-      .select('status,discipline_id,sort_order')
-      .eq('slug', `added-${MARK}`)
-      .single();
-    expect(error).toBeNull();
+    // Releases on: a pending create, which live has no row for yet; the API reads it.
+    const createdId = new URL(page.url()).pathname.split('/').pop()!;
+    const data = releasesOn()
+      ? await apiService(page, createdId)
+      : (
+          await service()
+            .from('services')
+            .select('status,discipline_id,sort_order')
+            .eq('slug', `added-${MARK}`)
+            .single()
+        ).data;
     expect(data).toMatchObject({ status: 'draft', discipline_id: ids.discipline });
+    if (releasesOn()) expect(data).toMatchObject({ slug: `added-${MARK}` });
     // After the discipline's last service, inside its range.
     expect(Number(data!.sort_order)).toBeGreaterThan(S.second.sort_order);
   });
@@ -355,12 +418,18 @@ test.describe('as admin', () => {
         /^\/admin\/services\/[0-9a-f-]{36}$/.test(url.pathname) &&
         !url.pathname.endsWith(ids.first!),
     );
-    const { data, error } = await service()
-      .from('services')
-      .select('status,title,discipline_id')
-      .eq('slug', `${S.first.slug}-copy`)
-      .single();
-    expect(error).toBeNull();
+    // Releases on: the copy is a pending create; the API reads it (live has no row yet).
+    const copyId = new URL(page.url()).pathname.split('/').pop()!;
+    const data = releasesOn()
+      ? await apiService(page, copyId)
+      : (
+          await service()
+            .from('services')
+            .select('status,title,discipline_id')
+            .eq('slug', `${S.first.slug}-copy`)
+            .single()
+        ).data;
+    if (releasesOn()) expect(data).toMatchObject({ slug: `${S.first.slug}-copy` });
     expect(data).toMatchObject({
       status: 'draft',
       discipline_id: ids.discipline,
@@ -396,6 +465,10 @@ test.describe('as admin', () => {
       .eq('slug', `${S.first.slug}-copy`)
       .maybeSingle();
     expect(left).toBeNull();
+    // Releases on: the pending create was thrown away, nothing of it is left to publish.
+    if (releasesOn()) {
+      expect(await hasDrafts({ entityType: 'service', entityIds: [copyId] })).toBe(false);
+    }
   });
 });
 
