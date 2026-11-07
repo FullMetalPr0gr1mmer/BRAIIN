@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import Modal from '@/components/admin/kit/Modal';
 import { singletonHistory } from '@/lib/admin/historyTarget';
@@ -12,7 +12,8 @@ import { useEntitySave, type EntitySave } from '@/lib/admin/useEntitySave';
 //
 // Hiding the whole site from search engines asks for typed confirmation (D12): a save that
 // moves the robots default from indexed to a noindex value opens a dialog whose button stays
-// off until "noindex" is typed. Cancel puts the previous value back.
+// off until "noindex" is typed. Cancel puts the previous value back. With releases on the
+// automatic save on leaving a field waits for that confirmation too (R14d).
 //
 // History (Admin v2 R14-prep): every save of the defaults that went live, and Restore once
 // releases are on (R13's drawer; the history names the site, not an id: historyTarget.ts).
@@ -62,7 +63,21 @@ export default function SiteWideForm() {
       }
       return save.save();
     },
+    // Admin v2 R14d: release mode's automatic save (leaving a field, P-5) never hides the site
+    // either: the typed confirmation belongs to the person's Save, so a pending noindex waits
+    // for it instead of being staged unasked.
+    flush: () => {
+      if (needsConfirmation(committed.current[ROBOTS], save.values[ROBOTS])) return;
+      save.flush?.();
+    },
   };
+  // R14d review: and so does every save the hook starts by itself (one asked for while another
+  // was on its way, the replayed press): a robots value moved to noindex meanwhile waits too.
+  const addVeto = save.addAutoSaveVeto;
+  useEffect(
+    () => addVeto?.((values) => needsConfirmation(committed.current[ROBOTS], values[ROBOTS])),
+    [addVeto],
+  );
 
   // The dialog reports every way it closes (Escape, Close, Cancel) through onClose; only a
   // close that is not the confirmation puts the previous value back.

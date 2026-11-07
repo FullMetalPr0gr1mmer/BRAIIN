@@ -1,8 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
+import { DELETE_WORDS } from '@/components/admin/screens/collection/collections';
 import { expectCleanAtWidths } from './collectionLayout';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import {
+  discardDrafts,
+  discardDraftsLike,
+  publishOwn,
+  reorderedIds,
+  systemClient,
+} from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The FAQ screen end to end (Admin v2 U7), signed in, against this job's local Supabase:
@@ -24,11 +31,19 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  * stay true while this runs beside it; the service role removes whatever a failed run left.
  * Not here: "an empty FAQ hides the band and the FAQPage" (emptying the shared database
  * would race the Contact suite): tests/render/sections.spec.ts and tests/lib/contactPage.spec.ts.
+ *
+ * Both modes (Admin v2 R14d). With releases on every save is a pending change: the new question
+ * is a pending create (still a draft, "New · not live yet"); the drawer's status is the
+ * "Visible on the site" switch (and "Archived", which only an Admin is offered); each step that
+ * reads the Contact page first publishes exactly this run's own changes (`publishOwn`: the
+ * question, and the rows a move named, read from the reorder's own request); Delete throws the
+ * pending copy away and stages the original's removal (DELETE_WORDS), which is then published.
+ * The clean-up throws this run's unclaimed pending changes away as the system before it removes
+ * the rows. A move touches the question and the row just above it (the end of the list), never
+ * the first rows other specs open.
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 test.describe.configure({ mode: 'serial' });
 
@@ -36,17 +51,17 @@ const MARK = `E2E ${randomBytes(4).toString('hex')}`;
 const Q = { en: `${MARK}: can you answer this?`, ar: `${MARK}: هل تجيبون على هذا؟` };
 const A = { en: 'Yes. One paragraph, answer first.', ar: 'نعم. فقرة واحدة، والإجابة أولًا.' };
 
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+/** Rows a move of this run named that are not its own (the row above it), for the clean-up. */
+const touched = new Set<string>();
 
 test.afterAll(async () => {
   if (!staffEnv()) return;
+  // Releases on: this run's unclaimed pending changes first (its creates by the marker, the
+  // moved rows by id), as the system.
+  await discardDraftsLike('faq_item', 'payload->question->>en', `${MARK}%`);
+  await discardDrafts([{ entityType: 'faq_item', entityIds: [...touched] }]);
   // Whatever this run left (a failed step, the copy): only rows carrying its marker.
-  await service().from('faq_items').delete().like('question->>en', `${MARK}%`);
+  await systemClient().from('faq_items').delete().like('question->>en', `${MARK}%`);
 });
 
 async function openScreen(page: Page) {
@@ -83,6 +98,32 @@ async function showBoth(page: Page) {
     .getByRole('group', { name: 'Editing language' })
     .getByRole('radio', { name: 'Both' })
     .check();
+}
+
+/** A row's id, from its title link (/admin/faq/<id>). */
+async function idOf(page: Page, text: string, nth = 0): Promise<string> {
+  const href = await row(page, text).nth(nth).locator('a.li__t').getAttribute('href');
+  const id = href?.split('/').pop();
+  expect(id, `the row's link names its id (${href})`).toBeTruthy();
+  return id!;
+}
+
+/** Releases on: publishes this run's own questions, by id; releases off: nothing to do. */
+async function publishQuestions(page: Page, ids: readonly string[]): Promise<void> {
+  await publishOwn(page, [{ entityType: 'faq_item', entityIds: ids }]);
+}
+
+/** A move through the list; with releases on, the rows its reorder named are published. */
+async function move(page: Page, act: () => Promise<void>): Promise<void> {
+  const sent = page.waitForRequest(
+    (r) => r.method() === 'POST' && new URL(r.url()).pathname === '/api/admin/faq/reorder',
+  );
+  await act();
+  const ids = reorderedIds((await sent).postData());
+  await expect(page.locator('.toast', { hasText: 'Order updated.' }).first()).toBeVisible();
+  const own = await idOf(page, Q.en);
+  for (const id of ids) if (id !== own) touched.add(id);
+  await publishQuestions(page, ids);
 }
 
 async function openRow(page: Page, text: string) {
@@ -146,14 +187,27 @@ test.describe('as content_creator', () => {
     page,
   }) => {
     await openScreen(page);
+    const id = await idOf(page, Q.en);
     await openRow(page, Q.en);
-    // This role may not archive (content.archiveDelete): the option is not offered.
-    await expect(dialog(page).locator('#f-status option[value="archived"]')).toHaveCount(0);
     await expect(dialog(page).getByRole('button', { name: 'Delete' })).toHaveCount(0);
-    await dialog(page).locator('#f-status').selectOption('published');
+    if (releasesOn()) {
+      // The release form: a switch for the status, and no Archived for this role.
+      await expect(dialog(page).locator('select#f-status')).toHaveCount(0);
+      await expect(dialog(page).getByRole('switch', { name: 'Archived' })).toHaveCount(0);
+      const visible = dialog(page).getByRole('switch', { name: 'Visible on the site' });
+      await expect(visible).toHaveAttribute('aria-checked', 'false');
+      await visible.click();
+      await expect(visible).toHaveAttribute('aria-checked', 'true');
+    } else {
+      // This role may not archive (content.archiveDelete): the option is not offered.
+      await expect(dialog(page).locator('#f-status option[value="archived"]')).toHaveCount(0);
+      await dialog(page).locator('#f-status').selectOption('published');
+    }
     await dialog(page).getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(dialog(page)).toHaveCount(0);
     await expect(row(page, Q.en)).not.toContainText('Draft');
+    // Releases on: the pending question goes live with this run's own publish.
+    await publishQuestions(page, [id]);
 
     for (const [path, words] of [
       ['/contact', Q.en],
@@ -174,17 +228,17 @@ test.describe('as content_creator', () => {
     expect(before).toBeGreaterThan(1);
 
     await openScreen(page);
-    const handle = page.getByRole('button', { name: `Reorder ${Q.en}` });
-    await handle.focus();
-    await page.keyboard.press('Space');
-    await page.keyboard.press('ArrowUp');
-    await page.keyboard.press('Space');
-    await expect(page.locator('.toast', { hasText: 'Order updated.' }).first()).toBeVisible();
+    await move(page, async () => {
+      const handle = page.getByRole('button', { name: `Reorder ${Q.en}` });
+      await handle.focus();
+      await page.keyboard.press('Space');
+      await page.keyboard.press('ArrowUp');
+      await page.keyboard.press('Space');
+    });
     expect(await place()).toBe(before - 1);
 
     await openScreen(page);
-    await page.getByRole('button', { name: `Move ${Q.en} down` }).click();
-    await expect(page.locator('.toast', { hasText: 'Order updated.' }).first()).toBeVisible();
+    await move(page, () => page.getByRole('button', { name: `Move ${Q.en} down` }).click());
     expect(await place()).toBe(before);
   });
 
@@ -240,19 +294,49 @@ test.describe('as admin', () => {
 
   test('archives the question, then deletes it and its copy', async ({ page }) => {
     await openScreen(page);
+    const original = await idOf(page, Q.en);
     await openRow(page, Q.en);
-    await dialog(page).locator('#f-status').selectOption('archived');
+    if (releasesOn()) {
+      await dialog(page).getByRole('switch', { name: 'Archived' }).click();
+    } else {
+      await dialog(page).locator('#f-status').selectOption('archived');
+    }
     await dialog(page).getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(dialog(page)).toHaveCount(0);
     await expect(row(page, Q.en).first()).toContainText('Archived');
+    await publishQuestions(page, [original]);
     expect((await publicFaq(page, '/contact')).visible).not.toContain(Q.en);
 
     await openScreen(page);
-    while ((await row(page, Q.en).count()) > 0) {
-      await openRow(page, Q.en);
-      await dialog(page).getByRole('button', { name: 'Delete' }).click();
-      await page.getByRole('button', { name: 'Delete', exact: true }).last().click();
-      await expect(page.locator('.toast', { hasText: 'Deleted.' }).first()).toBeVisible();
+    if (!releasesOn()) {
+      while ((await row(page, Q.en).count()) > 0) {
+        await openRow(page, Q.en);
+        await dialog(page).getByRole('button', { name: 'Delete' }).click();
+        await page.getByRole('button', { name: 'Delete', exact: true }).last().click();
+        await expect(
+          page.locator('.toast', { hasText: DELETE_WORDS.deleted }).first(),
+        ).toBeVisible();
+        await openScreen(page);
+      }
+    } else {
+      // The pending copy is thrown away (it was never on the site); the original's removal is
+      // a pending change of its own until it is published.
+      await expect(row(page, Q.en)).toHaveCount(2);
+      const copy = await idOf(page, Q.en, 1);
+      for (const [id, words] of [
+        [copy, DELETE_WORDS.discarded],
+        [original, DELETE_WORDS.removal],
+      ] as const) {
+        await page.locator(`ul.coll__list a.li__t[href="/admin/faq/${id}"]`).click();
+        await expect(dialog(page).getByRole('heading', { name: 'Edit question' })).toBeVisible();
+        await expect(dialog(page).locator('#f-question-en')).toHaveValue(/\S/);
+        await dialog(page).getByRole('button', { name: 'Delete' }).click();
+        await page.getByRole('button', { name: 'Delete', exact: true }).last().click();
+        await expect(page.locator('.toast', { hasText: words }).first()).toBeVisible();
+        await openScreen(page);
+      }
+      await expect(row(page, Q.en)).toHaveCount(1);
+      await publishQuestions(page, [original]);
       await openScreen(page);
     }
     await expect(row(page, Q.en)).toHaveCount(0);

@@ -1,14 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import { ABOUT_WHO_COPY } from '@/lib/sections/copy/aboutWho';
 import { CTA_COPY } from '@/lib/sections/copy/cta';
+import { removeConfirm } from '@/components/admin/screens/pageEditor/model';
 import { expectCleanAtWidths } from './collectionLayout';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { discardDrafts, discardDraftsLike, publishOwn, systemClient } from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
- * Pages and the page editor (Admin v2 E1), signed in, through the real Worker, releases off:
+ * Pages and the page editor (Admin v2 E1), signed in, through the real Worker:
  *
  *   every width  the list, the editor on About, and the editor with each drawer (SEO, History)
  *                and dialog (Add a section, Rename section) open, as Admin; as a Content
@@ -34,11 +35,21 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *
  * Every row this suite writes is its own (the scratch page, the added section), removed by the
  * service role afterwards whatever failed.
+ *
+ * Both modes (Admin v2 R14d). With releases on every write is a pending change: the column's
+ * moves, eyes and renames, the section's words and the page details are read back as the
+ * editor reads them (the API lays the pending change over live), never published (the scratch
+ * page is a draft); switching sections saves the open words on the way instead of asking
+ * (P-5), so "Stay" is releases off's alone; the bar has Publish… and the savebar island; the
+ * new page and its banner are pending creates that this run publishes (`publishOwn`) before
+ * the service role publishes the page itself; the added section is a pending create, and
+ * removing it throws it away (removeConfirm's words). On About, release mode stages nothing
+ * but that section (the unsaved-words check, which would stage the seeded "Who we are", is
+ * releases off's: there the switch asks). The clean-up throws this run's unclaimed pending
+ * changes away as the system before the rows go.
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 test.describe.configure({ mode: 'serial' });
 
@@ -49,16 +60,13 @@ const TITLE = { en: `Scratch ${MARK}`, ar: `مسودة ${MARK}` };
 let scratchId = '';
 let aboutId = '';
 const added: string[] = [];
+/** The page New page made (E11): its id, once the editor opened on it. */
+let newPageId = '';
 /** The page New page makes (E11), removed with its sections afterwards. */
 const NEW_SLUG = `e2e-new-${MARK}`;
 const NEW_TITLE = { en: `Made ${MARK}`, ar: `صفحة ${MARK}` };
 
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+const service = systemClient;
 
 async function sectionRow(id: string): Promise<Record<string, unknown> | null> {
   const { data, error } = await service()
@@ -68,6 +76,41 @@ async function sectionRow(id: string): Promise<Record<string, unknown> | null> {
     .maybeSingle();
   expect(error).toBeNull();
   return data as Record<string, unknown> | null;
+}
+
+/**
+ * A section as stored (releases off), or as the editor reads it (releases on: its pending change
+ * laid over live, a pending create included); null when there is neither.
+ */
+async function sectionNow(page: Page, id: string): Promise<Record<string, unknown> | null> {
+  if (!releasesOn()) return sectionRow(id);
+  const res = await page.request.get(`/api/admin/sections/${id}`);
+  if (res.status() === 404) return null;
+  expect(res.status(), await res.text()).toBe(200);
+  return ((await res.json()) as { data: Record<string, unknown> }).data;
+}
+
+/** A page row as stored (releases off), or as its editor reads it (releases on). */
+async function pageNow(page: Page, id: string): Promise<Record<string, unknown>> {
+  if (!releasesOn()) {
+    const { data, error } = await service()
+      .from('pages')
+      .select('slug,title,status')
+      .eq('id', id)
+      .single();
+    expect(error).toBeNull();
+    return data as Record<string, unknown>;
+  }
+  const res = await page.request.get(`/api/admin/pages/${id}`);
+  expect(res.status(), await res.text()).toBe(200);
+  return ((await res.json()) as { data: Record<string, unknown> }).data;
+}
+
+/** A page's sections as the editor lists them (releases on: pending creates included). */
+async function sectionsOf(page: Page, pageId: string): Promise<Record<string, unknown>[]> {
+  const res = await page.request.get(`/api/admin/sections?page_id=${pageId}&limit=100`);
+  expect(res.status(), await res.text()).toBe(200);
+  return ((await res.json()) as { data: { rows: Record<string, unknown>[] } }).data.rows;
 }
 
 test.beforeAll(async () => {
@@ -98,6 +141,21 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   if (!staffEnv()) return;
   const svc = service();
+  // Releases on: this run's unclaimed pending changes first, as the system: the scratch page's
+  // and its sections', the added section, and the new page with its banner (by its address and
+  // by the page its banner names).
+  const { data: scratch } = scratchId
+    ? await svc.from('page_sections').select('id').eq('page_id', scratchId)
+    : { data: [] };
+  await discardDrafts([
+    { entityType: 'page', entityIds: scratchId ? [scratchId] : [] },
+    {
+      entityType: 'page_section',
+      entityIds: [...(scratch ?? []).map((r) => String(r.id)), ...added],
+    },
+  ]);
+  await discardDraftsLike('page', 'payload->>slug', NEW_SLUG);
+  if (newPageId) await discardDraftsLike('page_section', 'payload->>pageId', newPageId);
   if (added.length > 0) await svc.from('page_sections').delete().in('id', added);
   if (scratchId) await svc.from('pages').delete().eq('id', scratchId);
   // The New page test's page (its sections go with it: page_sections cascades), by its
@@ -210,9 +268,10 @@ test.describe('as admin', () => {
       'href',
       '/ar/about',
     );
-    // Nothing of releases while they are off.
-    await expect(bar.getByRole('button', { name: 'Publish…' })).toHaveCount(0);
-    await expect(page.locator('astro-island[component-url*="AdminSavebar"]')).toHaveCount(0);
+    // Releases off: nothing of releases. On: the bar's Publish… and the savebar island.
+    const shown = releasesOn() ? 1 : 0;
+    await expect(bar.getByRole('button', { name: 'Publish…' })).toHaveCount(shown);
+    await expect(page.locator('astro-island[component-url*="AdminSavebar"]')).toHaveCount(shown);
     await expectCleanAtWidths(page, 'the page editor');
   });
 
@@ -285,15 +344,15 @@ test.describe('as admin', () => {
       'Slogan band',
       'Call to action',
     ]);
-    expect((await sectionRow(sloganId))?.['sort_order']).toBe(10);
-    expect((await sectionRow(ctaId))?.['sort_order']).toBe(20);
+    expect((await sectionNow(page, sloganId))?.['sort_order']).toBe(10);
+    expect((await sectionNow(page, ctaId))?.['sort_order']).toBe(20);
 
     // The eye: the hidden slogan band is shown.
     const eye = page.getByRole('switch', { name: 'Show Slogan band on the site' });
     await expect(eye).toHaveAttribute('aria-checked', 'false');
     await eye.click();
     await expect(eye).toHaveAttribute('aria-checked', 'true');
-    expect((await sectionRow(sloganId))?.['visible']).toBe(true);
+    expect((await sectionNow(page, sloganId))?.['visible']).toBe(true);
 
     // A refused eye (here a 409, as a colleague's save in between gives) says why, and the
     // reason stays on screen after the column reads the list again.
@@ -315,7 +374,7 @@ test.describe('as admin', () => {
     );
     await expect(eye).toHaveAttribute('aria-checked', 'true');
     await page.unroute(slogan, refuse);
-    expect((await sectionRow(sloganId))?.['visible']).toBe(true);
+    expect((await sectionNow(page, sloganId))?.['visible']).toBe(true);
 
     // Rename the open section (the column's write moves its version: the form follows it).
     await page.getByRole('button', { name: 'Rename' }).click();
@@ -324,7 +383,7 @@ test.describe('as admin', () => {
     await rename.getByRole('button', { name: 'Save name' }).click();
     await expect(rename).toBeHidden();
     await expect(pick(page, `Closing band ${MARK}`)).toBeVisible();
-    expect((await sectionRow(ctaId))?.['label']).toBe(`Closing band ${MARK}`);
+    expect((await sectionNow(page, ctaId))?.['label']).toBe(`Closing band ${MARK}`);
 
     // Its words: prefilled with the built-in copy; one heading saved, the only thing stored
     // with its highlight (the two are read together), after the move and the rename.
@@ -333,18 +392,33 @@ test.describe('as admin', () => {
     await heading.fill(`Let us talk about it ${MARK}`);
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page.locator('.save-status[data-state="saved"]')).toBeVisible();
-    const stored = (await sectionRow(ctaId))?.['content'] as Record<string, unknown>;
+    const stored = (await sectionNow(page, ctaId))?.['content'] as Record<string, unknown>;
     expect(Object.keys(stored).sort()).toEqual(['accent', 'heading']);
     expect(stored['heading']).toEqual({
       en: `Let us talk about it ${MARK}`,
       ar: CTA_COPY.heading.ar,
     });
 
-    // Leaving with words not saved asks first; Stay keeps them.
+    // Leaving with words not saved asks first; Stay keeps them. Releases on, the switch saves
+    // them on the way (P-5) and asks nothing; back on the section, they are there.
     await heading.fill(`Unsaved ${MARK}`);
     await pick(page, 'Slogan band').click();
-    const ask = page.getByRole('dialog').filter({ hasText: 'Leave without saving?' });
-    await ask.getByRole('button', { name: 'Stay' }).click();
+    if (releasesOn()) {
+      await expect(rowOf(page, 'Slogan band')).toHaveAttribute('aria-current', 'true');
+      await expect(
+        page.getByRole('dialog').filter({ hasText: 'Leave without saving?' }),
+      ).toHaveCount(0);
+      await expect
+        .poll(
+          async () =>
+            ((await sectionNow(page, ctaId))?.['content'] as Record<string, unknown>)?.['heading'],
+        )
+        .toEqual({ en: `Unsaved ${MARK}`, ar: CTA_COPY.heading.ar });
+      await pick(page, `Closing band ${MARK}`).click();
+    } else {
+      const ask = page.getByRole('dialog').filter({ hasText: 'Leave without saving?' });
+      await ask.getByRole('button', { name: 'Stay' }).click();
+    }
     await expect(heading).toHaveValue(`Unsaved ${MARK}`);
     await expect(rowOf(page, `Closing band ${MARK}`)).toHaveAttribute('aria-current', 'true');
 
@@ -380,8 +454,8 @@ test.describe('as admin', () => {
     await page.locator('#f-title-en').fill(`${TITLE.en} renamed`);
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page.locator('.save-status[data-state="saved"]')).toBeVisible();
-    const { data } = await service().from('pages').select('title').eq('id', scratchId).single();
-    expect((data as { title: { en: string } }).title.en).toBe(`${TITLE.en} renamed`);
+    const title = (await pageNow(page, scratchId))['title'] as { en: string };
+    expect(title.en).toBe(`${TITLE.en} renamed`);
   });
 
   test('New page: a draft with its banner, its editor, then the page in both languages (E11)', async ({
@@ -407,22 +481,26 @@ test.describe('as admin', () => {
     await expect(dialog).toContainText(`The page will be at /${NEW_SLUG} and /ar/${NEW_SLUG}.`);
     await dialog.getByRole('button', { name: 'Make the page' }).click();
     await page.waitForURL(/\/admin\/pages\/[0-9a-f-]{36}(\?|$)/);
-    const newPageId = /\/admin\/pages\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
+    newPageId = /\/admin\/pages\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
     expect(newPageId).not.toBe('');
 
-    // Stored: a draft at its address, with one shown hero whose headline is the title.
+    // Stored: a draft at its address, with one shown hero whose headline is the title. (Releases
+    // on: both are pending creates, read as the editor reads them.)
     const svc = service();
-    const { data: row } = await svc
-      .from('pages')
-      .select('slug,title,status')
-      .eq('id', newPageId)
-      .single();
-    expect(row).toEqual({ slug: NEW_SLUG, title: NEW_TITLE, status: 'draft' });
-    const { data: sections } = await svc
-      .from('page_sections')
-      .select('type,visible,content')
-      .eq('page_id', newPageId);
-    expect(sections).toEqual([{ type: 'hero', visible: true, content: { headline: NEW_TITLE } }]);
+    const row = await pageNow(page, newPageId);
+    expect({ slug: row['slug'], title: row['title'], status: row['status'] }).toEqual({
+      slug: NEW_SLUG,
+      title: NEW_TITLE,
+      status: 'draft',
+    });
+    const listed = await sectionsOf(page, newPageId);
+    expect(listed).toHaveLength(1);
+    const hero = await sectionNow(page, String(listed[0]!['id']));
+    expect({
+      type: hero?.['type'],
+      visible: hero?.['visible'],
+      content: hero?.['content'],
+    }).toEqual({ type: 'hero', visible: true, content: { headline: NEW_TITLE } });
 
     // The editor opened on it, and its page details say where it lives.
     await expect(column(page).locator('li.pe__row[aria-current="true"]')).toHaveCount(1);
@@ -436,8 +514,18 @@ test.describe('as admin', () => {
       const res = await page.request.get(path);
       expect(res.status(), path).toBe(404);
     }
-    // Published (by the service role: this suite runs with releases off), it renders in both
-    // languages with its title as its one heading.
+    // Releases on: the page and its banner become live rows (a draft still) with this run's
+    // own publish of the two.
+    await publishOwn(
+      page,
+      [
+        { entityType: 'page', entityIds: [newPageId] },
+        { entityType: 'page_section', entityIds: [String(listed[0]!['id'])] },
+      ],
+      2,
+    );
+    // Published (by the service role, which the release guard lets through), it renders in
+    // both languages with its title as its one heading.
     const published = await svc
       .from('pages')
       .update({ status: 'published', published_at: new Date().toISOString() })
@@ -458,8 +546,10 @@ test.describe('as admin', () => {
     page,
   }) => {
     await openEditor(page, aboutId);
-    // Words not saved in the open section (Who we are): opening the new one asks first.
-    await page.locator('#f-content-heading-en').fill(`Unsaved ${MARK}`);
+    // Words not saved in the open section (Who we are): opening the new one asks first. That
+    // ask is releases off's (on, the switch saves them on the way, which would stage the seeded
+    // section other specs open), so release mode adds with nothing typed.
+    if (!releasesOn()) await page.locator('#f-content-heading-en').fill(`Unsaved ${MARK}`);
     await column(page).getByRole('button', { name: 'Add section' }).click();
     const library = page.getByRole('dialog', { name: 'Add a section' });
     const hero = library.getByRole('button', { name: 'Hero' });
@@ -480,19 +570,23 @@ test.describe('as admin', () => {
     added.push(body.data.id);
     await expect(library).toBeHidden();
     await expect(column(page).locator('li.pe__row .pe__name').last()).toHaveText('Call to action');
-    const ask = page.getByRole('dialog').filter({ hasText: 'Leave without saving?' });
-    await ask.getByRole('button', { name: 'Leave without saving' }).click();
+    if (!releasesOn()) {
+      const ask = page.getByRole('dialog').filter({ hasText: 'Leave without saving?' });
+      await ask.getByRole('button', { name: 'Leave without saving' }).click();
+    }
     const row = rowOf(page, 'Call to action');
     await expect(row).toHaveAttribute('aria-current', 'true');
     await expect(row.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
-    const stored = await sectionRow(body.data.id);
+    const stored = await sectionNow(page, body.data.id);
     expect(stored).toMatchObject({ type: 'cta', visible: false, content: {}, sort_order: 50 });
 
+    // Releases on the section is a pending create, and removing it throws it away.
+    const question = removeConfirm('Call to action', releasesOn());
     await page.getByRole('button', { name: 'Delete' }).click();
-    const sure = page.getByRole('dialog').filter({ hasText: 'Delete the section' });
-    await sure.getByRole('button', { name: 'Delete' }).click();
+    const sure = page.getByRole('dialog').filter({ hasText: question.message });
+    await sure.getByRole('button', { name: question.confirmLabel, exact: true }).click();
     await expect(rowOf(page, 'Call to action')).toHaveCount(0);
-    expect(await sectionRow(body.data.id)).toBeNull();
+    expect(await sectionNow(page, body.data.id)).toBeNull();
   });
 });
 
@@ -533,11 +627,13 @@ test.describe('as content_creator', () => {
     await expect(pick(page, `Slogan ${MARK}`)).toBeVisible();
     const { data } = await service()
       .from('page_sections')
-      .select('label')
+      .select('id,label')
       .eq('page_id', scratchId)
       .eq('type', 'slogan')
       .single();
-    expect((data as { label: string }).label).toBe(`Slogan ${MARK}`);
+    // Releases on: the name is a pending change, read as the editor reads it.
+    const slogan = await sectionNow(page, String((data as { id: string }).id));
+    expect(slogan?.['label']).toBe(`Slogan ${MARK}`);
   });
 });
 

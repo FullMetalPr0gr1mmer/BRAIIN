@@ -181,6 +181,17 @@ describe('the typed confirmation (a site-wide noindex)', () => {
     expect(needsConfirmation('noindex,follow', 'index,follow')).toBe(false);
     expect(needsConfirmation('index,follow', 'index,follow')).toBe(false);
   });
+
+  it('release mode’s automatic save waits for it too (R14d): the guard wraps flush as well as save', () => {
+    // With releases on, leaving the robots select saves by itself (P-5); without this the
+    // site-wide noindex was staged with no typed confirmation.
+    const src = readFileSync('src/components/admin/screens/seo/SiteWideForm.tsx', 'utf8');
+    const guard = src.slice(src.indexOf('const guarded: EntitySave = {'));
+    expect(guard).toMatch(
+      /flush: \(\) => \{\s*if \(needsConfirmation\(committed\.current\[ROBOTS\], save\.values\[ROBOTS\]\)\) return;\s*save\.flush\?\.\(\);\s*\},/,
+    );
+    expect(src).toContain('save={guarded}');
+  });
 });
 
 describe('the Pages tab', () => {

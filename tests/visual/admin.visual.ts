@@ -2,7 +2,13 @@ import { expect, test, type Page } from '@playwright/test';
 import { STAFF_ROLES, authFile, staffEnv } from '../admin/staff';
 import { CAPTURE_VIEWPORTS, captureName, captureRoutes } from '../admin/routes';
 import { resolvePath } from '../admin/openRoute';
-import { GREETING_HOLDERS, GREETING_SOURCE, STEADY_GREETING } from './adminVisualSteady';
+import {
+  GREETING_HOLDERS,
+  GREETING_SOURCE,
+  STEADY_GREETING,
+  frameFor,
+  type FrameRegion,
+} from './adminVisualSteady';
 
 /*
  * Admin visual baselines (Admin v2 Z1, ui.md AV-34: "turns [the admin capture] into
@@ -26,6 +32,9 @@ import { GREETING_HOLDERS, GREETING_SOURCE, STEADY_GREETING } from './adminVisua
  * mode the workflow runs in: its env is the e2e job's (tests/ci/adminVisual.spec.ts), so R14c's
  * flip of that job to release mode is followed by an `update` run. The savebar's words, which
  * count pending changes, are masked like every other count.
+ *
+ * The activity log's list grows with every write anywhere (R14d): on that screen alone the list
+ * takes a fixed, masked frame and its chain note is left out (adminVisualSteady.ts FRAMED).
  */
 
 const MODE = process.env['ADMIN_VISUAL'];
@@ -80,6 +89,32 @@ async function steadyText(page: Page): Promise<void> {
   );
 }
 
+/**
+ * A framed screen's regions held still (adminVisualSteady.ts FRAMED): a `fixed` one keeps its
+ * block size, clipped, and is masked; a `hidden` one is left out. Through the CSSOM.
+ */
+async function frame(page: Page, regions: readonly FrameRegion[]): Promise<void> {
+  // The list's card is always drawn (rows, or its empty state): a frame that holds nothing would
+  // let a moved list pass unseen.
+  for (const region of regions.filter((r) => r.hold === 'fixed')) {
+    await expect(page.locator(region.selector), region.selector).toHaveCount(1);
+  }
+  await page.evaluate((list) => {
+    for (const { selector, hold, blockSize } of list) {
+      for (const el of document.querySelectorAll<HTMLElement>(selector)) {
+        if (hold === 'hidden') {
+          el.style.setProperty('display', 'none');
+          continue;
+        }
+        for (const prop of ['block-size', 'min-block-size', 'max-block-size']) {
+          el.style.setProperty(prop, `${blockSize}px`);
+        }
+        el.style.setProperty('overflow', 'hidden');
+      }
+    }
+  }, regions);
+}
+
 test.describe('admin visual baselines', () => {
   test.skip(
     !MODE || !staffEnv(),
@@ -107,11 +142,14 @@ test.describe('admin visual baselines', () => {
             await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
             await page.evaluate(() => document.fonts.ready);
             await steadyText(page);
+            const framed = frameFor(path!);
+            if (framed) await frame(page, framed);
+            const fixed = (framed ?? []).filter((r) => r.hold === 'fixed').map((r) => r.selector);
             await expect(page).toHaveScreenshot(`${name}.png`, {
               fullPage: true,
               animations: 'disabled',
               caret: 'hide',
-              mask: masks(page),
+              mask: fixed.length ? [...masks(page), page.locator(fixed.join(', '))] : masks(page),
               // Anti-aliasing noise only: a moved or recoloured element is far more.
               maxDiffPixelRatio: 0.002,
               timeout: 20_000,

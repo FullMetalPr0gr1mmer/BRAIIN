@@ -55,6 +55,9 @@ import {
   pageMoved,
   previewSectionsOf,
   reloadsPreview,
+  removeConfirm,
+  removeOutcome,
+  removeWords,
   renameBody,
   rowMoved,
   rowStamp,
@@ -439,12 +442,7 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
 
   async function remove(row: SectionRow) {
     const name = sectionName(row);
-    const ok = await confirmDialog({
-      message: release
-        ? `Remove the section “${name}” from the page? The removal is saved as an unpublished change, and nothing leaves the site until it is published.`
-        : `Delete the section “${name}”? Its words go with it. To keep them, hide it instead.`,
-      confirmLabel: release ? 'Remove' : 'Delete',
-    });
+    const ok = await confirmDialog(removeConfirm(name, release));
     if (!ok || !rows) return;
     setWorking(true);
     setError('');
@@ -455,13 +453,12 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
         method: 'DELETE',
       });
       wrote('remove');
-      if ('staged' in answer || 'draft' in answer) {
-        announcePending();
-        toast(`The removal of ${name} is saved as an unpublished change.`, 'ok');
-      } else {
-        toast(`${name} is deleted.`, 'ok');
-        setSelected(next ?? PAGE_DETAILS);
-      }
+      // R14d: a pending removal stays listed (and selected) until it is published; a section
+      // gone at once, or a pending new one thrown away, leaves, and the next one opens.
+      const outcome = removeOutcome(answer);
+      if (outcome !== 'deleted') announcePending();
+      toast(removeWords(name, outcome), 'ok');
+      if (outcome !== 'removal') setSelected(next ?? PAGE_DETAILS);
       await load();
     } catch (err) {
       setError(`Not deleted. ${describeError(err)}`);
