@@ -258,6 +258,25 @@ export interface UnreadableControl {
   label: string;
 }
 
+/** The boxes `unreadableIn` reads: number, date and date-and-time. */
+export const UNREADABLE_SELECTOR =
+  'input[type="number"], input[type="datetime-local"], input[type="date"]';
+
+/**
+ * The number and date boxes of a form whose text the browser could not read. Such a box reports
+ * '' to script, so no save may send the form while one is there: neither the person's (EditorForm
+ * refuses it, naming them) nor, in release mode, the automatic one when focus leaves a field or a
+ * tab changes (Admin v2 R14d: it sent '' as "no value" and cleared the stored one).
+ */
+export function unreadableIn(
+  form: Pick<ParentNode, 'querySelectorAll'> | null,
+): UnreadableControl[] {
+  if (!form) return [];
+  return [...form.querySelectorAll<HTMLInputElement>(UNREADABLE_SELECTOR)]
+    .filter((input) => input.validity.badInput)
+    .map((input) => ({ id: input.id, type: input.type, label: input.dataset['label'] ?? '' }));
+}
+
 /**
  * The form's own errors for boxes the browser could not read: such a box reports '' to
  * script, which the payload would send as "no value" (EditorForm refuses the save).
