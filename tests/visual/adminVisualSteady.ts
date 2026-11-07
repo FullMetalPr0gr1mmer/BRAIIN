@@ -34,8 +34,11 @@ export function steadyGreeting(text: string): string {
  * no data moves:
  *   - `fixed`: the region keeps one block size (overflow clipped) and is masked: the list's card,
  *     its rows and its "1 to 25 of N" line;
- *   - `hidden`: the region is left out of the picture: the chain note ("The latest N entries link
- *     up"), whose words follow the count and which is drawn only once there are two entries.
+ *   - `hidden`: the region is left out of the picture: the chain note while the chain links up
+ *     ("The latest N entries link up", the one `ok` note), whose words follow the count and which
+ *     is drawn only once there are two entries. Only that one: a broken chain's alert ("Entry N
+ *     does not link to the one before it") and the export and filter notes are `err`/`warn`, and
+ *     stay in the picture, so a baseline can still show them (review SEC-3).
  * Both are set through the CSSOM (style-src has no 'unsafe-inline', and the CSSOM is not an
  * inline style), after the page has loaded and before the picture. Everything above the list
  * (the head, the filters, the kind chips) is the seed's and the code's, and stays in the picture.
@@ -52,7 +55,7 @@ export interface FrameRegion {
 /** The framed screens, by their path (any query: a filtered view of the same list). */
 export const FRAMED: Readonly<Record<string, readonly FrameRegion[]>> = {
   '/admin/audit': [
-    { selector: '.act-note', hold: 'hidden' },
+    { selector: '.act-note[data-tone="ok"]', hold: 'hidden' },
     { selector: '.card.dt', hold: 'fixed', blockSize: 480 },
   ],
 };

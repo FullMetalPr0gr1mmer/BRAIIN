@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import EditorForm from '@/components/admin/fields/EditorForm';
 import Modal from '@/components/admin/kit/Modal';
 import { singletonHistory } from '@/lib/admin/historyTarget';
@@ -71,6 +71,13 @@ export default function SiteWideForm() {
       save.flush?.();
     },
   };
+  // R14d review: and so does every save the hook starts by itself (one asked for while another
+  // was on its way, the replayed press): a robots value moved to noindex meanwhile waits too.
+  const addVeto = save.addAutoSaveVeto;
+  useEffect(
+    () => addVeto?.((values) => needsConfirmation(committed.current[ROBOTS], values[ROBOTS])),
+    [addVeto],
+  );
 
   // The dialog reports every way it closes (Escape, Close, Cancel) through onClose; only a
   // close that is not the confirmation puts the previous value back.

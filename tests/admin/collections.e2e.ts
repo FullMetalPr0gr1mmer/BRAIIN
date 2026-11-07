@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
+import { ORDER_STEP } from '../../src/components/admin/screens/collection/reorder';
 import { expectCleanAtWidths } from './collectionLayout';
 import {
   discardDrafts,
@@ -45,7 +46,11 @@ import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
  * consent recorded and the quote kept off the site (not visible) the publish makes it real in
  * one change; the client's copy is a pending create and its clearing goes live when published;
  * the numbers' move is published by the ids its reorder named. Nothing here leaves the end of
- * each list (sort order 9980 and up), so the first rows other specs open are never staged. The
+ * each list (sort order 9980 and up), so the first rows other specs open are never staged. A
+ * move renumbers the list in tens from 10 and the seed's numbers are 1 to 4 and 11 to 14, so
+ * before the run the system puts the seeded numbers in tens, in the order the list shows
+ * (`numbersInTens`, R14d review C2: the numbers releases off's first move always wrote); the
+ * move then names this run's two numbers and nothing else, which the test asserts. The
  * clean-up throws this run's unclaimed pending changes away as the system before the rows go.
  */
 
@@ -114,7 +119,47 @@ test.beforeAll(async () => {
     ]),
   ];
   for (const { error } of await Promise.all(inserts)) expect(error).toBeNull();
+  await numbersInTens();
 });
+
+/**
+ * The seeded numbers in tens, as the system (R14d review C2). A move renumbers every row it may
+ * write in tens from 10 (reorder.ts orderChanges) and the seed's are 1 to 4 and 11 to 14, so the
+ * first move named all eight, the first row other specs open included, and in release mode
+ * staged them and published them all. Here they take the numbers that move would give them, in
+ * the order the list shows them (an archived row is an Admin's and keeps its number, as the
+ * Content Creator's move leaves it), so the move names only this run's two. The rows a number
+ * lowers go first, front to back, then the rows it raises, back to front, so no row passes
+ * another on the way (as reorder.ts duplicateChanges orders them): a public page reading the
+ * numbers meanwhile shows them in the same order.
+ */
+async function numbersInTens(): Promise<void> {
+  const svc = service();
+  const { data, error } = await svc
+    .from('statistics')
+    .select('id, slug, sort_order')
+    .eq('tenant_id', TENANT_ID)
+    .neq('status', 'archived')
+    .order('sort_order');
+  expect(error).toBeNull();
+  const changes = (data ?? [])
+    .filter((r) => !String(r.slug).endsWith(MARK))
+    .map((r, index) => ({
+      id: String(r.id),
+      from: Number(r.sort_order),
+      to: (index + 1) * ORDER_STEP,
+    }))
+    .filter((c) => c.from !== c.to);
+  const lowered = changes.filter((c) => c.to < c.from);
+  const raised = changes.filter((c) => c.to > c.from).reverse();
+  for (const change of [...lowered, ...raised]) {
+    const { error: failed } = await svc
+      .from('statistics')
+      .update({ sort_order: change.to })
+      .eq('id', change.id);
+    expect(failed).toBeNull();
+  }
+}
 
 test.afterAll(async () => {
   if (!staffEnv()) return;
@@ -347,6 +392,9 @@ test('numbers: a keyboard move reorders them', async ({ page }) => {
     ),
   );
   for (const id of moved) if (!ownIds.includes(id)) touched.add(id);
+  // The move named this run's numbers alone (R14d review C2): no seeded row is staged or
+  // published (the clean-up still throws away any other a failure here left pending).
+  expect([...moved].sort()).toEqual([...ownIds].sort());
   await publishOwn(page, [{ entityType: 'statistic', entityIds: moved }]);
 
   const one = Number((await serviceRow('statistics', slug('n1')))['sort_order']);

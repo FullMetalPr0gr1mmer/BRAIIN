@@ -5,6 +5,7 @@ import { AdminApiError, adminFetch, describeError } from './client';
 import {
   autosaveDecision,
   buildSaveRequest,
+  queuedSaveDecision,
   createdHref,
   entitySaveReducer,
   initialSaveState,
@@ -98,6 +99,14 @@ export interface EntitySave {
   /** Admin v2 R12: save now if this is an unsaved pending change (blur, tab switch, ⌘S). */
   flush?(): void;
   /**
+   * Admin v2 R14d review: a check every save the person did not just make asks first (the
+   * blur, the tab switch, the idle timer, a save asked for while one was on its way). While it
+   * says true the save waits; the person's own Save is the form's to guard. The form that draws
+   * the boxes adds it (EditorForm: a box the browser could not read; SiteWideForm: a site-wide
+   * noindex not yet confirmed). Returns the function that takes it off. Optional, as R12's are.
+   */
+  addAutoSaveVeto?(veto: AutoSaveVeto): () => void;
+  /**
    * Admin v2 U5/U6: go to `href` without the unsaved-changes question, after an action that
    * made the form moot (the record was deleted: editorDelete.ts). Optional, so a screen's
    * fake save need not carry it.
@@ -111,6 +120,9 @@ export interface EntitySave {
    */
   rebase?(): void;
 }
+
+/** True while an automatic save must wait (Admin v2 R14d review: `addAutoSaveVeto`). */
+export type AutoSaveVeto = (values: Readonly<Row>) => boolean;
 
 export interface UseEntitySaveOptions {
   fields: readonly FieldDef[];
@@ -184,6 +196,8 @@ export function useEntitySave(
   // R12 review: the pending change was settled in the publish dialog while a save was on its
   // way; read the record again once that save has landed.
   const rebaseNext = useRef(false);
+  // R14d review: the forms' checks every automatic or replayed save asks first.
+  const vetoes = useRef(new Set<AutoSaveVeto>());
   const url = loadUrl(target, id);
 
   const load = useCallback(async () => {
@@ -254,7 +268,8 @@ export function useEntitySave(
   }, [url, fields]);
 
   const run = useCallback(
-    async (auto: boolean): Promise<boolean> => {
+    // `replay`: the person's press, sent now that the save it waited for has landed (R14d).
+    async (auto: boolean, replay = false): Promise<boolean> => {
       const current = latest.current;
       const target = targetRef.current;
       if (current.phase !== 'ready' || inFlight.current) {
@@ -264,11 +279,19 @@ export function useEntitySave(
         }
         return false;
       }
+      // R14d review: a save the person did not just make (an automatic one, or a press replayed
+      // over values typed since) waits while a form's check says so, as the person's Save does.
+      if ((auto || replay) && [...vetoes.current].some((veto) => veto(current.values))) {
+        wanted.current = false;
+        return false;
+      }
       if (!auto) wanted.current = true;
       let request: ReturnType<typeof buildSaveRequest>;
       try {
         request = buildSaveRequest(target, id, current, fields);
       } catch (err) {
+        // R14d review: a refusal answers the person's press (as the request's refusals do).
+        wanted.current = false;
         dispatch({
           type: 'save-failed',
           message: err instanceof Error ? err.message : String(err),
@@ -285,6 +308,10 @@ export function useEntitySave(
         });
         if (request.method === 'POST' && target.kind === 'resource') {
           // A create opens the record's edit screen; the form's state goes with the page.
+          // R14d review: a press while it was on its way is answered by it: never a second
+          // create (Ctrl/⌘+S pressed again, or held, made a duplicate item).
+          again.current = false;
+          wanted.current = false;
           const at = new Date().toISOString();
           if ('draft' in row) announcePending();
           if (onCreated) {
@@ -372,11 +399,14 @@ export function useEntitySave(
       void rebase();
     } else if (again.current) {
       again.current = false;
-      // R14d: a press the save that just landed did not answer is the person's save now.
-      if (wanted.current) void run(false);
-      else flush();
+      // R14d: a press the save that just landed did not answer is the person's save now; never
+      // for a new record or with releases off, and only over something new (queuedSaveDecision).
+      const next = queuedSaveDecision(latest.current, isNew, wanted.current);
+      if (next !== 'person') wanted.current = false;
+      if (next === 'person') void run(false, true);
+      else if (next === 'auto') flush();
     }
-  }, [state.phase, flush, rebase, run]);
+  }, [state.phase, flush, rebase, run, isNew]);
 
   // R12 review: the publish dialog settled this record's pending change.
   const draftId = state.draft?.id;
@@ -437,6 +467,12 @@ export function useEntitySave(
     releasesOff: state.releasesOff,
     savedByPerson: state.savedByPerson,
     flush,
+    addAutoSaveVeto: useCallback((veto: AutoSaveVeto) => {
+      vetoes.current.add(veto);
+      return () => {
+        vetoes.current.delete(veto);
+      };
+    }, []),
     leave: useCallback((href: string) => {
       leaving.current = true;
       window.location.assign(href);

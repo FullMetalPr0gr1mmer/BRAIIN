@@ -170,12 +170,13 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
     setError('');
     let failure = '';
     try {
-      await adminFetch(`/api/admin/disciplines/${row.id}`, {
+      const answer = await adminFetch<Record<string, unknown>>(`/api/admin/disciplines/${row.id}`, {
         method: 'PATCH',
         // R14d: a row with a pending change names it (eyeBody).
         body: stagedBody(eyeBody(row, next, staged), staged),
       });
-      toast(eyeToast(name, next, staged), 'ok');
+      // R14d review: the answer says whether the change waits or was thrown away.
+      toast(eyeToast(name, next, answer), 'ok');
     } catch (err) {
       failure = eyeRefusal(
         'discipline',

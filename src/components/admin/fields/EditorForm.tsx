@@ -1,4 +1,13 @@
-import { lazy, Suspense, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { flushSync } from 'react-dom';
 import ErrorSummary, { type FieldError } from '@/components/admin/kit/ErrorSummary';
 import Note from '@/components/admin/kit/Note';
@@ -344,6 +353,10 @@ export default function EditorForm({
     if (unreadableIn(formRef.current).length > 0) return;
     save.flush?.();
   };
+  // R14d review: the saves this form does not start (the page editor's idle timer, a save
+  // replayed once another lands, the notice's and the column's flush) ask the same, in the hook.
+  const addVeto = save.addAutoSaveVeto;
+  useEffect(() => addVeto?.(() => unreadableIn(formRef.current).length > 0), [addVeto]);
   const choose = (id: string) => {
     setTab(id);
     setOpened((seen) => (seen.has(id) ? seen : new Set([...seen, id])));

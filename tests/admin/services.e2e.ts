@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
+import { eyeToast } from '@/components/admin/screens/services/model';
 import { expectCleanAtWidths } from './collectionLayout';
 import {
   discardDrafts,
@@ -246,13 +247,21 @@ test.describe('as content_creator', () => {
 
     await press(list.getByRole('button', { name: `Show ${S.second.title.en}` }));
     if (releasesOn()) {
+      // The toast says the change waits for a publish (eyeToast, read from the PATCH's answer).
+      // Read first: a toast lasts four seconds.
+      const waits = eyeToast(S.second.title.en, 'published', { draft: { fields: ['status'] } });
+      await expect(page.locator('.toast', { hasText: waits }).first()).toBeVisible();
       // A pending status: the list lays it over live, and live keeps the draft.
       const own = { entityType: 'service', entityIds: [ids.second!] };
       await expect(list.getByRole('button', { name: `Hide ${S.second.title.en}` })).toBeVisible();
       expect((await stored('second')).status).toBe('draft');
       expect(await hasDrafts(own)).toBe(true);
-      // Hide names that change (eyeBody), so it lands: equal to live, it is thrown away.
+      // Hide names that change (eyeBody), so it lands: equal to live, it is thrown away, and the
+      // toast says so (review C1): nothing waits, the service is hidden as it is on the site.
       await press(list.getByRole('button', { name: `Hide ${S.second.title.en}` }));
+      const undone = eyeToast(S.second.title.en, 'draft', { draft: null });
+      expect(undone).toBe(`${S.second.title.en} stays hidden. Nothing is waiting to publish.`);
+      await expect(page.locator('.toast', { hasText: undone }).first()).toBeVisible();
       await expect(list.getByRole('button', { name: `Show ${S.second.title.en}` })).toBeVisible();
       await expect(page.locator('main .msg[data-kind="error"]')).toHaveCount(0);
       await expect.poll(() => hasDrafts(own)).toBe(false);

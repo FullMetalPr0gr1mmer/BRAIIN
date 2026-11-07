@@ -116,10 +116,15 @@ describe('the wiring', () => {
     // The landing: the person's own, or the automatic one when nothing was typed since.
     expect(hook).toContain('const byPerson = !auto || (wanted.current && !typedSince);');
     expect(hook).toMatch(/dispatch\(\{ type: 'saved', row, fields, at: [^}]*, byPerson \}\)/);
-    // A press the landing did not answer becomes the person's own save.
-    expect(hook).toMatch(/if \(wanted\.current\) void run\(false\);\s*else flush\(\);/);
-    // A refusal answers the press.
-    expect(hook).toMatch(/catch \(err\) \{\s*\/\/[^\n]*\n\s*wanted\.current = false;/);
+    // A press the landing did not answer becomes the person's own save, when queuedSaveDecision
+    // says so (never for a create or with releases off: R14d review SEC-1, entitySaveQueue.spec).
+    expect(hook).toMatch(
+      /const next = queuedSaveDecision\(latest\.current, isNew, wanted\.current\);\s*if \(next !== 'person'\) wanted\.current = false;\s*if \(next === 'person'\) void run\(false, true\);\s*else if \(next === 'auto'\) flush\(\);/,
+    );
+    // A refusal answers the press: the request's, and one refused before it was sent (C3).
+    expect(hook.match(/catch \(err\) \{\s*\/\/[^\n]*\n\s*wanted\.current = false;/g)).toHaveLength(
+      2,
+    );
     expect(hook).toContain('savedByPerson: state.savedByPerson,');
   });
 });

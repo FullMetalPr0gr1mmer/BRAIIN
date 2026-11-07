@@ -1504,6 +1504,47 @@ describe('the Services eyes in release mode (R14d, services/model.ts eyeBody)', 
     // Back to what live holds: the change is thrown away, and live was never written.
     expect(drafts()).toEqual([]);
     expect(liveWrites()).toEqual([]);
+    // Review C1: each toast is read from its own answer. The first waits for a publish; the
+    // second threw the pending status away, so nothing waits and the row is hidden already.
+    const { eyeToast } = await import('@/components/admin/screens/services/model');
+    expect(eyeToast('Logo', 'published', shown.data)).toBe(
+      'Logo will show on the site once this change is published.',
+    );
+    expect(hidden.data['draft']).toBeNull();
+    expect(eyeToast('Logo', 'draft', hidden.data)).toBe(
+      'Logo stays hidden. Nothing is waiting to publish.',
+    );
+  });
+
+  it('a press that undoes only the pending status, with other changes pending, says they still wait (review C1)', async () => {
+    const shown = await eye(await listed(), 'published');
+    expect(shown.status).toBe(200);
+    // Another change on the same pending change (the slug), then Hide.
+    let row = await listed();
+    const ref = row['draft'] as { id: string; version: number };
+    const slugged = await call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: stagedBody(
+        {
+          slug: 'logo-next',
+          version: Number(row['version']),
+          draftId: ref.id,
+          draftVersion: ref.version,
+        },
+        true,
+      ),
+    });
+    expect(slugged.status, JSON.stringify(slugged.body)).toBe(200);
+    row = await listed();
+    const hidden = await eye(row, 'draft');
+    expect(hidden.status, JSON.stringify(hidden.body)).toBe(200);
+    const left = hidden.data['draft'] as { fields: string[] };
+    expect(left.fields).not.toContain('status');
+    expect(left.fields).toContain('slug');
+    const { eyeToast } = await import('@/components/admin/screens/services/model');
+    expect(eyeToast('Logo', 'draft', hidden.data)).toBe(
+      'Logo stays hidden. Its other changes still wait for a publish.',
+    );
   });
 
   it('without the change named (the eye before R14d), the second press was a 409 for ever', async () => {
@@ -1532,15 +1573,36 @@ describe('the Services eyes in release mode (R14d, services/model.ts eyeBody)', 
     });
   });
 
-  it('the toast says the change waits for a publish (releases off: the words it always said)', async () => {
+  it('the toast follows the answer: live at once, waiting for a publish, or nothing waiting (review C1)', async () => {
     const { eyeToast } = await import('@/components/admin/screens/services/model');
-    expect(eyeToast('Logo', 'published', false)).toBe('Logo is on the site.');
-    expect(eyeToast('Logo', 'draft', false)).toBe('Logo is hidden.');
-    expect(eyeToast('Logo', 'published', true)).toBe(
+    // Releases off: no `draft` key, the words it always said.
+    expect(eyeToast('Logo', 'published', { id: S1, status: 'published' })).toBe(
+      'Logo is on the site.',
+    );
+    expect(eyeToast('Logo', 'draft', { id: S1, status: 'draft' })).toBe('Logo is hidden.');
+    // A pending status.
+    const waiting = { id: S1, draft: { id: 'd1', version: 1, op: 'update', fields: ['status'] } };
+    expect(eyeToast('Logo', 'published', waiting)).toBe(
       'Logo will show on the site once this change is published.',
     );
-    expect(eyeToast('Logo', 'draft', true)).toBe(
+    expect(eyeToast('Logo', 'draft', waiting)).toBe(
       'Logo will be hidden once this change is published.',
+    );
+    // A draft meta without its field list is read as the status waiting.
+    expect(eyeToast('Logo', 'draft', { id: S1, draft: { id: 'd1', version: 1 } })).toBe(
+      'Logo will be hidden once this change is published.',
+    );
+    // Thrown away: back as live holds it.
+    expect(eyeToast('Logo', 'published', { id: S1, draft: null })).toBe(
+      'Logo stays on the site. Nothing is waiting to publish.',
+    );
+    expect(eyeToast('Logo', 'draft', { id: S1, draft: null })).toBe(
+      'Logo stays hidden. Nothing is waiting to publish.',
+    );
+    // Other changes still pending, the status not among them.
+    const other = { id: S1, draft: { id: 'd1', version: 2, op: 'update', fields: ['slug'] } };
+    expect(eyeToast('Logo', 'published', other)).toBe(
+      'Logo stays on the site. Its other changes still wait for a publish.',
     );
   });
 
@@ -1551,7 +1613,12 @@ describe('the Services eyes in release mode (R14d, services/model.ts eyeBody)', 
     ]) {
       const src = readFileSync(path, 'utf8');
       expect(src, path).toContain('body: stagedBody(eyeBody(row, next, staged), staged),');
-      expect(src, path).toContain("toast(eyeToast(name, next, staged), 'ok');");
+      // Review C1: the toast reads the PATCH's own answer, not the screen's mode.
+      expect(src, path).toMatch(
+        /const answer = await adminFetch<Record<string, unknown>>\(`\/api\/admin\/(services|disciplines)\/\$\{row\.id\}`, \{\s*method: 'PATCH',/,
+      );
+      expect(src, path).toContain("toast(eyeToast(name, next, answer), 'ok');");
+      expect(src, path).not.toContain('eyeToast(name, next, staged)');
     }
   });
 });

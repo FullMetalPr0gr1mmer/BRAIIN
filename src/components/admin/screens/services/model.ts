@@ -108,15 +108,35 @@ export function eyeBody(row: Row, next: Status, release: boolean): Record<string
 }
 
 /**
- * What the eye says once its write landed (Admin v2 R14d). Releases off the row is on the site,
- * or off it, at once; in release mode the change waits for a publish, so the words say that
- * instead of claiming the site already shows it.
+ * What the eye says once its write landed (Admin v2 R14d), read from the PATCH's own answer.
+ * Releases off (no `draft` key) the row is on the site, or off it, at once. In release mode the
+ * change waits for a publish, so the words say that instead of claiming the site shows it; but
+ * a press that puts the status back to what live holds (Hide after a pending Show) throws the
+ * pending status away (review C1: the answer's `draft` is null, or no longer names `status`),
+ * and then the row already looks on the site as it says, with nothing of it waiting.
  */
-export function eyeToast(name: string, next: Status, release: boolean): string {
-  if (!release) return next === 'draft' ? `${name} is hidden.` : `${name} is on the site.`;
-  return next === 'draft'
-    ? `${name} will be hidden once this change is published.`
-    : `${name} will show on the site once this change is published.`;
+export function eyeToast(
+  name: string,
+  next: Status,
+  answer: Readonly<Record<string, unknown>>,
+): string {
+  if (!('draft' in answer))
+    return next === 'draft' ? `${name} is hidden.` : `${name} is on the site.`;
+  const draft = answer['draft'];
+  const fields =
+    draft && typeof draft === 'object' && !Array.isArray(draft)
+      ? (draft as Record<string, unknown>)['fields']
+      : undefined;
+  const statusWaits = Boolean(draft) && (!Array.isArray(fields) || fields.includes('status'));
+  if (statusWaits) {
+    return next === 'draft'
+      ? `${name} will be hidden once this change is published.`
+      : `${name} will show on the site once this change is published.`;
+  }
+  const stays = next === 'draft' ? `${name} stays hidden.` : `${name} stays on the site.`;
+  return draft
+    ? `${stays} Its other changes still wait for a publish.`
+    : `${stays} Nothing is waiting to publish.`;
 }
 
 /**

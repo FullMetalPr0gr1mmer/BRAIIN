@@ -270,7 +270,7 @@ describe('the activity log’s frame in the baselines (R14d, adminVisualSteady.t
 
   it('holds the list’s card fixed and masked, and leaves the chain note out', () => {
     expect(frameFor('/admin/audit')).toEqual([
-      { selector: '.act-note', hold: 'hidden' },
+      { selector: '.act-note[data-tone="ok"]', hold: 'hidden' },
       { selector: '.card.dt', hold: 'fixed', blockSize: 480 },
     ]);
     // The regions are the markup's: the page's notes and its server table, whose card is the
@@ -282,6 +282,28 @@ describe('the activity log’s frame in the baselines (R14d, adminVisualSteady.t
     expect(page.match(/<ServerTable\b/g)).toHaveLength(1);
     const table = readFileSync('src/components/admin/ui/ServerTable.astro', 'utf8');
     expect(table).toContain('<div class="card card--flush dt">');
+  });
+
+  it('leaves out only the chain note that links up: a broken chain and every other note stay in (review SEC-3)', () => {
+    // A frame that hid every `.act-note` took the broken chain's alert ("Entry N does not link
+    // to the one before it"), the export refusals and the dropped-filter note out of every
+    // baseline. Only the `ok` note's words follow the count.
+    const hidden = (frameFor('/admin/audit') ?? []).filter((r) => r.hold === 'hidden');
+    expect(hidden.map((r) => r.selector)).toEqual(['.act-note[data-tone="ok"]']);
+    const page = readFileSync('src/pages/admin/audit.astro', 'utf8');
+    const tones = [...page.matchAll(/<Note\s+tone=(\{[^}]*\}|"[a-z]+")[^>]*class="act-note"/g)].map(
+      (m) => m[1],
+    );
+    expect(tones).toEqual([
+      '"warn"',
+      '"err"',
+      '"warn"',
+      '"err"',
+      "{result.chain.contiguous ? 'ok' : 'err'}",
+    ]);
+    // The tone is on the same element as the class, so the selector reads it.
+    const note = readFileSync('src/components/admin/ui/Note.astro', 'utf8');
+    expect(note).toContain("<div class:list={['note', className]} data-tone={tone} role={role}>");
   });
 
   it('frames the page after it has loaded and before the picture, the card masked too', () => {

@@ -563,6 +563,29 @@ export function autosaveDecision(
   return 'save';
 }
 
+/**
+ * What runs once a save on its way has landed, when another was asked for meanwhile (Admin v2
+ * R14d, review SEC-1): `person` (the person's press, sent as their own save), `auto` (the
+ * automatic save's own rules decide: autosaveDecision) or `none`.
+ *
+ * - A new record: `none`. The create that landed answered every press made while it was on its
+ *   way; a second POST would make a duplicate item (Ctrl/⌘+S pressed twice, or held).
+ * - Releases off (no `draft` key): `none`, as before R14d. Live mode saves only when asked, and
+ *   a press while a save is on its way is answered by that save.
+ * - Draft mode: `person` only when the person pressed and the form holds something the landed
+ *   save did not carry (typed since); with nothing new the landed save was the answer. Else
+ *   `auto`.
+ */
+export function queuedSaveDecision(
+  state: EntitySaveState,
+  isNew: boolean,
+  wanted: boolean,
+): 'person' | 'auto' | 'none' {
+  if (isNew || state.draft === undefined) return 'none';
+  if (wanted && state.phase === 'ready' && isDirty(state)) return 'person';
+  return 'auto';
+}
+
 /** Where an editor reads its row from. */
 export function loadUrl(target: SaveTarget, id: string | null): string {
   if (target.kind === 'singleton') return target.endpoint;
