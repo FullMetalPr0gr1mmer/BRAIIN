@@ -5,6 +5,7 @@ import Note from '@/components/admin/kit/Note';
 import SaveStatus from '@/components/admin/kit/SaveStatus';
 import { TabStrip, tabIds, writeTabParam } from '@/components/admin/kit/Tabs';
 import { tabOfElement, tabsWithErrors } from '@/lib/admin/editorTabs';
+import { CONFLICT_WORDS } from '@/lib/admin/entitySave';
 import { badInputErrors, type MappedErrors } from '@/lib/admin/fieldErrors';
 import type { HistoryTarget } from '@/lib/admin/historyTarget';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
@@ -573,7 +574,7 @@ export default function EditorForm({
       )}
       {save.conflict && (
         <div className="msg editor__conflict" data-kind="error" role="alert">
-          <span>Someone else saved changes while you were editing.</span>
+          <span>{CONFLICT_WORDS}</span>
           <button type="button" onClick={() => void save.reloadTheirs()}>
             Reload their version
           </button>

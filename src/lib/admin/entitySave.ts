@@ -495,6 +495,13 @@ export function entitySaveReducer(
   }
 }
 
+/**
+ * The banner over a form whose save met someone else's (a 409): a newer live version, or, in
+ * release mode, a pending change the form never saw (`draft-conflict`). One sentence for both
+ * modes, which EditorForm renders and the e2e specs read (Admin v2 R14d).
+ */
+export const CONFLICT_WORDS = 'Someone else saved changes while you were editing.';
+
 /** What a change a scheduled release holds says (R12). */
 export const SCHEDULED_WORDS =
   'This change is scheduled to go live, so it cannot be edited now. Unschedule it to change it.';

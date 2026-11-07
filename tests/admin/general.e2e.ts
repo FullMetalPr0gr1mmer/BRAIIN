@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
 import { encodeMediaMeta, MEDIA_META_HEADER } from '@schemas/media';
+import { CONFLICT_WORDS } from '@/lib/admin/entitySave';
 import { discardDrafts, publishOwn, savedPattern, withDraft } from './releaseSteps';
 import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
@@ -75,6 +76,8 @@ function profileBody(row: Row): Record<string, unknown> {
     phoneDisplay: row['phone_display'] ?? null,
     faviconMediaId: row['favicon_media_id'] ?? null,
     appIconMediaId: row['app_icon_media_id'] ?? null,
+    // The second tab's save changes it (R14d), and with releases off that change is live.
+    foundedYear: row['founded_year'] ?? null,
     socials: row['socials'],
     version: row.version,
   };
@@ -241,19 +244,27 @@ test.describe('as admin', () => {
 
   test('a second tab’s save is a 409, and the form keeps its work', async ({ page, browser }) => {
     await page.goto('/admin/settings', { waitUntil: 'networkidle' });
+    await expect(page.locator('#f-mapUrl')).toBeVisible();
     const other = await browser.newContext({ storageState: authFile('admin') });
     const second = await other.newPage();
     await second.goto('/admin', { waitUntil: 'networkidle' });
-    // With releases on, the other tab's save is the pending change this form never saw.
     const row = await read(second, PROFILE);
-    await save(second, PROFILE, withDraft(row, { foundedYear: 2019 }));
+    // A real change: a year the identity does not hold. A save equal to live changes nothing,
+    // and with releases on it stages nothing either (stagedSingletonUpdate drops it), so it
+    // would leave this form nothing to meet (R14d: the rehearsal's failure).
+    const founded = row['founded_year'] === 2018 ? 2017 : 2018;
+    const res = await save(second, PROFILE, withDraft(row, { foundedYear: founded }));
+    const theirs = ((await res.json()) as { data: Row }).data;
+    expect(theirs['founded_year']).toBe(founded);
+    // With releases on, the other tab's save is the pending change this form never saw.
+    if (releasesOn()) expect(theirs['draft'], 'the other tab left a pending change').toBeTruthy();
     await other.close();
 
     await page.locator('#f-mapUrl').fill('https://maps.app.goo.gl/e2eConflict');
     await page.getByRole('button', { name: 'Save general settings' }).click();
-    await expect(
-      page.getByText('Someone else saved changes while you were editing.'),
-    ).toBeVisible();
+    // Releases off: the row moved on (409 `conflict`); on: a pending change the form did not
+    // name (409 `draft-conflict`). The same banner, from the form's own words.
+    await expect(page.getByRole('alert').filter({ hasText: CONFLICT_WORDS })).toBeVisible();
     await expect(page.locator('#f-mapUrl')).toHaveValue('https://maps.app.goo.gl/e2eConflict');
   });
 });
