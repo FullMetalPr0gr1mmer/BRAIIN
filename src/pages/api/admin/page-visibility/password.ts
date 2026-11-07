@@ -5,7 +5,7 @@ import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { savePagePassword } from '@/lib/admin/pageVisibility';
 import { syncVisibilityToEdge, visibilityPurgeTags } from '@/lib/admin/visibilitySync';
 import { purgeAfterSave } from '@/lib/http/purge';
-import { refuseStagedQuery } from '@/lib/release/releasesOff';
+import { refuseStagedBody, refuseStagedQuery } from '@/lib/release/releasesOff';
 import { stagedPasswordWrite } from '@/lib/release/stagedPageVisibility';
 
 // POST /api/admin/page-visibility/password — put one page behind a password (Admin v2
@@ -27,8 +27,9 @@ import { stagedPasswordWrite } from '@/lib/release/stagedPageVisibility';
 // and the message as the page's visibility change, so the page asks for the password once that
 // change is published. The screen sends it marked (`?staged=1`, and the pending change it names
 // in the body), and with releases off such a request is refused (409 `releases-off`) rather than
-// taken as a live mode change the screen never offered. The body is parsed in the handler (a
-// staged one names its pending change, which the strict schema refuses), with the same 422.
+// taken as a live mode change the screen never offered. The body is parsed in the handler, after
+// the markers are refused (a staged one names its pending change, which the strict schema would
+// refuse as a 422), with the same 422 for a bad body.
 //
 // There is no audit row written HERE on purpose: the database writes `page_visibility
 // .password_set` (`.password_stored` with releases on) inside the same transaction as the
@@ -46,8 +47,12 @@ export const POST = defineAdminRoute({
       await liveRecheck(auth);
       return stagedPasswordWrite(ctx, ctx.input);
     }
-    const input = PagePasswordWriteSchema.parse(ctx.input);
+    // Release mode's markers before the body is parsed, as the list's PUT does: a staged body
+    // names its pending change, which the strict schema would answer with a 422 instead of the
+    // 409 `releases-off` the screen reloads on (R14e review).
     refuseStagedQuery(ctx.url, 'page_visibility');
+    refuseStagedBody(ctx.input, 'page_visibility');
+    const input = PagePasswordWriteSchema.parse(ctx.input);
     await liveRecheck(auth);
     const { setting, slug } = await savePagePassword(sb, auth, input);
     const sync = await syncVisibilityToEdge(sb, auth);

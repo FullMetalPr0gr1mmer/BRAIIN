@@ -25,7 +25,8 @@
 --      the token's role and tenant, H16) and manages visibility (Admin, Developer); the tenant
 --      is that profile's, never an argument; releases must be on for it (55000 otherwise: with
 --      releases off the door keeps calling set_page_password, so nothing there changes); the
---      page is that tenant's and not the homepage; the password 8 to 72 bytes. It writes
+--      page is that tenant's (P0002 otherwise) and not the homepage; the password 8 to 72 bytes
+--      (22023 otherwise). It writes
 --      public.page_passwords (bcrypt, cost 10, as 0061) and, only when the page asks for a
 --      password on the live site, that row's exempt password_version + 1, which ends every
 --      unlock cookie of the old password (0066's guard lets an update of exempt columns only
@@ -40,7 +41,11 @@
 --      insert, or an update from another mode) whose password_version did not move gets old + 1.
 --      A release writes the staged mode and message, never the exempt version, and 0061's CHECK
 --      needs a version above 0 in password mode. set_page_password already moves it (an insert
---      at 1, an update at old + 1), so with releases off no write ends differently. The rest is
+--      at 1, an update at old + 1), so with releases off no write ends differently. Outside a
+--      release (app.release_token_valid()) that branch refuses the write instead (23514, the
+--      rule's own name), because a stored hash may now be a leftover: without it, a direct
+--      `set mode = 'password'` by an API token with releases off would put a page behind a
+--      password no door set, with no audit row (R14e review). The rest is
 --      0061's word for word: no writer puts a page into password mode without a stored hash, and
 --      leaving the mode deletes the hash, clears the message and moves the version.
 --   4. A release may write the message. `note` has been in the registry's allowlist since 0061,
@@ -93,14 +98,16 @@ begin
     raise exception using errcode = '55000',
       message = 'store_page_password: releases are not switched on for this site';
   end if;
+  -- No such page is P0002 (no_data_found), apart from the password's 22023, so the Worker can
+  -- say which it is (R14e review).
   if p_page_id is null then
-    raise exception using errcode = '22023', message = 'store_page_password: no such page in this tenant';
+    raise exception using errcode = 'P0002', message = 'store_page_password: no such page in this tenant';
   end if;
   select pg_catalog.lower(p.slug::text) into v_slug
     from public.pages p
    where p.tenant_id = v_tenant and p.id = p_page_id;
   if v_slug is null then
-    raise exception using errcode = '22023', message = 'store_page_password: no such page in this tenant';
+    raise exception using errcode = 'P0002', message = 'store_page_password: no such page in this tenant';
   end if;
   if v_slug = 'home' then
     raise exception 'The homepage cannot be hidden. Use maintenance mode instead.'
@@ -181,9 +188,18 @@ begin
         using errcode = '23514', constraint = 'page_visibility_password_required';
     end if;
     -- R14e: a release writes the mode, never the exempt version; entering the mode moves it.
+    -- Only a release may enter without moving it. A stored hash can now outlive a change that was
+    -- discarded or never published (store_page_password), so its existence no longer proves the
+    -- write came through a door: with releases off an API token's direct `set mode = 'password'`
+    -- (it holds UPDATE (mode), never the version) would put the page behind a leftover password
+    -- with no audit row. set_page_password moves the version itself and is not this branch.
     if (tg_op = 'INSERT' and new.password_version <= 0)
        or (tg_op = 'UPDATE' and old.mode <> 'password'
            and new.password_version <= old.password_version) then
+      if not app.release_token_valid() then
+        raise exception 'A page goes behind a password only by setting one on the Page visibility screen.'
+          using errcode = '23514', constraint = 'page_visibility_password_required';
+      end if;
       new.password_version := case when tg_op = 'INSERT' then 0 else old.password_version end + 1;
     end if;
   elsif tg_op = 'UPDATE' and old.mode = 'password' then
@@ -364,6 +380,7 @@ begin
                     and p.proconfig = array['search_path=""']
                     and p.prosrc ~ 'page_visibility_password_required'
                     and p.prosrc ~ 'old\.mode <> ''password'''
+                    and p.prosrc ~ 'if not app\.release_token_valid\(\) then'
                     and p.prosrc ~ 'delete from public\.page_passwords') then
     raise exception 'R14e: app.tg_page_password_sync is not 0061''s with the entry branch';
   end if;

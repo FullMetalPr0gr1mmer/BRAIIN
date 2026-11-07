@@ -332,6 +332,28 @@ describe('releases off: main’s path, and a save made in release mode is refuse
     expect(res.status).toBe(409);
     expect(rpcs('set_page_password')).toEqual([]);
   });
+
+  it('the password door naming its pending change: 409 releases-off, not a 422 (R14e review)', async () => {
+    // The screen names the pending change in the body whenever the page has one. The strict
+    // schema refuses those keys, so the markers must be refused before the body is parsed.
+    for (const [url, mark] of [
+      [
+        `${API}/password?staged=1`,
+        { draftId: '77777777-7777-4777-8777-000000000001', draftVersion: 1 },
+      ],
+      [`${API}/password`, { draftId: '77777777-7777-4777-8777-000000000001', draftVersion: 1 }],
+      [`${API}/password`, { staged: true }],
+    ] as const) {
+      const res = await callRoute(db, (await password()).POST, 'POST', url, {
+        body: { pageId: ABOUT, password: 'open sesame', note: null, version: 0, ...mark },
+      });
+      expect([res.status, res.body['error']], JSON.stringify(res.body)).toEqual([
+        409,
+        'releases-off',
+      ]);
+    }
+    expect(rpcs('set_page_password')).toEqual([]);
+  });
 });
 
 describe('the password door with releases on: the secret at once, the mode and message staged (R14e)', () => {
@@ -442,6 +464,34 @@ describe('the password door with releases on: the secret at once, the mode and m
     });
   });
 
+  it('a live gate whose staging then fails: the edge already has the new version (R14e review)', async () => {
+    // The database committed the new password and its version; a concurrent save then makes the
+    // staging step fail. The edge must not keep the old version, or the old password's cookies
+    // would keep opening the page until the next sync.
+    db.tables['page_visibility'] = [
+      aboutRow({ mode: 'password', hide_from: null, note: { en: 'Ask us' }, password_version: 4 }),
+    ];
+    db.fail = (call) =>
+      call.kind === 'rpc' && call.name === 'write_drafts'
+        ? { code: 'XX000', message: 'write_drafts: the database is unwell' }
+        : null;
+    const res = await ask({ note: { en: 'Ask us first' } });
+    expect(res.status).toBe(500);
+    expect(stores()).toHaveLength(1);
+    expect(edge).toEqual({ syncs: 1, purges: 1 });
+  });
+
+  it('a page newly behind a password whose staging fails: nothing live moved, nothing synced', async () => {
+    db.tables['page_visibility'] = [aboutRow()];
+    db.fail = (call) =>
+      call.kind === 'rpc' && call.name === 'write_drafts'
+        ? { code: 'XX000', message: 'write_drafts: the database is unwell' }
+        : null;
+    const res = await ask();
+    expect(res.status).toBe(500);
+    expect(edge).toEqual({ syncs: 0, purges: 0 });
+  });
+
   it('a pending change must be named, and a named one is replaced; the secret waits for the checks', async () => {
     db.tables['page_visibility'] = [aboutRow()];
     db.tables['content_drafts'] = [
@@ -509,6 +559,22 @@ describe('the password door with releases on: the secret at once, the mode and m
         : undefined;
     const off = await ask();
     expect([off.status, off.body['error']]).toEqual([409, 'releases-off']);
+    // The page gone since it was read (P0002) is a 404, never the password's own 422 (R14e
+    // review): only the byte limits are 22023.
+    db.rpc = (fn) =>
+      fn === 'store_page_password'
+        ? { data: null, error: { code: 'P0002', message: 'store_page_password: no such page' } }
+        : undefined;
+    const gone = await ask();
+    expect(gone.status).toBe(404);
+    expect(JSON.stringify(gone.body)).not.toContain('too short');
+    db.rpc = (fn) =>
+      fn === 'store_page_password'
+        ? { data: null, error: { code: '22023', message: 'a password is 8 to 72 bytes' } }
+        : undefined;
+    const length = await ask();
+    expect(length.status).toBe(422);
+    expect(JSON.stringify(length.body)).toContain('too short or too long');
     expect(drafts()).toEqual([]);
     expect(auditsOf(db)).toEqual([]);
   });

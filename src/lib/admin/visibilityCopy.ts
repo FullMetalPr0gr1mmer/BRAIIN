@@ -100,6 +100,16 @@ export function stagedSaved(title: string): string {
 export const NOTHING_TO_PUBLISH = 'There is nothing to publish.';
 
 /**
+ * The toast after the password door in release mode on a page that already asks for a password
+ * live (R14e review): the new password works at once, and only a new message waits.
+ */
+export function passwordLiveSaved(title: string, messageWaits: boolean): string {
+  return messageWaits
+    ? `${title}: the new password works now. The new message above the box goes live when it is published.`
+    : `${title}: the new password works now. ${NOTHING_TO_PUBLISH}`;
+}
+
+/**
  * Release mode, the password drawer on a page that does not ask for one live (Admin v2 R14e):
  * the password is stored at once, the page asks for it once the change is published.
  */

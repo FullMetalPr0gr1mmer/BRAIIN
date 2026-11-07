@@ -18,6 +18,7 @@ import {
   MODE_COPY,
   NOTHING_TO_PUBLISH,
   STAGED_CONFIRM_SUB,
+  passwordLiveSaved,
   stagedSaved,
 } from '@/lib/admin/visibilityCopy';
 import { visibilityRevision } from '@/lib/http/visibility';
@@ -167,15 +168,19 @@ export function saved(item: VisibilityItem, mode: VisibilityDraft['mode']): stri
  * with a pending change says it waits for publishing; a staged save that left nothing pending
  * (the setting equals live, or "visible to everyone" on a page with no setting) says the live
  * words and that there is nothing to publish (R14b review), and still asks the savebar to count
- * again, because it may have discarded the page's earlier pending change. A live save says the
- * live words.
+ * again, because it may have discarded the page's earlier pending change. The password door on
+ * a page already behind one live (R14e) says the new password works now, and whether a new
+ * message waits for publishing. A live save says the live words.
  */
 export function afterSave(
   item: VisibilityItem,
   mode: VisibilityDraft['mode'],
-  answer: Pick<VisibilitySaveAnswer, 'staged' | 'pending'>,
+  answer: Pick<VisibilitySaveAnswer, 'staged' | 'pending' | 'passwordLive'>,
 ): { text: string; recount: boolean } {
   if (!answer.staged) return { text: saved(item, mode), recount: false };
+  if (answer.passwordLive) {
+    return { text: passwordLiveSaved(itemTitle(item), Boolean(answer.pending)), recount: true };
+  }
   if (answer.pending) return { text: stagedSaved(itemTitle(item)), recount: true };
   return { text: `${saved(item, mode)} ${NOTHING_TO_PUBLISH}`, recount: true };
 }

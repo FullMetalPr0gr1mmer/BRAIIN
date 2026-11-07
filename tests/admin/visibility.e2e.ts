@@ -470,8 +470,11 @@ test.describe('behind a password (U14b)', () => {
     expect(body.data.staged).toBe(true);
     expect(body.data.pending, 'the mode and the message wait as the page change').toBeTruthy();
     expect(JSON.stringify(body)).not.toContain(PASSWORD);
-    // Nothing live moved: the page opens as before, and the unlock refuses it, because the page
-    // does not ask for a password on the live site (page_password_check: no live password mode).
+    // Nothing live moved: the page opens as before, and the unlock refuses it. The 400 comes from
+    // the unlock route's own check of the edge snapshot (the page asks for no password there),
+    // before the database is asked; the database's half, page_password_check admitting no one
+    // to a page whose live mode is not password, is held by pgTAP
+    // (page_password_release.test.sql, the r14e_check assertions).
     const open = await answer(request, '/about');
     expect(open.status).toBe(200);
     expect(open.body).not.toContain('action="/api/page-access"');
@@ -485,7 +488,8 @@ test.describe('behind a password (U14b)', () => {
     const drawer = page.getByRole('dialog', { name: 'Who can see About?' });
     await expect(drawer).toContainText(RELEASE_PASSWORD_STAGED);
     await drawer.getByRole('button', { name: 'Cancel' }).click();
-    // Thrown away, the page stays open and the stored password stays inert.
+    // Thrown away, the page stays open and the unlock still refuses (the snapshot again; the
+    // hash a discard leaves behind is held inert, and out of a direct write's reach, by pgTAP).
     await discardDrafts(VISIBILITY);
     expect((await answer(request, '/about')).status).toBe(200);
     expect((await unlock(request, origin, '/about', PASSWORD)).status).toBe(400);

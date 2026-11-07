@@ -37,6 +37,7 @@ import {
   STAGED_APPLIES,
   STAGED_CONFIRM_SUB,
   TEMPLATE_NOTE,
+  passwordLiveSaved,
   stagedSaved,
 } from '@/lib/admin/visibilityCopy';
 import { VISIBILITY_KV_CACHE_TTL_S, VISIBILITY_MEMO_MS } from '@/lib/http/visibility';
@@ -335,7 +336,10 @@ describe('the copy keeps the client’s rules (P-12)', () => {
 // the live version; the password is offered only where it can be set at once. Releases off,
 // nothing here changes what the screen draws or sends.
 describe('release mode (Admin v2 R14b)', () => {
-  const pending = (mode: 'public' | 'hidden' | 'link', over: Partial<VisibilityPending> = {}) =>
+  const pending = (
+    mode: 'public' | 'hidden' | 'link' | 'password',
+    over: Partial<VisibilityPending> = {},
+  ) =>
     ({
       setting: {
         ...hiddenAbout.setting!,
@@ -399,6 +403,25 @@ describe('release mode (Admin v2 R14b)', () => {
       recount: true,
     });
     expect(nothing.text).not.toContain('unpublished');
+    // The password door on a page already behind one live (R14e review): the new password
+    // works now, and only a new message waits. Never "saved as an unpublished change".
+    const both = afterSave(hiddenAbout, 'password', {
+      staged: true,
+      passwordLive: true,
+      pending: pending('password'),
+    });
+    expect(both).toEqual({ text: passwordLiveSaved('About', true), recount: true });
+    expect(both.text).toContain('the new password works now');
+    expect(both.text).toContain('message above the box goes live when it is published');
+    expect(both.text).not.toContain('unpublished');
+    const onlyPassword = afterSave(hiddenAbout, 'password', {
+      staged: true,
+      passwordLive: true,
+      pending: null,
+    });
+    expect(onlyPassword).toEqual({ text: passwordLiveSaved('About', false), recount: true });
+    expect(onlyPassword.text).toBe(`About: the new password works now. ${NOTHING_TO_PUBLISH}`);
+    for (const text of [both.text, onlyPassword.text]) expect(text).not.toMatch(/[–—]/);
     // Releases off: the live words, nothing to count.
     expect(afterSave(hiddenAbout, 'link', {})).toEqual({
       text: 'About is open only to people with the link.',

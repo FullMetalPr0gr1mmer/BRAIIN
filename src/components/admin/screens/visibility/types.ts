@@ -30,4 +30,6 @@ export interface VisibilitySaveAnswer {
   /** Admin v2 R14b: a staged save's pending change (release mode only). */
   pending?: VisibilityPending | null;
   staged?: true;
+  /** Admin v2 R14e: the password door in release mode, on a page already asking for one live. */
+  passwordLive?: boolean;
 }

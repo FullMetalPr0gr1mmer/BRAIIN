@@ -8,7 +8,12 @@ import {
 } from '@schemas/visibility';
 import type { AdminRouteContext } from '@/lib/admin/route';
 import { AuthorizationError } from '@/lib/authz/errors';
-import { DraftConflictError, OptimisticLockError, ValidationError } from '@/lib/admin/errors';
+import {
+  DraftConflictError,
+  NotFoundError,
+  OptimisticLockError,
+  ValidationError,
+} from '@/lib/admin/errors';
 import { syncVisibilityToEdge, visibilityPurgeTags } from '@/lib/admin/visibilitySync';
 import { purgeAfterSave } from '@/lib/http/purge';
 import {
@@ -403,6 +408,13 @@ export async function stagedPasswordWrite(ctx: Ctx, raw: unknown): Promise<Stage
   const before = await readLive(ctx, pageTarget);
   const draft = await loadVisibilityDraft(ctx, before, pageTarget);
   await assertNamed(ctx, before, draft, ref, input.version);
+  // The staged change is built before anything is stored, so no parse can fail after the secret.
+  const { version: _version, ...change } = PagePasswordDraftSchema.parse({
+    target: pageTarget,
+    mode: 'password',
+    note: input.note,
+    version: 0,
+  });
 
   // 1. The secret, at once.
   const { data, error } = await sb.rpc('store_page_password', {
@@ -410,9 +422,11 @@ export async function stagedPasswordWrite(ctx: Ctx, raw: unknown): Promise<Stage
     p_password: input.password,
   });
   if (error) {
-    // 42501 is the function's own live check (a demoted token), 22023 its argument checks,
-    // 55000 releases switched off since the flag was read, 23514 the homepage.
+    // 42501 is the function's own live check (a demoted token), 22023 the password's length,
+    // P0002 the page gone since it was read, 55000 releases switched off since the flag was
+    // read, 23514 the homepage.
     if (error.code === '42501') throw new AuthorizationError('maintenance.manage', 'live check');
+    if (error.code === 'P0002') throw new NotFoundError('page');
     if (error.code === '22023') {
       throw new ValidationError('That password is too short or too long.', 'password');
     }
@@ -424,19 +438,11 @@ export async function stagedPasswordWrite(ctx: Ctx, raw: unknown): Promise<Stage
   }
   const stored = StoredAnswerSchema.parse(data);
 
-  // 2. The mode and the message, staged against the row as it is now (its version moved where
-  //    the live gate took the password).
-  const live = stored.live ? await readLive(ctx, pageTarget) : before;
-  const { version: _version, ...change } = PagePasswordDraftSchema.parse({
-    target: pageTarget,
-    mode: 'password',
-    note: input.note,
-    version: 0,
-  });
-  const pending = await stageSetting(ctx, target, live, draft, change);
-
-  // 3. The edge, only where the live gate moved: its snapshot carries the version every unlock
-  //    cookie is signed over. A page newly behind a password changes nothing live yet.
+  // 2. The edge, at once and only where the live gate moved: its snapshot carries the version
+  //    every unlock cookie is checked against, and the database has already committed the new
+  //    one. So it is synced before the staging step, which can still fail (a concurrent save, a
+  //    database error): otherwise the old password's cookies would keep opening the page until
+  //    the next sync (R14e review). A page newly behind a password changes nothing live yet.
   let kvSynced = true;
   let purgeTags: string[] = [];
   if (stored.live && target.kind === 'page') {
@@ -444,6 +450,11 @@ export async function stagedPasswordWrite(ctx: Ctx, raw: unknown): Promise<Stage
     purgeTags = visibilityPurgeTags({ kind: 'page', slug: target.slug });
     await purgeAfterSave(auth.tenantId, purgeTags, 'visibility');
   }
+
+  // 3. The mode and the message, staged against the row as it is now (its version moved where
+  //    the live gate took the password).
+  const live = stored.live ? await readLive(ctx, pageTarget) : before;
+  const pending = await stageSetting(ctx, target, live, draft, change);
   return {
     setting: live ? settingOfRow(live) : null,
     pending,

@@ -8,15 +8,18 @@
 --      stale Developer tokens (demoted, switched off, locked) are refused, and releases off the
 --      function refuses everyone (the door keeps calling set_page_password then);
 --   3. a stored hash is inert until a release publishes the mode: page_password_check admits no
---      one to a page whose live mode is not password, a discarded change leaves it so, and a page
---      already behind a password takes the new one at once (its version moves, the old one stops);
+--      one to a page whose live mode is not password; a hash a discarded change left behind
+--      cannot be reached by a direct write with releases off (only a release enters the mode
+--      without moving the version); a page already behind a password takes the new one at once
+--      (its version moves, the old one stops);
 --   4. a publish through apply_release puts the page behind the stored password (the entry moves
---      the version), and a staged password mode with no stored hash is refused by the dry run;
+--      the version), a note-only change of a page already behind one publishes the message alone,
+--      and a staged password mode with no stored hash is refused by the dry run;
 --   5. the password is in no table a release, a version, an audit row or a log keeps, nor is
 --      its hash.
 
 begin;
-select plan(51);
+select plan(57);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -165,6 +168,19 @@ select is(r14e_by('A', $$ with u as (update public.page_visibility set note = '{
   '42501', 'releases off: an Admin''s direct write of the message is refused, as before');
 select is((select note ->> 'en' from public.page_visibility where id = '14e00000-0000-4000-8000-0000000c0003'),
   'Ask the studio', 'and the message is as it was');
+-- The INSERT (note) grant's side of the guard: a new row carrying a message (R14e review).
+select is(r14e_by('A', $$ with i as (insert into public.page_visibility (tenant_id, page_id, mode, note)
+                                    values ('14e00000-0000-4000-8000-000000000001',
+                                            '14e00000-0000-4000-8000-00000000a005', 'hidden', '{"en":"Hi"}')
+                                    returning 1)
+                         select count(*)::text from i $$),
+  '42501', 'releases off: an Admin''s direct insert carrying a message is refused (the guard''s insert branch)');
+select is(r14e_by('C', $$ with i as (insert into public.page_visibility (tenant_id, page_id, mode, note)
+                                    values ('14e00000-0000-4000-8000-000000000001',
+                                            '14e00000-0000-4000-8000-00000000a005', 'hidden', '{"en":"Hi"}')
+                                    returning 1)
+                         select count(*)::text from i $$),
+  '42501', 'and a content_creator''s too');
 
 insert into app.release_tenants (tenant_id) values
   ('14e00000-0000-4000-8000-000000000001'), ('14e00000-0000-4000-8000-0000000000ff');
@@ -185,7 +201,7 @@ select is(r14e_by('Do', $$ select public.store_page_password('14e00000-0000-4000
 select is(r14e_by('Dl', $$ select public.store_page_password('14e00000-0000-4000-8000-00000000a002', 'r14e-secret-1') $$),
   '42501', 'a stale token (locked) is refused');
 select is(r14e_by('O', $$ select public.store_page_password('14e00000-0000-4000-8000-00000000a002', 'r14e-secret-1') $$),
-  '22023', 'another tenant''s Admin cannot reach this tenant''s page (its own tenant, from its profile)');
+  'P0002', 'another tenant''s Admin cannot reach this tenant''s page (its own tenant, from its profile: no such page)');
 select is((select count(*)::int from public.page_passwords where page_id = '14e00000-0000-4000-8000-00000000a002'),
   0, 'no refused caller stored anything');
 select is(r14e_by('A', $$ select public.store_page_password('14e00000-0000-4000-8000-00000000a001', 'r14e-secret-1') $$),
@@ -236,8 +252,20 @@ values ('14e00000-0000-4000-8000-0000000dd004', '14e00000-0000-4000-8000-0000000
         '{"target":{"pageId":"14e00000-0000-4000-8000-00000000a004"},"mode":"password","note":{"en":"Soon"},"redirectPageId":null,"hideFrom":null,"showOn":null}',
         '{"mode":"hidden","note":null}', 1, '{mode,note}');
 delete from public.content_drafts where id = '14e00000-0000-4000-8000-0000000dd004';
-select is(r14e_check('14e00000-0000-4000-8000-00000000a004', 'r14e-secret-3'), '(null)',
-  'a discarded password change leaves the hash inert: Join admits no one');
+-- The hash the discarded change left behind (R14e review): with releases off again, an Admin's
+-- direct write of the mode (it holds UPDATE (mode), never the version) must not put Join behind
+-- it. Before R14e a hash existed only while its page was in password mode, so the sync's
+-- existence check was the fence; now only a release may enter the mode without moving the version.
+delete from app.release_tenants where tenant_id = '14e00000-0000-4000-8000-000000000001';
+select is(r14e_by('A', $$ with u as (update public.page_visibility set mode = 'password'
+                                    where page_id = '14e00000-0000-4000-8000-00000000a004' returning 1)
+                         select count(*)::text from u $$),
+  '23514', 'releases off: an Admin''s direct write cannot put a page behind a leftover password');
+select is((select format('%s %s', mode, password_version) from public.page_visibility
+            where page_id = '14e00000-0000-4000-8000-00000000a004')
+          || ' ' || r14e_check('14e00000-0000-4000-8000-00000000a004', 'r14e-secret-3'),
+  'hidden 0 (null)', 'Join stays hidden and its hash inert: it admits no one');
+insert into app.release_tenants (tenant_id) values ('14e00000-0000-4000-8000-000000000001');
 
 -- Contact asks for a password live: the new one works at once, the old one stops.
 select is(r14e_by('D', $$ select public.store_page_password('14e00000-0000-4000-8000-00000000a003', 'r14e-secret-2')::text $$),
@@ -307,6 +335,35 @@ select is(r14e_check('14e00000-0000-4000-8000-00000000a002', 'r14e-secret-1'), '
   'the stored password now opens About');
 select is(r14e_check('14e00000-0000-4000-8000-00000000a002', 'r14e-wrong-one'), '(null)',
   'and a wrong one does not');
+
+-- Contact, already behind a password live: the door's other staged shape, a note-only update,
+-- published (R14e review). It runs the UPDATE (note) grant and the guard's update branch inside
+-- a release; the password and its version stay as they are.
+insert into public.content_drafts (id, tenant_id, entity_type, entity_id, op, payload, base, base_version, fields)
+select '14e00000-0000-4000-8000-0000000dd003', '14e00000-0000-4000-8000-000000000001', 'page_visibility',
+       '14e00000-0000-4000-8000-0000000c0003', 'update',
+       '{"target":{"pageId":"14e00000-0000-4000-8000-00000000a003"},"mode":"password","note":{"en":"Ask the studio first"},"redirectPageId":null,"hideFrom":null,"showOn":null}',
+       '{"note":{"en":"Ask the studio"}}', v.version, '{note}'
+  from public.page_visibility v where v.id = '14e00000-0000-4000-8000-0000000c0003';
+set local role service_role;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+insert into r14e_out (k, result)
+select 'note', public.apply_release('14e00000-0000-4000-8000-0000000000a1'::uuid, 'admin', 'publish',
+         jsonb_build_array(jsonb_build_object(
+           'draft_id', '14e00000-0000-4000-8000-0000000dd003', 'draft_version', 1,
+           'entity_type', 'page_visibility', 'entity_id', '14e00000-0000-4000-8000-0000000c0003',
+           'op', 'update',
+           'patch', '{"note":{"en":"Ask the studio first"}}'::jsonb,
+           'base', '{"note":{"en":"Ask the studio"}}'::jsonb)));
+reset role;
+select set_config('request.jwt.claims', '', true);
+select ok((select (result ->> 'number') is not null from r14e_out where k = 'note'),
+  'the Admin publishes Contact''s new message');
+select is((select format('%s %s %s', mode, note ->> 'en', password_version) from public.page_visibility
+            where page_id = '14e00000-0000-4000-8000-00000000a003'),
+  'password Ask the studio first 5', 'the message changed; the mode and the password version did not');
+select is(r14e_check('14e00000-0000-4000-8000-00000000a003', 'r14e-secret-2'), '5',
+  'and the current password still opens Contact');
 
 -- ── 6. the secret, and its hash, are nowhere a release, a version, an audit row or a log keeps
 select is((select count(*)::int from public.audit_log
