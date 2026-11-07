@@ -1,7 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Role } from '@/lib/auth/types';
 import { SECTION_UI } from '@/lib/admin/sectionUi';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { CONFLICT_WORDS } from '@/lib/admin/entitySave';
+import { discardDrafts, hasDrafts } from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The field kit v2 on a real editor (Admin v2 F5a), signed in, against this job's local
@@ -21,12 +23,32 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  * never race each other's versions. The title is put back afterwards (the public pages and
  * the other suites read these rows); the conflict saves change nothing but the version.
  * The kit's own pieces are driven on /admin/kit (kit.e2e.ts).
+ *
+ * Both modes (Admin v2 R14d). With releases on a save is a pending change that the editor and
+ * the API read back laid over live, so the digits round trip needs no publish, and setting the
+ * title back makes the change equal live, which throws it away. The conflict needs a real
+ * change (a save equal to live stages nothing): the first tab changes the English title, so the
+ * second tab's save meets a pending change it never saw (409 `draft-conflict`, the same banner,
+ * CONFLICT_WORDS), and the actions bar reads "Live version N", which a pending change never
+ * moves. The new category is a pending create, thrown away again. Nothing is published: these
+ * services are seeded rows other suites read, so no change of theirs outlives the test (the
+ * clean-up throws away what a failed step left, as the system). None of them is the first row
+ * of the services list.
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
+
+/** The actions bar's version: "Version N", or with releases on "Live version N". */
+const VERSION = /(?:Live version|Version) (\d+)/;
+/** The words for version `n` in the current mode. */
+const versionText = (n: number) => `${releasesOn() ? 'Live version' : 'Version'} ${n}`;
+/** The services this file saved, for the clean-up (releases on). */
+const saved = new Set<string>();
+
+test.afterAll(async () => {
+  if (staffEnv()) await discardDrafts([{ entityType: 'service', entityIds: [...saved] }]);
+});
 
 const DIGITS = '٠١٢٣٤ ۵۶۷۸۹';
 
@@ -81,6 +103,7 @@ for (const role of ['admin', 'content_creator'] as const satisfies readonly Role
       // can still reload and put the title back.
       page.on('dialog', (dialog) => void dialog.accept());
       const id = await serviceId(page, SERVICE[role]);
+      saved.add(id);
       await openEditor(page, id);
       await showBoth(page);
       const ar = page.locator('#f-title-ar');
@@ -123,38 +146,47 @@ test.describe('as admin, two tabs on one service', () => {
     context,
   }) => {
     const id = await serviceId(page, SERVICE.conflict);
+    saved.add(id);
     const second = await context.newPage();
     await openEditor(page, id);
     await openEditor(second, id);
     const version = async (p: Page) =>
-      Number(
-        (await p.locator('form.editor .form-actions').textContent())?.match(/Version (\d+)/)?.[1],
-      );
+      Number((await p.locator('form.editor .form-actions').textContent())?.match(VERSION)?.[1]);
     const before = await version(page);
     expect(before).toBeGreaterThan(0);
+    // Releases on, a save equal to live stages nothing (so nothing to meet): the first tab
+    // changes the English title, a pending change only, thrown away below.
+    const title = page.locator('#f-title-en');
+    const theirs = `${await title.inputValue()} (their edit)`;
+    if (releasesOn()) await title.fill(theirs);
 
+    // Releases off the row's version moves; on, live does not move, and a change is pending.
+    const after = releasesOn() ? before : before + 1;
     await saveAndWait(page);
-    await expect(page.locator('form.editor .form-actions')).toContainText(`Version ${before + 1}`);
+    await expect(page.locator('form.editor .form-actions')).toContainText(versionText(after));
+    if (releasesOn()) {
+      expect(await hasDrafts({ entityType: 'service', entityIds: [id] })).toBe(true);
+    }
 
     await second.getByRole('button', { name: 'Save changes', exact: true }).click();
-    const banner = second.getByRole('alert').filter({
-      hasText: 'Someone else saved changes while you were editing.',
-    });
+    const banner = second.getByRole('alert').filter({ hasText: CONFLICT_WORDS });
     await expect(banner).toBeVisible();
     await expect(saveStatus(second)).toHaveText('Not saved');
     // Nothing the editor typed is thrown away by the refusal: still version `before`.
-    await expect(second.locator('form.editor .form-actions')).toContainText(`Version ${before}`);
+    await expect(second.locator('form.editor .form-actions')).toContainText(versionText(before));
 
     await banner.getByRole('button', { name: 'Reload their version' }).click();
     await expect(banner).toHaveCount(0);
-    await expect(second.locator('form.editor .form-actions')).toContainText(
-      `Version ${before + 1}`,
-    );
+    await expect(second.locator('form.editor .form-actions')).toContainText(versionText(after));
+    // Releases on: their version is the pending change, read over live.
+    if (releasesOn()) await expect(second.locator('#f-title-en')).toHaveValue(theirs);
     // And now it saves.
     await saveAndWait(second);
     await expect(second.locator('form.editor .form-actions')).toContainText(
-      `Version ${before + 2}`,
+      versionText(releasesOn() ? before : before + 2),
     );
+    // Releases on: the change is this test's own, and nobody publishes it.
+    await discardDrafts([{ entityType: 'service', entityIds: [id] }]);
   });
 });
 
@@ -199,9 +231,14 @@ test.describe('as admin, a create (review H1)', () => {
       }
       if (id) {
         const csrf = await page.locator('meta[name="csrf-token"]').getAttribute('content');
-        const res = await page.request.delete(`/api/admin/categories/${id}`, {
-          headers: { 'x-csrf-token': csrf ?? '', origin: new URL(page.url()).origin },
-        });
+        // Releases on: the create is a pending change, and this throws it away (marked, as the
+        // screen's own delete is).
+        const res = await page.request.delete(
+          `/api/admin/categories/${id}${releasesOn() ? '?staged=1' : ''}`,
+          {
+            headers: { 'x-csrf-token': csrf ?? '', origin: new URL(page.url()).origin },
+          },
+        );
         expect(res.status(), await res.text()).toBeLessThan(300);
       }
     }
@@ -224,7 +261,8 @@ test.describe('as admin, a number the browser cannot read (review M2)', () => {
     await expect(sort).toBeVisible();
     const before = await sort.inputValue();
     // The row's version, as the actions bar shows it: it must not move, since nothing saves.
-    const versionOf = (text: string | null) => /Version \d+/.exec(text ?? '')?.[0] ?? null;
+    // ("Live version N" with releases on, where the save on leaving the box must wait too.)
+    const versionOf = (text: string | null) => VERSION.exec(text ?? '')?.[0] ?? null;
     const version = versionOf(await page.locator('form.editor .form-actions').textContent());
     expect(version).not.toBeNull();
     let sent = false;
