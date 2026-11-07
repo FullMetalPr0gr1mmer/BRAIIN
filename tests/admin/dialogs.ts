@@ -580,7 +580,7 @@ export const DIALOGS_COVERED_ELSEWHERE: readonly CoveredElsewhere[] = [
     spec: 'tests/admin/seo.e2e.ts',
     marker: "name: 'Hide the whole site from search engines?'",
     roles: ['admin'],
-    why: 'opens on a save that would hide the site from search engines; releases off only until seo.e2e.ts is converted to both modes (R14b owner item B2)',
+    why: 'opens on a save that would hide the site from search engines; seo.e2e.ts runs in both modes since R14d (R14b owner item B2)',
   },
   {
     source: `${C}/release/PublishDialog.tsx`,
