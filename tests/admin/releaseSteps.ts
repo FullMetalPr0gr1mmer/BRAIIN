@@ -212,3 +212,22 @@ export function reorderedIds(postData: string | null): string[] {
   expect(ids.length, 'the reorder named the rows it moved').toBeGreaterThan(0);
   return ids as string[];
 }
+
+/**
+ * Releases on: asks to publish the spec's own pending changes and answers what the route said,
+ * for a step that expects the publish to be refused (a rule that release mode checks when the
+ * change goes live, not when it is saved). Releases off: null (a save was live and checked).
+ */
+export async function tryPublishOwn(
+  page: Page,
+  own: readonly Own[],
+): Promise<{ status: number; text: string } | null> {
+  if (!releasesOn()) return null;
+  const items = await settledPending(page, own);
+  expect(items.length, `pending changes of ${JSON.stringify(own)}`).toBeGreaterThan(0);
+  const res = await page.request.post('/api/admin/releases', {
+    headers: await writeHeaders(page),
+    data: { items: items.map(({ draftId, draftVersion }) => ({ draftId, draftVersion })) },
+  });
+  return { status: res.status(), text: await res.text() };
+}
