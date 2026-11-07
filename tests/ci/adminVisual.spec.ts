@@ -2,7 +2,15 @@ import { existsSync, readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { greeting } from '@/lib/admin/dashboard/greeting';
-import { GREETING_HOLDERS, STEADY_GREETING, steadyGreeting } from '../visual/adminVisualSteady';
+import { STAFF_ROLES } from '../admin/staff';
+import { captureRoutes } from '../admin/routes';
+import {
+  FRAMED,
+  GREETING_HOLDERS,
+  STEADY_GREETING,
+  frameFor,
+  steadyGreeting,
+} from '../visual/adminVisualSteady';
 
 /*
  * The admin visual baselines (Admin v2 Z1, ui.md AV-34) stay out of every required gate:
@@ -240,5 +248,52 @@ describe('the dashboard greeting in the baselines (tests/visual/adminVisualStead
     const steady = spec.indexOf('await steadyText(page);');
     expect(steady).toBeGreaterThan(0);
     expect(steady).toBeLessThan(spec.indexOf('toHaveScreenshot('));
+  });
+});
+
+describe('the activity log’s frame in the baselines (R14d, adminVisualSteady.ts FRAMED)', () => {
+  // The log grows with every write anywhere, the visual run's own included, so its list is held
+  // in a fixed, masked frame; every other screen is pictured as it renders.
+  it('frames exactly the activity log’s capture routes, and nothing else', () => {
+    const framed: string[] = [];
+    for (const role of STAFF_ROLES) {
+      for (const route of captureRoutes(role)) {
+        if (frameFor(route.path)) framed.push(`${role} ${route.path}`);
+      }
+    }
+    expect(framed.sort()).toEqual([
+      'admin /admin/audit',
+      'admin /admin/audit?kind=leads&from=2026-01-01',
+    ]);
+    expect(Object.keys(FRAMED)).toEqual(['/admin/audit']);
+  });
+
+  it('holds the list’s card fixed and masked, and leaves the chain note out', () => {
+    expect(frameFor('/admin/audit')).toEqual([
+      { selector: '.act-note', hold: 'hidden' },
+      { selector: '.card.dt', hold: 'fixed', blockSize: 480 },
+    ]);
+    // The regions are the markup's: the page's notes and its server table, whose card is the
+    // one `.card.dt` on the page.
+    const page = readFileSync('src/pages/admin/audit.astro', 'utf8');
+    expect(page).toMatch(
+      /<Note[\s\S]*?class="act-note"[\s\S]*?The latest \$\{result\.chain\.checked\} entries link up/,
+    );
+    expect(page.match(/<ServerTable\b/g)).toHaveLength(1);
+    const table = readFileSync('src/components/admin/ui/ServerTable.astro', 'utf8');
+    expect(table).toContain('<div class="card card--flush dt">');
+  });
+
+  it('frames the page after it has loaded and before the picture, the card masked too', () => {
+    const spec = readFileSync(SPEC, 'utf8');
+    const framing = spec.indexOf('if (framed) await frame(page, framed);');
+    expect(framing).toBeGreaterThan(spec.indexOf('await steadyText(page);'));
+    expect(framing).toBeLessThan(spec.indexOf('toHaveScreenshot('));
+    expect(spec).toMatch(
+      /mask: fixed\.length \? \[\.\.\.masks\(page\), page\.locator\(fixed\.join/,
+    );
+    // Through the CSSOM, never a style attribute (style-src has no 'unsafe-inline').
+    expect(spec).toContain("el.style.setProperty('display', 'none')");
+    expect(spec).not.toMatch(/setAttribute\(\s*'style'/);
   });
 });
