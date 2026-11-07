@@ -216,17 +216,17 @@ select is(
      from pg_trigger t
     where t.tgrelid = 'public.page_visibility'::regclass and not t.tgisinternal),
   'page_visibility__release_guard,page_visibility_actor,page_visibility_guard,'
-  'page_visibility_password,page_visibility_release_capture,page_visibility_snapshot,'
+  'page_visibility_note_guard,page_visibility_password,page_visibility_release_capture,page_visibility_snapshot,'
   'page_visibility_updated_at,page_visibility_version',
-  '0057''s six triggers, the password sync (which sorts after the guard) and 0066''s release '
-  'guard, which sorts first');
+  '0057''s six triggers, the password sync (which sorts after the guard), 0066''s release '
+  'guard, which sorts first, and R14e''s message guard, before the sync');
+-- R14e grants the message to authenticated for a release's apply (it writes as the publisher);
+-- outside a release its guard refuses an API token's write of it (page_password_release.test.sql).
 select ok(
-  not has_column_privilege('authenticated', 'public.page_visibility', 'note', 'insert')
-    and not has_column_privilege('authenticated', 'public.page_visibility', 'note', 'update')
-    and not has_column_privilege('authenticated', 'public.page_visibility', 'password_version', 'insert')
+  not has_column_privilege('authenticated', 'public.page_visibility', 'password_version', 'insert')
     and not has_column_privilege('authenticated', 'public.page_visibility', 'password_version', 'update')
     and has_column_privilege('authenticated', 'public.page_visibility', 'note', 'select'),
-  'staff read the message and the version but write neither: set_page_password is the only door');
+  'staff read the message and the version but never write the version: set_page_password moves it');
 select ok(
   exists (select 1 from app.release_entities
            where entity_type = 'page_visibility'
