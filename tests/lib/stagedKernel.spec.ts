@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import type { Role } from '@/lib/auth/types';
@@ -1471,5 +1472,73 @@ describe('audit: one draft_save per draft per person per ten minutes', () => {
     });
     expect(res.status).toBe(200);
     expect(audits()).toEqual(['service.draft_save']);
+  });
+});
+
+// ── A list's eye, pressed twice (Admin v2 R14d) ─────────────────────────────────────────────
+
+describe('the Services eyes in release mode (R14d, services/model.ts eyeBody)', () => {
+  const eye = async (row: Row, next: 'draft' | 'published') => {
+    const { eyeBody } = await import('@/components/admin/screens/services/model');
+    return call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: stagedBody(eyeBody(row as Row & { id: string }, next, true), true),
+    });
+  };
+  const listed = async () => {
+    const res = await call(services.LIST, 'GET', { query: '?limit=100' });
+    expect(res.status).toBe(200);
+    return (res.data['rows'] as Row[]).find((r) => r['id'] === S1)!;
+  };
+
+  it('Show, then Hide: the second press names the pending change and leaves nothing pending', async () => {
+    const shown = await eye(await listed(), 'published');
+    expect(shown.status, JSON.stringify(shown.body)).toBe(200);
+    expect(drafts()).toHaveLength(1);
+    // The list lays the pending status over live, and carries the change for the next press.
+    const row = await listed();
+    expect(row['status']).toBe('published');
+    expect(row['draft']).toMatchObject({ id: drafts()[0]!['id'], version: 1 });
+    const hidden = await eye(row, 'draft');
+    expect(hidden.status, JSON.stringify(hidden.body)).toBe(200);
+    // Back to what live holds: the change is thrown away, and live was never written.
+    expect(drafts()).toEqual([]);
+    expect(liveWrites()).toEqual([]);
+  });
+
+  it('without the change named (the eye before R14d), the second press was a 409 for ever', async () => {
+    expect((await eye(await listed(), 'published')).status).toBe(200);
+    const row = await listed();
+    const blind = await call(services.PATCH, 'PATCH', {
+      id: S1,
+      body: stagedBody({ status: 'draft', version: Number(row['version']) }, true),
+    });
+    expect([blind.status, blind.body['error']]).toEqual([409, 'draft-conflict']);
+  });
+
+  it('releases off, or nothing pending: the body is what the eye always sent', async () => {
+    const { eyeBody } = await import('@/components/admin/screens/services/model');
+    const row = { id: S1, version: 3, draft: { id: 'd1', version: 2 } };
+    expect(eyeBody(row, 'published', false)).toEqual({ status: 'published', version: 3 });
+    expect(eyeBody({ id: S1, version: 3 }, 'published', true)).toEqual({
+      status: 'published',
+      version: 3,
+    });
+    expect(eyeBody(row, 'draft', true)).toEqual({
+      status: 'draft',
+      version: 3,
+      draftId: 'd1',
+      draftVersion: 2,
+    });
+  });
+
+  it('both eyes send it (the overview’s disciplines and a discipline’s services)', () => {
+    for (const path of [
+      'src/components/admin/screens/services/DisciplinePage.tsx',
+      'src/components/admin/screens/services/ServicesOverview.tsx',
+    ]) {
+      const src = readFileSync(path, 'utf8');
+      expect(src, path).toContain('body: stagedBody(eyeBody(row, next, staged), staged),');
+    }
   });
 });

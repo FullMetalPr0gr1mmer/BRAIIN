@@ -15,6 +15,7 @@ import {
   ORDER_STEP,
   bySort,
   eyeLabel,
+  eyeBody,
   eyeRefusal,
   eyeTarget,
   groupServices,
@@ -170,7 +171,8 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
     try {
       await adminFetch(`/api/admin/disciplines/${row.id}`, {
         method: 'PATCH',
-        body: stagedBody({ status: next, version: Number(row['version'] ?? 1) }, staged),
+        // R14d: a row with a pending change names it (eyeBody).
+        body: stagedBody(eyeBody(row, next, staged), staged),
       });
       toast(next === 'draft' ? `${name} is hidden.` : `${name} is on the site.`, 'ok');
     } catch (err) {

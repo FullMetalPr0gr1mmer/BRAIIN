@@ -14,6 +14,7 @@ import {
   bySort,
   clipWords,
   eyeLabel,
+  eyeBody,
   eyeRefusal,
   eyeTarget,
   isShown,
@@ -202,7 +203,8 @@ export default function DisciplinePage({ id, write, archive, leads }: Discipline
     try {
       await adminFetch(`/api/admin/services/${row.id}`, {
         method: 'PATCH',
-        body: stagedBody({ status: next, version: Number(row['version'] ?? 1) }, staged),
+        // R14d: a row with a pending change names it (eyeBody).
+        body: stagedBody(eyeBody(row, next, staged), staged),
       });
       toast(next === 'draft' ? `${name} is hidden.` : `${name} is on the site.`, 'ok');
     } catch (err) {

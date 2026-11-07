@@ -91,6 +91,23 @@ export function eyeTarget(status: unknown): Status | null {
 }
 
 /**
+ * The eye's PATCH body, before stagedBody marks it (Admin v2 R14d): the next status and the
+ * version the row was read at, and, when the screen is in release mode, the pending change the
+ * row carries (its list read lays it over live as `draft`: `draftId` + `draftVersion`). A row
+ * whose eye was pressed already holds that pending status; without the change named, its next
+ * press was refused as someone else's save (409 `draft-conflict`) and the list said "try
+ * again" for ever. Releases off, or nothing pending: exactly the body it sent before.
+ */
+export function eyeBody(row: Row, next: Status, release: boolean): Record<string, unknown> {
+  const body: Record<string, unknown> = { status: next, version: Number(row['version'] ?? 1) };
+  const draft = row['draft'];
+  if (!release || !draft || typeof draft !== 'object' || Array.isArray(draft)) return body;
+  const { id, version } = draft as Record<string, unknown>;
+  if (typeof id !== 'string' || typeof version !== 'number') return body;
+  return { ...body, draftId: id, draftVersion: version };
+}
+
+/**
  * What the eye says when its write is refused (R12b review). A 409 from someone else's save
  * says so, over the list read again; every other refusal says its own words (`described`,
  * client.ts describeError), a 409 `releases-off` included: publishing was switched off under
