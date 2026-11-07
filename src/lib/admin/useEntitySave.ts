@@ -89,6 +89,12 @@ export interface EntitySave {
   gone?: DraftGone | null;
   /** Admin v2 R12: releases were switched off under the form; it offers a reload. */
   releasesOff?: boolean;
+  /**
+   * Admin v2 R14d: the last save that landed was the person's (Save, Add, ⌘S), not an automatic
+   * one. A drawer that closes once an edit lands reads it (closeOnSave.ts), so in release mode
+   * the first field left does not close it. Optional, as R12's members are: absent is theirs.
+   */
+  savedByPerson?: boolean;
   /** Admin v2 R12: save now if this is an unsaved pending change (blur, tab switch, ⌘S). */
   flush?(): void;
   /**
@@ -171,6 +177,10 @@ export function useEntitySave(
   // asked for meanwhile, run once the first lands.
   const inFlight = useRef(false);
   const again = useRef(false);
+  // R14d: the person asked for a save (Save, Add, ⌘S) that has not landed yet. A press while an
+  // automatic save is on its way is answered by that save when nothing was typed since, else by
+  // a save of the person's own once it lands; either way the landing says it was theirs.
+  const wanted = useRef(false);
   // R12 review: the pending change was settled in the publish dialog while a save was on its
   // way; read the record again once that save has landed.
   const rebaseNext = useRef(false);
@@ -248,9 +258,13 @@ export function useEntitySave(
       const current = latest.current;
       const target = targetRef.current;
       if (current.phase !== 'ready' || inFlight.current) {
-        if (inFlight.current) again.current = true;
+        if (inFlight.current) {
+          again.current = true;
+          if (!auto) wanted.current = true;
+        }
         return false;
       }
+      if (!auto) wanted.current = true;
       let request: ReturnType<typeof buildSaveRequest>;
       try {
         request = buildSaveRequest(target, id, current, fields);
@@ -283,11 +297,19 @@ export function useEntitySave(
           }
           return true;
         }
-        dispatch({ type: 'saved', row, fields, at: new Date().toISOString() });
+        // R14d: whose save this was. The person's own, or an automatic one that carried
+        // everything the person had when they pressed Save (nothing typed since it was sent).
+        const typedSince =
+          JSON.stringify(latest.current.values) !== JSON.stringify(latest.current.sent);
+        const byPerson = !auto || (wanted.current && !typedSince);
+        if (byPerson) wanted.current = false;
+        dispatch({ type: 'saved', row, fields, at: new Date().toISOString(), byPerson });
         onRow.current?.(row);
         if ('draft' in row) announcePending();
         return true;
       } catch (err) {
+        // A refusal answers the person's press too: they see why, and press again.
+        wanted.current = false;
         if (err instanceof AdminApiError && err.info.status === 409) {
           const code = err.info.error;
           if (GONE.has(code)) {
@@ -350,9 +372,11 @@ export function useEntitySave(
       void rebase();
     } else if (again.current) {
       again.current = false;
-      flush();
+      // R14d: a press the save that just landed did not answer is the person's save now.
+      if (wanted.current) void run(false);
+      else flush();
     }
-  }, [state.phase, flush, rebase]);
+  }, [state.phase, flush, rebase, run]);
 
   // R12 review: the publish dialog settled this record's pending change.
   const draftId = state.draft?.id;
@@ -411,6 +435,7 @@ export function useEntitySave(
     stagedCreate: isNew && target.kind === 'resource' && target.staged === true,
     gone: state.gone,
     releasesOff: state.releasesOff,
+    savedByPerson: state.savedByPerson,
     flush,
     leave: useCallback((href: string) => {
       leaving.current = true;

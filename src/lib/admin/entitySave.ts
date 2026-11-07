@@ -130,6 +130,13 @@ export interface EntitySaveState {
   gone: DraftGone | null;
   /** Releases were switched off under the form (409 `releases-off`): it waits for a reload. */
   releasesOff: boolean;
+  /**
+   * Admin v2 R14d: the last save that landed was the person's own (Save, Add, ⌘S), not an
+   * automatic one (a blur, a tab switch, the idle timer). A drawer that closes once an edit
+   * lands closes only then: in release mode the first field left would otherwise close it.
+   * Live mode saves only when asked, so there every save is the person's.
+   */
+  savedByPerson: boolean;
 }
 
 export type EntitySaveAction =
@@ -143,6 +150,8 @@ export type EntitySaveAction =
       fields: readonly FieldDef[];
       /** When it landed, ISO (the caller's clock: the reducer reads none). */
       at: string;
+      /** R14d: false for an automatic save the person did not ask for (default: theirs). */
+      byPerson?: boolean | undefined;
     }
   | {
       type: 'save-failed';
@@ -239,6 +248,7 @@ export function initialSaveState(
     autoBlocked: false,
     gone: null,
     releasesOff: false,
+    savedByPerson: false,
   };
 }
 
@@ -371,6 +381,7 @@ export function entitySaveReducer(
         edgeMissed: action.row['kvSynced'] === false,
         ...pending,
         sent: null,
+        savedByPerson: action.byPerson !== false,
       };
     }
     case 'created':

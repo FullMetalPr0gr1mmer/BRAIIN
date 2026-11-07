@@ -7,6 +7,7 @@ import { toast } from '@/lib/admin/toast';
 import { uiFor } from '@/lib/admin/uiSchema';
 import { useEntitySave } from '@/lib/admin/useEntitySave';
 import { historyTargetOf } from '@/lib/admin/historyTarget';
+import { editLanded } from '@/lib/admin/closeOnSave';
 
 // The Redirects tab of /admin/seo (Admin v2 U10, AV-19 D10): the redirects list as before
 // (ResourceTable: the "Sync to edge" line, search, Delete), with "Edit <rule>" and "New
@@ -40,10 +41,15 @@ function RedirectForm({ id, staged, onDone }: RedirectFormProps) {
   const done = useRef(onDone);
   done.current = onDone;
   useEffect(() => {
-    if (id !== null && save.savedAt !== null && save.status === 'saved') {
+    // Only the person's save, never release mode's save on leaving a field (R14d).
+    if (
+      id !== null &&
+      editLanded(save.savedAt, null, save.savedByPerson) &&
+      save.status === 'saved'
+    ) {
       done.current(save.edgeMissed);
     }
-  }, [id, save.savedAt, save.status, save.edgeMissed]);
+  }, [id, save.savedAt, save.status, save.edgeMissed, save.savedByPerson]);
   return (
     <EditorForm
       history={historyTargetOf({ kind: 'resource', slug: ui.slug }, id)}

@@ -19,6 +19,7 @@ import {
 } from './collections';
 import { drawerFields, SAMPLE_LOCKED, type CollectionPermissions } from './fields';
 import { historyTargetOf } from '@/lib/admin/historyTarget';
+import { editLanded } from '@/lib/admin/closeOnSave';
 
 // The drawer that adds or edits one item of a collection (Admin v2 U7): the kit Drawer
 // (`dismissible={false}`: a stray press on the scrim keeps what was typed) around the
@@ -92,11 +93,12 @@ export default function CollectionDrawer({
   });
 
   // An edit that landed: the list reads it again and the drawer closes (the prototype's
-  // "Saved" and back to the list). A create goes through onCreated instead.
+  // "Saved" and back to the list). A create goes through onCreated instead. Only the person's
+  // save closes it, never release mode's save on leaving a field (R14d, closeOnSave.ts).
   const savedAt = save.savedAt;
   const firstSavedAt = useRef(savedAt);
   useEffect(() => {
-    if (id !== null && savedAt && savedAt !== firstSavedAt.current) {
+    if (id !== null && editLanded(savedAt, firstSavedAt.current, save.savedByPerson)) {
       onSaved();
       setOpen(false);
     }
