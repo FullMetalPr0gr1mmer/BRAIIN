@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { createClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
 import { expectCleanAtWidths } from './collectionLayout';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { discardDrafts, discardDraftsLike, publishOwn, systemClient } from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The Projects area (Admin v2 U6, AV-15), signed in, through the real Worker and this job's
@@ -27,11 +27,16 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *
  * Every row is made by the service role with a random marker in its slug and removed by it
  * afterwards; the pictures are the seed's own stills, linked, never changed.
+ *
+ * Both modes (Admin v2 R14d). With releases on every save is a pending change: the new sector
+ * and the new project are pending creates, read back through their APIs (live has no row yet);
+ * each of the editor's saves is still ONE request (a staged PATCH, the child sets in its
+ * payload, no save_portfolio until the apply), and its media reach the database when this run
+ * publishes its own project (`publishOwn`; a draft, so no public page shows it). The clean-up
+ * throws this run's unclaimed pending changes away as the system before the rows go.
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.use({ contextOptions: { reducedMotion: 'reduce' } });
 test.describe.configure({ mode: 'serial' });
 
@@ -41,11 +46,18 @@ const TYPE = { en: `Film ${MARK}`, ar: `فيلم ${MARK}` };
 let projectId = '';
 let stills: string[] = [];
 
-function service() {
-  const env = staffEnv()!;
-  return createClient(env.url, env.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+const service = systemClient;
+/** This run's project, as release mode names its pending change. */
+const PROJECT = () => [{ entityType: 'portfolio', entityIds: [projectId] }];
+
+/** A row of a list API by its slug (releases on: a pending create is listed too). */
+async function listedBySlug(page: Page, api: string, slug: string) {
+  const res = await page.request.get(`${api}?limit=100`);
+  expect(res.status(), api).toBe(200);
+  const rows = ((await res.json()) as { data: { rows: Record<string, unknown>[] } }).data.rows;
+  const row = rows.find((r) => r['slug'] === slug);
+  expect(row, `${api} lists ${slug}`).toBeTruthy();
+  return row!;
 }
 
 test.beforeAll(async () => {
@@ -119,6 +131,11 @@ test.afterAll(async () => {
   const svc = service();
   const { data } = await svc.from('portfolio').select('id').like('slug', `%${MARK}%`);
   const ids = (data ?? []).map((r) => r.id as string);
+  // Releases on: this run's unclaimed pending changes first (its creates by their slug, its
+  // project's by id), as the system.
+  await discardDraftsLike('portfolio', 'payload->>slug', `%${MARK}%`);
+  await discardDraftsLike('sector', 'payload->>slug', `%${MARK}%`);
+  await discardDrafts([{ entityType: 'portfolio', entityIds: ids }]);
   if (ids.length > 0) {
     await svc.from('portfolio_media').delete().in('portfolio_id', ids);
     await svc.from('portfolio_services').delete().in('portfolio_id', ids);
@@ -184,12 +201,16 @@ test.describe('as content_creator', () => {
     await drawer.locator('#ft-name-ar').fill(`قطاع ${MARK}`);
     await drawer.getByRole('button', { name: 'Add sector', exact: true }).click();
     await expect(drawer.getByText(`Sector ${MARK}`)).toBeVisible();
-    const { data, error } = await service()
-      .from('sectors')
-      .select('name,visible')
-      .eq('slug', `e2e-sector-${MARK}`)
-      .single();
-    expect(error).toBeNull();
+    // Releases on: a pending create, read through the sectors' own list.
+    const data = releasesOn()
+      ? await listedBySlug(page, '/api/admin/sectors', `e2e-sector-${MARK}`)
+      : (
+          await service()
+            .from('sectors')
+            .select('name,visible')
+            .eq('slug', `e2e-sector-${MARK}`)
+            .single()
+        ).data;
     expect(data).toMatchObject({
       name: { en: `Sector ${MARK}`, ar: `قطاع ${MARK}` },
       visible: true,
@@ -208,12 +229,21 @@ test.describe('as content_creator', () => {
     await expect(modal.locator('#f-slug')).toHaveValue(`added-project-${MARK}`);
     await modal.getByRole('button', { name: 'Create project', exact: true }).click();
     await page.waitForURL((url) => /^\/admin\/portfolio\/[0-9a-f-]{36}$/.test(url.pathname));
-    const { data, error } = await service()
-      .from('portfolio')
-      .select('status,is_featured,poster_media_id')
-      .eq('slug', `added-project-${MARK}`)
-      .single();
-    expect(error).toBeNull();
+    // Releases on: a pending create, which live has no row for yet; its API reads it.
+    const created = releasesOn()
+      ? await listedBySlug(page, '/api/admin/portfolio', `added-project-${MARK}`)
+      : (
+          await service()
+            .from('portfolio')
+            .select('status,is_featured,poster_media_id')
+            .eq('slug', `added-project-${MARK}`)
+            .single()
+        ).data;
+    const data = {
+      status: created?.['status'],
+      is_featured: created?.['is_featured'] ?? false,
+      poster_media_id: created?.['poster_media_id'] ?? null,
+    };
     // Empty but for what was asked: never another project's copy.
     expect(data).toEqual({ status: 'draft', is_featured: false, poster_media_id: null });
   });
@@ -265,6 +295,8 @@ test.describe('as content_creator', () => {
     const response = await saved;
     expect(response.status(), await response.text()).toBe(200);
     expect(writes).toEqual([`PATCH /api/admin/portfolio/${projectId}`]);
+    // Releases on: the media reach the database with this run's publish of its own project.
+    await publishOwn(page, PROJECT());
 
     const after = await storedMedia();
     expect(after.filter(([role]) => role === 'gallery').map(([, id]) => id)).toEqual([
@@ -322,6 +354,8 @@ test.describe('as content_creator', () => {
     const response = await saved;
     expect(response.status(), await response.text()).toBe(200);
     expect(writes).toEqual([`PATCH /api/admin/portfolio/${projectId}`]);
+    // Releases on: the new item reaches the database with this run's publish of its project.
+    await publishOwn(page, PROJECT());
 
     const { data, error } = await service()
       .from('portfolio_media')

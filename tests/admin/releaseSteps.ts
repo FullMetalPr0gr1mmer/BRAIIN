@@ -179,3 +179,55 @@ export async function hasDrafts(own: Own): Promise<boolean> {
 export function savedPattern(): RegExp {
   return new RegExp(`${savedWords(releasesOn())} at \\d\\d:\\d\\d`);
 }
+
+/**
+ * Releases on: throws away the unclaimed pending changes of `entityType` whose stored payload
+ * matches `pattern` at `path` (a PostgREST JSON path into the camelCase payload, such as
+ * `payload->question->>en`), as the system. For a spec's pending creates whose ids it may not
+ * have read yet when a step fails: its marker finds them. Releases off: nothing to do.
+ */
+export async function discardDraftsLike(
+  entityType: string,
+  path: string,
+  pattern: string,
+): Promise<void> {
+  if (!releasesOn()) return;
+  const { error } = await systemClient()
+    .from('content_drafts')
+    .delete()
+    .eq('tenant_id', TENANT_ID)
+    .eq('entity_type', entityType)
+    .is('release_id', null)
+    .like(path, pattern);
+  expect(error, `discard ${entityType} like ${pattern}`).toBeNull();
+}
+
+/**
+ * The ids a list's reorder named (its POST body's `items`), in both modes: what a move staged
+ * with releases on, so the spec publishes exactly those (never "everything pending").
+ */
+export function reorderedIds(postData: string | null): string[] {
+  const body = JSON.parse(postData ?? '{}') as { items?: { id?: unknown }[] };
+  const ids = (body.items ?? []).map((item) => item.id).filter((id) => typeof id === 'string');
+  expect(ids.length, 'the reorder named the rows it moved').toBeGreaterThan(0);
+  return ids as string[];
+}
+
+/**
+ * Releases on: asks to publish the spec's own pending changes and answers what the route said,
+ * for a step that expects the publish to be refused (a rule that release mode checks when the
+ * change goes live, not when it is saved). Releases off: null (a save was live and checked).
+ */
+export async function tryPublishOwn(
+  page: Page,
+  own: readonly Own[],
+): Promise<{ status: number; text: string } | null> {
+  if (!releasesOn()) return null;
+  const items = await settledPending(page, own);
+  expect(items.length, `pending changes of ${JSON.stringify(own)}`).toBeGreaterThan(0);
+  const res = await page.request.post('/api/admin/releases', {
+    headers: await writeHeaders(page),
+    data: { items: items.map(({ draftId, draftVersion }) => ({ draftId, draftVersion })) },
+  });
+  return { status: res.status(), text: await res.text() };
+}

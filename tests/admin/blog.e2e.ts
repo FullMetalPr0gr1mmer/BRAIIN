@@ -1,8 +1,16 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import {
+  discardDrafts,
+  discardDraftsLike,
+  publishOwn,
+  savedPattern,
+  systemClient,
+  tryPublishOwn,
+  withDraft,
+} from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The tabbed and read-only post editor (Admin v2 U8b), signed in, through the real Worker:
@@ -23,12 +31,20 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  * opens the first row of the posts list, and a post removed between its list and its open
  * would 404 there; the CI database is per run): it is archived instead, off the public site.
  * The draft team member sorts last (the sweep's team row is the first) and is removed.
+ *
+ * Both modes (Admin v2 R14d). With releases on the new post is a pending create and every save
+ * a pending change; the Publishing tab's status is the "Visible on the site" switch. A post with
+ * no author, or a draft one, is saved as a change and refused when it would go live: the
+ * publish of this run's own post answers 422 naming the author (release mode checks the
+ * author when a change is published, D6), and the refused change is thrown away. With a
+ * published author the post goes live with this run's own publish (`publishOwn`), then the
+ * public page is read. The SEO tab's save is a pending SEO change, thrown away as the system
+ * once it is shown saved. The refusals sent by hand say they were made in release mode, and
+ * stage nothing.
  */
 
 const env = staffEnv();
 test.skip(!env, SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 test.describe.configure({ mode: 'serial' });
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
@@ -39,10 +55,21 @@ const DRAFT_AUTHOR = '0e2e0000-0000-4000-8000-0000000000b8';
 
 let postId = '';
 
-function service(): SupabaseClient {
-  return createClient(env!.url, env!.serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+const service = systemClient;
+/** This run's post, as release mode names its pending change. */
+const POST = () => [{ entityType: 'blog_post', entityIds: [postId] }];
+
+/** The Publishing tab's status in the current mode: the select, or "Visible on the site". */
+async function publishPost(page: Page): Promise<void> {
+  if (!releasesOn()) {
+    await page.locator('#f-status').selectOption('published');
+    return;
+  }
+  const visible = page
+    .locator('[data-editor-tab="publishing"]')
+    .getByRole('switch', { name: 'Visible on the site' });
+  if ((await visible.getAttribute('aria-checked')) !== 'true') await visible.click();
+  await expect(visible).toHaveAttribute('aria-checked', 'true');
 }
 
 async function ready(page: Page) {
@@ -180,6 +207,11 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   const svc = service();
+  // Releases on: this run's unclaimed pending changes first (the post's, its SEO), as the system.
+  if (postId) {
+    await discardDrafts(POST());
+    await discardDraftsLike('entity_seo', 'payload->>entityId', postId);
+  }
   if (postId) await svc.from('blog_posts').update({ status: 'archived' }).eq('id', postId);
   await svc.from('team_members').delete().eq('id', DRAFT_AUTHOR);
 });
@@ -214,8 +246,18 @@ test.describe('as Admin', () => {
     await page.goto(`/admin/blog/${postId}?tab=publishing`);
     await ready(page);
     await expect(tab(page, 'Publishing')).toHaveAttribute('aria-selected', 'true');
-    await page.locator('#f-status').selectOption('published');
+    await publishPost(page);
     await page.getByRole('button', { name: 'Save changes' }).click();
+    if (releasesOn()) {
+      // The change is saved; going live is what checks the author, and refuses it by name.
+      await expect(
+        page.getByRole('status').filter({ hasText: savedPattern() }).first(),
+      ).toBeVisible();
+      const refused = await tryPublishOwn(page, POST());
+      expect(refused!.status, refused!.text).toBe(422);
+      expect(refused!.text).toContain('a published post must have an author');
+      return;
+    }
     const summary = page.locator('.error-summary');
     await expect(summary).toBeVisible();
     await expect(tab(page, 'Content, has errors')).toBeVisible();
@@ -235,13 +277,18 @@ test.describe('as Admin', () => {
     expect(await author.locator('option', { hasText: 'Draft Author' }).count()).toBe(0);
     await author.selectOption({ index: 1 });
     await tab(page, 'Publishing').click();
-    await page.locator('#f-status').selectOption('published');
-    // Chosen, not saved: the page does not exist yet, so nothing links to it.
-    await expect(page.getByRole('link', { name: 'Open on site' })).toHaveCount(0);
+    await publishPost(page);
+    // Chosen, not saved: the page does not exist yet, so nothing links to it. (Releases on, the
+    // change saved in the step before already holds the switch on.)
+    if (!releasesOn()) {
+      await expect(page.getByRole('link', { name: 'Open on site' })).toHaveCount(0);
+    }
     await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.locator('.save-status')).toContainText(/Saved/);
+    await expect(page.locator('.save-status')).toContainText(savedPattern());
     await expect(tab(page, 'Content')).toBeVisible();
     await expect(tab(page, /has errors/)).toHaveCount(0);
+    // Releases on: the post goes live with this run's own publish.
+    await publishOwn(page, POST());
     const open = page.getByRole('link', { name: 'Open on site' });
     await expect(open).toHaveAttribute('href', `/creative-knowledge/${SLUG}`);
     const res = await page.request.get(`/creative-knowledge/${SLUG}`);
@@ -257,8 +304,17 @@ test.describe('as Admin', () => {
     const { data } = (await current.json()) as { data: { version: number } };
     const res = await page.request.patch(`/api/admin/blog/${postId}`, {
       headers: { 'x-csrf-token': token!, origin: new URL(page.url()).origin },
-      data: { authorId: DRAFT_AUTHOR, version: data.version },
+      data: withDraft(data, { authorId: DRAFT_AUTHOR }),
     });
+    if (releasesOn()) {
+      // Saved as a change; its publish is refused on the author, and the change is thrown away.
+      expect(res.status(), await res.text()).toBe(200);
+      const refused = await tryPublishOwn(page, POST());
+      expect(refused!.status, refused!.text).toBe(422);
+      expect(refused!.text).toContain('the author must be a published team member');
+      await discardDrafts(POST());
+      return;
+    }
     expect(res.status()).toBe(422);
     expect(await res.json()).toMatchObject({
       ok: false,
@@ -321,14 +377,19 @@ test.describe('as SEO', () => {
     await ready(page);
     const headers = await writeHeaders(page);
     const before = await stored();
+    // Releases on: sent as a screen in release mode sends them (the marker), refused the same.
     const edit = await page.request.patch(`/api/admin/blog/${postId}`, {
       headers,
-      data: { excerpt: { en: 'Refused', ar: 'مرفوض' }, version: before.version },
+      data: {
+        excerpt: { en: 'Refused', ar: 'مرفوض' },
+        version: before.version,
+        ...(releasesOn() ? { staged: true } : {}),
+      },
     });
     expect(edit.status(), 'PATCH /api/admin/blog/[id] as seo').toBe(403);
     expect(await edit.json()).toMatchObject({ ok: false, error: 'forbidden' });
     const slug = `e2e-refused-${RUN}`;
-    const create = await page.request.post('/api/admin/blog', {
+    const create = await page.request.post(`/api/admin/blog${releasesOn() ? '?staged=1' : ''}`, {
       headers,
       data: { slug, title: { en: 'Refused', ar: 'مرفوض' }, status: 'draft' },
     });
@@ -338,6 +399,14 @@ test.describe('as SEO', () => {
     expect(await stored()).toEqual(before);
     const { data: made } = await service().from('blog_posts').select('id').eq('slug', slug);
     expect(made).toEqual([]);
+    // Nor staged (releases on): no pending change of the post, no pending create of the slug.
+    const { data: staged } = await service()
+      .from('content_drafts')
+      .select('id')
+      .eq('tenant_id', TENANT_ID)
+      .eq('entity_type', 'blog_post')
+      .or(`entity_id.eq.${postId},payload->>slug.eq.${slug}`);
+    expect(staged).toEqual([]);
   });
 
   test('the SEO tab saves', async ({ page }) => {
@@ -348,7 +417,9 @@ test.describe('as SEO', () => {
     await seo.locator('#f-metaTitle-en').fill(`Colour notes ${RUN} | Search`);
     await seo.locator('#f-metaTitle-ar').fill('ملاحظات اللون');
     await seo.getByRole('button', { name: 'Save SEO' }).click();
-    await expect(seo.locator('.save-status')).toContainText(/Saved/);
+    await expect(seo.locator('.save-status')).toContainText(savedPattern());
+    // Releases on: the SEO change waits; this run throws it away as the system.
+    await discardDraftsLike('entity_seo', 'payload->>entityId', postId);
   });
 });
 
@@ -385,6 +456,7 @@ test.describe('as Content Creator', () => {
         entityId: postId,
         metaTitle: { en: 'Refused', ar: 'مرفوض' },
         version: Number(before['version'] ?? 0),
+        ...(releasesOn() ? { staged: true } : {}),
       },
     });
     expect(res.status(), 'PUT /api/admin/entity-seo as content_creator').toBe(403);

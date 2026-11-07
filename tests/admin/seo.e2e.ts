@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
+import { TENANT_ID } from '../../scripts/gen-seeds.mjs';
+import { discardDraftsLike, hasDrafts, publishOwn, systemClient } from './releaseSteps';
+import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 
 /*
  * The SEO screen (Admin v2 U10), signed in, through the real Worker:
@@ -20,11 +22,18 @@ import { RELEASES_OFF_ONLY, SKIP_REASON, authFile, releasesOn, staffEnv } from '
  *
  * The service is booth-installation, which no other spec reads (its head and its sitemap line
  * change for a moment); every change is put back in afterAll, whatever failed.
+ *
+ * Both modes (Admin v2 R14d). With releases on a page's SEO save is a pending change: the drawer
+ * says "Saved as an unpublished change", the Pages list (which reads live) and the public head
+ * follow once this run publishes the page's own SEO change (`publishOwn`, by the target its
+ * payload names); the second editor meets the first one's pending change (409, the same "Reload
+ * their version"); putting it back throws this run's pending SEO change away as the system,
+ * stages the defaults and publishes them. A redirect is a pending create, edited and thrown away
+ * again (nothing reaches the edge). The site-wide noindex is never staged: its automatic save
+ * waits for the typed confirmation, which Cancel never gives.
  */
 
 test.skip(!staffEnv(), SKIP_REASON);
-// The release-mode rehearsal (Admin v2 R14-prep): written for releases off.
-test.skip(releasesOn(), RELEASES_OFF_ONLY);
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const SLUG = 'booth-installation';
@@ -110,6 +119,25 @@ test.describe('the Pages tab, end to end', () => {
   let entityId = '';
   let label = '';
 
+  /** Releases on: the ids of the page's pending SEO changes (each payload names its target). */
+  async function seoDrafts(): Promise<string[]> {
+    if (!releasesOn()) return [];
+    const { data, error } = await systemClient()
+      .from('content_drafts')
+      .select('entity_id')
+      .eq('tenant_id', TENANT_ID)
+      .eq('entity_type', 'entity_seo')
+      .eq('payload->>entityId', entityId)
+      .is('release_id', null);
+    expect(error).toBeNull();
+    return (data ?? []).map((r) => String(r.entity_id));
+  }
+
+  /** Releases on: publishes the page's own pending SEO change (at least `atLeast`). */
+  async function publishSeo(page: Page, atLeast = 1): Promise<void> {
+    await publishOwn(page, [{ entityType: 'entity_seo', entityIds: await seoDrafts() }], atLeast);
+  }
+
   async function current(page: Page) {
     const res = await page.request.get(
       `/api/admin/entity-seo?entityType=service&entityId=${entityId}`,
@@ -124,12 +152,22 @@ test.describe('the Pages tab, end to end', () => {
     const context = await browser.newContext({ storageState: authFile('admin') });
     const page = await context.newPage();
     try {
+      // Releases on: this run's own pending SEO change goes first (as the system), so the
+      // defaults below are staged over live and published alone.
+      await discardDraftsLike('entity_seo', 'payload->>entityId', entityId);
       const row = await current(page);
       const res = await page.request.put('/api/admin/entity-seo', {
         headers: await csrf(page),
-        data: { entityType: 'service', entityId, version: Number(row['version'] ?? 0) },
+        data: {
+          entityType: 'service',
+          entityId,
+          version: Number(row['version'] ?? 0),
+          ...(releasesOn() ? { staged: true } : {}),
+        },
       });
       expect(res.status(), await res.text()).toBe(200);
+      // Nothing is staged when live has no row of its own: a publish only when there is one.
+      await publishSeo(page, 0);
     } finally {
       await context.close();
     }
@@ -227,6 +265,13 @@ test.describe('the Pages tab, end to end', () => {
     expect(rowReads, 'reads of the SEO row while the drawer was open').toBe(1);
     await page.keyboard.press('Escape');
     await expect(drawer).toBeHidden();
+    if (releasesOn()) {
+      // The list reads live: the change shows there once this run publishes it.
+      await publishSeo(page);
+      await page.goto('/admin/seo?tab=pages&type=service');
+      await ready(page);
+      await page.getByLabel('Search services').fill(SLUG);
+    }
     const row = page.getByRole('row', { name: new RegExp(label) });
     await expect(row).toContainText('Custom');
     await expect(row).toContainText('Hidden');
@@ -286,6 +331,11 @@ test.describe('the Pages tab, end to end', () => {
 
 test.describe('the Redirects tab', () => {
   test.use({ storageState: authFile('seo'), contextOptions: { reducedMotion: 'reduce' } });
+  const from = `/e2e-u10-${Date.now().toString(36)}`;
+  test.afterAll(async () => {
+    // Releases on: the rule is a pending create; whatever a failed step left goes as the system.
+    if (staffEnv()) await discardDraftsLike('redirect', 'payload->>sourcePath', from);
+  });
 
   test('/admin/redirects answers on the tab; a rule is created, edited and deleted in the drawer', async ({
     page,
@@ -295,7 +345,6 @@ test.describe('the Redirects tab', () => {
     await ready(page);
     await expect(page.getByRole('button', { name: 'Sync to edge' })).toBeVisible();
 
-    const from = `/e2e-u10-${Date.now().toString(36)}`;
     await page.getByRole('button', { name: 'New redirect' }).click();
     const created = page.getByRole('dialog', { name: 'New redirect' });
     await expect(created).toBeVisible();
@@ -318,6 +367,16 @@ test.describe('the Redirects tab', () => {
     await press(page, `Delete ${from}`);
     await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
     await expect(page.getByRole('link', { name: from })).toHaveCount(0);
+    // Releases on: the pending create was thrown away, nothing of it is left to publish.
+    if (releasesOn()) {
+      const { data } = await systemClient()
+        .from('content_drafts')
+        .select('id')
+        .eq('tenant_id', TENANT_ID)
+        .eq('entity_type', 'redirect')
+        .eq('payload->>sourcePath', from);
+      expect(data).toEqual([]);
+    }
   });
 });
 
@@ -346,5 +405,8 @@ test.describe('the Site wide tab', () => {
     await ask.getByRole('button', { name: 'Cancel' }).click();
     await expect(ask).toBeHidden();
     await expect(robots).toHaveValue('index,follow');
+    // Releases on: leaving the select did not stage the noindex either (its automatic save
+    // waits for the confirmation, R14d).
+    if (releasesOn()) expect(await hasDrafts({ entityType: 'seo_defaults' })).toBe(false);
   });
 });

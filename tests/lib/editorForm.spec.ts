@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
+import { CONFLICT_WORDS } from '@/lib/admin/entitySave';
 import { RESOURCE_UI, SINGLETON_UI, type FieldDef } from '@/lib/admin/uiSchema';
 
 vi.mock('@/components/admin/RichText', () => ({ default: () => null }));
@@ -104,6 +105,8 @@ describe('EditorForm', () => {
   it('a 409: the banner and "Reload their version"', () => {
     const html = render(fakeSave({ conflict: true, status: 'error' }));
     expect(html).toContain('Someone else saved changes while you were editing.');
+    // R14d: the words are the constant the e2e specs read (general, fields).
+    expect(html).toContain(`<span>${CONFLICT_WORDS}</span>`);
     expect(html).toContain('<button type="button">Reload their version</button>');
     expect(html).toContain('Not saved');
   });

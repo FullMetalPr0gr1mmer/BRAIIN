@@ -1,11 +1,21 @@
-import { lazy, Suspense, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { flushSync } from 'react-dom';
 import ErrorSummary, { type FieldError } from '@/components/admin/kit/ErrorSummary';
 import Note from '@/components/admin/kit/Note';
 import SaveStatus from '@/components/admin/kit/SaveStatus';
 import { TabStrip, tabIds, writeTabParam } from '@/components/admin/kit/Tabs';
 import { tabOfElement, tabsWithErrors } from '@/lib/admin/editorTabs';
-import { badInputErrors, type MappedErrors } from '@/lib/admin/fieldErrors';
+import { CONFLICT_WORDS } from '@/lib/admin/entitySave';
+import { badInputErrors, unreadableIn, type MappedErrors } from '@/lib/admin/fieldErrors';
 import type { HistoryTarget } from '@/lib/admin/historyTarget';
 import type { EntitySave } from '@/lib/admin/useEntitySave';
 import { useSaveShortcut } from '@/lib/admin/useEntitySave';
@@ -334,11 +344,24 @@ export default function EditorForm({
     () => tabs?.find((t) => t.id === initialTab)?.id ?? tabs?.[0]?.id ?? '',
   );
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set([tab]));
+  /**
+   * R12: release mode's automatic save (P-5; a no-op in live mode), never while a number or
+   * date box holds text the browser could not read (R14d: it would send '' and clear the
+   * stored value; the person's Save names the box instead).
+   */
+  const autoSave = () => {
+    if (unreadableIn(formRef.current).length > 0) return;
+    save.flush?.();
+  };
+  // R14d review: the saves this form does not start (the page editor's idle timer, a save
+  // replayed once another lands, the notice's and the column's flush) ask the same, in the hook.
+  const addVeto = save.addAutoSaveVeto;
+  useEffect(() => addVeto?.(() => unreadableIn(formRef.current).length > 0), [addVeto]);
   const choose = (id: string) => {
     setTab(id);
     setOpened((seen) => (seen.has(id) ? seen : new Set([...seen, id])));
     // R12: a section switch saves a pending change (P-5); a no-op in live mode.
-    save.flush?.();
+    autoSave();
   };
   // An error link or "Next gap" asks for a field: its tab is shown first, in this turn.
   useRevealListener((id) => {
@@ -357,16 +380,7 @@ export default function EditorForm({
    * sort order). So those boxes are read here and the save refused with their names.
    */
   function submit() {
-    const form = formRef.current;
-    const unreadable = form
-      ? [
-          ...form.querySelectorAll<HTMLInputElement>(
-            'input[type="number"], input[type="datetime-local"], input[type="date"]',
-          ),
-        ]
-          .filter((input) => input.validity.badInput)
-          .map((input) => ({ id: input.id, type: input.type, label: input.dataset['label'] ?? '' }))
-      : [];
+    const unreadable = unreadableIn(formRef.current);
     if (unreadable.length > 0) {
       setLocal(badInputErrors(unreadable));
       return;
@@ -526,7 +540,7 @@ export default function EditorForm({
         aria-haspopup="dialog"
         onClick={() => {
           // A pending change typed but not saved yet is saved first (P-5's blur rule).
-          save.flush?.();
+          autoSave();
           setHistoryMounted(true);
           setHistoryOpen(true);
         }}
@@ -553,7 +567,7 @@ export default function EditorForm({
       hidden={current?.panel ? true : undefined}
       // R12: focus leaving a control saves a pending change (P-5), after the change event
       // has landed in the form's state. Only in release mode: live mode saves on Save alone.
-      onBlur={draftMode ? () => window.setTimeout(() => save.flush?.(), 0) : undefined}
+      onBlur={draftMode ? () => window.setTimeout(autoSave, 0) : undefined}
     >
       <ErrorSummary errors={errors.summary} />
       {save.message && !save.releasesOff && (
@@ -573,7 +587,7 @@ export default function EditorForm({
       )}
       {save.conflict && (
         <div className="msg editor__conflict" data-kind="error" role="alert">
-          <span>Someone else saved changes while you were editing.</span>
+          <span>{CONFLICT_WORDS}</span>
           <button type="button" onClick={() => void save.reloadTheirs()}>
             Reload their version
           </button>
