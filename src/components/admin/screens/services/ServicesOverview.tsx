@@ -17,6 +17,7 @@ import {
   eyeLabel,
   eyeBody,
   eyeRefusal,
+  eyeToast,
   eyeTarget,
   groupServices,
   hideDisciplineQuestion,
@@ -174,7 +175,7 @@ export default function ServicesOverview({ write, archive }: ServicesOverviewPro
         // R14d: a row with a pending change names it (eyeBody).
         body: stagedBody(eyeBody(row, next, staged), staged),
       });
-      toast(next === 'draft' ? `${name} is hidden.` : `${name} is on the site.`, 'ok');
+      toast(eyeToast(name, next, staged), 'ok');
     } catch (err) {
       failure = eyeRefusal(
         'discipline',

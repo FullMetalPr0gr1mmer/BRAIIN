@@ -108,6 +108,18 @@ export function eyeBody(row: Row, next: Status, release: boolean): Record<string
 }
 
 /**
+ * What the eye says once its write landed (Admin v2 R14d). Releases off the row is on the site,
+ * or off it, at once; in release mode the change waits for a publish, so the words say that
+ * instead of claiming the site already shows it.
+ */
+export function eyeToast(name: string, next: Status, release: boolean): string {
+  if (!release) return next === 'draft' ? `${name} is hidden.` : `${name} is on the site.`;
+  return next === 'draft'
+    ? `${name} will be hidden once this change is published.`
+    : `${name} will show on the site once this change is published.`;
+}
+
+/**
  * What the eye says when its write is refused (R12b review). A 409 from someone else's save
  * says so, over the list read again; every other refusal says its own words (`described`,
  * client.ts describeError), a 409 `releases-off` included: publishing was switched off under

@@ -1532,6 +1532,18 @@ describe('the Services eyes in release mode (R14d, services/model.ts eyeBody)', 
     });
   });
 
+  it('the toast says the change waits for a publish (releases off: the words it always said)', async () => {
+    const { eyeToast } = await import('@/components/admin/screens/services/model');
+    expect(eyeToast('Logo', 'published', false)).toBe('Logo is on the site.');
+    expect(eyeToast('Logo', 'draft', false)).toBe('Logo is hidden.');
+    expect(eyeToast('Logo', 'published', true)).toBe(
+      'Logo will show on the site once this change is published.',
+    );
+    expect(eyeToast('Logo', 'draft', true)).toBe(
+      'Logo will be hidden once this change is published.',
+    );
+  });
+
   it('both eyes send it (the overview’s disciplines and a discipline’s services)', () => {
     for (const path of [
       'src/components/admin/screens/services/DisciplinePage.tsx',
@@ -1539,6 +1551,7 @@ describe('the Services eyes in release mode (R14d, services/model.ts eyeBody)', 
     ]) {
       const src = readFileSync(path, 'utf8');
       expect(src, path).toContain('body: stagedBody(eyeBody(row, next, staged), staged),');
+      expect(src, path).toContain("toast(eyeToast(name, next, staged), 'ok');");
     }
   });
 });
