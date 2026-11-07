@@ -16,7 +16,7 @@
 --      its hash.
 
 begin;
-select plan(50);
+select plan(51);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 insert into public.tenants (id, name) values
@@ -141,6 +141,10 @@ select is((select count(*)::int from pg_proc p, aclexplode(coalesce(p.proacl, ac
                             'public.page_password_stored(uuid)'::regprocedure)
               and a.grantee = 0),
   0, 'neither is executable by PUBLIC (the default privilege revoked)');
+select is(array[has_function_privilege('authenticated', 'app.in_release_write()', 'execute'),
+                has_function_privilege('anon', 'app.in_release_write()', 'execute'),
+                has_function_privilege('service_role', 'app.in_release_write()', 'execute')],
+  array[true, false, false], 'app.in_release_write (the message guard''s question): authenticated alone');
 select ok(not exists (select 1 from app.release_entities where table_name = 'page_passwords'),
   'page_passwords is never a registry table: no release carries the secret');
 

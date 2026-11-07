@@ -49,7 +49,9 @@
 --      through one. INSERT and UPDATE (note) are granted to authenticated, and an invoker guard
 --      (page_visibility_note_guard) refuses an API token's message write outside a release, as
 --      the missing privilege did (42501), so with releases off a direct write is refused as
---      before and the message is still set only with the password.
+--      before and the message is still set only with the password. It asks app.in_release_write()
+--      (a definer over app.release_token_valid(), which no API role may execute; EXECUTE
+--      authenticated, never anon).
 --   5. The page-visibility guide, revision 2 to 3: its release-mode paragraph says what is true now.
 --
 -- Not changed: page_passwords (no policy, no grant to any API role), set_page_password,
@@ -202,23 +204,33 @@ revoke all on function app.tg_page_password_sync() from public, anon, authentica
 -- through one. Granted for insert and update, and held by a guard so that OUTSIDE a release an
 -- API token still writes no message (exactly as before: 42501): an invoker trigger, so it sees
 -- the role the statement runs as (authenticated through PostgREST and inside the apply, the
--- owner inside set_page_password and the other definers), and the release token is read as
--- app.release_token_valid() reads it (that function is not executable by any API role). The
+-- owner inside set_page_password and the other definers), which asks app.in_release_write(), a
+-- definer over app.release_token_valid() (executable by no API role, 0038). The
 -- service role keeps the table-wide UPDATE it had (0057) and is not refused. The guard is named
 -- to run after the release guard and before app.tg_page_password_sync, so it sees the message the
 -- statement wrote, not the one that trigger clears when a page leaves password mode.
 grant insert (note), update (note) on public.page_visibility to authenticated;
 
+-- Whether this transaction is applying a release, for a trigger that runs as the caller:
+-- app.release_token_valid() is executable by no API role (0038), so a definer asks it.
+create or replace function app.in_release_write() returns boolean
+  language sql stable security definer set search_path = ''
+as $$ select app.release_token_valid() $$;
+revoke all on function app.in_release_write() from public, anon, authenticated, service_role;
+grant execute on function app.in_release_write() to authenticated;
+
 create or replace function app.tg_page_visibility_note_guard() returns trigger
   language plpgsql security invoker set search_path = '' as $$
 begin
-  if current_user in ('authenticated', 'anon')
-     and (case when tg_op = 'INSERT' then new.note is not null
-               else new.note is distinct from old.note end)
-     and not coalesce(nullif(pg_catalog.current_setting('app.release_apply', true), '')
-                        = pg_catalog.pg_current_xact_id_if_assigned()::text, false) then
-    raise exception 'The message above the password box is set with the password, on the Page visibility screen.'
-      using errcode = '42501';
+  -- Nested, so the release question is asked only of an API token's write of the message.
+  if current_user in ('authenticated', 'anon') then
+    if (case when tg_op = 'INSERT' then new.note is not null
+             else new.note is distinct from old.note end) then
+      if not app.in_release_write() then
+        raise exception 'The message above the password box is set with the password, on the Page visibility screen.'
+          using errcode = '42501';
+      end if;
+    end if;
   end if;
   return new;
 end $$;
@@ -375,6 +387,15 @@ begin
      or (select p.prosecdef from pg_catalog.pg_proc p
           where p.oid = 'app.tg_page_visibility_note_guard()'::regprocedure) then
     raise exception 'R14e: page_visibility_note_guard must be an invoker trigger on page_visibility';
+  end if;
+  if not exists (select 1 from pg_catalog.pg_proc p
+                  where p.oid = 'app.in_release_write()'::regprocedure and p.prosecdef
+                    and p.proconfig = array['search_path=""']
+                    and p.prosrc ~ '^ *select app\.release_token_valid\(\) *$')
+     or not has_function_privilege('authenticated', 'app.in_release_write()', 'execute')
+     or has_function_privilege('anon', 'app.in_release_write()', 'execute')
+     or has_function_privilege('service_role', 'app.in_release_write()', 'execute') then
+    raise exception 'R14e: app.in_release_write must be a definer over release_token_valid, for authenticated alone';
   end if;
   if 'page_visibility_note_guard' collate "C" <= 'page_visibility__release_guard' collate "C"
      or 'page_visibility_note_guard' collate "C" >= 'page_visibility_password' collate "C" then
