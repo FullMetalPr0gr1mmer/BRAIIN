@@ -278,7 +278,8 @@ test('a client: hidden until cleared, copied hidden, cleared with one switch', a
     ? await listed(page, '/api/admin/clients', `${slug('client')}-copy`)
     : await serviceRow('clients', `${slug('client')}-copy`);
   expect(copy['visible']).toBe(false);
-  expect(copy['is_placeholder']).toBe(false);
+  // (A pending create carries only what it writes: no flag is no sample.)
+  expect(copy['is_placeholder'] ?? false).toBe(false);
   const texts = await page.locator('ul.coll__list > li').allTextContents();
   const at = texts.findIndex((t) => t.includes(CLIENT.en));
   expect(texts[at + 1]).toContain(CLIENT.en);

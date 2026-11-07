@@ -56,6 +56,8 @@ import {
   previewSectionsOf,
   reloadsPreview,
   removeConfirm,
+  removeOutcome,
+  removeWords,
   renameBody,
   rowMoved,
   rowStamp,
@@ -451,13 +453,12 @@ function Editor({ page: initialPage, access, builtIns, seo, initialSection }: Pa
         method: 'DELETE',
       });
       wrote('remove');
-      if ('staged' in answer || 'draft' in answer) {
-        announcePending();
-        toast(`The removal of ${name} is saved as an unpublished change.`, 'ok');
-      } else {
-        toast(`${name} is deleted.`, 'ok');
-        setSelected(next ?? PAGE_DETAILS);
-      }
+      // R14d: a pending removal stays listed (and selected) until it is published; a section
+      // gone at once, or a pending new one thrown away, leaves, and the next one opens.
+      const outcome = removeOutcome(answer);
+      if (outcome !== 'deleted') announcePending();
+      toast(removeWords(name, outcome), 'ok');
+      if (outcome !== 'removal') setSelected(next ?? PAGE_DETAILS);
       await load();
     } catch (err) {
       setError(`Not deleted. ${describeError(err)}`);

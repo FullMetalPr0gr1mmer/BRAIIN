@@ -643,3 +643,29 @@ describe('the question before a section is removed (R14d: removeConfirm)', () =>
     expect(editor).toContain('const ok = await confirmDialog(removeConfirm(name, release));');
   });
 });
+
+describe('what a section’s DELETE did (R14d: removeOutcome, removeWords)', () => {
+  it('a staged removal, a pending new section thrown away, or deleted at once', async () => {
+    const { removeOutcome, removeWords } =
+      await import('@/components/admin/screens/pageEditor/model');
+    const removal = { deleted: 's1', pendingRemoval: true, draft: { id: 'd1', version: 1 } };
+    const discarded = { deleted: 's1', draft: null };
+    const deleted = { deleted: 's1' };
+    expect([removal, discarded, deleted].map(removeOutcome)).toEqual([
+      'removal',
+      'discarded',
+      'deleted',
+    ]);
+    expect(removeWords('Call to action', 'removal')).toBe(
+      'The removal of Call to action is saved as an unpublished change.',
+    );
+    expect(removeWords('Call to action', 'discarded')).toBe(
+      'Call to action is thrown away. It was never on the site.',
+    );
+    expect(removeWords('Call to action', 'deleted')).toBe('Call to action is deleted.');
+    // Only a pending removal stays selected; the others leave for the next section.
+    const editor = readFileSync('src/components/admin/screens/pageEditor/PageEditor.tsx', 'utf8');
+    expect(editor).toContain("if (outcome !== 'removal') setSelected(next ?? PAGE_DETAILS);");
+    expect(editor).toContain("toast(removeWords(name, outcome), 'ok');");
+  });
+});
