@@ -9,7 +9,9 @@ import VisibilityDrawer, {
 import {
   afterSave,
   edgeLine,
+  passwordLive,
   passwordOffered,
+  passwordPost,
   shownItem,
   visibilityPut,
 } from '@/components/admin/screens/visibility/VisibilityScreen';
@@ -29,9 +31,9 @@ import {
   PASSWORD_HINT,
   PASSWORD_NOTE,
   PASSWORD_REQUIRED,
-  RELEASE_NOTE_KEPT,
-  RELEASE_PASSWORD_ONLY,
-  RELEASE_PASSWORD_PENDING,
+  RELEASE_PASSWORD_LIVE,
+  RELEASE_PASSWORD_MISSING,
+  RELEASE_PASSWORD_STAGED,
   STAGED_APPLIES,
   STAGED_CONFIRM_SUB,
   TEMPLATE_NOTE,
@@ -434,12 +436,15 @@ describe('release mode (Admin v2 R14b)', () => {
     });
   });
 
-  it('the password: always offered releases off; in release mode only live and unpending', () => {
+  it('the password: offered on every page in both modes, never on a template (R14e)', () => {
     expect(passwordOffered(hiddenAbout, false)).toBe(true);
-    expect(passwordOffered(hiddenAbout, true)).toBe(false);
+    expect(passwordOffered(hiddenAbout, true)).toBe(true);
     expect(passwordOffered(passwordAbout, true)).toBe(true);
-    expect(passwordOffered(withPending(passwordAbout, pending('public')), true)).toBe(false);
+    expect(passwordOffered(withPending(passwordAbout, pending('public')), true)).toBe(true);
     expect(passwordOffered(template, true)).toBe(false);
+    expect(passwordLive(passwordAbout)).toBe(true);
+    expect(passwordLive(hiddenAbout)).toBe(false);
+    expect(passwordLive(template)).toBe(false);
     const offered = (on: boolean) =>
       renderToStaticMarkup(
         createElement(VisibilityDrawer, {
@@ -457,6 +462,26 @@ describe('release mode (Admin v2 R14b)', () => {
     expect(offered(false)).not.toContain('value="password"');
   });
 
+  it('the password door’s body: the live version, and in release mode the change it names', () => {
+    const typed = { ...draft, mode: 'password' as const, password: 'open sesame', noteEn: ' Ask ' };
+    const live = withPending(hiddenAbout, pending('public')) as VisibilityItem & { kind: 'page' };
+    expect(passwordPost(live, typed, true)).toEqual({
+      pageId: ABOUT,
+      password: 'open sesame',
+      note: { en: 'Ask' },
+      version: 2,
+      draftId: '77777777-7777-4777-8777-000000000001',
+      draftVersion: 4,
+    });
+    // Releases off: exactly main's body.
+    expect(passwordPost(hiddenAbout as VisibilityItem & { kind: 'page' }, typed, false)).toEqual({
+      pageId: ABOUT,
+      password: 'open sesame',
+      note: { en: 'Ask' },
+      version: 2,
+    });
+  });
+
   it('the drawer and the confirm say when it goes live; releases off they are unchanged', () => {
     const on = renderToStaticMarkup(
       createElement(VisibilityDrawer, {
@@ -472,27 +497,39 @@ describe('release mode (Admin v2 R14b)', () => {
     expect(on).toContain(STAGED_APPLIES);
     expect(on).not.toContain(APPLIES_WITHIN);
     expect(drawer(hiddenAbout)).toContain(APPLIES_WITHIN);
-    const rotate = renderToStaticMarkup(
-      createElement(VisibilityDrawer, {
-        item: passwordAbout,
-        choices,
-        busy: false,
-        error: null,
-        release: true,
-        onClose: () => undefined,
-        onApply: () => undefined,
-      }),
-    );
-    // A password is set at once, so its line is the live one, and the message stays.
+    const passwordDrawer = (item: VisibilityItem, live: boolean) =>
+      renderToStaticMarkup(
+        createElement(VisibilityDrawer, {
+          item,
+          choices,
+          busy: false,
+          error: null,
+          release: true,
+          passwordLive: live,
+          onClose: () => undefined,
+          onApply: () => undefined,
+        }),
+      );
+    // A page behind a password live: a new password works at once, a new message waits.
+    const rotate = passwordDrawer(passwordAbout, true);
     expect(rotate).toContain(APPLIES_WITHIN);
-    expect(rotate).toContain(RELEASE_NOTE_KEPT);
+    expect(rotate).toContain(RELEASE_PASSWORD_LIVE);
+    // A page whose pending change puts it behind a password (shown as password, live is not):
+    // the page asks for it once published.
+    const newGate = passwordDrawer(passwordAbout, false);
+    expect(newGate).toContain(STAGED_APPLIES);
+    expect(newGate).toContain(RELEASE_PASSWORD_STAGED);
+    // Releases off, neither line.
+    expect(drawer(passwordAbout)).not.toContain(RELEASE_PASSWORD_LIVE);
+    expect(drawer(passwordAbout)).not.toContain(RELEASE_PASSWORD_STAGED);
     const screen = readFileSync(
       join(process.cwd(), 'src/components/admin/screens/visibility/VisibilityScreen.tsx'),
       'utf8',
     );
     expect(screen).toContain(
-      "sub={release && pending?.mode !== 'password' ? STAGED_CONFIRM_SUB : CONFIRM_SUB}",
+      "release && !(pending?.mode === 'password' && passwordLive(liveOf(open)))",
     );
+    expect(screen).toContain('passwordLive={passwordLive(liveOf(open))}');
   });
 
   it('the release words keep the client’s rules (P-12)', () => {
@@ -500,9 +537,9 @@ describe('release mode (Admin v2 R14b)', () => {
       STAGED_APPLIES,
       STAGED_CONFIRM_SUB,
       stagedSaved('About'),
-      RELEASE_PASSWORD_ONLY,
-      RELEASE_NOTE_KEPT,
-      RELEASE_PASSWORD_PENDING,
+      RELEASE_PASSWORD_STAGED,
+      RELEASE_PASSWORD_LIVE,
+      RELEASE_PASSWORD_MISSING,
     ]) {
       expect(text).not.toMatch(/[–—]/);
       expect(text.toLowerCase()).not.toMatch(/braii?n|statii?on/);

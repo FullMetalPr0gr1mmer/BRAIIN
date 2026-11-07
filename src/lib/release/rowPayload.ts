@@ -134,6 +134,12 @@ export function restorePatch(
   row: Readonly<Row>,
   children?: LinkSetsImage | null,
 ): RestoredPatch {
+  // A version in password mode is never restored (Admin v2 R14e): a version cannot carry the
+  // secret, so restoring one would put the page behind whatever hash is stored now, which only
+  // the password door may decide. The door sets it again.
+  if (entry.kind === 'pageVisibility' && row['mode'] === 'password') {
+    return { ok: false, reason: 'unreadable', columns: [] };
+  }
   const payload = rowToPayload(entry, row, children);
   let derived: DerivedPatch;
   try {

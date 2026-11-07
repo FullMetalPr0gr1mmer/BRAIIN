@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { PagePasswordWriteSchema } from '@schemas/visibility';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
@@ -5,7 +6,7 @@ import { savePagePassword } from '@/lib/admin/pageVisibility';
 import { syncVisibilityToEdge, visibilityPurgeTags } from '@/lib/admin/visibilitySync';
 import { purgeAfterSave } from '@/lib/http/purge';
 import { refuseStagedQuery } from '@/lib/release/releasesOff';
-import { assertPasswordImmediate } from '@/lib/release/stagedPageVisibility';
+import { stagedPasswordWrite } from '@/lib/release/stagedPageVisibility';
 
 // POST /api/admin/page-visibility/password — put one page behind a password (Admin v2
 // U14b), `maintenance.manage` (Admin + Developer, §5 "Maintenance / hidden pages / page
@@ -19,31 +20,35 @@ import { assertPasswordImmediate } from '@/lib/release/stagedPageVisibility';
 // screen now reads it, with the message and the version count but never the password, and
 // `kvSynced` for the edge.
 //
-// With releases on (Admin v2 R14b) the password stays immediate, a secret (P-3): the door
-// changes the password of a page that already asks for one, with nothing pending on its setting
-// and its message unchanged, which moves only the exempt `password_version` past 0066's guard;
-// anything else is refused in words (`assertPasswordImmediate`). The screen sends it marked
-// (`?staged=1`) in release mode, and with releases off such a request is refused (409
-// `releases-off`) rather than taken as a live mode change the screen never offered.
+// With releases on (Admin v2 R14e, owner item B1 option b) the door splits the change, because a
+// secret is immediate and no release carries one (P-3): after the same live recheck,
+// `stagedPasswordWrite` stores the secret at once (`public.store_page_password`, which moves only
+// the exempt `password_version` of a page already behind a password live) and stages the mode
+// and the message as the page's visibility change, so the page asks for the password once that
+// change is published. The screen sends it marked (`?staged=1`, and the pending change it names
+// in the body), and with releases off such a request is refused (409 `releases-off`) rather than
+// taken as a live mode change the screen never offered. The body is parsed in the handler (a
+// staged one names its pending change, which the strict schema refuses), with the same 422.
 //
 // There is no audit row written HERE on purpose: the database writes `page_visibility
-// .password_set` inside the same transaction as the change, so a change whose audit row
-// cannot be chained does not happen at all.
+// .password_set` (`.password_stored` with releases on) inside the same transaction as the
+// change, so a change whose audit row cannot be chained does not happen at all.
 export const prerender = false;
 
 export const POST = defineAdminRoute({
   cap: 'maintenance.manage',
-  input: PagePasswordWriteSchema,
+  // Parsed in the handler: a staged write also names `draftId`/`draftVersion`.
+  input: z.unknown(),
   handler: async (ctx) => {
-    const { auth, sb, input } = ctx;
+    const { auth, sb } = ctx;
     if (await ctx.releasesEnabled()) {
       // The person first (§9 b): a stale token is refused before the setting is read.
       await liveRecheck(auth);
-      await assertPasswordImmediate(ctx, input);
-    } else {
-      refuseStagedQuery(ctx.url, 'page_visibility');
-      await liveRecheck(auth);
+      return stagedPasswordWrite(ctx, ctx.input);
     }
+    const input = PagePasswordWriteSchema.parse(ctx.input);
+    refuseStagedQuery(ctx.url, 'page_visibility');
+    await liveRecheck(auth);
     const { setting, slug } = await savePagePassword(sb, auth, input);
     const sync = await syncVisibilityToEdge(sb, auth);
     // A page behind a password leaves the menus, the sitemap and llms.txt of every cached page

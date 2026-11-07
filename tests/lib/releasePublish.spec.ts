@@ -5,6 +5,7 @@ import { client, T, type Db, type Row } from '../fixtures/stagedDb';
 import { ADMIN, callRoute, draftRow, makeDb } from '../fixtures/stagedRoute';
 import { MEDIA_BLOCKS_FULL, MEDIA_BLOCKS_PER_PAGE } from '@schemas/sectionTypes';
 import { ANCHOR_DISCIPLINE, ANCHOR_TAKEN } from '@schemas/sectionAppearance';
+import { RELEASE_PASSWORD_MISSING } from '@/lib/admin/visibilityCopy';
 
 // The publish and validate endpoints (Admin v2 R6) over the PostgREST stand-in: the selection as
 // the person saw it, the per-change capabilities, the live re-read, the check over the state the
@@ -1558,5 +1559,125 @@ describe('section anchors over a release (E9)', () => {
     expect(errorsOf(4)).toEqual([
       expect.objectContaining({ field: 'anchor', message: ANCHOR_DISCIPLINE }),
     ]);
+  });
+});
+
+// Admin v2 R14e (owner item B1 option b): a page goes behind a password only where one is
+// stored. The password door stores the secret at once and stages the mode and the message; a
+// release never carries the secret, so the check asks the database whether a hash is there
+// (public.page_password_stored, as the publisher) and refuses in words where none is, and the
+// apply's own refusal of the same thing (0061's sync trigger) gets the same words.
+describe('a page behind a password over a release (R14e)', () => {
+  const ROW = id(52);
+  const passwordDraft = (over: Row = {}) =>
+    draftRow({
+      id: draftId(21),
+      entity_type: 'page_visibility',
+      entity_id: ROW,
+      op: 'create',
+      base_version: null,
+      payload: {
+        target: { pageId: PAGE },
+        mode: 'password',
+        note: { en: 'Ask the studio' },
+        redirectPageId: null,
+        hideFrom: null,
+        showOn: null,
+      },
+      ...over,
+    });
+  const storedAnswer = (db: Db, stored: boolean) => {
+    db.rpc = (fn, args) =>
+      fn === 'page_password_stored'
+        ? { data: args['p_page_id'] === PAGE && stored, error: null }
+        : undefined;
+  };
+  const dryRunOk = () => ({
+    data: { mode: 'dry_run', ok: true, item_count: 1, conflicts: [], errors: [] },
+    error: null,
+  });
+
+  it('no stored password: the check refuses it in words, and the apply is never asked', async () => {
+    const draft = passwordDraft();
+    const db = seed({ content_drafts: [draft], page_visibility: [] });
+    storedAnswer(db, false);
+    svc.answer = dryRunOk;
+    const res = await run(VALIDATE, db, select(draft), 'developer');
+    expect(res.data).toMatchObject({ ok: false, dryRun: 'skipped' });
+    const [item] = res.data['items'] as Row[];
+    expect(item!['errors']).toEqual([
+      expect.objectContaining({ message: RELEASE_PASSWORD_MISSING, field: 'mode' }),
+    ]);
+    expect(applyCalls()).toEqual([]);
+    const asked = db.calls.filter((c) => c.kind === 'rpc' && c.name === 'page_password_stored');
+    expect(asked.map((c) => c.values)).toEqual([{ p_page_id: PAGE }]);
+    // And a publish of it is refused the same way, nothing applied.
+    const publish = await run(PUBLISH, db, select(draft), 'developer');
+    expect(publish.status).toBe(422);
+    expect(applyCalls()).toEqual([]);
+  });
+
+  it('a stored password: the change reaches the dry run, carrying the mode and the message only', async () => {
+    const draft = passwordDraft();
+    const db = seed({ content_drafts: [draft], page_visibility: [] });
+    storedAnswer(db, true);
+    svc.answer = dryRunOk;
+    const res = await run(VALIDATE, db, select(draft), 'admin');
+    expect(res.data, JSON.stringify(res.body)).toMatchObject({ ok: true, dryRun: 'ran' });
+    const [call] = applyCalls();
+    const [sent] = call!.args['p_items'] as Row[];
+    expect(sent!['patch']).toEqual({
+      page_id: PAGE,
+      mode: 'password',
+      note: { en: 'Ask the studio' },
+      redirect_page_id: null,
+      hide_from: null,
+      show_on: null,
+    });
+    // The exempt version is never in a release: the database moves it on entering the mode.
+    expect(Object.keys(sent!['patch'] as Row)).not.toContain('password_version');
+  });
+
+  it('a payload carrying anything like a secret is refused, never sent (the draft is untrusted)', async () => {
+    const draft = passwordDraft({
+      payload: { target: { pageId: PAGE }, mode: 'password', note: null, password: 'leaked-1' },
+    });
+    const db = seed({ content_drafts: [draft], page_visibility: [] });
+    storedAnswer(db, true);
+    svc.answer = dryRunOk;
+    const res = await run(VALIDATE, db, select(draft), 'admin');
+    expect(res.data).toMatchObject({ ok: false });
+    expect(applyCalls()).toEqual([]);
+    expect(JSON.stringify(res.body)).not.toContain('leaked-1');
+  });
+
+  it('the database’s own refusal (no hash at the apply) gets the same words', async () => {
+    const draft = passwordDraft();
+    const db = seed({ content_drafts: [draft], page_visibility: [] });
+    storedAnswer(db, true);
+    svc.answer = () => ({
+      data: {
+        mode: 'dry_run',
+        ok: false,
+        item_count: 1,
+        conflicts: [],
+        errors: [
+          {
+            draftId: draft['id'],
+            sqlstate: '23514',
+            constraint: 'page_visibility_password_required',
+            column: null,
+            message: 'A page goes behind a password only by setting one (secret detail)',
+          },
+        ],
+      },
+      error: null,
+    });
+    const res = await run(VALIDATE, db, select(draft), 'admin');
+    const [item] = res.data['items'] as Row[];
+    expect(item!['errors']).toEqual([
+      { code: 'refused', message: RELEASE_PASSWORD_MISSING, field: 'mode' },
+    ]);
+    expect(JSON.stringify(res.body)).not.toContain('secret detail');
   });
 });

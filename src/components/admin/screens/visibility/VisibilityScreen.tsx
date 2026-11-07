@@ -35,8 +35,9 @@ import type { VisibilityItem, VisibilityList as ListAnswer, VisibilitySaveAnswer
 // it, with a pending badge; a save is a pending change, marked as made in release mode
 // (`staged`, and the change it names), so once releases are switched off under the screen the
 // live route refuses it (409 `releases-off`). The line about the live site still compares the
-// LIVE settings with the edge. The password stays immediate: offered only on a page that asks
-// for one live with nothing pending (the server checks the same, stagedPageVisibility.ts).
+// LIVE settings with the edge. The password itself is saved at once and no release carries it
+// (Admin v2 R14e): on a page that asks for one live a new one works at once; putting a page behind
+// one, and its message, wait for the publish like any other setting (stagedPageVisibility.ts).
 
 const API = '/api/admin/page-visibility';
 
@@ -102,10 +103,37 @@ export function shownItem(item: VisibilityItem): VisibilityItem {
   return item.pending?.setting ? { ...item, setting: item.pending.setting } : item;
 }
 
-/** Release mode: the password is immediate, so only a page that asks for one live, unpending. */
+/**
+ * Whether "Behind a password" is offered: on every page in both modes (Admin v2 R14e; R14b
+ * offered it in release mode only where a password could be set at once). A template takes
+ * public or hidden only, which the drawer holds itself.
+ */
 export function passwordOffered(live: VisibilityItem | null, release: boolean): boolean {
-  if (!release) return true;
-  return live?.kind === 'page' && live.setting?.mode === 'password' && !live.pending;
+  return !release || live?.kind === 'page';
+}
+
+/** Whether the page asks for a password on the LIVE site (a new one then works at once). */
+export function passwordLive(live: VisibilityItem | null): boolean {
+  return live?.kind === 'page' && live.setting?.mode === 'password';
+}
+
+/**
+ * The password door's body, from the LIVE row: the version the live setting has (0 with none)
+ * and, in release mode, the pending change it names (R14e). Releases off it is exactly main's.
+ */
+export function passwordPost(
+  live: VisibilityItem & { kind: 'page' },
+  draft: VisibilityDraft,
+  release: boolean,
+) {
+  const pending = release ? (live.pending ?? null) : null;
+  return {
+    pageId: live.id,
+    password: draft.password,
+    note: noteOf(draft),
+    version: live.setting?.version ?? 0,
+    ...(pending ? { draftId: pending.draftId, draftVersion: pending.draftVersion } : {}),
+  };
 }
 
 /**
@@ -198,20 +226,14 @@ export default function VisibilityScreen() {
     setSaveError(null);
     try {
       const live = liveOf(item) ?? item;
-      const version = live.setting?.version ?? 0;
       // The password has its own door: the list's PUT takes the three modes that need no
       // secret, and this one hands the password straight to the database, which hashes it.
       // Nothing of it is kept here, and the drawer closes with the field empty.
       const answer =
-        draft.mode === 'password' && item.kind === 'page'
+        draft.mode === 'password' && live.kind === 'page'
           ? await adminFetch<VisibilitySaveAnswer>(stagedUrl(`${API}/password`, release), {
               method: 'POST',
-              body: {
-                pageId: item.id,
-                password: draft.password,
-                note: noteOf(draft),
-                version,
-              },
+              body: passwordPost(live, draft, release),
             })
           : await adminFetch<VisibilitySaveAnswer>(API, {
               method: 'PUT',
@@ -298,6 +320,7 @@ export default function VisibilityScreen() {
         error={saveError}
         release={release}
         passwordOffered={passwordOffered(liveOf(open), release)}
+        passwordLive={passwordLive(liveOf(open))}
         onClose={() => setOpen(null)}
         onApply={(draft) => setPending(draft)}
       />
@@ -306,7 +329,11 @@ export default function VisibilityScreen() {
         open={pending !== null && open !== null}
         onClose={() => setPending(null)}
         title={pending ? `${MODE_COPY[pending.mode].title}?` : ''}
-        sub={release && pending?.mode !== 'password' ? STAGED_CONFIRM_SUB : CONFIRM_SUB}
+        sub={
+          release && !(pending?.mode === 'password' && passwordLive(liveOf(open)))
+            ? STAGED_CONFIRM_SUB
+            : CONFIRM_SUB
+        }
         footer={
           <>
             <button

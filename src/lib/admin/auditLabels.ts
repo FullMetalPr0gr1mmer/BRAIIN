@@ -396,6 +396,14 @@ const EXACT: Readonly<Record<string, Label>> = {
     verb: 'Set a password on',
     noun: 'a page',
   },
+  // Written by public.store_page_password (Admin v2 R14e) with releases on: the password stored
+  // at once, the mode and the message staged. `live`: the page asked for a password live and asks
+  // for the new one now. Never the password, the hash or the message.
+  'page_visibility.password_stored': {
+    kind: 'settings',
+    verb: (detail) => (detail['live'] === true ? 'Changed the password of' : 'Saved a password for'),
+    noun: 'a page',
+  },
   // CRM settings for leads (C9a): which card changed, never its values.
   'crm.settings.update': { kind: 'settings', verb: 'Changed', noun: 'the CRM settings' },
   'crm.stages.update': { kind: 'settings', verb: 'Changed', noun: 'the pipeline stages' },

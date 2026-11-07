@@ -1,7 +1,16 @@
+import { z } from 'zod';
 import type { DraftOp } from '@schemas/release';
-import type { PagePasswordWrite, PageVisibilityWrite } from '@schemas/visibility';
+import {
+  PagePasswordDraftSchema,
+  PagePasswordWriteSchema,
+  type PagePasswordWrite,
+  type PageVisibilityWrite,
+} from '@schemas/visibility';
 import type { AdminRouteContext } from '@/lib/admin/route';
+import { AuthorizationError } from '@/lib/authz/errors';
 import { DraftConflictError, OptimisticLockError, ValidationError } from '@/lib/admin/errors';
+import { syncVisibilityToEdge, visibilityPurgeTags } from '@/lib/admin/visibilitySync';
+import { purgeAfterSave } from '@/lib/http/purge';
 import {
   PAGE_VISIBILITY,
   VISIBILITY_ROW_COLUMNS,
@@ -14,12 +23,7 @@ import {
   type VisibilitySetting,
   type VisibilityTemplateItem,
 } from '@/lib/admin/pageVisibility';
-import {
-  RELEASE_NOTE_KEPT,
-  RELEASE_PASSWORD_ONLY,
-  RELEASE_PASSWORD_PENDING,
-} from '@/lib/admin/visibilityCopy';
-import { jsonEqual } from './deepEqual';
+import { HOME_REFUSAL } from '@/lib/admin/visibilityCopy';
 import {
   derivePatch,
   dropNoOps,
@@ -40,6 +44,7 @@ import {
 } from './drafts';
 import { pick, put, stagedSelect } from './staged';
 import { parseDraftSave } from './stagedSingleton';
+import { STALE_MODE_DETAIL } from './releasesOff';
 
 // The staged branch of page visibility (Admin v2 R14b; docs/admin-v2/releases.md §1.1, P-3).
 // SERVER ONLY (it reaches the registry). `page_visibility` joined the release registry in U14a
@@ -61,11 +66,10 @@ import { parseDraftSave } from './stagedSingleton';
 // The edge's snapshot is not rebuilt here: nothing live moved. A publish rebuilds it (R7's
 // after-effects), and the screen's "live site" line keeps comparing the LIVE settings.
 //
-// The password stays immediate (P-3: a secret; 0061 exempts `password_version`): with releases
-// on the password door may change the password of a page that already asks for one, with its
-// message unchanged and nothing pending on the setting, which moves only the exempt column and
-// so passes the guard. Anything else about a password needs a release that can carry a secret,
-// which none can yet (R14B.md, blocker B1).
+// The password itself stays immediate (P-3: a secret; 0061 exempts `password_version`), and no
+// release carries it. With releases on the password door (Admin v2 R14e, owner item B1 option b)
+// stores the secret at once and stages the mode and the message like any other setting; the page
+// asks for the password once that change is published (stagedPasswordWrite, below).
 
 type Row = Record<string, unknown>;
 type Ctx = AdminRouteContext<unknown>;
@@ -234,12 +238,28 @@ export async function stagedVisibilityWrite(
   ctx: Ctx,
   raw: unknown,
 ): Promise<StagedVisibilityAnswer> {
-  const { sb, auth, audit } = ctx;
   const { payload, ref } = parseDraftSave<PageVisibilityWrite>(PAGE_VISIBILITY.WriteSchema, raw);
-  const target = await checkVisibilityWrite(sb, auth, payload);
+  const target = await checkVisibilityWrite(ctx.sb, ctx.auth, payload);
   const live = await readLive(ctx, payload.target);
   const draft = await loadVisibilityDraft(ctx, live, payload.target);
+  await assertNamed(ctx, live, draft, ref, payload.version);
+  // A full replace: the save alone, its target always kept.
+  const stored = mergePayload(null, payload, entry());
+  return answer(live, await stageSetting(ctx, target, live, draft, stored));
+}
 
+/**
+ * The pending change a save must name, as every staged editor names it: a change held by a
+ * scheduled release cannot move; a pending change must be the one the screen read; a change the
+ * screen names that is gone was published or discarded; with none, the live version is checked.
+ */
+async function assertNamed(
+  ctx: Ctx,
+  live: Row | null,
+  draft: StoredDraft | null,
+  ref: { draftId: string; draftVersion: number } | null,
+  version: number,
+): Promise<void> {
   if (draft) {
     if (draft.release_id !== null)
       throw new DraftConflictError('scheduled', PAGE_VISIBILITY.entity);
@@ -247,17 +267,32 @@ export async function stagedVisibilityWrite(
       throw new DraftConflictError('draft-conflict', PAGE_VISIBILITY.entity);
     }
   } else if (ref) {
-    const published = await draftWasPublished(sb, auth, ref.draftId);
+    const published = await draftWasPublished(ctx.sb, ctx.auth, ref.draftId);
     throw new DraftConflictError(
       published ? 'draft-published' : 'draft-discarded',
       PAGE_VISIBILITY.entity,
       live,
     );
-  } else if ((live ? live['version'] : 0) !== payload.version) {
+  } else if ((live ? live['version'] : 0) !== version) {
     // The legacy save's rule: the version the drawer read (0 while there is no row).
     throw new OptimisticLockError(PAGE_VISIBILITY.table);
   }
+}
 
+/**
+ * Stages one setting as its target's full replace, `stored` being the payload as the draft keeps
+ * it: no row and "visible to everyone", or a change equal to live, stages nothing (and discards a
+ * pending change it replaces); otherwise the pending change is written and audited (the mode and
+ * field names only). Returns the pending change, or null when nothing is pending.
+ */
+async function stageSetting(
+  ctx: Ctx,
+  target: VisibilitySaveResult['target'],
+  live: Row | null,
+  draft: StoredDraft | null,
+  stored: Row,
+): Promise<VisibilityPending | null> {
+  const { sb, auth, audit } = ctx;
   const e = entry();
   const op: DraftOp = live ? 'update' : 'create';
   const discard = async (reason: string) => {
@@ -277,13 +312,11 @@ export async function stagedVisibilityWrite(
     });
   };
 
-  if (op === 'create' && payload.mode === 'public') {
+  if (op === 'create' && stored['mode'] === 'public') {
     // No row is "visible to everyone": nothing to publish.
     await discard('no-op');
-    return answer(null, null);
+    return null;
   }
-  // A full replace: the save alone, its target always kept.
-  const stored = mergePayload(null, payload, e);
   const derived = derivePatch(e, op, stored);
   let changed = derived.patch;
   const liveNow = live ? inOneSpelling(live) : null;
@@ -292,7 +325,7 @@ export async function stagedVisibilityWrite(
     if (!remaining) {
       // The save equals live: nothing is pending.
       await discard('no-op');
-      return answer(live, null);
+      return null;
     }
     changed = remaining;
   }
@@ -317,40 +350,106 @@ export async function stagedVisibilityWrite(
       action: 'page_visibility.draft_save',
       entityType: at.entityType,
       entityId: at.entityId,
-      detail: { op, mode: payload.mode, fields: write.fields, ...at.detail },
+      detail: { op, mode: stored['mode'], fields: write.fields, ...at.detail },
     });
   }
-  return answer(live, pendingOf(live, saved));
+  return pendingOf(live, saved);
 }
 
-/** A message as stored or sent, compared as the screen reads it (absent and blank alike). */
-function noteKey(value: unknown): string {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return '{}';
-  const raw = value as Row;
-  const out: Row = {};
-  for (const lang of ['en', 'ar'] as const) {
-    const line = raw[lang];
-    if (typeof line === 'string' && line.trim().length > 0) out[lang] = line;
-  }
-  return JSON.stringify(out);
+// ---- the password door with releases on (Admin v2 R14e, owner item B1 option b) --------------
+
+/** What `public.store_page_password` answers: whether the live gate took the new password. */
+const StoredAnswerSchema = z.object({
+  live: z.boolean(),
+  passwordVersion: z.number().int().nullable(),
+});
+
+/** What the door answers with releases on: a staged answer that may have reached the edge. */
+export interface StagedPasswordAnswer extends Omit<StagedVisibilityAnswer, 'kvSynced'> {
+  kvSynced: boolean;
+  /** The page asked for a password on the live site, and asks for the new one now. */
+  passwordLive: boolean;
 }
 
 /**
- * Release mode: may the password door change this page's password now? Only a page that asks
- * for one on the live site, with nothing pending on its setting and its message unchanged: then
- * `public.set_page_password` moves only the exempt `password_version` (and the secret, which is
- * not a registry table), so 0066's guard lets it through. Anything else is refused in words
- * before the database would refuse it in its own.
+ * POST /api/admin/page-visibility/password with releases on, after the route's live recheck. A
+ * secret is immediate and no release carries one (P-3), so the door splits the change in two:
+ *   1. the secret, at once: `public.store_page_password` (a definer: the live profile, its own
+ *      tenant, releases on) stores its bcrypt hash and nothing else, but for the exempt
+ *      `password_version` of a page that already asks for a password live, which then asks for
+ *      the new one (every unlock cookie of the old one stops verifying);
+ *   2. the mode and the message, staged as the page's visibility change (a full replace), which
+ *      put the page behind the stored password when it is published. Until then the hash is
+ *      inert: `page_password_check` admits no one to a page whose live mode is not password.
+ * The checks of a staged save come first (the page, the homepage, the change named, a scheduled
+ * one refused, the live version), so a refused request stores nothing. The password goes from the
+ * body to the database and nowhere else: not into the draft (`PagePasswordDraftSchema` has no key
+ * for it), the audit row, the answer or a log.
  */
-export async function assertPasswordImmediate(ctx: Ctx, input: PagePasswordWrite): Promise<void> {
-  const live = await readLive(ctx, { pageId: input.pageId });
-  if (!live || live['mode'] !== 'password') {
-    throw new ValidationError(RELEASE_PASSWORD_ONLY, 'mode');
+export async function stagedPasswordWrite(ctx: Ctx, raw: unknown): Promise<StagedPasswordAnswer> {
+  const { sb, auth } = ctx;
+  const { payload: input, ref } = parseDraftSave<PagePasswordWrite>(PagePasswordWriteSchema, raw);
+  const pageTarget = { pageId: input.pageId };
+  // The save's own rules: the page is this tenant's, and the homepage stays visible (the rule
+  // reads only "not public"; a password page has no redirect or days).
+  const target = await checkVisibilityWrite(sb, auth, {
+    target: pageTarget,
+    mode: 'hidden',
+    redirectPageId: null,
+    hideFrom: null,
+    showOn: null,
+    version: input.version,
+  });
+  const before = await readLive(ctx, pageTarget);
+  const draft = await loadVisibilityDraft(ctx, before, pageTarget);
+  await assertNamed(ctx, before, draft, ref, input.version);
+
+  // 1. The secret, at once.
+  const { data, error } = await sb.rpc('store_page_password', {
+    p_page_id: input.pageId,
+    p_password: input.password,
+  });
+  if (error) {
+    // 42501 is the function's own live check (a demoted token), 22023 its argument checks,
+    // 55000 releases switched off since the flag was read, 23514 the homepage.
+    if (error.code === '42501') throw new AuthorizationError('maintenance.manage', 'live check');
+    if (error.code === '22023') {
+      throw new ValidationError('That password is too short or too long.', 'password');
+    }
+    if (error.code === '55000') {
+      throw new DraftConflictError('releases-off', PAGE_VISIBILITY.entity, null, STALE_MODE_DETAIL);
+    }
+    if (error.code === '23514') throw new ValidationError(HOME_REFUSAL, 'mode');
+    throw new Error(`store_page_password failed (${error.code ?? 'no code'})`);
   }
-  if (await loadVisibilityDraft(ctx, live, { pageId: input.pageId })) {
-    throw new ValidationError(RELEASE_PASSWORD_PENDING, 'mode');
+  const stored = StoredAnswerSchema.parse(data);
+
+  // 2. The mode and the message, staged against the row as it is now (its version moved where
+  //    the live gate took the password).
+  const live = stored.live ? await readLive(ctx, pageTarget) : before;
+  const { version: _version, ...change } = PagePasswordDraftSchema.parse({
+    target: pageTarget,
+    mode: 'password',
+    note: input.note,
+    version: 0,
+  });
+  const pending = await stageSetting(ctx, target, live, draft, change);
+
+  // 3. The edge, only where the live gate moved: its snapshot carries the version every unlock
+  //    cookie is signed over. A page newly behind a password changes nothing live yet.
+  let kvSynced = true;
+  let purgeTags: string[] = [];
+  if (stored.live && target.kind === 'page') {
+    kvSynced = (await syncVisibilityToEdge(sb, auth)).kvSynced;
+    purgeTags = visibilityPurgeTags({ kind: 'page', slug: target.slug });
+    await purgeAfterSave(auth.tenantId, purgeTags, 'visibility');
   }
-  if (!jsonEqual(noteKey(input.note), noteKey(live['note']))) {
-    throw new ValidationError(RELEASE_NOTE_KEPT, 'noteEn');
-  }
+  return {
+    setting: live ? settingOfRow(live) : null,
+    pending,
+    kvSynced,
+    purgeTags,
+    staged: true,
+    passwordLive: stored.live,
+  };
 }

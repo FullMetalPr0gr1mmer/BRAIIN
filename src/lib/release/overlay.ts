@@ -121,11 +121,13 @@ export function derivePatch(entry: RegistryEntry, op: DraftOp, payload: Payload)
       values = { ...defaults, ...values };
     }
   } else if (entry.kind === 'pageVisibility') {
-    // A full replace, as entity SEO's; the target is fixed once the row exists.
+    // A full replace, as entity SEO's; the target is fixed once the row exists. The list's save
+    // or, in password mode, the door's change: the mode and the message, never the secret
+    // (Admin v2 R14e; the apply refuses password mode where no hash is stored).
     const config = entry.pageVisibility!;
-    const write = config.WriteSchema.parse({ ...input, version: 0 });
+    const write = config.parseDraft({ ...input, version: 0 });
     parsed = withoutVersion(write);
-    values = { ...config.toRow(write), ...(op === 'create' ? config.target(write) : {}) };
+    values = { ...config.draftRow(write), ...(op === 'create' ? config.target(write) : {}) };
   } else {
     const config = entry.entitySeo!;
     const write = config.WriteSchema.parse({ ...input, version: 1 });
