@@ -1645,9 +1645,11 @@ select app.disable_releases('<tenant id>', '<operator profile id>', p_discard_pe
 From this switch on, an edit in a release-managed area (pages and sections, services, our work,
 collections, blog, navigation, the site identity, the forms, the header and loading screen, the
 template pages' shared text, SEO, redirects, themes, page visibility) is saved as an unpublished
-change and goes live only when someone publishes it. A page's password stays immediate (it can be
-changed at once only on a page that already asks for one; R14b), and so do maintenance, users,
-integrations, leads, job applications and media details. §6o says what the two functions
+change and goes live only when someone publishes it. A page's password is saved at once and no
+release ever carries it (R14e): on a page that already asks for one a new password works straight
+away, and putting a page behind one, with its message, waits for the publish like every other
+setting. Maintenance, users, integrations, leads, job applications and media details stay
+immediate too. §6o says what the two functions
 do; this section is the order to run them in. Nothing here is automated: the owner (or the
 operator the owner names) runs every step by hand. Owner item O-5 names the window, the operator
 and the fallback scheduler.
@@ -1659,7 +1661,10 @@ and the fallback scheduler.
    R14b: the release-mode create form (no per-item schedule), page visibility staged (before
    R14b the guard refused its saves once releases were on), and R14b's migration (the
    publishing and page-visibility guides for both modes; its number is the one the merge train
-   gave it). The switch itself needs only R11's (0112).
+   gave it), and R14e: page passwords in release mode (owner item B1; its migration stores a
+   password at once and lets a release write the message above the box), and R14d: the
+   release-mode fixes to the editors' saves found converting the last nine specs (no migration).
+   The switch itself needs only R11's (0112).
 2. **The required e2e job in release mode (R14c).** The owner's go for the switch-on is also the
    go for R14c, the CI change that seeds releases on and makes the required e2e job run every
    spec in release mode (the change list is in `docs/admin-v2/as-built/R14B.md`). It merges, and

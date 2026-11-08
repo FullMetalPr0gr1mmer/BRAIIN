@@ -5,7 +5,8 @@ import Note from '@/components/admin/kit/Note';
 import type { IconName } from '@/lib/admin/icons';
 import {
   APPLIES_WITHIN,
-  RELEASE_NOTE_KEPT,
+  RELEASE_PASSWORD_LIVE,
+  RELEASE_PASSWORD_STAGED,
   STAGED_APPLIES,
   HIDDEN_NOTE,
   HOME_REFUSAL,
@@ -93,6 +94,7 @@ export default function VisibilityDrawer({
   error,
   release = false,
   passwordOffered = true,
+  passwordLive = false,
   onClose,
   onApply,
 }: {
@@ -103,11 +105,15 @@ export default function VisibilityDrawer({
   /** Admin v2 R14b: the screen is in release mode (a save is a pending change). */
   release?: boolean;
   /**
-   * Admin v2 R14b: whether "Behind a password" is offered. Releases off, always (a page's
-   * drawer); in release mode only on a page that asks for one live with nothing pending, since
-   * a password is set at once (the screen's passwordOffered).
+   * Whether "Behind a password" is offered (the screen's passwordOffered): on a page, in both
+   * modes since Admin v2 R14e.
    */
   passwordOffered?: boolean;
+  /**
+   * Admin v2 R14e: the page asks for a password on the live site, so in release mode a new one
+   * works at once and only a new message waits for the publish.
+   */
+  passwordLive?: boolean;
   onClose: () => void;
   onApply: (draft: VisibilityDraft) => void;
 }) {
@@ -176,9 +182,13 @@ export default function VisibilityDrawer({
       {item && draft && (
         <div className="vis-drawer">
           <p className="admin-sub">
-            {release && draft.mode !== 'password' ? STAGED_APPLIES : APPLIES_WITHIN}
+            {release && !(draft.mode === 'password' && passwordLive)
+              ? STAGED_APPLIES
+              : APPLIES_WITHIN}
           </p>
-          {release && draft.mode === 'password' && <Note>{RELEASE_NOTE_KEPT}</Note>}
+          {release && draft.mode === 'password' ? (
+            <Note>{passwordLive ? RELEASE_PASSWORD_LIVE : RELEASE_PASSWORD_STAGED}</Note>
+          ) : null}
           {error && (
             <Note tone="err" role="alert">
               {error}

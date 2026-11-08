@@ -311,14 +311,15 @@ const SANCTIONED: readonly Sanction[] = [
     kinds: ['rpc'],
     via: 'rpc',
     why:
-      'the password door: a secret is immediate (P-3). With releases on it is reached only for a ' +
-      'page already behind a password, its message unchanged and nothing pending, which moves ' +
-      "only 0061's exempt password_version past the guard (R14b)",
+      'the password door with releases off. With them on the route hands the request to ' +
+      'stagedPasswordWrite (R14e) after the live recheck and never reaches here: the secret is ' +
+      'stored at once by public.store_page_password (which moves only the exempt ' +
+      'password_version), and the mode and the message are staged',
     guard: {
       file: 'src/pages/api/admin/page-visibility/password.ts',
-      // The person re-read first (§9 b), then only the immediate change (R14b review).
+      // The person re-read first (§9 b), then the staged branch, returned (R14b review, R14e).
       holds:
-        /if \(await ctx\.releasesEnabled\(\)\) \{\s*(?:\/\/[^\n]*\s*)*await liveRecheck\(auth\);\s*await assertPasswordImmediate\(ctx, input\);/,
+        /if \(await ctx\.releasesEnabled\(\)\) \{\s*(?:\/\/[^\n]*\s*)*await liveRecheck\(auth\);\s*return stagedPasswordWrite\(ctx, ctx\.input\);/,
     },
   },
   {

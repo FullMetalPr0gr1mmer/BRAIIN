@@ -2,7 +2,8 @@
 -- v2 R14b; its migration puts both through H11's catalog). Run with `supabase test db`.
 -- help_centre.test.sql and help_catalog.test.sql prove the guides' table, its RLS and the
 -- catalog; this file proves only what R14b's two puts leave:
---   1. the catalog holds each guide once, at revision 2, in its place, with its capabilities,
+--   1. the catalog holds each guide once, at revision 2 (page-visibility: 2 or later, R14e), in its
+--      place, with its capabilities,
 --      and with the words release mode adds;
 --   2. every tenant holds both as the catalog renders them, a tenant made after them included;
 --   3. a writer role reads its own tenant's copy, another tenant's admin reads none of it, and
@@ -43,9 +44,11 @@ select ok((select body #>> '{en,0,x}' like '%Until it is, what you save is what 
 select ok((select body #>> '{en,5,x}' like 'Save no longer changes the site.%'
              from app.help_guide_catalog where slug = 'saving-and-publishing'),
   'and what Save does once it is');
-select ok((select revision = 2 and sort_order = 105 and caps = array['maintenance.manage']
+-- R14e (page passwords in release mode) moved page-visibility on to revision 3; its own words
+-- are held by page_password_release.test.sql. This file holds what R14b put: at least that.
+select ok((select revision >= 2 and sort_order = 105 and caps = array['maintenance.manage']
              from app.help_guide_catalog where slug = 'page-visibility'),
-  'page-visibility is at revision 2, in its place (105), for maintenance.manage');
+  'page-visibility is at revision 2 or later, in its place (105), for maintenance.manage');
 select ok((select body #>> '{en,2,x}' like 'Once publishing in releases is switched on, a change here waits%'
              from app.help_guide_catalog where slug = 'page-visibility'),
   'it says a setting waits for a release once releases are on');

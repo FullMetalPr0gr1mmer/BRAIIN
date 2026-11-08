@@ -2,19 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIRoute } from 'astro';
 import { resetIds, T, type Db, type Row } from '../fixtures/stagedDb';
 import { auditsOf, callRoute, draftRow, liveWritesOf, makeDb } from '../fixtures/stagedRoute';
-import {
-  HOME_REFUSAL,
-  RELEASE_NOTE_KEPT,
-  RELEASE_PASSWORD_ONLY,
-  RELEASE_PASSWORD_PENDING,
-} from '@/lib/admin/visibilityCopy';
+import { HOME_REFUSAL } from '@/lib/admin/visibilityCopy';
 
 // Page visibility in release mode (Admin v2 R14b), through the real routes over the PostgREST
 // stand-in. `page_visibility` is a registry table guarded by 0066, so with releases on its
 // routes must stage: the list shows each setting's pending change, a save is a pending change
 // (a full replace keyed by its target), nothing live is written, synced or purged, and the
-// password door stays immediate only where 0066's guard lets it (a page already asking for
-// one, its message unchanged, nothing pending). Releases off, every route is what it was.
+// password door (Admin v2 R14e) stores the secret at once and stages the mode and the message,
+// the edge taking only a live gate's new version. Releases off, every route is what it was.
 
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
 vi.mock('@/lib/admin/liveRecheck', () => ({ liveRecheck: async () => undefined }));
@@ -337,60 +332,259 @@ describe('releases off: main’s path, and a save made in release mode is refuse
     expect(res.status).toBe(409);
     expect(rpcs('set_page_password')).toEqual([]);
   });
-});
 
-describe('the password door with releases on: immediate only where the guard lets it', () => {
-  const ask = async (over: Row = {}) =>
-    callRoute(db, (await password()).POST, 'POST', `${API}/password?staged=1`, {
-      body: { pageId: ABOUT, password: 'open sesame', note: { en: 'Ask us' }, version: 3, ...over },
-    });
-
-  beforeEach(() => {
-    db.rpc = (fn) => (fn === 'set_page_password' ? { data: null, error: null } : undefined);
-  });
-
-  it('a page not behind a password live: refused in words, the database never asked', async () => {
-    db.tables['page_visibility'] = [aboutRow()];
-    const res = await ask();
-    expect(res.status).toBe(422);
-    expect(JSON.stringify(res.body)).toContain(RELEASE_PASSWORD_ONLY);
+  it('the password door naming its pending change: 409 releases-off, not a 422 (R14e review)', async () => {
+    // The screen names the pending change in the body whenever the page has one. The strict
+    // schema refuses those keys, so the markers must be refused before the body is parsed.
+    for (const [url, mark] of [
+      [
+        `${API}/password?staged=1`,
+        { draftId: '77777777-7777-4777-8777-000000000001', draftVersion: 1 },
+      ],
+      [`${API}/password`, { draftId: '77777777-7777-4777-8777-000000000001', draftVersion: 1 }],
+      [`${API}/password`, { staged: true }],
+    ] as const) {
+      const res = await callRoute(db, (await password()).POST, 'POST', url, {
+        body: { pageId: ABOUT, password: 'open sesame', note: null, version: 0, ...mark },
+      });
+      expect([res.status, res.body['error']], JSON.stringify(res.body)).toEqual([
+        409,
+        'releases-off',
+      ]);
+    }
     expect(rpcs('set_page_password')).toEqual([]);
   });
+});
 
-  it('a page behind a password with a pending change: refused', async () => {
+describe('the password door with releases on: the secret at once, the mode and message staged (R14e)', () => {
+  const PASSWORD = 'open sesame';
+  const ask = async (over: Row = {}) =>
+    callRoute(db, (await password()).POST, 'POST', `${API}/password?staged=1`, {
+      body: { pageId: ABOUT, password: PASSWORD, note: { en: 'Ask us' }, version: 3, ...over },
+    });
+  const stores = () => rpcs('store_page_password');
+  /** The stand-in for public.store_page_password: the live gate moves where it asks for one. */
+  const storeAnswers = () => {
+    db.rpc = (fn, args) => {
+      if (fn !== 'store_page_password') return undefined;
+      const row = (db.tables['page_visibility'] ?? []).find(
+        (r) => r['page_id'] === args['p_page_id'] && r['mode'] === 'password',
+      );
+      if (!row) return { data: { live: false, passwordVersion: null }, error: null };
+      row['password_version'] = Number(row['password_version']) + 1;
+      row['version'] = Number(row['version']) + 1;
+      return { data: { live: true, passwordVersion: row['password_version'] }, error: null };
+    };
+  };
+  /** Every table the stand-in holds (drafts, audit rows, settings), as one text. */
+  const everyTable = () => JSON.stringify(db.tables);
+
+  beforeEach(storeAnswers);
+
+  it('a page not behind a password live: the secret stored, the mode and the message staged', async () => {
+    db.tables['page_visibility'] = [aboutRow()];
+    const res = await ask();
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(stores()).toHaveLength(1);
+    expect(stores()[0]!.values).toEqual({ p_page_id: ABOUT, p_password: PASSWORD });
+    // Nothing live moved, so nothing reaches the edge.
+    expect(liveWritesOf(db, 'page_visibility')).toEqual([]);
+    expect(edge).toEqual({ syncs: 0, purges: 0 });
+    const [d] = drafts();
+    expect(d).toMatchObject({ entity_type: 'page_visibility', entity_id: ABOUT_ROW, op: 'update' });
+    expect(d!['payload']).toEqual({
+      target: { pageId: ABOUT },
+      mode: 'password',
+      note: { en: 'Ask us' },
+      redirectPageId: null,
+      hideFrom: null,
+      showOn: null,
+    });
+    expect([...(d!['fields'] as string[])].sort()).toEqual(['hide_from', 'mode', 'note']);
+    expect(res.data).toMatchObject({
+      staged: true,
+      passwordLive: false,
+      kvSynced: true,
+      setting: { mode: 'hidden' },
+      pending: { op: 'update', setting: { mode: 'password', note: { en: 'Ask us' } } },
+    });
+    expect(auditsOf(db)).toEqual(['page_visibility.draft_save']);
+    // The password is in the call to the database and nowhere else: no draft, no audit row, no
+    // setting, no answer.
+    expect(everyTable()).not.toContain(PASSWORD);
+    expect(JSON.stringify(res.body)).not.toContain(PASSWORD);
+  });
+
+  it('a page with no setting: a pending create under a Worker id, keyed by its target', async () => {
+    const res = await ask({ pageId: CONTACT, version: 0, note: null });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const [d] = drafts();
+    expect(d).toMatchObject({ op: 'create', base: {}, base_version: null });
+    expect(d!['payload']).toMatchObject({
+      target: { pageId: CONTACT },
+      mode: 'password',
+      note: null,
+    });
+    expect(res.data).toMatchObject({ setting: null, pending: { op: 'create' } });
+    expect(everyTable()).not.toContain(PASSWORD);
+  });
+
+  it('a page behind a password live, its message kept: the new one works at once, nothing staged', async () => {
     db.tables['page_visibility'] = [
-      aboutRow({ mode: 'password', hide_from: null, note: { en: 'Ask us' } }),
+      aboutRow({ mode: 'password', hide_from: null, note: { en: 'Ask us' }, password_version: 4 }),
     ];
+    const res = await ask();
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(stores()).toHaveLength(1);
+    expect(drafts()).toEqual([]);
+    // The live gate's version moved, so the edge takes the snapshot the cookies are signed over.
+    expect(edge).toEqual({ syncs: 1, purges: 1 });
+    expect(res.data).toMatchObject({
+      passwordLive: true,
+      pending: null,
+      setting: { mode: 'password', passwordVersion: 5, version: 4 },
+    });
+    expect(auditsOf(db)).toEqual([]);
+  });
+
+  it('a page behind a password live with a new message: the password at once, the message staged', async () => {
+    db.tables['page_visibility'] = [
+      aboutRow({ mode: 'password', hide_from: null, note: { en: 'Ask us' }, password_version: 4 }),
+    ];
+    const res = await ask({ note: { en: 'Ask us first', ar: 'اسألنا' } });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const [d] = drafts();
+    expect(d!['fields']).toEqual(['note']);
+    // Staged against the row as the password left it.
+    expect(d).toMatchObject({ base: { note: { en: 'Ask us' } }, base_version: 4 });
+    expect(edge).toEqual({ syncs: 1, purges: 1 });
+    expect(res.data).toMatchObject({
+      passwordLive: true,
+      pending: { setting: { note: { en: 'Ask us first', ar: 'اسألنا' } } },
+    });
+  });
+
+  it('a live gate whose staging then fails: the edge already has the new version (R14e review)', async () => {
+    // The database committed the new password and its version; a concurrent save then makes the
+    // staging step fail. The edge must not keep the old version, or the old password's cookies
+    // would keep opening the page until the next sync.
+    db.tables['page_visibility'] = [
+      aboutRow({ mode: 'password', hide_from: null, note: { en: 'Ask us' }, password_version: 4 }),
+    ];
+    db.fail = (call) =>
+      call.kind === 'rpc' && call.name === 'write_drafts'
+        ? { code: 'XX000', message: 'write_drafts: the database is unwell' }
+        : null;
+    const res = await ask({ note: { en: 'Ask us first' } });
+    expect(res.status).toBe(500);
+    expect(stores()).toHaveLength(1);
+    expect(edge).toEqual({ syncs: 1, purges: 1 });
+  });
+
+  it('a page newly behind a password whose staging fails: nothing live moved, nothing synced', async () => {
+    db.tables['page_visibility'] = [aboutRow()];
+    db.fail = (call) =>
+      call.kind === 'rpc' && call.name === 'write_drafts'
+        ? { code: 'XX000', message: 'write_drafts: the database is unwell' }
+        : null;
+    const res = await ask();
+    expect(res.status).toBe(500);
+    expect(edge).toEqual({ syncs: 0, purges: 0 });
+  });
+
+  it('a pending change must be named, and a named one is replaced; the secret waits for the checks', async () => {
+    db.tables['page_visibility'] = [aboutRow()];
     db.tables['content_drafts'] = [
       draftRow({
         entity_type: 'page_visibility',
         entity_id: ABOUT_ROW,
-        payload: body({ mode: 'public' }),
+        payload: body({ mode: 'link' }),
+        base: { mode: 'hidden' },
+        base_version: 3,
       }),
     ];
-    const res = await ask();
-    expect(res.status).toBe(422);
-    expect(JSON.stringify(res.body)).toContain(RELEASE_PASSWORD_PENDING);
-    expect(rpcs('set_page_password')).toEqual([]);
+    const unnamed = await ask();
+    expect([unnamed.status, unnamed.body['error']]).toEqual([409, 'draft-conflict']);
+    expect(stores()).toEqual([]);
+    const named = await ask({ draftId: '77777777-7777-4777-8777-000000000001', draftVersion: 1 });
+    expect(named.status, JSON.stringify(named.body)).toBe(200);
+    expect(stores()).toHaveLength(1);
+    expect(drafts()[0]).toMatchObject({ version: 2, payload: { mode: 'password' } });
   });
 
-  it('a new message: refused, the message stays as it is', async () => {
-    db.tables['page_visibility'] = [
-      aboutRow({ mode: 'password', hide_from: null, note: { en: 'Ask us' } }),
+  it('a change a scheduled release holds cannot move: 409, nothing stored', async () => {
+    db.tables['page_visibility'] = [aboutRow()];
+    db.tables['content_drafts'] = [
+      draftRow({
+        entity_type: 'page_visibility',
+        entity_id: ABOUT_ROW,
+        payload: body({ mode: 'link' }),
+        release_id: '88888888-8888-4888-8888-000000000001',
+      }),
     ];
-    const res = await ask({ note: { en: 'Ask us first' } });
-    expect(res.status).toBe(422);
-    expect(JSON.stringify(res.body)).toContain(RELEASE_NOTE_KEPT);
-    expect(rpcs('set_page_password')).toEqual([]);
+    const res = await ask({ draftId: '77777777-7777-4777-8777-000000000001', draftVersion: 1 });
+    expect([res.status, res.body['error']]).toEqual([409, 'scheduled']);
+    expect(stores()).toEqual([]);
   });
 
-  it('a new password for a page that asks for one, the message unchanged: set at once', async () => {
-    db.tables['page_visibility'] = [
-      aboutRow({ mode: 'password', hide_from: null, note: { en: 'Ask us' } }),
-    ];
-    const res = await ask();
-    expect(res.status, JSON.stringify(res.body)).toBe(200);
-    expect(rpcs('set_page_password')).toHaveLength(1);
+  it('the live version is checked with nothing pending: a stale drawer is a 409, nothing stored', async () => {
+    db.tables['page_visibility'] = [aboutRow()];
+    const res = await ask({ version: 2 });
+    expect(res.status).toBe(409);
+    expect(stores()).toEqual([]);
     expect(drafts()).toEqual([]);
+  });
+
+  it('the homepage and a short password are refused before anything is stored', async () => {
+    const home = await ask({ pageId: HOME, version: 0 });
+    expect(home.status).toBe(422);
+    expect(JSON.stringify(home.body)).toContain(HOME_REFUSAL);
+    const short = await ask({ password: 'short' });
+    expect(short.status).toBe(422);
+    expect(stores()).toEqual([]);
+    expect(drafts()).toEqual([]);
+  });
+
+  it('the database’s own refusals: a stale token is a 403, releases switched off a 409, nothing staged', async () => {
+    db.tables['page_visibility'] = [aboutRow()];
+    db.rpc = (fn) =>
+      fn === 'store_page_password'
+        ? { data: null, error: { code: '42501', message: 'store_page_password: no' } }
+        : undefined;
+    const stale = await ask();
+    expect(stale.status).toBe(403);
+    db.rpc = (fn) =>
+      fn === 'store_page_password'
+        ? { data: null, error: { code: '55000', message: 'releases are off' } }
+        : undefined;
+    const off = await ask();
+    expect([off.status, off.body['error']]).toEqual([409, 'releases-off']);
+    // The page gone since it was read (P0002) is a 404, never the password's own 422 (R14e
+    // review): only the byte limits are 22023.
+    db.rpc = (fn) =>
+      fn === 'store_page_password'
+        ? { data: null, error: { code: 'P0002', message: 'store_page_password: no such page' } }
+        : undefined;
+    const gone = await ask();
+    expect(gone.status).toBe(404);
+    expect(JSON.stringify(gone.body)).not.toContain('too short');
+    db.rpc = (fn) =>
+      fn === 'store_page_password'
+        ? { data: null, error: { code: '22023', message: 'a password is 8 to 72 bytes' } }
+        : undefined;
+    const length = await ask();
+    expect(length.status).toBe(422);
+    expect(JSON.stringify(length.body)).toContain('too short or too long');
+    expect(drafts()).toEqual([]);
+    expect(auditsOf(db)).toEqual([]);
+  });
+
+  it('the list’s PUT still refuses the password mode in release mode (it has no secret to set)', async () => {
+    const res = await callRoute(db, (await screen()).PUT, 'PUT', API, {
+      body: { ...body({ mode: 'password' }), staged: true },
+    });
+    expect(res.status).toBe(422);
+    expect(drafts()).toEqual([]);
+    expect(stores()).toEqual([]);
   });
 });

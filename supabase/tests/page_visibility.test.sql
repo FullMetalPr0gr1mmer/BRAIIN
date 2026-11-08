@@ -155,10 +155,10 @@ select is(
      from pg_trigger t
     where t.tgrelid = 'public.page_visibility'::regclass and not t.tgisinternal),
   'page_visibility__release_guard,page_visibility_actor,page_visibility_guard,'
-  'page_visibility_password,page_visibility_release_capture,page_visibility_snapshot,'
+  'page_visibility_note_guard,page_visibility_password,page_visibility_release_capture,page_visibility_snapshot,'
   'page_visibility_updated_at,page_visibility_version',
   'the actor, guard, stamp and version triggers, history, release capture, (0061) the '
-  'password sync and (0066) the release guard');
+  'password sync, (0066) the release guard and (R14e) the message guard');
 select ok(
   exists (select 1 from app.release_entities
            where entity_type = 'page_visibility' and table_name = 'page_visibility'

@@ -1,10 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import {
+  PagePasswordDraftSchema,
   PageVisibilityWriteSchema,
   riyadhDayOf,
   riyadhMidnight,
   type PageNote,
+  type PagePasswordDraft,
   type PagePasswordWrite,
   type PageVisibilityWrite,
 } from '@schemas/visibility';
@@ -37,6 +39,16 @@ const MODE_KEYS = {
   showOn: 'show_on',
 } as const;
 
+/** The mode and its extras, the dates as their Riyadh midnights. */
+function visibilityToRow(input: Pick<PageVisibilityWrite, keyof typeof MODE_KEYS>) {
+  return {
+    mode: input.mode,
+    redirect_page_id: input.redirectPageId,
+    hide_from: input.hideFrom ? riyadhMidnight(input.hideFrom) : null,
+    show_on: input.showOn ? riyadhMidnight(input.showOn) : null,
+  };
+}
+
 /**
  * The entity as the release registry binds it (src/lib/release/registry.ts, Admin v2 R2's
  * contract): its table, capability, schema, and the payload → column mapping a save and a
@@ -50,12 +62,30 @@ export const PAGE_VISIBILITY = {
   readCaps: ['maintenance.manage'],
   WriteSchema: PageVisibilityWriteSchema,
   /** The mode and its extras, the dates as their Riyadh midnights. */
-  toRow: (input: Pick<PageVisibilityWrite, keyof typeof MODE_KEYS>) => ({
-    mode: input.mode,
-    redirect_page_id: input.redirectPageId,
-    hide_from: input.hideFrom ? riyadhMidnight(input.hideFrom) : null,
-    show_on: input.showOn ? riyadhMidnight(input.showOn) : null,
-  }),
+  toRow: visibilityToRow,
+  /**
+   * A stored visibility change, as a release reads it (Admin v2 R14e): the list's save
+   * (`WriteSchema`, three modes), or the password door's change in password mode
+   * (`PagePasswordDraftSchema`: the mode and the message, never the secret, which the door
+   * stores at once). UNTRUSTED input, parsed whole either way.
+   */
+  parseDraft: (input: unknown): PageVisibilityWrite | PagePasswordDraft =>
+    input !== null &&
+    typeof input === 'object' &&
+    (input as Record<string, unknown>)['mode'] === 'password'
+      ? PagePasswordDraftSchema.parse(input)
+      : PageVisibilityWriteSchema.parse(input),
+  /** A parsed change → its columns: `toRow`, with the message in password mode (a full replace). */
+  draftRow: (input: PageVisibilityWrite | PagePasswordDraft) =>
+    input.mode === 'password'
+      ? {
+          mode: input.mode,
+          note: input.note,
+          redirect_page_id: null,
+          hide_from: null,
+          show_on: null,
+        }
+      : visibilityToRow(input),
   /** The target's column, written only on the insert. */
   target: (input: Pick<PageVisibilityWrite, 'target'>) =>
     'pageId' in input.target
@@ -68,8 +98,9 @@ export const PAGE_VISIBILITY = {
   /**
    * Columns a release may carry that no payload key of this schema writes. `note`, the
    * password gate's message, is written by the password door (`savePagePassword`, which has
-   * its own schema) because setting it is setting a password; a release still stages it,
-   * as 0061's registry row says.
+   * its own schema) because setting it is setting a password; with releases on the door stages
+   * it as part of its password-mode change (`parseDraft`, Admin v2 R14e), as 0061's registry
+   * row says. A restore never brings it back (rowPayload.ts).
    */
   restoreOnlyColumns: ['note'] as readonly string[],
   /**

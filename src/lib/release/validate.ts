@@ -20,7 +20,7 @@ import {
   sectionAnchorQuery,
   sectionPageQuery,
 } from '@/lib/admin/resources/sections';
-import { HOME_REFUSAL } from '@/lib/admin/visibilityCopy';
+import { HOME_REFUSAL, RELEASE_PASSWORD_MISSING } from '@/lib/admin/visibilityCopy';
 import { HOME_SLUG } from '@/lib/visibility/routes';
 import { serviceClient } from '@/lib/supabase/server';
 import { requiredCaps, waitingFor } from './caps';
@@ -857,9 +857,28 @@ async function rulesOf(
     if (pageId && merged['redirect_page_id'] === pageId) {
       throw new ValidationError('A page cannot send its visitors to itself.', 'redirectPageId');
     }
+    // A page goes behind a password only where one is stored (Admin v2 R14e): no release carries
+    // the secret, the password door stores it at once. The database refuses the same thing at
+    // the apply (0061's sync trigger); this says it first, in words.
+    if (typeof pageId === 'string' && merged['mode'] === 'password') {
+      if (!(await passwordStored(ctx.sb, pageId))) {
+        throw new ValidationError(RELEASE_PASSWORD_MISSING, 'mode');
+      }
+    }
   }
   // The singletons: their rules are the schema's (step 4); the job-application switch never
   // travels in a release (an immediate column).
+}
+
+/**
+ * Whether a password is stored for a page (`public.page_password_stored`, R14e: a definer that
+ * answers a live Admin or Developer of the page's tenant only, never the hash). Asked as the
+ * person publishing, who holds `maintenance.manage` (step 2 checked it).
+ */
+async function passwordStored(sb: SupabaseClient, pageId: string): Promise<boolean> {
+  const { data, error } = await sb.rpc('page_password_stored', { p_page_id: pageId });
+  if (error) throw new Error(`page_password_stored failed (${error.code ?? 'no code'})`);
+  return data === true;
 }
 
 /** Warnings: a published service whose discipline the release leaves unpublished. */

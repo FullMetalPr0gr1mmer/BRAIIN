@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import {
   CONFIRM_SUB,
-  RELEASE_PASSWORD_ONLY,
+  RELEASE_PASSWORD_STAGED,
   STAGED_CONFIRM_SUB,
   stagedSaved,
 } from '@/lib/admin/visibilityCopy';
@@ -25,17 +25,15 @@ import { SKIP_REASON, authFile, releasesOn, staffEnv } from './staff';
 // Both modes (Admin v2 R14b: page visibility stages with releases on). Each setting this spec
 // saves is a pending change, published right after, alone (its own setting only:
 // releaseSteps.ts), before the public site is read; the screen's confirm and toast say so in
-// their release-mode words (visibilityCopy.ts). A page newly behind a password cannot be set
-// while releases are on (a secret no release carries yet, blocker B1 in
-// docs/admin-v2/as-built/R14B.md): those three tests skip in release mode with that reason, and
-// the refusal itself is tested instead.
+// their release-mode words (visibilityCopy.ts). A page's password (Admin v2 R14e, owner item B1
+// option b) is stored at once and its mode and message staged: the password tests run in both
+// modes, publishing the page's change before the gate is read, and a release-mode test holds the
+// stored password inert (the page open, the unlock refused) until that change is published.
 
 test.skip(!staffEnv(), SKIP_REASON);
 test.describe.configure({ mode: 'serial' });
 
 const VISIBILITY = [{ entityType: 'page_visibility' }] as const;
-const PASSWORD_GATE_B1 =
-  'with releases on a page cannot newly go behind a password (R14B blocker B1: a secret no release carries yet); the refusal is tested instead';
 test.use({ storageState: authFile('admin'), contextOptions: { reducedMotion: 'reduce' } });
 
 const API = '/api/admin/page-visibility';
@@ -412,22 +410,37 @@ test.describe('as developer', () => {
   });
 });
 
-/** Puts one page behind a password (Admin v2 U14b): its own door, never the list's PUT. */
+/**
+ * Puts one page behind a password (Admin v2 U14b): its own door, never the list's PUT. With
+ * releases on (R14e) the password is stored at once and the mode and the message are the page's
+ * pending change, named and marked as the screen sends them, then published alone (unless
+ * `publish` is false), so the public site answers for it as it does with releases off.
+ */
 async function setPassword(
   page: Page,
   slug: string,
   password: string,
   note: { en?: string; ar?: string } | null = null,
   expectStatus = 200,
+  publish = true,
 ) {
   const current = await list(page.request);
   const item = current.pages.find((p) => p.slug === slug);
   expect(item, slug).toBeTruthy();
-  const res = await page.request.post(`${API}/password`, {
+  const res = await page.request.post(`${API}/password${releasesOn() ? '?staged=1' : ''}`, {
     headers: { 'x-csrf-token': await csrf(page), origin: new URL(page.url()).origin },
-    data: { pageId: item!.id, password, note, version: item!.setting?.version ?? 0 },
+    data: {
+      pageId: item!.id,
+      password,
+      note,
+      version: item!.setting?.version ?? 0,
+      ...(releasesOn() && item!.pending
+        ? { draftId: item!.pending.draftId, draftVersion: item!.pending.draftVersion }
+        : {}),
+    },
   });
   expect(res.status(), `POST ${API}/password ${slug}: ${await res.text()}`).toBe(expectStatus);
+  if (res.status() === 200 && publish) await publishSetting(page, { slug });
   return { res, pageId: item!.id! };
 }
 
@@ -445,18 +458,41 @@ test.describe('behind a password (U14b)', () => {
   const PASSWORD = 'open-sesame-77';
   const NOTE = { en: 'Ask the studio for the password.', ar: 'اطلب كلمة المرور من الاستوديو.' };
 
-  test('releases on: a page newly behind a password is refused in words, on the screen and the API', async ({
+  test('releases on: the stored password stays shut away until the change is published', async ({
     page,
+    request,
+    baseURL,
   }) => {
-    test.skip(!releasesOn(), 'releases are off: the password door sets a new gate at once');
-    const { res } = await setPassword(page, 'about', PASSWORD, NOTE, 422);
-    expect(JSON.stringify(await res.json())).toContain(RELEASE_PASSWORD_ONLY);
+    test.skip(!releasesOn(), 'releases are off: the password door sets the gate at once');
+    const origin = new URL(baseURL!).origin;
+    const { res } = await setPassword(page, 'about', PASSWORD, NOTE, 200, false);
+    const body = (await res.json()) as { data: { pending: Pending | null; staged?: true } };
+    expect(body.data.staged).toBe(true);
+    expect(body.data.pending, 'the mode and the message wait as the page change').toBeTruthy();
+    expect(JSON.stringify(body)).not.toContain(PASSWORD);
+    // Nothing live moved: the page opens as before, and the unlock refuses it. The 400 comes from
+    // the unlock route's own check of the edge snapshot (the page asks for no password there),
+    // before the database is asked; the database's half, page_password_check admitting no one
+    // to a page whose live mode is not password, is held by pgTAP
+    // (page_password_release.test.sql, the r14e_check assertions).
+    const open = await answer(request, '/about');
+    expect(open.status).toBe(200);
+    expect(open.body).not.toContain('action="/api/page-access"');
+    expect((await unlock(request, origin, '/about', PASSWORD)).status).toBe(400);
+    // The screen shows the change it waits for, in the screen's words.
     await page.goto('/admin/visibility', { waitUntil: 'networkidle' });
+    const row = page.locator('.vis-row', { hasText: 'About' }).first();
+    await expect(row).toContainText('Password');
+    await expect(row).toContainText(PENDING_WORDS.changed);
     await page.getByRole('button', { name: 'Change who can see About', exact: true }).click();
     const drawer = page.getByRole('dialog', { name: 'Who can see About?' });
-    await expect(drawer).toBeVisible();
-    await expect(drawer.getByRole('radio', { name: /Behind a password/ })).toHaveCount(0);
+    await expect(drawer).toContainText(RELEASE_PASSWORD_STAGED);
     await drawer.getByRole('button', { name: 'Cancel' }).click();
+    // Thrown away, the page stays open and the unlock still refuses (the snapshot again; the
+    // hash a discard leaves behind is held inert, and out of a direct write's reach, by pgTAP).
+    await discardDrafts(VISIBILITY);
+    expect((await answer(request, '/about')).status).toBe(200);
+    expect((await unlock(request, origin, '/about', PASSWORD)).status).toBe(400);
   });
 
   test('the gate, the unlock, and the words that stay closed until it', async ({
@@ -465,7 +501,6 @@ test.describe('behind a password (U14b)', () => {
     browser,
     baseURL,
   }) => {
-    test.skip(releasesOn(), PASSWORD_GATE_B1);
     const origin = new URL(baseURL!).origin;
     const openHtml = (await answer(request, '/about')).body;
     const { pageId } = await setPassword(page, 'about', PASSWORD, NOTE);
@@ -544,7 +579,8 @@ test.describe('behind a password (U14b)', () => {
 
       // 8. A new password ends the old unlock: the visitor who still holds the cookie minted
       //    under the old version is shown the gate again once the edge has the new one.
-      await setPassword(page, 'about', 'another-password-9');
+      // The same message, so with releases on nothing waits: a new password is immediate.
+      await setPassword(page, 'about', 'another-password-9', NOTE);
       await expect
         .poll(async () => (await answer(visit, '/about')).status, {
           message: 'the old cookie stops opening the page',
@@ -566,7 +602,6 @@ test.describe('behind a password (U14b)', () => {
     browser,
     baseURL,
   }) => {
-    test.skip(releasesOn(), PASSWORD_GATE_B1);
     await setPassword(page, 'about', PASSWORD, NOTE);
     const visitor = await browser.newContext({ baseURL: baseURL! });
     const visiting = await visitor.newPage();
@@ -583,7 +618,6 @@ test.describe('behind a password (U14b)', () => {
   test('the drawer asks for a password, keeps it out of the markup, and refuses the homepage', async ({
     page,
   }) => {
-    test.skip(releasesOn(), PASSWORD_GATE_B1);
     // The page's title is the seeded "Contact us" (supabase/seed-data/20-pages.json), and the
     // row button, the drawer and the toast all name it whole.
     await page.goto('/admin/visibility', { waitUntil: 'networkidle' });
@@ -612,15 +646,24 @@ test.describe('behind a password (U14b)', () => {
       'password',
     );
 
+    if (releasesOn()) await expect(drawer).toContainText(RELEASE_PASSWORD_STAGED);
     await apply.click();
-    await page
-      .getByRole('dialog', { name: 'Behind a password?' })
-      .getByRole('button', { name: 'Apply change' })
-      .click();
+    const confirm = page.getByRole('dialog', { name: 'Behind a password?' });
+    // Release mode: Contact does not ask for a password live, so the gate waits for the publish.
+    await expect(confirm).toContainText(releasesOn() ? STAGED_CONFIRM_SUB : CONFIRM_SUB);
+    await confirm.getByRole('button', { name: 'Apply change' }).click();
     await expect(page.locator('#admin-toasts')).toContainText(
-      'Contact us now asks for a password.',
+      releasesOn() ? stagedSaved('Contact us') : 'Contact us now asks for a password.',
     );
     await expect(page.locator('.vis-row', { hasText: 'Contact' })).toContainText('Password');
+    if (releasesOn()) {
+      await publishSetting(page, { slug: 'contact' });
+      // Published from outside this screen: read it again.
+      await page.reload({ waitUntil: 'networkidle' });
+      await expect(page.locator('.vis-row', { hasText: 'Contact' })).not.toContainText(
+        PENDING_WORDS.changed,
+      );
+    }
     // Reopened, the field is empty again: nothing can read a password back (0061).
     await page.getByRole('button', { name: 'Change who can see Contact us', exact: true }).click();
     await expect(drawer.getByLabel('Password', { exact: true })).toHaveValue('');
@@ -645,6 +688,7 @@ test.describe('behind a password (U14b)', () => {
       .getByRole('button', { name: 'Apply change' })
       .click();
     await expect(page.locator('.vis-row', { hasText: 'Contact' })).toContainText('Visible');
+    await publishSetting(page, { slug: 'contact' });
   });
 
   test('a template is never offered a password, in either layer', async ({ page }) => {

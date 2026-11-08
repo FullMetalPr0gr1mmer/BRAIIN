@@ -20,6 +20,7 @@ import {
 } from '@schemas/release';
 import type { AuthContext } from '@/lib/auth/types';
 import { writeSystemLog } from '@/lib/data/systemLog';
+import { RELEASE_PASSWORD_MISSING } from '@/lib/admin/visibilityCopy';
 import { serviceClient } from '@/lib/supabase/server';
 import { afterPublish } from './afterEffects';
 import { ReleaseRefusal, type CheckedItem } from './validate';
@@ -123,6 +124,10 @@ export function dbIssue(
   },
   item: CheckedItem | undefined,
 ): ReleaseIssue {
+  // A page put behind a password none was stored for (0061's sync trigger, Admin v2 R14e).
+  if (err.constraint === 'page_visibility_password_required') {
+    return { code: 'refused', message: RELEASE_PASSWORD_MISSING, field: 'mode' };
+  }
   const resource = item?.entry.resource;
   const named = err.constraint ? resource?.constraintFields?.[err.constraint] : undefined;
   if (named) {

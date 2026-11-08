@@ -141,5 +141,25 @@ export const PagePasswordWriteSchema = z
   .strict();
 export type PagePasswordWrite = z.infer<typeof PagePasswordWriteSchema>;
 
+/**
+ * A page's visibility change in password mode, as a release carries it (Admin v2 R14e): what the
+ * password door stages with releases on, next to the secret it stores at once. A page target only
+ * (a template takes public or hidden), the message, and no redirect or days. There is no password
+ * here and no key that could hold one: a release never carries the secret (P-3), and a page goes
+ * behind it only if the database holds a hash for it when the change is published.
+ */
+export const PagePasswordDraftSchema = z
+  .object({
+    target: z.object({ pageId: z.string().uuid() }).strict(),
+    mode: z.literal('password'),
+    note: PageNoteSchema.nullable().default(null),
+    redirectPageId: z.null().default(null),
+    hideFrom: z.null().default(null),
+    showOn: z.null().default(null),
+    version: z.number().int().min(0),
+  })
+  .strict();
+export type PagePasswordDraft = z.infer<typeof PagePasswordDraftSchema>;
+
 /** What the unlock form posts (src/pages/api/page-access.ts). Never logged, never echoed. */
 export const PAGE_ACCESS_FIELDS = { page: 'page', next: 'next', password: 'password' } as const;
