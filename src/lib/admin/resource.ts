@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { ContentStatusSchema, type ContentStatus } from '@schemas/primitives';
-import { ListQuerySchema } from '@schemas/admin';
+import { ListQuerySchema, SORT_ORDER_MAX } from '@schemas/admin';
 import type { AuthContext } from '@/lib/auth/types';
 import { assertCap, type Access, type Capability } from '@/lib/authz/matrix';
 import { defineAdminRoute, json } from './route';
@@ -615,7 +615,11 @@ export function reorderRoute(config: ResourceConfig): APIRoute {
               .string()
               .uuid()
               .transform((id) => id.toLowerCase()),
-            sortOrder: z.number().int(),
+            // The bounds every other write of a sort order holds (SortOrderSchema). Unbounded,
+            // a move wrote any number live while release mode, which stages it through the
+            // entity's schema, refused it with a 422 (the R14a rehearsal's reorder.e2e): one rule
+            // in both modes, so no move stores a number the release could not carry.
+            sortOrder: z.number().int().min(-SORT_ORDER_MAX).max(SORT_ORDER_MAX),
           }),
         )
         .min(1)
