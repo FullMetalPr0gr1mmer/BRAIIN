@@ -44,6 +44,17 @@ export function steadyGreeting(text: string): string {
  * (the head, the filters, the kind chips) is the seed's and the code's, and stays in the picture.
  */
 
+/**
+ * The admin's dates and relative times, wherever they are printed, masked in every picture:
+ * relTime.ts's short forms ("5 min ago", "in 2 h"), and the bell's Intl forms from
+ * src/lib/admin/notifications/ago.ts ("4 minutes ago", "in 3 hours", "last week", "yesterday").
+ * R14f: the Notifications page printed "4 minutes ago", which the short forms alone missed, so
+ * the label moved on between the `update` run's two passes and the compare failed.
+ * tests/ci/adminVisual.spec.ts holds every label agoLabel() can produce to this.
+ */
+export const WHEN =
+  /\b(?:just now|\d+ (?:min|h|d) ago|in \d+ (?:min|h|d)|tomorrow|yesterday|today|\d+ (?:minutes?|hours?|days?|weeks?|months?|years?) ago|in \d+ (?:minutes?|hours?|days?|weeks?|months?|years?)|(?:last|next) (?:week|month|year))\b|\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b|\b\d{1,2}:\d{2}\b|\b20\d\d\b/i;
+
 /** One region of a framed screen: what it is, and how the frame holds it. */
 export interface FrameRegion {
   selector: string;

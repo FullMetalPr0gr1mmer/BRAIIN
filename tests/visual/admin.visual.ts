@@ -6,6 +6,7 @@ import {
   GREETING_HOLDERS,
   GREETING_SOURCE,
   STEADY_GREETING,
+  WHEN,
   frameFor,
   type FrameRegion,
 } from './adminVisualSteady';
@@ -38,10 +39,6 @@ import {
  */
 
 const MODE = process.env['ADMIN_VISUAL'];
-
-/** The admin's dates and relative times (src/lib/admin/relTime.ts), wherever they are printed. */
-const WHEN =
-  /\b(?:just now|\d+ (?:min|h|d) ago|in \d+ (?:min|h|d)|tomorrow|yesterday|today)\b|\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b|\b\d{1,2}:\d{2}\b|\b20\d\d\b/i;
 
 /**
  * What changes from one run to the next: times and dates, counts, figures, charts, the savebar's
