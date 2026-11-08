@@ -569,7 +569,8 @@ export default function EditorForm({
       // has landed in the form's state. Only in release mode: live mode saves on Save alone.
       onBlur={draftMode ? () => window.setTimeout(autoSave, 0) : undefined}
     >
-      <ErrorSummary errors={errors.summary} />
+      {/* R14f: a refused automatic save shows its errors without moving focus (refusedAuto). */}
+      <ErrorSummary errors={errors.summary} focus={save.refusedAuto !== true} />
       {save.message && !save.releasesOff && (
         <p className="msg" data-kind="error" role="alert">
           {save.message}
