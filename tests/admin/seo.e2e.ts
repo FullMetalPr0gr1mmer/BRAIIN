@@ -365,7 +365,12 @@ test.describe('the Redirects tab', () => {
     await expect(page.getByRole('row', { name: new RegExp(from) })).toContainText('/contact');
 
     await press(page, `Delete ${from}`);
-    await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+    // The confirm's button is ResourceTable's `confirmLabel`: "Remove" with releases on (a
+    // staged removal, here a pending create thrown away), "Delete" with them off.
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: releasesOn() ? 'Remove' : 'Delete', exact: true })
+      .click();
     await expect(page.getByRole('link', { name: from })).toHaveCount(0);
     // Releases on: the pending create was thrown away, nothing of it is left to publish.
     if (releasesOn()) {
