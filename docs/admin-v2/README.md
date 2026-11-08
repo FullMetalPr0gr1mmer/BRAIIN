@@ -434,7 +434,7 @@ The TDD's *product* requirements are the spec. Its *stack* suggestions are mappe
 
 | # | Slice | Depends | Status (Z1, 2026-11-05) |
 |---|---|---|---|
-| Z1 | Admin visual baselines (1440/390), full per-role axe matrix with dialogs open, docs + TDD coverage closure [AV-34] | E1, E4, E5, U12, U13, C10 | Built: [Z1](as-built/Z1.md); the first admin visual baselines wait for the operator's `update` run |
+| Z1 | Admin visual baselines (1440/390), full per-role axe matrix with dialogs open, docs + TDD coverage closure [AV-34] | E1, E4, E5, U12, U13, C10 | Built: [Z1](as-built/Z1.md); the first 224 admin visual baselines committed from the green `update` run on R14f (2026-11-08) |
 | R15 | Release contract | R14 + one stable cycle | Not built (after R14 and one stable cycle) |
 | R16 | PDPL history redaction — **legal-gated (O-12)** | R4, R14 | Not built: waits on O-12 (legal) |
 
