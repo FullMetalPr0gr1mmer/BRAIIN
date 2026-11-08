@@ -2,12 +2,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { greeting } from '@/lib/admin/dashboard/greeting';
+import { agoLabel } from '@/lib/admin/notifications/ago';
 import { STAFF_ROLES } from '../admin/staff';
 import { captureRoutes } from '../admin/routes';
 import {
   FRAMED,
   GREETING_HOLDERS,
   STEADY_GREETING,
+  WHEN,
   frameFor,
   steadyGreeting,
 } from '../visual/adminVisualSteady';
@@ -317,5 +319,76 @@ describe('the activity log’s frame in the baselines (R14d, adminVisualSteady.t
     // Through the CSSOM, never a style attribute (style-src has no 'unsafe-inline').
     expect(spec).toContain("el.style.setProperty('display', 'none')");
     expect(spec).not.toMatch(/setAttribute\(\s*'style'/);
+  });
+});
+
+describe('relative times in the baselines (R14f, adminVisualSteady.ts WHEN)', () => {
+  const NOW = Date.parse('2026-11-08T12:00:00Z');
+  const SECONDS = [
+    0,
+    30,
+    59,
+    60,
+    61,
+    90,
+    150,
+    3_599,
+    3_600,
+    7_200,
+    86_399,
+    86_400,
+    2 * 86_400,
+    6 * 86_400,
+    7 * 86_400,
+    13 * 86_400,
+    20 * 86_400,
+    29 * 86_400,
+    30 * 86_400,
+    45 * 86_400,
+    200 * 86_400,
+    364 * 86_400,
+    365 * 86_400,
+    800 * 86_400,
+  ];
+
+  it('masks every label the bell and the Notifications page can print, past and future', () => {
+    for (const s of SECONDS) {
+      for (const sign of [-1, 1]) {
+        const label = agoLabel(new Date(NOW + sign * s * 1000).toISOString(), NOW);
+        expect(label, String(sign * s)).not.toBe('');
+        expect(WHEN.test(label), `${sign * s}s: "${label}"`).toBe(true);
+        // As printed: after the item's detail, " · ".
+        expect(WHEN.test(`New inquiry · ${label}`), label).toBe(true);
+      }
+    }
+  });
+
+  it('still masks the short forms, and leaves ordinary words alone', () => {
+    for (const label of [
+      'just now',
+      '5 min ago',
+      'in 2 h',
+      '3 d ago',
+      'yesterday',
+      '14:05',
+      '8 Nov',
+    ]) {
+      expect(WHEN.test(label), label).toBe(true);
+    }
+    for (const word of [
+      'Check now',
+      'Back up now',
+      'Notifications',
+      'Minutes of the meeting',
+      'Last name',
+    ]) {
+      expect(WHEN.test(word), word).toBe(false);
+    }
+  });
+
+  it('is the one pattern the spec masks with', () => {
+    const spec = readFileSync('tests/visual/admin.visual.ts', 'utf8');
+    expect(spec).toContain('page.getByText(WHEN)');
+    expect(spec).not.toMatch(/const WHEN\s*=/);
   });
 });

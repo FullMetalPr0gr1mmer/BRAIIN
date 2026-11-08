@@ -96,6 +96,13 @@ export interface EntitySave {
    * the first field left does not close it. Optional, as R12's members are: absent is theirs.
    */
   savedByPerson?: boolean;
+  /**
+   * R14f: the save the server last refused was an automatic one (a blur, a tab switch, the idle
+   * timer), not the person's. The form's error summary then shows without taking focus: focus
+   * stays where the person put it (WCAG 3.2.2), as it did when Next gap had just moved it to a
+   * field. A refusal of the person's own Save still focuses the summary.
+   */
+  refusedAuto?: boolean;
   /** Admin v2 R12: save now if this is an unsaved pending change (blur, tab switch, ⌘S). */
   flush?(): void;
   /**
@@ -466,6 +473,7 @@ export function useEntitySave(
     gone: state.gone,
     releasesOff: state.releasesOff,
     savedByPerson: state.savedByPerson,
+    refusedAuto: state.autoBlocked,
     flush,
     addAutoSaveVeto: useCallback((veto: AutoSaveVeto) => {
       vetoes.current.add(veto);

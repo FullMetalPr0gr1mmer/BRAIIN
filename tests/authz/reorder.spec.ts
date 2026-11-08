@@ -130,6 +130,34 @@ describe('POST /api/admin/<resource>/reorder — judged whole before any row is 
     expect(versions()[SHELVED]).toBe(1);
   });
 
+  it('a sort order past SORT_ORDER_MAX: 422 in both modes, nothing written or staged', async () => {
+    for (const flag of [false, true]) {
+      db.flag = flag;
+      db.calls = [];
+      for (const sortOrder of [10_001, -10_001]) {
+        const res = await reorder('admin', [
+          { id: LIVE_1, sortOrder },
+          { id: LIVE_2, sortOrder: 10 },
+        ]);
+        expect([res.status, res.body['error']], `${flag} ${sortOrder}`).toEqual([
+          422,
+          'validation',
+        ]);
+      }
+      expect(writes(), String(flag)).toEqual([]);
+      expect(db.tables['content_drafts'], String(flag)).toEqual([]);
+    }
+    expect(order()).toEqual(BEFORE);
+    // The ends themselves are a move like any other.
+    db.flag = false;
+    const res = await reorder('admin', [
+      { id: LIVE_1, sortOrder: 10_000 },
+      { id: LIVE_2, sortOrder: -10_000 },
+    ]);
+    expect(res.status).toBe(200);
+    expect(order()).toEqual({ ...BEFORE, [LIVE_1]: 10_000, [LIVE_2]: -10_000 });
+  });
+
   it('an id of another tenant: 422, and nothing is written in either tenant', async () => {
     for (const principal of ['admin', 'content_creator'] as const) {
       db.calls = [];

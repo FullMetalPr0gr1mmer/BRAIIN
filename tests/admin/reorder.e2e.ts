@@ -53,15 +53,17 @@ const MARK = randomBytes(4).toString('hex');
 const slug = (kind: string) => `e2e-h12-${kind}-${MARK}`;
 const title = (kind: string) => ({ en: `Order ${kind} ${MARK}`, ar: `ترتيب ${kind} ${MARK}` });
 
+// Within SORT_ORDER_MAX (10,000), as every write of a sort order must be: with releases on a
+// move is staged through the entity's schema, which refused 99,910 and up with a 422.
 const ROWS = {
-  first: { slug: slug('first'), title: title('first'), status: 'draft', sort_order: 99910 },
+  first: { slug: slug('first'), title: title('first'), status: 'draft', sort_order: 9910 },
   shelved: {
     slug: slug('shelved'),
     title: title('shelved'),
     status: 'archived',
-    sort_order: 99920,
+    sort_order: 9920,
   },
-  second: { slug: slug('second'), title: title('second'), status: 'draft', sort_order: 99930 },
+  second: { slug: slug('second'), title: title('second'), status: 'draft', sort_order: 9930 },
 } as const;
 type Kind = keyof typeof ROWS;
 
