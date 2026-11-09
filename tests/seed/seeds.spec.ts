@@ -5,6 +5,7 @@ import {
   generate,
   loadBlocks,
   rowForMode as rowForModeRaw,
+  seedId,
   OUTPUTS,
   TENANT_ID as TENANT,
 } from '../../scripts/gen-seeds.mjs';
@@ -53,11 +54,57 @@ describe('generated seed files', () => {
         .split(/;\n/)
         .filter((s: string) => /insert into/.test(s));
       for (const s of statements) {
-        expect(/on conflict \([^)]+\) do nothing|where not exists/.test(s), s.slice(0, 80)).toBe(
+        // `on conflict do nothing` (no target) is the stronger form: a row with a made id has
+        // two keys a re-run can meet (its slug, and its id after an editor renamed the slug).
+        expect(/on conflict (\([^)]+\) )?do nothing|where not exists/.test(s), s.slice(0, 80)).toBe(
           true,
         );
       }
     }
+  });
+});
+
+// Z1 baselines: every database the seed builds holds the same ids, so a list that breaks ties on
+// the id (crud.ts listRows) reads in one order everywhere. A row keyed by its slug that names no
+// id takes one made from its table and slug.
+describe('the ids the seed makes', () => {
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+  it('are the same every time, uuids, and differ by table and by slug', () => {
+    expect(seedId('services', 'logo')).toBe(seedId('services', 'logo'));
+    expect(seedId('services', 'logo')).toMatch(UUID);
+    expect(seedId('services', 'logo')).not.toBe(seedId('portfolio', 'logo'));
+    expect(seedId('services', 'logo')).not.toBe(seedId('services', 'animation'));
+  });
+
+  it('every slug-keyed row of the data has an id in the files, in both modes', () => {
+    const slugKeyed = loadBlocks().filter(
+      (b: { conflict?: string[] }) =>
+        b.conflict?.length === 2 && b.conflict.includes('tenant_id') && b.conflict.includes('slug'),
+    );
+    expect(slugKeyed.length).toBeGreaterThanOrEqual(10);
+    for (const mode of ['published', 'production'] as const) {
+      const sql = generate(mode);
+      for (const block of slugKeyed as { table: string; rows: Row[] }[]) {
+        for (const row of block.rows) {
+          const id =
+            typeof row['id'] === 'string' ? row['id'] : seedId(block.table, String(row['slug']));
+          expect(sql.includes(`'${id}'`), `${mode} ${block.table} ${String(row['slug'])}`).toBe(
+            true,
+          );
+        }
+      }
+    }
+  });
+
+  it('a block given made ids conflicts on any key; one whose rows name their own ids keeps its target', () => {
+    const sql = generate('published');
+    const services = sql.split(/;\n/).find((s: string) => s.includes('-- services ('))!;
+    expect(services).toMatch(/on conflict do nothing$/);
+    const sections = sql
+      .split(/;\n/)
+      .find((s: string) => s.includes('insert into public.page_sections'))!;
+    expect(sections).toMatch(/on conflict \(id\) do nothing/);
   });
 });
 

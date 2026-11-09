@@ -114,7 +114,9 @@ function query(db: Db, table: string) {
   let count = false;
   // R13: `{ count: 'exact', head: true }` answers the count and no rows, as PostgREST does.
   let head = false;
-  let order: { column: string; ascending: boolean } | null = null;
+  // Every `.order()` call is a key, in the order given (PostgREST's `order=a,b`): listRows breaks
+  // ties on the id last, so the stand-in keeps them all, as Postgres does.
+  const order: { column: string; ascending: boolean }[] = [];
   let range: [number, number] | null = null;
   let limit: number | null = null;
   const filters: Filter[] = [];
@@ -140,12 +142,15 @@ function query(db: Db, table: string) {
       return { data: hit.map((r) => project(r, topNames(columns))), error: null };
     }
     let out = [...hit];
-    if (order) {
-      const { column, ascending } = order;
+    if (order.length > 0) {
       out.sort((a, b) => {
-        const x = a[column] as number | string;
-        const y = b[column] as number | string;
-        return (x < y ? -1 : x > y ? 1 : 0) * (ascending ? 1 : -1);
+        for (const { column, ascending } of order) {
+          const x = a[column] as number | string;
+          const y = b[column] as number | string;
+          const by = (x < y ? -1 : x > y ? 1 : 0) * (ascending ? 1 : -1);
+          if (by !== 0) return by;
+        }
+        return 0;
       });
     }
     const total = out.length;
@@ -184,7 +189,7 @@ function query(db: Db, table: string) {
     lt: (c: string, v: unknown) => (filters.push(['lt', c, v]), b),
     gte: (c: string, v: unknown) => (filters.push(['gte', c, v]), b),
     order: (c: string, o?: { ascending?: boolean }) => (
-      (order = { column: c, ascending: o?.ascending ?? true }),
+      order.push({ column: c, ascending: o?.ascending ?? true }),
       b
     ),
     range: (from: number, to: number) => ((range = [from, to]), b),

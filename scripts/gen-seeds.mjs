@@ -48,6 +48,7 @@
 // Every statement is idempotent: re-running a seed never duplicates a row and never
 // overwrites an editor's change (conflict → do nothing).
 
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -111,6 +112,16 @@ export function literal(value) {
   return `${quote(JSON.stringify(value))}::jsonb`;
 }
 
+/**
+ * The id a seeded row keyed by its slug takes: a version-4-shaped uuid from the SHA-256 of its
+ * table, the launch tenant and its slug. The same on every run and every machine.
+ */
+export function seedId(table, slug) {
+  const hex = createHash('sha256').update(`${table}:${TENANT_ID}:${slug}`).digest('hex');
+  const variant = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
 /** `exists (…)` for one row of the launch tenant, named by its columns (a block's `requires`). */
 function existsSql(ref) {
   const where = Object.entries(ref.by)
@@ -124,13 +135,34 @@ function blockSql(block, mode) {
   if (block.requires && !block.unlessAuthored) {
     throw new Error(`${block.source}:${block.table} takes requires only with unlessAuthored`);
   }
+  const bySlug =
+    scoped &&
+    block.conflict?.length === 2 &&
+    block.conflict.includes('tenant_id') &&
+    block.conflict.includes('slug');
   const rows = block.rows.map((r) => {
     const row = rowForMode(r, mode);
-    return scoped ? { tenant_id: TENANT_ID, ...row } : row;
+    // A row keyed by its slug gets an id made from its table and slug when the data names
+    // none, so every database the seed builds holds the same ids. A list that breaks ties on
+    // the id (crud.ts listRows) then reads in one order everywhere, which the admin visual
+    // baselines need (Z1). An editor's row is never touched: the insert is `do nothing` on any
+    // conflict (below), so a database that already holds the slug keeps its own id.
+    const fixed =
+      bySlug && !('id' in row) && typeof row.slug === 'string'
+        ? { id: seedId(block.table, row.slug) }
+        : {};
+    return scoped ? { tenant_id: TENANT_ID, ...fixed, ...row } : row;
   });
   const columns = [...new Set(rows.flatMap((r) => Object.keys(r)))];
   const tuple = (r) => columns.map((c) => (c in r ? literal(r[c]) : 'default')).join(', ');
   const header = `-- ${block.table} (${block.source})`;
+  // With a made id the row has two keys a re-run can meet: its slug, and its id once an
+  // editor has renamed the slug. `on conflict (tenant_id, slug)` covers only the first, so a
+  // re-run would fail on the primary key; with no target, either one is `do nothing`.
+  const madeIds = rows.some((r, i) => 'id' in r && !('id' in block.rows[i]));
+  const onConflict = madeIds
+    ? 'on conflict do nothing'
+    : `on conflict (${block.conflict?.join(', ')}) do nothing`;
 
   if (block.existsBy) {
     // No unique key to conflict on (e.g. partner_logos): insert only if absent, so a
@@ -186,7 +218,7 @@ function blockSql(block, mode) {
         `do $seed$ begin\n` +
         `  if ${requires}not exists (select 1 from public.${block.table} where ${tenant}${match}) then\n` +
         `    insert into public.${block.table} (${columns.join(', ')}) values\n${values}\n` +
-        `    on conflict (${block.conflict.join(', ')}) do nothing;\n` +
+        `    ${onConflict};\n` +
         `  end if;\n` +
         `end $seed$;`
       );
@@ -197,7 +229,7 @@ function blockSql(block, mode) {
   const values = rows.map((r) => `  (${tuple(r)})`).join(',\n');
   return (
     `${header}\ninsert into public.${block.table} (${columns.join(', ')}) values\n${values}\n` +
-    `on conflict (${block.conflict.join(', ')}) do nothing;`
+    `${onConflict};`
   );
 }
 

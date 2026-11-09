@@ -83,6 +83,11 @@ export async function listRows<T>(
   }
   if (opts.orderBy) {
     q = q.order(opts.orderBy.column, { ascending: opts.orderBy.ascending ?? true });
+    // The row's id breaks ties last (Z1 baselines). Rows sharing the ordered value (sections
+    // at the same sort order, cases saved in one statement) came back in any order, so a list
+    // could change between two loads, and a row could repeat on page 2 while another was never
+    // shown: `range()` pages a sort that is not total.
+    if (opts.orderBy.column !== 'id') q = q.order('id', { ascending: true });
   }
 
   const { data, error, count } = await q;

@@ -21,6 +21,10 @@ const env = staffEnv();
 // so in CI a null here is a broken export or build: failing beats quietly skipping every
 // admin spec. Locally, skipping stays the safe default.
 setup.skip(!env && !process.env['CI'], SKIP_REASON);
+// One role at a time, in STAFF_ROLES order: each account is created by its own sign-in, and the
+// users list orders by when an account was made, so parallel workers made the list's order a
+// race (the admin visual baselines saw Admin and Content Creator swap between runs, Z1).
+setup.describe.configure({ mode: 'serial' });
 
 for (const role of STAFF_ROLES) {
   setup(`sign in as ${role}`, async ({ browser }) => {
