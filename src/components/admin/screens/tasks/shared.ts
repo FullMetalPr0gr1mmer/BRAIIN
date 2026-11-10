@@ -112,5 +112,8 @@ export function readTasks(
   if (query.view) params.set('view', query.view);
   if (query.contact) params.set('contact', query.contact);
   if (query.lead) params.set('lead', query.lead);
-  return adminFetch<TaskGroups>(`/api/admin/crm/tasks?${params.toString()}`, signal ? { signal } : {});
+  return adminFetch<TaskGroups>(
+    `/api/admin/crm/tasks?${params.toString()}`,
+    signal ? { signal } : {},
+  );
 }

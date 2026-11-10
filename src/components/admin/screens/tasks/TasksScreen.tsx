@@ -103,7 +103,10 @@ export default function TasksScreen({ initial, view: initialView, owners, me }: 
         show();
       })
       .catch(() =>
-        setMessage({ tone: 'err', text: 'The task form could not be loaded. Reload and try again.' }),
+        setMessage({
+          tone: 'err',
+          text: 'The task form could not be loaded. Reload and try again.',
+        }),
       );
   }
 
@@ -117,7 +120,9 @@ export default function TasksScreen({ initial, view: initialView, owners, me }: 
       owners={ownerNames}
       busy={busy}
       showOwner={view === 'all'}
-      onDone={(t, done) => void act(() => setDone(t, done), done ? 'Task done.' : 'Task opened again.')}
+      onDone={(t, done) =>
+        void act(() => setDone(t, done), done ? 'Task done.' : 'Task opened again.')
+      }
       onEdit={(t) => openDrawer(t)}
       onSnooze={(t) => void act(() => snooze(t), 'Snoozed to tomorrow 10:00.')}
       onDelete={(t) =>
