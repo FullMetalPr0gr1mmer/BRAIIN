@@ -217,7 +217,12 @@ export function eventSentence(event: LeadEvent, stages: StagesByKey, people: Peo
     case 'note_deleted':
       return 'Note deleted';
     case 'contact_linked':
-      return 'Linked to a contact';
+      // (Admin v2 C5) A link made by phone alone may be someone else on a shared line. It
+      // says so, and asks nothing: the check (C6, C7) has no screen yet, and most lead
+      // workers (Developer, Sales) hold no crm.contacts to make it.
+      return detail['by'] === 'phone'
+        ? 'Linked to a contact by phone number'
+        : 'Linked to a contact';
     case 'task_created':
       return 'Task added';
     case 'task_done':

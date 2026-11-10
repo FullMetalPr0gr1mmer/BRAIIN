@@ -37,11 +37,14 @@ function requireId(params: Record<string, string | undefined>): string {
   return id;
 }
 
-/** What crm_erase_lead answers: the lead's number and how many rows went. */
+/**
+ * What crm_erase_lead answers: the lead's number and how many rows went (since Admin v2 C5,
+ * `contacts` too: the auto-contact the lead left with nothing, 0 or 1).
+ */
 function counts(data: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   if (data && typeof data === 'object' && !Array.isArray(data)) {
-    for (const key of ['lead_number', 'leads', 'notes', 'events']) {
+    for (const key of ['lead_number', 'leads', 'notes', 'events', 'contacts']) {
       const value = (data as Record<string, unknown>)[key];
       if (typeof value === 'number') out[key] = value;
     }

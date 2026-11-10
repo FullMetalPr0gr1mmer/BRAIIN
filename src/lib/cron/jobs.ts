@@ -9,6 +9,7 @@ import {
   runLeadIndexBackfill,
   type IndexRun,
 } from '@/lib/crm/indexBackfill';
+import { runContactLinkBackfill, type LinkRun } from '@/lib/crm/linkBackfill';
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 
 // The Worker's daily cron jobs, in the order src/lib/cron/daily.ts runs them. A new job is
@@ -86,8 +87,9 @@ export const DAILY_JOBS: readonly CronJob[] = [
   {
     name: 'crm-index',
     label: 'lead indexing',
-    // The read, a country lookup (one tenant), one write per lead, then its line.
-    budget: 2 + INDEX_BATCH + 2,
+    // The read, a country lookup (one tenant), one write per lead, the contact links (one
+    // call, Admin v2 C5), then its line.
+    budget: 2 + INDEX_BATCH + 1 + 2,
     run: indexLeads,
   },
 ];
@@ -191,6 +193,9 @@ async function resyncVisibility(): Promise<void> {
 // CRM lead indexing (Admin v2 C1b): blind indexes, signals and scores for leads that
 // arrived without them. The run object fills in as it goes, so a step that throws
 // part-way is still logged with what it did: this job writes its line on every run.
+// Then (Admin v2 C5) the contact links: leads never linked, the ones indexed a moment ago
+// included, linked by blind index in one call (src/lib/crm/linkBackfill.ts). It runs even
+// when the indexing failed: leads indexed on an earlier day still wait for it.
 async function indexLeads(): Promise<void> {
   const run = newIndexRun();
   let failure: string | null = null;
@@ -199,21 +204,41 @@ async function indexLeads(): Promise<void> {
   } catch (err) {
     failure = err instanceof Error ? err.message : 'lead indexing failed';
   }
-  await writeSystemLog(indexLogEntry(run, failure));
+  let link: LinkRun | null = null;
+  let linkFailure: string | null = null;
+  try {
+    link = await runContactLinkBackfill(serviceClient());
+  } catch (err) {
+    linkFailure = err instanceof Error ? err.message : 'contact linking failed';
+  }
+  await writeSystemLog(indexLogEntry(run, failure, { run: link, failure: linkFailure }));
+}
+
+/** The contact links' share of the lead-indexing line (Admin v2 C5). */
+export interface LinkOutcome {
+  run: LinkRun | null;
+  failure: string | null;
 }
 
 /** The lead-indexing line: counts and, when there was trouble, what kind. */
-export function indexLogEntry(run: IndexRun, failure: string | null): SystemLogEntry {
+export function indexLogEntry(
+  run: IndexRun,
+  failure: string | null,
+  link: LinkOutcome = { run: null, failure: null },
+): SystemLogEntry {
   let message = 'lead indexing ran';
   if (failure !== null) message = `lead indexing failed after ${run.indexed} lead(s): ${failure}`;
   else if (run.stopped === 'key')
     message = `lead indexing stopped: the key decrypts none of the ${run.scanned} waiting lead(s), so nothing was written`;
   else if (run.failed > 0) message = `lead indexing ran with ${run.failed} failed write(s)`;
+  if (link.failure !== null) message += `; contact linking failed: ${link.failure}`;
+  else if (link.run && link.run.failed > 0)
+    message += `; ${link.run.failed} contact link(s) failed`;
   return {
     level: message === 'lead indexing ran' ? 'info' : 'error',
     source: 'cron:crm-index',
     message,
-    detail: { ...run },
+    detail: { ...run, ...(link.run || link.failure !== null ? { links: link.run } : {}) },
   };
 }
 

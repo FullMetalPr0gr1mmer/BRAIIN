@@ -203,10 +203,11 @@ describe('runLeadIndexBackfill', () => {
   });
 
   it('a batch fits the Free plan beside the other daily jobs (src/lib/cron/jobs.ts)', () => {
-    // The indexing job's budget is the read, a country lookup, one write per lead and its
-    // log line; with every other registered job's, it stays inside the 50 per invocation.
+    // The indexing job's budget is the read, a country lookup, one write per lead, the
+    // contact links' one call (Admin v2 C5) and its log line; with every other registered
+    // job's, it stays inside the 50 per invocation.
     const indexing = DAILY_JOBS.find((job) => job.name === 'crm-index');
-    expect(indexing?.budget).toBe(2 + INDEX_BATCH + 2);
+    expect(indexing?.budget).toBe(2 + INDEX_BATCH + 1 + 2);
     expect(DAILY_JOBS.reduce((sum, job) => sum + job.budget, 0)).toBeLessThanOrEqual(50);
   });
 });

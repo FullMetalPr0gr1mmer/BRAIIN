@@ -31,6 +31,7 @@ const LABEL_TO_CAP: Record<string, Capability> = {
   'Leads — view list / manage status / notes': 'leads.manage',
   'Leads — budget/timeline/internal_notes/ip (PII)': 'leads.pii',
   'Leads / analytics / activity — export CSV': 'export.csv',
+  'CRM — contacts (view, edit, notes; the people behind leads)': 'crm.contacts',
   "Leads & contacts — erase a person's data (DSAR)": 'crm.erase',
   'CRM settings — pipeline stages, scoring, response time, assignment': 'crm.settings',
   'Job applications — view / manage status / notes / erase': 'applications.manage',
@@ -90,7 +91,7 @@ for (const file of ['CLAUDE.md', 'docs/architecture.md']) {
   describe(`ROLE_CAPS matches the matrix in ${file}`, () => {
     const doc = parseDocMatrix(file);
 
-    it('parses all 35 capabilities from the documented table', () => {
+    it('parses all 36 capabilities from the documented table', () => {
       expect(Object.keys(doc.admin).sort()).toEqual([...CAPABILITIES].sort());
     });
 
@@ -161,6 +162,7 @@ describe('Sales holds leads and the stats, nothing else', () => {
     // exports, backups and erasure: no bulk contact details; nor the CRM's settings
     'export.csv',
     'export.backup',
+    'crm.contacts',
     'crm.erase',
     'crm.settings',
     // hiring, logs, the activity log, site health, search analytics, the stats' goals
@@ -176,7 +178,7 @@ describe('Sales holds leads and the stats, nothing else', () => {
     expect(ROLE_CAPS.sales[cap]).toBe('none');
   });
 
-  it('the CRM invariants hold for every role: export and erasure imply the PII they reach', () => {
+  it('the CRM invariants hold for every role: export, contacts and erasure imply the PII they reach', () => {
     for (const role of ROLES) {
       if (ROLE_CAPS[role]['export.csv'] === 'full')
         expect(ROLE_CAPS[role]['leads.pii']).toBe('full');
@@ -184,6 +186,14 @@ describe('Sales holds leads and the stats, nothing else', () => {
         expect(ROLE_CAPS[role]['leads.pii']).toBe('full');
       if (ROLE_CAPS[role]['leads.pii'] === 'full')
         expect(ROLE_CAPS[role]['leads.manage']).toBe('full');
+      // Contacts are built from leads (Admin v2 C5, crm.md §2.1): whoever holds a contact can
+      // see the lead details it came from, and whoever erases a person can see that person.
+      if (ROLE_CAPS[role]['crm.contacts'] === 'full') {
+        expect(ROLE_CAPS[role]['leads.manage'], `${role}: crm.contacts`).toBe('full');
+        expect(ROLE_CAPS[role]['leads.pii'], `${role}: crm.contacts`).toBe('full');
+      }
+      if (ROLE_CAPS[role]['crm.erase'] === 'full')
+        expect(ROLE_CAPS[role]['crm.contacts'], `${role}: crm.erase`).toBe('full');
     }
   });
 });

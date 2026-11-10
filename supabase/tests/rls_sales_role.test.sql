@@ -127,6 +127,16 @@ insert into public.blog_posts (id, tenant_id, slug, title, status) values
    '{"en":"Post","ar":"مقال"}', 'published');
 
 -- Staff-only rows, one at least in each relation `authenticated` holds more of than anon.
+-- The contacts (0131, Admin v2 C5): Admin's alone until C10b gives Sales crm.contacts, so here
+-- they are compared like any staff-only relation (a Sales token reads none). The contact's
+-- `created` and `channel_added` events come from its triggers.
+insert into public.crm_contacts (id, tenant_id, display_name) values
+  ('93000000-0000-0000-0000-00000000c5c1', '93000000-0000-0000-0000-000000000001', 'C5 contact');
+insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc, value_hmac, is_primary) values
+  ('93000000-0000-0000-0000-000000000001', '93000000-0000-0000-0000-00000000c5c1', 'email', 'ciphertext',
+   repeat('c', 64), true);
+insert into public.crm_contact_notes (tenant_id, contact_id, body) values
+  ('93000000-0000-0000-0000-000000000001', '93000000-0000-0000-0000-00000000c5c1', 'a note');
 insert into public.site_settings (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.site_integrations (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.ai_config (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
@@ -321,13 +331,14 @@ select ok(not app.is_member(), 'no role claim is no member');
 
 -- Every helper, for every value of the enum and none: a literal copy of CLAUDE.md §5.
 select is(
-  (select string_agg(format('%s:%s%s%s%s%s%s%s%s%s%s', r,
+  (select string_agg(format('%s:%s%s%s%s%s%s%s%s%s%s%s', r,
             app.role_works_leads(r)::int, app.role_analytics_read(r)::int, app.role_crm_erase(r)::int,
             app.role_manages_users(r)::int, app.role_views_audit(r)::int, app.role_site_health(r)::int,
             app.role_manages_visibility(r)::int, app.role_analytics_goals(r)::int,
-            app.role_crm_settings(r)::int, app.role_manages_integrations(r)::int), ' ' order by r)
+            app.role_crm_settings(r)::int, app.role_manages_integrations(r)::int,
+            app.role_crm_contacts(r)::int), ' ' order by r)
      from unnest(enum_range(null::public.app_role)::text[] || array['anon']) r),
-  'admin:1111111111 anon:0000000000 content_creator:0100000000 developer:1100111000 sales:1100000000 seo:0100000101',
+  'admin:11111111111 anon:00000000000 content_creator:01000000000 developer:11001110000 sales:11000000000 seo:01000001010',
   'each helper answers its capability for each role: Sales works leads and reads the stats, nothing else');
 
 select is(

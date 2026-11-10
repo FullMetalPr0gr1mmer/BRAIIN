@@ -27,6 +27,7 @@ const state = vi.hoisted(() => ({
   failMediaOrphans: false,
   notifyMisses: 0 as unknown,
   failNotifyCheck: false,
+  failLinkBackfill: false,
   removed: [] as { bucket: string; keys: string[] }[],
   visibilityRows: [] as Record<string, unknown>[],
 }));
@@ -87,6 +88,13 @@ const svc = {
       if (state.throwOnIndexWrite && done === state.throwOnIndexWrite)
         throw new Error('network lost');
       return { data: true, error: null };
+    }
+    if (fn === 'crm_link_backfill') {
+      if (state.failLinkBackfill) return { data: null, error: { code: '57014', message: 'x' } };
+      return {
+        data: { scanned: 2, email: 1, phone: 0, new: 1, skipped: 0, failed: 0 },
+        error: null,
+      };
     }
     if (fn === 'application_orphan_cvs')
       return {
@@ -180,6 +188,7 @@ beforeEach(async () => {
   state.failMediaOrphans = false;
   state.notifyMisses = 0;
   state.failNotifyCheck = false;
+  state.failLinkBackfill = false;
   state.removed = [];
   state.visibilityRows = [];
   __kv.clear();
@@ -342,6 +351,37 @@ describe('runDailyJobs', () => {
     expect(tables()).not.toContain('crm_index_lead:rpc');
     expect(state.logs.filter((l) => l.source === 'cron:crm-index')).toHaveLength(1);
     expect(indexLine()!.message).toContain('the key decrypts none');
+  });
+
+  it('links leads to contacts after the indexing, in one call, counted on the same line (C5)', async () => {
+    await runDailyJobs();
+    const order = tables();
+    expect(order.filter((t) => t === 'crm_link_backfill:rpc')).toHaveLength(1);
+    expect(order.indexOf('crm_link_backfill:rpc')).toBeGreaterThan(
+      order.lastIndexOf('crm_index_lead:rpc'),
+    );
+    expect(state.logs.filter((l) => l.source === 'cron:crm-index')).toHaveLength(1);
+    expect(indexLine()).toMatchObject({
+      level: 'info',
+      message: 'lead indexing ran',
+      detail: { links: { scanned: 2, email: 1, new: 1, failed: 0 } },
+    });
+  });
+
+  it('a link run that fails is reported on the line, by code only, and the indexing still counts', async () => {
+    state.failLinkBackfill = true;
+    await runDailyJobs();
+    expect(indexLine()).toMatchObject({
+      level: 'error',
+      message: 'lead indexing ran; contact linking failed: contact link backfill: 57014',
+      detail: { indexed: INDEX_BATCH, links: null },
+    });
+  });
+
+  it('the links run even when the indexing fails', async () => {
+    state.failLeadSelect = true;
+    await runDailyJobs();
+    expect(tables()).toContain('crm_link_backfill:rpc');
   });
 
   it('stays inside the Free plan: 50 subrequests, with every step at its worst', async () => {
