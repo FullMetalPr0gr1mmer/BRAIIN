@@ -507,3 +507,331 @@ export const CrmSettingsSaveSchema = z
     'nothing to save',
   );
 export type CrmSettingsSave = z.infer<typeof CrmSettingsSaveSchema>;
+
+// ── Contacts (Admin v2 C6) ──────────────────────────────────────────────────────────────────
+// The contacts API's shapes. The database checks them again: the column CHECKs of C5's
+// crm_contacts (0131), the filter's allow-list (app.crm_contact_filter, 0133) and the doors'
+// own validation; two layers, and a 22023 or 23514 for anything outside them.
+
+/** A contact's relationship stage (crm_contacts.stage). */
+export const CONTACT_STAGES = ['lead', 'client', 'past', 'partner'] as const;
+export type ContactStage = (typeof CONTACT_STAGES)[number];
+
+/** How the person found us (crm_contacts.source). `import` is the importer's alone (C15). */
+export const CONTACT_SOURCES = [
+  'web_form',
+  'manual',
+  'referral',
+  'instagram',
+  'event',
+  'google',
+  'linkedin',
+  'direct',
+  'whatsapp',
+  'import',
+] as const;
+export type ContactSource = (typeof CONTACT_SOURCES)[number];
+/** The sources a person may choose (never `import`). */
+export const CONTACT_CHOSEN_SOURCES = [
+  'web_form',
+  'manual',
+  'referral',
+  'instagram',
+  'event',
+  'google',
+  'linkedin',
+  'direct',
+  'whatsapp',
+] as const satisfies readonly ContactSource[];
+
+/** The People list's orders: the most recently active first is the default. */
+export const CONTACT_SORTS = ['recent', 'name', 'starred', 'oldest'] as const;
+
+/** Text a person types: trimmed, no control characters (the columns' CHECKs refuse them). */
+const plainText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(max)
+    .refine((v) => !CONTROL.test(v), 'no control characters');
+
+/** POST /api/admin/crm/contacts/query: the list's filter, its search in a body (D10). */
+export const ContactQuerySchema = z
+  .object({
+    stage: z.enum(CONTACT_STAGES).optional(),
+    owner: LeadAssignedFilterSchema.optional(),
+    starred: z.boolean().optional(),
+    expiring: z.boolean().optional(),
+    tag: LeadTagSchema.optional(),
+    q: z.string().max(64).optional(),
+    sort: z.enum(CONTACT_SORTS).optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+    offset: z.number().int().min(0).max(10000).optional(),
+  })
+  .strict();
+export type ContactQuery = z.infer<typeof ContactQuerySchema>;
+
+/** POST /api/admin/crm/contacts/summary takes nothing. */
+export const ContactSummaryQuerySchema = z.object({}).strict();
+
+/** POST /api/admin/crm/contacts/lookup: a picker's search, at most 8 answers. */
+export const ContactLookupSchema = z.object({ q: z.string().trim().min(1).max(64) }).strict();
+
+/** An e-mail or phone a person types for a contact. The Worker encrypts and indexes it. */
+export const ContactChannelInputSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('email'),
+      value: z.string().trim().email().max(254),
+      isPrimary: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('phone'),
+      value: z.string().trim().min(3).max(32),
+      isPrimary: z.boolean().optional(),
+    })
+    .strict(),
+]);
+export type ContactChannelInput = z.infer<typeof ContactChannelInputSchema>;
+
+const ChannelsAddSchema = z.array(ContactChannelInputSchema).max(10);
+
+/**
+ * Custom field values: a key per field the CRM settings define (C9b), each a short text, a
+ * number, a yes or no, or empty. Checked against the definitions in the Worker
+ * (src/lib/crm/contactCustom.ts); an unknown key is refused there.
+ */
+export const ContactCustomSchema = z.record(
+  z.string().regex(/^[a-z][a-z0-9_]{0,39}$/),
+  z.union([z.string().max(500), z.number().finite(), z.boolean(), z.null()]),
+);
+export type ContactCustom = z.infer<typeof ContactCustomSchema>;
+
+/** A custom field as C9b will define it (crm_settings.custom_fields): what C6 validates against. */
+export const CUSTOM_FIELD_TYPES = ['text', 'number', 'date', 'select', 'boolean'] as const;
+export const CustomFieldDefinitionSchema = z
+  .object({
+    key: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/),
+    label: z.string().trim().min(1).max(60),
+    type: z.enum(CUSTOM_FIELD_TYPES),
+    options: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
+    min: z.number().finite().optional(),
+    max: z.number().finite().optional(),
+    maxLength: z.number().int().min(1).max(500).optional(),
+  })
+  .strict();
+export type CustomFieldDefinition = z.infer<typeof CustomFieldDefinitionSchema>;
+
+const CountrySchema = z.string().regex(/^[A-Z]{2}$/, 'a two-letter country code');
+
+/** The details a person writes, shared by the add and the edit. */
+const contactDetails = {
+  displayName: plainText(120),
+  title: plainText(120).nullable(),
+  companyName: plainText(120).nullable(),
+  stage: z.enum(CONTACT_STAGES),
+  source: z.enum(CONTACT_CHOSEN_SOURCES),
+  ownerId: z.string().uuid().nullable(),
+  locale: z.enum(['en', 'ar']),
+  city: plainText(80).nullable(),
+  country: CountrySchema.nullable(),
+  tags: LeadTagsSchema,
+  custom: ContactCustomSchema,
+};
+
+/** POST /api/admin/crm/contacts: a contact added by hand, with its e-mails and phones. */
+export const ContactCreateSchema = z
+  .object({
+    displayName: contactDetails.displayName,
+    title: contactDetails.title.optional(),
+    companyName: contactDetails.companyName.optional(),
+    stage: contactDetails.stage.optional(),
+    source: contactDetails.source.optional(),
+    ownerId: contactDetails.ownerId.optional(),
+    locale: contactDetails.locale.optional(),
+    city: contactDetails.city.optional(),
+    country: contactDetails.country.optional(),
+    tags: contactDetails.tags.optional(),
+    custom: contactDetails.custom.optional(),
+    channels: ChannelsAddSchema.optional(),
+  })
+  .strict();
+export type ContactCreate = z.infer<typeof ContactCreateSchema>;
+
+/** The PATCH fields that need the version the caller read. */
+export const VERSIONED_CONTACT_FIELDS = [
+  'displayName',
+  'title',
+  'companyName',
+  'stage',
+  'source',
+  'ownerId',
+  'locale',
+  'city',
+  'country',
+  'tags',
+  'custom',
+  'channels',
+] as const;
+
+/**
+ * PATCH /api/admin/crm/contacts/[id]. The details and the channels need the version the
+ * caller read (a 409 when it moved on); a star does not, as it never moves it. A channel
+ * change (add, remove, make primary) is checked at that version and does not move it.
+ */
+export const ContactPatchSchema = z
+  .object({
+    version: z.number().int().min(1).optional(),
+    displayName: contactDetails.displayName.optional(),
+    title: contactDetails.title.optional(),
+    companyName: contactDetails.companyName.optional(),
+    stage: contactDetails.stage.optional(),
+    source: contactDetails.source.optional(),
+    ownerId: contactDetails.ownerId.optional(),
+    locale: contactDetails.locale.optional(),
+    city: contactDetails.city.optional(),
+    country: contactDetails.country.optional(),
+    tags: contactDetails.tags.optional(),
+    custom: contactDetails.custom.optional(),
+    isStarred: z.boolean().optional(),
+    channels: z
+      .object({
+        add: ChannelsAddSchema.optional(),
+        remove: z.array(z.string().uuid()).max(10).optional(),
+        primary: z.array(z.string().uuid()).max(2).optional(),
+      })
+      .strict()
+      .refine(
+        (c) => (c.add?.length ?? 0) + (c.remove?.length ?? 0) + (c.primary?.length ?? 0) > 0,
+        'nothing to change',
+      )
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (patch) =>
+      Object.entries(patch).some(([field, value]) => field !== 'version' && value !== undefined),
+    { message: 'nothing to change' },
+  )
+  .refine(
+    (patch) =>
+      patch.version !== undefined ||
+      VERSIONED_CONTACT_FIELDS.every((field) => patch[field] === undefined),
+    { message: 'send the version you read with a change to the details', path: ['version'] },
+  );
+export type ContactPatch = z.infer<typeof ContactPatchSchema>;
+
+const ContactBulkItemsSchema = z
+  .array(z.object({ id: z.string().uuid(), version: z.number().int().min(1).optional() }).strict())
+  .min(1)
+  .max(100)
+  .refine((items) => new Set(items.map((i) => i.id.toLowerCase())).size === items.length, {
+    message: 'each contact once',
+  });
+const VersionedContactItemsSchema = ContactBulkItemsSchema.refine(
+  (items) => items.every((item) => item.version !== undefined),
+  { message: 'this action needs the version of each contact' },
+);
+
+/** POST /api/admin/crm/contacts/bulk: one action over up to 100 contacts. No bulk delete. */
+export const ContactBulkSchema = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('tagAdd'),
+      value: LeadTagSchema,
+      items: VersionedContactItemsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('tagRemove'),
+      value: LeadTagSchema,
+      items: VersionedContactItemsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('owner'),
+      value: z.string().uuid().nullable(),
+      items: VersionedContactItemsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('stage'),
+      value: z.enum(CONTACT_STAGES),
+      items: VersionedContactItemsSchema,
+    })
+    .strict(),
+  z
+    .object({ action: z.literal('star'), value: z.boolean(), items: ContactBulkItemsSchema })
+    .strict(),
+]);
+export type ContactBulk = z.infer<typeof ContactBulkSchema>;
+export type ContactBulkAction = ContactBulk['action'];
+
+/** A note on a contact: as a lead's, 1 to 5,000 characters, append-only. */
+export const ContactNoteInputSchema = LeadNoteInputSchema;
+
+/** GET /api/admin/crm/contacts/[id]/timeline: a filter and the last event shown. */
+export const CONTACT_TIMELINE_KINDS = ['all', 'notes', 'leads', 'changes'] as const;
+export const ContactTimelineQuerySchema = z
+  .object({
+    kind: z.enum(CONTACT_TIMELINE_KINDS).optional(),
+    before: Instant.optional(),
+    beforeSrc: z.enum(['contact', 'lead']).optional(),
+    beforeId: z.coerce.number().int().positive().optional(),
+    limit: z.coerce.number().int().min(1).max(60).optional(),
+  })
+  .strict()
+  .refine(
+    (page) =>
+      (page.before === undefined) === (page.beforeSrc === undefined) &&
+      (page.before === undefined) === (page.beforeId === undefined),
+    { message: 'before, beforeSrc and beforeId go together', path: ['beforeId'] },
+  );
+export type ContactTimelineQuery = z.infer<typeof ContactTimelineQuerySchema>;
+
+/**
+ * POST /api/admin/crm/contacts/[id]/links: the check of a lead matched to this contact by
+ * phone alone. `confirm`: it is this person. `detach`: it is not.
+ */
+export const ContactLinkSchema = z
+  .object({ leadId: z.string().uuid(), action: z.enum(['confirm', 'detach']) })
+  .strict();
+
+/**
+ * POST /api/admin/crm/contacts/[id]/leads: a new lead for this contact. Its e-mail and phone
+ * are the contact's own, copied by the database; the request carries none.
+ */
+export const ContactNewLeadSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    company: z.string().trim().min(1).max(120).optional(),
+    serviceOfInterest: SlugSchema.optional(),
+    budgetBand: BudgetBandSchema.optional(),
+    timeline: z.string().trim().min(1).max(120).optional(),
+    message: z.string().trim().min(1).max(5000),
+    locale: z.enum(['en', 'ar']).optional(),
+    channel: z.enum(MANUAL_LEAD_CHANNELS),
+  })
+  .strict();
+export type ContactNewLead = z.infer<typeof ContactNewLeadSchema>;
+
+/**
+ * POST /api/admin/crm/contacts/[id]/erase: why, and the phone matches the Admin ticked in the
+ * preview (each must be one of them, or the database refuses the whole erasure).
+ */
+export const ContactEraseSchema = z
+  .object({
+    reason: z.enum(['dsar', 'decision']),
+    extraLeads: z
+      .array(z.string().uuid())
+      .max(100)
+      .refine((ids) => new Set(ids.map((id) => id.toLowerCase())).size === ids.length, 'each once')
+      .optional(),
+  })
+  .strict();

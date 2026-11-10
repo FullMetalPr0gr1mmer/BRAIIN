@@ -1,5 +1,5 @@
 import { TIMELINE_BAND_LABELS, type LeadInput } from '@schemas/lead';
-import type { LeadManualCreate, ScoreSignal } from '@schemas/crm';
+import type { ContactNewLead, LeadManualCreate, ScoreSignal } from '@schemas/crm';
 import { resolveLaunchTenantId } from './tenant';
 import { serviceClient } from '@/lib/supabase/server';
 import { supabaseConfigured } from '@/lib/supabase/client';
@@ -171,6 +171,65 @@ export async function ingestManualLead(
   });
   if (error) return { ok: false, code: error.code ?? null };
   return { ok: true, id };
+}
+
+export type ContactLeadResult =
+  | { ok: true; id: string; link: string | null }
+  | { ok: false; code: string | null };
+
+/**
+ * "New lead" for a contact (Admin v2 C6, crm.md §9): the lead goes through
+ * public.crm_contact_new_lead, the service role's door that copies the contact's own e-mail and
+ * phone to it as ciphertext (never decrypted, so never typed again), passes it through
+ * crm_ingest_lead like every lead, and links it to this contact as a person's link (`staff`).
+ * The budget and the timeline are encrypted here; the request carries no contact detail, and
+ * `source`, the creator and the contact's channels are the door's. The score signals are the
+ * ones worked out from what was typed: the contact's e-mail is not decrypted, so a company
+ * address earns no point here (the score can only be lower, never higher, than it would be).
+ */
+export async function ingestContactLead(
+  tenantId: string,
+  actorId: string,
+  contactId: string,
+  input: ContactNewLead & { name: string; company: string | null; locale: 'en' | 'ar' },
+): Promise<ContactLeadResult> {
+  const [budget_enc, timeline_text_enc] = await Promise.all([
+    input.budgetBand ? encryptPII(input.budgetBand, LEAD_PII_ENC_KEY) : Promise.resolve(null),
+    input.timeline ? encryptPII(input.timeline, LEAD_PII_ENC_KEY) : Promise.resolve(null),
+  ]);
+  const signals = leadSignals({
+    email: null,
+    ...(input.serviceOfInterest !== undefined
+      ? { serviceOfInterest: input.serviceOfInterest }
+      : {}),
+    ...(input.budgetBand !== undefined ? { budgetBand: input.budgetBand } : {}),
+    ...(input.company ? { company: input.company } : {}),
+    ...(input.timeline !== undefined ? { timelineText: input.timeline } : {}),
+  });
+  const lead: Record<string, unknown> = {
+    id: crypto.randomUUID(),
+    locale: input.locale,
+    name: input.name,
+    company: input.company,
+    budget_enc,
+    timeline_text_enc,
+    message: input.message,
+    service_of_interest: input.serviceOfInterest
+      ? canonicalServiceSlug(input.serviceOfInterest)
+      : null,
+    channel: input.channel,
+    score_signals: [...signals],
+  };
+  const { data, error } = await serviceClient().rpc('crm_contact_new_lead', {
+    p_tenant: tenantId,
+    p_contact: contactId,
+    p_lead: lead,
+    p_actor: actorId,
+  });
+  if (error) return { ok: false, code: error.code ?? null };
+  const answer = (data ?? {}) as { id?: unknown; link?: unknown };
+  if (typeof answer.id !== 'string') return { ok: false, code: null };
+  return { ok: true, id: answer.id, link: typeof answer.link === 'string' ? answer.link : null };
 }
 
 /** Blind indexes and score signals for a new lead. Never throws: a lead outranks its index. */
