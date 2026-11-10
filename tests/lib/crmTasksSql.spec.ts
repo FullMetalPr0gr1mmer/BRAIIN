@@ -2,9 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Admin v2 C8 (0134) restates four of C5's functions (0131): the orphan rule (a task keeps an
-// auto-contact), the nightly run (the tasks' purge and its count), and the two person-erasure
-// doors (the tasks counted). The migration says each is C5's copy plus the lines marked
+// Admin v2 C8 (0134) restates five of C5's functions (0131): the orphan rule (a task keeps an
+// auto-contact), the nightly run (the tasks' purge and its count), the two person-erasure
+// doors (the tasks counted, and each phone match's own) and, since the C8 review (C8-SEC-3),
+// the single-lead erasure (its tasks counted for the outcome audit row). The migration says each is C5's copy plus the lines marked
 // `-- C8`; this holds it to that, so a later edit to the copy (or a fix to C5's function that
 // the copy would silently undo) fails here instead of in production.
 
@@ -34,6 +35,7 @@ const RESTATED: readonly [string, string, RegExp][] = [
   ['app.run_retention', 'end $$;', /app\.purge_crm_tasks\(\)/],
   ['public.crm_erase_preview', 'end $$;', /'tasks', \(select count/],
   ['public.crm_erase_person', 'end $$;', /'tasks', v_tasks/],
+  ['public.crm_erase_lead', 'end $$;', /'tasks', v_tasks/],
 ];
 
 describe('0134 restates C5’s functions with its marked lines only', () => {
@@ -48,7 +50,11 @@ describe('0134 restates C5’s functions with its marked lines only', () => {
   }
 
   it('the erasure doors still check the actor live before anything else', () => {
-    for (const name of ['public.crm_erase_preview', 'public.crm_erase_person']) {
+    for (const name of [
+      'public.crm_erase_preview',
+      'public.crm_erase_person',
+      'public.crm_erase_lead',
+    ]) {
       const after = fn(C8, name, 'end $$;');
       expect(after.indexOf('app.crm_eraser_ok(p_tenant, p_actor)'), name).toBeGreaterThan(0);
       expect(after.indexOf('app.crm_eraser_ok(p_tenant, p_actor)'), name).toBeLessThan(
@@ -63,6 +69,7 @@ describe('0134 restates C5’s functions with its marked lines only', () => {
       'public.crm_task_create',
       'public.crm_task_update',
       'public.crm_task_delete',
+      'public.crm_task_read',
     ]) {
       const head = fn(C8, name, 'as $$');
       expect(head, name).toMatch(/security invoker/);

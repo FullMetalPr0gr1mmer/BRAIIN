@@ -34,22 +34,25 @@
 --   6. Readers and writers, SECURITY INVOKER (RLS, the live check and the grants decide; the
 --      Worker names the tenant and is refused unless it is the token's), executable by
 --      authenticated only: crm_tasks_grouped, crm_task_create, crm_task_update,
---      crm_task_delete, crm_my_overdue_tasks (the sidebar badge, owner item O-9: MY overdue
---      tasks) and crm_nav_counts (the sidebar's two CRM counts, new leads and that badge, in one
+--      crm_task_delete, crm_task_read (one task, for the drawer after a 409),
+--      crm_my_overdue_tasks (the sidebar badge, owner item O-9: MY overdue tasks) and
+--      crm_nav_counts (the sidebar's two CRM counts, new leads and that badge, in one
 --      read: the leads counter moves onto it, so the badge costs the dashboard no subrequest).
 --   7. Retention (crm.md §8.1, docs/retention.md): app.purge_crm_tasks: a done task goes
---      leads_months after it was done; an open task about no one goes leads_months after its
---      last change or its due moment, whichever is later; a task about someone goes with its
---      contact or lead. app.run_retention restated to call it (its summary gains
---      tasks_purged); app.crm_contact_is_orphan restated: an auto-contact with a task is not
---      an orphan (a person is working with them). The person erasure doors restated to count
---      the tasks that go (C5 left "(Tasks join in C8.)"). Each restated function is C5's copy
---      plus the lines marked `-- C8` (tests/lib/crmTasksSql.spec.ts).
+--      leads_months after it was done; an open task about no one goes leads_months after it
+--      was created (crm.md §8.1 "Unlinked: created_at + horizon": neither an edit nor a far
+--      due date keeps it longer); a task about someone goes with its contact or lead.
+--      app.run_retention restated to call it (its summary gains tasks_purged);
+--      app.crm_contact_is_orphan restated: an auto-contact with a task is not an orphan (a
+--      person is working with them). The erasure doors restated to count the tasks that go:
+--      the person's (C5 left "(Tasks join in C8.)"; each phone match says how many of its own
+--      would go if ticked) and a single lead's (crm_erase_lead). Each restated function is
+--      C5's copy plus the lines marked `-- C8` (tests/lib/crmTasksSql.spec.ts).
 --
 -- Production behaviour: none until C8's Worker deploys. Rule 5 (the deployed Worker between
 -- the push and the deploy): no table it reads changes; app.run_retention's answer gains one
--- key (pg_cron ignores it); crm_erase_preview and crm_erase_person answer one more key, which
--- C6's routes read by name only.
+-- key (pg_cron ignores it); crm_erase_preview, crm_erase_person and crm_erase_lead answer one
+-- more key (a phone match one more too), which the deployed routes read by name only.
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 
 -- A busy table fails the push instead of queueing behind it (0041's reason): this adds
@@ -121,6 +124,19 @@ declare
   v_changed boolean := true;
   f text;
 begin
+  -- (C8 review, C8-SEC-2) An API session's insert is held to its own tenant and a live tasks
+  -- role FIRST. Postgres runs this BEFORE trigger ahead of RLS's WITH CHECK, and every staff
+  -- token holds the INSERT column grant (tenant_id included): without this, the owner and
+  -- tombstone rules below (23514, naming a constraint) would tell any signed-in token whether
+  -- a uuid is an active Admin of, or a merged contact in, any tenant. The refusal is RLS's own
+  -- code and words, whatever the row names. The service role and pg_cron carry no user.
+  if tg_op = 'INSERT' and auth.uid() is not null
+     and (new.tenant_id is distinct from app.effective_tenant_id()
+          or not coalesce(app.role_crm_tasks(app.live_role()), false)) then
+    raise exception using errcode = '42501',
+      message = 'new row violates row-level security policy for table "crm_tasks"';
+  end if;
+
   -- The done stamps are the server's: the first tick keeps its time and person, unticking
   -- clears both, and done_by follows done_at only.
   if tg_op = 'INSERT' then
@@ -268,7 +284,7 @@ grant select, insert, update, delete on public.crm_tasks to service_role;
 -- A local date and clock time in a zone, as an instant (a time a clock change skips moves
 -- forward, as Postgres reads it). Pure: the zone is an argument.
 create or replace function app.crm_local_at(p_date date, p_time time, p_tz text) returns timestamptz
-  language sql stable as $$
+  language sql stable set search_path = '' as $$
   select (p_date + p_time) at time zone p_tz
 $$;
 -- Which list a task is in at `p_now`, in zone `p_tz`: done; overdue (open and due before
@@ -276,7 +292,7 @@ $$;
 -- day boundary with a fixed now (crm.md §13: 21:30Z is the next day in Riyadh).
 create or replace function app.crm_task_bucket(p_due timestamptz, p_done timestamptz,
                                                p_now timestamptz, p_tz text) returns text
-  language sql stable as $$
+  language sql stable set search_path = '' as $$
   select case
     when p_done is not null then 'done'
     when p_due < p_now then 'overdue'
@@ -286,7 +302,7 @@ create or replace function app.crm_task_bucket(p_due timestamptz, p_done timesta
 $$;
 -- "Snooze to tomorrow 10:00": tomorrow's local date at 10:00 in the zone.
 create or replace function app.crm_task_snooze_at(p_now timestamptz, p_tz text) returns timestamptz
-  language sql stable as $$
+  language sql stable set search_path = '' as $$
   select app.crm_local_at(((p_now at time zone p_tz)::date + 1), time '10:00', p_tz)
 $$;
 revoke all on function app.crm_local_at(date, time, text) from public, anon, authenticated, service_role;
@@ -324,7 +340,7 @@ grant execute on function app.crm_task_json(uuid, uuid, text) to authenticated;
 
 -- The tenant a writer names must be the token's: anything else is refused before a read.
 create or replace function app.crm_task_tenant_ok(p_tenant uuid) returns void
-  language plpgsql stable as $$
+  language plpgsql stable set search_path = '' as $$
 begin
   if p_tenant is null or p_tenant is distinct from app.effective_tenant_id() then
     raise exception using errcode = '42501', message = 'crm tasks: not this tenant';
@@ -437,7 +453,7 @@ create or replace function app.crm_task_input(p jsonb, p_patch boolean)
                  has_contact boolean, contact_id uuid, has_lead boolean, lead_id uuid,
                  has_owner boolean, owner_id uuid, has_note boolean, note text,
                  has_done boolean, done boolean, snooze boolean)
-  language plpgsql stable as $$
+  language plpgsql stable set search_path = '' as $$
 declare
   v_allowed text[] := array['title', 'type', 'due_date', 'due_time', 'contact_id', 'lead_id',
                             'owner_id', 'note'];
@@ -607,6 +623,24 @@ end $$;
 revoke all on function public.crm_task_delete(uuid, uuid, int) from public, anon, authenticated, service_role;
 grant execute on function public.crm_task_delete(uuid, uuid, int) to authenticated;
 
+-- (C8 review, C8-UX-1) One task as the screens show it, read as the caller: the drawer reads
+-- it again after a 409, so the form it shows next is the task as it is now. P0002 when the
+-- caller sees no such task (gone, another tenant's, a stale token's).
+create or replace function public.crm_task_read(p_tenant uuid, p_task uuid) returns jsonb
+  language plpgsql stable security invoker set search_path = public, pg_temp as $$
+declare
+  v_task jsonb;
+begin
+  perform app.crm_task_tenant_ok(p_tenant);
+  v_task := app.crm_task_json(p_tenant, p_task, app.studio_time_zone(p_tenant));
+  if v_task is null then
+    raise exception using errcode = 'P0002', message = 'task: no such task';
+  end if;
+  return v_task;
+end $$;
+revoke all on function public.crm_task_read(uuid, uuid) from public, anon, authenticated, service_role;
+grant execute on function public.crm_task_read(uuid, uuid) to authenticated;
+
 -- The sidebar badge (owner item O-9): the caller's own open tasks due before now. A count,
 -- read as the caller; 0 for anyone who reads no task.
 create or replace function public.crm_my_overdue_tasks(p_tenant uuid) returns int
@@ -642,8 +676,9 @@ grant execute on function public.crm_nav_counts(uuid) to authenticated;
 -- Every tenant, its own horizon (site_settings.retention.leads_months, 24 by default:
 -- app.lead_retention_months). A task about someone goes with them (cascade); here, a done
 -- task goes leads_months after it was done, and an open task about no one leads_months after
--- its last change or its due moment, whichever is later. A definer, run by pg_cron through
--- app.run_retention.
+-- it was created (crm.md §8.1; C8 review, C8-SEC-1: an edit does not restart the clock and a
+-- due date as late as 2100 does not hold it, since such a task can name a person no erasure
+-- can find). A definer, run by pg_cron through app.run_retention.
 create or replace function app.purge_crm_tasks() returns int
   language plpgsql security definer set search_path = '' as $$
 declare
@@ -660,8 +695,7 @@ begin
     delete from public.crm_tasks k
      where k.tenant_id = t.id and k.done_at is null
        and k.contact_id is null and k.lead_id is null
-       and greatest(k.updated_at, k.due_at)
-           < now() - make_interval(months => app.lead_retention_months(t.id));
+       and k.created_at < now() - make_interval(months => app.lead_retention_months(t.id));
     get diagnostics n = row_count;
     removed := removed + n;
   end loop;
@@ -746,7 +780,7 @@ begin
                   where ch.tenant_id = p_tenant and ch.contact_id = p_contact),
     'notes', (select count(*)::int from public.crm_contact_notes n
                where n.tenant_id = p_tenant and n.contact_id = p_contact),
-    -- The tasks about the person or their certain leads (a ticked phone match's go too).  -- C8
+    -- The tasks about the person or their certain leads; a phone match says its own below.  -- C8
     'tasks', (select count(*)::int from public.crm_tasks tk  -- C8
                where tk.tenant_id = p_tenant  -- C8
                  and (tk.contact_id = p_contact  -- C8
@@ -756,6 +790,10 @@ begin
       select jsonb_agg(jsonb_build_object('id', l.id, 'lead_number', l.lead_number,
                                           'name', l.name, 'company', l.company,
                                           'created_at', l.created_at,
+                                          -- The tasks that go too if it is ticked (none counted above).  -- C8
+                                          'tasks', (select count(*)::int from public.crm_tasks tk  -- C8
+                                                     where tk.tenant_id = p_tenant and tk.lead_id = l.id  -- C8
+                                                       and tk.contact_id is distinct from p_contact),  -- C8
                                           'linked', coalesce(l.contact_id = p_contact, false))
                        order by l.created_at desc, l.id)
         from app.crm_person_leads(p_tenant, p_contact) p
@@ -844,6 +882,72 @@ end $$;
 revoke all on function public.crm_erase_person(uuid, uuid, uuid[], uuid) from public, anon, authenticated, service_role;
 grant execute on function public.crm_erase_person(uuid, uuid, uuid[], uuid) to service_role;
 
+-- (C8 review, C8-SEC-3) C5's lead erasure, with the tasks counted: a lead's tasks go with it
+-- (crm_tasks_lead_fk, ON DELETE CASCADE), so the outcome audit row says how many.
+create or replace function public.crm_erase_lead(p_tenant uuid, p_lead uuid, p_actor uuid)
+  returns jsonb
+  language plpgsql volatile security invoker set search_path = public, pg_temp as $$
+declare
+  v_number int;
+  v_notes int;
+  v_events int;
+  v_tasks int;  -- C8
+  v_contact uuid;
+  v_link text;
+  v_email_hmac text;
+  v_phone_hmac text;
+  v_contacts int := 0;
+begin
+  if p_tenant is null or p_lead is null or p_actor is null then
+    raise exception using errcode = '22023', message = 'crm_erase_lead: a tenant, a lead and an actor are required';
+  end if;
+  if not app.crm_eraser_ok(p_tenant, p_actor) then
+    raise exception using errcode = '42501', message = 'crm_erase_lead: this person may not erase';
+  end if;
+  select l.lead_number, l.contact_id, l.contact_link, l.email_hmac, l.phone_hmac
+    into v_number, v_contact, v_link, v_email_hmac, v_phone_hmac
+    from public.leads l
+   where l.tenant_id = p_tenant and l.id = p_lead
+     for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'crm_erase_lead: no such lead';
+  end if;
+  select count(*)::int into v_notes from public.lead_notes n
+   where n.tenant_id = p_tenant and n.lead_id = p_lead;
+  select count(*)::int into v_events from public.lead_events e
+   where e.tenant_id = p_tenant and e.lead_id = p_lead;
+  select count(*)::int into v_tasks from public.crm_tasks tk  -- C8
+   where tk.tenant_id = p_tenant and tk.lead_id = p_lead;  -- C8
+  delete from public.leads l where l.tenant_id = p_tenant and l.id = p_lead;
+  delete from public.crm_contact_events e
+   where e.tenant_id = p_tenant and e.kind = 'lead_linked' and e.detail ->> 'lead_id' = p_lead::text;
+  if v_contact is not null and app.crm_contact_is_orphan(p_tenant, v_contact) then
+    delete from public.lead_events e
+     where e.tenant_id = p_tenant and e.kind = 'contact_linked'
+       and e.detail ->> 'contact_id' = v_contact::text;
+    delete from public.crm_contacts c where c.tenant_id = p_tenant and c.id = v_contact;
+    v_contacts := 1;
+  elsif v_contact is not null and v_link is distinct from 'phone' then
+    -- A phone link copied nothing to the contact, so only a lead of the person's own has
+    -- copies to take back: the channels made from it that no remaining lead of the person
+    -- (linked other than by phone) carries.
+    delete from public.crm_contact_channels ch
+     where ch.tenant_id = p_tenant and ch.contact_id = v_contact and ch.source = 'lead'
+       and ((ch.kind = 'email' and ch.value_hmac = v_email_hmac)
+            or (ch.kind = 'phone' and ch.value_hmac = v_phone_hmac))
+       and not exists (select 1 from public.leads l
+                        where l.tenant_id = p_tenant and l.contact_id = v_contact
+                          and l.contact_link is distinct from 'phone'
+                          and ((ch.kind = 'email' and l.email_hmac = ch.value_hmac)
+                               or (ch.kind = 'phone' and l.phone_hmac = ch.value_hmac)));
+  end if;
+  return jsonb_build_object('lead_number', v_number, 'leads', 1, 'notes', v_notes, 'events', v_events,
+                            'tasks', v_tasks,  -- C8
+                            'contacts', v_contacts);
+end $$;
+revoke all on function public.crm_erase_lead(uuid, uuid, uuid) from public, anon, authenticated, service_role;
+grant execute on function public.crm_erase_lead(uuid, uuid, uuid) to service_role;
+
 -- ═══ 11. Postconditions (P-14: under both Supabase grant regimes) ═════════════════════════
 do $$
 declare
@@ -929,6 +1033,7 @@ begin
                               'public.crm_task_create(uuid, jsonb)',
                               'public.crm_task_update(uuid, uuid, integer, jsonb)',
                               'public.crm_task_delete(uuid, uuid, integer)',
+                              'public.crm_task_read(uuid, uuid)',
                               'public.crm_my_overdue_tasks(uuid)',
                               'public.crm_nav_counts(uuid)',
                               'app.crm_task_json(uuid, uuid, text)',
@@ -977,7 +1082,8 @@ begin
   end loop;
   -- The restated doors stay the service role's alone, INVOKER; the nightly run no API role's.
   foreach v_fn in array array['public.crm_erase_preview(uuid, uuid, uuid)',
-                              'public.crm_erase_person(uuid, uuid, uuid[], uuid)'] loop
+                              'public.crm_erase_person(uuid, uuid, uuid[], uuid)',
+                              'public.crm_erase_lead(uuid, uuid, uuid)'] loop
     if has_function_privilege('anon', v_fn, 'execute')
        or has_function_privilege('authenticated', v_fn, 'execute')
        or not has_function_privilege('service_role', v_fn, 'execute')
@@ -990,6 +1096,30 @@ begin
      or has_function_privilege('service_role', 'app.run_retention()', 'execute') then
     raise exception 'C8: app.run_retention() is executable by an API role';
   end if;
+  -- (C8 review, C8-SEC-5) Every function this migration makes or restates pins its
+  -- search_path (Supabase advisor lint 0011), so none resolves a name through a caller's path.
+  -- The capability helper is the exception every app.role_* helper is: an immutable SQL
+  -- expression the planner inlines, which a SET clause would prevent.
+  foreach v_fn in array array['app.tg_crm_task_row()', 'app.tg_crm_task_events()',
+                              'app.crm_local_at(date, time without time zone, text)',
+                              'app.crm_task_bucket(timestamp with time zone, timestamp with time zone, timestamp with time zone, text)',
+                              'app.crm_task_snooze_at(timestamp with time zone, text)',
+                              'app.crm_task_json(uuid, uuid, text)', 'app.crm_task_tenant_ok(uuid)',
+                              'app.crm_task_links_ok(uuid, uuid, uuid)', 'app.crm_task_input(jsonb, boolean)',
+                              'public.crm_tasks_grouped(uuid, jsonb)', 'public.crm_task_create(uuid, jsonb)',
+                              'public.crm_task_update(uuid, uuid, integer, jsonb)',
+                              'public.crm_task_delete(uuid, uuid, integer)', 'public.crm_task_read(uuid, uuid)',
+                              'public.crm_my_overdue_tasks(uuid)', 'public.crm_nav_counts(uuid)',
+                              'app.purge_crm_tasks()', 'app.crm_contact_is_orphan(uuid, uuid)',
+                              'app.run_retention()', 'public.crm_erase_preview(uuid, uuid, uuid)',
+                              'public.crm_erase_person(uuid, uuid, uuid[], uuid)',
+                              'public.crm_erase_lead(uuid, uuid, uuid)'] loop
+    if not exists (select 1 from pg_proc f, unnest(f.proconfig) c
+                    where f.oid = v_fn::regprocedure and c like 'search_path=%') then
+      raise exception 'C8: % does not pin its search_path', v_fn;
+    end if;
+  end loop;
+
   -- The helper answers crm.tasks: Admin alone.
   if not app.role_crm_tasks('admin')
      or app.role_crm_tasks('developer') or app.role_crm_tasks('sales')
