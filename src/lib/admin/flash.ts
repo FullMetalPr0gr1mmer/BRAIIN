@@ -15,6 +15,9 @@ export const FLASH_PARAM = 'done';
 export const FLASH_MESSAGES = {
   'lead-added': 'Lead added',
   'lead-erased': 'Lead erased',
+  // The contacts screens (C7).
+  'contact-added': 'Contact added',
+  'contact-erased': 'Everything about them was erased',
   // Website stats goals (G1c): the card reloads with its new progress after each change.
   'goal-added': 'Goal added',
   'goal-saved': 'Goal saved',

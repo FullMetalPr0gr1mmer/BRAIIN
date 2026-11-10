@@ -13,7 +13,9 @@ import {
   type TimelinePage,
 } from './contacts';
 import { customFieldDefinitions } from './contactCustom';
-import type { ContactLead, ContactSummary } from './contactView';
+import type { ContactLead, ContactPerson, ContactSummary } from './contactView';
+import { ROLE_CAPS } from '@/lib/authz/matrix';
+import { isRole } from '@/lib/auth/types';
 
 // The contacts pages' server render (Admin v2 C7): what /admin/contacts and
 // /admin/contacts/[id] read before their islands hydrate, so each page is complete without
@@ -28,6 +30,34 @@ import type { ContactLead, ContactSummary } from './contactView';
 //            the lead stages, the people, the retention months, the view's audit row = 8
 // Never a channel's value or index, a note, a score reason or a decrypted value: those are
 // read by the island, through the audited routes, and only on request.
+
+/**
+ * The people the screens name (public.crm_people: the tenant's active CRM members, names and
+ * roles only), each marked with whether the owner rule accepts them: an active holder of
+ * `crm.contacts` (crm_contacts_owner_active). Empty when the directory cannot be read.
+ */
+export async function readContactPeople(
+  sb: SupabaseClient,
+  auth: AuthContext,
+): Promise<ContactPerson[]> {
+  const { data, error } = await sb.rpc('crm_people', { p_tenant: auth.tenantId });
+  if (error || !Array.isArray(data)) return [];
+  return (data as Record<string, unknown>[]).flatMap((person) => {
+    if (typeof person['id'] !== 'string') return [];
+    const role = person['role'];
+    const name =
+      typeof person['display_name'] === 'string' && person['display_name'].trim()
+        ? person['display_name'].trim()
+        : 'A member with no name';
+    return [
+      {
+        id: person['id'],
+        name,
+        canOwn: isRole(role) && ROLE_CAPS[role]['crm.contacts'] === 'full',
+      },
+    ];
+  });
+}
 
 /** One People list row: the safe fields only (CONTACT_LIST_FIELDS). */
 export type ContactRow = Record<(typeof CONTACT_LIST_FIELDS)[number], unknown> & { id: string };

@@ -203,7 +203,12 @@ const account = session ? accountViewFor(session, shell.displayName) : null;
          the page is usable. Its data is built here, on the server: no capability map
          ships to the browser. */
       app && session && account && (
-        <AdminChrome client:load palette={paletteGroupsFor(session.role)} account={account} />
+        <AdminChrome
+          client:load
+          palette={paletteGroupsFor(session.role)}
+          account={account}
+          contacts={can(session.role, 'crm.contacts') === 'full'}
+        />
       )
     }
 

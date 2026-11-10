@@ -12,6 +12,8 @@ export const ADMIN_STYLESHEETS = [
   'activity.css',
   'applications.css',
   'collection.css',
+  // Admin v2 C7: the contacts screens (over leads.css, whose CRM pieces they draw).
+  'contacts.css',
   'crm-settings.css',
   'dashboard.css',
   // Admin v2 E6: the Footer screen (its sketch and the columns card).

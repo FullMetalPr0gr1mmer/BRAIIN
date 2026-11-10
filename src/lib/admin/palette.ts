@@ -86,6 +86,42 @@ export function remoteGroups(groups: readonly RemoteGroup[]): PaletteGroup[] {
   }));
 }
 
+/**
+ * A query that looks like an e-mail address or a phone number (Admin v2 C7): it is never put in
+ * a URL, so the palette skips its GET search and its "See all results" link for it (a typed
+ * address would otherwise sit in the address bar's history and the Worker's request logs,
+ * verification D10). The contacts lookup still gets it, in a POST body, where a whole one finds
+ * its person through the blind index. The rule the lookup's own search applies
+ * (src/lib/crm/leadQuery.ts toRpcFilter): an `@`, or phone characters with seven digits.
+ */
+export function looksLikeContactDetail(query: string): boolean {
+  const term = query.trim();
+  if (term.includes('@')) return true;
+  const digits = term.replace(/[^\d٠-٩۰-۹]/g, '');
+  return /^[+\d\s\-().٠-٩۰-۹]+$/.test(term) && digits.length >= 7;
+}
+
+/** A contacts lookup row, as POST /api/admin/crm/contacts/lookup answers it. */
+export interface ContactHit {
+  id: string;
+  display_name: string | null;
+  company_name: string | null;
+}
+
+/** The lookup's answers as a palette group: a name and a company, never a way to reach them. */
+export function contactGroup(hits: readonly ContactHit[]): PaletteGroup[] {
+  const items = hits
+    .filter((hit) => typeof hit.id === 'string')
+    .map((hit) => ({
+      key: `c:${hit.id}`,
+      label: hit.display_name?.trim() || 'A contact with no name',
+      href: `/admin/contacts/${hit.id}`,
+      icon: 'users' as const,
+      detail: hit.company_name?.trim() || undefined,
+    }));
+  return items.length > 0 ? [{ title: 'Contacts', items }] : [];
+}
+
 /** The palette's last option: the full, no-JS results page for the same query. */
 export function seeAll(query: string): PaletteItem {
   return {

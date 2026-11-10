@@ -140,6 +140,8 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'activity.css',
       'applications.css',
       'collection.css',
+      // Admin v2 C7: the contacts screens.
+      'contacts.css',
       'crm-settings.css',
       'dashboard.css',
       // Admin v2 E6: the Footer screen.

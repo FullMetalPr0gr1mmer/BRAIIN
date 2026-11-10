@@ -65,6 +65,14 @@ export function roleLine(title: unknown, company: unknown): string {
   return t || (c ? `At ${c}` : '');
 }
 
+/** Someone the screens name: everyone the CRM directory lists, and who may own a contact. */
+export interface ContactPerson {
+  id: string;
+  name: string;
+  /** Holds crm.contacts, so the owner rule accepts them (crm_contacts_owner_active). */
+  canOwn: boolean;
+}
+
 /** The counts POST /api/admin/crm/contacts/summary answers. */
 export interface ContactSummary {
   total: number;
