@@ -62,9 +62,20 @@ end $$;
 revoke all on function app.crm_contacts_with_channel(text, text) from public, anon, authenticated, service_role;
 grant execute on function app.crm_contacts_with_channel(text, text) to authenticated;
 
+-- leads.pii's helper (C6 review, C6-COR-4: one app.role_* helper per capability, CLAUDE.md
+-- §8, held equal to ROLE_CAPS by tests/authz/sqlHelpers.spec.ts). The new-lead door puts a
+-- person's contact details on a lead, so its actor must hold leads.pii as well as
+-- leads.manage; today both have the same holders, and this keeps the database's layer right
+-- if they ever part. The service role's doors are its only callers.
+create or replace function app.role_lead_pii(r text) returns boolean
+  language sql immutable
+as $$ select coalesce(r in ('admin', 'developer', 'sales'), false) $$;  -- leads.pii
+revoke all on function app.role_lead_pii(text) from public, anon, authenticated, service_role;
+grant execute on function app.role_lead_pii(text) to service_role;
+
 -- The acting person of a service-role door, checked now: an active, unlocked profile of the
--- tenant holding crm.contacts (and, for a new lead, working leads). The Worker checked the
--- same a moment before (liveRecheck); this is the database's own layer.
+-- tenant holding crm.contacts (and, for a new lead, leads.manage and leads.pii). The Worker
+-- checked the same a moment before (liveRecheck, assertCap); this is the database's own layer.
 create or replace function app.crm_contacts_actor_ok(p_tenant uuid, p_actor uuid, p_leads boolean)
   returns boolean
   language sql stable security definer set search_path = '' as $$
@@ -75,7 +86,8 @@ create or replace function app.crm_contacts_actor_ok(p_tenant uuid, p_actor uuid
        and p.is_active
        and (p.locked_until is null or p.locked_until <= now())
        and app.role_crm_contacts(p.role::text)
-       and (not coalesce(p_leads, false) or app.role_works_leads(p.role::text)))
+       and (not coalesce(p_leads, false)
+            or (app.role_works_leads(p.role::text) and app.role_lead_pii(p.role::text))))
 $$;
 revoke all on function app.crm_contacts_actor_ok(uuid, uuid, boolean) from public, anon, authenticated, service_role;
 grant execute on function app.crm_contacts_actor_ok(uuid, uuid, boolean) to service_role;
@@ -310,7 +322,9 @@ begin
   end if;
   select c.created_by into v_created_by
     from public.crm_contacts c
-   where c.tenant_id = app.effective_tenant_id() and c.tenant_id = p_tenant and c.id = p_contact;
+   where c.tenant_id = app.effective_tenant_id() and c.tenant_id = p_tenant and c.id = p_contact
+     -- A merge tombstone (C12) is not a contact (C6 review, C6-SEC-4), as everywhere else.
+     and c.merged_into is null;
   if not found then
     raise exception using errcode = 'P0002', message = 'contact timeline: no such contact';
   end if;
@@ -551,6 +565,17 @@ end $$;
 revoke all on function app.crm_email_holder(uuid, jsonb, uuid) from public, anon, authenticated, service_role;
 grant execute on function app.crm_email_holder(uuid, jsonb, uuid) to service_role;
 
+-- How many e-mails, and how many phones, one contact keeps when a person adds or copies them
+-- (C6 review, C6-SEC-3). The reveal decrypts every channel of a contact for one slot of its
+-- limiter, so without a ceiling confirming phone match after phone match into one contact
+-- (every lead sharing an office line) would let one reveal show many people's details. The
+-- doors that add channels on a person's say (add, edit, confirm, new lead) keep to it; the
+-- arrival's own link (C5) adds at most the lead's own e-mail and phone.
+create or replace function app.crm_channel_cap() returns int
+  language sql immutable set search_path = '' as $$ select 10 $$;
+revoke all on function app.crm_channel_cap() from public, anon, authenticated, service_role;
+grant execute on function app.crm_channel_cap() to service_role;
+
 -- Each kind with a channel and no primary gets its oldest as primary.
 create or replace function app.crm_fill_primary(p_tenant uuid, p_contact uuid) returns void
   language sql volatile security definer set search_path = '' as $$
@@ -699,6 +724,16 @@ begin
     from jsonb_array_elements(v_add) e
   on conflict do nothing;
   get diagnostics v_added = row_count;
+  -- At most app.crm_channel_cap() of a kind this change adds to (C6 review, C6-SEC-3); the
+  -- whole change is refused, nothing half-saved. The message names the rule for the Worker's
+  -- map (src/lib/crm/contacts.ts CONTACT_CONSTRAINTS), as the owner rule's does.
+  if exists (select 1 from (select distinct e ->> 'kind' as kind from jsonb_array_elements(v_add) e) k
+              where (select count(*) from public.crm_contact_channels ch
+                      where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.kind = k.kind)
+                    > app.crm_channel_cap()) then
+    raise exception using errcode = '23514',
+      message = 'a contact keeps at most ten e-mails and ten phones (constraint "crm_contact_channels_cap")';
+  end if;
 
   -- Primary: the one named, per kind; a newly added channel marked primary too.
   foreach v_id in array v_primary || array(
@@ -752,8 +787,9 @@ grant execute on function public.crm_delete_contact_note(uuid, uuid, uuid, uuid)
 -- trigger writes the two link lines and runs the won and owner rules, which a phone link
 -- skipped; a line naming another contact this lead was linked to goes. The person's details
 -- on the lead join the contact (copied, never decrypted): its phone, and its e-mail unless
--- another contact holds it. Its activity counts from now on, from its own time. Answers
--- {link, email: added | kept | elsewhere | none, phone: added | kept | none}.
+-- another contact holds it or the contact keeps as many of that kind as it may
+-- (app.crm_channel_cap). Its activity counts from now on, from its own time. Answers
+-- {link, email: added | kept | elsewhere | full | none, phone: added | kept | full | none}.
 create or replace function app.crm_staff_link(p_tenant uuid, p_contact uuid, p_lead uuid)
   returns jsonb
   language plpgsql volatile security definer set search_path = '' as $$
@@ -797,6 +833,11 @@ begin
                 where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.kind = 'email'
                   and ch.value_hmac = l.email_hmac) then
       v_email := 'kept';
+    elsif (select count(*) from public.crm_contact_channels ch
+            where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.kind = 'email')
+          >= app.crm_channel_cap() then
+      -- The contact keeps as many e-mails as it may: the link stands, nothing is copied.
+      v_email := 'full';
     else
       insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc, value_hmac,
                                                is_primary, source)
@@ -807,12 +848,21 @@ begin
     end if;
   end if;
   if l.phone_hmac is not null and l.phone_enc is not null then
-    insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc, value_hmac,
-                                             is_primary, source)
-    values (p_tenant, p_contact, 'phone', l.phone_enc, l.phone_hmac, false, 'lead')
-    on conflict do nothing;
-    get diagnostics v_n = row_count;
-    v_phone := case when v_n = 1 then 'added' else 'kept' end;
+    if not exists (select 1 from public.crm_contact_channels ch
+                    where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.kind = 'phone'
+                      and ch.value_hmac = l.phone_hmac)
+       and (select count(*) from public.crm_contact_channels ch
+             where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.kind = 'phone')
+           >= app.crm_channel_cap() then
+      v_phone := 'full';
+    else
+      insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc, value_hmac,
+                                               is_primary, source)
+      values (p_tenant, p_contact, 'phone', l.phone_enc, l.phone_hmac, false, 'lead')
+      on conflict do nothing;
+      get diagnostics v_n = row_count;
+      v_phone := case when v_n = 1 then 'added' else 'kept' end;
+    end if;
   end if;
   perform app.crm_fill_primary(p_tenant, p_contact);
 
@@ -998,7 +1048,11 @@ begin
      or has_function_privilege('authenticated', 'app.crm_staff_link(uuid, uuid, uuid)', 'execute')
      or has_function_privilege('authenticated', 'app.crm_channels_ok(jsonb)', 'execute')
      or has_function_privilege('anon', 'app.crm_channels_ok(jsonb)', 'execute')
-     or has_function_privilege('anon', 'app.crm_contact_filter(jsonb)', 'execute') then
+     or has_function_privilege('anon', 'app.crm_contact_filter(jsonb)', 'execute')
+     or has_function_privilege('authenticated', 'app.role_lead_pii(text)', 'execute')
+     or has_function_privilege('anon', 'app.role_lead_pii(text)', 'execute')
+     or has_function_privilege('authenticated', 'app.crm_channel_cap()', 'execute')
+     or has_function_privilege('anon', 'app.crm_channel_cap()', 'execute') then
     raise exception 'C6: a helper''s EXECUTE is not as stated';
   end if;
 end $$;
