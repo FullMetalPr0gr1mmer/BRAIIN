@@ -129,7 +129,9 @@ const ADMIN_CONTACTS_LAZY =
 // What the two CRM families both run (Admin v2 C7): the late-answer rules and the leads' words
 // (the contact timeline names its leads' events in them). Their own group, above both
 // families, so neither family's chunk imports the other's (scripts/admin-bundle.mjs check 6).
-const ADMIN_CRM = /[\\/]src[\\/]lib[\\/]crm[\\/](lateAnswers|leadView)\.ts$/;
+// Since the first build: also the CRM's schemas (their option lists), which the leads chunk held.
+const ADMIN_CRM =
+  /[\\/](src[\\/]lib[\\/]crm[\\/](lateAnswers|leadView)|packages[\\/]schemas[\\/]crm)\.ts$/;
 // The savebar and the publish dialog (Admin v2 R12): the AdminSavebar island and its screen
 // code. Their own group, never in admin-ui (every admin screen loads that, releases on or
 // off): AdminLayout renders the island only while releases are on, so with them off no page
