@@ -4,6 +4,7 @@ import { decryptPII } from '@/lib/crypto/pii';
 import { normalizeEmail, normalizePhone } from './normalize';
 import { blindIndex } from './blindIndex';
 import { leadSignals } from './score';
+import { isServicePage } from './attribution';
 
 // The daily cron's lead indexing (Admin v2 C1b): leads that arrived before 0035, without
 // their indexes, or through createLead's fallback insert have no blind indexes, signals or
@@ -39,6 +40,8 @@ interface UnindexedLead {
   timeline_text_enc: string | null;
   service_of_interest: string | null;
   company: string | null;
+  /** (C13) The page the inquiry was sent from: recorded only with the visitor's consent. */
+  landing_path: string | null;
 }
 
 export interface IndexRun {
@@ -68,7 +71,7 @@ export async function runLeadIndexBackfill(
   const { data, error } = await sb
     .from('leads')
     .select(
-      'id,tenant_id,email_enc,phone_enc,budget_enc,timeline_text_enc,service_of_interest,company',
+      'id,tenant_id,email_enc,phone_enc,budget_enc,timeline_text_enc,service_of_interest,company,landing_path',
     )
     .is('crm_indexed_at', null)
     .order('created_at', { ascending: true })
@@ -153,15 +156,20 @@ async function indexArgs(
     p_id: row.id,
     p_email_hmac: email_hmac,
     p_phone_hmac: phone_hmac,
-    p_signals: leadSignals({
-      email,
-      serviceOfInterest: row.service_of_interest ?? undefined,
-      budgetBand: budget,
-      company: row.company ?? undefined,
-      // Presence is all a signal needs; the deadline itself stays encrypted (a legacy band
-      // is in it too, moved there by this cron before C14a).
-      timelineText: row.timeline_text_enc ? 'given' : undefined,
-    }),
+    p_signals: [
+      ...leadSignals({
+        email,
+        serviceOfInterest: row.service_of_interest ?? undefined,
+        budgetBand: budget,
+        company: row.company ?? undefined,
+        // Presence is all a signal needs; the deadline itself stays encrypted (a legacy band
+        // is in it too, moved there by this cron before C14a).
+        timelineText: row.timeline_text_enc ? 'given' : undefined,
+      }),
+      // (C13) As arrival adds it (src/lib/data/leads.ts): only a recorded landing path, so
+      // only with the visitor's analytics consent.
+      ...(isServicePage(row.landing_path ?? undefined) ? (['service_page'] as const) : []),
+    ],
   };
 }
 
