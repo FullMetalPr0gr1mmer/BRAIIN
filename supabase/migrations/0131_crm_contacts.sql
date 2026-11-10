@@ -716,8 +716,12 @@ grant select on public.leads_safe to authenticated;
 -- (the cron indexes it first), 'no_index' (no e-mail or phone index), 'missing'.
 -- A definer owned by a role that bypasses RLS: it writes four FORCE RLS tables for the
 -- service role's doors (the only callers; no API role executes it).
+-- A link that would wait more than two seconds for a lock (a colleague's long transaction on
+-- the contact) gives up instead of holding the visitor's answer at arrival: the error is
+-- caught there and the cron links the lead tonight. A function setting, so it holds only
+-- while the link runs (no exposed function sets a setting: release_apply.test.sql).
 create or replace function app.crm_link_lead_core(p_tenant uuid, p_lead uuid) returns text
-  language plpgsql volatile security definer set search_path = '' as $$
+  language plpgsql volatile security definer set search_path = '' set lock_timeout = '2s' as $$
 declare
   l record;
   v_contact uuid;
@@ -960,10 +964,6 @@ begin
   -- (public.crm_link_backfill). A lead without its indexes waits for them the same way.
   if found then
     begin
-      -- A link that would wait more than two seconds for a lock (a colleague's long
-      -- transaction on the contact) gives up instead of holding the visitor's answer: the
-      -- cron links the lead tonight. Local to this sub-transaction's success: undone with it.
-      perform set_config('lock_timeout', '2s', true);
       perform app.crm_link_lead_core(p_tenant, v_id);
     exception when others then
       raise warning 'crm_ingest_lead: the contact link was skipped (SQLSTATE %); the daily cron links the lead later', sqlstate;
@@ -1420,7 +1420,7 @@ begin
                               'app.purge_crm()', 'app.crm_person_leads(uuid, uuid)'] loop
     if not exists (select 1 from pg_proc f join pg_roles o on o.oid = f.proowner
                     where f.oid = v_fn::regprocedure and f.prosecdef
-                      and f.proconfig = array['search_path=""']
+                      and f.proconfig[1] = 'search_path=""'
                       and (o.rolsuper or o.rolbypassrls)) then
       raise exception 'C5: % is not a definer with an empty search_path owned by a role that bypasses RLS', v_fn;
     end if;
