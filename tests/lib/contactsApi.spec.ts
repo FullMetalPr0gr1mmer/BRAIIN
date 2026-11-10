@@ -442,7 +442,7 @@ describe('custom field values (crm.md §5.1)', () => {
     [{ vip: 'yes' }, 'type'],
     [{ met_on: '01/03/2026' }, 'date shape'],
     [{ nick: 'Sarah!' }, 'too long'],
-  ])('refuses %j (%s)', (values) => {
+  ])('refuses %j (%s)', (values: Record<string, unknown>, _why: string) => {
     expect(() => validateCustomValues(fields, values as never)).toThrow();
   });
   it('refuses any custom value while no fields are defined (until C9b)', async () => {

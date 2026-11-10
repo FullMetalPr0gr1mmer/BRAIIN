@@ -190,7 +190,11 @@ export async function ingestContactLead(
   tenantId: string,
   actorId: string,
   contactId: string,
-  input: ContactNewLead & { name: string; company: string | null; locale: 'en' | 'ar' },
+  input: Omit<ContactNewLead, 'name' | 'company' | 'locale'> & {
+    name: string;
+    company: string | null;
+    locale: 'en' | 'ar';
+  },
 ): Promise<ContactLeadResult> {
   const [budget_enc, timeline_text_enc] = await Promise.all([
     input.budgetBand ? encryptPII(input.budgetBand, LEAD_PII_ENC_KEY) : Promise.resolve(null),
