@@ -11,6 +11,7 @@ import {
 } from '@schemas/crmTasks';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import {
+  FORMER_MEMBER,
   TYPE_LABELS,
   failureText,
   icsHref,
@@ -149,14 +150,21 @@ export default function TaskDrawer({
     const controller = new AbortController();
     lookup.current = controller;
     const timer = window.setTimeout(() => {
-      adminFetch<{ contacts: { id: string; display_name: string | null; company_name: string | null }[] }>(
-        '/api/admin/crm/contacts/lookup',
-        { method: 'POST', body: { q }, signal: controller.signal },
-      )
+      adminFetch<{
+        contacts: { id: string; display_name: string | null; company_name: string | null }[];
+      }>('/api/admin/crm/contacts/lookup', {
+        method: 'POST',
+        body: { q },
+        signal: controller.signal,
+      })
         .then((answer) => {
           if (controller.signal.aborted) return;
           setFound(
-            answer.contacts.map((c) => ({ id: c.id, name: c.display_name, company: c.company_name })),
+            answer.contacts.map((c) => ({
+              id: c.id,
+              name: c.display_name,
+              company: c.company_name,
+            })),
           );
           setLookupError('');
         })
@@ -476,6 +484,11 @@ export default function TaskDrawer({
             onChange={(event) => set('ownerId')(event.target.value)}
           >
             <option value="">Nobody</option>
+            {/* An owner who no longer holds tasks stays chosen until someone changes it: a
+                save that keeps them is not a change (app.tg_crm_task_row checks a new owner). */}
+            {task?.owner_id && !owners.some((person) => person.id === task.owner_id) && (
+              <option value={task.owner_id}>{FORMER_MEMBER}</option>
+            )}
             {owners.map((person) => (
               <option key={person.id} value={person.id}>
                 {person.id === me.id ? `${person.name} (you)` : person.name}
