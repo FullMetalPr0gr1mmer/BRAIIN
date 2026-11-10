@@ -133,7 +133,10 @@ export const PATCH = defineAdminRoute({
           primary: input.channels.primary?.length ?? 0,
         },
       });
-      return { contact: await getContact(sb, auth, id), channels: await channelPresence(sb, auth, id) };
+      return {
+        contact: await getContact(sb, auth, id),
+        channels: await channelPresence(sb, auth, id),
+      };
     }
 
     if (input.custom !== undefined) validateCustomValues(customFieldDefinitions(), input.custom);

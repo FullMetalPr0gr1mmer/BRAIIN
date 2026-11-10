@@ -93,7 +93,12 @@ export const POST = defineAdminRoute({
 
     const { data, error } = await serviceClient()
       .from('crm_contact_notes')
-      .insert({ tenant_id: auth.tenantId, contact_id: id, body: input.body, created_by: auth.userId })
+      .insert({
+        tenant_id: auth.tenantId,
+        contact_id: id,
+        body: input.body,
+        created_by: auth.userId,
+      })
       .select('id,created_at')
       .single();
     if (error || !data) throw new Error(`add contact note: ${error?.code ?? 'no row'}`);

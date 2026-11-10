@@ -93,7 +93,9 @@ export async function getContact(
   id: string,
   columns: string = CONTACT_DETAIL_COLUMNS,
 ): Promise<Record<string, unknown>> {
-  const withMerged = columns.split(',').includes('merged_into') ? columns : `${columns},merged_into`;
+  const withMerged = columns.split(',').includes('merged_into')
+    ? columns
+    : `${columns},merged_into`;
   const row = await getRow<Record<string, unknown>>(sb, 'crm_contacts', auth, id, withMerged);
   if (row['merged_into'] !== null && row['merged_into'] !== undefined) {
     throw new NotFoundError('contact');
@@ -138,7 +140,11 @@ interface DbError {
  * policy or the live check a 403, anything else a 500 whose detail stays in system_logs.
  * Never the database's own text, which can quote values.
  */
-export function contactError(error: DbError, what: string, cap: Capability = 'crm.contacts'): Error {
+export function contactError(
+  error: DbError,
+  what: string,
+  cap: Capability = 'crm.contacts',
+): Error {
   switch (error.code) {
     case 'P0002':
       return new NotFoundError('contact');

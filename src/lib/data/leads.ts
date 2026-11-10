@@ -174,8 +174,7 @@ export async function ingestManualLead(
 }
 
 export type ContactLeadResult =
-  | { ok: true; id: string; link: string | null }
-  | { ok: false; code: string | null };
+  { ok: true; id: string; link: string | null } | { ok: false; code: string | null };
 
 /**
  * "New lead" for a contact (Admin v2 C6, crm.md §9): the lead goes through

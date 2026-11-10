@@ -104,7 +104,7 @@ export const POST = defineAdminRoute({
       }
       if (error.code === '22023') {
         throw new ValidationError(
-          'A lead you ticked is no longer one of this person's phone matches. Open the preview again.',
+          "A lead you ticked is no longer one of this person's phone matches. Open the preview again.",
           'extraLeads',
         );
       }

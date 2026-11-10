@@ -54,7 +54,12 @@ export const POST = defineAdminRoute({
       action: 'crm.contact.link',
       entityType: 'contact',
       entityId: id,
-      detail: { lead: input.leadId, action: input.action, email: result.email, phone: result.phone },
+      detail: {
+        lead: input.leadId,
+        action: input.action,
+        email: result.email,
+        phone: result.phone,
+      },
     });
     return result;
   },
