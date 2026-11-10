@@ -6,6 +6,7 @@ import { z } from 'zod';
 //   - first-party telemetry ingest        (analytics)
 //   - the RUM web-vitals beacon            (analytics)
 //   - GA4 injection                        (analytics)
+//   - lead attribution with an inquiry     (analytics; Admin v2 C13, src/lib/crm/attribution.ts)
 //   - the third-party video facade click   (functional is always on; embeds need functional)
 // Default DENY. `functional` (strictly necessary) is always granted.
 // ─────────────────────────────────────────────────────────────────────────────
