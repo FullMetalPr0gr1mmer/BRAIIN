@@ -410,7 +410,7 @@ The TDD's *product* requirements are the spec. Its *stack* suggestions are mappe
 | C2 | Leads read API (query/board/summary, audited reveal, notes path, directory) | C1 | Built: [C2a](as-built/C2a.md), [C2b](as-built/C2b.md) |
 | C3 | Leads write API (versioned PATCH, bulk with per-lead audit, manual add, erase, export filters) | C2 | Built: [C3](as-built/C3.md) |
 | C4 | Leads UI (list + KPIs, board with keyboard "Move to…", detail, add drawer) | C3, F5 | Built: [C4a](as-built/C4a.md), [C4b](as-built/C4b.md), [C4c](as-built/C4c.md), [C4-star-race](as-built/C4-star-race.md) |
-| C5 | Contacts schema + ingest linking + phone link-and-flag + retention + person erase (**merge gated on O-11**) | C3 | Not built: its merge waits on O-11 (legal) |
+| C5 | Contacts schema + ingest linking + phone link-and-flag + retention + person erase (**merge gated on O-11**) | C3 | Built, held: [C5](as-built/C5.md) (the PR merges after the lawyer's sign-off of [the notice text](../legal/privacy-notice-c5.md), O-11, register L-2) |
 | C6 | Contacts API | C5 | Not built (after C5) |
 | C7 | Contacts UI + contacts in ⌘K | C6, C4 | Not built (after C6) |
 | C8 | Tasks | C6, F5 | Not built (after C6) |
@@ -699,7 +699,8 @@ Legal holds outside the O-items:
   may only go shorter (CLAUDE.md, Pillar 4).
 - **L5:** referrer, UTM, device, country and a persistent visitor id wait on PDPL sign-off.
 - **The legal review register** (`docs/legal/review-register.md`): L-1, the font licences'
-  notice (LOW, open). Go-live waits on every HIGH item; there is none open.
+  notice (LOW, open); L-2, the CRM contacts and the privacy-notice update (HIGH, open: it gates
+  merging C5 and C13, O-11; the draft text is `docs/legal/privacy-notice-c5.md`).
 
 The security exceptions the owner holds, each with its expiry, are in
 `docs/security-exceptions.md` (open: EXC-004, EXC-006 to EXC-013).
@@ -819,6 +820,7 @@ and why; H6 pulls part of R1 forward and records its departures from it.
 - [C10a](as-built/C10a.md): the Sales role for leads: the enum value alone (0096), then the helpers, `app.is_member()` for `audit_insert`, the non-staff block, the no-role-claim trusted context, the legacy lead writes withdrawn, the directory and the guides (0097), the Sales column in §5 and architecture §3.4 (both parsed), the catalog-driven pgTAP, the Sales sweep (numbers assigned at merge; PR number at review)
 - [C14a](as-built/C14a.md): the leads contract, part one (the code, no migration): `GET /api/admin/leads` and the `?pii=1` alias removed (the POST reveal is the one reveal), no Worker query naming `leads.status`, `internal_notes`, `ip_inet`, `timeline_band` or `crm_settings.timezone`, so the code runs on today's schema and on C14b's; the export keeps its PII rules (note counts, never note words; a legacy `?status=` link refused), the static gate `leadsContract.spec`, C14b's exact migration plan and the rollback floor it moves (PR number at review)
 - [C14b](as-built/C14b.md): the leads contract, part two (the migration alone, held until C14a has deployed a day and applied before its merge): `leads.status`, `internal_notes`, `ip_inet`, `timeline_band` and `crm_settings.timezone` dropped after preconditions that count, never show, what would be lost; the legacy sync, the notes mirror, the backfill and the sync's helper gone; a lead naming no stage starts in the initial one; `leads_safe` re-created SECURITY INVOKER with its grants stated; the rollback floor moved to #109; 0113 (number at merge; PR number at review)
+- [C5](as-built/C5.md): the contacts schema, a HELD PR (merges after the lawyer signs off the privacy-notice update, O-11, register L-2): `crm.contacts` (Admin), contacts, channels (the leads' ciphertext copied, blind-indexed, one e-mail per tenant), notes and events, each behind the live check; leads linked at arrival in a sub-transaction that never loses a lead (e-mail first, a phone match linked and flagged, else a new contact) and by the daily cron after indexing; retention from the last activity (`app.purge_crm` in `app.run_retention`); a person's erasure (`crm_erase_preview`, `crm_erase_person`), and a lead's erasure taking its orphan auto-contact; 0131 (number at merge)
 - [C4 star race](as-built/C4-star-race.md): a list read that left before a star was saved no longer draws it back off: on the list a row write (the star, a bulk action) aborts the read in flight and holds new ones, and the list is read once more when writes overlapped or one failed; a lead's page runs every read and write of the row in turn, busy until they land; every row write has a 15 s deadline (`src/lib/crm/lateAnswers.ts`); a failed board move reads the board again; no migration (PR number at review)
 
 **Hotfixes**
