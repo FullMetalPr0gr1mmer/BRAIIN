@@ -130,7 +130,10 @@ describe('ContactForm payload ⊆ LeadInputSchema (the contract test)', () => {
 
   it('the first touch (C13) rides as `attribution` only when the form was given one', () => {
     const values: Record<string, string> = { name: 'K', email: 'k@example.com', message: 'Hi' };
-    const without = buildContactPayload((k) => values[k] ?? null, { kind: 'contact', locale: 'en' });
+    const without = buildContactPayload((k) => values[k] ?? null, {
+      kind: 'contact',
+      locale: 'en',
+    });
     expect(without).not.toHaveProperty('attribution');
     const touch = { referrerHost: 'www.google.com', utmSource: 'google' };
     const payload = buildContactPayload((k) => values[k] ?? null, {

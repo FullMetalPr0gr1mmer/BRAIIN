@@ -25,10 +25,7 @@ import { consentCookieHeader } from '../e2e/consentCookie';
 
 const HOST = 'site.example.test';
 
-function request(
-  headers: Record<string, string> = {},
-  cf?: Record<string, unknown>,
-): Request {
+function request(headers: Record<string, string> = {}, cf?: Record<string, unknown>): Request {
   const req = new Request(`https://${HOST}/api/contact`, {
     method: 'POST',
     headers: { host: HOST, ...headers },
@@ -52,7 +49,9 @@ describe('the gate: nothing without analytics consent', () => {
   });
 
   it('analytics refused: null', () => {
-    expect(leadAttribution(request({ ...everything, cookie: NO }, { country: 'SA' }), touch)).toBeNull();
+    expect(
+      leadAttribution(request({ ...everything, cookie: NO }, { country: 'SA' }), touch),
+    ).toBeNull();
   });
 
   it('a cookie out of shape counts as no consent', () => {
@@ -61,7 +60,9 @@ describe('the gate: nothing without analytics consent', () => {
   });
 
   it('with consent: every column, cleaned, and the channel', () => {
-    expect(leadAttribution(request({ ...everything, cookie: YES }, { country: 'SA' }), touch)).toEqual({
+    expect(
+      leadAttribution(request({ ...everything, cookie: YES }, { country: 'SA' }), touch),
+    ).toEqual({
       landing_path: '/services/logo',
       referrer_host: 'www.google.com',
       utm_source: 'google',
@@ -158,9 +159,9 @@ describe('each value in its bounded shape, or dropped', () => {
     expect(deviceClassOf(h({ 'sec-ch-ua-mobile': '?1' }))).toBe('mobile');
     expect(deviceClassOf(h({ 'sec-ch-ua-mobile': '?0' }))).toBe('desktop');
     expect(deviceClassOf(h({ 'user-agent': 'Mozilla/5.0 (iPad; CPU OS 17_0)' }))).toBe('tablet');
-    expect(
-      deviceClassOf(h({ 'user-agent': 'Mozilla/5.0 (Linux; Android 14; Tab) Safari' })),
-    ).toBe('tablet');
+    expect(deviceClassOf(h({ 'user-agent': 'Mozilla/5.0 (Linux; Android 14; Tab) Safari' }))).toBe(
+      'tablet',
+    );
     expect(
       deviceClassOf(h({ 'user-agent': 'Mozilla/5.0 (Linux; Android 14; Pixel) Mobile Safari' })),
     ).toBe('mobile');
@@ -242,9 +243,9 @@ describe('the first touch of a page', () => {
   });
 
   it('a tag is cut to the schema bound', () => {
-    expect(firstTouchOf(`https://${HOST}/?utm_campaign=${'a'.repeat(300)}`, '').utmCampaign).toHaveLength(
-      200,
-    );
+    expect(
+      firstTouchOf(`https://${HOST}/?utm_campaign=${'a'.repeat(300)}`, '').utmCampaign,
+    ).toHaveLength(200);
   });
 });
 

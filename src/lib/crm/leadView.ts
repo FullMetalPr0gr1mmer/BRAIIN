@@ -125,8 +125,7 @@ export function countryName(code: string): string {
  * their stored shape are printed (strings), each exactly as stored.
  */
 export function attributionRows(lead: Readonly<Record<string, unknown>>): [string, string][] {
-  const str = (key: string): string =>
-    typeof lead[key] === 'string' ? (lead[key] as string) : '';
+  const str = (key: string): string => (typeof lead[key] === 'string' ? (lead[key] as string) : '');
   const rows: [string, string][] = [];
   const channel = lead['channel'];
   if (isKey(CHANNEL_LABELS, channel) && channel !== 'unknown') {

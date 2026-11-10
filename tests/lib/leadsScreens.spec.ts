@@ -391,7 +391,9 @@ describe('how they found us (C13)', () => {
       lead: row({ source: 'web_form', channel: 'unknown' }) as never,
       permissions: PERMS,
     });
-    expect(plain).toContain('Nothing was recorded. We record this only when the visitor allows analytics cookies.');
+    expect(plain).toContain(
+      'Nothing was recorded. We record this only when the visitor allows analytics cookies.',
+    );
     const manual = html(LeadDetail, {
       ...base,
       lead: row({ source: 'manual', channel: 'phone' }) as never,

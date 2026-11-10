@@ -64,7 +64,10 @@ describe('POST /api/contact — attribution (C13)', () => {
   });
 
   it('analytics refused: nothing', async () => {
-    await send({ ...BASE, attribution: TOUCH }, { cookie: consentCookieHeader({ analytics: false }) });
+    await send(
+      { ...BASE, attribution: TOUCH },
+      { cookie: consentCookieHeader({ analytics: false }) },
+    );
     expect(calls[0]!.attribution).toBeNull();
   });
 

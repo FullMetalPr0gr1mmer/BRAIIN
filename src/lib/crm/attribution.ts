@@ -184,7 +184,15 @@ const SEARCH = [
   'baidu.com',
   'search.brave.com',
 ];
-const SEARCH_NAMES = new Set(['google', 'bing', 'duckduckgo', 'yahoo', 'yandex', 'ecosia', 'baidu']);
+const SEARCH_NAMES = new Set([
+  'google',
+  'bing',
+  'duckduckgo',
+  'yahoo',
+  'yandex',
+  'ecosia',
+  'baidu',
+]);
 const MAIL = ['mail.google.com', 'outlook.live.com', 'outlook.office.com', 'mail.yahoo.com'];
 
 const onHost = (host: string, domains: readonly string[]) =>
@@ -263,7 +271,11 @@ function attributionOf(
   const device_class = deviceClassOf(request.headers);
   const country = countryOf(request);
   const columns: LeadAttributionColumns = {
-    channel: classifyChannel({ source: utm_source, medium: utm_medium, referrerHost: referrer_host }),
+    channel: classifyChannel({
+      source: utm_source,
+      medium: utm_medium,
+      referrerHost: referrer_host,
+    }),
   };
   if (landing_path) columns.landing_path = landing_path;
   if (referrer_host) columns.referrer_host = referrer_host;
