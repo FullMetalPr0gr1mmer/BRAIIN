@@ -1,4 +1,6 @@
 import type { Locale } from '@schemas/primitives';
+// C13 (HELD for O-11): lead attribution's sections, in their own file (./attribution.ts).
+import { ATTRIBUTION_COOKIE, ATTRIBUTION_PRIVACY } from './attribution';
 
 // Legal content (PDPL-oriented) for the v1 legal pages. DRAFT skeletons — the copy
 // is structurally complete (data, lawful basis, retention, rights/DSAR, cookies)
@@ -84,6 +86,9 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
             'We do not sell your personal data.',
           ],
         },
+        // C13: what an inquiry records about how the visitor found the site (before the Join
+        // section, which stays last).
+        ATTRIBUTION_PRIVACY.en,
         {
           id: 'recruitment',
           heading: 'Job applications (the Join form)',
@@ -162,6 +167,8 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
             'Video embeds load only after you click the placeholder (a "facade"), so no third-party cookies are set until you choose to play.',
           ],
         },
+        // C13: the session storage behind lead attribution.
+        ATTRIBUTION_COOKIE.en,
       ],
     },
   },
@@ -210,6 +217,9 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
             'لا نبيع بياناتك الشخصية.',
           ],
         },
+        // C13: what an inquiry records about how the visitor found the site (before the Join
+        // section, which stays last).
+        ATTRIBUTION_PRIVACY.ar,
         {
           id: 'recruitment',
           heading: 'طلبات التوظيف (نموذج الانضمام)',
@@ -281,6 +291,8 @@ export const LEGAL: Record<Locale, Record<LegalKey, LegalDoc>> = {
             'لا تُحمّل مقاطع الفيديو إلا بعد النقر على الصورة البديلة، فلا تُضبط ملفات الطرف الثالث حتى تختار التشغيل.',
           ],
         },
+        // C13: the session storage behind lead attribution.
+        ATTRIBUTION_COOKIE.ar,
       ],
     },
   },
