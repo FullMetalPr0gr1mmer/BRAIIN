@@ -7,11 +7,14 @@
 -- attribution (without it, a lead is what it was before C13: every column null, channel
 -- unknown), a refused value refusing the insert (the Worker then sends the lead without it), an
 -- unknown key still refused; the grants (lead workers read the columns, nobody writes them,
--- anon nothing) and the rows (Admin and Developer read their tenant's lead, Content Creator,
--- SEO, a demoted token and another tenant's Admin read none). CLAUDE.md §3, §7 Consent, §8, §9.
+-- anon nothing; the service role inserts and reads them) and the rows (Admin, Developer and
+-- Sales read their tenant's lead; Content Creator, SEO, a demoted, a deactivated and a locked
+-- token and another tenant's Admin read none). CLAUDE.md §3, §7 Consent, §8, §9.
+-- (C13 review) The shape CHECKs also refuse a percent-escape in a path, a phone number split by
+-- separators in a path or a tag, and an IP address as a referrer host.
 
 begin;
-select plan(40);
+select plan(48);
 
 insert into public.tenants (id, name) values
   ('00000000-0000-0000-0000-000000000001', 'T1'),
@@ -22,6 +25,9 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000c1', 'creator@example.test'),
   ('00000000-0000-0000-0000-0000000000d1', 'developer@example.test'),
   ('00000000-0000-0000-0000-0000000000d2', 'demoted-developer@example.test'),
+  ('00000000-0000-0000-0000-0000000000d3', 'deactivated-developer@example.test'),
+  ('00000000-0000-0000-0000-0000000000d4', 'locked-developer@example.test'),
+  ('00000000-0000-0000-0000-0000000000b1', 'sales@example.test'),
   ('00000000-0000-0000-0000-0000000000e1', 'seo@example.test'),
   ('00000000-0000-0000-0000-0000000000f1', 'other-admin@example.test');
 insert into public.profiles (id, tenant_id, role, is_active, locked_until) values
@@ -30,6 +36,9 @@ insert into public.profiles (id, tenant_id, role, is_active, locked_until) value
   ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-000000000001', 'developer', true, null),
   -- demoted: the token still says developer
   ('00000000-0000-0000-0000-0000000000d2', '00000000-0000-0000-0000-000000000001', 'seo', true, null),
+  ('00000000-0000-0000-0000-0000000000d3', '00000000-0000-0000-0000-000000000001', 'developer', false, null),
+  ('00000000-0000-0000-0000-0000000000d4', '00000000-0000-0000-0000-000000000001', 'developer', true, now() + interval '1 hour'),
+  ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-000000000001', 'sales', true, null),
   ('00000000-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-000000000001', 'seo', true, null),
   ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000ff', 'admin', true, null);
 
@@ -78,6 +87,10 @@ select throws_ok($$ select _attr('landing_path', '/x/0501234567') $$, '23514', n
   'a path with a run of seven digits is refused (a phone number must never be stored here)');
 select throws_ok($$ select _attr('landing_path', '/' || repeat('a', 200)) $$, '23514', null,
   'a path is at most 200 characters');
+select throws_ok($$ select _attr('landing_path', '/contact/someone%40example.test') $$, '23514', null,
+  'a path with a percent-escape is refused (%40 is an @)');
+select throws_ok($$ select _attr('landing_path', '/contact/050-123-4567') $$, '23514', null,
+  'a path with a phone number split by separators is refused');
 
 select lives_ok($$ select _attr('referrer_host', 'www.google.com') $$, 'a host name');
 select lives_ok($$ select _attr('referrer_host', 'xn--mgbh0fb.example') $$, 'an IDN host in its ASCII form');
@@ -87,6 +100,8 @@ select throws_ok($$ select _attr('referrer_host', 'Google.com') $$, '23514', nul
   'a host name is lower case');
 select throws_ok($$ select _attr('referrer_host', 'localhost') $$, '23514', null,
   'a host name has a dot');
+select throws_ok($$ select _attr('referrer_host', '192.168.1.5') $$, '23514', null,
+  'a referrer host is never an IP address');
 
 select lives_ok($$ select _attr('utm_campaign', 'spring_launch-2026.v2') $$, 'a campaign tag');
 select throws_ok($$ select _attr('utm_source', 'someone@example.test') $$, '23514', null,
@@ -94,6 +109,8 @@ select throws_ok($$ select _attr('utm_source', 'someone@example.test') $$, '2351
 select throws_ok($$ select _attr('utm_medium', 'CPC') $$, '23514', null, 'a tag is lower case');
 select throws_ok($$ select _attr('utm_campaign', 'call-0501234567') $$, '23514', null,
   'a tag with a run of seven digits is refused');
+select throws_ok($$ select _attr('utm_campaign', 'call-050-123-4567') $$, '23514', null,
+  'a tag with a phone number split by separators is refused');
 select throws_ok($$ select _attr('utm_campaign', repeat('a', 65)) $$, '23514', null,
   'a tag is at most 64 characters');
 
@@ -155,6 +172,12 @@ select ok(
                        'device_class', 'country']) c),
   'lead workers read the attribution and write none of it; anon and PUBLIC hold nothing on it');
 select ok(
+  (select bool_and(has_column_privilege('service_role', 'public.leads', c, 'select')
+                   and has_column_privilege('service_role', 'public.leads', c, 'insert'))
+     from unnest(array['landing_path', 'referrer_host', 'utm_source', 'utm_medium', 'utm_campaign',
+                       'device_class', 'country']) c),
+  'the service role inserts the attribution (crm_ingest_lead is SECURITY INVOKER) and reads it (the backfill)');
+select ok(
   has_function_privilege('service_role', 'public.crm_ingest_lead(uuid, jsonb)', 'execute')
   and not has_function_privilege('authenticated', 'public.crm_ingest_lead(uuid, jsonb)', 'execute')
   and not has_function_privilege('anon', 'public.crm_ingest_lead(uuid, jsonb)', 'execute')
@@ -175,6 +198,10 @@ select _as('00000000-0000-0000-0000-0000000000d1', 'developer', '00000000-0000-0
 select is(
   (select country from public.leads where id = '00000000-0000-0000-0000-00000000c131'),
   'SA', 'developer reads it (leads.manage)');
+select _as('00000000-0000-0000-0000-0000000000b1', 'sales', '00000000-0000-0000-0000-000000000001');
+select is(
+  (select utm_campaign from public.leads where id = '00000000-0000-0000-0000-00000000c131'),
+  'spring', 'sales reads it (leads.manage since 0097)');
 select _as('00000000-0000-0000-0000-0000000000c1', 'content_creator', '00000000-0000-0000-0000-000000000001');
 select is(
   (select count(*)::int from public.leads where landing_path is not null), 0,
@@ -186,6 +213,14 @@ select _as('00000000-0000-0000-0000-0000000000d2', 'developer', '00000000-0000-0
 select is(
   (select count(*)::int from public.leads where landing_path is not null), 0,
   'a demoted developer''s token reads no lead (the live check)');
+select _as('00000000-0000-0000-0000-0000000000d3', 'developer', '00000000-0000-0000-0000-000000000001');
+select is(
+  (select count(*)::int from public.leads where landing_path is not null), 0,
+  'a deactivated developer''s token reads no lead (the live check)');
+select _as('00000000-0000-0000-0000-0000000000d4', 'developer', '00000000-0000-0000-0000-000000000001');
+select is(
+  (select count(*)::int from public.leads where landing_path is not null), 0,
+  'a locked developer''s token reads no lead (the live check)');
 select _as('00000000-0000-0000-0000-0000000000f1', 'admin', '00000000-0000-0000-0000-0000000000ff');
 select is(
   (select count(*)::int from public.leads where landing_path is not null), 0,

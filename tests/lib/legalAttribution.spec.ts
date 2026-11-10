@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LEGAL } from '@/lib/legal/content';
-import { ATTRIBUTION_COOKIE, ATTRIBUTION_PRIVACY } from '@/lib/legal/attribution';
+import {
+  ATTRIBUTION_COOKIE,
+  ATTRIBUTION_NOTICE_HELD,
+  ATTRIBUTION_PRIVACY,
+} from '@/lib/legal/attribution';
+import { RECRUITMENT_POLICY_VERSION } from '@consent/recruitment';
 import { ATTRIBUTION_LEAD_COLUMNS } from '@/lib/admin/leadFields';
 import { FIRST_TOUCH_KEY } from '@/lib/client/attribution';
 
@@ -16,6 +21,18 @@ const SIGN_OFF = readFileSync(
   join(process.cwd(), 'docs', 'legal', 'privacy-notice-c13-attribution.md'),
   'utf8',
 );
+const REGISTER = readFileSync(join(process.cwd(), 'docs', 'legal', 'review-register.md'), 'utf8');
+
+/**
+ * The notices' date before C13's sections (legal.spec derives the "Last updated" lines from the
+ * recruitment notice version, J-17): the merge must move it past this.
+ */
+const PRE_C13_NOTICE_VERSION = '2026-10-04';
+
+/** C13's register rows: [id, severity, status]. */
+const C13_ROWS = [
+  ...REGISTER.matchAll(/^\| (L-C13-\d+) \|.*\| (HIGH|MEDIUM|LOW) \| ([a-z]+) \|/gm),
+].map((m) => [m[1]!, m[2]!, m[3]!] as const);
 
 describe('the notices carry C13’s sections, in both languages', () => {
   it('the privacy notice has the attribution section just before the Join one, the cookie policy ends with the storage one', () => {
@@ -51,6 +68,30 @@ describe('the notices carry C13’s sections, in both languages', () => {
   });
 });
 
+describe('held until the lawyer approves, and the dates move at the merge (C13 review COR-4)', () => {
+  it('the register carries C13’s rows', () => {
+    expect(C13_ROWS.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('held while a C13 HIGH question is open; released once none is', () => {
+    const openHigh = C13_ROWS.filter(([, sev, status]) => sev === 'HIGH' && status === 'open');
+    // Recording the lawyer's answers (merge step 1) fails this until ATTRIBUTION_NOTICE_HELD
+    // is set to false, which then requires the dates below to move.
+    expect(ATTRIBUTION_NOTICE_HELD).toBe(openHigh.length > 0);
+  });
+
+  it('released: the notices are dated after C13’s sections were added', () => {
+    if (ATTRIBUTION_NOTICE_HELD) {
+      // Held: the sign-off file still says so. (The dates may move first with C5's part, which
+      // shares the notices' dates.)
+      expect(SIGN_OFF).toMatch(/Status: draft, not approved/);
+      expect(RECRUITMENT_POLICY_VERSION >= PRE_C13_NOTICE_VERSION).toBe(true);
+    } else {
+      expect(RECRUITMENT_POLICY_VERSION > PRE_C13_NOTICE_VERSION).toBe(true);
+    }
+  });
+});
+
 describe('the words match the code', () => {
   const en = ATTRIBUTION_PRIVACY.en.body.join('\n');
 
@@ -75,6 +116,22 @@ describe('the words match the code', () => {
     for (const phrase of ['IP address', 'full web addresses', 'your city']) {
       expect(en, phrase).toContain(phrase);
     }
+  });
+
+  it('says what the build does: the first page seen with consent, a stored identifier, the tab (C13 review)', () => {
+    const ar = ATTRIBUTION_PRIVACY.ar.body.join('\n');
+    // The tags and referrer are those of the first page seen WITH consent (COR-2, S7).
+    expect(en).toMatch(/first page you viewed in that visit after allowing analytics cookies/);
+    expect(en).not.toMatch(/the link you first arrived by/);
+    expect(ar).toMatch(/أول صفحة زرتها في تلك الزيارة بعد موافقتك/);
+    // No stored identifier, not "nothing that links" (S4; the inference is register L-C13-8).
+    expect(en).toMatch(/We store no identifier that links your inquiry/);
+    expect(en).not.toMatch(/or anything that links your inquiry/);
+    // bs_ft stays in the tab until it closes; an inquiry keeps a copy (COR-3).
+    expect(en).toMatch(/kept in the tab’s session storage until you close the tab/);
+    expect(en).not.toMatch(/until you send an inquiry/);
+    expect(ar).toMatch(/تُحفظ نسخة منه مع طلبك/);
+    expect(REGISTER).toMatch(/\| L-C13-8 \|/);
   });
 
   it('names the session storage key the browser uses', () => {

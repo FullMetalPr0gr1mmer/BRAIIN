@@ -15,6 +15,8 @@ import {
   readFirstTouch,
   recordFirstTouch,
 } from '@/lib/client/attribution';
+import { analyticsConsent, attributionConsent } from '@/lib/client/analytics';
+import { ATTRIBUTION_CONSENT_VERSION, CONSENT_VERSION } from '@consent/gate';
 import { LeadInputSchema } from '@schemas/lead';
 import { consentCookieHeader } from '../e2e/consentCookie';
 
@@ -78,6 +80,42 @@ describe('the gate: nothing without analytics consent', () => {
   });
 });
 
+describe('the consent must be given under the current notice (C13 review: S1, COR-1)', () => {
+  // A yes given to an older notice, which the banner is asking about again, records nothing,
+  // as the GA4 loader treats it (public/scripts/ga4.js); raising CONSENT_VERSION is the
+  // re-consent step register row L-C13-2 relies on.
+  const touch = { utmSource: 'google', utmMedium: 'cpc' };
+  const at = (v: number) => consentCookieHeader({ analytics: true }, v);
+  const value = (header: string) => header.slice(header.indexOf('=') + 1);
+
+  it('the attribution version is never above the current one (else nothing would ever record)', () => {
+    expect(ATTRIBUTION_CONSENT_VERSION).toBeLessThanOrEqual(CONSENT_VERSION);
+  });
+
+  it('server: an older or a newer version records nothing; the current one records', () => {
+    for (const v of [CONSENT_VERSION - 1, CONSENT_VERSION + 1]) {
+      expect(
+        leadAttribution(request({ cookie: at(v) }, { country: 'SA' }), touch),
+        `v=${v}`,
+      ).toBeNull();
+    }
+    expect(leadAttribution(request({ cookie: at(CONSENT_VERSION) }), touch)?.channel).toBe('paid');
+  });
+
+  it('browser: a yes under an older notice is no consent for attribution', () => {
+    // The first-party page views still count a yes under any version; attribution does not.
+    expect(analyticsConsent(at(CONSENT_VERSION - 1))).toBe(true);
+    expect(attributionConsent(at(CONSENT_VERSION - 1))).toBe(false);
+    expect(attributionConsent(at(CONSENT_VERSION + 1))).toBe(false);
+    expect(attributionConsent(at(CONSENT_VERSION))).toBe(true);
+    expect(attributionConsent(consentCookieHeader({ analytics: false }))).toBe(false);
+    expect(attributionConsent('')).toBe(false);
+    // Among other cookies, as document.cookie lists them.
+    expect(attributionConsent(`a=1; ${at(CONSENT_VERSION)}`)).toBe(true);
+    expect(attributionConsent(`a=1; __Host-consent=${value(at(CONSENT_VERSION - 1))}`)).toBe(false);
+  });
+});
+
 describe('the landing path is the server’s', () => {
   it('the path of a same-origin Referer, without its query or fragment', () => {
     expect(landingPathFrom(`https://${HOST}/contact?email=a%40b.test#inquiry`, HOST)).toBe(
@@ -98,6 +136,14 @@ describe('the landing path is the server’s', () => {
     expect(landingPathFrom(`https://${HOST}/x/a@b.test`, HOST)).toBeUndefined();
     expect(landingPathFrom(`https://${HOST}/x/0501234567`, HOST)).toBeUndefined();
     expect(landingPathFrom(`https://${HOST}/${'a'.repeat(200)}`, HOST)).toBeUndefined();
+  });
+
+  it('an encoded @ or a phone number split by separators: no path (C13 review S3)', () => {
+    expect(landingPathFrom(`https://${HOST}/contact/someone%40mail.com`, HOST)).toBeUndefined();
+    expect(landingPathFrom(`https://${HOST}/contact/050-123-4567`, HOST)).toBeUndefined();
+    expect(landingPathFrom(`https://${HOST}/contact/(050)123.4567`, HOST)).toBeUndefined();
+    // An ordinary page keeps its path, digits and all.
+    expect(landingPathFrom(`https://${HOST}/services/3d-design`, HOST)).toBe('/services/3d-design');
   });
 
   it('the client cannot supply it: a landing path in the body is not read', () => {
@@ -144,12 +190,23 @@ describe('each value in its bounded shape, or dropped', () => {
     expect(cleanReferrerHost(undefined, HOST)).toBeUndefined();
   });
 
+  it('the referrer is never an IP address, in any spelling (C13 review S3)', () => {
+    expect(cleanReferrerHost('192.168.1.5', HOST)).toBeUndefined();
+    expect(cleanReferrerHost('3232235777', HOST)).toBeUndefined(); // 192.168.1.1 as one integer
+    expect(cleanReferrerHost('0xc0.0xa8.1.1', HOST)).toBeUndefined();
+    expect(cleanReferrerHost('[::1]', HOST)).toBeUndefined();
+    expect(cleanReferrerHost('a1.example2.com', HOST)).toBe('a1.example2.com');
+  });
+
   it('a tag: a lower-case slug of at most 64, never an address or a phone number', () => {
     expect(cleanTag(' Spring Launch ')).toBe('spring-launch');
     expect(cleanTag('a'.repeat(64))).toBe('a'.repeat(64));
     expect(cleanTag('a'.repeat(65))).toBeUndefined();
     expect(cleanTag('someone@example.test')).toBeUndefined();
     expect(cleanTag('call-0501234567')).toBeUndefined();
+    expect(cleanTag('call-050-123-4567')).toBeUndefined();
+    expect(cleanTag('966.50.123.4567')).toBeUndefined();
+    expect(cleanTag('spring_launch-2026.v2')).toBe('spring_launch-2026.v2');
     expect(cleanTag('حملة')).toBeUndefined();
     expect(cleanTag('')).toBeUndefined();
   });
@@ -179,6 +236,20 @@ describe('each value in its bounded shape, or dropped', () => {
     expect(countryOf(request({}, { city: 'Riyadh' }))).toBeUndefined();
     expect(countryOf(request())).toBeUndefined();
   });
+
+  it('the country survives Astro rebuilding the request (C13 review COR-5)', () => {
+    // astro/dist/core/fetch/fetch-state.js rebuilds the request with `new Request(url, request)`
+    // on its forwarded-host path; outside workerd that drops `cf`. Cloudflare's CF-IPCountry
+    // header survives it.
+    const original = request({ 'cf-ipcountry': 'SA' }, { country: 'SA' });
+    const rebuilt = new Request(`https://${HOST}/api/contact`, original);
+    expect((rebuilt as Request & { cf?: unknown }).cf).toBeUndefined();
+    expect(countryOf(rebuilt)).toBe('SA');
+    expect(countryOf(request({ 'cf-ipcountry': 'XX' }))).toBeUndefined();
+    expect(countryOf(request({ 'cf-ipcountry': 'Riyadh' }))).toBeUndefined();
+    // `cf` wins where both are present.
+    expect(countryOf(request({ 'cf-ipcountry': 'AE' }, { country: 'SA' }))).toBe('SA');
+  });
 });
 
 describe('the channel', () => {
@@ -199,6 +270,21 @@ describe('the channel', () => {
     expect(classifyChannel({ referrerHost: 't.co' })).toBe('social');
     expect(classifyChannel({ referrerHost: 'blog.example.test' })).toBe('referral');
     expect(classifyChannel({ medium: 'weird', referrerHost: 'www.google.com' })).toBe('organic');
+  });
+
+  it('consent given after the first page: unknown, never direct (C13 review COR-2)', () => {
+    expect(classifyChannel({ lateConsent: true })).toBe('unknown');
+    expect(classifyChannel({ lateConsent: true, medium: 'cpc' })).toBe('paid');
+    expect(classifyChannel({ lateConsent: true, source: 'google' })).toBe('organic');
+    const parsed = LeadInputSchema.parse({
+      name: 'A',
+      email: 'a@example.test',
+      message: 'hi',
+      attribution: { lateConsent: true },
+    });
+    expect(leadAttribution(request({ cookie: YES }), parsed.attribution)).toEqual({
+      channel: 'unknown',
+    });
   });
 
   it('then the source, and direct with nothing', () => {
@@ -235,8 +321,14 @@ describe('the first touch of a page', () => {
     });
   });
 
-  it('this site as referrer, an unreadable referrer, or none: no host', () => {
-    expect(firstTouchOf(`https://${HOST}/`, `https://${HOST}/about`)).toEqual({});
+  it('this site as referrer: no host, and the arrival was not seen (COR-2)', () => {
+    // The visitor allowed analytics on a page they reached from inside the site.
+    expect(
+      firstTouchOf(`https://${HOST}/about`, `https://${HOST}/services/logo?utm_medium=cpc`),
+    ).toEqual({ lateConsent: true });
+  });
+
+  it('an unreadable referrer, or none: no host', () => {
     expect(firstTouchOf(`https://${HOST}/`, 'android-app://com.example')).toEqual({});
     expect(firstTouchOf(`https://${HOST}/`, '')).toEqual({});
     expect(firstTouchOf('nonsense', '')).toEqual({});
@@ -280,6 +372,12 @@ describe('the first touch in sessionStorage, with consent only', () => {
     page(`https://${HOST}/contact?utm_source=second`);
     recordFirstTouch(true);
     expect(readFirstTouch(true)).toEqual({ referrerHost: 'www.google.com', utmSource: 'first' });
+  });
+
+  it('the late-consent marker is kept and read back', () => {
+    page(`https://${HOST}/about`, `https://${HOST}/`);
+    recordFirstTouch(true);
+    expect(readFirstTouch(true)).toEqual({ lateConsent: true });
   });
 
   it('a withdrawn consent removes it', () => {

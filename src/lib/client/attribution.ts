@@ -3,10 +3,17 @@
 // visitor (its host name, never the URL) and the campaign tags of their first page — kept so an
 // inquiry sent later in the session can say how the visitor found us.
 //
-// ONLY with analytics consent. The caller passes the consent it read from the cookie
-// (src/lib/client/analytics.ts analyticsConsent): without it nothing is written, and what an
-// earlier yes wrote is removed, so withdrawing consent clears it. The server checks the consent
-// again through hasConsent (the gate of record) and drops everything without it.
+// ONLY with analytics consent given under the current notice. The caller passes the consent it
+// read from the cookie (src/lib/client/analytics.ts attributionConsent, which also compares the
+// choice's version, packages/consent/version.ts): without it nothing is written, and what an
+// earlier yes wrote is removed, so withdrawing consent, or a notice change the banner asks about
+// again, clears it. The server checks the consent again through hasAttributionConsent (the gate
+// of record) and drops everything without it.
+//
+// "First" means the first page of the session seen WITH consent: nothing is kept before the
+// yes. When that page was reached from inside the site (the visitor allowed analytics on a
+// later page), the arrival was never seen, and the touch says so (`lateConsent`), so the
+// server records the channel as `unknown` rather than `direct` (C13 review).
 //
 // Where: sessionStorage under `bs_ft`, so it dies with the tab. Never a cookie, never sent
 // anywhere but with an inquiry, never joined to the analytics session id (`bs_sid`), never the
@@ -21,6 +28,8 @@ export interface FirstTouch {
   utmSource?: string;
   utmMedium?: string;
   utmCampaign?: string;
+  /** The page was reached from inside the site: the visit's arrival was not seen. */
+  lateConsent?: true;
 }
 
 const TAGS = [
@@ -32,7 +41,10 @@ const KEYS = ['referrerHost', 'utmSource', 'utmMedium', 'utmCampaign'] as const;
 const TAG_MAX = 200;
 const HOST_MAX = 253;
 
-/** The first touch of a page: its campaign tags and, from another site only, the referrer's host. */
+/**
+ * The first touch of a page: its campaign tags and, from another site only, the referrer's
+ * host; from this site, `lateConsent` (the visit began on an earlier page, before consent).
+ */
 export function firstTouchOf(href: string, referrer: string): FirstTouch {
   const touch: FirstTouch = {};
   let here: URL;
@@ -54,6 +66,8 @@ export function firstTouchOf(href: string, referrer: string): FirstTouch {
         from.hostname !== here.hostname
       ) {
         touch.referrerHost = from.hostname.slice(0, HOST_MAX);
+      } else if (from.hostname === here.hostname) {
+        touch.lateConsent = true;
       }
     } catch {
       // An unreadable referrer is no referrer.
@@ -97,6 +111,7 @@ export function readFirstTouch(consented: boolean): FirstTouch | undefined {
         touch[key] = value.slice(0, key === 'referrerHost' ? HOST_MAX : TAG_MAX);
       }
     }
+    if ((parsed as Record<string, unknown>)['lateConsent'] === true) touch.lateConsent = true;
     return touch;
   } catch {
     return undefined;

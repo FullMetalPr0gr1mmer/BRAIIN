@@ -19,11 +19,13 @@
 --   country        a two-letter code from the network location: never the IP, never a city
 -- and `channel` (0035), which the Worker classifies from them.
 --
--- The CHECKs are the second layer behind the Worker's cleaners (src/lib/crm/attribution.ts):
--- no `@` and no run of seven digits in a path or a tag, so an e-mail address or a phone number
--- a link carried cannot be stored here. A refused value refuses the insert; the Worker then
--- sends the lead again without its attribution (src/lib/data/leads.ts), so attribution never
--- costs a lead.
+-- The CHECKs are the second layer behind the Worker's cleaners (src/lib/crm/attribution.ts),
+-- with the same patterns (tests/lib/leadAttributionSql.spec.ts): no `@` and no seven digits,
+-- in a row or split by single separators (`050-123-4567`), in a path or a tag; no
+-- percent-escape in a path (`%40` is an `@`); no IP address as a referrer host (a numeric last
+-- label). An e-mail address or a phone number written plainly in a link is not stored here.
+-- A refused value refuses the insert; the Worker then sends the lead again without its
+-- attribution (src/lib/data/leads.ts), so attribution never costs a lead.
 --
 -- Retention and erasure need nothing new: the values live on the lead row, so they go when the
 -- lead goes (app.purge_leads, the spam horizon, crm_erase_lead). Staff cannot write them (no
@@ -44,24 +46,28 @@ alter table public.leads
 alter table public.leads drop constraint if exists leads_landing_path_shape;
 alter table public.leads add constraint leads_landing_path_shape check (
   landing_path is null
-  or (landing_path ~ '^/[^?#[:space:]]{0,199}$'
+  or (landing_path ~ '^/[^?#%[:space:]]{0,199}$'
       and landing_path !~ '@'
-      and landing_path !~ '[0-9]{7}'));
+      and landing_path !~ '[0-9]([^0-9A-Za-z]?[0-9]){6}'));
 
 alter table public.leads drop constraint if exists leads_referrer_host_shape;
 alter table public.leads add constraint leads_referrer_host_shape check (
   referrer_host is null
   or (char_length(referrer_host) <= 253
-      and referrer_host ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$'));
+      and referrer_host ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$'
+      and referrer_host !~ '\.[0-9]+$'));
 
 alter table public.leads drop constraint if exists leads_utm_shape;
 alter table public.leads add constraint leads_utm_shape check (
   (utm_source is null
-   or (utm_source ~ '^[a-z0-9][a-z0-9._+-]{0,63}$' and utm_source !~ '[0-9]{7}'))
+   or (utm_source ~ '^[a-z0-9][a-z0-9._+-]{0,63}$'
+       and utm_source !~ '[0-9]([^0-9A-Za-z]?[0-9]){6}'))
   and (utm_medium is null
-       or (utm_medium ~ '^[a-z0-9][a-z0-9._+-]{0,63}$' and utm_medium !~ '[0-9]{7}'))
+       or (utm_medium ~ '^[a-z0-9][a-z0-9._+-]{0,63}$'
+           and utm_medium !~ '[0-9]([^0-9A-Za-z]?[0-9]){6}'))
   and (utm_campaign is null
-       or (utm_campaign ~ '^[a-z0-9][a-z0-9._+-]{0,63}$' and utm_campaign !~ '[0-9]{7}')));
+       or (utm_campaign ~ '^[a-z0-9][a-z0-9._+-]{0,63}$'
+           and utm_campaign !~ '[0-9]([^0-9A-Za-z]?[0-9]){6}')));
 
 alter table public.leads drop constraint if exists leads_device_class_check;
 alter table public.leads add constraint leads_device_class_check check (
@@ -198,8 +204,14 @@ begin
                          'leads_device_class_check', 'leads_country_shape')) <> 5 then
     raise exception 'C13: an attribution CHECK is missing';
   end if;
-  -- Staff read them and write none of them; anon, PUBLIC nothing at all.
+  -- Staff read them and write none of them; anon, PUBLIC nothing at all. The service role
+  -- inserts them through crm_ingest_lead (SECURITY INVOKER) and the daily index backfill reads
+  -- landing_path, so it must hold INSERT and SELECT on each (P-14: stated, never assumed).
   foreach c in array v_attr loop
+    if not has_column_privilege('service_role', 'public.leads', c, 'select')
+       or not has_column_privilege('service_role', 'public.leads', c, 'insert') then
+      raise exception 'C13: service_role must hold SELECT and INSERT on leads.%', c;
+    end if;
     if not has_column_privilege('authenticated', 'public.leads', c, 'select')
        or has_column_privilege('authenticated', 'public.leads', c, 'insert, update, references') then
       raise exception 'C13: authenticated must hold SELECT and nothing else on leads.%', c;

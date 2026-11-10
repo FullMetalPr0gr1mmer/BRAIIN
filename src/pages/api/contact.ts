@@ -28,9 +28,10 @@ import { leadAttribution } from '@/lib/crm/attribution';
 //
 // Attribution (Admin v2 C13): how the visitor found us is recorded with the lead ONLY with their
 // analytics consent, checked here through the one gate (src/lib/crm/attribution.ts
-// leadAttribution → hasConsent); without it nothing is recorded, whatever the browser sent. It
-// never fails a send: a bad attribution object is dropped by the schema, a bad value by its
-// cleaner, and a refused one by createLead's retry.
+// leadAttribution → hasAttributionConsent, which also requires the current notice's consent
+// version); without it nothing is recorded, whatever the browser sent. It never fails a send: a
+// bad attribution object is dropped by the schema, a bad value by its cleaner, and a refused one
+// by createLead's retry.
 export const prerender = false;
 
 function json(body: unknown, status: number): Response {

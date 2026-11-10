@@ -1,12 +1,14 @@
-import { hasConsent } from '@consent/gate';
+import { hasAttributionConsent } from '@consent/gate';
 import type { LeadAttributionInput } from '@schemas/lead';
 import type { LeadChannel } from '@schemas/crm';
 
 // Lead attribution, the server's half (Admin v2 C13, crm.md §7.3; HELD for O-11): what is
 // recorded with an inquiry about how the visitor found the site, and ONLY when they said yes to
-// analytics. The consent is read here through the one gate (packages/consent/gate.ts
-// hasConsent), the gate of record, whatever the browser sent: without it the answer is null
-// and the lead carries none of these columns (its channel stays `unknown`).
+// analytics, under the current notice. The consent is read here through the one gate
+// (packages/consent/gate.ts hasAttributionConsent: hasConsent, and the choice's version is the
+// current one and names attribution, packages/consent/version.ts), the gate of record, whatever
+// the browser sent: without it the answer is null and the lead carries none of these columns
+// (its channel stays `unknown`).
 //
 // What is recorded (migration 0132's columns), each cleaned on its own, a value that does not
 // fit dropped while the rest are kept:
@@ -17,12 +19,15 @@ import type { LeadChannel } from '@schemas/crm';
 //   utm_*          the first page's campaign tags: lower-case slugs, at most 64 characters.
 //   device_class   mobile, tablet or desktop, from Sec-CH-UA-Mobile or the User-Agent. The
 //                  User-Agent itself is never stored.
-//   country        Cloudflare's two-letter country for the connection (request.cf.country),
-//                  never the IP, never a city.
-//   channel        organic, social, paid, referral, direct or email, classified from the above.
+//   country        Cloudflare's two-letter country for the connection (request.cf.country,
+//                  else its CF-IPCountry header), never the IP, never a city.
+//   channel        organic, social, paid, referral, direct or email, classified from the above;
+//                  `unknown` when the visitor allowed analytics only after the first page.
 //
-// No value may carry an `@` or a run of seven digits (an e-mail address or a phone number a
-// link put there); the database's CHECKs refuse them as well (0132).
+// No value may carry an `@`, seven digits in a row or split by single separators (an e-mail
+// address or a phone number a link put there, `050-123-4567` too), a percent-escape in a path
+// (an encoded `@` must not slip through) or an IP address as a host; the database's CHECKs
+// refuse them as well (0132), with the same patterns (tests/lib/leadAttributionSql.spec.ts).
 //
 // Never recorded: the IP, the full User-Agent, any URL with its query, a city, the analytics
 // session id, or anything else that links a lead to its page views (G1 D4).
@@ -41,15 +46,26 @@ export interface LeadAttributionColumns {
 
 export type DeviceClass = 'mobile' | 'tablet' | 'desktop';
 
-/** An e-mail address or a phone-length run of digits: never stored in a path or a tag. */
-const LOOKS_PERSONAL = /@|[0-9]{7}/;
-const PATH = /^\/[^?#\s]{0,199}$/;
+/**
+ * A phone number: seven digits, each pair split by at most one character that is not a letter
+ * or a digit (`0501234567`, `050-123-4567`, `(050)1234`). The SQL CHECKs carry this source.
+ */
+export const PHONE_LIKE_SOURCE = '[0-9]([^0-9A-Za-z]?[0-9]){6}';
+const PHONE_LIKE = new RegExp(PHONE_LIKE_SOURCE);
+/** An e-mail address or a phone number: never stored in a path or a tag. */
+const looksPersonal = (value: string) => value.includes('@') || PHONE_LIKE.test(value);
+const PATH = /^\/[^?#%\s]{0,199}$/;
 const TAG = /^[a-z0-9][a-z0-9._+-]{0,63}$/;
 const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+/** A host whose last label is all digits is an IP address (no top-level domain is numeric). */
+export const NUMERIC_TLD_SOURCE = '\\.[0-9]+$';
+const NUMERIC_TLD = new RegExp(NUMERIC_TLD_SOURCE);
 
 /**
  * The path of the page the form was sent from: the Referer's, when it is this site's own
- * origin (the request's Host), with no query and no fragment. Anything else is no path.
+ * origin (the request's Host), with no query and no fragment. Anything else is no path, and so
+ * is a path with a percent-escape (every page of the site has an ASCII path, and `%40` is an
+ * `@`).
  */
 export function landingPathFrom(
   referer: string | null | undefined,
@@ -65,10 +81,10 @@ export function landingPathFrom(
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined;
   if (url.host.toLowerCase() !== host.toLowerCase()) return undefined;
   const path = url.pathname;
-  return PATH.test(path) && !LOOKS_PERSONAL.test(path) ? path : undefined;
+  return PATH.test(path) && !looksPersonal(path) ? path : undefined;
 }
 
-/** A host name in its ASCII form, lower case, never this site's own; else nothing. */
+/** A host name in ASCII, lower case, never an IP address, never this site's own; else nothing. */
 export function cleanReferrerHost(
   value: string | undefined,
   ownHost: string | null | undefined,
@@ -83,7 +99,7 @@ export function cleanReferrerHost(
   } catch {
     return undefined;
   }
-  if (host.length > 253 || !HOST.test(host)) return undefined;
+  if (host.length > 253 || !HOST.test(host) || NUMERIC_TLD.test(host)) return undefined;
   const own = ownHost?.toLowerCase().replace(/:\d+$/, '');
   if (own && (host === own || host === `www.${own}` || own === `www.${host}`)) return undefined;
   return host;
@@ -93,7 +109,7 @@ export function cleanReferrerHost(
 export function cleanTag(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const tag = value.trim().toLowerCase().replace(/\s+/g, '-');
-  return TAG.test(tag) && !LOOKS_PERSONAL.test(tag) ? tag : undefined;
+  return TAG.test(tag) && !looksPersonal(tag) ? tag : undefined;
 }
 
 /** Mobile, tablet or desktop, from the request's hints; nothing when it cannot tell. */
@@ -108,10 +124,17 @@ export function deviceClassOf(headers: Headers): DeviceClass | undefined {
   return undefined;
 }
 
-/** Cloudflare's country code for the connection (adapter 14: `request.cf`); else nothing. */
+/**
+ * Cloudflare's country code for the connection; else nothing. Adapter 14 documents
+ * `Astro.request.cf` (its error for the removed `Astro.locals.runtime.cf` says so), but Astro
+ * rebuilds the request with `new Request(url, request)` on its forwarded-host path
+ * (astro/dist/core/fetch/fetch-state.js), and outside workerd a rebuilt request has no `cf`.
+ * Cloudflare's CF-IPCountry header (set by its edge, never the client's) survives a rebuild, so
+ * it is the fallback. Neither is verified on staging yet (C13 as-built, merge step 4).
+ */
 export function countryOf(request: Request): string | undefined {
   const cf = (request as Request & { cf?: { country?: unknown } }).cf;
-  const country = cf?.country;
+  const country = cf?.country ?? request.headers.get('cf-ipcountry') ?? undefined;
   // XX: Cloudflare could not tell. T1 (Tor) fails the shape.
   return typeof country === 'string' && /^[A-Z]{2}$/.test(country) && country !== 'XX'
     ? country
@@ -204,15 +227,17 @@ const isSearchHost = (host: string) =>
 /**
  * How the visitor reached us (crm.md §7.3): a paid, e-mail or social medium first, then the
  * referring site (mail before search: webmail lives on search engines' domains), then the
- * source's name, and `direct` with neither. Called only with consent; without it the lead
- * keeps `unknown`.
+ * source's name, and `direct` with neither. `lateConsent` (the visitor allowed analytics on a
+ * page reached from inside the site, so their arrival was never seen) makes that last case
+ * `unknown`, never `direct`. Called only with consent; without it the lead keeps `unknown`.
  */
 export function classifyChannel(touch: {
   source?: string | undefined;
   medium?: string | undefined;
   referrerHost?: string | undefined;
+  lateConsent?: boolean | undefined;
 }): LeadChannel {
-  const { source, medium, referrerHost } = touch;
+  const { source, medium, referrerHost, lateConsent } = touch;
   if (medium) {
     if (PAID_MEDIA.has(medium)) return 'paid';
     if (EMAIL_MEDIA.has(medium)) return 'email';
@@ -231,7 +256,8 @@ export function classifyChannel(touch: {
     if (SEARCH_NAMES.has(source)) return 'organic';
     return 'referral';
   }
-  return medium ? 'referral' : 'direct';
+  if (medium) return 'referral';
+  return lateConsent ? 'unknown' : 'direct';
 }
 
 /** A service page, English or Arabic: the `service_page` score signal (0035). */
@@ -240,8 +266,8 @@ export function isServicePage(path: string | undefined): boolean {
 }
 
 /**
- * What a new lead records about how the visitor found us: null without analytics consent
- * (hasConsent, the gate of record), else the cleaned columns and the channel. `input` is the
+ * What a new lead records about how the visitor found us: null without analytics consent given
+ * under the current notice (hasAttributionConsent, the gate of record), else the cleaned columns and the channel. `input` is the
  * browser's first touch (LeadInputSchema `attribution`); the landing path, device and country
  * come from the request itself.
  */
@@ -249,7 +275,7 @@ export function leadAttribution(
   request: Request,
   input: LeadAttributionInput | undefined,
 ): LeadAttributionColumns | null {
-  if (!hasConsent(request, 'analytics')) return null;
+  if (!hasAttributionConsent(request)) return null;
   try {
     return attributionOf(request, input);
   } catch {
@@ -275,6 +301,7 @@ function attributionOf(
       source: utm_source,
       medium: utm_medium,
       referrerHost: referrer_host,
+      lateConsent: input?.lateConsent === true,
     }),
   };
   if (landing_path) columns.landing_path = landing_path;

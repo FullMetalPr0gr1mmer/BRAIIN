@@ -78,10 +78,10 @@ export function budgetBandLabel(key: string, locale: 'en' | 'ar' = 'en'): string
  * The browser's first touch of the session (Admin v2 C13, crm.md §7.3): the other site that sent
  * the visitor and the campaign tags of their first page, which only the browser saw. Kept in
  * sessionStorage and sent with an inquiry ONLY with analytics consent
- * (src/lib/client/attribution.ts); the server checks the consent again through hasConsent and
- * cleans every value on its own (src/lib/crm/attribution.ts), dropping what does not fit, so
- * these bounds are the raw input's, not the stored shape's. Never a URL with its query: a host
- * name and three tags.
+ * (src/lib/client/attribution.ts); the server checks the consent again through
+ * hasAttributionConsent and cleans every value on its own (src/lib/crm/attribution.ts), dropping
+ * what does not fit, so these bounds are the raw input's, not the stored shape's. Never a URL
+ * with its query: a host name, three tags and the late-consent marker.
  */
 export const LeadAttributionInputSchema = z
   .object({
@@ -89,6 +89,12 @@ export const LeadAttributionInputSchema = z
     utmSource: z.string().max(200).optional(),
     utmMedium: z.string().max(200).optional(),
     utmCampaign: z.string().max(200).optional(),
+    /**
+     * The visitor allowed analytics on a page they reached from inside the site, so the
+     * session's real arrival (its referrer and tags) was never seen: the server records the
+     * channel as `unknown`, never `direct` (C13 review).
+     */
+    lateConsent: z.literal(true).optional(),
   })
   .strict();
 export type LeadAttributionInput = z.infer<typeof LeadAttributionInputSchema>;
