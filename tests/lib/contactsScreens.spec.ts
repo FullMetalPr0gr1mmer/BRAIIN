@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import ContactsList from '@/components/admin/screens/contacts/ContactsList';
 import ContactDetail from '@/components/admin/screens/contacts/ContactDetail';
+import ContactChannelsCard from '@/components/admin/screens/contacts/ContactChannelsCard';
 import {
   checkContact,
   contactBody,
@@ -242,6 +243,43 @@ describe('a contact’s page', () => {
 
   it('keeps names in their own direction', () => {
     expect(admin).toMatch(/<span dir="auto">Nora Haddad<\/span>/);
+  });
+});
+
+describe('the contact details card after a reveal', () => {
+  const channels = [
+    { id: OTHER, kind: 'email', is_primary: true, source: 'manual' },
+    { id: SARA, kind: 'phone', is_primary: true, source: 'lead' },
+  ];
+  const card = (revealed: Map<string, string | null>) =>
+    html(ContactChannelsCard, {
+      contactId: ID,
+      channels,
+      revealed,
+      onRevealed: () => undefined,
+      busy: false,
+      edit: async () => true,
+    });
+
+  it('shows what was revealed, with its links, and offers no second reveal', () => {
+    const out = card(
+      new Map([
+        [OTHER, 'nora@example.test'],
+        [SARA, '+966551234567'],
+      ]),
+    );
+    expect(out).toContain('nora@example.test');
+    expect(out).toContain('href="mailto:nora@example.test"');
+    expect(out).toContain('href="https://wa.me/966551234567"');
+    expect(out).not.toContain('Reveal contact details');
+    expect(out).not.toMatch(/\sstyle=/);
+  });
+
+  it('keeps a channel that arrived after the reveal hidden, and offers the reveal again', () => {
+    const out = card(new Map([[OTHER, 'nora@example.test']]));
+    expect(out).toContain('Hidden');
+    expect(out).not.toContain('+966');
+    expect(out).toContain('Reveal contact details (this access is logged)');
   });
 });
 
