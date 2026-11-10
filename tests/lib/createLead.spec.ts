@@ -13,6 +13,8 @@ const rpcs: { fn: string; args: { p_tenant: string; p_lead: Record<string, unkno
 const inserts: Record<string, unknown>[] = [];
 const logs: { level: string; message: string }[] = [];
 let rpcError: { code?: string; message?: string } | null = null;
+/** Per-call answers, taken first (C13's retry): an empty queue answers rpcError. */
+const rpcErrorQueue: ({ code?: string; message?: string } | null)[] = [];
 let insertError: { code?: string } | null = null;
 let country = 'SA';
 let countryFails = false;
@@ -20,8 +22,9 @@ let countryFails = false;
 vi.mock('@/lib/supabase/server', () => ({
   serviceClient: () => ({
     rpc: async (fn: string, args: { p_tenant: string; p_lead: Record<string, unknown> }) => {
-      rpcs.push({ fn, args });
-      return { data: null, error: rpcError };
+      // A copy: the retry edits the same object after the first call.
+      rpcs.push({ fn, args: { ...args, p_lead: structuredClone(args.p_lead) } });
+      return { data: null, error: rpcErrorQueue.length > 0 ? rpcErrorQueue.shift()! : rpcError };
     },
     from: (table: string) => {
       const b: Record<string, unknown> = {};
@@ -74,6 +77,7 @@ beforeEach(() => {
   inserts.length = 0;
   logs.length = 0;
   rpcError = null;
+  rpcErrorQueue.length = 0;
   insertError = null;
   country = 'SA';
   countryFails = false;
@@ -213,5 +217,78 @@ describe('the fallback (the contact form fails open)', () => {
     rpcError = { code: '42883' };
     insertError = { code: '23514' };
     expect(await createLead(input())).toEqual({ ok: false, reason: 'insert-failed' });
+  });
+});
+
+// ---- Attribution (Admin v2 C13): decided by the caller with consent; never costs a lead ----------
+const ATTRIBUTION = {
+  landing_path: '/services/logo',
+  referrer_host: 'www.google.com',
+  utm_source: 'google',
+  utm_medium: 'cpc',
+  utm_campaign: 'spring',
+  device_class: 'mobile',
+  country: 'SA',
+  channel: 'paid',
+} as const;
+const ATTRIBUTION_COLUMNS = Object.keys(ATTRIBUTION);
+
+describe('attribution (C13)', () => {
+  it('without consent (null) the lead carries no attribution key and no service_page', async () => {
+    expect(await createLead(input(), null)).toEqual({ ok: true });
+    const lead = rpcs[0]!.args.p_lead;
+    for (const key of ATTRIBUTION_COLUMNS) expect(lead, key).not.toHaveProperty(key);
+    expect(lead['score_signals']).not.toContain('service_page');
+  });
+
+  it('with it, every column goes through the allow-list, and a service page scores', async () => {
+    expect(await createLead(input(), { ...ATTRIBUTION })).toEqual({ ok: true });
+    expect(rpcs).toHaveLength(1);
+    const lead = rpcs[0]!.args.p_lead;
+    for (const [key, value] of Object.entries(ATTRIBUTION)) expect(lead[key], key).toBe(value);
+    for (const key of Object.keys(lead)) expect(INGEST_KEYS, key).toContain(key);
+    expect(lead['score_signals']).toContain('service_page');
+  });
+
+  it('another page is no service_page', async () => {
+    await createLead(input(), { ...ATTRIBUTION, landing_path: '/contact' });
+    expect(rpcs[0]!.args.p_lead['score_signals']).not.toContain('service_page');
+  });
+
+  it('a lead without computed signals gets no service_page (the cron scores it)', async () => {
+    countryFails = true;
+    await createLead(input(), { ...ATTRIBUTION });
+    expect(rpcs[0]!.args.p_lead).not.toHaveProperty('score_signals');
+  });
+
+  it('a refusal of the attributed lead sends it once more without the attribution', async () => {
+    rpcErrorQueue.push({ code: '22023', message: 'crm_ingest_lead: unknown lead field' }, null);
+    expect(await createLead(input(), { ...ATTRIBUTION })).toEqual({ ok: true });
+    expect(rpcs).toHaveLength(2);
+    const [first, second] = [rpcs[0]!.args.p_lead, rpcs[1]!.args.p_lead];
+    expect(second['id']).toBe(first['id']);
+    for (const key of ATTRIBUTION_COLUMNS) expect(second, key).not.toHaveProperty(key);
+    expect(second['score_signals']).not.toContain('service_page');
+    expect(inserts).toHaveLength(0);
+    expect(logs.at(-1)!.level).toBe('warn');
+    // The code only: never a value of the lead or of its attribution.
+    expect(JSON.stringify(logs)).not.toMatch(/Sara|google|services\/logo/);
+  });
+
+  it('a second refusal is the real one: reported, never an insert', async () => {
+    rpcError = { code: '23514' };
+    expect(await createLead(input(), { ...ATTRIBUTION })).toEqual({
+      ok: false,
+      reason: 'insert-failed',
+    });
+    expect(rpcs).toHaveLength(2);
+    expect(inserts).toHaveLength(0);
+  });
+
+  it('the fail-open insert never carries the attribution', async () => {
+    rpcError = { code: 'PGRST202' };
+    expect(await createLead(input(), { ...ATTRIBUTION })).toEqual({ ok: true });
+    expect(rpcs).toHaveLength(1);
+    for (const key of ATTRIBUTION_COLUMNS) expect(inserts[0], key).not.toHaveProperty(key);
   });
 });

@@ -13,8 +13,10 @@
 //                     chooses a service there, at most once per key per page view.
 //
 // Nothing is sent without analytics consent (read here from the consent cookie, and
-// re-checked by /api/analytics with hasConsent), and nothing new is stored: the same per-tab
-// `bs_sid` the page views always carried. `sendBeacon`, so a beacon never delays a navigation
+// re-checked by /api/analytics with hasConsent). Stored: the same per-tab `bs_sid` the page
+// views always carried, and (Admin v2 C13) the session's first touch, `bs_ft`, which an inquiry
+// carries and nothing else reads (src/lib/client/attribution.ts): written only with consent,
+// removed when consent is withdrawn, never joined to `bs_sid`. `sendBeacon`, so a beacon never delays a navigation
 // and survives the one the click starts (the language link). No layout reads, no work on
 // idle: one listener for clicks and one for the explorer's event.
 //
@@ -28,6 +30,8 @@
 // dies with the tab, is never joined to a user, and exists only so visits are countable.
 // Under PDPL that keeps this an analytics measure rather than a tracking one, but it is still
 // consent-gated, because the visitor's expectation governs, not our data model.
+
+import { recordFirstTouch } from './attribution';
 
 const COOKIE = '__Host-consent';
 const ENDPOINT = '/api/analytics';
@@ -98,6 +102,10 @@ export function initAnalytics(): void {
   // `pageshow` covers both a fresh load and a bfcache restore.
   addEventListener('pageshow', sendView);
   document.addEventListener('consent-updated', sendView);
+
+  // (C13) The session's first touch, with consent only; a "no" removes it.
+  recordFirstTouch(analyticsConsent());
+  document.addEventListener('consent-updated', () => recordFirstTouch(analyticsConsent()));
 
   // Once per id (or key) per page view: a second click on the same link counts nothing.
   const done = new Set<string>();

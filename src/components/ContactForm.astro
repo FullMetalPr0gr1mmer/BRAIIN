@@ -308,6 +308,8 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
   } from '@/lib/client/formErrors';
   import { buildContactPayload, leadKeysToFields, variantOfForm } from '@/lib/forms/contactPayload';
   import { preselectValue } from '@/lib/forms/serviceSelect';
+  import { analyticsConsent } from '@/lib/client/analytics';
+  import { readFirstTouch } from '@/lib/client/attribution';
 
   const form = document.getElementById('contact-form') as HTMLFormElement | null;
   const status = document.getElementById('contact-status') as HTMLElement | null;
@@ -361,6 +363,9 @@ const serviceValue = initialServiceValue(serviceGroups, selected);
         kind: d['kind'] === 'project_inquiry' ? 'project_inquiry' : 'contact',
         locale: d['locale'] ?? 'en',
         form: variantOfForm(d['formVariant']),
+        // How the visitor found us (C13): with analytics consent only, checked again by the
+        // server through hasConsent.
+        attribution: readFirstTouch(analyticsConsent()),
       });
       busy = true;
       showStatus(form, status, 'sending');

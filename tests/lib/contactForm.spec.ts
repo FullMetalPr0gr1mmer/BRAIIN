@@ -128,6 +128,22 @@ describe('ContactForm payload ⊆ LeadInputSchema (the contract test)', () => {
     expect(LeadInputSchema.safeParse(payload).success).toBe(true);
   });
 
+  it('the first touch (C13) rides as `attribution` only when the form was given one', () => {
+    const values: Record<string, string> = { name: 'K', email: 'k@example.com', message: 'Hi' };
+    const without = buildContactPayload((k) => values[k] ?? null, { kind: 'contact', locale: 'en' });
+    expect(without).not.toHaveProperty('attribution');
+    const touch = { referrerHost: 'www.google.com', utmSource: 'google' };
+    const payload = buildContactPayload((k) => values[k] ?? null, {
+      kind: 'contact',
+      locale: 'en',
+      attribution: touch,
+    });
+    expect(SCHEMA_KEYS).toContain('attribution');
+    expect(payload['attribution']).toEqual(touch);
+    const parsed = LeadInputSchema.safeParse(payload);
+    expect(parsed.success && parsed.data.attribution).toEqual(touch);
+  });
+
   it('sends empty required fields as "" so the server names them', () => {
     const payload = buildContactPayload(() => null, { kind: 'contact', locale: 'en' });
     expect(payload).toMatchObject({ name: '', email: '', message: '' });

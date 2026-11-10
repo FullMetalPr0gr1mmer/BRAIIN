@@ -74,6 +74,25 @@ export function budgetBandLabel(key: string, locale: 'en' | 'ar' = 'en'): string
   return (BUDGET_BAND_LABELS as Record<string, { en: string; ar: string }>)[key]?.[locale] ?? key;
 }
 
+/**
+ * The browser's first touch of the session (Admin v2 C13, crm.md §7.3): the other site that sent
+ * the visitor and the campaign tags of their first page, which only the browser saw. Kept in
+ * sessionStorage and sent with an inquiry ONLY with analytics consent
+ * (src/lib/client/attribution.ts); the server checks the consent again through hasConsent and
+ * cleans every value on its own (src/lib/crm/attribution.ts), dropping what does not fit, so
+ * these bounds are the raw input's, not the stored shape's. Never a URL with its query: a host
+ * name and three tags.
+ */
+export const LeadAttributionInputSchema = z
+  .object({
+    referrerHost: z.string().max(253).optional(),
+    utmSource: z.string().max(200).optional(),
+    utmMedium: z.string().max(200).optional(),
+    utmCampaign: z.string().max(200).optional(),
+  })
+  .strict();
+export type LeadAttributionInput = z.infer<typeof LeadAttributionInputSchema>;
+
 export const LeadInputSchema = z.object({
   kind: LeadKindSchema.default('contact'),
   locale: LocaleSchema.default('en'),
@@ -110,6 +129,11 @@ export const LeadInputSchema = z.object({
    * before the claim sends none, and is held to the config.
    */
   requiredFields: z.array(z.string().max(32)).max(16).optional(),
+  /**
+   * The first touch (C13), sent only with analytics consent. `.catch`: an attribution object
+   * out of shape is dropped, never a 422 — attribution must never cost a lead.
+   */
+  attribution: LeadAttributionInputSchema.optional().catch(undefined),
   // Anti-spam: honeypot must be empty; captcha token verified server-side once
   // reCAPTCHA is provisioned (KAN-20) — optional in v1 so the form works pre-launch
   // (honeypot + edge rate-limit cover spam until then).

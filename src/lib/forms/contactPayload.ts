@@ -9,6 +9,7 @@
 
 import { serviceChoice } from './serviceSelect';
 import { parseRequiredClaim, REQUIRED_CLAIM_INPUT } from './requiredClaim';
+import type { FirstTouch } from '@/lib/client/attribution';
 
 /**
  * Form control `name` → LeadInputSchema key. Only controls a form actually renders: the
@@ -86,7 +87,16 @@ type Get = (name: string) => FormDataEntryValue | null;
  */
 export function buildContactPayload(
   get: Get,
-  opts: { kind: ContactKind; locale: string; form?: string | undefined },
+  opts: {
+    kind: ContactKind;
+    locale: string;
+    form?: string | undefined;
+    /**
+     * The session's first touch (Admin v2 C13), passed only with analytics consent
+     * (src/lib/client/attribution.ts readFirstTouch); the server checks the consent again.
+     */
+    attribution?: FirstTouch | undefined;
+  },
 ): Record<string, unknown> {
   const text = (name: string) => {
     const v = get(name);
@@ -105,6 +115,7 @@ export function buildContactPayload(
   // the send to those, so a page drawn before a field became required still sends.
   const claim = parseRequiredClaim(get(REQUIRED_CLAIM_INPUT));
   if (claim) payload['requiredFields'] = claim;
+  if (opts.attribution) payload['attribution'] = { ...opts.attribution };
   for (const [field, key] of Object.entries(CONTACT_FIELD_TO_LEAD)) {
     if (field === 'service') {
       // `discipline:<slug>` → disciplineOfInterest, a slug → serviceOfInterest; "not sure"
