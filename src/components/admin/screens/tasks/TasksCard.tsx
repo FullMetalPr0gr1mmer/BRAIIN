@@ -95,7 +95,13 @@ export default function TasksCard({ lead, contact, owners, me, onChanged }: Task
           </h2>
           <p className="card__sub">Follow-ups for {lead ? 'this lead' : 'this person'}.</p>
         </div>
-        <button type="button" data-size="sm" onClick={() => openDrawer(null)}>
+        {/* Not before the first read: it brings the studio's today, the new task's due date. */}
+        <button
+          type="button"
+          data-size="sm"
+          disabled={groups === null}
+          onClick={() => openDrawer(null)}
+        >
           <Icon name="plus" size={14} />
           Add a task
         </button>

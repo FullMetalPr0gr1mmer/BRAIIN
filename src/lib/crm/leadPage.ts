@@ -21,6 +21,7 @@ import {
   type LeadFilters,
 } from './leadUrl';
 import { stageTone, type LeadEvent } from './leadView';
+import { crmPeople } from './people';
 
 // The leads pages' server render (Admin v2 C4b): what /admin/leads, /admin/leads/board and
 // /admin/leads/[id] read before their islands hydrate, so each page is complete without
@@ -134,11 +135,14 @@ export async function readStages(sb: SupabaseClient, auth: AuthContext): Promise
   );
 }
 
-/** The people a lead can be assigned to; empty when the directory cannot be read. */
+/**
+ * The people a lead can be assigned to; empty when the directory cannot be read. The directory
+ * is read once per request (crmPeople): the Tasks card's owners come from the same read.
+ */
 export async function readPeople(sb: SupabaseClient, auth: AuthContext): Promise<PersonView[]> {
-  const { data, error } = await sb.rpc('crm_people', { p_tenant: auth.tenantId });
-  if (error || !Array.isArray(data)) return [];
-  return (data as Record<string, unknown>[]).flatMap((person) =>
+  const data = await crmPeople(sb, auth.tenantId);
+  if (!data) return [];
+  return data.flatMap((person) =>
     typeof person['id'] === 'string'
       ? [{ id: person['id'], name: text(person['display_name']) || 'A member with no name' }]
       : [],

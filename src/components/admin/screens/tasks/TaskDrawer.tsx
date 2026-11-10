@@ -11,9 +11,9 @@ import {
 } from '@schemas/crmTasks';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import {
+  CONFLICT,
   FORMER_MEMBER,
   TYPE_LABELS,
-  failureText,
   icsHref,
   isConflict,
   type TaskContactRef,
@@ -28,9 +28,11 @@ import {
 // from a lead's page), who owns it (me by default) and a note. Loaded with import() on first
 // use, so neither this form nor the kit pieces it draws with ride on a screen's first load.
 //
-// A new task is one POST; an edit one PATCH at the version read (a 409 says "Someone else
-// changed this. Refreshed." and the list is read again). The explicit Save is the only write
-// (P-5: no keystroke autosave). "Download .ics" shows once the task is saved.
+// A new task is one POST; an edit one PATCH at the version read. A 409 reads the task again
+// (GET /api/admin/crm/tasks/<id>) and puts it in the form, so "Someone else changed this.
+// Refreshed." is true and the next Save carries the new version (C8 review, C8-UX-1); the list
+// is read again too. The explicit Save is the only write (P-5: no keystroke autosave).
+// "Download .ics" shows once the task is saved.
 
 export interface TaskDrawerProps {
   open: boolean;
@@ -96,6 +98,15 @@ function initialForm(
   };
 }
 
+const contactOf = (task: TaskRow | null | undefined, fallback?: TaskContactRef | null) =>
+  task?.contact_id
+    ? { id: task.contact_id, name: task.contact_name, company: task.contact_company }
+    : (fallback ?? null);
+const leadOf = (task: TaskRow | null | undefined, fallback?: TaskLeadRef | null) =>
+  task?.lead_id
+    ? { id: task.lead_id, number: task.lead_number, name: task.lead_name }
+    : (fallback ?? null);
+
 /** What the form itself refuses before it asks the server. */
 export function checkTask(form: Form): Partial<Record<FieldKey, string>> {
   const errors: Partial<Record<FieldKey, string>> = {};
@@ -120,15 +131,9 @@ export default function TaskDrawer({
   const id = (key: FieldKey) => `${prefix}-${key}`;
   const [form, setForm] = useState<Form>(() => initialForm(task, today, me, owners));
   const [linkedContact, setLinkedContact] = useState<TaskContactRef | null>(() =>
-    task?.contact_id
-      ? { id: task.contact_id, name: task.contact_name, company: task.contact_company }
-      : (contact ?? null),
+    contactOf(task, contact),
   );
-  const [linkedLead, setLinkedLead] = useState<TaskLeadRef | null>(() =>
-    task?.lead_id
-      ? { id: task.lead_id, number: task.lead_number, name: task.lead_name }
-      : (lead ?? null),
-  );
+  const [linkedLead, setLinkedLead] = useState<TaskLeadRef | null>(() => leadOf(task, lead));
   const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
   const [summary, setSummary] = useState<FieldError[]>([]);
   const [failure, setFailure] = useState('');
@@ -229,9 +234,23 @@ export default function TaskDrawer({
       onSaved(answer);
       if (!task) onClose();
     } catch (err) {
-      if (isConflict(err)) {
-        setFailure(failureText(err));
+      if (isConflict(err) && saved) {
         onSaved(null);
+        // The task as someone else left it, in the form, at its new version.
+        try {
+          const fresh = await adminFetch<TaskRow>(`/api/admin/crm/tasks/${saved.id}`);
+          setSaved(fresh);
+          setForm(initialForm(fresh, today, me, owners));
+          setLinkedContact(contactOf(fresh));
+          setLinkedLead(leadOf(fresh));
+          setFailure(CONFLICT);
+        } catch (readErr) {
+          setFailure(
+            readErr instanceof AdminApiError && readErr.info.status === 404
+              ? 'Someone else deleted this task.'
+              : describeError(readErr),
+          );
+        }
         return;
       }
       if (err instanceof AdminApiError && err.info.status === 422) {
@@ -384,7 +403,7 @@ export default function TaskDrawer({
           )}
         </div>
         <div className="f">
-          <span className="f__l" id={id('contactId')}>
+          <span className="f__l" id={`${id('contactId')}-l`}>
             {FIELD_LABELS.contactId}
           </span>
           {linkedContact ? (
@@ -396,9 +415,11 @@ export default function TaskDrawer({
                 </>
               )}
               <button
+                id={id('contactId')}
                 type="button"
                 data-size="sm"
                 data-variant="ghost"
+                aria-describedby={described('contactId')}
                 onClick={() => setLinkedContact(null)}
               >
                 Remove<span className="visually-hidden"> the contact</span>
@@ -407,9 +428,11 @@ export default function TaskDrawer({
           ) : (
             <>
               <input
+                id={id('contactId')}
                 type="search"
-                aria-labelledby={id('contactId')}
-                aria-describedby={`${id('contactId')}-hint`}
+                aria-labelledby={`${id('contactId')}-l`}
+                aria-invalid={errors.contactId ? true : undefined}
+                aria-describedby={described('contactId', true)}
                 placeholder="Search by name or company"
                 value={query}
                 autoComplete="off"
@@ -423,6 +446,16 @@ export default function TaskDrawer({
                   {lookupError}
                 </p>
               )}
+              {/* What the search found, said once it lands (WCAG 4.1.3). */}
+              <p className="visually-hidden" role="status">
+                {found === null
+                  ? ''
+                  : found.length === 0
+                    ? 'Nobody matches.'
+                    : found.length === 1
+                      ? '1 contact found.'
+                      : `${found.length} contacts found.`}
+              </p>
               {found && (
                 <ul className="task-form__found" aria-label="Contacts found">
                   {found.length === 0 && <li className="f__hint">Nobody matches.</li>}
@@ -450,7 +483,11 @@ export default function TaskDrawer({
               )}
             </>
           )}
-          {errors.contactId && <p className="field-error f__err">{errors.contactId}</p>}
+          {errors.contactId && (
+            <p id={`${id('contactId')}-error`} className="field-error f__err">
+              {errors.contactId}
+            </p>
+          )}
         </div>
         {linkedLead && (
           <div className="f">
@@ -463,14 +500,21 @@ export default function TaskDrawer({
                 </>
               )}
               <button
+                id={id('leadId')}
                 type="button"
                 data-size="sm"
                 data-variant="ghost"
+                aria-describedby={described('leadId')}
                 onClick={() => setLinkedLead(null)}
               >
                 Remove<span className="visually-hidden"> the lead</span>
               </button>
             </p>
+            {errors.leadId && (
+              <p id={`${id('leadId')}-error`} className="field-error f__err">
+                {errors.leadId}
+              </p>
+            )}
           </div>
         )}
         {field(
@@ -486,8 +530,8 @@ export default function TaskDrawer({
             <option value="">Nobody</option>
             {/* An owner who no longer holds tasks stays chosen until someone changes it: a
                 save that keeps them is not a change (app.tg_crm_task_row checks a new owner). */}
-            {task?.owner_id && !owners.some((person) => person.id === task.owner_id) && (
-              <option value={task.owner_id}>{FORMER_MEMBER}</option>
+            {saved?.owner_id && !owners.some((person) => person.id === saved.owner_id) && (
+              <option value={saved.owner_id}>{FORMER_MEMBER}</option>
             )}
             {owners.map((person) => (
               <option key={person.id} value={person.id}>

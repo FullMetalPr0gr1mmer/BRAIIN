@@ -45,7 +45,7 @@ export default function EraseLeadDialog({ leadId, open, onClose }: EraseLeadDial
       onClose={onClose}
       dismissible={false}
       title="Erase this lead"
-      sub="This deletes the lead, its notes and its timeline. It is logged in the activity log. Answer a request within 30 days."
+      sub="This deletes the lead, its notes, its tasks and its timeline. It is logged in the activity log. Answer a request within 30 days."
       footer={
         <>
           <button type="button" data-autofocus="" onClick={onClose} disabled={busy}>

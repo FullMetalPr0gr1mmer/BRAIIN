@@ -120,6 +120,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'crmContacts: contacts list (POST query)',
   'crmContacts: contacts list searched by e-mail (blind index)',
   'crmContacts: contacts picker (POST lookup)',
+  'crmTasks: one task read again (the drawer after a 409)',
   'crmTasks: task added',
   'crmTasks: task calendar file (.ics)',
   'crmTasks: task edit (versioned PATCH)',

@@ -63,7 +63,9 @@ export const GET = defineAdminRoute({
       {
         host: site.host,
         brand: await brandOf(sb, auth.tenantId),
-        link: `${site.origin}/admin/tasks#task-${id}`,
+        // Everyone's list (C8 review, C8-UX-2): My tasks would not show a task someone else
+        // or nobody owns, so the anchor would point at nothing.
+        link: `${site.origin}/admin/tasks?view=all#task-${id}`,
         now: new Date(),
       },
     );

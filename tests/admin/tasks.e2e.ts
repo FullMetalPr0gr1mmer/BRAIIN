@@ -9,8 +9,10 @@ import { SKIP_REASON, STAFF_IDS, authFile, staffEnv } from './staff';
  *   the screen  as the Admin: a task added through the drawer (10:00 by default) lands in its
  *               list; an overdue one of mine lights the sidebar's Tasks count; ticking moves a
  *               task to Done; the snooze sets tomorrow 10:00 in the studio's zone; a stale
- *               version is a 409; the calendar file is an attachment carrying the title and
- *               no note; axe with the drawer open;
+ *               version is a 409, and in the drawer a 409 shows the task as it is now so the
+ *               next Save goes through (C8 review, C8-UX-1); the calendar file is an
+ *               attachment carrying the title, a link to Everyone's list and no note; axe with
+ *               the drawer open;
  *   a lead      the Tasks card on a lead's page adds a task about that lead;
  *   refusals    Content Creator, SEO, Developer and Sales get a 403 page (and API), and no
  *               Tasks link (crm.tasks is Admin's until C10b).
@@ -207,7 +209,46 @@ test.describe('as admin', () => {
     const body = (await ics.text()).replace(/\r\n /g, '');
     expect(body).toContain(`SUMMARY:E2E ${RUN} calendar`);
     expect(body).toContain(`UID:${task.id}@`);
+    expect(body).toContain(`/admin/tasks?view=all#task-${task.id}`);
     expect(body).not.toContain('secret note');
+  });
+
+  test('the drawer after someone else’s edit: the 409 shows the task as it is now, and the next Save goes through', async ({
+    page,
+  }) => {
+    const today = (await groups(page)).today;
+    const task = await addTask(page, {
+      title: `E2E ${RUN} drawer race`,
+      dueDate: shift(today, 6),
+      dueTime: '14:00',
+    });
+    await visit(page, '/admin/tasks?view=all');
+    await page.locator(`#task-${task.id}`).getByRole('button', { name: 'Edit this task' }).click();
+    const drawer = page.getByRole('dialog', { name: 'Edit task' });
+    await expect(drawer).toBeVisible();
+    const what = drawer.getByLabel('What needs doing');
+    await expect(what).toHaveValue(task.title);
+    // Someone else saves first: the version the drawer read moves on.
+    const theirs = `E2E ${RUN} drawer race, theirs`;
+    const moved = await page.request.patch(`/api/admin/crm/tasks/${task.id}`, {
+      headers: { 'x-csrf-token': await csrf(page) },
+      data: { version: task.version, title: theirs },
+    });
+    expect(moved.status()).toBe(200);
+    await what.fill(`E2E ${RUN} drawer race, lost`);
+    await drawer.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(
+      drawer.getByRole('alert').filter({ hasText: 'Someone else changed this. Refreshed.' }),
+    ).toBeVisible();
+    await expect(what).toHaveValue(theirs);
+    // The next Save carries the new version: no second 409.
+    const mine = `E2E ${RUN} drawer race, mine`;
+    await what.fill(mine);
+    await drawer.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect
+      .poll(async () => all(await groups(page)).find((t) => t.id === task.id)?.title ?? null)
+      .toBe(mine);
+    await expect(drawer.getByText('Someone else changed this.')).toHaveCount(0);
   });
 
   test('a lead’s page: the Tasks card adds a task about that lead', async ({ page }) => {
@@ -257,6 +298,7 @@ for (const role of ['content_creator', 'seo', 'developer', 'sales'] as const) {
       const probe = '00000000-0000-4000-8000-000000000000';
       expect((await page.request.get('/api/admin/crm/tasks')).status()).toBe(403);
       expect((await page.request.get(`/api/admin/crm/tasks/${probe}/ics`)).status()).toBe(403);
+      expect((await page.request.get(`/api/admin/crm/tasks/${probe}`)).status()).toBe(403);
       const post = await page.request.post('/api/admin/crm/tasks', {
         headers: { 'x-csrf-token': await csrf(page) },
         data: { title: 'x', dueDate: '2026-11-11', dueTime: '10:00' },

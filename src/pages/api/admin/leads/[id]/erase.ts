@@ -20,8 +20,8 @@ import { serviceClient } from '@/lib/supabase/server';
 //                                 lead is a 404 before anything is written
 //   5. attempt audit, WRITTEN     fail-closed: no row, no erase
 //   6. public.crm_erase_lead      as the service role (no staff token may delete a lead,
-//                                 0030): the lead and, by cascade, its notes and timeline,
-//                                 in one transaction. The database checks the acting
+//                                 0030): the lead and, by cascade, its notes, timeline and
+//                                 (Admin v2 C8) tasks, in one transaction. The database checks the acting
 //                                 profile itself, live, through app.role_crm_erase
 //   7. outcome audit              with the counts, or the failure
 //
@@ -39,12 +39,13 @@ function requireId(params: Record<string, string | undefined>): string {
 
 /**
  * What crm_erase_lead answers: the lead's number and how many rows went (since Admin v2 C5,
- * `contacts` too: the auto-contact the lead left with nothing, 0 or 1).
+ * `contacts` too: the auto-contact the lead left with nothing, 0 or 1; since C8, `tasks`: the
+ * follow-ups on the lead, which go with it).
  */
 function counts(data: unknown): Record<string, number> {
   const out: Record<string, number> = {};
   if (data && typeof data === 'object' && !Array.isArray(data)) {
-    for (const key of ['lead_number', 'leads', 'notes', 'events', 'contacts']) {
+    for (const key of ['lead_number', 'leads', 'notes', 'events', 'tasks', 'contacts']) {
       const value = (data as Record<string, unknown>)[key];
       if (typeof value === 'number') out[key] = value;
     }

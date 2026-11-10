@@ -32,6 +32,14 @@ export const cases: readonly Case[] = [
     allow: ['admin'],
   },
   {
+    name: 'one task read again (the drawer after a 409)',
+    load: () => import('@/pages/api/admin/crm/tasks/[id]'),
+    method: 'GET',
+    url: BASE,
+    allow: ['admin'],
+    read: true,
+  },
+  {
     name: 'task edit (versioned PATCH)',
     load: () => import('@/pages/api/admin/crm/tasks/[id]'),
     method: 'PATCH',

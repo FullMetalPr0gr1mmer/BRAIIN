@@ -178,6 +178,7 @@ export default function TasksScreen({ initial, view: initialView, owners, me }: 
                 aria-labelledby={`tasks-${section.key}-h`}
               >
                 <h2 id={`tasks-${section.key}-h`} className="card__t">
+                  {section.key === 'overdue' && <Icon name="warn" size={16} />}
                   {section.title} <span className="tasks__n">{total}</span>
                 </h2>
                 {list.length === 0 ? (

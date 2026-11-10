@@ -325,6 +325,37 @@ describe('PATCH /api/admin/crm/tasks/[id]', () => {
   });
 });
 
+describe('GET /api/admin/crm/tasks/[id] (C8 review, C8-UX-1: the drawer after a 409)', () => {
+  it('reads the task as the caller, in the caller’s tenant, cut to the named fields, unaudited', async () => {
+    const { GET } = await import('@/pages/api/admin/crm/tasks/[id]');
+    rpcAnswers['crm_task_read'] = { data: { ...ROW, version: 3 }, error: null };
+    const res = await GET(ctx(`/api/admin/crm/tasks/${TASK}`));
+    expect(res.status).toBe(200);
+    expect(rpcCalls).toEqual([{ fn: 'crm_task_read', args: { p_tenant: TENANT, p_task: TASK } }]);
+    const data = (await json(res))['data'] as Record<string, unknown>;
+    expect(data['version']).toBe(3);
+    expect(data['title']).toBe('Call Huda');
+    expect(data['email_enc']).toBeUndefined();
+    expect(audits).toEqual([]);
+  });
+
+  it('an unseen task is a 404, a stale token a 403, a bad id a 404 before the database', async () => {
+    const { GET } = await import('@/pages/api/admin/crm/tasks/[id]');
+    for (const [code, status] of [
+      ['P0002', 404],
+      ['42501', 403],
+    ] as const) {
+      rpcAnswers['crm_task_read'] = { data: null, error: { code, message: 'x' } };
+      expect((await GET(ctx(`/api/admin/crm/tasks/${TASK}`))).status, code).toBe(status);
+    }
+    rpcCalls.length = 0;
+    const c = ctx('/api/admin/crm/tasks/nope');
+    (c as unknown as { params: Record<string, string> }).params = { id: 'nope' };
+    expect((await GET(c)).status).toBe(404);
+    expect(rpcCalls).toEqual([]);
+  });
+});
+
 describe('DELETE /api/admin/crm/tasks/[id]', () => {
   it('removes at the version read and audits what it was about, by id', async () => {
     const { DELETE } = await import('@/pages/api/admin/crm/tasks/[id]');
@@ -372,7 +403,10 @@ describe('GET /api/admin/crm/tasks/[id]/ics', () => {
     const body = (await res.text()).replace(/\r\n /g, '');
     expect(body).toContain(`UID:${TASK}@www.example.test`);
     expect(body).toContain('PRODID:-//Studio Name//Admin//EN');
-    expect(body).toContain(`DESCRIPTION:https://www.example.test/admin/tasks#task-${TASK}`);
+    // Everyone's list (C8-UX-2): My tasks would not list a task someone else owns.
+    expect(body).toContain(
+      `DESCRIPTION:https://www.example.test/admin/tasks?view=all#task-${TASK}`,
+    );
     expect(body).toContain('SUMMARY:Call Huda\\, about the logo');
     expect(audits).toEqual([{ action: 'crm.task.ics', entityType: 'task', entityId: TASK }]);
   });

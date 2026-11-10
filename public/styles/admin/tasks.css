@@ -34,6 +34,12 @@
   cursor: pointer;
 }
 
+/* Overdue's header is marked (crm.md §11 screen 10): the warning sign, in the error tone; the
+   word "Overdue" carries the meaning, so it is never colour alone. */
+.tasks__sec[data-sec='overdue'] > .card__t .ic {
+  color: var(--ad-err-text);
+}
+
 .tasks__n {
   color: var(--ad-dim);
   font-weight: 600;
