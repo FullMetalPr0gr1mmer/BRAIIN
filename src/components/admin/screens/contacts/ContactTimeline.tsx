@@ -57,7 +57,7 @@ export default function ContactTimeline(props: Props) {
             <li key={`${event.src}-${event.id}`} className="tl__i" data-kind={event.kind}>
               <p className="tl__t">
                 {event.src === 'lead' && event.lead_id ? (
-                  <a href={`/admin/leads/${event.lead_id}`}>
+                  <a className="ct-tl" href={`/admin/leads/${event.lead_id}`}>
                     {contactEventSentence(event, props.leadStages, props.people)}
                   </a>
                 ) : (
