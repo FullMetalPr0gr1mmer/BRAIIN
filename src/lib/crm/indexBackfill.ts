@@ -57,22 +57,25 @@ export function newIndexRun(): IndexRun {
 
 /**
  * Indexes one batch. `run` is filled in as the batch goes, so a caller that catches an
- * error part-way still has the counts of what was done.
+ * error part-way still has the counts of what was done. `tenantId` limits the batch to one
+ * tenant: a person's erasure preview (Admin v2 C6) indexes its own tenant's leads first, so
+ * the erasure can compare them, and never another tenant's; the daily cron passes none.
  */
 export async function runLeadIndexBackfill(
   sb: SupabaseClient,
   rootKey: string,
   batch: number = INDEX_BATCH,
   run: IndexRun = newIndexRun(),
+  tenantId?: string,
 ): Promise<IndexRun> {
-  const { data, error } = await sb
+  let query = sb
     .from('leads')
     .select(
       'id,tenant_id,email_enc,phone_enc,budget_enc,timeline_text_enc,service_of_interest,company',
     )
-    .is('crm_indexed_at', null)
-    .order('created_at', { ascending: true })
-    .limit(batch);
+    .is('crm_indexed_at', null);
+  if (tenantId !== undefined) query = query.eq('tenant_id', tenantId);
+  const { data, error } = await query.order('created_at', { ascending: true }).limit(batch);
   if (error) throw new Error(`lead index backfill: ${error.message}`);
 
   const rows = (data ?? []) as UnindexedLead[];

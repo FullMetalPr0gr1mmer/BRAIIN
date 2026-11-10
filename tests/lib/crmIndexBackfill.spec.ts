@@ -21,6 +21,7 @@ let failIds = new Set<string>();
 const writes: Record<string, unknown>[] = [];
 let selectFilter: { is?: [string, unknown]; limit?: number } = {};
 const leadSelects: string[] = [];
+const leadEqs: [string, unknown][] = [];
 
 /** The legacy columns C14b drops: a query naming one would fail there (42703). */
 const DROPPED: readonly string[] = LEGACY_LEAD_COLUMNS;
@@ -35,7 +36,10 @@ function client(): SupabaseClient {
         if (table === 'leads') leadSelects.push(list);
         return b;
       };
-      b['eq'] = () => b;
+      b['eq'] = (column: string, value: unknown) => {
+        if (table === 'leads') leadEqs.push([column, value]);
+        return b;
+      };
       b['order'] = () => b;
       b['is'] = (column: string, value: unknown) => {
         selectFilter.is = [column, value];
@@ -88,7 +92,22 @@ beforeEach(() => {
   failIds = new Set();
   writes.length = 0;
   leadSelects.length = 0;
+  leadEqs.length = 0;
   selectFilter = {};
+});
+
+describe('runLeadIndexBackfill for one tenant (Admin v2 C6 review, C6-COR-2)', () => {
+  it('the erasure preview’s batch reads only the tenant it names', async () => {
+    rows = [await lead('l1')];
+    await runLeadIndexBackfill(client(), KEY, INDEX_BATCH, newIndexRun(), T1);
+    expect(leadEqs).toEqual([['tenant_id', T1]]);
+  });
+
+  it('the daily cron’s batch names no tenant', async () => {
+    rows = [await lead('l1')];
+    await runLeadIndexBackfill(client(), KEY);
+    expect(leadEqs).toEqual([]);
+  });
 });
 
 describe('runLeadIndexBackfill', () => {

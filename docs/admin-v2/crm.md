@@ -463,7 +463,7 @@ One source of truth, `site_settings.retention.leads_months` (Zod max 24 until le
 
 **What `crm_erase_person` deletes,** in one transaction:
 - every lead linked by contact_id or sharing one of the person's **e-mail** blind indexes;
-- the phone-only matches the Admin ticked in the preview. Phones are shared, so they are never deleted silently: `GET …/erase-preview` lists those leads with safe columns only.
+- the phone-only matches the Admin ticked in the preview. Phones are shared, so they are never deleted silently: `POST …/erase-preview` (a POST since the C6 review: it indexes the tenant's unindexed leads before it counts, under its own limit) lists those leads with safe columns only.
 - the person's tasks;
 - the contact, and by cascade its channels, notes, events and dismissals.
 
@@ -521,7 +521,7 @@ Legacy `GET /api/admin/leads?…` and `GET …/[id]?pii=1` are fixed to be fail-
 | GET /api/admin/crm/contacts/[id]/timeline?filter&before | RPC `crm_contact_timeline` (INVOKER, UNION over contact events, contact notes, linked lead events and lead notes, which RLS hides from non-pii holders, and tasks; limit 60, keyset) | crm.contact.view {page} |
 | POST /api/admin/crm/contacts/bulk | ≤100 [{id, version}]; actions addTag, removeTag, owner, stage, star | one audit row per contact |
 | POST /api/admin/crm/contacts/[id]/leads | Also needs leads.manage + leads.pii. "New lead" copies the contact's channel ciphertext. | lead.create |
-| GET …/erase-preview, POST …/erase | crm.erase; §8.2 | |
+| POST …/erase-preview, POST …/erase | crm.erase; §8.2. The preview is a POST with its own limit (C6 review, C6-SEC-2) | |
 
 **Tasks** (CRM-8). Every route needs crm.tasks.
 - `GET /api/admin/crm/tasks?view=mine|all`: RPC `crm_tasks_grouped(view, tz)` returns {overdue, today, upcoming, done (last 20 within 30 days)} with counts.
@@ -610,6 +610,8 @@ alter type public.app_role add value if not exists 'sales';
 - Shell data Sales needs must not depend on `is_staff()`: the brand from `site_profile` is anon-readable; theme tokens need a server read that doesn't rely on the caller.
 
 **Docs and tests:** §14 and §13. `matrix.spec` gets a 6-cell parser, 5 roles, 36 caps, the new labels and a parse of architecture §3.4. `endpoints.spec` iterates `ROLES`, so every existing row automatically asserts Sales = 403; the CRM rows' allow lists gain 'sales'.
+
+**C10b, contacts for Sales: one reveal must stay one person (C6 review, C6-SEC-3).** Confirming a phone match copies that lead's e-mail and phone into the contact, and the contact reveal decrypts every channel of a contact for one slot of the `pii-reveal` limiter. While only Admin holds `crm.contacts` this adds nothing (Admin can export). Before C10b gives Sales `crm.contacts` ("no bulk PII"), keep these: a contact keeps at most ten e-mails and ten phones that a person adds or copies (`app.crm_channel_cap()`, 0133: a confirm into a full contact copies nothing and answers `full`, a channel edit past it is refused whole), so one reveal shows at most twenty values. C10b should also decide whether a Sales confirm spends a reveal slot or a limit of its own, and whether the reveal shows a Sales user only the primary of each kind. Register L-3 records it.
 
 ## 11. UI contract for the UI architect
 

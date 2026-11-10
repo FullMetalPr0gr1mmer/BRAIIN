@@ -93,6 +93,10 @@ function outcome(done: string, notDone: string, partly?: string) {
   };
 }
 
+/** What an erasure removed: a person (Admin v2 C6) or, as before C6, one lead. */
+const erasedNoun = (detail: Detail): string =>
+  str(detail['target']) === 'contact' ? 'a contact and their leads' : 'a lead';
+
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
 // ── The resource kernel's actions (src/lib/admin/resource.ts) ────────────────────────────
@@ -277,11 +281,53 @@ const EXACT: Readonly<Record<string, Label>> = {
     verb: outcome('Deleted a note on', 'Could not delete a note on'),
     noun: 'a lead',
   },
-  'crm.erase.attempt': { kind: 'leads', verb: 'Started erasing', noun: 'a lead' },
+  // An erasure names its target (Admin v2 C6: a person, with their leads, or one lead).
+  'crm.erase.attempt': { kind: 'leads', verb: 'Started erasing', noun: erasedNoun },
   'crm.erase.outcome': {
     kind: 'leads',
     verb: outcome('Erased', 'Could not erase'),
-    noun: 'a lead',
+    noun: erasedNoun,
+  },
+  'crm.erase.preview': {
+    kind: 'leads',
+    verb: 'Checked what erasing would remove for',
+    noun: 'a contact',
+  },
+
+  // Contacts (Admin v2 C6): ids, field names and counts only, never what a person typed.
+  'crm.contact.create': { kind: 'leads', verb: 'Added', noun: 'a contact' },
+  'crm.contact.create.duplicate': {
+    kind: 'leads',
+    verb: 'Found the e-mail address already on',
+    noun: 'a contact',
+  },
+  'crm.contact.view': { kind: 'leads', verb: 'Opened', noun: 'a contact' },
+  'crm.contact.update': { kind: 'leads', verb: 'Updated', noun: 'a contact' },
+  'crm.contact.bulk': { kind: 'leads', verb: 'Changed several contacts at once', noun: null },
+  'crm.contact.view_pii': {
+    kind: 'leads',
+    verb: 'Revealed the e-mails and phones of',
+    noun: 'a contact',
+  },
+  'crm.contact.view_notes': { kind: 'leads', verb: 'Read the notes on', noun: 'a contact' },
+  'crm.contact.note_add': { kind: 'leads', verb: 'Added a note to', noun: 'a contact' },
+  'crm.contact.note.delete.attempt': {
+    kind: 'leads',
+    verb: 'Started deleting a note on',
+    noun: 'a contact',
+  },
+  'crm.contact.note.delete.outcome': {
+    kind: 'leads',
+    verb: outcome('Deleted a note on', 'Could not delete a note on'),
+    noun: 'a contact',
+  },
+  'crm.contact.link': {
+    kind: 'leads',
+    verb: (detail) =>
+      str(detail['action']) === 'detach'
+        ? 'Took a lead matched by phone off'
+        : 'Confirmed a lead matched by phone on',
+    noun: 'a contact',
   },
   'export.csv.attempt': { kind: 'leads', verb: 'Started exporting', noun: 'the leads' },
   'export.csv.outcome': {
