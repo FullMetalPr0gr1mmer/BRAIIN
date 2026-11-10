@@ -113,7 +113,7 @@ export default function ContactDetail(props: ContactDetailProps) {
     if (!sub && line && head) {
       sub = document.createElement('p');
       sub.className = 'admin-sub';
-      head.after(sub);
+      head.insertAdjacentElement('afterend', sub);
     }
     if (sub) sub.textContent = line;
   }
