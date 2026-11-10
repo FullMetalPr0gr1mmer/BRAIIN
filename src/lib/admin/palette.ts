@@ -12,6 +12,11 @@ export interface PaletteItem {
   icon: IconName;
   /** A second line: an area for a screen, a slug or path for a record. */
   detail?: string | undefined;
+  /**
+   * 'auto' for words someone typed about a person (a contact's name and company, C7 review
+   * C7-I18N-1): drawn in their own direction, so an Arabic name in the LTR chrome reads right.
+   */
+  dir?: 'auto' | undefined;
 }
 
 export interface PaletteGroup {
@@ -66,7 +71,19 @@ export function move(current: number, count: number, direction: 1 | -1): number 
   return (current + direction + count) % count;
 }
 
-/** The server's search result, as GET /api/admin/search returns it. */
+/**
+ * The palette's record search: a POST with the term in its body (C7 review, C7-SEC-1). It is
+ * asked on every pause in typing, so a GET would put whatever was in the box at that moment
+ * (half an e-mail address, the first digits of a number) in a URL.
+ */
+export function searchRequest(query: string): {
+  url: string;
+  init: { method: 'POST'; body: { q: string } };
+} {
+  return { url: '/api/admin/search', init: { method: 'POST', body: { q: query.trim() } } };
+}
+
+/** The server's search result, as POST /api/admin/search returns it. */
 export interface RemoteGroup {
   group: string;
   hits: { href: string; label: string; detail: string | null }[];
@@ -87,18 +104,18 @@ export function remoteGroups(groups: readonly RemoteGroup[]): PaletteGroup[] {
 }
 
 /**
- * A query that looks like an e-mail address or a phone number (Admin v2 C7): it is never put in
- * a URL, so the palette skips its GET search and its "See all results" link for it (a typed
- * address would otherwise sit in the address bar's history and the Worker's request logs,
- * verification D10). The contacts lookup still gets it, in a POST body, where a whole one finds
- * its person through the blind index. The rule the lookup's own search applies
- * (src/lib/crm/leadQuery.ts toRpcFilter): an `@`, or phone characters with seven digits.
+ * A query that may hold an e-mail address or a phone number (Admin v2 C7): it is never put in
+ * a URL, so the palette leaves out its "See all results" link (a GET of the /admin/search page)
+ * for it. Every search the palette makes on its own is a POST (`searchRequest`, the contacts
+ * lookup); this link is the one URL a typed term could reach, and only when the person picks it.
+ * Wider than the lookup's own rule (src/lib/crm/leadQuery.ts toRpcFilter, an `@` or a whole
+ * number): an `@`, or seven digits however they are written ("050/123/4567", "+966501234567
+ * mobile"), C7 review C7-SEC-1.
  */
 export function looksLikeContactDetail(query: string): boolean {
   const term = query.trim();
   if (term.includes('@')) return true;
-  const digits = term.replace(/[^\d٠-٩۰-۹]/g, '');
-  return /^[+\d\s\-().٠-٩۰-۹]+$/.test(term) && digits.length >= 7;
+  return term.replace(/[^\d٠-٩۰-۹]/g, '').length >= 7;
 }
 
 /** A contacts lookup row, as POST /api/admin/crm/contacts/lookup answers it. */
@@ -118,6 +135,7 @@ export function contactGroup(hits: readonly ContactHit[]): PaletteGroup[] {
       href: `/admin/contacts/${hit.id}`,
       icon: 'users' as const,
       detail: hit.company_name?.trim() || undefined,
+      dir: 'auto' as const,
     }));
   return items.length > 0 ? [{ title: 'Contacts', items }] : [];
 }

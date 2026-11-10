@@ -304,7 +304,8 @@ export default function ContactsList({
     return () => controller.abort();
   }, [filters, q, tag, relist]);
 
-  // The counts: the chips and the page head's sub-line, read again after a bulk change.
+  // The counts: the chips and the page head's sub-line, read again after a bulk change or a
+  // star.
   const counted = useRef(true);
   useEffect(() => {
     if (counted.current) {
@@ -367,6 +368,8 @@ export default function ContactsList({
       ROW_WAIT_MS,
       { presses, id: row.id },
     );
+    // The Starred chip's count and the head's sub-line follow a star too (C7 review, C7-UX-4).
+    setRecount((n) => n + 1);
   }
 
   /** One bulk action: a row write (not optimistic), then the list and the counts read again. */

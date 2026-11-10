@@ -44,6 +44,8 @@ interface Props {
   // `subtitle` from an optional value passes an explicit undefined, which `?:` alone
   // rejects.
   subtitle?: string | undefined;
+  /** `auto` for a sub-line that is a person's words (a contact's title and company, C7). */
+  subtitleDir?: 'auto' | undefined;
   /** `bare` drops the shell. No page asks for it since sign-in v2 (F7) gave the sign-in
       screens their own shell, src/layouts/AuthLayout.astro; it is also what a page gets
       when it renders without a session. */
@@ -57,7 +59,16 @@ interface Props {
   preload?: ShellPreload | undefined;
 }
 
-const { title, heading, headingDir, subtitle, layout = 'app', styles = [], preload } = Astro.props;
+const {
+  title,
+  heading,
+  headingDir,
+  subtitle,
+  subtitleDir,
+  layout = 'app',
+  styles = [],
+  preload,
+} = Astro.props;
 const session = Astro.locals.session;
 const supabase = Astro.locals.supabase;
 const nav = session ? visibleNav(session.role) : [];
@@ -171,6 +182,7 @@ const account = session ? accountViewFor(session, shell.displayName) : null;
             heading={heading}
             headingDir={headingDir}
             subtitle={subtitle}
+            subtitleDir={subtitleDir}
             tabs={section?.tabs}
             currentTab={tab}
             area={section?.label}

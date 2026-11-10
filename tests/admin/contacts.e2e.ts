@@ -15,8 +15,10 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *                audit row; a note; Details saved, then a conflict from another tab; a phone
  *                match confirmed; a new lead from the contact;
  *   the erasure  the preview, the reason, the second confirm; a 404 after;
- *   the palette  finds a person by name and by whole e-mail; an address never goes into a URL;
- *   refusals     every other role gets a 403 page (and API), with no contact's name in it.
+ *   the palette  finds a person by name and by whole e-mail, typed key by key; no part of a
+ *                typed term goes into a URL;
+ *   refusals     every other role gets a 403 page (and API) for a real contact, with no name
+ *                or company of theirs in it.
  * axe runs with each dialog open. Every contact it adds is named with this run's token and
  * added through the real routes; nothing reads or writes the database directly.
  */
@@ -61,7 +63,7 @@ interface Added {
 async function addContact(
   page: Page,
   label: string,
-  extra: { name?: string; email?: string | null; phone?: string } = {},
+  extra: { name?: string; email?: string | null; phone?: string; company?: string } = {},
 ): Promise<Added> {
   const name = extra.name ?? `E2E ${RUN} ${label}`;
   const email =
@@ -72,7 +74,11 @@ async function addContact(
   ];
   const res = await page.request.post('/api/admin/crm/contacts', {
     headers: { 'x-csrf-token': await csrf(page) },
-    data: { displayName: name, ...(channels.length ? { channels } : {}) },
+    data: {
+      displayName: name,
+      ...(extra.company ? { companyName: extra.company } : {}),
+      ...(channels.length ? { channels } : {}),
+    },
   });
   expect(res.status(), `add ${label}`).toBe(200);
   const { data } = (await res.json()) as { data: { id: string } };
@@ -210,7 +216,9 @@ test.describe('as admin', () => {
     // Details: an explicit Save.
     await page.getByLabel('Title', { exact: true }).fill('Head of marketing');
     await page.getByRole('button', { name: 'Save details' }).click();
+    await expect(page.locator('#admin-toasts')).toContainText('Details saved.');
     await expect(page.locator('.admin-header .admin-sub')).toHaveText('Head of marketing');
+    await expect(page.locator('.admin-header .admin-sub')).toHaveAttribute('dir', 'auto');
     await expect
       .poll(async () => (await contactOf(page, person.id))['title'])
       .toBe('Head of marketing');
@@ -287,23 +295,53 @@ test.describe('as admin', () => {
     expect(gone.status()).toBe(404);
   });
 
-  test('the palette finds a person by name and by whole e-mail, never in a URL', async ({
+  test('the palette finds a person by name and by whole e-mail; no typed term reaches a URL', async ({
     page,
   }) => {
+    // Typed key by key, each pause longer than the palette's 200 ms wait, so every part of a
+    // term typed so far is searched (C7 review, C7-SEC-1: a fill() sends the whole value at
+    // once, and a part of an address never reached the old check).
+    test.slow();
     const person = await addContact(page, 'palette');
-    const urls: string[] = [];
-    page.on('request', (request) => urls.push(request.url()));
+    const local = person.email!.split('@')[0]!;
     await visit(page, '/admin');
+    const sent: { method: string; url: URL }[] = [];
+    page.on('request', (request) =>
+      sent.push({ method: request.method(), url: new URL(request.url()) }),
+    );
     await page.keyboard.press('Control+k');
     const palette = page.getByRole('dialog', { name: 'Search the admin' });
     await expect(palette).toBeVisible();
     const box = palette.getByRole('combobox', { name: 'Search the admin' });
-    await box.fill(`E2E ${RUN} palette`);
+    await box.pressSequentially(`E2E ${RUN} palette`, { delay: 250 });
     await expect(palette.getByRole('option', { name: person.name })).toBeVisible();
-    await box.fill(person.email!);
+    await box.fill('');
+    await box.pressSequentially(person.email!, { delay: 250 });
     await expect(palette.getByRole('option', { name: person.name })).toBeVisible();
     await expect(palette.getByRole('option', { name: /^See all results/ })).toHaveCount(0);
-    expect(urls.filter((url) => url.includes('@') || url.includes('%40'))).toEqual([]);
+    await box.fill('');
+    await box.pressSequentially('+966 55 123 4567', { delay: 250 });
+    await expect(palette.getByRole('option', { name: /^See all results/ })).toHaveCount(0);
+
+    // The parts were searched: in POST bodies, never in an address.
+    const searches = sent.filter((r) => r.url.pathname === '/api/admin/search');
+    expect(searches.length).toBeGreaterThan(5);
+    expect(searches.filter((r) => r.method !== 'POST' || r.url.search !== '')).toEqual([]);
+    const api = sent.filter((r) => r.url.pathname.startsWith('/api/')).map((r) => r.url);
+    expect(api.filter((url) => url.searchParams.has('q')).map(String)).toEqual([]);
+    expect(
+      api
+        .filter(
+          (url) =>
+            url.href.includes(local) ||
+            url.href.includes(RUN) ||
+            url.href.includes('@') ||
+            url.href.includes('%40') ||
+            url.search.includes('966') ||
+            url.search.includes('4567'),
+        )
+        .map(String),
+    ).toEqual([]);
   });
 });
 
@@ -311,15 +349,29 @@ for (const role of ['content_creator', 'seo', 'developer', 'sales'] as const) {
   test.describe(`as ${role}`, () => {
     test.use({ storageState: authFile(role) });
 
+    // A real contact, added as the Admin in this worker (so its name carries this worker's
+    // RUN), for the refused role to try to open (C7 review, C7-TEST-1: an id that is no one's
+    // proves nothing about what the page would have named).
+    let person: Added;
+    const company = `Refused Co ${randomBytes(4).toString('hex')}`;
+    test.beforeAll(async ({ browser }) => {
+      const context = await browser.newContext({ storageState: authFile('admin') });
+      const page = await context.newPage();
+      person = await addContact(page, `refused-${role}`, { company });
+      await context.close();
+    });
+
     test('every contacts page is refused by the server, naming no contact', async ({ page }) => {
-      const probe = '00000000-0000-4000-8000-000000000000';
-      for (const path of ['/admin/contacts', `/admin/contacts/${probe}`]) {
+      for (const path of ['/admin/contacts', `/admin/contacts/${person.id}`]) {
         const res = await visit(page, path);
         expect(res?.status(), path).toBe(403);
         await expect(page.locator('main .msg[data-kind="error"]').first()).toContainText(
           'Your role does not allow that.',
         );
-        expect(await page.content(), path).not.toContain(RUN);
+        const html = await page.content();
+        expect(html, path).not.toContain(person.name);
+        expect(html, path).not.toContain(company);
+        expect(html, path).not.toContain(RUN);
         expect(await page.locator('main').innerText(), path).not.toContain('E2E ');
       }
       for (const [method, api] of [
@@ -327,16 +379,19 @@ for (const role of ['content_creator', 'seo', 'developer', 'sales'] as const) {
         ['post', '/api/admin/crm/contacts/summary'],
         ['get', '/api/admin/crm/contacts/summary'],
         ['post', '/api/admin/crm/contacts/lookup'],
-        ['get', `/api/admin/crm/contacts/${probe}`],
+        ['get', `/api/admin/crm/contacts/${person.id}`],
       ] as const) {
         const res =
           method === 'post'
             ? await page.request.post(api, {
                 headers: { 'x-csrf-token': await csrf(page) },
-                data: api.endsWith('lookup') ? { q: 'E2E' } : {},
+                data: api.endsWith('lookup') ? { q: person.name } : {},
               })
             : await page.request.get(api);
         expect(res.status(), api).toBe(403);
+        const body = await res.text();
+        expect(body, api).not.toContain(person.name);
+        expect(body, api).not.toContain(company);
       }
     });
   });

@@ -8,9 +8,12 @@ import type { ChannelPresence } from '@/lib/crm/contactPage';
 // /api/admin/crm/contacts/[id]/reveal: `crm.contacts`, a live recheck, the reveal limiter the
 // lead reveal shares (60 an hour per person), and an audit row written BEFORE anything is
 // decrypted (src/lib/crm/contactReveal.ts). What it answers lives in this island's state only:
-// never storage, never the address, gone when the page is left. The Email, Call and WhatsApp
-// links exist only after a reveal, and so does editing: add, make main, remove (one versioned
-// PATCH each, sent through the page's queue, `edit`).
+// never storage, never the address, gone when the page is left (ContactDetail clears it on
+// pagehide and on a return from the back/forward cache). The Email, Call and WhatsApp links
+// exist only after a reveal, and so does editing: add, make main, remove (one versioned PATCH
+// each, sent through the page's queue, `edit`). A contact with no e-mail or phone has nothing to
+// reveal: the Add form is there at once, and no reveal is offered (no reveal slot spent, no
+// audit row for nothing; C7 review, C7-UX-5).
 
 /** A revealed channel's value by its id. */
 export type RevealedValues = ReadonlyMap<string, string | null>;
@@ -90,6 +93,7 @@ export default function ContactChannelsCard({
   // A channel that arrived after the reveal (a phone match confirmed, another tab) was not
   // revealed: it stays hidden, and the reveal is offered again for it.
   const unrevealed = revealed !== null && channels.some((c) => !revealed.has(c.id));
+  const none = channels.length === 0;
   const main = (k: string) => channels.find((c) => c.kind === k && c.is_primary);
   const email = main('email');
   const phone = main('phone');
@@ -182,13 +186,13 @@ export default function ContactChannelsCard({
           {error}
         </p>
       )}
-      {(revealed === null || unrevealed) && (
+      {!none && (revealed === null || unrevealed) && (
         <button type="button" disabled={revealing} onClick={() => void reveal()}>
           <Icon name="eye" size={16} />
           Reveal contact details (this access is logged)
         </button>
       )}
-      {revealed !== null && (
+      {(revealed !== null || none) && (
         <form className="lead-log" onSubmit={(event) => void add(event)}>
           <div className="f">
             <label className="f__l" htmlFor={`${id}-kind`}>

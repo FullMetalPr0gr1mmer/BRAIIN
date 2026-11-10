@@ -27,6 +27,28 @@ export interface ContactsPermissions {
 
 export type { ContactPerson };
 
+/**
+ * Runs `forget` when the page is left (pagehide) and again if it comes back from the browser's
+ * back/forward cache (pageshow, persisted), and returns the cleanup (C7 review, C7-PRIV-2).
+ * Revealed contact details live in an island's state only; a page restored from that cache
+ * would otherwise show them again with no new reveal and no audit row.
+ */
+export function forgetOnLeave(
+  target: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>,
+  forget: () => void,
+): () => void {
+  const onHide = () => forget();
+  const onShow = (event: Event) => {
+    if ((event as Event & { persisted?: boolean }).persisted === true) forget();
+  };
+  target.addEventListener('pagehide', onHide);
+  target.addEventListener('pageshow', onShow);
+  return () => {
+    target.removeEventListener('pagehide', onHide);
+    target.removeEventListener('pageshow', onShow);
+  };
+}
+
 /** The owner's name, a former member's words, or null for no owner. */
 export function ownerName(id: unknown, people: readonly ContactPerson[]): string | null {
   if (typeof id !== 'string' || id === '') return null;

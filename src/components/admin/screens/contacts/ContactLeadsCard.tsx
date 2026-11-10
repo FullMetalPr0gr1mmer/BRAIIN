@@ -38,6 +38,11 @@ interface Props {
   stages: readonly StageView[];
   contactId: string;
   canAddLead: boolean;
+  /**
+   * The contact has an e-mail or a phone: a new lead copies them, and the route refuses one
+   * for a contact with neither (422 NO_CHANNEL), so the button waits for one (C7-UX-5).
+   */
+  hasChannel: boolean;
   onNewLead: () => void;
   /** After a match was checked: the contact and its timeline are read again. */
   onChecked: (said: string) => void;
@@ -49,6 +54,7 @@ export default function ContactLeadsCard({
   stages,
   contactId,
   canAddLead,
+  hasChannel,
   onNewLead,
   onChecked,
 }: Props) {
@@ -85,11 +91,22 @@ export default function ContactLeadsCard({
           Leads
         </h2>
         {canAddLead && (
-          <button type="button" data-size="sm" onClick={onNewLead}>
+          <button
+            type="button"
+            data-size="sm"
+            disabled={!hasChannel}
+            aria-describedby={hasChannel ? undefined : `${id}-nolead`}
+            onClick={onNewLead}
+          >
             New lead
           </button>
         )}
       </div>
+      {canAddLead && !hasChannel && (
+        <p id={`${id}-nolead`} className="f__hint">
+          Add an e-mail or phone first: a new lead is reached through them.
+        </p>
+      )}
       {leads.length === 0 ? (
         <p className="f__hint">No leads yet.</p>
       ) : (

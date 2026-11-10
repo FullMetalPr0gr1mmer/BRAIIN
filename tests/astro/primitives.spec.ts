@@ -487,4 +487,16 @@ describe('PageHead: the h1 and the title (C4b)', () => {
     expect(html).toMatch(/<h1 dir="auto">سارة<\/h1>/);
     expect(html).not.toMatch(/<h1[^>]*>Lead<\/h1>/);
   });
+
+  // C7 review, C7-UX-1: a contact's "title at Company" is a person's words too.
+  it('a sub-line of a person’s words is read in its own direction; others have no dir', async () => {
+    const own = await render(PageHead, {
+      title: 'Contact',
+      subtitle: 'مديرة at شركة',
+      subtitleDir: 'auto',
+    });
+    expect(own).toMatch(/<p class="admin-sub" dir="auto">مديرة at شركة<\/p>/);
+    const plain = await render(PageHead, { title: 'Leads', subtitle: '12 inquiries.' });
+    expect(plain).toMatch(/<p class="admin-sub">12 inquiries\.<\/p>/);
+  });
 });

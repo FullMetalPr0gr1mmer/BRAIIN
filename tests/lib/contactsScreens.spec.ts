@@ -8,11 +8,16 @@ import ContactChannelsCard from '@/components/admin/screens/contacts/ContactChan
 import {
   checkContact,
   contactBody,
+  issueField,
   tagsOf,
 } from '@/components/admin/screens/contacts/AddContactDrawer';
+import { forgetOnLeave } from '@/components/admin/screens/contacts/shared';
+import CommandPalette from '@/components/admin/screens/chrome/CommandPalette';
 import { eraseStep } from '@/components/admin/screens/contacts/EraseContactDialog';
 import { detailsPatch } from '@/components/admin/screens/contacts/ContactDetailsCard';
-import { copiedWords } from '@/components/admin/screens/contacts/ContactLeadsCard';
+import ContactLeadsCard, {
+  copiedWords,
+} from '@/components/admin/screens/contacts/ContactLeadsCard';
 import { ContactCreateSchema, ContactPatchSchema, ContactQuerySchema } from '@schemas/crm';
 import {
   DEFAULT_CONTACT_FILTERS,
@@ -30,7 +35,7 @@ import {
   type ContactEvent,
   type ContactLead,
 } from '@/lib/crm/contactView';
-import { contactGroup, looksLikeContactDetail } from '@/lib/admin/palette';
+import { contactGroup, looksLikeContactDetail, searchRequest } from '@/lib/admin/palette';
 import type { StageView } from '@/lib/crm/leadPage';
 
 // The contacts screens (Admin v2 C7, crm.md §11 screens 5 to 8 and its "PII rules"): the HTML
@@ -42,7 +47,8 @@ import type { StageView } from '@/lib/crm/leadPage';
 //   • states are words: the stage, "Phone match to check", the star's pressed state;
 //   • the address never carries the search or a tag; every body the screens send passes the
 //     API's own schema;
-//   • the erasure needs a reason and a second press; the palette never puts an address in a URL.
+//   • the erasure needs a reason and a second press; the palette's searches are POSTs, so no
+//     typed term goes in a URL (C7 review); revealed details are forgotten when the page is left.
 
 const NOW = '2026-11-10T09:00:00.000Z';
 const ID = '44444444-4444-4444-8444-444444444444';
@@ -275,11 +281,110 @@ describe('the contact details card after a reveal', () => {
     expect(out).not.toMatch(/\sstyle=/);
   });
 
+  // C7 review, C7-UX-5: nothing to reveal is no reveal (no slot spent, no audit row for
+  // nothing); the first e-mail or phone is added straight away.
+  it('offers no reveal for a contact with no e-mail or phone, and lets one be added', () => {
+    const out = html(ContactChannelsCard, {
+      contactId: ID,
+      channels: [],
+      revealed: null,
+      onRevealed: () => undefined,
+      busy: false,
+      edit: async () => true,
+    });
+    expect(out).toContain('No e-mail address or phone number yet.');
+    expect(out).not.toContain('Reveal contact details');
+    expect(out).toContain('An e-mail address');
+    expect(out).toMatch(/<button type="submit"[^>]*>Add<\/button>/);
+  });
+
   it('keeps a channel that arrived after the reveal hidden, and offers the reveal again', () => {
     const out = card(new Map([[OTHER, 'nora@example.test']]));
     expect(out).toContain('Hidden');
     expect(out).not.toContain('+966');
     expect(out).toContain('Reveal contact details (this access is logged)');
+  });
+});
+
+describe('New lead waits for an e-mail or phone (C7-UX-5)', () => {
+  const card = (hasChannel: boolean) =>
+    html(ContactLeadsCard, {
+      leads: [],
+      more: false,
+      stages: STAGES,
+      contactId: ID,
+      canAddLead: true,
+      hasChannel,
+      onNewLead: () => undefined,
+      onChecked: () => undefined,
+    });
+  it('is disabled, and says why, for a contact with neither', () => {
+    const out = card(false);
+    expect(out).toMatch(/<button[^>]*disabled=""[^>]*>New lead<\/button>/);
+    expect(out).toContain('Add an e-mail or phone first');
+  });
+  it('is offered for a contact with one', () => {
+    const out = card(true);
+    expect(out).toContain('>New lead</button>');
+    expect(out).not.toMatch(/<button[^>]*disabled=""[^>]*>New lead<\/button>/);
+    expect(out).not.toContain('Add an e-mail or phone first');
+  });
+  it('the contact page tells the card whether there is one', () => {
+    const source = readFileSync('src/components/admin/screens/contacts/ContactDetail.tsx', 'utf8');
+    expect(source).toContain('hasChannel={channels.length > 0}');
+  });
+});
+
+describe('revealed details are forgotten when the page is left (C7-PRIV-2)', () => {
+  it('on pagehide, and on a return from the back/forward cache', () => {
+    const target = new EventTarget();
+    let forgot = 0;
+    const stop = forgetOnLeave(target, () => (forgot += 1));
+    target.dispatchEvent(new Event('pagehide'));
+    expect(forgot).toBe(1);
+    target.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }));
+    expect(forgot).toBe(2);
+    // A first load is not a return.
+    target.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: false }));
+    expect(forgot).toBe(2);
+    stop();
+    target.dispatchEvent(new Event('pagehide'));
+    expect(forgot).toBe(2);
+  });
+  it('the contact page clears its revealed values that way, before the page is frozen', () => {
+    const source = readFileSync('src/components/admin/screens/contacts/ContactDetail.tsx', 'utf8');
+    expect(source).toMatch(
+      /forgetOnLeave\(window, \(\) => flushSync\(\(\) => setRevealed\(null\)\)\)/,
+    );
+  });
+});
+
+describe('the contact page keeps its figures current (C7-UX-3, C7-UX-4)', () => {
+  it('a Details save is a toast', () => {
+    const source = readFileSync(
+      'src/components/admin/screens/contacts/ContactDetailsCard.tsx',
+      'utf8',
+    );
+    expect(source).toMatch(/if \(await save\(patch\)\) toast\('Details saved\.', 'ok'\)/);
+  });
+  it('a note reads the contact again (last activity, kept until)', () => {
+    const source = readFileSync('src/components/admin/screens/contacts/ContactDetail.tsx', 'utf8');
+    const notes = source.slice(source.indexOf('<ContactNotes'), source.indexOf('<ContactTimeline'));
+    expect(notes).toContain('queue.run(() => readContact(true))');
+  });
+  it('a star reads the counts again', () => {
+    const source = readFileSync('src/components/admin/screens/contacts/ContactsList.tsx', 'utf8');
+    const star = source.slice(
+      source.indexOf('async function toggleStar'),
+      source.indexOf('async function postBulk'),
+    );
+    expect(star).toContain('setRecount((n) => n + 1)');
+  });
+  it('the sub-line under a contact’s name is drawn in its own direction', () => {
+    const page = readFileSync('src/pages/admin/contacts/[id].astro', 'utf8');
+    expect(page).toContain("subtitleDir={subtitle ? 'auto' : undefined}");
+    const island = readFileSync('src/components/admin/screens/contacts/ContactDetail.tsx', 'utf8');
+    expect(island).toContain("sub.setAttribute('dir', 'auto')");
   });
 });
 
@@ -313,6 +418,29 @@ describe('the add drawer’s rules', () => {
     expect(body.tags).toEqual(['vip', 'expo']);
     expect(body.channels).toEqual([{ kind: 'email', value: 'nora@example.test', isPrimary: true }]);
     expect(tagsOf(' a , ,b ')).toEqual(['a', 'b']);
+  });
+
+  // C7 review, C7-COR-1 and C7-UX-2: a channel's issue is the n-th channel sent, by its kind.
+  it('files a refused channel under its own box, in plain words', () => {
+    const both = contactBody({ ...form, phone: '12' });
+    expect(issueField('channels.1.value', 'String must contain at least 3', both)).toEqual({
+      key: 'phone',
+      message: 'Type the whole number, with its country code.',
+    });
+    expect(issueField('channels.0.value', 'Invalid email', both)).toEqual({
+      key: 'email',
+      message: 'Type the whole e-mail address, like name@example.com.',
+    });
+    const phoneOnly = contactBody({ ...form, email: '', phone: '12' });
+    expect(issueField('channels.0.value', 'String must contain at least 3', phoneOnly)?.key).toBe(
+      'phone',
+    );
+    expect(issueField('channels.4', 'x', phoneOnly)).toBeNull();
+    expect(issueField('displayName', 'Required', both)).toEqual({
+      key: 'name',
+      message: 'Required',
+    });
+    expect(issueField('nope', 'x', both)).toBeNull();
   });
 });
 
@@ -493,13 +621,15 @@ describe('the words', () => {
 });
 
 describe('the palette’s contacts', () => {
-  it('knows an address or a number when it sees one', () => {
+  it('knows an address or a number when it sees one, however the number is written', () => {
     for (const term of [
       'nora@example.test',
       'nora@',
       '+966 55 123 4567',
       '0551234567',
       '٠٥٥١٢٣٤٥٦٧',
+      '050/123/4567',
+      '+966501234567 mobile',
     ]) {
       expect(looksLikeContactDetail(term), term).toBe(true);
     }
@@ -518,18 +648,64 @@ describe('the palette’s contacts', () => {
             href: `/admin/contacts/${ID}`,
             icon: 'users',
             detail: 'Acme',
+            dir: 'auto',
           },
         ],
       },
     ]);
     expect(contactGroup([])).toEqual([]);
   });
-  it('posts the query to the lookup, and keeps an address out of the GET search and See all', () => {
+  // C7 review, C7-SEC-1: the palette asks at every pause in typing, so whatever is in the box
+  // then (half an address, the first digits of a number) must never go in a URL.
+  it('searches records with a POST, the term in its body, never in a URL', () => {
+    expect(searchRequest('  nora.haddad ')).toEqual({
+      url: '/api/admin/search',
+      init: { method: 'POST', body: { q: 'nora.haddad' } },
+    });
     const source = readFileSync('src/components/admin/screens/chrome/CommandPalette.tsx', 'utf8');
+    expect(source).toContain('searchRequest(q)');
+    expect(source).not.toMatch(/api\/admin\/search\?/);
+    expect(source).not.toContain('encodeURIComponent(q)');
     expect(source).toMatch(
       /'\/api\/admin\/crm\/contacts\/lookup', \{\s*method: 'POST',\s*body: \{ q \}/,
     );
-    expect(source).toMatch(/personal\s*\?\s*Promise\.resolve/);
+    // "See all results" (a link the person picks) is left out for an address or a number.
     expect(source).toContain('!looksLikeContactDetail(query)');
+  });
+
+  // C7 review, C7-I18N-1 and C7-UX-1: a person's name and company in their own direction.
+  it('draws an option’s label and detail in the direction the item asks', () => {
+    const out = html(CommandPalette, {
+      groups: [
+        {
+          title: 'Contacts',
+          items: [
+            {
+              key: `c:${ID}`,
+              label: 'نورة',
+              href: `/admin/contacts/${ID}`,
+              icon: 'users',
+              detail: 'شركة',
+              dir: 'auto',
+            },
+            { key: 's', label: 'Services', href: '/admin/services', icon: 'pages' },
+          ],
+        },
+      ],
+      contacts: true,
+    });
+    expect(out).toContain('<span dir="auto">نورة</span>');
+    expect(out).toContain('<i dir="auto">شركة</i>');
+    expect(out).toContain('<span>Services</span>');
+  });
+
+  // C7 review, C7-COPY-1: services are still searched for a contacts holder.
+  it('names every area it searches in its placeholder', () => {
+    expect(html(CommandPalette, { groups: [], contacts: true })).toContain(
+      'placeholder="Search pages, services, projects, people…"',
+    );
+    expect(html(CommandPalette, { groups: [] })).toContain(
+      'placeholder="Search pages, services, projects…"',
+    );
   });
 });

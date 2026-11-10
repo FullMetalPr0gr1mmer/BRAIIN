@@ -47,19 +47,59 @@ export interface ContactForm {
   tags: string;
 }
 
-/** The field each API key belongs to, and what the summary calls it. */
-const FIELDS: Readonly<Record<string, { key: keyof ContactForm; label: string }>> = {
-  displayName: { key: 'name', label: 'Name' },
-  title: { key: 'title', label: 'Title' },
-  companyName: { key: 'company', label: 'Company' },
-  channels: { key: 'email', label: 'E-mail' },
-  stage: { key: 'stage', label: 'Stage' },
-  ownerId: { key: 'owner', label: 'Owner' },
-  locale: { key: 'locale', label: 'Language' },
-  city: { key: 'city', label: 'City' },
-  source: { key: 'source', label: 'Source' },
-  tags: { key: 'tags', label: 'Tags' },
+/** What the error summary calls each field. */
+const LABELS: Readonly<Record<keyof ContactForm, string>> = {
+  name: 'Name',
+  title: 'Title',
+  email: 'E-mail',
+  phone: 'Phone or WhatsApp',
+  company: 'Company',
+  stage: 'Stage',
+  owner: 'Owner',
+  locale: 'Language',
+  city: 'City',
+  source: 'How they found us',
+  tags: 'Tags',
 };
+
+/** The field each API key belongs to (a channel's is found by its kind, `issueField`). */
+const FIELDS: Readonly<Record<string, keyof ContactForm>> = {
+  displayName: 'name',
+  title: 'title',
+  companyName: 'company',
+  stage: 'stage',
+  ownerId: 'owner',
+  locale: 'locale',
+  city: 'city',
+  source: 'source',
+  tags: 'tags',
+};
+
+/** A channel the server refused, in words: Zod's own text is not written for people (P-12). */
+const CHANNEL_WORDS: Readonly<Record<'email' | 'phone', string>> = {
+  email: 'Type the whole e-mail address, like name@example.com.',
+  phone: 'Type the whole number, with its country code.',
+};
+
+/**
+ * The form field a server issue belongs to, and what to say under it (C7 review, C7-COR-1). A
+ * channel's path is `channels.<n>…`: the n-th channel of the body that was sent, whose kind
+ * says whether it is the e-mail or the phone box (the e-mail goes first when both are given).
+ */
+export function issueField(
+  path: string,
+  message: string,
+  sent: ContactCreate,
+): { key: keyof ContactForm; message: string } | null {
+  const [head, index] = path.split('.');
+  if (head === 'channels') {
+    const kind = sent.channels?.[Number(index)]?.kind;
+    if (kind === 'email' || kind === 'phone') return { key: kind, message: CHANNEL_WORDS[kind] };
+    return null;
+  }
+  const key = FIELDS[head ?? ''];
+  return key ? { key, message } : null;
+}
 
 /** Tags as typed: comma separated, trimmed, each once. */
 export function tagsOf(raw: string): string[] {
@@ -136,7 +176,7 @@ export default function AddContactDrawer({ open, onClose, people, me }: AddConta
     setSummary(
       (Object.entries(found) as [keyof ContactForm, string][]).map(([key, message]) => ({
         id: id(key),
-        message: `${Object.values(FIELDS).find((f) => f.key === key)?.label ?? 'Phone'}: ${message}`,
+        message: `${LABELS[key]}: ${message}`,
       })),
     );
   }
@@ -149,10 +189,11 @@ export default function AddContactDrawer({ open, onClose, people, me }: AddConta
     if (Object.keys(local).length > 0) return show(local);
     show({});
     setBusy(true);
+    const sent = contactBody(form);
     try {
       const added = await adminFetch<{ id: string }>('/api/admin/crm/contacts', {
         method: 'POST',
-        body: contactBody(form),
+        body: sent,
       });
       // The confirmation rides to the contact's page, which shows it.
       location.assign(withFlash(`/admin/contacts/${added.id}`, 'contact-added'));
@@ -166,8 +207,8 @@ export default function AddContactDrawer({ open, onClose, people, me }: AddConta
       if (err instanceof AdminApiError && err.info.status === 422 && err.info.issues) {
         const found: Partial<Record<keyof ContactForm, string>> = {};
         for (const issue of err.info.issues) {
-          const field = FIELDS[issue.path.split('.')[0] ?? ''];
-          if (field) found[field.key] ??= issue.message;
+          const field = issueField(issue.path, issue.message, sent);
+          if (field) found[field.key] ??= field.message;
         }
         if (Object.keys(found).length > 0) return show(found);
       }

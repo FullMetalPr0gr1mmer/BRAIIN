@@ -5,11 +5,12 @@ import {
   type CustomFieldDefinition,
 } from '@schemas/crm';
 import type { ContactDetailRow } from '@/lib/crm/contactPage';
+import { toast } from '@/lib/admin/toast';
 import { CONTACT_SOURCE_LABELS, sourceLabelOf } from '@/lib/crm/contactView';
 
 // Details (Admin v2 C7, crm.md §11 screen 6): the contact's own words, with an explicit Save
 // (no autosave, P-5). One versioned PATCH of the fields that changed, through the page's queue
-// (`save`): a 409 says "Someone else changed this. Refreshed." and the form takes the stored
+// (`save`): a success is a toast, "Details saved." (crm.md §11, toasts for success only); a 409 says "Someone else changed this. Refreshed." and the form takes the stored
 // values. The custom fields the CRM settings define (C9b) are drawn here too; until then there
 // are none. E-mails and phones are edited in Contact details, after a reveal.
 
@@ -122,7 +123,9 @@ export default function ContactDetailsCard({ contact, customFields, busy, save }
       return;
     }
     setError('');
-    if (await save(patch)) setSaid('Saved.');
+    // Success is a toast (crm.md §11): nothing else on the card changes after a save of the
+    // city or the source (C7 review, C7-UX-3).
+    if (await save(patch)) toast('Details saved.', 'ok');
   }
 
   const set = (key: string) => (value: string | boolean) =>
@@ -233,7 +236,7 @@ export default function ContactDetailsCard({ contact, customFields, busy, save }
             {error}
           </p>
         )}
-        <p className="visually-hidden" role="status">
+        <p className="f__hint" role="status">
           {said}
         </p>
         <button type="submit" data-variant="primary" disabled={busy}>

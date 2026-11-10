@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import { flushSync } from 'react-dom';
 import Icon from '@/components/admin/kit/Icon';
 import Note from '@/components/admin/kit/Note';
 import { useClock } from '@/components/admin/kit/clock';
@@ -30,7 +31,7 @@ import ContactNotes from './ContactNotes';
 import ContactTimeline, { type TimelineKind } from './ContactTimeline';
 import type { EraseContactDialogProps } from './EraseContactDialog';
 import type { NewLeadDrawerProps } from './NewLeadDrawer';
-import { useLazy, type ContactPerson, type ContactsPermissions } from './shared';
+import { forgetOnLeave, useLazy, type ContactPerson, type ContactsPermissions } from './shared';
 
 // One contact (Admin v2 C7, crm.md §11 screen 6). The page renders the head (the name as the
 // h1, "title at Company") and this island's first view on the server; the island keeps the
@@ -115,7 +116,11 @@ export default function ContactDetail(props: ContactDetailProps) {
       sub.className = 'admin-sub';
       head.insertAdjacentElement('afterend', sub);
     }
-    if (sub) sub.textContent = line;
+    if (sub) {
+      // A person's words, in their own direction (as the server draws it, C7 review).
+      sub.setAttribute('dir', 'auto');
+      sub.textContent = line;
+    }
   }
 
   const peopleById = useMemo(
@@ -257,6 +262,11 @@ export default function ContactDetail(props: ContactDetailProps) {
 
   useEffect(() => showFlash(), []);
 
+  // Revealed details go when the page is left, and stay gone if the browser brings the page
+  // back from its back/forward cache: drawn away before the page is frozen (flushSync), so the
+  // kept copy holds none (C7 review, C7-PRIV-2).
+  useEffect(() => forgetOnLeave(window, () => flushSync(() => setRevealed(null))), []);
+
   const tags = Array.isArray(contact['tags'])
     ? (contact['tags'] as unknown[]).filter((t): t is string => typeof t === 'string')
     : [];
@@ -391,7 +401,11 @@ export default function ContactDetail(props: ContactDetailProps) {
             contactId={contact.id}
             me={me}
             canDelete={permissions.canErase}
-            onChanged={() => void reloadEvents()}
+            onChanged={() => {
+              // A note is activity (C5): "last activity" and "kept until" follow it.
+              void queue.run(() => readContact(true));
+              void reloadEvents();
+            }}
           />
           <ContactTimeline
             events={events}
@@ -430,6 +444,7 @@ export default function ContactDetail(props: ContactDetailProps) {
             stages={leadStages}
             contactId={contact.id}
             canAddLead={permissions.canAddLead}
+            hasChannel={channels.length > 0}
             onNewLead={newLead.open}
             onChecked={(said) => {
               setMessage({ tone: 'ok', text: said });
