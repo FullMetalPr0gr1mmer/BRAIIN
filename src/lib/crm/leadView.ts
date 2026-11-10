@@ -53,6 +53,25 @@ export const CHANNEL_LABELS: Readonly<Record<LeadChannel, string>> = {
   unknown: 'Other',
 };
 
+/**
+ * The channels the web form's attribution can set (C13, src/lib/crm/attribution.ts
+ * classifyChannel), with `unknown`: nothing recorded (no analytics consent, or before C13).
+ */
+export const WEB_LEAD_CHANNELS = [
+  'organic',
+  'social',
+  'paid',
+  'referral',
+  'direct',
+  'email',
+  'unknown',
+] as const satisfies readonly LeadChannel[];
+
+/** How a web form lead's channel reads: `unknown` there means nothing was recorded. */
+export function webChannelLabel(channel: LeadChannel): string {
+  return channel === 'unknown' ? 'Not recorded' : CHANNEL_LABELS[channel];
+}
+
 const SOURCE_LABELS: Readonly<Record<LeadSource, string>> = {
   web_form: 'Web form',
   manual: 'By hand',
@@ -66,6 +85,10 @@ const isKey = <K extends string>(map: Readonly<Record<K, unknown>>, key: unknown
 /** "Web form", or "By hand · Phone" for a lead added by hand (the channel says how). */
 export function sourceLabel(source: unknown, channel: unknown): string {
   if (!isKey(SOURCE_LABELS, source)) return 'Other';
+  // (C13) A web form lead names its channel once attribution recorded one.
+  if (source === 'web_form' && isKey(CHANNEL_LABELS, channel) && channel !== 'unknown') {
+    return `${SOURCE_LABELS.web_form} · ${CHANNEL_LABELS[channel]}`;
+  }
   if (source !== 'manual') return SOURCE_LABELS[source];
   return `${SOURCE_LABELS.manual} · ${isKey(CHANNEL_LABELS, channel) ? CHANNEL_LABELS[channel] : CHANNEL_LABELS.unknown}`;
 }
@@ -75,6 +98,49 @@ export function sourceTone(source: unknown): BadgeTone {
   if (source === 'web_form') return 'klein';
   if (source === 'manual') return 'sky';
   return 'gray';
+}
+
+// ---- Attribution (C13) -------------------------------------------------------------------------
+
+const DEVICE_LABELS: Readonly<Record<string, string>> = {
+  mobile: 'Phone',
+  tablet: 'Tablet',
+  desktop: 'Computer',
+};
+
+/** A country's English name from its two-letter code, else the code itself. */
+export function countryName(code: string): string {
+  try {
+    const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(code);
+    // ICU names a code it does not know "Unknown Region": the code says more.
+    return name && name !== 'Unknown Region' ? name : code;
+  } catch {
+    return code;
+  }
+}
+
+/**
+ * What a web form lead's attribution says, as label and value rows, in the card's order; empty
+ * when nothing was recorded (no analytics consent, or a lead from before C13). Only values in
+ * their stored shape are printed (strings), each exactly as stored.
+ */
+export function attributionRows(lead: Readonly<Record<string, unknown>>): [string, string][] {
+  const str = (key: string): string =>
+    typeof lead[key] === 'string' ? (lead[key] as string) : '';
+  const rows: [string, string][] = [];
+  const channel = lead['channel'];
+  if (isKey(CHANNEL_LABELS, channel) && channel !== 'unknown') {
+    rows.push(['How they reached us', CHANNEL_LABELS[channel]]);
+  }
+  if (str('landing_path')) rows.push(['Page they wrote from', str('landing_path')]);
+  if (str('referrer_host')) rows.push(['Site that sent them', str('referrer_host')]);
+  if (str('utm_campaign')) rows.push(['Campaign', str('utm_campaign')]);
+  if (str('utm_source')) rows.push(['Campaign source', str('utm_source')]);
+  if (str('utm_medium')) rows.push(['Campaign medium', str('utm_medium')]);
+  const device = DEVICE_LABELS[str('device_class')];
+  if (device) rows.push(['Device', device]);
+  if (/^[A-Z]{2}$/.test(str('country'))) rows.push(['Country', countryName(str('country'))]);
+  return rows;
 }
 
 // ---- Stage, score, SLA -----------------------------------------------------------------------

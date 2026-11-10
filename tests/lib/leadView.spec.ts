@@ -19,6 +19,10 @@ import {
   sourceLabel,
   sourceTone,
   stageTone,
+  attributionRows,
+  countryName,
+  webChannelLabel,
+  WEB_LEAD_CHANNELS,
 } from '@/lib/crm/leadView';
 import { previousPeriod } from '@/lib/crm/leadKpis';
 
@@ -55,6 +59,10 @@ describe('interestOf', () => {
 describe('source, stage, score and SLA', () => {
   it('names the source in words; a lead added by hand says how', () => {
     expect(sourceLabel('web_form', 'unknown')).toBe('Web form');
+    // (C13) A web form lead names the channel its attribution recorded.
+    expect(sourceLabel('web_form', 'organic')).toBe('Web form · Search');
+    expect(sourceLabel('web_form', 'paid')).toBe('Web form · Ads');
+    expect(sourceLabel('web_form', 'nonsense')).toBe('Web form');
     expect(sourceLabel('manual', 'phone')).toBe('By hand · Phone');
     expect(sourceLabel('manual', 'walk_in')).toBe('By hand · Walk-in');
     expect(sourceLabel('manual', 'unknown')).toBe('By hand · Other');
@@ -234,5 +242,56 @@ describe('leadsSubline (C4b)', () => {
       '12,345 inquiries in the last 90 days. 0 new, 0 unread.',
     );
     expect(leadsSubline({ total: 2, new: 2, unread: 2 }, '30')).not.toMatch(DASHES);
+  });
+});
+
+describe('attribution rows (C13)', () => {
+  it('a lead with nothing recorded has no rows (the card says why)', () => {
+    expect(attributionRows({ source: 'web_form', channel: 'unknown' })).toEqual([]);
+    expect(attributionRows({})).toEqual([]);
+  });
+
+  it('every recorded value, in the card’s order, exactly as stored', () => {
+    expect(
+      attributionRows({
+        channel: 'paid',
+        landing_path: '/services/logo',
+        referrer_host: 'www.google.com',
+        utm_source: 'google',
+        utm_medium: 'cpc',
+        utm_campaign: 'spring',
+        device_class: 'mobile',
+        country: 'SA',
+      }),
+    ).toEqual([
+      ['How they reached us', 'Ads'],
+      ['Page they wrote from', '/services/logo'],
+      ['Site that sent them', 'www.google.com'],
+      ['Campaign', 'spring'],
+      ['Campaign source', 'google'],
+      ['Campaign medium', 'cpc'],
+      ['Device', 'Phone'],
+      ['Country', 'Saudi Arabia'],
+    ]);
+  });
+
+  it('a value out of shape is not printed', () => {
+    expect(attributionRows({ device_class: 'iphone', country: 'sa', landing_path: 7 })).toEqual([]);
+    expect(countryName('ZZ')).toBe('ZZ');
+  });
+
+  it('the web form’s channels read in plain words, unknown as not recorded', () => {
+    expect(WEB_LEAD_CHANNELS.map(webChannelLabel)).toEqual([
+      'Search',
+      'Social',
+      'Ads',
+      'Referral',
+      'Direct',
+      'E-mail',
+      'Not recorded',
+    ]);
+    for (const row of attributionRows({ channel: 'organic', device_class: 'tablet' })) {
+      expect(row.join(' ')).not.toMatch(/[–—]/);
+    }
   });
 });

@@ -2,7 +2,12 @@ import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { MANUAL_LEAD_CHANNELS, type LeadAssignedFilter, type LeadChannel } from '@schemas/crm';
 import type { DisciplineView, PersonView } from '@/lib/crm/leadPage';
 import { LEAD_FILTER_SOURCES, type LeadFilters, type LeadSort } from '@/lib/crm/leadUrl';
-import { CHANNEL_LABELS, type LeadRange } from '@/lib/crm/leadView';
+import {
+  CHANNEL_LABELS,
+  WEB_LEAD_CHANNELS,
+  webChannelLabel,
+  type LeadRange,
+} from '@/lib/crm/leadView';
 
 // The leads list's and board's toolbar (Admin v2 C4b, crm.md §11): the search, and the
 // selects with visible labels. The search is posted in a body only, never put in the address
@@ -145,8 +150,9 @@ export function LeadFilterSelects({
             source: (LEAD_FILTER_SOURCES as readonly string[]).includes(value)
               ? (value as LeadFilters['source'])
               : null,
-            // How they reached us belongs to a lead added by hand.
-            channel: value === 'manual' ? filters.channel : null,
+            // How they reached us belongs to the source chosen: a channel of the other source
+            // is dropped (C13: the web form's channels come from its attribution).
+            channel: value === filters.source ? filters.channel : null,
           })
         }
       >
@@ -170,6 +176,26 @@ export function LeadFilterSelects({
           {MANUAL_LEAD_CHANNELS.map((channel) => (
             <option key={channel} value={channel}>
               {CHANNEL_LABELS[channel]}
+            </option>
+          ))}
+        </Select>
+      )}
+      {filters.source === 'web_form' && (
+        <Select
+          label="How they reached us"
+          value={filters.channel ?? ''}
+          onChange={(value) =>
+            set({
+              channel: (WEB_LEAD_CHANNELS as readonly string[]).includes(value)
+                ? (value as LeadChannel)
+                : null,
+            })
+          }
+        >
+          <option value="">Any way</option>
+          {WEB_LEAD_CHANNELS.map((channel) => (
+            <option key={channel} value={channel}>
+              {webChannelLabel(channel)}
             </option>
           ))}
         </Select>
