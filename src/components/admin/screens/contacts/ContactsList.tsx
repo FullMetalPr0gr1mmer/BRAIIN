@@ -485,7 +485,7 @@ export default function ContactsList({
         ) : (
           <span className="ct-tags">
             {tags.map((t) => (
-              <span key={t} className="lead-tag" dir="auto">
+              <span key={t} className="lead-tag ct-tag" dir="auto">
                 {t}
               </span>
             ))}

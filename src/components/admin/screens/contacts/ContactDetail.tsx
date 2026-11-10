@@ -104,11 +104,18 @@ export default function ContactDetail(props: ContactDetailProps) {
   function show(next: ContactDetailRow) {
     row.current = next;
     setContact(next);
-    // The page head's h1 and sub-line are the server's: kept in step after a rename.
+    // The page head's h1 and sub-line are the server's: kept in step after a rename (the
+    // sub-line made when the contact had no title or company before). Text only.
     const head = document.querySelector('.admin-header h1');
     if (head) head.textContent = contactName(next);
-    const sub = document.querySelector('.admin-header .admin-sub');
-    if (sub) sub.textContent = roleLine(next['title'], next['company_name']);
+    const line = roleLine(next['title'], next['company_name']);
+    let sub = document.querySelector('.admin-header .admin-sub');
+    if (!sub && line && head) {
+      sub = document.createElement('p');
+      sub.className = 'admin-sub';
+      head.after(sub);
+    }
+    if (sub) sub.textContent = line;
   }
 
   const peopleById = useMemo(
@@ -194,7 +201,7 @@ export default function ContactDetail(props: ContactDetailProps) {
     setMessage(null);
     return writeInTurn(queue, {
       send: (signal) =>
-        adminFetch<ContactAnswer>(base, {
+        adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}`, {
           method: 'PATCH',
           body: versioned ? { ...body, version: row.current.version } : body,
           signal,
@@ -283,7 +290,7 @@ export default function ContactDetail(props: ContactDetailProps) {
       <div className="ct-head">
         <button
           type="button"
-          className="lead-star btn--icon"
+          className="lead-star ct-head__star btn--icon"
           data-variant="ghost"
           aria-pressed={contact['is_starred'] === true}
           aria-label={`Star ${name}`}

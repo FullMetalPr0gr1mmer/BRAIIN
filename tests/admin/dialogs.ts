@@ -419,6 +419,27 @@ export const DIALOG_CASES: readonly DialogCase[] = [
     sources: [`${C}/leads/AddLeadDrawer.tsx`, `${C}/leads/shared.tsx`],
   },
 
+  // ---- Contacts (C7; contacts.e2e.ts) ---------------------------------------------------
+  {
+    id: 'contacts-add',
+    screen: '/admin/contacts',
+    // The page head's button is drawn for crm.contacts holders (src/pages/admin/contacts/index.astro).
+    who: full('crm.contacts'),
+    open: [{ click: { role: 'button', name: 'Add contact', exact: true } }],
+    name: 'Add a contact',
+    sources: [`${C}/contacts/AddContactDrawer.tsx`],
+  },
+  {
+    id: 'contacts-new-lead',
+    screen: '/admin/contacts/[id]',
+    // The Leads card's button: crm.contacts with leads.manage and leads.pii (the route's caps).
+    who: (role) =>
+      full('crm.contacts')(role) && full('leads.manage')(role) && full('leads.pii')(role),
+    open: [{ click: { role: 'button', name: 'New lead', exact: true } }],
+    name: /^New lead for /,
+    sources: [`${C}/contacts/NewLeadDrawer.tsx`],
+  },
+
   // ---- Website stats: goals (G1; stats-v2.e2e.ts) ---------------------------------------
   {
     id: 'stats-new-goal',
@@ -539,6 +560,13 @@ export const DIALOGS_COVERED_ELSEWHERE: readonly CoveredElsewhere[] = [
     marker: "name: 'Erase this lead'",
     roles: ['admin'],
     why: 'needs a lead of its own to erase; Admin alone holds crm.erase',
+  },
+  {
+    source: `${C}/contacts/EraseContactDialog.tsx`,
+    spec: 'tests/admin/contacts.e2e.ts',
+    marker: "name: 'Erase everything about them'",
+    roles: ['admin'],
+    why: 'opening it asks the erasure preview, which spends a slot of its own hourly limit, and its spec erases a contact of its own; Admin alone holds crm.erase',
   },
   {
     source: `${C}/maintenance/TurnOnDialog.tsx`,
