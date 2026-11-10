@@ -152,6 +152,14 @@ describe('the timeline', () => {
     expect(say('note_deleted', { note_id: 'n', source: 'staff' })).toBe('Note deleted');
     expect(say('created', {}, null)).toBe('Arrived through the website form');
     expect(say('created', {}, SARA)).toBe('Added by hand by Sara');
+    // Admin v2 C5: a link by e-mail or a new contact is plain; one by phone asks for a check.
+    expect(say('contact_linked', { contact_id: 'c', by: 'email' }, null)).toBe(
+      'Linked to a contact',
+    );
+    expect(say('contact_linked', { contact_id: 'c', by: 'new' }, null)).toBe('Linked to a contact');
+    expect(say('contact_linked', { contact_id: 'c', by: 'phone' }, null)).toBe(
+      'Linked to a contact by phone number. Please check it is the same person',
+    );
     expect(say('something_new')).toBe('Updated');
   });
 

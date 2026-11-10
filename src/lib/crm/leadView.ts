@@ -217,7 +217,10 @@ export function eventSentence(event: LeadEvent, stages: StagesByKey, people: Peo
     case 'note_deleted':
       return 'Note deleted';
     case 'contact_linked':
-      return 'Linked to a contact';
+      // (Admin v2 C5) A link made by phone alone may be someone else on a shared line.
+      return detail['by'] === 'phone'
+        ? 'Linked to a contact by phone number. Please check it is the same person'
+        : 'Linked to a contact';
     case 'task_created':
       return 'Task added';
     case 'task_done':

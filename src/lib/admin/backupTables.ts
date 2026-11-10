@@ -141,6 +141,12 @@ export const FORBIDDEN_BACKUP_TABLES: readonly string[] = [
   'lead_events',
   'lead_stages',
   'crm_settings',
+  // The contacts (0131, Admin v2 C5): people built from leads, their channels (the leads'
+  // ciphertext), notes and timeline.
+  'crm_contacts',
+  'crm_contact_channels',
+  'crm_contact_notes',
+  'crm_contact_events',
   'job_applications',
   'applications_safe',
   'cv_deletion_queue',
