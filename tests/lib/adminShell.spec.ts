@@ -31,6 +31,8 @@ interface Query {
 function fakeSupabase(results: Record<string, Result>, rpc: Record<string, unknown> = {}) {
   const tables: string[] = [];
   const queries: Query[] = [];
+  /** Every rpc the shell made, with its arguments. */
+  const rpcs: { fn: string; args: unknown }[] = [];
   const sb = {
     from(table: string) {
       tables.push(table);
@@ -60,12 +62,25 @@ function fakeSupabase(results: Record<string, Result>, rpc: Record<string, unkno
         builder[method] = () => builder;
       return builder;
     },
-    rpc: async (fn: string) => ({ data: rpc[fn] ?? null, error: null }),
+    rpc: async (fn: string, args?: unknown) => {
+      rpcs.push({ fn, args });
+      // (Admin v2 C8) The sidebar's two CRM counts are one read, public.crm_nav_counts: it
+      // answers the `leads` result's count (or its error) and the `crm_tasks` one's.
+      if (fn === 'crm_nav_counts' && !(fn in rpc)) {
+        const failed = results['leads']?.error ?? results['crm_tasks']?.error;
+        if (failed) return { data: null, error: failed };
+        return {
+          data: { leads: results['leads']?.count ?? 0, tasks: results['crm_tasks']?.count ?? 0 },
+          error: null,
+        };
+      }
+      return { data: rpc[fn] ?? null, error: null };
+    },
   };
   /** The filters of the HEAD counts on a table: the sidebar's counters. */
   const headFilters = (table: string) =>
     queries.filter((q) => q.table === table && q.head).map((q) => q.filters);
-  return { sb: sb as unknown as SupabaseClient, tables, queries, headFilters };
+  return { sb: sb as unknown as SupabaseClient, tables, queries, headFilters, rpcs };
 }
 
 const auth = (role: Role): AuthContext => ({
@@ -88,26 +103,28 @@ describe('loadShellState', () => {
       profiles: { data: { display_name: 'Kareem Hassan' } },
     });
     const state = await loadShellState(sb, auth('admin'), visibleNav('admin'), kv(null));
-    expect(state.counts).toEqual({ leads: 4, applications: 2 });
+    // (C8) Admin also sees Tasks: my overdue tasks, none here.
+    expect(state.counts).toEqual({ leads: 4, applications: 2, tasks: 0 });
     expect(state.displayName).toBe('Kareem Hassan');
-    expect(tables).toEqual(expect.arrayContaining(['leads', 'job_applications']));
+    expect(tables).toEqual(expect.arrayContaining(['job_applications']));
   });
 
   it("counts only the caller's tenant's NEW leads and applications, as the dashboard does", async () => {
-    const { sb, headFilters, queries } = fakeSupabase({
+    const { sb, headFilters, queries, rpcs } = fakeSupabase({
       leads: { count: 4 },
       job_applications: { count: 2 },
+      crm_tasks: { count: 3 },
     });
-    await loadShellState(sb, auth('admin'), visibleNav('admin'), kv(null));
+    const state = await loadShellState(sb, auth('admin'), visibleNav('admin'), kv(null));
     // Leads (C4a): the pipeline's first stage, spam left out, the rule of the dashboard's
-    // "New leads waiting" (lead_summary.new), not the legacy status.
-    expect(headFilters('leads')).toEqual([
-      [
-        ['tenant_id', 't-1'],
-        ['is_spam', false],
-        ['lead_stages.is_initial', true],
-      ],
+    // "New leads waiting" (lead_summary.new), not the legacy status. Since C8 it is read in
+    // SQL with the Tasks badge, in ONE read for the caller's tenant (public.crm_nav_counts,
+    // its rule pinned by supabase/tests/rls_crm_tasks.test.sql), never a HEAD on leads.
+    expect(rpcs.filter((r) => r.fn === 'crm_nav_counts')).toEqual([
+      { fn: 'crm_nav_counts', args: { p_tenant: 't-1' } },
     ]);
+    expect(headFilters('leads')).toEqual([]);
+    expect(state.counts).toEqual({ leads: 4, applications: 2, tasks: 3 });
     expect(headFilters('job_applications')).toEqual([
       [
         ['tenant_id', 't-1'],
@@ -117,11 +134,6 @@ describe('loadShellState', () => {
     expect(queries.filter((q) => q.table === 'profiles').map((q) => q.filters)).toEqual([
       [['id', 'u-1']],
     ]);
-    // The stage is joined, inner, through the composite key (an outer join would count every
-    // lead, whatever its stage).
-    expect(queries.find((q) => q.table === 'leads' && q.head)?.columns).toBe(
-      'id,lead_stages!inner(is_initial)',
-    );
   });
 
   it('never queries a count a role has no link for', async () => {
@@ -137,9 +149,16 @@ describe('loadShellState', () => {
     expect(tables).not.toContain('job_applications');
   });
 
+  it('a role with no CRM link makes no CRM read (C8)', async () => {
+    const { sb, rpcs } = fakeSupabase({ leads: { count: 4 } });
+    await loadShellState(sb, auth('seo'), visibleNav('seo'), kv(null));
+    expect(rpcs.map((r) => r.fn)).not.toContain('crm_nav_counts');
+  });
+
   it('gives Developer the lead count but not the applications one', async () => {
     const { sb, tables } = fakeSupabase({ leads: { count: 1 }, job_applications: { count: 9 } });
     const state = await loadShellState(sb, auth('developer'), visibleNav('developer'), kv(null));
+    // No Tasks link for Developer (crm.tasks is Admin's), so no tasks count either.
     expect(state.counts).toEqual({ leads: 1 });
     expect(tables).not.toContain('job_applications');
   });
@@ -181,7 +200,7 @@ describe('loadShellState', () => {
     expect(tables).not.toContain('admin_user_prefs');
     expect(tables).not.toContain('blog_posts');
     // The menu's counts are the shell's own, and still read.
-    expect(state.counts).toEqual({ leads: 4, applications: 2 });
+    expect(state.counts).toEqual({ leads: 4, applications: 2, tasks: 0 });
   });
 
   it('reads the maintenance flag, and treats a broken value as off', async () => {
@@ -349,7 +368,7 @@ describe('the release flag (Admin v2 R12: whether the savebar is drawn)', () => 
 describe('the counters registry (src/lib/admin/counters)', () => {
   it('holds exactly the counts the menu shows, each shown by a link', () => {
     // Pinned, not derived: a counter dropped from the registry must fail here.
-    expect(Object.keys(COUNTERS).sort()).toEqual(['applications', 'leads']);
+    expect(Object.keys(COUNTERS).sort()).toEqual(['applications', 'leads', 'tasks']);
     const shown = ADMIN_NAV.flatMap((group) =>
       group.links.flatMap((link) => (link.count ? [link.count] : [])),
     );

@@ -35,7 +35,8 @@
 --      Worker names the tenant and is refused unless it is the token's), executable by
 --      authenticated only: crm_tasks_grouped, crm_task_create, crm_task_update,
 --      crm_task_delete, crm_my_overdue_tasks (the sidebar badge, owner item O-9: MY overdue
---      tasks).
+--      tasks) and crm_nav_counts (the sidebar's two CRM counts, new leads and that badge, in one
+--      read: the leads counter moves onto it, so the badge costs the dashboard no subrequest).
 --   7. Retention (crm.md §8.1, docs/retention.md): app.purge_crm_tasks: a done task goes
 --      leads_months after it was done; an open task about no one goes leads_months after its
 --      last change or its due moment, whichever is later; a task about someone goes with its
@@ -617,6 +618,26 @@ $$;
 revoke all on function public.crm_my_overdue_tasks(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.crm_my_overdue_tasks(uuid) to authenticated;
 
+-- The sidebar's two CRM counts in ONE read (README P-15: a Worker request on the Workers Free
+-- plan makes at most 50 subrequests, and the dashboard, the heaviest admin page, sits at its
+-- measured budget, tests/lib/dashboardWidgets.spec.ts): new leads, by the rule of the leads
+-- counter it replaces (C4a: the pipeline's initial stage, spam left out, as lead_summary's
+-- `new`), and the caller's own overdue tasks. As the caller (RLS and the live check decide),
+-- so a role that reads no task counts none; src/lib/admin/counters/crm.ts reads it once per
+-- request for both links.
+create or replace function public.crm_nav_counts(p_tenant uuid) returns jsonb
+  language sql stable security invoker set search_path = public, pg_temp as $$
+  select jsonb_build_object(
+    'leads', (select count(*)::int
+                from public.leads l
+                join public.lead_stages s on s.tenant_id = l.tenant_id and s.id = l.stage_id
+               where l.tenant_id = app.effective_tenant_id() and l.tenant_id = p_tenant
+                 and not l.is_spam and s.is_initial),
+    'tasks', public.crm_my_overdue_tasks(p_tenant))
+$$;
+revoke all on function public.crm_nav_counts(uuid) from public, anon, authenticated, service_role;
+grant execute on function public.crm_nav_counts(uuid) to authenticated;
+
 -- ═══ 9. Retention ═════════════════════════════════════════════════════════════════════════
 -- Every tenant, its own horizon (site_settings.retention.leads_months, 24 by default:
 -- app.lead_retention_months). A task about someone goes with them (cascade); here, a done
@@ -909,6 +930,7 @@ begin
                               'public.crm_task_update(uuid, uuid, integer, jsonb)',
                               'public.crm_task_delete(uuid, uuid, integer)',
                               'public.crm_my_overdue_tasks(uuid)',
+                              'public.crm_nav_counts(uuid)',
                               'app.crm_task_json(uuid, uuid, text)',
                               'app.crm_task_tenant_ok(uuid)',
                               'app.crm_task_links_ok(uuid, uuid, uuid)',

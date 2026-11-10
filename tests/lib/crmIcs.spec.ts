@@ -89,7 +89,8 @@ describe('the file name', () => {
   it('is an ASCII slug of the title, at most 60 characters before .ics', () => {
     expect(icsFilename('Call Huda: "the logo" / v2')).toBe('call-huda-the-logo-v2.ics');
     expect(icsFilename('x'.repeat(100))).toBe(`${'x'.repeat(60)}.ics`);
-    expect(icsFilename('Café crème')).toBe('cafe-creme.ics');
+    // No folding: an accented letter is not ASCII, so it becomes a hyphen.
+    expect(icsFilename('Café crème')).toBe('caf-cr-me.ics');
   });
 
   it('is task.ics when nothing ASCII is left', () => {

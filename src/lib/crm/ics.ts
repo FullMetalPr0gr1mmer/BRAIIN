@@ -103,9 +103,9 @@ export function buildTaskIcs(task: IcsTask, ctx: IcsContext): string {
  * when nothing ASCII is left (an Arabic title). Quotes and path characters never survive.
  */
 export function icsFilename(title: string): string {
+  // No Unicode folding (the admin never transforms Arabic text, P-12): anything not ASCII
+  // letters or digits becomes a hyphen.
   const slug = title
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')

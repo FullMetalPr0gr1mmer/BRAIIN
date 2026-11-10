@@ -22,7 +22,7 @@
 --   7. grants (P-14) and the helper.
 
 begin;
-select plan(70);
+select plan(73);
 
 insert into public.tenants (id, name) values
   ('c8000000-0000-4000-8000-000000000001', 'C8 T1'),
@@ -168,6 +168,14 @@ select is(c8_val($$ select public.crm_tasks_grouped('c8000000-0000-4000-8000-000
   '42501', 'naming another tenant is refused');
 select is(c8_val($$ select public.crm_my_overdue_tasks('c8000000-0000-4000-8000-000000000001') $$),
   '1', 'the badge: my overdue tasks only');
+select is(c8_val($$ select public.crm_nav_counts('c8000000-0000-4000-8000-000000000001')::text $$),
+  '{"leads": 1, "tasks": 1}',
+  'the sidebar''s one CRM read: new leads (the initial stage, no spam) and my overdue tasks');
+select is(c8_val($$ select public.crm_nav_counts('c8000000-0000-4000-8000-000000000001')::text $$),
+  (select jsonb_build_object('leads', count(*)::int, 'tasks', 1)::text
+     from public.leads_safe l join public.lead_stages s on s.tenant_id = l.tenant_id and s.id = l.stage_id
+    where l.tenant_id = 'c8000000-0000-4000-8000-000000000001' and not l.is_spam and s.is_initial),
+  'its leads count is the leads counter''s rule (C4a: the initial stage, spam left out)');
 select c8_as('O');
 select is(c8_val($$ select string_agg(title, ',') from public.crm_tasks $$), 'Theirs',
   'another tenant''s Admin reads only its own tenant''s task');
@@ -211,14 +219,18 @@ select is((select string_agg(who || '=' || res, ' ' order by who) from c8_out),
   || 'L=0/{"done": 0, "today": 0, "overdue": 0, "upcoming": 0}/0 '
   || 'S=0/{"done": 0, "today": 0, "overdue": 0, "upcoming": 0}/0',
   'no other role, and no stale Admin token (demoted, switched off, locked), reads a task through the table, the grouping or the badge');
+select c8_as('Ao');
+select is(c8_val($$ select public.crm_nav_counts('c8000000-0000-4000-8000-000000000001')::text $$),
+  '{"leads": 0, "tasks": 0}', 'a switched-off Admin''s token counts no lead and no task in the sidebar''s read');
 reset role;
 set local role anon;
 select c8_as('N');
 select is(c8_val($$ select count(*) from public.crm_tasks $$) || ' '
           || c8_val($$ select public.crm_tasks_grouped('c8000000-0000-4000-8000-000000000001', '{}') $$) || ' '
           || c8_val($$ select public.crm_my_overdue_tasks('c8000000-0000-4000-8000-000000000001') $$) || ' '
+          || c8_val($$ select public.crm_nav_counts('c8000000-0000-4000-8000-000000000001') $$) || ' '
           || c8_val($$ select public.crm_task_create('c8000000-0000-4000-8000-000000000001', c8_body('x')) $$),
-  '42501 42501 42501 42501', 'anon holds nothing: no read, no reader, no door');
+  '42501 42501 42501 42501 42501', 'anon holds nothing: no read, no reader, no door');
 reset role;
 
 -- ── 3. Changes, the version and the done stamps ─────────────────────────────────────────────
