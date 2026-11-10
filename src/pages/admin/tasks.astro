@@ -1,0 +1,68 @@
+---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminTasks from '@/components/admin/islands/AdminTasks';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { readTaskGroups, readTaskOwners } from '@/lib/crm/taskPage';
+import type { TaskGroups } from '@/lib/crm/tasks';
+
+export const prerender = false;
+
+// The studio's time zone (Admin v2 U9): the lists are grouped in it on the server, and the
+// island prints its dates in it.
+const studioTz = await studioTimeZone(Astro.locals);
+
+// Tasks (Admin v2 C8, crm.md §11 screen 10): the follow-ups, grouped Overdue, Today, Upcoming
+// and Done in the studio's zone by public.crm_tasks_grouped. The first view is rendered here,
+// so the page is complete without JavaScript; the island takes over. `crm.tasks` (Admin only
+// until C10b): any other role is refused here with a 403 and reads nothing (Refused.astro);
+// RLS and the live check refuse them again in the database.
+//
+// My tasks is the default, falling back to Everyone when I have no open task (crm.md §11); an
+// address may name the view (?view=mine|all), never anything else.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = session !== null && can(session.role, 'crm.tasks') === 'full';
+if (!allowed) Astro.response.status = 403;
+
+const asked = Astro.url.searchParams.get('view');
+let view: 'mine' | 'all' = asked === 'all' ? 'all' : 'mine';
+let groups: TaskGroups | null = null;
+let owners: { id: string; name: string }[] = [];
+if (allowed && session && sb) {
+  try {
+    [groups, owners] = await Promise.all([
+      readTaskGroups(sb, session, { view }),
+      readTaskOwners(sb, session),
+    ]);
+    if (asked !== 'mine' && asked !== 'all' && groups.mineOpen === 0) {
+      view = 'all';
+      groups = await readTaskGroups(sb, session, { view });
+    }
+  } catch {
+    groups = null;
+  }
+}
+const me = session
+  ? { id: session.userId, name: owners.find((p) => p.id === session.userId)?.name ?? 'You' }
+  : { id: '', name: 'You' };
+// The counts line ("{n} overdue · {n} today · {n} upcoming, for you") is the island's, so it
+// follows the view; the sub-line stays the same.
+const subtitle = 'Follow-ups for your leads and contacts.';
+---
+
+<AdminLayout title="Tasks" subtitle={subtitle} styles={['tasks.css']}>
+  {
+    !allowed ? (
+      <Refused />
+    ) : !groups ? (
+      <p class="msg" data-kind="error" role="alert">
+        The tasks could not be loaded just now. Try again in a moment.
+      </p>
+    ) : (
+      <AdminTasks client:load tz={studioTz} initial={groups} view={view} owners={owners} me={me} />
+    )
+  }
+</AdminLayout>

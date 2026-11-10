@@ -1,5 +1,6 @@
 import { applications } from './applications';
 import { leads } from './leads';
+import { tasks } from './tasks';
 import type { Counter } from './types';
 
 export type { Counter } from './types';
@@ -11,6 +12,7 @@ export type { Counter } from './types';
 export const COUNTERS = {
   applications,
   leads,
+  tasks,
 } as const satisfies Readonly<Record<string, Counter>>;
 
 /** The key of a registered counter: what a nav link's `count` may name. */

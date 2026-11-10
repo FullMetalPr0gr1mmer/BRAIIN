@@ -37,6 +37,8 @@ export const ADMIN_STYLESHEETS = [
   'seo.css',
   'services.css',
   'stats.css',
+  // Admin v2 C8: the Tasks screen, the task drawer and the Tasks card on a lead's page.
+  'tasks.css',
   // Admin v2 E3: the template editors (the Showing picker, the fixed parts), over pages.css.
   'templates.css',
   // Admin v2 E4: the theme editor.

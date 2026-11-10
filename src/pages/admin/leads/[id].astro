@@ -17,6 +17,7 @@ import {
   type StageView,
 } from '@/lib/crm/leadPage';
 import { firstPage, parseLeadFilters, withLeadFilters } from '@/lib/crm/leadUrl';
+import { readTaskOwners } from '@/lib/crm/taskPage';
 import { interestOf } from '@/lib/crm/leadView';
 
 export const prerender = false;
@@ -55,6 +56,9 @@ let detail: LeadDetailInitial | null = null;
 let stages: StageView[] = [];
 let people: PersonView[] = [];
 let sameEmail: { id: string; number: number | null }[] = [];
+// (Admin v2 C8) The Tasks card's owners, for crm.tasks holders only (its routes check again).
+const canTasks = allowed && can(session.role, 'crm.tasks') === 'full';
+let tasks: { owners: { id: string; name: string }[] } | null = null;
 let failed = false;
 let notFound = false;
 
@@ -63,11 +67,14 @@ if (allowed && session && sb) {
     notFound = true;
   } else {
     try {
-      [detail, stages, people] = await Promise.all([
+      let owners: { id: string; name: string }[] = [];
+      [detail, stages, people, owners] = await Promise.all([
         readLeadDetail(sb, session, id, filters, now, permissions.canEditServices, studioTz),
         readStages(sb, session),
         readPeople(sb, session),
+        canTasks ? readTaskOwners(sb, session) : Promise.resolve([]),
       ]);
+      if (canTasks) tasks = { owners };
     } catch (err) {
       if (err instanceof NotFoundError) notFound = true;
       else failed = true;
@@ -131,7 +138,7 @@ const me = session
   heading={name ?? (notFound ? 'Lead not found' : 'Lead')}
   headingDir={name ? 'auto' : undefined}
   subtitle={subtitle}
-  styles={['leads.css']}
+  styles={canTasks ? ['leads.css', 'tasks.css'] : ['leads.css']}
 >
   {
     allowed && (
@@ -187,6 +194,7 @@ const me = session
         me={me}
         sameEmail={sameEmail}
         now={now.toISOString()}
+        tasks={tasks}
       />
     )
   }

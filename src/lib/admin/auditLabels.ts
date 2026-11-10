@@ -329,6 +329,16 @@ const EXACT: Readonly<Record<string, Label>> = {
         : 'Confirmed a lead matched by phone on',
     noun: 'a contact',
   },
+  // Tasks (Admin v2 C8): ids, the type and field names only, never a title or a note.
+  'crm.task.create': { kind: 'leads', verb: 'Added', noun: 'a task' },
+  'crm.task.update': {
+    kind: 'leads',
+    verb: (detail) =>
+      detail['done'] === true ? 'Ticked off' : detail['done'] === false ? 'Reopened' : 'Updated',
+    noun: 'a task',
+  },
+  'crm.task.delete': { kind: 'leads', verb: 'Removed', noun: 'a task' },
+  'crm.task.ics': { kind: 'leads', verb: 'Downloaded the calendar file of', noun: 'a task' },
   'export.csv.attempt': { kind: 'leads', verb: 'Started exporting', noun: 'the leads' },
   'export.csv.outcome': {
     kind: 'leads',

@@ -31,7 +31,8 @@ import { getContact, requireContactId } from '@/lib/crm/contacts';
 
 export const prerender = false;
 
-const PREVIEW_COUNTS = ['leads', 'unindexed', 'channels', 'notes'] as const;
+// (Admin v2 C8) `tasks`: the follow-ups that go with the person.
+const PREVIEW_COUNTS = ['leads', 'unindexed', 'channels', 'notes', 'tasks'] as const;
 
 interface PhoneMatch {
   id: string;

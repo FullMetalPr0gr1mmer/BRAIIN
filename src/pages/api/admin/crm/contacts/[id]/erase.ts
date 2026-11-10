@@ -45,6 +45,8 @@ const ERASE_COUNTS = [
   'notes',
   'events',
   'unindexed',
+  // (Admin v2 C8) the follow-ups that went with the person.
+  'tasks',
 ] as const;
 
 /** What crm_erase_person answers: counts only, the named keys only. */
