@@ -46,6 +46,7 @@ export const CAP_LABELS: Readonly<Record<Capability, CapLabel>> = {
   'leads.manage': { full: 'See and manage inquiries' },
   'leads.pii': { full: 'See an inquirer’s contact details, one at a time' },
   'export.csv': { full: 'Export inquiries, stats and the activity log as CSV' },
+  'crm.contacts': { full: 'See and manage contacts, the people behind inquiries' },
   'crm.erase': { full: 'Erase an inquiry and its notes for good' },
   'crm.settings': {
     full: 'Set up the pipeline stages, lead scoring, response time and assignment',

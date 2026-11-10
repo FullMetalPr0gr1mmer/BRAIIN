@@ -39,6 +39,7 @@ export const CAPABILITIES = [
   'leads.manage',
   'leads.pii',
   'export.csv',
+  'crm.contacts',
   'crm.erase',
   'crm.settings',
   'applications.manage',
@@ -84,6 +85,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': F,
     'leads.pii': F,
     'export.csv': F,
+    'crm.contacts': F,
     'crm.erase': F,
     'crm.settings': F,
     'applications.manage': F,
@@ -123,6 +125,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': N,
     'leads.pii': N,
     'export.csv': N,
+    'crm.contacts': N,
     'crm.erase': N,
     'crm.settings': N,
     'applications.manage': N,
@@ -162,6 +165,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': N,
     'leads.pii': N,
     'export.csv': N,
+    'crm.contacts': N,
     'crm.erase': N,
     'crm.settings': N,
     'applications.manage': N,
@@ -183,7 +187,8 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
   // J6: applicants' CVs and contact details are Admin-only, unlike leads), NO erasing
   // a lead or a person's data (crm.erase is Admin's, Admin v2 C3), and NO CRM settings
   // (crm.settings is Admin's, Admin v2 C9a: owner item O-7, Developer gets no CRM
-  // configuration).
+  // configuration), and NO contacts (crm.contacts is Admin's, Admin v2 C5: owner default
+  // O-7; Developer keeps its leads).
   developer: {
     'users.manage': N,
     'settings.general': F,
@@ -206,6 +211,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': F,
     'leads.pii': F,
     'export.csv': F,
+    'crm.contacts': N,
     'crm.erase': N,
     'crm.settings': N,
     'applications.manage': N,
@@ -251,6 +257,7 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': F,
     'leads.pii': F,
     'export.csv': N,
+    'crm.contacts': N,
     'crm.erase': N,
     'crm.settings': N,
     'applications.manage': N,

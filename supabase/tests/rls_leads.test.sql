@@ -254,7 +254,8 @@ select ok(
      from pg_class where relname = 'leads_safe' and relnamespace = 'public'::regnamespace),
   'leads_safe is SECURITY INVOKER (without it, every authenticated role reads all leads)');
 
--- Its columns, exactly and in order: 0041's list less the legacy status (C14b). Nothing gated
+-- Its columns, exactly and in order: 0041's list less the legacy status (C14b), plus the contact
+-- link (C5: which contact, and how it was linked; never the contact's details). Nothing gated
 -- (ciphertext, retention, the indexes, the reasons, the search text) is among them.
 select is(
   (select array_agg(attname::text order by attnum) from pg_attribute
@@ -264,8 +265,8 @@ select is(
         'lead_number', 'stage_id', 'is_spam', 'spam_marked_at', 'first_response_at', 'won_at',
         'version', 'created_by', 'updated_by', 'score', 'source', 'channel', 'assigned_to',
         'value_sar', 'is_starred', 'read_at', 'read_by', 'tags', 'last_contact_at',
-        'last_contact_channel'],
-  'leads_safe carries exactly the safe columns, in order (C14b: no status)');
+        'last_contact_channel', 'contact_id', 'contact_link'],
+  'leads_safe carries exactly the safe columns, in order (C14b: no status; C5: the contact link)');
 
 -- Its grants, stated when it was re-created (P-14): staff SELECT and nothing else; PUBLIC,
 -- anon and the service role nothing, table-wide or on a column.
