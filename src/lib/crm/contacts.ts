@@ -86,6 +86,33 @@ export const CONTACT_LEAD_FIELDS = [
 ] as const;
 export const CONTACT_LEAD_COLUMNS = CONTACT_LEAD_FIELDS.join(',');
 
+/** How many of a contact's leads its page lists, newest first. */
+const CONTACT_LEAD_LIMIT = 50;
+
+/**
+ * A contact's leads, read as the caller (RLS, the live check, the leads' column grant): the
+ * safe columns only, with how each was linked, so a phone match shows as one to check.
+ */
+export async function contactLeads(
+  sb: SupabaseClient,
+  auth: AuthContext,
+  contactId: string,
+): Promise<Record<(typeof CONTACT_LEAD_FIELDS)[number], unknown>[]> {
+  const { data, error } = await sb
+    .from('leads')
+    .select(CONTACT_LEAD_COLUMNS)
+    .eq('tenant_id', auth.tenantId)
+    .eq('contact_id', contactId)
+    .order('created_at', { ascending: false })
+    .limit(CONTACT_LEAD_LIMIT);
+  if (error) throw new Error(`contact leads: ${error.code ?? 'no code'}`);
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map((lead) => {
+    const out = {} as Record<(typeof CONTACT_LEAD_FIELDS)[number], unknown>;
+    for (const field of CONTACT_LEAD_FIELDS) out[field] = lead[field] ?? null;
+    return out;
+  });
+}
+
 /** One contact, as the caller's own client sees it; a tombstone (C12) is not one. */
 export async function getContact(
   sb: SupabaseClient,

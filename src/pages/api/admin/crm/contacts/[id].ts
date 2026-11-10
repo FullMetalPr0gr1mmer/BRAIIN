@@ -4,14 +4,13 @@ import { defineAdminRoute } from '@/lib/admin/route';
 import { NotFoundError, ValidationError } from '@/lib/admin/errors';
 import { updateRow } from '@/lib/admin/crud';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
-import { pick, tenantCountry } from '@/lib/crm/leadQuery';
+import { tenantCountry } from '@/lib/crm/leadQuery';
 import { serviceClient } from '@/lib/supabase/server';
 import {
   CONTACT_CONSTRAINTS,
   CONTACT_DETAIL_COLUMNS,
-  CONTACT_LEAD_COLUMNS,
-  CONTACT_LEAD_FIELDS,
   channelPresence,
+  contactLeads,
   contactError,
   contactPatchValues,
   getContact,
@@ -39,29 +38,20 @@ import { customFieldDefinitions, validateCustomValues } from '@/lib/crm/contactC
 
 export const prerender = false;
 
-const LEAD_LIMIT = 50;
-
 export const GET = defineAdminRoute({
   cap: 'crm.contacts',
   handler: async ({ auth, sb, params, audit }) => {
     const id = requireContactId(params);
     const contact = await getContact(sb, auth, id);
-    const [channels, leadsResult, timelineResult] = await Promise.all([
+    const [channels, leads, timelineResult] = await Promise.all([
       channelPresence(sb, auth, id),
-      sb
-        .from('leads')
-        .select(CONTACT_LEAD_COLUMNS)
-        .eq('tenant_id', auth.tenantId)
-        .eq('contact_id', id)
-        .order('created_at', { ascending: false })
-        .limit(LEAD_LIMIT),
+      contactLeads(sb, auth, id),
       sb.rpc('crm_contact_timeline', {
         p_tenant: auth.tenantId,
         p_contact: id,
         p_filter: { limit: 30 },
       }),
     ]);
-    if (leadsResult.error) throw new Error(`contact leads: ${leadsResult.error.code ?? 'no code'}`);
     if (timelineResult.error) throw contactError(timelineResult.error, 'the contact timeline');
 
     audit({ action: 'crm.contact.view', entityType: 'contact', entityId: id });
@@ -69,9 +59,7 @@ export const GET = defineAdminRoute({
     return {
       contact: own,
       channels,
-      leads: ((leadsResult.data ?? []) as unknown as Record<string, unknown>[]).map((lead) =>
-        pick(lead, CONTACT_LEAD_FIELDS),
-      ),
+      leads,
       timeline: parseTimeline(timelineResult.data),
       customFields: customFieldDefinitions(),
     };
