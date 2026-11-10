@@ -647,10 +647,21 @@ describe('POST /api/admin/leads/[id]/erase', () => {
 
   it('recheck, the erase limit, the RLS read, the attempt WRITTEN, the door, the outcome', async () => {
     serviceRpc = {
-      crm_erase_lead: { data: { lead_number: 7, leads: 1, notes: 2, events: 5 }, error: null },
+      // (Admin v2 C5) `contacts`: the auto-contact the lead left with nothing went too.
+      crm_erase_lead: {
+        data: { lead_number: 7, leads: 1, notes: 2, events: 5, contacts: 1 },
+        error: null,
+      },
     };
     const res = await run();
     expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { erased: boolean; counts: Record<string, number> };
+    };
+    expect(body.data).toEqual({
+      erased: true,
+      counts: { lead_number: 7, leads: 1, notes: 2, events: 5, contacts: 1 },
+    });
     expect(events).toEqual([
       'svc:profiles',
       'ops:crm-erase',
@@ -675,6 +686,7 @@ describe('POST /api/admin/leads/[id]/erase', () => {
       leads: 1,
       notes: 2,
       events: 5,
+      contacts: 1,
     });
   });
 

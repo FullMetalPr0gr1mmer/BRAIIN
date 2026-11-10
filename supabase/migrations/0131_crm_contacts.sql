@@ -45,7 +45,8 @@
 --      contact from the lead's name, company and language, with the lead's channels. A
 --      spam lead is never linked. The lead's timeline gets `contact_linked`, the contact's
 --      `lead_linked`; a linked lead in a won stage makes its contact a client; an assignee
---      who holds crm.contacts becomes an empty contact's owner.
+--      who holds crm.contacts becomes an empty contact's owner. A phone link does neither,
+--      and is not the contact's activity, until a person confirms it (C6).
 --   5. Arrival (crm_ingest_lead restated, the allow-list unchanged): after the insert the
 --      link runs in its own sub-transaction. ANY error there is caught: a WARNING, the lead
 --      stays, the daily cron links it later. The public form is never blocked by it.
@@ -54,10 +55,12 @@
 --      is copied, the indexes compared.
 --   7. Retention from last activity (docs/retention.md): last_activity_at advances when a
 --      linked lead arrives (its own time), is moved, contacted or noted, when a contact note
---      is added or its stage changes; never on a detail edit, a star, an assignment, a value
---      or spam. app.purge_crm() (called by app.run_retention(), restated) deletes contacts
---      idle past leads_months and orphan auto-contacts (made by the system, never edited,
---      not starred, no lead, no note); channels, notes and events go by cascade.
+--      is added or a person changes its stage; never on a detail edit, a star, an
+--      assignment, a value, spam, a phone link or the won rule's stage change.
+--      app.purge_crm() (called by app.run_retention(), restated) deletes contacts idle past
+--      leads_months and orphan auto-contacts (made by the system, never edited by a person,
+--      not starred, no lead linked other than by phone, no note); channels, notes and events
+--      go by cascade.
 --   8. Person erasure (crm.md §8.2, crm.erase, Admin): public.crm_erase_preview and
 --      public.crm_erase_person, the service role's, each checking the acting profile live
 --      (app.crm_eraser_ok). The person's leads (linked by e-mail, created with the contact
@@ -133,6 +136,13 @@ create table public.crm_contacts (
   custom jsonb not null default '{}'::jsonb
     check (jsonb_typeof(custom) = 'object' and pg_column_size(custom) < 8192),
   is_starred boolean not null default false,
+  -- A person has edited it (C5 review): set by app.tg_crm_contact_row on a direct write that
+  -- changes a detail (a staff token's, or a service-role door acting for a person), never by
+  -- the system's own writes (the won rule, the owner fill, the activity time), and never
+  -- cleared. An auto-contact a person never edited goes with its last lead (the orphan rule,
+  -- app.crm_contact_is_orphan); the version cannot say this, as the system's writes move it.
+  -- No staff grant writes it.
+  staff_edited boolean not null default false,
   -- Retention runs from here (docs/retention.md): see the triggers below for what moves it.
   last_activity_at timestamptz not null default now(),
   -- Merge tombstones (C12). A tombstone goes with the contact it was merged into (retention
@@ -469,7 +479,10 @@ create or replace function app.tg_crm_contact_row() returns trigger
   language plpgsql security definer set search_path = '' as $$
 declare
   c_skip constant text[] := array['last_activity_at', 'is_starred', 'name_key', 'search_text',
-    'updated_at', 'updated_by', 'version'];
+    'updated_at', 'updated_by', 'version', 'staff_edited'];
+  -- (C5 review) A direct write: a statement on the table itself, not one a trigger made (the
+  -- won rule and the owner fill run in app.tg_lead_contact, a trigger on leads).
+  v_direct constant boolean := pg_trigger_depth() = 1;
   v_edited boolean := true;
 begin
   if tg_op = 'UPDATE' then
@@ -501,9 +514,19 @@ begin
 
   new.created_by := old.created_by;
   new.created_at := old.created_at;
-  -- A staff stage change is activity (a client, a partner: someone is working with them).
-  if new.stage is distinct from old.stage then
+  -- A person's stage change is activity (a client, a partner: someone is working with them).
+  -- (C5 review) The won rule's is not: it follows a lead move that is activity already
+  -- (lead_events 'stage_changed'), and on the backfill it would give an old lead's person a
+  -- fresh horizon.
+  if v_direct and new.stage is distinct from old.stage then
     new.last_activity_at := greatest(old.last_activity_at, now());
+  end if;
+  -- (C5 review) Edited by a person: a direct write that changes a detail, or a service-role
+  -- door saying so. Never cleared; the system's trigger-made writes keep what it was.
+  if v_direct then
+    new.staff_edited := old.staff_edited or new.staff_edited or v_edited;
+  else
+    new.staff_edited := old.staff_edited;
   end if;
   if v_edited then
     new.updated_at := now();
@@ -591,6 +614,9 @@ create trigger crm_contact_notes_event after insert on public.crm_contact_notes
 -- A linked lead's timeline is the person's activity: arriving, moving, being contacted,
 -- a note (and, from C8, a task done; C12, a merge). Not an assignment, a value, spam, a
 -- deleted note or the link itself (linking is the system's act, not the person's).
+-- (C5 review) Not a lead linked by phone alone either: until a person confirms it (C6's
+-- 'staff' link), it may be someone else on a shared line, and must not extend this
+-- person's record.
 create or replace function app.tg_lead_event_contact_activity() returns trigger
   language plpgsql security definer set search_path = '' as $$
 declare
@@ -600,7 +626,9 @@ begin
     return null;
   end if;
   select l.contact_id into v_contact
-    from public.leads l where l.tenant_id = new.tenant_id and l.id = new.lead_id;
+    from public.leads l
+   where l.tenant_id = new.tenant_id and l.id = new.lead_id
+     and l.contact_link is distinct from 'phone';
   if v_contact is not null then
     perform app.crm_touch(new.tenant_id, v_contact, new.at);
   end if;
@@ -614,6 +642,9 @@ create trigger lead_events_contact_activity after insert on public.lead_events
 -- lead returns at once): the link's two timeline lines; a won lead makes its contact a
 -- client (from lead or past; a partner stays a partner); the assignee fills an empty owner
 -- when they hold crm.contacts (the owner rule above, so the update never refuses).
+-- (C5 review) The two rules skip a lead linked by phone alone: it may be someone else's
+-- (a shared line) until a person confirms the link (C6). Neither rule marks the contact as
+-- edited by a person (app.tg_crm_contact_row: a trigger's write is not a direct one).
 create or replace function app.tg_lead_contact() returns trigger
   language plpgsql security definer set search_path = '' as $$
 declare
@@ -630,6 +661,9 @@ begin
     values (new.tenant_id, new.contact_id, auth.uid(), 'lead_linked',
             jsonb_build_object('lead_id', new.id, 'lead_number', new.lead_number,
                                'by', new.contact_link));
+  end if;
+  if new.contact_link is not distinct from 'phone' then
+    return null;
   end if;
   if (v_linked or new.stage_id is distinct from old.stage_id)
      and exists (select 1 from public.lead_stages s
@@ -691,6 +725,19 @@ grant select, insert, delete on public.crm_contact_notes to service_role;
 revoke all on public.crm_contact_events from public, anon, authenticated, service_role;
 grant select on public.crm_contact_events to authenticated;
 grant select, insert, delete on public.crm_contact_events to service_role;
+-- (C5 review) The events' identity sequence, the one sequence this migration creates: no
+-- API role holds anything on it (Supabase's default privileges would give them all of it;
+-- UPDATE on a sequence is setval). An identity column draws its next value without any
+-- privilege on its sequence, so the definer triggers' inserts need none (0038's precedent).
+do $$
+declare
+  v_seq text := pg_get_serial_sequence('public.crm_contact_events', 'id');
+begin
+  if v_seq is null then
+    raise exception 'C5: public.crm_contact_events.id owns no sequence';
+  end if;
+  execute format('revoke all on sequence %s from public, anon, authenticated, service_role', v_seq);
+end $$;
 
 -- leads: lead workers read the link (a contact's id and how it was made, never the
 -- contact's details), and leads_safe carries it, appended (create or replace can only add
@@ -820,10 +867,13 @@ begin
   end if;
 
   -- 5. The link (not an edit: app.tg_lead_pipeline's c_derived). app.tg_lead_contact writes
-  --    the two timeline lines and the won and owner rules.
+  --    the two timeline lines and the won and owner rules. (C5 review) A phone link is not
+  --    the contact's activity: it may be someone else's until a person confirms it.
   update public.leads x set contact_id = v_contact, contact_link = v_by
    where x.tenant_id = p_tenant and x.id = p_lead;
-  perform app.crm_touch(p_tenant, v_contact, l.created_at);
+  if v_by <> 'phone' then
+    perform app.crm_touch(p_tenant, v_contact, l.created_at);
+  end if;
   return v_by;
 end $$;
 revoke all on function app.crm_link_lead_core(uuid, uuid) from public, anon, authenticated, service_role;
@@ -977,18 +1027,25 @@ grant execute on function public.crm_ingest_lead(uuid, jsonb) to service_role;
 
 -- ═══ 12. Retention from last activity ═════════════════════════════════════════════════════
 -- An auto-contact with nothing left: made by the system (created_by null), never edited by
--- a person (version 1), not starred, no lead and no note. Its channels are copies of its
--- leads' ciphertext, so it must not outlive them.
+-- a person (staff_edited: the version cannot say it, as the won rule and the owner fill
+-- move it), not starred, no note, no channel a person added, and no lead linked other than
+-- by phone (a phone link may be someone else's on a shared line: it does not keep another
+-- person's name and copied details alive). Its channels are copies of its leads'
+-- ciphertext, so it must not outlive them.
 create or replace function app.crm_contact_is_orphan(p_tenant uuid, p_contact uuid) returns boolean
   language sql stable security definer set search_path = '' as $$
   select exists (
     select 1 from public.crm_contacts c
      where c.tenant_id = p_tenant and c.id = p_contact
-       and c.created_by is null and c.version = 1 and not c.is_starred
+       and c.created_by is null and not c.staff_edited and not c.is_starred
        and not exists (select 1 from public.leads l
-                        where l.tenant_id = c.tenant_id and l.contact_id = c.id)
+                        where l.tenant_id = c.tenant_id and l.contact_id = c.id
+                          and l.contact_link is distinct from 'phone')
        and not exists (select 1 from public.crm_contact_notes n
-                        where n.tenant_id = c.tenant_id and n.contact_id = c.id))
+                        where n.tenant_id = c.tenant_id and n.contact_id = c.id)
+       and not exists (select 1 from public.crm_contact_channels ch
+                        where ch.tenant_id = c.tenant_id and ch.contact_id = c.id
+                          and ch.source <> 'lead'))
 $$;
 revoke all on function app.crm_contact_is_orphan(uuid, uuid) from public, anon, authenticated, service_role;
 -- crm_erase_lead (an INVOKER the service role runs) asks it.
@@ -1012,13 +1069,11 @@ begin
        and c.last_activity_at < now() - make_interval(months => app.lead_retention_months(t.id));
     get diagnostics n = row_count;
     removed := removed + n;
+    -- The orphans, by the one rule (the first three tests narrow the candidates).
     delete from public.crm_contacts c
      where c.tenant_id = t.id
-       and c.created_by is null and c.version = 1 and not c.is_starred
-       and not exists (select 1 from public.leads l
-                        where l.tenant_id = c.tenant_id and l.contact_id = c.id)
-       and not exists (select 1 from public.crm_contact_notes nn
-                        where nn.tenant_id = c.tenant_id and nn.contact_id = c.id);
+       and c.created_by is null and not c.staff_edited and not c.is_starred
+       and app.crm_contact_is_orphan(c.tenant_id, c.id);
     get diagnostics n = row_count;
     removed := removed + n;
   end loop;
@@ -1102,6 +1157,11 @@ begin
   end if;
   return jsonb_build_object(
     'leads', (select count(*)::int from app.crm_person_leads(p_tenant, p_contact) p where p.certain),
+    -- (C5 review) Leads not indexed yet (the fail-open insert, or the cron behind): their
+    -- e-mail and phone cannot be compared, so this erasure cannot find them if they are the
+    -- person's. C6's route runs the index backfill first and shows any count left.
+    'unindexed', (select count(*)::int from public.leads l
+                   where l.tenant_id = p_tenant and l.crm_indexed_at is null),
     'channels', (select count(*)::int from public.crm_contact_channels ch
                   where ch.tenant_id = p_tenant and ch.contact_id = p_contact),
     'notes', (select count(*)::int from public.crm_contact_notes n
@@ -1139,6 +1199,7 @@ declare
   v_notes int;
   v_events int;
   v_link_lines int;
+  v_n int;
 begin
   if p_tenant is null or p_contact is null or p_actor is null then
     raise exception using errcode = '22023', message = 'crm_erase_person: a tenant, a contact and an actor are required';
@@ -1177,11 +1238,21 @@ begin
    where e.tenant_id = p_tenant and e.kind = 'contact_linked'
      and e.detail ->> 'contact_id' = p_contact::text;
   get diagnostics v_link_lines = row_count;
+  -- (C5 review) Nor does another contact's timeline keep a line naming an erased lead (one
+  -- of the person's leads linked to someone else by phone, say).
+  delete from public.crm_contact_events e
+   where e.tenant_id = p_tenant and e.kind = 'lead_linked' and e.contact_id <> p_contact
+     and e.detail ->> 'lead_id' = any (v_leads::text[]);
+  get diagnostics v_n = row_count;
+  v_link_lines := v_link_lines + v_n;
   delete from public.crm_contacts c where c.tenant_id = p_tenant and c.id = p_contact;
   return jsonb_build_object(
     'contacts', 1, 'leads', cardinality(v_sure), 'phone_leads', cardinality(v_leads) - cardinality(v_sure),
     'lead_notes', v_lead_notes, 'lead_events', v_lead_events, 'link_lines', v_link_lines,
-    'channels', v_channels, 'notes', v_notes, 'events', v_events);
+    'channels', v_channels, 'notes', v_notes, 'events', v_events,
+    -- (C5 review) What this erasure could not check (crm_erase_preview says why).
+    'unindexed', (select count(*)::int from public.leads l
+                   where l.tenant_id = p_tenant and l.crm_indexed_at is null));
 end $$;
 revoke all on function public.crm_erase_person(uuid, uuid, uuid[], uuid) from public, anon, authenticated, service_role;
 grant execute on function public.crm_erase_person(uuid, uuid, uuid[], uuid) to service_role;
@@ -1189,7 +1260,10 @@ grant execute on function public.crm_erase_person(uuid, uuid, uuid[], uuid) to s
 -- 0041's lead erasure, with one step added (C5): an auto-contact the erased lead leaves with
 -- nothing (app.crm_contact_is_orphan) goes with it, so the copy of the lead's contact
 -- details in its channels does not outlive the lead. The answer gains `contacts` (0 or 1),
--- which the deployed route ignores (it reads named keys).
+-- which the deployed route ignores (it reads named keys). (C5 review) A contact that stays
+-- (a person edited it, or another of the person's leads is linked) keeps no copy of the
+-- erased lead's details that no remaining lead of the person carries, and no timeline line
+-- names the erased lead; a contact that goes leaves no link line on the leads it leaves.
 create or replace function public.crm_erase_lead(p_tenant uuid, p_lead uuid, p_actor uuid)
   returns jsonb
   language plpgsql volatile security invoker set search_path = public, pg_temp as $$
@@ -1198,6 +1272,9 @@ declare
   v_notes int;
   v_events int;
   v_contact uuid;
+  v_link text;
+  v_email_hmac text;
+  v_phone_hmac text;
   v_contacts int := 0;
 begin
   if p_tenant is null or p_lead is null or p_actor is null then
@@ -1206,7 +1283,8 @@ begin
   if not app.crm_eraser_ok(p_tenant, p_actor) then
     raise exception using errcode = '42501', message = 'crm_erase_lead: this person may not erase';
   end if;
-  select l.lead_number, l.contact_id into v_number, v_contact
+  select l.lead_number, l.contact_id, l.contact_link, l.email_hmac, l.phone_hmac
+    into v_number, v_contact, v_link, v_email_hmac, v_phone_hmac
     from public.leads l
    where l.tenant_id = p_tenant and l.id = p_lead
      for update;
@@ -1218,9 +1296,27 @@ begin
   select count(*)::int into v_events from public.lead_events e
    where e.tenant_id = p_tenant and e.lead_id = p_lead;
   delete from public.leads l where l.tenant_id = p_tenant and l.id = p_lead;
+  delete from public.crm_contact_events e
+   where e.tenant_id = p_tenant and e.kind = 'lead_linked' and e.detail ->> 'lead_id' = p_lead::text;
   if v_contact is not null and app.crm_contact_is_orphan(p_tenant, v_contact) then
+    delete from public.lead_events e
+     where e.tenant_id = p_tenant and e.kind = 'contact_linked'
+       and e.detail ->> 'contact_id' = v_contact::text;
     delete from public.crm_contacts c where c.tenant_id = p_tenant and c.id = v_contact;
     v_contacts := 1;
+  elsif v_contact is not null and v_link is distinct from 'phone' then
+    -- A phone link copied nothing to the contact, so only a lead of the person's own has
+    -- copies to take back: the channels made from it that no remaining lead of the person
+    -- (linked other than by phone) carries.
+    delete from public.crm_contact_channels ch
+     where ch.tenant_id = p_tenant and ch.contact_id = v_contact and ch.source = 'lead'
+       and ((ch.kind = 'email' and ch.value_hmac = v_email_hmac)
+            or (ch.kind = 'phone' and ch.value_hmac = v_phone_hmac))
+       and not exists (select 1 from public.leads l
+                        where l.tenant_id = p_tenant and l.contact_id = v_contact
+                          and l.contact_link is distinct from 'phone'
+                          and ((ch.kind = 'email' and l.email_hmac = ch.value_hmac)
+                               or (ch.kind = 'phone' and l.phone_hmac = ch.value_hmac)));
   end if;
   return jsonb_build_object('lead_number', v_number, 'leads', 1, 'notes', v_notes, 'events', v_events,
                             'contacts', v_contacts);
@@ -1354,6 +1450,14 @@ begin
      or has_table_privilege('service_role', 'public.crm_contact_events', 'update') then
     raise exception 'C5: service_role''s privileges on the contact tables are not as stated';
   end if;
+
+  -- (C5 review) The events' identity sequence: no API role holds anything on it.
+  foreach r in array array['public', 'anon', 'authenticated', 'service_role'] loop
+    if has_sequence_privilege(r::name, pg_get_serial_sequence('public.crm_contact_events', 'id'),
+                              'usage, select, update') then
+      raise exception 'C5: % holds a privilege on the crm_contact_events sequence', r;
+    end if;
+  end loop;
 
   -- ---- 4. leads: the link is read, never written, by staff; leads_safe -----------------------
   if not has_column_privilege('authenticated', 'public.leads', 'contact_id', 'select')

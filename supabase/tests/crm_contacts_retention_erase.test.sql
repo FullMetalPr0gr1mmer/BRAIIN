@@ -13,7 +13,7 @@
 --   3. crm_erase_lead takes an auto-contact the lead leaves with nothing, and only that.
 
 begin;
-select plan(28);
+select plan(29);
 
 insert into public.tenants (id, name) values
   ('c5200000-0000-4000-8000-000000000001', 'C5 keep T1'),
@@ -154,8 +154,8 @@ select throws_ok(
 select is(
   (select p - 'phone_matches' from public.crm_erase_preview('c5200000-0000-4000-8000-000000000001',
             c5k_contact('c5200000-0000-4000-8000-0000000000e1'), 'c5200000-0000-4000-8000-0000000000a1') p),
-  '{"leads": 3, "notes": 1, "channels": 2}'::jsonb,
-  'the preview counts the person''s three leads (e1, e2, e6), its two channels and its note');
+  '{"leads": 3, "notes": 1, "channels": 2, "unindexed": 3}'::jsonb,
+  'the preview counts the person''s three leads (e1, e2, e6), its two channels and its note, and the tenant''s leads not indexed yet (ab07, e5, e6), which no erasure can compare');
 select is(
   (select string_agg((m ->> 'id') || ':' || (m ->> 'linked'), ' ' order by m ->> 'id')
      from public.crm_erase_preview('c5200000-0000-4000-8000-000000000001',
@@ -186,8 +186,8 @@ select is(
   public.crm_erase_person('c5200000-0000-4000-8000-000000000001', (select contact_id from c5k_person),
     array['c5200000-0000-4000-8000-0000000000e5']::uuid[], 'c5200000-0000-4000-8000-0000000000a1')
     - 'lead_events',
-  '{"contacts": 1, "leads": 3, "phone_leads": 1, "lead_notes": 1, "link_lines": 1, "channels": 2, "notes": 1, "events": 7}'::jsonb,
-  'an Admin erases the person: three leads, the ticked phone match, the unticked one''s link line, the contact, its channels, note and timeline');
+  '{"contacts": 1, "leads": 3, "phone_leads": 1, "lead_notes": 1, "link_lines": 1, "channels": 2, "notes": 1, "events": 7, "unindexed": 1}'::jsonb,
+  'an Admin erases the person: three leads, the ticked phone match, the unticked one''s link line, the contact, its channels, note and timeline; one lead it could not check is left (ab07)');
 reset role;
 select is(
   (select string_agg(id::text, ' ' order by id) from public.leads
@@ -257,6 +257,9 @@ select is(
                         'c5200000-0000-4000-8000-0000000000a1') ->> 'contacts',
   '0', 'a contact a person edited stays when its last lead goes (retention or a person''s erasure decides)');
 reset role;
+select is(
+  (select count(*)::int from public.crm_contact_channels where contact_id = (select shared from c5k_auto)),
+  0, 'but the erased lead''s e-mail, which no lead of the person still carries, leaves it');
 
 select * from finish();
 rollback;
