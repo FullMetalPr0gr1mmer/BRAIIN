@@ -1105,7 +1105,7 @@ begin
       select jsonb_agg(jsonb_build_object('id', l.id, 'lead_number', l.lead_number,
                                           'name', l.name, 'company', l.company,
                                           'created_at', l.created_at,
-                                          'linked', l.contact_id = p_contact)
+                                          'linked', coalesce(l.contact_id = p_contact, false))
                        order by l.created_at desc, l.id)
         from app.crm_person_leads(p_tenant, p_contact) p
         join public.leads l on l.tenant_id = p_tenant and l.id = p.lead_id
@@ -1133,6 +1133,7 @@ declare
   v_channels int;
   v_notes int;
   v_events int;
+  v_link_lines int;
 begin
   if p_tenant is null or p_contact is null or p_actor is null then
     raise exception using errcode = '22023', message = 'crm_erase_person: a tenant, a contact and an actor are required';
@@ -1165,11 +1166,17 @@ begin
    where e.tenant_id = p_tenant and e.contact_id = p_contact;
 
   delete from public.leads l where l.tenant_id = p_tenant and l.id = any (v_leads);
+  -- A lead left behind (an unticked phone match) keeps no timeline line naming the erased
+  -- contact: the link it describes is gone, and no row should point at the person.
+  delete from public.lead_events e
+   where e.tenant_id = p_tenant and e.kind = 'contact_linked'
+     and e.detail ->> 'contact_id' = p_contact::text;
+  get diagnostics v_link_lines = row_count;
   delete from public.crm_contacts c where c.tenant_id = p_tenant and c.id = p_contact;
   return jsonb_build_object(
     'contacts', 1, 'leads', cardinality(v_sure), 'phone_leads', cardinality(v_leads) - cardinality(v_sure),
-    'lead_notes', v_lead_notes, 'lead_events', v_lead_events, 'channels', v_channels,
-    'notes', v_notes, 'events', v_events);
+    'lead_notes', v_lead_notes, 'lead_events', v_lead_events, 'link_lines', v_link_lines,
+    'channels', v_channels, 'notes', v_notes, 'events', v_events);
 end $$;
 revoke all on function public.crm_erase_person(uuid, uuid, uuid[], uuid) from public, anon, authenticated, service_role;
 grant execute on function public.crm_erase_person(uuid, uuid, uuid[], uuid) to service_role;
