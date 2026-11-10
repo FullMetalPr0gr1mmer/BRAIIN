@@ -138,7 +138,7 @@ const me = session
   heading={name ?? (notFound ? 'Lead not found' : 'Lead')}
   headingDir={name ? 'auto' : undefined}
   subtitle={subtitle}
-  styles={canTasks ? ['leads.css', 'tasks.css'] : ['leads.css']}
+  styles={['leads.css', 'tasks.css']}
 >
   {
     allowed && (

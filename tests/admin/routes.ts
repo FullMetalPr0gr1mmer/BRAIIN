@@ -131,6 +131,9 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     cap: 'leads.manage',
     render: 'server',
   },
+  // Admin v2 C8: Tasks renders its first view on the server and refuses itself (a 403 and
+  // Refused.astro); its JSON twin is the grouped list (a GET, the same capability).
+  { href: '/admin/tasks', api: '/api/admin/crm/tasks', cap: 'crm.tasks', render: 'server' },
   { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view', render: 'server' },
   {
     href: '/admin/site-health',

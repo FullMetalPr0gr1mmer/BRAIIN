@@ -199,6 +199,8 @@ const UNCLASSIFIED: Record<string, string> = {
     'the SEO list’s read (its options are typed { signal })',
   'src/components/admin/screens/logs/ClearLogs.tsx: clearUrl(scope)':
     'system logs: not release-managed',
+  'src/components/admin/screens/tasks/shared.ts: `/api/admin/crm/tasks?${params.toString()}`':
+    'the tasks list’s read (Admin v2 C8, a GET): CRM data is never staged (P-3)',
   'src/components/admin/screens/resources/ResourceTable.tsx: action.endpoint':
     'the redirects’ edge sync (ui.syncAction): rebuilds the KV snapshot, writes no content',
   'src/components/admin/screens/versions/api.ts: path(id)':

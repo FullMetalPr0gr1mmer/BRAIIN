@@ -418,6 +418,7 @@ describe('the locked screens the refusals e2e opens', () => {
       '/admin/seo',
       '/admin/settings',
       '/admin/site-health',
+      '/admin/tasks',
     ]);
     for (const screen of server) {
       const page = readFileSync(pageFileFor(screen.href), 'utf8');
@@ -508,7 +509,7 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'Certifications /admin/certifications',
       'Media library /admin/media',
     ],
-    CRM: ['Leads /admin/leads'],
+    CRM: ['Leads /admin/leads', 'Tasks /admin/tasks'],
     Hiring: ['Job applications /admin/applications'],
     Growth: [
       'Website stats /admin/analytics',
