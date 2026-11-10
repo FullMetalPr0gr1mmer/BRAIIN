@@ -11,6 +11,7 @@ import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { checkInquiry } from '@/lib/forms/config';
 import type { InquiryConfig } from '@schemas/forms';
 import { readPublishedFormSettings } from '@/lib/forms/published';
+import { leadAttribution } from '@/lib/crm/attribution';
 
 // Public contact / project-inquiry submission — the ONLY public write path (RLS denies
 // anon on the leads table). Server-side Zod validation + honeypot (schema) + same-origin
@@ -24,6 +25,13 @@ import { readPublishedFormSettings } from '@/lib/forms/published';
 // when empty (src/lib/forms/config.ts checkInquiry). It is read with the service client for
 // the tenant resolved here; an unreadable config leaves the schema floor (fail open, as the
 // limiter) but still drops what the sending form does not ask (minimisation never fails open).
+//
+// Attribution (Admin v2 C13): how the visitor found us is recorded with the lead ONLY with their
+// analytics consent, checked here through the one gate (src/lib/crm/attribution.ts
+// leadAttribution → hasAttributionConsent, which also requires the current notice's consent
+// version); without it nothing is recorded, whatever the browser sent. It never fails a send: a
+// bad attribution object is dropped by the schema, a bad value by its cleaner, and a refused one
+// by createLead's retry.
 export const prerender = false;
 
 function json(body: unknown, status: number): Response {
@@ -90,7 +98,7 @@ export const POST: APIRoute = async ({ request }) => {
   const lead = checked.data;
 
   // TODO(KAN-20): verify the captcha token with reCAPTCHA once provisioned (O-19).
-  const result = await createLead(lead);
+  const result = await createLead(lead, leadAttribution(request, parsed.data.attribution));
   if (result.ok) return json({ ok: true }, 200);
   if (result.reason === 'unconfigured') return json({ ok: false, error: 'unavailable' }, 503);
   return json({ ok: false, error: 'server' }, 500);

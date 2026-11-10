@@ -14,12 +14,14 @@ import {
  */
 export function consentCookieHeader(
   choice: Partial<Pick<ConsentState, 'analytics' | 'marketing'>>,
+  /** The notice version the choice was made under; an older one is a choice the banner asks again. */
+  version: number = CONSENT_VERSION,
 ): string {
   const state = ConsentStateSchema.parse({
     functional: true,
     analytics: choice.analytics ?? false,
     marketing: choice.marketing ?? false,
-    v: CONSENT_VERSION,
+    v: version,
     ts: Date.now(),
   });
   return `${CONSENT_COOKIE}=${encodeURIComponent(JSON.stringify(state))}`;

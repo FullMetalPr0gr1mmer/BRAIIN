@@ -10,6 +10,11 @@ import { normalizeEmail, normalizePhone } from '@/lib/crm/normalize';
 import { blindIndex } from '@/lib/crm/blindIndex';
 import { leadSignals } from '@/lib/crm/score';
 import { writeSystemLog } from '@/lib/data/systemLog';
+import {
+  ATTRIBUTION_KEYS,
+  isServicePage,
+  type LeadAttributionColumns,
+} from '@/lib/crm/attribution';
 
 // Server-side lead creation (the "submit-contact-form" path). Resolves the tenant
 // SERVER-SIDE (anon tenant fence — never client-chosen), envelope-encrypts PII, and
@@ -27,6 +32,13 @@ import { writeSystemLog } from '@/lib/data/systemLog';
 // is written by the plain insert it always was, and the daily cron indexes it later. Any
 // other RPC error is a real refusal (a CHECK, a bad field) and is NOT retried as an
 // insert, which would only hide the bug.
+//
+// Attribution (Admin v2 C13) arrives as `attribution`, already decided by the caller with the
+// visitor's analytics consent (src/lib/crm/attribution.ts leadAttribution; null without it, and
+// then the lead is exactly what it was before C13). It must never cost a lead: if the RPC
+// refuses a lead that carried it (a database without 0132 refuses the keys, a CHECK a value),
+// the same lead is sent once more without it, and a warning names the code only. The plain
+// insert of the fallback never carries it.
 export type CreateLeadResult =
   { ok: true } | { ok: false; reason: 'unconfigured' | 'no-tenant' | 'insert-failed' };
 
@@ -40,7 +52,10 @@ export function isRpcUnavailable(error: DbError): boolean {
   return error.code === 'PGRST202' || error.code === '42883' || !error.code;
 }
 
-export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
+export async function createLead(
+  input: LeadInput,
+  attribution: LeadAttributionColumns | null = null,
+): Promise<CreateLeadResult> {
   if (!supabaseConfigured()) return { ok: false, reason: 'unconfigured' };
 
   const sb = serviceClient();
@@ -91,8 +106,20 @@ export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
     source: 'web_form',
     ...(await crmIndexes(sb, tenantId, input)),
   };
+  if (attribution) withAttribution(lead, attribution);
 
-  const { error } = await sb.rpc('crm_ingest_lead', { p_tenant: tenantId, p_lead: lead });
+  let { error } = await sb.rpc('crm_ingest_lead', { p_tenant: tenantId, p_lead: lead });
+  if (error && attribution && !isRpcUnavailable(error)) {
+    // The attribution is the one thing a refusal may be about that the lead can do without.
+    void writeSystemLog({
+      level: 'warn',
+      source: 'contact:ingest',
+      message: `crm_ingest_lead refused the lead with its attribution (${error.code ?? 'no code'}); sent again without it`,
+      detail: { code: error.code ?? null },
+    });
+    withoutAttribution(lead);
+    ({ error } = await sb.rpc('crm_ingest_lead', { p_tenant: tenantId, p_lead: lead }));
+  }
   if (!error) return { ok: true };
 
   if (!isRpcUnavailable(error)) {
@@ -113,6 +140,25 @@ export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
     detail: { code: error.code ?? null },
   });
   return fallbackInsert(sb, tenantId, id, lead);
+}
+
+/** Adds the attribution columns, and `service_page` when the form was on a service page. */
+function withAttribution(lead: Record<string, unknown>, attribution: LeadAttributionColumns): void {
+  Object.assign(lead, attribution);
+  const signals = lead['score_signals'];
+  // Only with the signals the Worker computed: a lead without them is scored by the cron.
+  if (Array.isArray(signals) && isServicePage(attribution.landing_path)) {
+    lead['score_signals'] = [...signals, 'service_page'];
+  }
+}
+
+/** The lead as it would have been sent without consent. */
+function withoutAttribution(lead: Record<string, unknown>): void {
+  for (const key of ATTRIBUTION_KEYS) delete lead[key];
+  const signals = lead['score_signals'];
+  if (Array.isArray(signals)) {
+    lead['score_signals'] = signals.filter((signal) => signal !== 'service_page');
+  }
 }
 
 /** What the Worker worked out about a lead before encrypting it (blind indexes, signals). */
@@ -219,6 +265,8 @@ async function fallbackInsert(
   id: string,
   lead: Record<string, unknown>,
 ): Promise<CreateLeadResult> {
+  // (C13) Never the attribution: its columns may not exist yet, and a lead outranks it.
+  withoutAttribution(lead);
   const {
     email_hmac: _e,
     phone_hmac: _p,

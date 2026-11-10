@@ -79,6 +79,7 @@ async function lead(id: string, over: Record<string, unknown> = {}, key = KEY) {
     timeline_band: null,
     service_of_interest: null,
     company: null,
+    landing_path: null,
     ...over,
   };
 }
@@ -121,6 +122,21 @@ describe('runLeadIndexBackfill', () => {
     ]);
     // The timeline is left as it is (C14a): the call names no timeline at all.
     expect(write).not.toHaveProperty('p_timeline_text_enc');
+  });
+
+  it('adds service_page as arrival does: from a recorded service-page landing path only (C13)', async () => {
+    rows = [
+      await lead('l1', { landing_path: '/ar/services/logo' }),
+      await lead('l2', { landing_path: '/contact' }),
+      await lead('l3'),
+    ];
+    await runLeadIndexBackfill(client(), KEY, 50);
+    expect(leadSelects[0]!.split(',')).toContain('landing_path');
+    expect(writes.map((w) => (w['p_signals'] as string[]).includes('service_page'))).toEqual([
+      true,
+      false,
+      false,
+    ]);
   });
 
   // Admin v2 C14a: the cron reads no legacy column, so it runs on today's schema and on C14b's

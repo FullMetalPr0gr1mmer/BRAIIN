@@ -74,8 +74,20 @@ export const GATED_LEAD_COLUMNS = 'email_enc,phone_enc,budget_enc,timeline_text_
 export const PIPELINE_LEAD_COLUMNS =
   'lead_number,stage_id,is_spam,first_response_at,won_at,version,score,source,channel,assigned_to,value_sar,is_starred,read_at,read_by,tags,last_contact_at,last_contact_channel';
 
-/** What a lead write answers with (Admin v2 C3): the safe columns and the pipeline's. */
-export const LEAD_WRITE_COLUMNS = `${SAFE_LEAD_COLUMNS},${PIPELINE_LEAD_COLUMNS}`;
+/**
+ * How the visitor found us (Admin v2 C13, migration 0132): recorded only with their analytics
+ * consent (src/lib/crm/attribution.ts), readable by every lead worker, written by nobody
+ * through the API. A path, a host name, three campaign tags, a device class and a country:
+ * never a URL with its query, the IP or the User-Agent.
+ */
+export const ATTRIBUTION_LEAD_COLUMNS =
+  'landing_path,referrer_host,utm_source,utm_medium,utm_campaign,device_class,country';
+
+/**
+ * What a lead write answers with (Admin v2 C3), and what the lead page reads: the safe columns,
+ * the pipeline's and (C13) the attribution, so a write's answer redraws the whole lead.
+ */
+export const LEAD_WRITE_COLUMNS = `${SAFE_LEAD_COLUMNS},${PIPELINE_LEAD_COLUMNS},${ATTRIBUTION_LEAD_COLUMNS}`;
 
 /** Safe columns plus the gated ones: the PII export's projection, read as the service role. */
 export const FULL_LEAD_COLUMNS = `${SAFE_LEAD_COLUMNS},${GATED_LEAD_COLUMNS}`;

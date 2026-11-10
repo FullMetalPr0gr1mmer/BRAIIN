@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { attributionVersionOk } from './version';
+
+export { ATTRIBUTION_CONSENT_VERSION, CONSENT_VERSION, attributionVersionOk } from './version';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // THE SINGLE PDPL CONSENT GATE (CLAUDE.md §7 "Consent (PDPL)").
@@ -6,6 +9,8 @@ import { z } from 'zod';
 //   - first-party telemetry ingest        (analytics)
 //   - the RUM web-vitals beacon            (analytics)
 //   - GA4 injection                        (analytics)
+//   - lead attribution with an inquiry     (analytics under the current notice:
+//                                           hasAttributionConsent; Admin v2 C13)
 //   - the third-party video facade click   (functional is always on; embeds need functional)
 // Default DENY. `functional` (strictly necessary) is always granted.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -14,8 +19,8 @@ export const CONSENT_CATEGORIES = ['functional', 'analytics', 'marketing'] as co
 export type ConsentCategory = (typeof CONSENT_CATEGORIES)[number];
 
 export const CONSENT_COOKIE = '__Host-consent';
-/** Bump when the cookie inventory / lawful-basis copy changes → re-prompt. */
-export const CONSENT_VERSION = 1;
+// CONSENT_VERSION ("bump when the cookie inventory / lawful-basis copy changes → re-prompt")
+// lives in ./version.ts, zod-free, so the browser can compare versions too.
 
 export const ConsentStateSchema = z.object({
   functional: z.literal(true),
@@ -59,6 +64,16 @@ function readCookie(req: Request, name: string): string | undefined {
 export function hasConsent(req: Request, category: ConsentCategory): boolean {
   if (category === 'functional') return true;
   return parseConsentCookie(readCookie(req, CONSENT_COOKIE))[category] === true;
+}
+
+/**
+ * Lead attribution's gate (Admin v2 C13): analytics consent through hasConsent, AND given under
+ * the current notice at a version that names attribution (./version.ts). A yes given under an
+ * older notice records nothing, as GA4's loader treats it (public/scripts/ga4.js).
+ */
+export function hasAttributionConsent(req: Request): boolean {
+  if (!hasConsent(req, 'analytics')) return false;
+  return attributionVersionOk(parseConsentCookie(readCookie(req, CONSENT_COOKIE)).v);
 }
 
 /**

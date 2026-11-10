@@ -87,6 +87,10 @@ describe('parseLeadFilters', () => {
       source: 'manual',
     });
     expect(parse('source=manual&channel=walk_in').channel).toBe('walk_in');
+    // (C13) The web form's own channels, from its attribution; never a manual one.
+    expect(parse('source=web_form&channel=organic').channel).toBe('organic');
+    expect(parse('source=web_form&channel=unknown').channel).toBe('unknown');
+    expect(parse('source=web_form&channel=walk_in').channel).toBeNull();
     // So the list's query never carries one either.
     expect(listQueryOf(parse('channel=phone&source=import'), new Date())).not.toHaveProperty(
       'channel',

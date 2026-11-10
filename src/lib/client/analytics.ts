@@ -13,8 +13,11 @@
 //                     chooses a service there, at most once per key per page view.
 //
 // Nothing is sent without analytics consent (read here from the consent cookie, and
-// re-checked by /api/analytics with hasConsent), and nothing new is stored: the same per-tab
-// `bs_sid` the page views always carried. `sendBeacon`, so a beacon never delays a navigation
+// re-checked by /api/analytics with hasConsent). Stored: the same per-tab `bs_sid` the page
+// views always carried, and (Admin v2 C13) the session's first touch, `bs_ft`, which an inquiry
+// carries and nothing else reads (src/lib/client/attribution.ts): written only with consent
+// given under the current notice (attributionConsent), removed when consent is withdrawn or the
+// notice it was given to is outdated, never joined to `bs_sid`. `sendBeacon`, so a beacon never delays a navigation
 // and survives the one the click starts (the language link). No layout reads, no work on
 // idle: one listener for clicks and one for the explorer's event.
 //
@@ -29,18 +32,37 @@
 // Under PDPL that keeps this an analytics measure rather than a tracking one, but it is still
 // consent-gated, because the visitor's expectation governs, not our data model.
 
+import { attributionVersionOk } from '@consent/version';
+import { recordFirstTouch } from './attribution';
+
 const COOKIE = '__Host-consent';
 const ENDPOINT = '/api/analytics';
 
+/** The consent cookie's choice, parsed; null when there is none or it cannot be read. */
+function consentChoice(cookie: string): { analytics?: unknown; v?: unknown } | null {
+  const match = cookie.split('; ').find((c) => c.startsWith(COOKIE + '='));
+  if (!match) return null;
+  try {
+    const state: unknown = JSON.parse(decodeURIComponent(match.slice(COOKIE.length + 1)));
+    return typeof state === 'object' && state !== null ? state : null;
+  } catch {
+    return null;
+  }
+}
+
 /** True when the consent cookie records analytics as accepted. */
 export function analyticsConsent(cookie: string = document.cookie): boolean {
-  const match = cookie.split('; ').find((c) => c.startsWith(COOKIE + '='));
-  if (!match) return false;
-  try {
-    return JSON.parse(decodeURIComponent(match.slice(COOKIE.length + 1))).analytics === true;
-  } catch {
-    return false;
-  }
+  return consentChoice(cookie)?.analytics === true;
+}
+
+/**
+ * Lead attribution's consent (C13): analytics accepted under the CURRENT notice, at a version
+ * that names attribution (packages/consent/version.ts, as the server's hasAttributionConsent).
+ * A yes given to an older notice, which the banner is asking about again, counts as no.
+ */
+export function attributionConsent(cookie: string = document.cookie): boolean {
+  const choice = consentChoice(cookie);
+  return choice?.analytics === true && attributionVersionOk(choice.v);
 }
 
 function sessionId(): string | undefined {
@@ -98,6 +120,11 @@ export function initAnalytics(): void {
   // `pageshow` covers both a fresh load and a bfcache restore.
   addEventListener('pageshow', sendView);
   document.addEventListener('consent-updated', sendView);
+
+  // (C13) The session's first touch, with consent under the current notice only; a "no", or a
+  // yes to an older notice, removes it.
+  recordFirstTouch(attributionConsent());
+  document.addEventListener('consent-updated', () => recordFirstTouch(attributionConsent()));
 
   // Once per id (or key) per page view: a second click on the same link counts nothing.
   const done = new Set<string>();

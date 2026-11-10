@@ -353,6 +353,56 @@ describe('a lead’s page', () => {
   });
 });
 
+describe('how they found us (C13)', () => {
+  const base = {
+    neighbours: { prev: null, next: null },
+    events: [],
+    before: null,
+    serviceHref: null,
+    stages: FRAME.stages,
+    people: FRAME.people,
+    me: { id: SARA, name: 'Sara' },
+    sameEmail: [],
+    now: NOW,
+  };
+
+  it('a web form lead with its attribution shows it to every lead worker, as text', () => {
+    const lead = {
+      ...row({ source: 'web_form', channel: 'organic' }),
+      landing_path: '/services/logo',
+      referrer_host: 'www.google.com',
+      device_class: 'desktop',
+      country: 'SA',
+    } as never;
+    for (const permissions of [PERMS, { ...PERMS, canSeePii: false, canErase: false }]) {
+      const out = html(LeadDetail, { ...base, lead, permissions });
+      expect(out).toContain('How they found us');
+      expect(out).toContain('Web form · Search');
+      expect(out).toContain('<dd dir="ltr">/services/logo</dd>');
+      expect(out).toContain('<dd dir="ltr">www.google.com</dd>');
+      expect(out).toContain('Saudi Arabia');
+      expect(out).not.toContain('href="https://www.google.com');
+    }
+  });
+
+  it('with nothing recorded it says why; a lead added by hand has no card', () => {
+    const plain = html(LeadDetail, {
+      ...base,
+      lead: row({ source: 'web_form', channel: 'unknown' }) as never,
+      permissions: PERMS,
+    });
+    expect(plain).toContain(
+      'Nothing was recorded. We record this only when the visitor allows analytics cookies.',
+    );
+    const manual = html(LeadDetail, {
+      ...base,
+      lead: row({ source: 'manual', channel: 'phone' }) as never,
+      permissions: PERMS,
+    });
+    expect(manual).not.toContain('How they found us');
+  });
+});
+
 describe('contact details after the reveal', () => {
   const revealed = {
     email: 'nora@example.test',

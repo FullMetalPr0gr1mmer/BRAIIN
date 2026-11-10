@@ -12,6 +12,7 @@ import type {
   StageView,
 } from '@/lib/crm/leadPage';
 import { Latest, Serial, changeUnsure, withDeadline, writeInTurn } from '@/lib/crm/lateAnswers';
+import LeadAttributionCard from './LeadAttributionCard';
 import LeadContactCard, { type Revealed } from './LeadContactCard';
 import LeadNotes from './LeadNotes';
 import LeadStatusCard from './LeadStatusCard';
@@ -293,6 +294,8 @@ export default function LeadDetail(props: LeadDetailProps) {
               ))}
             </dl>
           </section>
+          {/* (C13) A web form lead only: a lead added by hand says how in its source badge. */}
+          {lead.source === 'web_form' && <LeadAttributionCard lead={lead} />}
           {permissions.canSeePii && (
             <LeadContactCard
               leadId={lead.id}

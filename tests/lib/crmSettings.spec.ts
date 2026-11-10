@@ -109,10 +109,8 @@ describe('the vocabularies equal the database (0034, 0035, 0091)', () => {
     for (const key of sent) expect(keys).toContain(key);
   });
 
-  it('the screen offers every live signal; service_page waits for attribution (C13)', () => {
-    expect(SIGNAL_COPY.map((s) => s.signal).sort()).toEqual(
-      SCORE_SIGNALS.filter((s) => s !== 'service_page').sort(),
-    );
+  it('the screen offers every signal; service_page since attribution sets it (C13)', () => {
+    expect(SIGNAL_COPY.map((s) => s.signal).sort()).toEqual([...SCORE_SIGNALS].sort());
   });
 });
 
@@ -536,7 +534,7 @@ describe('the screen’s own rules', () => {
   it('the highest score shown is capped at 100, from the offered signals', () => {
     const all50 = Object.fromEntries(SCORE_SIGNALS.map((s) => [s, 50]));
     expect(maxScore(all50)).toBe(MAX_LEAD_SCORE);
-    expect(maxScore({ returning: 10, company_named: 5, service_page: 50 })).toBe(15);
+    expect(maxScore({ returning: 10, company_named: 5, service_page: 50 })).toBe(65);
     expect(
       scoringOf({
         version: 1,

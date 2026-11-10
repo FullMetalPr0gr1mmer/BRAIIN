@@ -418,7 +418,7 @@ The TDD's *product* requirements are the spec. Its *stack* suggestions are mappe
 | C10 | **Sales role** (enum file alone, then helpers; `ROLE_CAPS`, §5, architecture §3.4 parsed by CI; catalog-driven exposure test; `analytics.read`) | C4, C7, C8, C9 | Built for leads: [C10a](as-built/C10a.md); contacts and tasks for Sales come with C7 and C8 |
 | C11 | Companies + find-or-create at ingest | C7, C10 | Not built (after C7) |
 | C12 | Merge duplicates | C7, C10 | Not built (after C7) |
-| C13 | Lead attribution (consent-gated) + privacy notice — **blocked on O-11** | C2 | Not built: waits on O-11 (legal) |
+| C13 | Lead attribution (consent-gated) + privacy notice — **blocked on O-11** | C2 | Built, HELD: [C13](as-built/C13.md); merges after the lawyer signs off its notice text (O-11) |
 | C14 | Contract (drop legacy status / internal_notes / ip_inet) | C4, C10 | Built: [C14a](as-built/C14a.md), [C14b](as-built/C14b.md) |
 | C15 | CSV import (`crm.import`, Admin): server parse, ≤ 5,000 rows / 2 MB, per-row lawful basis, blind-index dedupe, rate-limited, audited counts | C7 | Not built (after C7) |
 | C16 | Contact files (private bucket, byte-sniffed, audited download) | C7 | Not built (after C7) |

@@ -5,7 +5,7 @@ import {
   type LeadChannel,
   type LeadSource,
 } from '@schemas/crm';
-import { LEAD_RANGES, rangeToInstants, type LeadRange } from './leadView';
+import { LEAD_RANGES, WEB_LEAD_CHANNELS, rangeToInstants, type LeadRange } from './leadView';
 
 // The leads screens' filters in the address bar (Admin v2 C4b, crm.md §11: "Filter state lives
 // in the URL except `q`"). Pure, for the pages' server render and the islands alike, so a
@@ -14,9 +14,10 @@ import { LEAD_RANGES, rangeToInstants, type LeadRange } from './leadView';
 //   ?stage=<uuid>|unread|spam  the chip: a stage, the unread leads, or the spam view
 //   &assigned=me|none|<uuid>   whose leads ('me' is read in SQL as the session's user)
 //   &source=web_form|manual    where they came from (the Source select's two choices)
-//   &channel=<manual channel>  how they reached us, read only with source=manual: the
-//                              select is drawn only then, so a filter it cannot show is
-//                              never applied
+//   &channel=<channel>         how they reached us, read only with a source, from that
+//                              source's own channels (manual's, or since C13 the web form's
+//                              attribution channels): the select is drawn only then, so a
+//                              filter it cannot show is never applied
 //   &discipline=<slug>         a service in it, or "help me choose" in it
 //   &range=7|30|90             the last N days (all time when absent)
 //   &sort=newest|oldest|score  starred first when absent (decision D6)
@@ -107,8 +108,13 @@ export function parseLeadFilters(params: URLSearchParams): LeadFilters {
     chip,
     assigned,
     source,
-    // How they reached us belongs to a lead added by hand, as the toolbar draws it.
-    channel: source === 'manual' ? oneOf(MANUAL_LEAD_CHANNELS, params.get('channel')) : null,
+    // How they reached us belongs to the source chosen, as the toolbar draws it.
+    channel:
+      source === 'manual'
+        ? oneOf(MANUAL_LEAD_CHANNELS, params.get('channel'))
+        : source === 'web_form'
+          ? oneOf(WEB_LEAD_CHANNELS, params.get('channel'))
+          : null,
     discipline,
     range: oneOf(LEAD_RANGES, params.get('range')) ?? 'all',
     sort: oneOf(LEAD_SORTS, params.get('sort')) ?? DEFAULT_LEAD_SORT,

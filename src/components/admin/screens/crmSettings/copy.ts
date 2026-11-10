@@ -55,8 +55,8 @@ export const KINDS = Object.keys(KIND_NAMES) as StageKind[];
 
 /**
  * The signals the screen offers, in the prototype's order of weight, with what each means.
- * `service_page` is not offered: it is set only once attribution ships (C13), and its points
- * are kept as they are until then.
+ * `service_page` is offered since attribution (C13) sets it, and only with the visitor's
+ * analytics consent, which its hint says.
  */
 export const SIGNAL_COPY: readonly { signal: ScoreSignal; label: string; hint: string }[] = [
   {
@@ -78,6 +78,11 @@ export const SIGNAL_COPY: readonly { signal: ScoreSignal; label: string; hint: s
   { signal: 'returning', label: 'Came back', hint: 'Their e-mail reached us before.' },
   { signal: 'company_named', label: 'Named a company', hint: 'The company field is filled in.' },
   { signal: 'timeline_given', label: 'Gave a timeline', hint: 'They said when they need it.' },
+  {
+    signal: 'service_page',
+    label: 'Wrote from a service page',
+    hint: 'Counted only when the visitor allowed analytics cookies.',
+  },
 ];
 
 export const RULE_COPY: readonly { rule: AssignmentRule; label: string; hint: string }[] = [
