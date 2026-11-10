@@ -13,7 +13,7 @@
 --   3. crm_erase_lead takes an auto-contact the lead leaves with nothing, and only that.
 
 begin;
-select plan(27);
+select plan(28);
 
 insert into public.tenants (id, name) values
   ('c5200000-0000-4000-8000-000000000001', 'C5 keep T1'),
@@ -61,6 +61,10 @@ insert into public.crm_contacts (id, tenant_id, display_name, created_by, last_a
   ('c5200000-0000-4000-8000-00000000c007', 'c5200000-0000-4000-8000-000000000001', 'Idle, with a lead', null, now() - interval '25 months', false),
   ('c5200000-0000-4000-8000-00000000c0f1', 'c5200000-0000-4000-8000-0000000000ff', 'T2 idle 13 months', 'c5200000-0000-4000-8000-0000000000f1', now() - interval '13 months', false);
 update public.crm_contacts set title = 'Owner' where id = 'c5200000-0000-4000-8000-00000000c004';
+-- A merge tombstone (C12's shape): it goes with the contact it was merged into.
+insert into public.crm_contacts (id, tenant_id, display_name, created_by, merged_into, merged_at) values
+  ('c5200000-0000-4000-8000-00000000c008', 'c5200000-0000-4000-8000-000000000001', 'Tombstone',
+   'c5200000-0000-4000-8000-0000000000a1', 'c5200000-0000-4000-8000-00000000c001', now());
 insert into public.crm_contact_notes (tenant_id, contact_id, body) values
   ('c5200000-0000-4000-8000-000000000001', 'c5200000-0000-4000-8000-00000000c006', 'Kept for this');
 -- The note and the link are activity: put both back where the fixture says.
@@ -79,6 +83,8 @@ select is(
     where tenant_id in ('c5200000-0000-4000-8000-000000000001', 'c5200000-0000-4000-8000-0000000000ff')),
   'Auto, with a note, Idle 13 months, Orphan, edited, Orphan, starred',
   'gone: idle past the horizon (25 months in T1, 13 in T2''s 12), the untouched orphan, the idle one with a lead; kept: the rest');
+select is((select count(*)::int from public.crm_contacts where id = 'c5200000-0000-4000-8000-00000000c008'), 0,
+  'a tombstone went with the contact it was merged into');
 select is(
   (select coalesce(contact_id::text, 'none') || ' ' || contact_link from public.leads
     where id = 'c5200000-0000-4000-8000-00000000ab07'),

@@ -135,7 +135,8 @@ create table public.crm_contacts (
   is_starred boolean not null default false,
   -- Retention runs from here (docs/retention.md): see the triggers below for what moves it.
   last_activity_at timestamptz not null default now(),
-  -- Merge tombstones (C12).
+  -- Merge tombstones (C12). A tombstone goes with the contact it was merged into (retention
+  -- or erasure of the survivor), so the pair check below always holds.
   merged_into uuid,
   merged_at timestamptz,
   search_text text generated always as (app.crm_contact_search_text(display_name, company_name, title)) stored,
@@ -149,7 +150,7 @@ create table public.crm_contacts (
   constraint crm_contacts_owner_fk foreign key (tenant_id, owner_id)
     references public.profiles (tenant_id, id) on delete set null (owner_id),
   constraint crm_contacts_merged_fk foreign key (tenant_id, merged_into)
-    references public.crm_contacts (tenant_id, id) on delete set null (merged_into),
+    references public.crm_contacts (tenant_id, id) on delete cascade,
   constraint crm_contacts_merged_pair
     check ((merged_into is null) = (merged_at is null) and merged_into is distinct from id)
 );
@@ -959,6 +960,10 @@ begin
   -- (public.crm_link_backfill). A lead without its indexes waits for them the same way.
   if found then
     begin
+      -- A link that would wait more than two seconds for a lock (a colleague's long
+      -- transaction on the contact) gives up instead of holding the visitor's answer: the
+      -- cron links the lead tonight. Local to this sub-transaction's success: undone with it.
+      perform set_config('lock_timeout', '2s', true);
       perform app.crm_link_lead_core(p_tenant, v_id);
     exception when others then
       raise warning 'crm_ingest_lead: the contact link was skipped (SQLSTATE %); the daily cron links the lead later', sqlstate;
