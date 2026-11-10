@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import Icon from '@/components/admin/kit/Icon';
 import { Badge } from '@/components/admin/kit/StatusBadge';
 import { useClock } from '@/components/admin/kit/clock';
@@ -51,6 +51,12 @@ export default function TaskItem({
   const { formatDate, formatTime, relTime } = useClock();
   const titleId = useId();
   const done = task.done_at !== null;
+  // The box shows the press at once, while the write and the reread are out; the server's
+  // answer (a new row, or this one again after a refusal) sets it back to the truth.
+  const [ticked, setTicked] = useState(done);
+  useEffect(() => {
+    if (!busy) setTicked(done);
+  }, [done, task.version, busy]);
   const overdue = !done && Date.parse(task.due_at) < now;
   const owner = task.owner_id ? (owners.get(task.owner_id) ?? FORMER_MEMBER) : 'Nobody';
   return (
@@ -58,11 +64,14 @@ export default function TaskItem({
       <input
         type="checkbox"
         className="task__check"
-        checked={done}
+        checked={ticked}
         disabled={busy}
         aria-labelledby={titleId}
         aria-describedby={`${titleId}-state`}
-        onChange={(event) => onDone(task, event.target.checked)}
+        onChange={(event) => {
+          setTicked(event.target.checked);
+          onDone(task, event.target.checked);
+        }}
       />
       <span className="visually-hidden" id={`${titleId}-state`}>
         {done ? 'Done. Untick to open it again.' : 'Tick when done.'}

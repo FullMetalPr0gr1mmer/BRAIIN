@@ -25,6 +25,7 @@ export const crm: NavArea = {
       icon: 'check',
       caps: ['crm.tasks'],
       count: 'tasks',
+      countWord: 'overdue',
     },
   ],
 };

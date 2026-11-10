@@ -74,7 +74,7 @@ const { nav, current, brand, shell, email, roleLabel, initials } = Astro.props;
                       {count !== undefined && count > 0 && (
                         <span class="cnt">
                           {count}
-                          <span class="visually-hidden"> new</span>
+                          <span class="visually-hidden"> {link.countWord ?? 'new'}</span>
                         </span>
                       )}
                     </a>
