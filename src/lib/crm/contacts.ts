@@ -87,30 +87,37 @@ export const CONTACT_LEAD_FIELDS = [
 export const CONTACT_LEAD_COLUMNS = CONTACT_LEAD_FIELDS.join(',');
 
 /** How many of a contact's leads its page lists, newest first. */
-const CONTACT_LEAD_LIMIT = 50;
+export const CONTACT_LEAD_LIMIT = 50;
 
 /**
  * A contact's leads, read as the caller (RLS, the live check, the leads' column grant): the
- * safe columns only, with how each was linked, so a phone match shows as one to check.
+ * safe columns only, with how each was linked, so a phone match shows as one to check. Newest
+ * first, ties broken by id so the order is total; one row past the page is read, so `more`
+ * says when the page is not all of them (C6 review, C6-COR-7).
  */
 export async function contactLeads(
   sb: SupabaseClient,
   auth: AuthContext,
   contactId: string,
-): Promise<Record<(typeof CONTACT_LEAD_FIELDS)[number], unknown>[]> {
+): Promise<{ leads: Record<(typeof CONTACT_LEAD_FIELDS)[number], unknown>[]; more: boolean }> {
   const { data, error } = await sb
     .from('leads')
     .select(CONTACT_LEAD_COLUMNS)
     .eq('tenant_id', auth.tenantId)
     .eq('contact_id', contactId)
     .order('created_at', { ascending: false })
-    .limit(CONTACT_LEAD_LIMIT);
+    .order('id', { ascending: false })
+    .limit(CONTACT_LEAD_LIMIT + 1);
   if (error) throw new Error(`contact leads: ${error.code ?? 'no code'}`);
-  return ((data ?? []) as unknown as Record<string, unknown>[]).map((lead) => {
-    const out = {} as Record<(typeof CONTACT_LEAD_FIELDS)[number], unknown>;
-    for (const field of CONTACT_LEAD_FIELDS) out[field] = lead[field] ?? null;
-    return out;
-  });
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  return {
+    leads: rows.slice(0, CONTACT_LEAD_LIMIT).map((lead) => {
+      const out = {} as Record<(typeof CONTACT_LEAD_FIELDS)[number], unknown>;
+      for (const field of CONTACT_LEAD_FIELDS) out[field] = lead[field] ?? null;
+      return out;
+    }),
+    more: rows.length > CONTACT_LEAD_LIMIT,
+  };
 }
 
 /** One contact, as the caller's own client sees it; a tombstone (C12) is not one. */
@@ -153,6 +160,11 @@ export const CONTACT_CONSTRAINTS: ConstraintFields = {
     message: 'The custom fields hold too much. Shorten some of them.',
   },
   crm_contacts_country_check: { field: 'country', message: 'Use a two-letter country code.' },
+  // A rule of public.crm_edit_contact_channels (C6 review, C6-SEC-3), named in its message.
+  crm_contact_channels_cap: {
+    field: 'channels',
+    message: 'A contact keeps up to 10 e-mail addresses and 10 phone numbers. Remove one first.',
+  },
 };
 
 interface DbError {

@@ -13,6 +13,8 @@ import { ROLES } from '@/lib/auth/types';
 
 const HELPER_CAPABILITY: Record<string, Capability> = {
   role_works_leads: 'leads.manage',
+  // Admin v2 C6 review (C6-COR-4): the new-lead-for-a-contact door's actor check.
+  role_lead_pii: 'leads.pii',
   role_crm_erase: 'crm.erase',
   // Admin v2 C5 (crm_contacts and its channels and events).
   role_crm_contacts: 'crm.contacts',

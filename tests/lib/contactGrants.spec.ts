@@ -70,6 +70,17 @@ describe('the service role contact doors have named callers', () => {
     expect(callers(fn)).toEqual([file]);
   });
 
+  it('the lead index backfill (it decrypts in memory) has two named callers', () => {
+    // C6 review, C6-SEC-2: the daily cron, and one batch of the caller's own tenant inside an
+    // Admin's erasure preview (crm.erase, live recheck, its own limit, a POST). Its own file
+    // defines it.
+    expect(named(/\brunLeadIndexBackfill\(/)).toEqual([
+      'src/lib/crm/indexBackfill.ts',
+      'src/lib/cron/jobs.ts',
+      'src/pages/api/admin/crm/contacts/[id]/erase-preview.ts',
+    ]);
+  });
+
   it('every contacts route that uses the service role rechecks the profile live first', () => {
     const routes = files.filter(
       (f) =>

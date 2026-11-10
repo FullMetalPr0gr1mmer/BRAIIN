@@ -43,7 +43,7 @@ export const GET = defineAdminRoute({
   handler: async ({ auth, sb, params, audit }) => {
     const id = requireContactId(params);
     const contact = await getContact(sb, auth, id);
-    const [channels, leads, timelineResult] = await Promise.all([
+    const [channels, leadPage, timelineResult] = await Promise.all([
       channelPresence(sb, auth, id),
       contactLeads(sb, auth, id),
       sb.rpc('crm_contact_timeline', {
@@ -59,7 +59,9 @@ export const GET = defineAdminRoute({
     return {
       contact: own,
       channels,
-      leads,
+      leads: leadPage.leads,
+      // True when the contact has more leads than the page lists (C6 review, C6-COR-7).
+      moreLeads: leadPage.more,
       timeline: parseTimeline(timelineResult.data),
       customFields: customFieldDefinitions(),
     };
@@ -135,6 +137,9 @@ export const PATCH = defineAdminRoute({
       if (input.version === undefined) {
         throw new ValidationError('send the version you read', 'version');
       }
+      // updateRow reads any row the caller sees; a merge tombstone (C12) is not a contact,
+      // so it is a 404 here as on every other contact path (C6 review, C6-SEC-4).
+      await getContact(sb, auth, id, 'id');
       row = await updateRow<Record<string, unknown>>(
         sb,
         'crm_contacts',

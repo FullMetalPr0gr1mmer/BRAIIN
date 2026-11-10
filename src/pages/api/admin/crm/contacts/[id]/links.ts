@@ -10,7 +10,8 @@ import { contactError, getContact, requireContactId } from '@/lib/crm/contacts';
 //
 //   confirm  it is this person: the lead is linked as a person's (`staff`), its e-mail and
 //            phone join the contact (copied as ciphertext, never decrypted; an e-mail another
-//            contact holds stays there), and its activity counts from then on
+//            contact holds stays there, and a contact keeps at most ten e-mails and ten
+//            phones, so one reveal never shows a crowd), and its activity counts from then on
 //   detach   it is not: the lead leaves the contact for good (never linked again by the
 //            nightly run) and the two timeline lines naming the pair go
 //
@@ -22,7 +23,9 @@ import { contactError, getContact, requireContactId } from '@/lib/crm/contacts';
 
 export const prerender = false;
 
-const COPY_OUTCOMES = new Set(['added', 'kept', 'elsewhere', 'none']);
+// `full`: the contact keeps as many of that kind as it may (ten), so nothing was copied
+// (C6 review, C6-SEC-3).
+const COPY_OUTCOMES = new Set(['added', 'kept', 'elsewhere', 'full', 'none']);
 
 export const POST = defineAdminRoute({
   cap: 'crm.contacts',

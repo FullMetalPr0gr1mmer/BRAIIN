@@ -9,6 +9,11 @@ import type { APIContext } from 'astro';
 // blind index only; custom values are held to their definitions; the bulk change writes one
 // audit row per changed contact and one for the batch in one insert; the erasure is refused
 // before the door when its attempt row is not written; a new lead carries no contact detail.
+// The C6 review added: a note's delete (fail-closed attempt, its outcomes), the erasure preview
+// (a POST, its own limit, the backfill for the caller's tenant only, then the door), the phone
+// match's confirm and detach, the channel PATCH (sealed values only, the version, its
+// refusals), a tombstone's details as unseen, the counts' named keys, and the notes' and
+// leads' total order with a `more` flag.
 
 const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER = '11111111-1111-4111-8111-111111111111';
@@ -45,6 +50,12 @@ const auditBatches: { action: string; entityId?: string }[][] = [];
 const claims: { op: string; limits: unknown }[] = [];
 const rpcCalls: { owner: string; fn: string; args: Record<string, unknown> }[] = [];
 let rpcAnswers: Record<string, { data: unknown; error: unknown }> = {};
+let mergedInto: string | null = null;
+let notesCount = 1;
+let leadsCount = 1;
+const orders: string[] = [];
+const limits: Record<string, number> = {};
+const backfillCalls: { batch: unknown; tenantId: unknown }[] = [];
 
 vi.mock('@/lib/admin/audit', () => ({
   writeAudit: async (
@@ -70,6 +81,25 @@ vi.mock('@/lib/crypto/pii', () => ({
   },
 }));
 vi.mock('@/lib/data/systemLog', () => ({ writeSystemLog: async () => true }));
+vi.mock('@/lib/crm/indexBackfill', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/lib/crm/indexBackfill')>('@/lib/crm/indexBackfill');
+  return {
+    ...actual,
+    runLeadIndexBackfill: async (
+      _sb: unknown,
+      _key: unknown,
+      batch: unknown,
+      run: ReturnType<typeof actual.newIndexRun>,
+      tenantId: unknown,
+    ) => {
+      events.push('backfill');
+      backfillCalls.push({ batch, tenantId });
+      run.indexed = 2;
+      return run;
+    },
+  };
+});
 vi.mock('@/lib/admin/rateLimit', async () => {
   const actual =
     await vi.importActual<typeof import('@/lib/admin/rateLimit')>('@/lib/admin/rateLimit');
@@ -109,10 +139,20 @@ function listRows(table: string, owner: string): Record<string, unknown>[] {
         ];
   }
   if (table === 'leads') {
-    return [{ id: OTHER, lead_number: 7, name: 'Sara', email_enc: 'enc:sara@acme.sa' }];
+    return Array.from({ length: leadsCount }, (_, i) => ({
+      id: i === 0 ? OTHER : `lead-${i}`,
+      lead_number: 7 + i,
+      name: 'Sara',
+      email_enc: 'enc:sara@acme.sa',
+    }));
   }
   if (table === 'crm_contact_notes') {
-    return [{ id: NOTE, body: 'Prefers WhatsApp', created_by: USER, created_at: 'x' }];
+    return Array.from({ length: notesCount }, (_, i) => ({
+      id: i === 0 ? NOTE : `note-${i}`,
+      body: 'Prefers WhatsApp',
+      created_by: USER,
+      created_at: 'x',
+    }));
   }
   if (table === 'profiles') return [{ id: USER, display_name: 'Amal' }];
   return [];
@@ -120,7 +160,19 @@ function listRows(table: string, owner: string): Record<string, unknown>[] {
 
 function builder(table: string, owner: 'svc' | 'rls') {
   const b: Record<string, unknown> = {};
-  for (const method of ['order', 'limit', 'in', 'is', 'eq', 'update']) b[method] = () => b;
+  for (const method of ['in', 'is', 'eq']) b[method] = () => b;
+  b['order'] = (column: string, options?: { ascending?: boolean }) => {
+    orders.push(`${table}:${column}:${options?.ascending === false ? 'desc' : 'asc'}`);
+    return b;
+  };
+  b['limit'] = (n: number) => {
+    limits[table] = n;
+    return b;
+  };
+  b['update'] = () => {
+    events.push(`${owner}:update:${table}`);
+    return b;
+  };
   b['select'] = () => b;
   b['insert'] = () => {
     events.push(`${owner}:insert:${table}`);
@@ -138,7 +190,7 @@ function builder(table: string, owner: 'svc' | 'rls') {
         company_name: 'Acme',
         locale: 'ar',
         version: 3,
-        merged_into: null,
+        merged_into: mergedInto,
       },
       error: null,
     };
@@ -216,6 +268,10 @@ const bulk = await import('@/pages/api/admin/crm/contacts/bulk');
 const erase = await import('@/pages/api/admin/crm/contacts/[id]/erase');
 const newLead = await import('@/pages/api/admin/crm/contacts/[id]/leads');
 const add = await import('@/pages/api/admin/crm/contacts/index');
+const noteDelete = await import('@/pages/api/admin/crm/contacts/[id]/notes/[noteId]');
+const erasePreview = await import('@/pages/api/admin/crm/contacts/[id]/erase-preview');
+const links = await import('@/pages/api/admin/crm/contacts/[id]/links');
+const summary = await import('@/pages/api/admin/crm/contacts/summary');
 const { PII_REVEAL_LIMITS, MANUAL_LEAD_LIMITS, CRM_ERASE_LIMITS } =
   await import('@/lib/admin/rateLimit');
 const { validateCustomValues } = await import('@/lib/crm/contactCustom');
@@ -233,6 +289,12 @@ beforeEach(() => {
   claims.length = 0;
   rpcCalls.length = 0;
   rpcAnswers = {};
+  mergedInto = null;
+  notesCount = 1;
+  leadsCount = 1;
+  orders.length = 0;
+  for (const key of Object.keys(limits)) delete limits[key];
+  backfillCalls.length = 0;
 });
 
 describe('POST /[id]/reveal', () => {
@@ -614,5 +676,317 @@ describe('writes that carry a person’s details', () => {
         detail: { matches: [OTHER] },
       },
     ]);
+  });
+});
+
+describe('DELETE /[id]/notes/[noteId] (C6 review, C6-COR-2)', () => {
+  const del = () =>
+    noteDelete.DELETE(
+      ctx(`/api/admin/crm/contacts/${CONTACT}/notes/${NOTE}`, 'DELETE', undefined, {
+        noteId: NOTE,
+      }),
+    );
+
+  it('live recheck, RLS read, a written attempt row, the door, then the outcome', async () => {
+    const res = await del();
+    expect(res.status).toBe(200);
+    expect(events).toEqual([
+      'svc:profiles',
+      'rls:crm_contacts',
+      'audit:crm.contact.note.delete.attempt',
+      'svc:rpc:crm_delete_contact_note',
+      'audit:crm.contact.note.delete.outcome',
+    ]);
+    expect(rpcCalls[0]!.args).toEqual({
+      p_tenant: TENANT,
+      p_contact: CONTACT,
+      p_note: NOTE,
+      p_actor: USER,
+    });
+    expect(audits[1]!.detail).toEqual({ note: NOTE, status: 'ok' });
+  });
+
+  it('is refused, and the door never called, when the attempt row is not written', async () => {
+    auditOk = false;
+    const res = await del();
+    expect(res.status).toBe(403);
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it.each([
+    ['P0002', 404, 'not_found'],
+    ['42501', 403, 'refused'],
+  ])('a door refusal %s is a %i with an outcome row saying %s', async (code, status, said) => {
+    rpcAnswers['crm_delete_contact_note'] = { data: null, error: { code } };
+    const res = await del();
+    expect(res.status).toBe(status);
+    expect(audits.map((a) => a.action)).toEqual([
+      'crm.contact.note.delete.attempt',
+      'crm.contact.note.delete.outcome',
+    ]);
+    expect(audits[1]!.detail).toEqual({ note: NOTE, status: said, code });
+  });
+});
+
+describe('POST /[id]/erase-preview (C6 review, C6-SEC-2, C6-COR-2)', () => {
+  const preview = () =>
+    erasePreview.POST(ctx(`/api/admin/crm/contacts/${CONTACT}/erase-preview`, 'POST'));
+
+  it('is a POST only: a GET never runs the backfill', () => {
+    expect('GET' in erasePreview).toBe(false);
+  });
+
+  it('live recheck, its own limit, RLS read, the backfill for this tenant, then the door', async () => {
+    rpcAnswers['crm_erase_preview'] = {
+      data: {
+        leads: 2,
+        unindexed: 0,
+        channels: 3,
+        notes: 1,
+        name: 'Sara',
+        phone_matches: [
+          { id: OTHER, lead_number: 9, name: 'Desk', company: null, created_at: 'x', email: 'e' },
+        ],
+      },
+      error: null,
+    };
+    const res = await preview();
+    expect(res.status).toBe(200);
+    expect(events.slice(0, 5)).toEqual([
+      'svc:profiles',
+      'ops:crm-erase-preview',
+      'rls:crm_contacts',
+      'backfill',
+      'svc:rpc:crm_erase_preview',
+    ]);
+    expect(claims).toEqual([{ op: 'crm-erase-preview', limits: CRM_ERASE_LIMITS }]);
+    // One batch, of the caller's own tenant only.
+    expect(backfillCalls).toEqual([{ batch: undefined, tenantId: TENANT }]);
+    expect(rpcCalls.at(-1)!.args).toEqual({ p_tenant: TENANT, p_contact: CONTACT, p_actor: USER });
+    expect(await data(res)).toEqual({
+      counts: { leads: 2, unindexed: 0, channels: 3, notes: 1 },
+      phoneMatches: [
+        { id: OTHER, lead_number: 9, name: 'Desk', company: null, created_at: 'x', linked: false },
+      ],
+    });
+  });
+
+  it('answers 429 past its limit, before the backfill', async () => {
+    limited = true;
+    const res = await preview();
+    expect(res.status).toBe(429);
+    expect(events).toEqual(['svc:profiles', 'ops:crm-erase-preview']);
+  });
+
+  it('a contact the caller cannot see is a 404 before the backfill', async () => {
+    rlsSeesContact = false;
+    const res = await preview();
+    expect(res.status).toBe(404);
+    expect(backfillCalls).toEqual([]);
+  });
+
+  it.each([
+    ['P0002', 404],
+    ['42501', 403],
+  ])('a door refusal %s is a %i', async (code, status) => {
+    rpcAnswers['crm_erase_preview'] = { data: null, error: { code } };
+    const res = await preview();
+    expect(res.status).toBe(status);
+  });
+});
+
+describe('POST /[id]/links (C6 review, C6-SEC-3, C6-COR-2)', () => {
+  it('confirm: the door as the service role, what it copied, audited by kind', async () => {
+    rpcAnswers['crm_contact_link_lead'] = {
+      data: { link: 'staff', email: 'full', phone: 'kept' },
+      error: null,
+    };
+    const res = await links.POST(
+      ctx(`/api/admin/crm/contacts/${CONTACT}/links`, 'POST', {
+        leadId: OTHER,
+        action: 'confirm',
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(events.slice(0, 3)).toEqual([
+      'svc:profiles',
+      'rls:crm_contacts',
+      'svc:rpc:crm_contact_link_lead',
+    ]);
+    expect(rpcCalls[0]).toEqual({
+      owner: 'svc',
+      fn: 'crm_contact_link_lead',
+      args: {
+        p_tenant: TENANT,
+        p_contact: CONTACT,
+        p_lead: OTHER,
+        p_action: 'confirm',
+        p_actor: USER,
+      },
+    });
+    // A full contact copied no e-mail, and the screen is told so.
+    expect(await data(res)).toEqual({ link: 'staff', email: 'full', phone: 'kept' });
+    expect(audits).toEqual([
+      {
+        action: 'crm.contact.link',
+        entityType: 'contact',
+        entityId: CONTACT,
+        detail: { lead: OTHER, action: 'confirm', email: 'full', phone: 'kept' },
+      },
+    ]);
+  });
+
+  it('a lead that is not this contact’s phone match is a 422', async () => {
+    rpcAnswers['crm_contact_link_lead'] = { data: null, error: { code: '22023' } };
+    const res = await links.POST(
+      ctx(`/api/admin/crm/contacts/${CONTACT}/links`, 'POST', {
+        leadId: OTHER,
+        action: 'detach',
+      }),
+    );
+    expect(res.status).toBe(422);
+    expect(audits).toEqual([]);
+  });
+});
+
+describe('PATCH /[id] (C6 review, C6-SEC-4, C6-COR-2)', () => {
+  const patch = (body: unknown) =>
+    detail.PATCH(ctx(`/api/admin/crm/contacts/${CONTACT}`, 'PATCH', body));
+
+  it('channels reach the door sealed, at the version read, live-rechecked', async () => {
+    rpcAnswers['crm_edit_contact_channels'] = { data: { added: 1, removed: 1 }, error: null };
+    const res = await patch({
+      version: 3,
+      channels: { add: [{ kind: 'email', value: 'Sara@Acme.sa' }], remove: [OTHER] },
+    });
+    expect(res.status).toBe(200);
+    expect(events.slice(0, 3)).toEqual([
+      'svc:profiles',
+      'rls:crm_contacts',
+      'svc:rpc:crm_edit_contact_channels',
+    ]);
+    const call = rpcCalls.find((c) => c.fn === 'crm_edit_contact_channels')!;
+    expect(call.owner).toBe('svc');
+    const { p_add: added, ...rest } = call.args;
+    expect(rest).toEqual({
+      p_tenant: TENANT,
+      p_contact: CONTACT,
+      p_version: 3,
+      p_remove: [OTHER],
+      p_primary: [],
+      p_actor: USER,
+    });
+    const sealed = added as Record<string, unknown>[];
+    expect(sealed).toHaveLength(1);
+    expect(Object.keys(sealed[0]!).sort()).toEqual(
+      ['is_primary', 'kind', 'value_enc', 'value_hmac'].sort(),
+    );
+    expect(sealed[0]).toMatchObject({ kind: 'email', value_enc: 'enc:Sara@Acme.sa' });
+    expect(sealed[0]!['value_hmac']).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(call.args)).not.toMatch(/"Sara@Acme\.sa"/);
+    expect(audits[0]!.detail).toEqual({ fields: ['channels'], added: 1, removed: 1, primary: 0 });
+  });
+
+  it.each([
+    ['a taken e-mail', { data: { duplicate: OTHER }, error: null }, 422],
+    ['a moved version', { data: null, error: { code: '40001' } }, 409],
+    [
+      'an eleventh e-mail',
+      {
+        data: null,
+        error: {
+          code: '23514',
+          message:
+            'a contact keeps at most ten e-mails and ten phones (constraint "crm_contact_channels_cap")',
+        },
+      },
+      422,
+    ],
+  ])('%s is refused with its own status, and audited nothing', async (_what, answer, status) => {
+    rpcAnswers['crm_edit_contact_channels'] = answer;
+    const res = await patch({
+      version: 3,
+      channels: { add: [{ kind: 'email', value: 'x@y.sa' }] },
+    });
+    expect(res.status).toBe(status);
+    expect(audits).toEqual([]);
+    if (answer.error?.code === '23514') {
+      expect(JSON.stringify(await res.json())).toContain('up to 10 e-mail addresses');
+    }
+  });
+
+  it('details and channels in one request are a 422, before anything is read', async () => {
+    const res = await patch({ version: 3, displayName: 'Sara S', channels: { remove: [OTHER] } });
+    expect(res.status).toBe(422);
+    expect(events).toEqual([]);
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it('a merge tombstone’s details are a 404, and nothing is written', async () => {
+    mergedInto = OTHER;
+    const res = await patch({ version: 3, displayName: 'Sara S' });
+    expect(res.status).toBe(404);
+    expect(events).not.toContain('rls:update:crm_contacts');
+  });
+});
+
+describe('POST /summary (C6 review, C6-COR-2)', () => {
+  it('passes on the named counts only, as the caller', async () => {
+    rpcAnswers['crm_contact_summary'] = {
+      data: { total: 2, lead: 1, client: 1, starred: 'x', rows: [{ email: 'sara@acme.sa' }] },
+      error: null,
+    };
+    const res = await summary.POST(ctx('/api/admin/crm/contacts/summary', 'POST', {}));
+    expect(res.status).toBe(200);
+    expect(rpcCalls[0]).toEqual({
+      owner: 'rls',
+      fn: 'crm_contact_summary',
+      args: { p_tenant: TENANT },
+    });
+    expect(await data(res)).toEqual({
+      total: 2,
+      lead: 1,
+      client: 1,
+      past: 0,
+      partner: 0,
+      starred: 0,
+      mine: 0,
+      expiring: 0,
+      to_check: 0,
+    });
+  });
+});
+
+describe('notes and leads in a total order, with `more` (C6 review, C6-COR-7)', () => {
+  it('the notes: newest first, ties by id, 200 a read and `more` past them', async () => {
+    notesCount = 201;
+    const res = await notes.GET(ctx(`/api/admin/crm/contacts/${CONTACT}/notes`));
+    expect(res.status).toBe(200);
+    const body = (await data(res)) as { notes: unknown[]; more: boolean };
+    expect(body.notes).toHaveLength(200);
+    expect(body.more).toBe(true);
+    expect(orders.filter((o) => o.startsWith('crm_contact_notes:'))).toEqual([
+      'crm_contact_notes:created_at:desc',
+      'crm_contact_notes:id:desc',
+    ]);
+    expect(limits['crm_contact_notes']).toBe(201);
+
+    notesCount = 200;
+    const all = await notes.GET(ctx(`/api/admin/crm/contacts/${CONTACT}/notes`));
+    expect(((await data(all)) as { more: boolean }).more).toBe(false);
+  });
+
+  it('the detail’s leads: newest first, ties by id, 50 and `moreLeads` past them', async () => {
+    leadsCount = 51;
+    const res = await detail.GET(ctx(`/api/admin/crm/contacts/${CONTACT}`));
+    expect(res.status).toBe(200);
+    const body = (await data(res)) as { leads: unknown[]; moreLeads: boolean };
+    expect(body.leads).toHaveLength(50);
+    expect(body.moreLeads).toBe(true);
+    expect(orders.filter((o) => o.startsWith('leads:'))).toEqual([
+      'leads:created_at:desc',
+      'leads:id:desc',
+    ]);
+    expect(limits['leads']).toBe(51);
   });
 });

@@ -152,7 +152,7 @@ export const cases: readonly Case[] = [
   {
     name: 'contact erase preview (crm.erase, Admin only)',
     load: () => import('@/pages/api/admin/crm/contacts/[id]/erase-preview'),
-    method: 'GET',
+    method: 'POST',
     url: `${BASE}/erase-preview`,
     allow: ['admin'],
   },

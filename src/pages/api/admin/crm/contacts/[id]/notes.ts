@@ -14,7 +14,8 @@ import { getContact, requireContactId } from '@/lib/crm/contacts';
 //   GET   live recheck → a slot of the notes' own limit, the reveal's numbers (60 an hour per
 //         person, 300 per tenant, fail-closed: a note can quote a phone number or a budget)
 //         → the caller's own client must see the contact (RLS, live check) → an audit row
-//         WRITTEN (fail-closed: no row, no notes) → the notes, newest first
+//         WRITTEN (fail-closed: no row, no notes) → the newest 200 notes (ties broken by id),
+//         and `more` when there are older ones (C6 review, C6-COR-7)
 //   POST  live recheck → the contact must be visible → ONE insert as the service role, its
 //         author the session's user (never a client-supplied id). Its `note_added` line and
 //         the contact's activity are the database's (C5's trigger), in the same statement.
@@ -24,7 +25,7 @@ import { getContact, requireContactId } from '@/lib/crm/contacts';
 
 export const prerender = false;
 
-const NOTES_LIMIT = 200;
+export const NOTES_LIMIT = 200;
 
 export const GET = defineAdminRoute({
   cap: 'crm.contacts',
@@ -48,9 +49,11 @@ export const GET = defineAdminRoute({
       .eq('tenant_id', auth.tenantId)
       .eq('contact_id', id)
       .order('created_at', { ascending: false })
-      .limit(NOTES_LIMIT);
+      .order('id', { ascending: false })
+      .limit(NOTES_LIMIT + 1);
     if (error) throw new Error(`contact notes: ${error.code ?? 'no code'}`);
-    const notes = (data ?? []) as Record<string, unknown>[];
+    const rows = (data ?? []) as Record<string, unknown>[];
+    const notes = rows.slice(0, NOTES_LIMIT);
 
     // Authors by name (this tenant's profiles only); a removed author shows as unknown.
     const authorIds = [
@@ -79,6 +82,7 @@ export const GET = defineAdminRoute({
             ? { id: note['created_by'], display_name: names.get(note['created_by']) ?? null }
             : null,
       })),
+      more: rows.length > NOTES_LIMIT,
     };
   },
 });

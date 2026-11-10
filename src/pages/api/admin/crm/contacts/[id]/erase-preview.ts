@@ -3,6 +3,7 @@ import { defineAdminRoute } from '@/lib/admin/route';
 import { NotFoundError } from '@/lib/admin/errors';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
+import { claimPrivilegedOp, CRM_ERASE_LIMITS } from '@/lib/admin/rateLimit';
 import { serviceClient } from '@/lib/supabase/server';
 import { newIndexRun, runLeadIndexBackfill } from '@/lib/crm/indexBackfill';
 import { getContact, requireContactId } from '@/lib/crm/contacts';
@@ -12,11 +13,18 @@ import { getContact, requireContactId } from '@/lib/crm/contacts';
 // alone (a phone can be shared), each with the lead columns staff read anyway (number, name,
 // company, arrival), so the Admin can tick the ones that are this person's.
 //
-//   live recheck → the caller's own client must see the contact (RLS; a 404 otherwise) →
-//   one batch of the lead index backfill for this tenant (C5 review, C5-SEC-4: a lead not
-//   indexed yet cannot be compared, so the erasure could not find it; the batch makes that
-//   rarer, and the count left is shown as `unindexed`) → public.crm_erase_preview as the
-//   service role, which checks the acting profile itself, live (app.crm_eraser_ok).
+// A POST, not a GET (C6 review, C6-SEC-2): it has effects. It decrypts and indexes leads and
+// spends a slot, so it takes the CSRF check every mutation takes and a limit of its own.
+//
+//   live recheck → its own ledger key (`crm-erase-preview`) at the erasure's numbers (20 an
+//   hour per person, 50 per tenant, fail-closed) → the caller's own client must see the
+//   contact (RLS; a 404 otherwise) → one batch of the lead index backfill for this tenant only
+//   (C5 review, C5-SEC-4: a lead not indexed yet cannot be compared, so the erasure could not
+//   find it; the batch makes that rarer, and the count left is shown as `unindexed`; it
+//   decrypts e-mail, phone and budget in memory and stores only indexes, as the daily cron
+//   does, and this route is one of its two named callers, tests/lib/contactGrants.spec.ts)
+//   → public.crm_erase_preview as the service role, which checks the acting profile itself,
+//   live (app.crm_eraser_ok).
 //
 // It reveals no contact detail and changes nothing a person typed, so it is audited queued
 // (`crm.erase.preview`, the counts only).
@@ -48,11 +56,12 @@ function phoneMatches(value: unknown): PhoneMatch[] {
     }));
 }
 
-export const GET = defineAdminRoute({
+export const POST = defineAdminRoute({
   cap: 'crm.erase',
   handler: async ({ auth, sb, params, audit }) => {
     const id = requireContactId(params);
     await liveRecheck(auth);
+    await claimPrivilegedOp(auth, 'crm-erase-preview', CRM_ERASE_LIMITS);
     await getContact(sb, auth, id, 'id');
 
     const svc = serviceClient();
