@@ -442,7 +442,7 @@ One source of truth, `site_settings.retention.leads_months` (Zod max 24 until le
 | Leads | created_at + leads_months, or retention_delete_after | `app.purge_leads` (existing). Notes, events and tasks on the lead go by cascade. |
 | Spam leads | min(original, marked + spam_days) | CRM-1 trigger, then purge_leads |
 | Contacts | last_activity_at + leads_months. Shown under "Expiring soon" for the last 30 days, as a list chip and a dashboard count. | `app.purge_crm()`, called from `app.run_retention()` (CRM-5). Channels, notes and events go by cascade. |
-| Orphan auto-contacts | Next run, once no lead, note or task remains and staff never edited the record (version = 1, source web_form) | purge_crm |
+| Orphan auto-contacts | Next run (or at once, with the erased lead), once no lead linked other than by phone, no note, no task and no channel a person added remains, and no person edited the record (`staff_edited`, as built in C5: not the version, which the system's owner fill and won rule move) | purge_crm |
 | Tasks | done: done_at + horizon. Open: with their contact or lead. Unlinked: created_at + horizon. | purge_crm (CRM-8) |
 | Merge tombstones | Next run | purge_crm (CRM-12) |
 | Audit rows | Never deleted (ids and field names only) | none |

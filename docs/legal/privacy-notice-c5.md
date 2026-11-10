@@ -14,18 +14,26 @@
   that person: their name, company and language from the inquiry, and their e-mail address and
   phone number (encrypted, as the inquiry's are). Later inquiries from the same e-mail address
   join the same record. An inquiry that shares only a phone number with an existing record is
-  joined to it and marked for a person to check, because a phone line can be shared. Staff can
-  add a title, city, country, tags, an owner on the team, notes and (from C8) follow-up tasks.
-  Only the account administrator can see contacts today (Sales users later, C10b).
+  joined to it and marked for a person to check, because a phone line can be shared; until a
+  person confirms it (C6), that inquiry does not count as the record's activity and does not
+  change the record (no stage, no owner). Staff can add a title, city, country, tags, an owner
+  on the team, notes and (from C8) follow-up tasks. Only users with the Admin role can see
+  contacts today (Sales users later, C10b).
 - **Notes and tasks.** Staff notes about an inquiry or a person, and follow-up tasks (calls,
   e-mails, meetings) with due dates.
 - **Retention from last activity.** A contact record is deleted automatically when nothing has
   happened with that person for the inquiry retention period (24 months today, the same
   setting as inquiries). "Something happened" means: a new inquiry from them, a stage change,
   a logged call or message, a note, or (from C8) a task completed. Editing details or starring a
-  record does not count. A contact made automatically from an inquiry goes once its last inquiry
-  is gone, unless a person has worked on it. This can keep a person's details longer than today,
-  where each inquiry is deleted 24 months after it arrived (question L-2.3).
+  record does not count, nor does an inquiry joined only by a shared phone number until a person
+  confirms it. A contact made automatically from an inquiry goes once its last inquiry is gone
+  (an inquiry joined only by phone does not keep it), unless a person on the team has edited it,
+  starred it, or added a note or a contact detail to it; what the system does by itself (the
+  inquiry's assignee becoming the record's owner, a won inquiry making the person a client)
+  does not keep it. When a single inquiry is erased, the record also loses the e-mail address
+  and phone number copied from it that no other inquiry of the person carries. This can keep a
+  person's details longer than today, where each inquiry is deleted 24 months after it arrived
+  (question L-2.3).
 - **Attribution (C13 only, not live until C13 merges).** With each inquiry the site records the
   page the form was sent from (never with its query string). Only if the visitor accepted
   analytics cookies, it also records the website that sent them (the site's name only, not the
@@ -49,8 +57,11 @@ Changes to the existing privacy notice (`src/lib/legal/content.ts`, `en.privacy`
 
 > **When you send an inquiry, we also keep a contact record for you: your name, company and
 > language from the inquiry, and your e-mail address and phone number, stored encrypted. Later
-> inquiries from the same e-mail address are kept together with it. Our team may add notes, a
-> job title, your city and country, labels, the team member looking after you, and follow-up
+> inquiries from the same e-mail address are kept together with it. An inquiry from another
+> e-mail address that shares your phone number is kept with your record too, and marked for our
+> team to check whether it is yours, because a phone line can be shared; until they confirm
+> it, it does not change your record or how long we keep it. Our team may add notes, a job
+> title, your city and country, labels, the team member looking after you, and follow-up
 > tasks.**
 
 > **With each inquiry we record the page of our site the form was sent from. Only if you accept
@@ -73,8 +84,10 @@ are deleted within 30 days."):
 > deleted within 30 days of being marked. Your contact record, with its notes and tasks, is
 > deleted when there has been no activity with you for 24 months: no new inquiry, no change in
 > where your inquiry stands with us, no call, message or meeting we logged, and no note or task.
-> A contact record we made automatically from an inquiry is deleted when its last inquiry is,
-> unless our team has added notes or details to it.**
+> An inquiry that shares only your phone number does not count until our team has confirmed it
+> is yours. A contact record we made automatically from an inquiry is deleted when the last
+> inquiry we know is yours is deleted, unless our team has edited it, marked it, or added notes
+> or contact details to it.**
 
 **Your rights** (add after "You may request access, correction, or deletion of your data, and
 withdraw consent at any time."):
@@ -99,8 +112,11 @@ Changes to `ar.privacy`. The same places as the English.
 
 > **عندما ترسل استفسارًا، نحتفظ أيضًا بسجلّ تواصل خاص بك: اسمك وشركتك واللغة التي كتبت بها
 > من الاستفسار، وبريدك الإلكتروني ورقم جوالك مخزّنَين بشكل مشفّر. وتُحفظ الاستفسارات اللاحقة
-> المرسلة من البريد الإلكتروني نفسه مع هذا السجلّ. وقد يضيف فريقنا ملاحظات، ومسمّاك الوظيفي،
-> ومدينتك ودولتك، وتصنيفات، وعضو الفريق المسؤول عن متابعتك، ومهام متابعة.**
+> المرسلة من البريد الإلكتروني نفسه مع هذا السجلّ. وإذا وصل استفسار من بريد إلكتروني آخر يشترك
+> معك في رقم الجوال، نحفظه مع سجلّك أيضًا ونضع عليه علامة ليتحقق فريقنا مما إذا كان يخصّك، لأن
+> رقم الهاتف قد يكون مشتركًا؛ وإلى أن يتأكد فريقنا من ذلك، لا يغيّر هذا الاستفسار سجلّك ولا مدة
+> الاحتفاظ به. وقد يضيف فريقنا ملاحظات، ومسمّاك الوظيفي، ومدينتك ودولتك، وتصنيفات، وعضو الفريق
+> المسؤول عن متابعتك، ومهام متابعة.**
 
 > **مع كل استفسار نسجّل صفحة موقعنا التي أُرسل منها النموذج. وفقط إذا وافقت على ملفات تعريف
 > الارتباط الخاصة بالتحليلات، نسجّل أيضًا اسم الموقع الذي أحالك إلينا، ووسوم الحملة في الرابط
@@ -119,8 +135,10 @@ Changes to `ar.privacy`. The same places as the English.
 > **يُحذف كل استفسار بعد 24 شهرًا من وصوله، وتُحذف الاستفسارات المصنّفة كرسائل مزعجة خلال 30
 > يومًا من تصنيفها. ويُحذف سجلّ التواصل الخاص بك، مع ملاحظاته ومهامه، إذا مضى 24 شهرًا دون أي
 > نشاط معك: لا استفسار جديد، ولا تغيير في مرحلة استفسارك لدينا، ولا مكالمة أو رسالة أو اجتماع
-> سجّلناه، ولا ملاحظة أو مهمة. وأي سجلّ تواصل أنشأناه تلقائيًا من استفسار يُحذف عند حذف آخر
-> استفسار مرتبط به، ما لم يُضِف فريقنا إليه ملاحظات أو تفاصيل.**
+> سجّلناه، ولا ملاحظة أو مهمة. ولا يُحتسب الاستفسار الذي يشترك معك في رقم الجوال فقط إلى أن
+> يتأكد فريقنا أنه يخصّك. وأي سجلّ تواصل أنشأناه تلقائيًا من استفسار يُحذف عند حذف آخر استفسار
+> نعلم أنه يخصّك، ما لم يكن فريقنا قد عدّله أو ميّزه بعلامة أو أضاف إليه ملاحظات أو بيانات
+> تواصل.**
 
 **حقوقك** (تُضاف بعد «يمكنك طلب الوصول إلى بياناتك أو تصحيحها أو حذفها، وسحب موافقتك في أي
 وقت.»):
