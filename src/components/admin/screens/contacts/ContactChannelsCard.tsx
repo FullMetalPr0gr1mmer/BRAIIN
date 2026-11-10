@@ -87,6 +87,9 @@ export default function ContactChannelsCard({
   }
 
   const valueOf = (channel: ChannelPresence) => revealed?.get(channel.id) ?? null;
+  // A channel that arrived after the reveal (a phone match confirmed, another tab) was not
+  // revealed: it stays hidden, and the reveal is offered again for it.
+  const unrevealed = revealed !== null && channels.some((c) => !revealed.has(c.id));
   const main = (k: string) => channels.find((c) => c.kind === k && c.is_primary);
   const email = main('email');
   const phone = main('phone');
@@ -141,7 +144,7 @@ export default function ContactChannelsCard({
             return (
               <li key={channel.id} className="ct-channels__i">
                 <span className="ct-channels__k">{label}</span>
-                {revealed === null ? (
+                {revealed === null || !revealed.has(channel.id) ? (
                   <span className="lead-masked">Hidden</span>
                 ) : (
                   <span dir="ltr">{shown ?? 'Could not be read'}</span>
@@ -179,12 +182,13 @@ export default function ContactChannelsCard({
           {error}
         </p>
       )}
-      {revealed === null ? (
+      {(revealed === null || unrevealed) && (
         <button type="button" disabled={revealing} onClick={() => void reveal()}>
           <Icon name="eye" size={16} />
           Reveal contact details (this access is logged)
         </button>
-      ) : (
+      )}
+      {revealed !== null && (
         <form className="lead-log" onSubmit={(event) => void add(event)}>
           <div className="f">
             <label className="f__l" htmlFor={`${id}-kind`}>
