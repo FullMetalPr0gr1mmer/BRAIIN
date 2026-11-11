@@ -49,6 +49,7 @@ export const CAP_LABELS: Readonly<Record<Capability, CapLabel>> = {
   'crm.contacts': { full: 'See and manage contacts, the people behind inquiries' },
   'crm.tasks': { full: 'Plan and tick off follow-up tasks for inquiries and contacts' },
   'crm.erase': { full: 'Erase an inquiry and its notes for good' },
+  'crm.import': { full: 'Import contacts from a spreadsheet (CSV)' },
   'crm.settings': {
     full: 'Set up the pipeline stages, lead scoring, response time and assignment',
   },

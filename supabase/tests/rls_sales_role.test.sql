@@ -141,6 +141,13 @@ insert into public.crm_contact_notes (tenant_id, contact_id, body) values
 insert into public.crm_tasks (tenant_id, title, due_at, contact_id) values
   ('93000000-0000-0000-0000-000000000001', 'C8 task', now() + interval '1 day',
    '93000000-0000-0000-0000-00000000c5c1');
+-- An import and the lawful basis it recorded (Admin v2 C15): Admin's alone (crm.import, and
+-- crm.contacts for the basis).
+insert into public.crm_import_batches (id, tenant_id, attestation, expected_rows, expected_bytes) values
+  ('93000000-0000-0000-0000-00000000c15b', '93000000-0000-0000-0000-000000000001', 'c15-v1', 1, 10);
+insert into public.crm_contact_imports (tenant_id, contact_id, batch_id, row_number, basis) values
+  ('93000000-0000-0000-0000-000000000001', '93000000-0000-0000-0000-00000000c5c1',
+   '93000000-0000-0000-0000-00000000c15b', 2, 'consent');
 insert into public.site_settings (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.site_integrations (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.ai_config (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;

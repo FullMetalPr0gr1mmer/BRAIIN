@@ -20,6 +20,8 @@ const HELPER_CAPABILITY: Record<string, Capability> = {
   role_crm_contacts: 'crm.contacts',
   // Admin v2 C8 (crm_tasks).
   role_crm_tasks: 'crm.tasks',
+  // Admin v2 C15 (crm_import_batches and the import doors).
+  role_crm_import: 'crm.import',
   role_crm_settings: 'crm.settings',
   role_manages_users: 'users.manage',
   role_views_audit: 'audit.view',
