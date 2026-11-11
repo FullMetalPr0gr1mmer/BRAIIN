@@ -140,7 +140,7 @@ test.describe('as admin', () => {
     const held = new Promise<void>((resolve) => {
       release = () => resolve();
     });
-    await page.route(/\/api\/admin\/search\?/, async (route) => {
+    await page.route(/\/api\/admin\/search$/, async (route) => {
       await held;
       await route.continue();
     });
@@ -156,7 +156,7 @@ test.describe('as admin', () => {
 
   test('says when an area could not be searched, not just a shorter list', async ({ page }) => {
     // searchAdmin reports an entity whose query failed (and logs it); stand that answer in.
-    await page.route(/\/api\/admin\/search\?/, (route) =>
+    await page.route(/\/api\/admin\/search$/, (route) =>
       route.fulfill({ json: { ok: true, data: { groups: [], failed: ['Team & authors'] } } }),
     );
     await page.keyboard.press('Control+k');

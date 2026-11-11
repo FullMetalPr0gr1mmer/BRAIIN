@@ -73,6 +73,23 @@ export const EDIT_SAMPLES: Readonly<Record<string, EditSample>> = {
       },
     },
   },
+  // Admin v2 C7: a contact's page. The OLDEST contact, as for leads: tests/admin/contacts.e2e.ts
+  // erases a contact of its own while the sweep runs, and the leads spec's erasure takes its
+  // lead's contact with it. The arrival of the sample lead above already makes a contact (C5's
+  // link), so the create below runs only on a stack whose contacts were all erased.
+  '/admin/contacts/[id]': {
+    api: '/api/admin/crm/contacts/query',
+    method: 'POST',
+    body: { limit: 1, sort: 'oldest' },
+    cap: 'crm.contacts',
+    create: {
+      api: '/api/admin/crm/contacts',
+      body: {
+        displayName: 'Sample contact',
+        channels: [{ kind: 'email', value: 'sample.contact@example.invalid', isPrimary: true }],
+      },
+    },
+  },
 };
 
 /**
@@ -134,6 +151,14 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
   // Admin v2 C8: Tasks renders its first view on the server and refuses itself (a 403 and
   // Refused.astro); its JSON twin is the grouped list (a GET, the same capability).
   { href: '/admin/tasks', api: '/api/admin/crm/tasks', cap: 'crm.tasks', render: 'server' },
+  // Admin v2 C7: the People list renders its first view on the server and refuses itself (a
+  // 403 and Refused.astro); its data routes are POSTs, so its twin is the counts' GET.
+  {
+    href: '/admin/contacts',
+    api: '/api/admin/crm/contacts/summary',
+    cap: 'crm.contacts',
+    render: 'server',
+  },
   { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view', render: 'server' },
   {
     href: '/admin/site-health',

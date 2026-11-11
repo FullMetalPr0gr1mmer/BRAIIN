@@ -14,6 +14,8 @@ import { SKIP_REASON, STAFF_IDS, authFile, staffEnv } from './staff';
  *               attachment carrying the title, a link to Everyone's list and no note; axe with
  *               the drawer open;
  *   a lead      the Tasks card on a lead's page adds a task about that lead;
+ *   a contact   (C8b) the same card on a contact's page adds a task about that contact, and
+ *               the contact's timeline says so;
  *   refusals    Content Creator, SEO, Developer and Sales get a 403 page (and API), and no
  *               Tasks link (crm.tasks is Admin's until C10b).
  * Every task is named with this run's token and added through the real routes; nothing reads
@@ -280,6 +282,41 @@ test.describe('as admin', () => {
     await expect(card.getByText(title)).toBeVisible();
     const mine = await groups(page, `lead=${leadId}`);
     expect(all(mine).map((t) => t.title)).toEqual([title]);
+  });
+
+  // Admin v2 C8b: the card C8 built to take a contact, mounted on C7's contact page.
+  test('a contact’s page: the Tasks card adds a task about that contact', async ({ page }) => {
+    const name = `E2E ${RUN} task contact`;
+    const added = await page.request.post('/api/admin/crm/contacts', {
+      headers: { 'x-csrf-token': await csrf(page) },
+      data: { displayName: name },
+    });
+    expect(added.status()).toBe(200);
+    const contactId = ((await added.json()) as { data: { id: string } }).data.id;
+    await visit(page, `/admin/contacts/${contactId}`);
+    const card = page.locator('section.card').filter({
+      has: page.getByRole('heading', { level: 2, name: 'Tasks' }),
+    });
+    await expect(card).toBeVisible();
+    await expect(card.getByText('Follow-ups for this person.')).toBeVisible();
+    await expect(card.getByText('No open tasks.')).toBeVisible();
+    await card.getByRole('button', { name: 'Add a task' }).click();
+    const drawer = page.getByRole('dialog', { name: 'New task' });
+    await expect(drawer).toBeVisible();
+    // The contact is already chosen: their name, and a Remove button for it.
+    await expect(drawer.getByText(name, { exact: true })).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Remove the contact' })).toBeVisible();
+    await axe(page, 'the task drawer on a contact’s page');
+    const title = `E2E ${RUN} follow up the contact`;
+    await drawer.getByLabel('What needs doing').fill(title);
+    await drawer.getByRole('button', { name: 'Create task' }).click();
+    await expect(drawer).toBeHidden();
+    await expect(card.getByText(title)).toBeVisible();
+    const theirs = await groups(page, `contact=${contactId}`);
+    expect(all(theirs).map((t) => t.title)).toEqual([title]);
+    // The page read its timeline again: the task is a line on it (C8's event, in C7's words).
+    const timeline = page.getByRole('list', { name: 'What happened, newest first' });
+    await expect(timeline.getByText('Task added', { exact: true })).toBeVisible();
   });
 });
 

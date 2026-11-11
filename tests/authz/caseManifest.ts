@@ -116,6 +116,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'crmContacts: contact star (unversioned PATCH)',
   'crmContacts: contact timeline',
   'crmContacts: contacts bulk change',
+  'crmContacts: contacts counts (GET summary)',
   'crmContacts: contacts counts (POST summary)',
   'crmContacts: contacts list (POST query)',
   'crmContacts: contacts list searched by e-mail (blind index)',

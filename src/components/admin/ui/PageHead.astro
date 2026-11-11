@@ -17,13 +17,15 @@ import Icon from './Icon.astro';
 //
 // `heading` (C4b) is the h1 when it is not the title: a lead's page is titled "Lead" (the tab
 // and the history never carry a person's name, crm.md §11) while its h1 is the person's name,
-// read in its own direction (`headingDir: 'auto'`).
+// read in its own direction (`headingDir: 'auto'`). `subtitleDir` (C7 review) does the same for
+// a sub-line made of a person's words (a contact's "title at Company").
 
 interface Props {
   title: string;
   heading?: string | undefined;
   headingDir?: 'auto' | undefined;
   subtitle?: string | undefined;
+  subtitleDir?: 'auto' | undefined;
   tabs?: readonly NavTab[] | undefined;
   currentTab?: NavTab | null | undefined;
   area?: string | undefined;
@@ -35,6 +37,7 @@ const {
   heading,
   headingDir,
   subtitle,
+  subtitleDir,
   tabs = [],
   currentTab = null,
   area = title,
@@ -46,7 +49,13 @@ const screen = screenOf(Astro.url.pathname);
 <header class="admin-header">
   <div>
     <h1 dir={headingDir}>{heading ?? title}</h1>
-    {subtitle && <p class="admin-sub">{subtitle}</p>}
+    {
+      subtitle && (
+        <p class="admin-sub" dir={subtitleDir}>
+          {subtitle}
+        </p>
+      )
+    }
   </div>
   {
     guide && (

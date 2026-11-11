@@ -1,0 +1,135 @@
+---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminContactDetail from '@/components/admin/islands/AdminContactDetail';
+import EmptyState from '@/components/admin/ui/EmptyState.astro';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { NotFoundError } from '@/lib/admin/errors';
+import { readStages, type StageView } from '@/lib/crm/leadPage';
+import {
+  readContactDetail,
+  readContactPeople,
+  type ContactDetailInitial,
+} from '@/lib/crm/contactPage';
+import type { ContactPerson } from '@/lib/crm/contactView';
+import { readTaskOwners } from '@/lib/crm/taskPage';
+import { contactName, roleLine } from '@/lib/crm/contactView';
+
+export const prerender = false;
+
+// The studio's time zone (Admin v2 U9): the page and the island print dates in it.
+const studioTz = await studioTimeZone(Astro.locals);
+
+// One contact (Admin v2 C7, crm.md §11 screen 6). The tab and the history say "Contact"; the
+// h1 is the person's name, in its own direction (names stay out of titles, crm.md §11), and
+// the address carries the id only. `crm.contacts`: any other role is refused with a 403 and
+// reads nothing. A contact the caller cannot see (or a merge tombstone) answers a 404, the
+// same as one that does not exist, so an id never tells whether it is real.
+//
+// What this page reads is the contact's safe columns and its channels' presence
+// (src/lib/crm/contactPage.ts): never an e-mail, a phone, a note or a score reason. The island
+// asks for those, through the audited routes, when a person does. The flags handed to it are
+// UX hints.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = session !== null && can(session.role, 'crm.contacts') === 'full';
+if (!allowed) Astro.response.status = 403;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const id = Astro.params.id ?? '';
+const permissions = {
+  canErase: allowed && can(session.role, 'crm.erase') === 'full',
+  canAddLead:
+    allowed &&
+    can(session.role, 'leads.manage') === 'full' &&
+    can(session.role, 'leads.pii') === 'full',
+};
+
+let detail: ContactDetailInitial | null = null;
+let stages: StageView[] = [];
+let people: ContactPerson[] = [];
+// (Admin v2 C8b) The Tasks card's owners, for crm.tasks holders only (its routes check again):
+// the same directory read as `people` (src/lib/crm/people.ts), so no extra round trip.
+const canTasks = allowed && can(session.role, 'crm.tasks') === 'full';
+let tasks: { owners: { id: string; name: string }[] } | null = null;
+let failed = false;
+let notFound = false;
+
+if (allowed && session && sb) {
+  if (!UUID.test(id)) {
+    notFound = true;
+  } else {
+    try {
+      let owners: { id: string; name: string }[] = [];
+      [detail, stages, people, owners] = await Promise.all([
+        readContactDetail(sb, session, id),
+        readStages(sb, session),
+        readContactPeople(sb, session),
+        canTasks ? readTaskOwners(sb, session) : Promise.resolve([]),
+      ]);
+      if (canTasks) tasks = { owners };
+    } catch (err) {
+      if (err instanceof NotFoundError) notFound = true;
+      else failed = true;
+    }
+  }
+}
+if (allowed && notFound) Astro.response.status = 404;
+
+const contact = detail?.contact;
+const name = contact ? contactName(contact) : undefined;
+const subtitle = contact
+  ? roleLine(contact['title'], contact['company_name']) || undefined
+  : undefined;
+const me = session
+  ? { id: session.userId, name: people.find((p) => p.id === session.userId)?.name ?? 'You' }
+  : { id: '', name: 'You' };
+---
+
+<AdminLayout
+  title="Contact"
+  heading={name ?? (notFound ? 'Contact not found' : 'Contact')}
+  headingDir={name ? 'auto' : undefined}
+  subtitle={subtitle}
+  subtitleDir={subtitle ? 'auto' : undefined}
+  styles={['leads.css', 'contacts.css', 'tasks.css']}
+>
+  {
+    allowed && (
+      <a slot="actions" class="btn" href="/admin/contacts">
+        <Icon name="back" size={16} />
+        Back<span class="visually-hidden"> to the contacts</span>
+      </a>
+    )
+  }
+  {
+    !allowed ? (
+      <Refused />
+    ) : notFound ? (
+      <EmptyState icon="users" title="That contact is not here." text="They may have been erased.">
+        <a class="btn" href="/admin/contacts">
+          Back to the contacts
+        </a>
+      </EmptyState>
+    ) : failed || !detail ? (
+      <p class="msg" data-kind="error" role="alert">
+        The contact could not be loaded just now. Try again in a moment.
+      </p>
+    ) : (
+      <AdminContactDetail
+        client:load
+        tz={studioTz}
+        {...detail}
+        leadStages={stages}
+        people={people}
+        permissions={permissions}
+        me={me}
+        now={new Date().toISOString()}
+        tasks={tasks}
+      />
+    )
+  }
+</AdminLayout>

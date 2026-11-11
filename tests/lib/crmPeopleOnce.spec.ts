@@ -3,10 +3,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AuthContext } from '@/lib/auth/types';
 import { readPeople } from '@/lib/crm/leadPage';
 import { readTaskOwners } from '@/lib/crm/taskPage';
+import { readContactPeople } from '@/lib/crm/contactPage';
 
-// A lead's page lists whom the lead can go to and, for crm.tasks holders, whom a task can go
-// to. Both lists come from public.crm_people, which is read once per request (Admin v2 C8
-// review, C8-PERF-1: one subrequest, README P-15), and a failed read leaves both empty.
+// A lead's page (and since C8b a contact's) lists whom the record can go to and, for
+// crm.tasks holders, whom a task can go to. Both lists come from public.crm_people, which is
+// read once per request (Admin v2 C8 review, C8-PERF-1: one subrequest, README P-15), and a
+// failed read leaves both empty.
 
 const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const auth = { tenantId: TENANT, userId: 'u', role: 'admin' } as unknown as AuthContext;
@@ -34,6 +36,23 @@ describe('the CRM directory, once per request', () => {
     expect(calls).toEqual([{ fn: 'crm_people', args: { p_tenant: TENANT } }]);
     expect(people.map((p) => p.id)).toEqual(['p1', 'p2']);
     // A task goes only to a crm.tasks holder (Admin).
+    expect(owners).toEqual([{ id: 'p1', name: 'Amal' }]);
+  });
+
+  // Admin v2 C8b: a contact's page lists whom the contact can go to and, for crm.tasks
+  // holders, whom a task can go to (its Tasks card): one read too.
+  it('the contact page’s two lists cost one crm_people read (C8b)', async () => {
+    const { sb, calls } = client({ data: PEOPLE, error: null });
+    const [people, owners] = await Promise.all([
+      readContactPeople(sb, auth),
+      readTaskOwners(sb, auth),
+    ]);
+    expect(calls).toEqual([{ fn: 'crm_people', args: { p_tenant: TENANT } }]);
+    // A contact goes only to a crm.contacts holder (Admin); a task only to a crm.tasks holder.
+    expect(people).toEqual([
+      { id: 'p1', name: 'Amal', canOwn: true },
+      { id: 'p2', name: 'Dev', canOwn: false },
+    ]);
     expect(owners).toEqual([{ id: 'p1', name: 'Amal' }]);
   });
 

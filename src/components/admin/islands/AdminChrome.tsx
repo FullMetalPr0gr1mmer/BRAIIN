@@ -15,9 +15,11 @@ import NotificationsDrawer from '@/components/admin/screens/chrome/Notifications
 export interface AdminChromeProps {
   palette: PaletteGroup[];
   account: AccountView;
+  /** Admin v2 C7: the role holds crm.contacts, so the palette searches people too. */
+  contacts?: boolean;
 }
 
-export default function AdminChrome({ palette, account }: AdminChromeProps) {
+export default function AdminChrome({ palette, account, contacts = false }: AdminChromeProps) {
   // The topbar's shortcut hint is rendered for Windows and Linux; a Mac reads ⌘ instead.
   // A text change after hydration: nothing is styled, so nothing touches style-src.
   useEffect(() => {
@@ -30,7 +32,7 @@ export default function AdminChrome({ palette, account }: AdminChromeProps) {
 
   return (
     <>
-      <CommandPalette groups={palette} />
+      <CommandPalette groups={palette} contacts={contacts} />
       <HelpDrawer />
       <NotificationsDrawer />
       <AccountDrawer view={account} />

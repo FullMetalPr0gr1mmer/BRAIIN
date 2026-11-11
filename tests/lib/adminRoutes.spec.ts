@@ -202,7 +202,7 @@ describe('the sweep route map', () => {
   });
 
   it('opens an edit screen with no resource config through its declared sample (C4b)', () => {
-    expect(Object.keys(EDIT_SAMPLES)).toEqual(['/admin/leads/[id]']);
+    expect(Object.keys(EDIT_SAMPLES)).toEqual(['/admin/leads/[id]', '/admin/contacts/[id]']);
     const setup = readFileSync('tests/admin/samples.setup.ts', 'utf8');
     expect(setup).toContain("import { EDIT_SAMPLES } from './routes'");
     for (const [pattern, sample] of Object.entries(EDIT_SAMPLES)) {
@@ -232,6 +232,10 @@ describe('the sweep route map', () => {
     expect(
       ROLES.filter((role) => sweepRoutes(role).some((r) => r.pattern === '/admin/leads/[id]')),
     ).toEqual(ROLES.filter((role) => ROLE_CAPS[role]['leads.manage'] === 'full'));
+    // A contact's page (C7) for exactly the roles that hold crm.contacts.
+    expect(
+      ROLES.filter((role) => sweepRoutes(role).some((r) => r.pattern === '/admin/contacts/[id]')),
+    ).toEqual(ROLES.filter((role) => ROLE_CAPS[role]['crm.contacts'] === 'full'));
   });
 
   it('finds an edit screen’s row one way for the sweep and the capture (C4b)', () => {
@@ -409,6 +413,7 @@ describe('the locked screens the refusals e2e opens', () => {
       '/admin/appearance/theme',
       '/admin/audit',
       '/admin/backups',
+      '/admin/contacts',
       '/admin/forms',
       '/admin/integrations',
       '/admin/leads',
@@ -509,7 +514,7 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
       'Certifications /admin/certifications',
       'Media library /admin/media',
     ],
-    CRM: ['Leads /admin/leads', 'Tasks /admin/tasks'],
+    CRM: ['Leads /admin/leads', 'Contacts /admin/contacts', 'Tasks /admin/tasks'],
     Hiring: ['Job applications /admin/applications'],
     Growth: [
       'Website stats /admin/analytics',
