@@ -221,16 +221,19 @@ export default function ContactDetail(props: ContactDetailProps) {
     versioned: boolean,
     after?: (answer: ContactAnswer) => void,
     // (Admin v2 C11) A write to another of the contact's routes (its company), same rules.
-    via: { path: string; method: 'POST' } | null = null,
+    send: (sent: Record<string, unknown>, signal: AbortSignal) => Promise<ContactAnswer> = (
+      sent,
+      signal,
+    ) =>
+      adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}`, {
+        method: 'PATCH',
+        body: sent,
+        signal,
+      }),
   ): Promise<boolean> {
     setMessage(null);
     return writeInTurn(queue, {
-      send: (signal) =>
-        adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}${via?.path ?? ''}`, {
-          method: via?.method ?? 'PATCH',
-          body: versioned ? { ...body, version: row.current.version } : body,
-          signal,
-        }),
+      send: (signal) => send(versioned ? { ...body, version: row.current.version } : body, signal),
       saved: (answer) => {
         show(answer.contact);
         if (answer.channels) setChannels(answer.channels);
@@ -470,10 +473,13 @@ export default function ContactDetail(props: ContactDetailProps) {
             contact={contact}
             busy={busy}
             change={(change: CompanyChange) =>
-              write(change as Record<string, unknown>, true, undefined, {
-                path: '/company',
-                method: 'POST',
-              })
+              write(change as Record<string, unknown>, true, undefined, (sent, signal) =>
+                adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}/company`, {
+                  method: 'POST',
+                  body: sent,
+                  signal,
+                }),
+              )
             }
           />
           <ContactLeadsCard

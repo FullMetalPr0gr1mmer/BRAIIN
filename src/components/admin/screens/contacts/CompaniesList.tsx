@@ -7,7 +7,7 @@ import { COMPANY_STAGES, type CompanyStage } from '@schemas/crmCompanies';
 import type { CompanyPage, CompanyRow } from '@/lib/crm/companies';
 import { CONTACT_STAGE_LABELS } from '@/lib/crm/contactView';
 import { formatSar } from '@/lib/crm/leadView';
-import { ContactStageBadge, Owner, useLazy, usePageButton } from '../shared';
+import { ContactStageBadge, Owner, useLazy, usePageButton } from './shared';
 import type { CompanyDrawerProps } from './CompanyDrawer';
 import {
   COMPANY_SIZE_LABELS,
@@ -16,7 +16,7 @@ import {
   companyName,
   websiteHost,
   type CompanyChoices,
-} from './shared';
+} from './companyShared';
 
 // The Companies tab (Admin v2 C11, crm.md §11 screen 5): the organisations behind the people,
 // with their website, sector, city, how many contacts, stage, won value and owner. The page

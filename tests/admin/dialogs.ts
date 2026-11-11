@@ -439,6 +439,16 @@ export const DIALOG_CASES: readonly DialogCase[] = [
     name: /^New lead for /,
     sources: [`${C}/contacts/NewLeadDrawer.tsx`],
   },
+  // Admin v2 C11 (companies.e2e.ts): the Companies tab's head button, for crm.contacts holders
+  // (src/pages/admin/contacts/companies.astro).
+  {
+    id: 'companies-new',
+    screen: '/admin/contacts/companies',
+    who: full('crm.contacts'),
+    open: [{ click: { role: 'button', name: 'Add company', exact: true } }],
+    name: 'New company',
+    sources: [`${C}/contacts/CompanyDrawer.tsx`],
+  },
 
   // ---- Tasks (C8; tasks.e2e.ts) -----------------------------------------------------------
   {

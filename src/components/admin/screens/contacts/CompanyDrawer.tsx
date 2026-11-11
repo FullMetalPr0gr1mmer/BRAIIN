@@ -13,7 +13,7 @@ import {
 } from '@schemas/crmCompanies';
 import type { CompanyContact, CompanyRow } from '@/lib/crm/companies';
 import { CONTACT_STAGE_LABELS } from '@/lib/crm/contactView';
-import { CONFLICT, COMPANY_SIZE_LABELS, companyName, type CompanyChoices } from './shared';
+import { CONFLICT, COMPANY_SIZE_LABELS, companyName, type CompanyChoices } from './companyShared';
 
 // The company drawer (Admin v2 C11, crm.md §11: "The company drawer saves explicitly with a
 // version"). Loaded with import() on first use, so neither this form nor the kit pieces it
