@@ -7,6 +7,7 @@ import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { claimPrivilegedOp, CRM_ERASE_LIMITS } from '@/lib/admin/rateLimit';
 import { serviceClient } from '@/lib/supabase/server';
 import { getContact, requireContactId } from '@/lib/crm/contacts';
+import { removePersonFiles } from '@/lib/crm/files';
 
 // Erasing a person (Admin v2 C6, crm.md §8.2): `crm.erase`, Admin only (CLAUDE.md §5). It
 // cannot be undone, so it runs the lead erasure's order (src/pages/api/admin/leads/[id]/
@@ -79,6 +80,19 @@ export const POST = defineAdminRoute({
     });
     if (!logged) throw new AuthorizationError('crm.erase', 'audit unavailable, erase refused');
 
+    // (Admin v2 C16) The person's files: their objects first, then their rows (the Storage API
+    // removes an object; SQL cannot). A failure stops the erasure before anything else goes.
+    const files = await removePersonFiles(serviceClient(), auth.tenantId, id);
+    if (files === null) {
+      await writeAudit(sb, auth, {
+        action: 'crm.erase.outcome',
+        entityType: 'contact',
+        entityId: id,
+        detail: { target: 'contact', status: 'failed', code: 'files' },
+      });
+      throw new Error("crm erase: the person's files could not be removed");
+    }
+
     let data: unknown = null;
     let error: { code?: string } | null = null;
     try {
@@ -97,7 +111,7 @@ export const POST = defineAdminRoute({
         action: 'crm.erase.outcome',
         entityType: 'contact',
         entityId: id,
-        detail: { target: 'contact', status: 'failed', code: error.code ?? null },
+        detail: { target: 'contact', status: 'failed', code: error.code ?? null, files },
       });
       // Gone between the read and the erase (retention, a merge, a colleague): as unseen.
       if (error.code === 'P0002') throw new NotFoundError('contact');
@@ -113,7 +127,7 @@ export const POST = defineAdminRoute({
       throw new Error(`crm_erase_person: ${error.code ?? 'no code'}`);
     }
 
-    const erased = eraseCounts(data);
+    const erased = { ...eraseCounts(data), files };
     await writeAudit(sb, auth, {
       action: 'crm.erase.outcome',
       entityType: 'contact',
