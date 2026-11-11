@@ -745,7 +745,15 @@ describe('POST /[id]/erase-preview (C6 review, C6-SEC-2, C6-COR-2)', () => {
         notes: 1,
         name: 'Sara',
         phone_matches: [
-          { id: OTHER, lead_number: 9, name: 'Desk', company: null, created_at: 'x', email: 'e' },
+          {
+            id: OTHER,
+            lead_number: 9,
+            name: 'Desk',
+            company: null,
+            created_at: 'x',
+            email: 'e',
+            tasks: 2,
+          },
         ],
       },
       error: null,
@@ -764,9 +772,19 @@ describe('POST /[id]/erase-preview (C6 review, C6-SEC-2, C6-COR-2)', () => {
     expect(backfillCalls).toEqual([{ batch: undefined, tenantId: TENANT }]);
     expect(rpcCalls.at(-1)!.args).toEqual({ p_tenant: TENANT, p_contact: CONTACT, p_actor: USER });
     expect(await data(res)).toEqual({
-      counts: { leads: 2, unindexed: 0, channels: 3, notes: 1 },
+      // (C8) tasks: the door's answer here names none, so the route says 0.
+      counts: { leads: 2, unindexed: 0, channels: 3, notes: 1, tasks: 0 },
+      // (C8 review, C8-SEC-4) Each match says how many of its own tasks go if it is ticked.
       phoneMatches: [
-        { id: OTHER, lead_number: 9, name: 'Desk', company: null, created_at: 'x', linked: false },
+        {
+          id: OTHER,
+          lead_number: 9,
+          name: 'Desk',
+          company: null,
+          created_at: 'x',
+          linked: false,
+          tasks: 2,
+        },
       ],
     });
   });

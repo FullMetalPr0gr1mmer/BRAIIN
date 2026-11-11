@@ -512,8 +512,8 @@ select throws_ok(
 select is(
   public.crm_erase_lead('00000000-0000-0000-0000-000000000001',
     '00000000-0000-0000-0000-00000000aa03', '00000000-0000-0000-0000-0000000000a1') - 'lead_number',
-  '{"leads": 1, "notes": 1, "events": 3, "contacts": 0}'::jsonb,
-  'an admin erases a lead; the counts say what went (no contact: it was never linked, C5)');
+  '{"leads": 1, "notes": 1, "events": 3, "contacts": 0, "tasks": 0}'::jsonb,
+  'an admin erases a lead; the counts say what went (no contact: it was never linked, C5; no task, C8)');
 reset role;
 select ok(
   not exists (select 1 from public.leads where id = '00000000-0000-0000-0000-00000000aa03')

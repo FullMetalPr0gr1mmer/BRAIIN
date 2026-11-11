@@ -18,6 +18,8 @@ const HELPER_CAPABILITY: Record<string, Capability> = {
   role_crm_erase: 'crm.erase',
   // Admin v2 C5 (crm_contacts and its channels and events).
   role_crm_contacts: 'crm.contacts',
+  // Admin v2 C8 (crm_tasks).
+  role_crm_tasks: 'crm.tasks',
   role_crm_settings: 'crm.settings',
   role_manages_users: 'users.manage',
   role_views_audit: 'audit.view',

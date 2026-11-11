@@ -18,5 +18,14 @@ export const crm: NavArea = {
         { href: '/admin/leads/board', label: 'Pipeline', caps: ['leads.manage'] },
       ],
     },
+    // Admin v2 C8: the follow-ups, with my overdue count (owner item O-9).
+    {
+      href: '/admin/tasks',
+      label: 'Tasks',
+      icon: 'check',
+      caps: ['crm.tasks'],
+      count: 'tasks',
+      countWord: 'overdue',
+    },
   ],
 };

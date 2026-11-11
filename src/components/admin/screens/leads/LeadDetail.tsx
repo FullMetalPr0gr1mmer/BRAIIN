@@ -17,6 +17,8 @@ import LeadNotes from './LeadNotes';
 import LeadStatusCard from './LeadStatusCard';
 import LeadTimeline from './LeadTimeline';
 import type { EraseLeadDialogProps } from './EraseLeadDialog';
+import type { TasksCardProps } from '../tasks/TasksCard';
+import type { TaskPerson } from '../tasks/shared';
 import { SourceBadge, StageBadge, interestText, text, type LeadsPermissions } from './shared';
 
 // One lead (Admin v2 C4b, crm.md §11 screen 3). The page renders the head (the name as the h1,
@@ -38,6 +40,11 @@ export interface LeadDetailProps extends LeadDetailInitial {
   /** Earlier leads with the same e-mail (the manual add's answer, passed as ids). */
   sameEmail: { id: string; number: number | null }[];
   now: string;
+  /**
+   * (Admin v2 C8) For a crm.tasks holder: who a task may be given to. The Tasks card is drawn
+   * only then (a UX hint: the task routes refuse anyone else), loaded with import().
+   */
+  tasks?: { owners: TaskPerson[] } | null | undefined;
 }
 
 const CONFLICT = 'Someone else changed this. Refreshed.';
@@ -59,6 +66,7 @@ export default function LeadDetail(props: LeadDetailProps) {
   const [eraseOpen, setEraseOpen] = useState(false);
   const [eraseError, setEraseError] = useState('');
   const [now, setNow] = useState(() => Date.parse(props.now));
+  const [TasksCard, setTasksCard] = useState<ComponentType<TasksCardProps> | null>(null);
   const marked = useRef(false);
   // Every read and write of the lead's row runs one after another (src/lib/crm/lateAnswers.ts),
   // each bounded by a deadline, so the row's answers land in send order and the newest sent is
@@ -190,6 +198,14 @@ export default function LeadDetail(props: LeadDetailProps) {
   // A confirmation the last page sent here (a lead added by hand): shown once, then taken
   // out of the address.
   useEffect(() => showFlash(), []);
+
+  // (Admin v2 C8) The Tasks card, for crm.tasks holders, loaded once the page is up.
+  useEffect(() => {
+    if (!props.tasks) return;
+    import('../tasks/TasksCard')
+      .then((module) => setTasksCard(() => module.default))
+      .catch(() => undefined);
+  }, []);
 
   // Opening an unread lead marks it read, once (decision D4).
   useEffect(() => {
@@ -325,6 +341,18 @@ export default function LeadDetail(props: LeadDetailProps) {
               leadId={lead.id}
               me={me}
               canDelete={permissions.canErase}
+              onChanged={() => void reloadEvents()}
+            />
+          )}
+          {props.tasks && TasksCard && (
+            <TasksCard
+              lead={{
+                id: lead.id,
+                number: typeof lead.lead_number === 'number' ? lead.lead_number : null,
+                name: text(lead.name) || null,
+              }}
+              owners={props.tasks.owners}
+              me={me}
               onChanged={() => void reloadEvents()}
             />
           )}

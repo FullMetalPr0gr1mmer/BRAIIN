@@ -32,6 +32,7 @@ const LABEL_TO_CAP: Record<string, Capability> = {
   'Leads — budget/timeline/internal_notes/ip (PII)': 'leads.pii',
   'Leads / analytics / activity — export CSV': 'export.csv',
   'CRM — contacts (view, edit, notes; the people behind leads)': 'crm.contacts',
+  'CRM — tasks (follow-ups for leads and contacts)': 'crm.tasks',
   "Leads & contacts — erase a person's data (DSAR)": 'crm.erase',
   'CRM settings — pipeline stages, scoring, response time, assignment': 'crm.settings',
   'Job applications — view / manage status / notes / erase': 'applications.manage',
@@ -91,7 +92,7 @@ for (const file of ['CLAUDE.md', 'docs/architecture.md']) {
   describe(`ROLE_CAPS matches the matrix in ${file}`, () => {
     const doc = parseDocMatrix(file);
 
-    it('parses all 36 capabilities from the documented table', () => {
+    it('parses all 37 capabilities from the documented table', () => {
       expect(Object.keys(doc.admin).sort()).toEqual([...CAPABILITIES].sort());
     });
 
@@ -163,6 +164,7 @@ describe('Sales holds leads and the stats, nothing else', () => {
     'export.csv',
     'export.backup',
     'crm.contacts',
+    'crm.tasks',
     'crm.erase',
     'crm.settings',
     // hiring, logs, the activity log, site health, search analytics, the stats' goals
@@ -194,6 +196,10 @@ describe('Sales holds leads and the stats, nothing else', () => {
       }
       if (ROLE_CAPS[role]['crm.erase'] === 'full')
         expect(ROLE_CAPS[role]['crm.contacts'], `${role}: crm.erase`).toBe('full');
+      // A task names a contact and a lead (Admin v2 C8, crm.md §2.1): whoever holds tasks can
+      // see whom they are about.
+      if (ROLE_CAPS[role]['crm.tasks'] === 'full')
+        expect(ROLE_CAPS[role]['crm.contacts'], `${role}: crm.tasks`).toBe('full');
     }
   });
 });

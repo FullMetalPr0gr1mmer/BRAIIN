@@ -27,6 +27,8 @@ export interface NavLink extends NavTab {
   icon: IconName;
   /** A head count the shell computes for roles that see the link (src/lib/admin/counters). */
   count?: NavCount;
+  /** What the count is, read after it by a screen reader: `new` unless said (Admin v2 C8). */
+  countWord?: string;
   /** The area's screens, shown as tabs in its page head when the role sees two or more. */
   tabs?: readonly NavTab[];
 }

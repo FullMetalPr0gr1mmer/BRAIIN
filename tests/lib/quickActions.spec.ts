@@ -164,6 +164,16 @@ describe('the library', () => {
     }
     expect(libraryFor('seo').map((a) => a.id)).not.toContain('open-leads');
     expect(libraryFor('content_creator').map((a) => a.id)).not.toContain('applications');
+    // (Admin v2 C8 review, C8-DESIGN-1) "My tasks": crm.tasks holders only (Admin until C10b).
+    for (const role of ROLES) {
+      expect(
+        libraryFor(role)
+          .map((a) => a.id)
+          .includes('my-tasks'),
+        role,
+      ).toBe(role === 'admin');
+    }
+    expect(QUICK_LIBRARY.find((a) => a.id === 'my-tasks')?.href).toBe('/admin/tasks?view=mine');
   });
 
   it('every role’s default list is library actions the role may use', () => {

@@ -117,6 +117,14 @@ const ADMIN_LEADS =
   /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]leads[\\/]|islands[\\/]AdminLead)/;
 const ADMIN_LEADS_LAZY =
   /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]leads[\\/](AddLeadDrawer|EraseLeadDialog)\.tsx$/;
+// The Tasks screen (Admin v2 C8): its island and its screen code, in their own group, so no
+// other admin screen loads it. The task drawer and the Tasks card (on a lead's page, and from C7
+// a contact's) are reached only through import(): their own lazy group, below the field kit,
+// so the Tasks screen's and the lead page's first loads never carry them.
+const ADMIN_TASKS =
+  /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]tasks[\\/]|islands[\\/]AdminTasks\.tsx$)/;
+const ADMIN_TASKS_LAZY =
+  /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]tasks[\\/](TaskDrawer|TasksCard)\.tsx$/;
 // The savebar and the publish dialog (Admin v2 R12): the AdminSavebar island and its screen
 // code. Their own group, never in admin-ui (every admin screen loads that, releases on or
 // off): AdminLayout renders the island only while releases are on, so with them off no page
@@ -299,6 +307,7 @@ export default defineConfig({
                     !ADMIN_EDITOR_ISLANDS.test(id) &&
                     !ADMIN_EDITOR_SCREENS.test(id) &&
                     !ADMIN_LEADS.test(id) &&
+                    !ADMIN_TASKS.test(id) &&
                     !ADMIN_CONTENT.test(id) &&
                     !ADMIN_PAGES.test(id) &&
                     !ADMIN_PAGE_PREVIEW.test(id) &&
@@ -324,6 +333,13 @@ export default defineConfig({
                 priority: 17,
               },
               {
+                // The Tasks screen (Admin v2 C8): below admin-ui, so what both use stays in
+                // admin-ui and this chunk imports it from there; no other screen group imports it.
+                name: 'admin-tasks',
+                test: (id) => ADMIN_TASKS.test(id) && !ADMIN_TASKS_LAZY.test(id),
+                priority: 16.5,
+              },
+              {
                 // The field kit and the editors (F5a): below admin-ui, so a module both
                 // use (the API client, the descriptors, zod) stays in admin-ui and this
                 // chunk imports it from there; above the kit, so the kit pieces the fields
@@ -337,6 +353,14 @@ export default defineConfig({
                 // use. Below the field kit, so a kit piece they share with it stays there.
                 name: 'admin-leads-lazy',
                 test: ADMIN_LEADS_LAZY,
+                priority: 14,
+              },
+              {
+                // The task drawer and the Tasks card (C8), loaded on first use: below the field
+                // kit, so a kit piece they share with it stays there. Equal to admin-leads-lazy's
+                // priority and after it in this list; the two share no module.
+                name: 'admin-tasks-lazy',
+                test: ADMIN_TASKS_LAZY,
                 priority: 14,
               },
               {

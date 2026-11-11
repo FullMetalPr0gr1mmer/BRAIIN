@@ -528,6 +528,7 @@ Legacy `GET /api/admin/leads?…` and `GET …/[id]?pii=1` are fixed to be fail-
   - overdue = not done and due_at < now()
   - today = the same calendar day in the studio's zone (`app.studio_time_zone`, `site_settings.timezone`; C14b dropped `crm_settings.timezone`)
 - `POST /api/admin/crm/tasks`: takes {dueDate, dueTime}, converted in SQL in the tenant time zone.
+- `GET /[id]`: the task as it is now (RPC `crm_task_read`, INVOKER), for the task drawer after a 409 (C8 review).
 - `PATCH /[id]`: version; done; `snooze: 'tomorrow_10'` is computed in SQL in the tenant time zone.
 - `DELETE /[id]`.
 - `GET /[id]/ics`:

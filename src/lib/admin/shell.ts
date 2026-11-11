@@ -14,7 +14,8 @@ export { initialsOf } from './initials';
 // pill and the bell's unread count.
 //
 // Read on every admin render (Tier C, no-store), so every read is cheap and parallel:
-// HEAD counts only for the menu (no rows leave the database), one KV read shared by the
+// counts only for the menu (HEAD counts, and since Admin v2 C8 one RPC answering the Leads and
+// Tasks counts together, counters/crm.ts: no rows leave the database), one KV read shared by the
 // badge and the bell, one profile row, the environment from a per-isolate cache, and the
 // bell's few small reads (src/lib/admin/notifications). A count is computed only for a
 // link the role can see, and a bell source only for a role it is visible to — a Content

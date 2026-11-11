@@ -419,6 +419,17 @@ export const DIALOG_CASES: readonly DialogCase[] = [
     sources: [`${C}/leads/AddLeadDrawer.tsx`, `${C}/leads/shared.tsx`],
   },
 
+  // ---- Tasks (C8; tasks.e2e.ts) -----------------------------------------------------------
+  {
+    id: 'tasks-new',
+    screen: '/admin/tasks',
+    // The screen is crm.tasks's (Admin until C10b); its New task button opens the drawer.
+    who: full('crm.tasks'),
+    open: [{ click: { role: 'button', name: 'New task' } }],
+    name: 'New task',
+    sources: [`${C}/tasks/TaskDrawer.tsx`, `${C}/tasks/TasksScreen.tsx`],
+  },
+
   // ---- Website stats: goals (G1; stats-v2.e2e.ts) ---------------------------------------
   {
     id: 'stats-new-goal',
@@ -484,6 +495,13 @@ export interface CoveredElsewhere {
 }
 
 export const DIALOGS_COVERED_ELSEWHERE: readonly CoveredElsewhere[] = [
+  {
+    source: `${C}/tasks/TasksCard.tsx`,
+    spec: 'tests/admin/tasks.e2e.ts',
+    marker: "card.getByRole('button', { name: 'Add a task' })",
+    roles: ['admin'],
+    why: 'the Tasks card on a lead’s page needs a lead, which the spec adds through /api/admin/leads; the drawer it opens is the tasks-new case’s, with axe there',
+  },
   {
     source: `${C}/kit/KitGallery.tsx`,
     spec: 'tests/admin/kit.e2e.ts',

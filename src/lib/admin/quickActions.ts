@@ -11,8 +11,8 @@ import type { IconName } from './icons';
 // One library, each action with a stable id (what a person's list and a role's preset store:
 // admin_user_prefs.quick_actions, admin_role_defaults.quick_actions, 0060). The palette lists
 // the actions that carry a `palette` label, as it did before U1 (tests/lib/adminPalette.spec.ts).
-// Only actions whose screen exists today; "change colours", "my tasks" and "publish changes"
-// join with E4, C8 and R12.
+// Only actions whose screen exists today; "change colours" and "publish changes" join with E4
+// and R12. "My tasks" joined with C8 (its review, C8-DESIGN-1).
 
 export interface QuickAction {
   label: string;
@@ -112,6 +112,13 @@ export const QUICK_LIBRARY: readonly LibraryAction[] = [
     href: '/admin/leads',
     icon: 'inbox',
     cap: 'leads.manage',
+  },
+  {
+    id: 'my-tasks',
+    label: 'My tasks',
+    href: '/admin/tasks?view=mine',
+    icon: 'check',
+    cap: 'crm.tasks',
   },
   {
     id: 'stats',

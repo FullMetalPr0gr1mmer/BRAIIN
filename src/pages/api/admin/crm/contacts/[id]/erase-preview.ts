@@ -31,7 +31,8 @@ import { getContact, requireContactId } from '@/lib/crm/contacts';
 
 export const prerender = false;
 
-const PREVIEW_COUNTS = ['leads', 'unindexed', 'channels', 'notes'] as const;
+// (Admin v2 C8) `tasks`: the follow-ups that go with the person.
+const PREVIEW_COUNTS = ['leads', 'unindexed', 'channels', 'notes', 'tasks'] as const;
 
 interface PhoneMatch {
   id: string;
@@ -40,6 +41,11 @@ interface PhoneMatch {
   company: string | null;
   created_at: string | null;
   linked: boolean;
+  /**
+   * (Admin v2 C8 review, C8-SEC-4) The tasks on this lead that go too when it is ticked: none
+   * of them is in `counts.tasks`, so the dialog adds them for each match it ticks.
+   */
+  tasks: number;
 }
 
 function phoneMatches(value: unknown): PhoneMatch[] {
@@ -53,6 +59,7 @@ function phoneMatches(value: unknown): PhoneMatch[] {
       company: typeof row['company'] === 'string' ? row['company'] : null,
       created_at: typeof row['created_at'] === 'string' ? row['created_at'] : null,
       linked: row['linked'] === true,
+      tasks: typeof row['tasks'] === 'number' ? row['tasks'] : 0,
     }));
 }
 

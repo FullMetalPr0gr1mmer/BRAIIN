@@ -1,0 +1,172 @@
+/* Tasks (Admin v2 C8, crm.md §11 screen 10): the Tasks screen, its rows, the task drawer and the
+   Tasks card on a lead's page (and, from C7, a contact's). Linked through AdminLayout's `styles`
+   (src/lib/admin/stylesheets.ts). Colours come from admin.css's tokens only; an overdue task
+   says "Overdue" in words, its badge is the kit's. No colour literal here. */
+
+.tasks {
+  display: grid;
+  gap: 16px;
+}
+
+.tasks__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tasks__summary {
+  margin: 0;
+  color: var(--ad-dim);
+}
+
+.tasks__sec > .card__t,
+.tasks__sec > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.tasks__sec > summary {
+  min-block-size: 24px;
+  cursor: pointer;
+}
+
+/* Overdue's header is marked (crm.md §11 screen 10): the warning sign, in the error tone; the
+   word "Overdue" carries the meaning, so it is never colour alone. */
+.tasks__sec[data-sec='overdue'] > .card__t .ic {
+  color: var(--ad-err-text);
+}
+
+.tasks__n {
+  color: var(--ad-dim);
+  font-weight: 600;
+}
+
+.task-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 4px 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-card);
+}
+
+.task:target {
+  outline: 2px solid var(--ad-focus);
+  outline-offset: 2px;
+}
+
+.task__check {
+  inline-size: 20px;
+  block-size: 20px;
+  margin: 2px 0 0;
+}
+
+.task__type {
+  display: inline-flex;
+  margin-top: 3px;
+  color: var(--ad-dim);
+}
+
+.task__main {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.task__t {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.task[data-done] .task__t {
+  color: var(--ad-dim);
+  text-decoration: line-through;
+}
+
+.task__m {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+  color: var(--ad-dim);
+  font-size: 13px;
+}
+
+.task__m a {
+  min-block-size: 24px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.task__n {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.task__a {
+  grid-column: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.task-list[data-compact] .task__a {
+  margin-top: 2px;
+}
+
+/* The drawer's form. */
+.task-form {
+  display: grid;
+  gap: 14px;
+}
+
+.task-form__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.task-form__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.task-form__found {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (max-width: 560px) {
+  .task-form__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .task__a {
+    grid-column: 1 / -1;
+  }
+}

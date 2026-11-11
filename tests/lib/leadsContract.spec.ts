@@ -474,7 +474,7 @@ describe('no lead query names a dropped column, and no CRM settings query the ti
   it('finds the lead queries the Worker makes', () => {
     const files = new Set(leadQueries.map((q) => q.file));
     for (const known of [
-      'src/lib/admin/counters/leads.ts',
+      // (Admin v2 C8) src/lib/admin/counters/leads.ts reads public.crm_nav_counts now (0134).
       'src/lib/admin/dashboard/loaders.ts',
       'src/lib/admin/notifications/leads.ts',
       'src/lib/crm/indexBackfill.ts',
