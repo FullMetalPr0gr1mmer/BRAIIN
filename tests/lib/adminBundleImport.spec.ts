@@ -45,7 +45,8 @@ describe('Import contacts has its own group (Admin v2 C15)', () => {
     groups = [...config.vite.build.rollupOptions.output.codeSplitting.groups].sort(
       (a, b) => b.priority - a.priority,
     );
-  });
+    // Loading astro.config.mjs pulls in Vite; under the full suite's load it can pass 10 s.
+  }, 180_000);
   const claim = (path: string) => {
     const id = join(process.cwd(), path);
     return groups.find((g) => (typeof g.test === 'function' ? g.test(id) : g.test.test(id)))?.name;

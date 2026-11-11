@@ -135,10 +135,9 @@ export function isBlankRecord(record: readonly string[]): boolean {
 
 // ── The heading row ─────────────────────────────────────────────────────────────────────────
 
-/** A heading as typed, folded: case, Unicode forms, spaces, dashes and underscores. */
+/** A heading as typed, folded: case, spaces, dashes and underscores (never digits, P-12). */
 function foldHeading(raw: string): string {
   return raw
-    .normalize('NFKC')
     .trim()
     .toLowerCase()
     .replace(/[\s_\-.]+/g, ' ')

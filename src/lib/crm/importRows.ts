@@ -54,7 +54,6 @@ const CONTROL = /[\u0000-\u001f\u007f]/;
 
 function fold(value: string): string {
   return value
-    .normalize('NFKC')
     .trim()
     .toLowerCase()
     .replace(/[\s_\-]+/g, ' ');
