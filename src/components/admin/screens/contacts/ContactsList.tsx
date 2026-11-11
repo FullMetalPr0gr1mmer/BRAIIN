@@ -12,6 +12,7 @@ import {
   CONTACT_STAGES,
   type ContactBulk,
   type ContactStage,
+  type CustomFieldDefinition,
   type LeadAssignedFilter,
 } from '@schemas/crm';
 import {
@@ -75,7 +76,11 @@ export interface ContactsListProps {
   me: string;
   /** The server's clock when it rendered, so the first render's "3 h ago" matches. */
   now: string;
+  /** (C9b) The custom fields CRM settings define, for the Add contact drawer. */
+  customFields?: CustomFieldDefinition[];
 }
+
+const NO_FIELDS: CustomFieldDefinition[] = [];
 
 /** What the bulk route answers. */
 interface BulkOutcome {
@@ -219,6 +224,7 @@ export default function ContactsList({
   people,
   me,
   now: renderedAt,
+  customFields = NO_FIELDS,
 }: ContactsListProps) {
   const { formatDateTime, relTime } = useClock();
   const tagId = useId();
@@ -248,7 +254,7 @@ export default function ContactsList({
 
   const addContact = useLazy<AddContactDrawerProps>(
     () => import('./AddContactDrawer'),
-    (open, close) => ({ open, onClose: close, people, me }),
+    (open, close) => ({ open, onClose: close, people, me, customFields }),
   );
   usePageButton('[data-contact-add]', true, addContact.open);
 

@@ -490,6 +490,56 @@ export const CrmAssignmentSchema = z
   });
 export type CrmAssignment = z.infer<typeof CrmAssignmentSchema>;
 
+// ── Custom contact fields (Admin v2 C9b) ─────────────────────────────────────────────────────
+// The definitions live in crm_settings.custom_fields (crm.settings edits them); the values in
+// crm_contacts.custom. The database holds both again: app.crm_custom_fields_ok (the CHECK) and
+// app.tg_crm_contact_custom (each new or changed value), in the C9b migration;
+// tests/lib/crmCustomFields.spec.ts parses it and compares.
+
+/** A custom field's kinds (crm.md §4.7 and the prototype: text, number, date). */
+export const CUSTOM_FIELD_TYPES = ['text', 'number', 'date'] as const;
+export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
+export const MAX_CUSTOM_FIELDS = 12;
+export const MAX_CUSTOM_FIELD_LABEL = 60;
+export const MAX_CUSTOM_TEXT = 500;
+/** A number field holds at most 10^15 either way (the database's bound). */
+export const MAX_CUSTOM_NUMBER = 1e15;
+export const CUSTOM_FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
+
+/**
+ * Custom field values: a key per field the CRM settings define, each a short text, a number,
+ * or null (empty). Checked against the definitions in the Worker
+ * (src/lib/crm/contactCustom.ts) and the database; an unknown key is refused in both.
+ */
+export const ContactCustomSchema = z.record(
+  z.string().regex(CUSTOM_FIELD_KEY),
+  z.union([z.string().max(MAX_CUSTOM_TEXT), z.number().finite(), z.null()]),
+);
+export type ContactCustom = z.infer<typeof ContactCustomSchema>;
+
+/** One custom field as crm_settings.custom_fields holds it: exactly these three keys. */
+export const CustomFieldDefinitionSchema = z
+  .object({
+    key: z.string().regex(CUSTOM_FIELD_KEY, 'lower-case letters, digits and _, a letter first'),
+    label: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MAX_CUSTOM_FIELD_LABEL)
+      .refine((v) => !CONTROL.test(v), 'no control characters'),
+    type: z.enum(CUSTOM_FIELD_TYPES),
+  })
+  .strict();
+export type CustomFieldDefinition = z.infer<typeof CustomFieldDefinitionSchema>;
+
+/** The whole set a save writes, in the order the screen shows it: at most 12, each key once. */
+export const CustomFieldsSaveSchema = z
+  .array(CustomFieldDefinitionSchema)
+  .max(MAX_CUSTOM_FIELDS)
+  .refine((fields) => new Set(fields.map((f) => f.key)).size === fields.length, {
+    message: 'each key once',
+  });
+
 /**
  * PUT /api/admin/crm/settings: one card's change at the version the screen read. Each card
  * sends its own part; the time zone is not here (site_profile owns it, the plan's B7.5).
@@ -500,10 +550,16 @@ export const CrmSettingsSaveSchema = z
     scoring: CrmScoringSaveSchema.optional(),
     slaHours: z.number().int().min(MIN_SLA_HOURS).max(MAX_SLA_HOURS).optional(),
     assignment: CrmAssignmentSchema.optional(),
+    // C9b: the custom contact fields' definitions, the whole set.
+    customFields: CustomFieldsSaveSchema.optional(),
   })
   .strict()
   .refine(
-    (v) => v.scoring !== undefined || v.slaHours !== undefined || v.assignment !== undefined,
+    (v) =>
+      v.scoring !== undefined ||
+      v.slaHours !== undefined ||
+      v.assignment !== undefined ||
+      v.customFields !== undefined,
     'nothing to save',
   );
 export type CrmSettingsSave = z.infer<typeof CrmSettingsSaveSchema>;
@@ -598,32 +654,6 @@ export const ContactChannelInputSchema = z.discriminatedUnion('kind', [
 export type ContactChannelInput = z.infer<typeof ContactChannelInputSchema>;
 
 const ChannelsAddSchema = z.array(ContactChannelInputSchema).max(10);
-
-/**
- * Custom field values: a key per field the CRM settings define (C9b), each a short text, a
- * number, a yes or no, or empty. Checked against the definitions in the Worker
- * (src/lib/crm/contactCustom.ts); an unknown key is refused there.
- */
-export const ContactCustomSchema = z.record(
-  z.string().regex(/^[a-z][a-z0-9_]{0,39}$/),
-  z.union([z.string().max(500), z.number().finite(), z.boolean(), z.null()]),
-);
-export type ContactCustom = z.infer<typeof ContactCustomSchema>;
-
-/** A custom field as C9b will define it (crm_settings.custom_fields): what C6 validates against. */
-export const CUSTOM_FIELD_TYPES = ['text', 'number', 'date', 'select', 'boolean'] as const;
-export const CustomFieldDefinitionSchema = z
-  .object({
-    key: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/),
-    label: z.string().trim().min(1).max(60),
-    type: z.enum(CUSTOM_FIELD_TYPES),
-    options: z.array(z.string().trim().min(1).max(60)).max(30).optional(),
-    min: z.number().finite().optional(),
-    max: z.number().finite().optional(),
-    maxLength: z.number().int().min(1).max(500).optional(),
-  })
-  .strict();
-export type CustomFieldDefinition = z.infer<typeof CustomFieldDefinitionSchema>;
 
 const CountrySchema = z.string().regex(/^[A-Z]{2}$/, 'a two-letter country code');
 

@@ -159,6 +159,13 @@ export const CONTACT_CONSTRAINTS: ConstraintFields = {
     field: 'custom',
     message: 'The custom fields hold too much. Shorten some of them.',
   },
+  // C9b: the database's check of each new or changed custom value against the definitions
+  // (app.tg_crm_contact_custom). The Worker checks first, so this is a field changed or removed
+  // in CRM settings between the read and the write.
+  crm_contacts_custom_fields: {
+    field: 'custom',
+    message: 'The custom fields changed in CRM settings meanwhile. Reload the page and try again.',
+  },
   crm_contacts_country_check: { field: 'country', message: 'Use a two-letter country code.' },
   // A rule of public.crm_edit_contact_channels (C6 review, C6-SEC-3), named in its message.
   crm_contact_channels_cap: {

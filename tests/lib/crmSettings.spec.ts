@@ -407,7 +407,8 @@ describe('saving the pipeline', () => {
 });
 
 describe('what the screen reads', () => {
-  it('the settings, the stages with their counts, the people: four reads in the caller’s tenant', async () => {
+  // C9b: and the retention horizon the Data and privacy card states (site_settings).
+  it('the settings, the stages with their counts, the people, the horizon: five reads in the caller’s tenant', async () => {
     const { sb, calls } = fakeDb({ data: { version: 2, sla_hours: 24 } });
     const answer = await readCrmSettings(sb, AUTH);
     expect(calls.map((c) => c.table ?? c.rpc)).toEqual([
@@ -415,6 +416,7 @@ describe('what the screen reads', () => {
       'lead_stages',
       'lead_stage_counts',
       'crm_people',
+      'site_settings',
     ]);
     for (const call of calls.filter((c) => c.table)) {
       expect(call.eq).toContainEqual(['tenant_id', AUTH.tenantId]);
@@ -543,6 +545,7 @@ describe('the screen’s own rules', () => {
         scoring: { returning: 3 },
         slaHours: 24,
         assignment: { rule: 'manual', pool: [], fixedTo: null },
+        customFields: [],
         updatedAt: null,
       }),
     ).toEqual({ ...Object.fromEntries(SCORE_SIGNALS.map((x) => [x, 0])), returning: 3 });

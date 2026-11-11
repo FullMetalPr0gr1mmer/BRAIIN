@@ -476,19 +476,16 @@ describe('answers without contact details', () => {
 });
 
 describe('custom field values (crm.md §5.1)', () => {
+  // C9b: the three kinds CRM settings define (text, number, date).
   const fields = [
-    { key: 'budget_year', label: 'Budget year', type: 'number' as const, min: 2020, max: 2030 },
-    { key: 'sector', label: 'Sector', type: 'select' as const, options: ['retail', 'food'] },
-    { key: 'vip', label: 'VIP', type: 'boolean' as const },
+    { key: 'seats', label: 'Seats', type: 'number' as const },
     { key: 'met_on', label: 'Met on', type: 'date' as const },
-    { key: 'nick', label: 'Nickname', type: 'text' as const, maxLength: 5 },
+    { key: 'nick', label: 'Nickname', type: 'text' as const },
   ];
   it('accepts values that fit and empties', () => {
     expect(
       validateCustomValues(fields, {
-        budget_year: 2026,
-        sector: 'food',
-        vip: true,
+        seats: 12.5,
         met_on: '2026-03-01',
         // An empty value clears the field.
         nick: null,
@@ -497,22 +494,22 @@ describe('custom field values (crm.md §5.1)', () => {
   });
   it.each([
     [{ unknown_key: 'x' }, 'unknown key'],
-    [{ budget_year: '2026' }, 'type'],
-    [{ budget_year: 2019 }, 'below the least'],
-    [{ budget_year: 2031 }, 'above the most'],
-    [{ sector: 'cars' }, 'not an option'],
-    [{ vip: 'yes' }, 'type'],
+    [{ seats: '2026' }, 'type'],
+    [{ seats: 1e16 }, 'past 10^15'],
     [{ met_on: '01/03/2026' }, 'date shape'],
-    [{ nick: 'Sarah!' }, 'too long'],
+    [{ met_on: '2026-02-30' }, 'no such day'],
+    [{ nick: 'x'.repeat(501) }, 'too long'],
+    [{ nick: 'two\nlines' }, 'a control character'],
+    [{ nick: 5 }, 'type'],
   ])('refuses %j (%s)', (values: Record<string, unknown>, _why: string) => {
     expect(() => validateCustomValues(fields, values as never)).toThrow();
   });
-  it('refuses any custom value while no fields are defined (until C9b)', async () => {
+  it('refuses a value no field defines, before writing anything', async () => {
     const res = await detail.PATCH(
       ctx(`/api/admin/crm/contacts/${CONTACT}`, 'PATCH', { version: 3, custom: { a: 'x' } }),
     );
     expect(res.status).toBe(422);
-    expect(events.some((e) => e.startsWith('rls:'))).toBe(false);
+    expect(events.some((e) => e.startsWith('rls:update'))).toBe(false);
   });
 });
 

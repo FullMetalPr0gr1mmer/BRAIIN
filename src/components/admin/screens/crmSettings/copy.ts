@@ -101,3 +101,80 @@ export function removeBlocked(stage: { is_initial?: boolean; leads?: number }): 
   const n = stage.leads ?? 0;
   return n > 0 ? `Move its ${leadsCount(n)} first.` : null;
 }
+
+// ── Contacts (Admin v2 C9b) ─────────────────────────────────────────────────────────────────
+// The custom fields' limits and types, the contact stages' words and tones, held equal to the
+// schema's and the contact screens' by tests/lib/crmCustomFields.spec.ts (copied here for the
+// reason above: no run-time import from @schemas/crm or the contacts' code).
+
+export const CUSTOM_LIMITS = { maxFields: 12, maxLabel: 60, maxKey: 40 } as const;
+
+/** A custom field's type by its name, in the schema's order. */
+export const FIELD_TYPE_NAMES: Readonly<Record<'text' | 'number' | 'date', string>> = {
+  text: 'Text',
+  number: 'Number',
+  date: 'Date',
+};
+
+/** The key a new field is saved under: snake_case, a letter first (the database's rule). */
+export const FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
+
+/**
+ * A key from a label: lower-case Latin letters and digits joined by _, a letter first, at most
+ * 40 characters; `field_<n>` when the label has none (an Arabic label, say). Made unique among
+ * `taken` with a number on the end.
+ */
+export function keyFromLabel(label: string, taken: ReadonlySet<string>, n: number): string {
+  let base = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  if (!base) base = `field_${n}`;
+  else if (!/^[a-z]/.test(base)) base = `field_${base}`;
+  base = base.slice(0, CUSTOM_LIMITS.maxKey).replace(/_+$/, '');
+  let key = base;
+  for (let i = 2; taken.has(key); i += 1) {
+    const end = `_${i}`;
+    key = `${base.slice(0, CUSTOM_LIMITS.maxKey - end.length)}${end}`;
+  }
+  return key;
+}
+
+/** The four contact stages (fixed, crm.md §11), each with its badge tone and what it means. */
+export const CONTACT_STAGE_COPY: readonly {
+  stage: 'lead' | 'client' | 'past' | 'partner';
+  label: string;
+  tone: StageTone;
+  hint: string;
+}[] = [
+  {
+    stage: 'lead',
+    label: 'Lead',
+    tone: 'klein',
+    hint: 'Someone who asked about work and has not paid yet.',
+  },
+  {
+    stage: 'client',
+    label: 'Client',
+    tone: 'ok',
+    hint: 'Paid us at least once, with a project running or just done.',
+  },
+  {
+    stage: 'past',
+    label: 'Past client',
+    tone: 'gray',
+    hint: 'Worked with us more than 6 months ago.',
+  },
+  {
+    stage: 'partner',
+    label: 'Partner',
+    tone: 'sky',
+    hint: 'Printers, venues, photographers and other people we work with.',
+  },
+];
+
+/** The retention line on the Data and privacy card. */
+export function retentionLine(months: number | null): string {
+  if (months === null) return 'How long leads and contacts are kept could not be read.';
+  return `Leads and contacts are kept ${months} months after their last activity.`;
+}

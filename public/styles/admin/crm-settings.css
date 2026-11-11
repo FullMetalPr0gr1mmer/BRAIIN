@@ -160,3 +160,46 @@
   padding: 0;
   list-style: none;
 }
+
+/* Admin v2 C9b: the contact stages, each badge with what it means; the people the erasure's
+   search found; the General settings link, tall enough to be a target on its own (axe
+   target-size, 24px). */
+.crm-cstages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+
+.crm-cstage {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.crm-cstage > dt,
+.crm-cstage > dd {
+  margin: 0;
+}
+
+.crm-found {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crm-field__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0 12px;
+}
+
+.crm-link {
+  display: inline-block;
+  min-block-size: 24px;
+  line-height: 24px;
+}
