@@ -20,7 +20,7 @@
 --      holder the bases, nothing across tenants, anon nothing, and no token writes either.
 
 begin;
-select plan(51);
+select plan(52);
 
 insert into public.tenants (id, name) values
   ('c1500000-0000-4000-8000-000000000001', 'C15 T1'),
@@ -253,13 +253,20 @@ select is(c15_val(format($$ select public.crm_import_rows('c1500000-0000-4000-80
   '54000', 'the batch''s bytes stop at the file''s limit and a quarter');
 update public.crm_import_batches set bytes_seen = 900 where id = (select id from c15_ids where k = 'batch');
 
+-- A later piece: a repeat is named against the earlier piece's row (a 5,000-row file is 100 pieces).
+select is((select public.crm_import_rows('c1500000-0000-4000-8000-000000000001', (select id from c15_ids where k = 'batch'),
+             'c1500000-0000-4000-8000-0000000000a1',
+             jsonb_build_array(c15_row(11, 'consent', 'Later Repeat', '4', null)), 0, 10)::text),
+  '{"created": 0, "refused": [], "repeats": [{"of": 2, "row": 11}], "duplicates": [], "phone_matches": []}',
+  'a later piece names a repeat of a row an earlier piece added, and adds nobody');
+
 -- Finish.
 select is(c15_refusals(format($$ select public.crm_import_finish('c1500000-0000-4000-8000-000000000001', %L, %%L, false)::text $$,
                          (select id from c15_ids where k = 'batch'))),
   '42501 42501 42501 42501 42501 42501 42501 42501', 'finish refuses every actor who is not a live Admin of the tenant');
 select is((select (a - 'id' - 'bases')::text from (select public.crm_import_finish('c1500000-0000-4000-8000-000000000001',
              (select id from c15_ids where k = 'batch'), 'c1500000-0000-4000-8000-0000000000a1', false) a) x),
-  '{"rows": 9, "failed": 2, "status": "done", "created": 3, "repeats": 2, "duplicates": 2, "phone_matches": 1}',
+  '{"rows": 10, "failed": 2, "status": "done", "created": 3, "repeats": 3, "duplicates": 2, "phone_matches": 1}',
   'finish closes the import and answers its counts');
 select is(c15_val(format($$ select public.crm_import_finish('c1500000-0000-4000-8000-000000000001', %L,
                     'c1500000-0000-4000-8000-0000000000a1', false)::text $$, (select id from c15_ids where k = 'batch'))),
