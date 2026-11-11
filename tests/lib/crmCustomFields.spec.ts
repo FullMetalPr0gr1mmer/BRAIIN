@@ -613,3 +613,31 @@ describe('a contact’s custom values through the API', () => {
     expect(calls.some((c) => c.rpc === 'crm_create_contact')).toBe(false);
   });
 });
+
+describe('the crm-settings guide says what the new cards do (C9b, revision 1)', () => {
+  const guide = JSON.parse(
+    /select app\.put_help_guide\(\$guide\$\r?\n([\s\S]*?)\r?\n\$guide\$::jsonb, 1\);/.exec(
+      MIGRATION,
+    )![1]!,
+  ) as { slug: string; body: { en: unknown; ar: unknown } };
+  const en = JSON.stringify(guide.body.en);
+  const ar = JSON.stringify(guide.body.ar);
+  const screen = ['CustomFieldsCard', 'ContactStagesCard', 'PrivacyCard']
+    .map((f) => source(`src/components/admin/screens/crmSettings/${f}.tsx`))
+    .join('\n');
+
+  it('names the controls the screen draws, in both languages', () => {
+    expect(guide.slug).toBe('crm-settings');
+    for (const control of ['Add field', 'Save fields', "Erase a person's data"]) {
+      expect(screen.replace(/&apos;/g, "'"), control).toContain(control);
+      expect(en, control).toContain(control);
+      expect(ar, control).toContain(control);
+    }
+  });
+
+  it('gives the limits the schema holds, and the warning about removing a field', () => {
+    expect(en).toContain(`up to ${MAX_CUSTOM_FIELDS}`);
+    expect(en).toContain('Removing a field deletes what every contact holds in it');
+    expect(en).not.toMatch(/[–—]/);
+  });
+});
