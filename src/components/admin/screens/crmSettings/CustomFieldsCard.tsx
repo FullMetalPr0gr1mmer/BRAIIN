@@ -173,8 +173,7 @@ export default function CustomFieldsCard({ settings, version, onSaved }: Props) 
         fixed once it is saved. Removing a field deletes what every contact holds in it.
       </p>
       <p className="f__hint">
-        Add only what the work needs. Never a field for health, religion or other sensitive
-        details.
+        Add only what the work needs. Never a field for health, religion or other sensitive details.
       </p>
       {drafts.length === 0 ? (
         <p className="f__hint">No custom fields yet.</p>
