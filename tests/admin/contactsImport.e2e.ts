@@ -112,6 +112,10 @@ test.describe('as admin', () => {
     await page.getByRole('button', { name: 'Import 4 people' }).click();
 
     await expect(page.getByRole('heading', { name: 'The import is done' })).toBeVisible();
+    // The status region, on the page from the start, says the result too (WCAG 4.1.3).
+    await expect(page.getByRole('status').filter({ hasText: 'The import is done.' })).toContainText(
+      'Added 1 person.',
+    );
     const result = page.locator('.imp__result');
     await expect(result).toContainText('Added 1 person.');
     await expect(result).toContainText('Already contacts, so left as they are: 1 row (3).');
@@ -124,8 +128,11 @@ test.describe('as admin', () => {
     expect(await page.content()).not.toContain('a private note');
     await axe(page, 'Import contacts, the result');
 
-    // The recent imports, newest first: this one, by "You", done.
-    const first = page.locator('table.data tbody tr').first();
+    // The recent imports, newest first: this one, by "You", done. The table is named by its
+    // heading (the columns help, also a table.data, comes first on the page).
+    const recent = page.getByRole('table', { name: 'Recent imports' });
+    await expect(recent).toBeVisible();
+    const first = recent.locator('tbody tr').first();
     await expect(first).toContainText('You');
     await expect(first).toContainText('Done');
 

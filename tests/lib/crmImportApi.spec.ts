@@ -6,8 +6,9 @@ import type { APIContext } from 'astro';
 // import), then the door; an import left open gets its outcome row. A piece is parsed here,
 // its rows checked and sealed: the door receives ciphertext and indexes, never an e-mail or a
 // phone as typed, and the answer is row numbers and codes, never what a row held. Finish
-// writes the OUTCOME row with counts only. A body over its cap is refused before it is read;
-// a refusal never repeats what was sent.
+// writes the OUTCOME row with counts only. The live recheck runs before the body is read, and
+// a body over its cap is refused before it is read whole, a chunked one (no Content-Length)
+// included; a refusal never repeats what was sent.
 
 const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER = '11111111-1111-4111-8111-111111111111';
@@ -215,15 +216,61 @@ describe('open', () => {
     const text = JSON.stringify(await json(res));
     expect(text).not.toContain(EMAIL);
     expect(text).toContain('The import request was not understood.');
-    expect(events).toEqual([]);
+    expect(events).toEqual(['svc:profiles']);
   });
 
-  it('a body over its cap is refused before it is parsed or anything is read', async () => {
+  it('a body over its cap is refused before it is parsed or anything else is read', async () => {
     const res = await route.POST(
       ctx(URL_, 'POST', undefined, JSON.stringify({ step: 'rows', csv: 'x'.repeat(460_000) })),
     );
     expect(res.status).toBe(422);
-    expect(events).toEqual([]);
+    expect(events).toEqual(['svc:profiles']);
+  });
+
+  // A body sent in chunks, with no Content-Length: `pulled` counts what the route read.
+  const CHUNK = 64 * 1024;
+  function chunked(total: number, counter: { pulled: number }): APIContext {
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          if (sent >= total) return controller.close();
+          const chunk = new TextEncoder().encode('x'.repeat(CHUNK));
+          sent += chunk.byteLength;
+          counter.pulled += chunk.byteLength;
+          controller.enqueue(chunk);
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const context = ctx(URL_, 'POST');
+    const request = new Request(context.url, {
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+      duplex: 'half',
+    } as RequestInit);
+    expect(request.headers.get('content-length')).toBeNull();
+    return { ...context, request } as APIContext;
+  }
+
+  it('a demoted, switched-off or locked token makes the route read no byte of the body', async () => {
+    liveProfile = { role: 'admin', is_active: false, locked_until: null };
+    const counter = { pulled: 0 };
+    const res = await route.POST(chunked(4 * 1024 * 1024, counter));
+    expect(res.status).toBe(403);
+    expect(counter.pulled).toBe(0);
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it('a chunked body over its cap is cut at the cap, never read whole', async () => {
+    const counter = { pulled: 0 };
+    const res = await route.POST(chunked(4 * 1024 * 1024, counter));
+    expect(res.status).toBe(422);
+    expect(JSON.stringify(await json(res))).toContain('too large to send');
+    // 450,000 characters at three bytes each at most, plus the chunk that passed it.
+    expect(counter.pulled).toBeLessThanOrEqual(450_000 * 3 + CHUNK);
+    expect(rpcCalls).toEqual([]);
   });
 });
 

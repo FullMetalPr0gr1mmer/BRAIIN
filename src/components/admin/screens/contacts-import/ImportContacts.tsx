@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import Note from '@/components/admin/kit/Note';
 import { useClock } from '@/components/admin/kit/clock';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
@@ -34,7 +34,7 @@ export interface ImportContactsProps {
   now: string;
 }
 
-type Phase =
+export type Phase =
   | { kind: 'idle' }
   | { kind: 'running'; done: number; total: number }
   | { kind: 'finished'; stopped: boolean; error?: string };
@@ -69,6 +69,25 @@ export function batchStatus(batch: ImportBatch, now: number): string {
   return now - Date.parse(batch.createdAt) > STALE_MS ? 'Stopped before the end' : 'In progress';
 }
 
+/**
+ * What the screen's one status region says (WCAG 4.1.3): the progress while the import runs,
+ * then the result in a sentence or two. The region is on the page from the first render, so a
+ * screen reader hears each change; the visible result below repeats it with the rows.
+ */
+export function importStatusText(phase: Phase, tally: ImportTally): string {
+  if (phase.kind === 'idle') return '';
+  if (phase.kind === 'running') {
+    return `Read ${phase.done.toLocaleString('en-US')} of ${phase.total.toLocaleString('en-US')} rows.`;
+  }
+  const head = phase.stopped ? 'The import stopped before the end.' : 'The import is done.';
+  const failed = tally.problems.length;
+  const tail =
+    failed > 0
+      ? ` Not imported: ${failed.toLocaleString('en-US')} ${failed === 1 ? 'row' : 'rows'}.`
+      : '';
+  return `${head} ${tallyLines(tally).join(' ')}${tail}`;
+}
+
 export default function ImportContacts({ initialBatches, names, me, now }: ImportContactsProps) {
   const id = useId();
   const clock = useClock();
@@ -80,7 +99,16 @@ export default function ImportContacts({ initialBatches, names, me, now }: Impor
   const [batches, setBatches] = useState<ImportBatch[]>(initialBatches);
   const stopRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const resultRef = useRef<HTMLHeadingElement>(null);
   const nowMs = Date.parse(now) || 0;
+
+  // When the import ends, the Stop button it was on is gone: focus moves to the result's
+  // heading rather than to the page, so a keyboard user carries on from there.
+  useEffect(() => {
+    if (phase.kind !== 'finished') return;
+    const active = document.activeElement;
+    if (active === null || active === document.body) resultRef.current?.focus();
+  }, [phase.kind]);
 
   async function choose(file: File | undefined) {
     setPhase({ kind: 'idle' });
@@ -213,6 +241,10 @@ export default function ImportContacts({ initialBatches, names, me, now }: Impor
           same phone when there is no e-mail) are left as they are, so a file can be imported again
           after fixing its rows.
         </p>
+        <p className="admin-sub">
+          We do not keep anything about people erased from Contacts, so importing an old file adds
+          them back. Take them out of the file first.
+        </p>
       </section>
 
       <form
@@ -300,21 +332,25 @@ export default function ImportContacts({ initialBatches, names, me, now }: Impor
               value={phase.done}
               aria-label="Import progress"
             />
-            <p role="status">
+            <p>
               Read {phase.done.toLocaleString('en-US')} of {phase.total.toLocaleString('en-US')}{' '}
               rows.
             </p>
           </div>
         )}
 
+        <p className="visually-hidden" role="status">
+          {importStatusText(phase, tally)}
+        </p>
+
         {phase.kind === 'finished' && (
-          <div className="imp__result" aria-live="polite">
+          <div className="imp__result">
             {phase.error && (
               <Note tone="err" role="alert">
                 {phase.error}
               </Note>
             )}
-            <h3 className="imp__h3">
+            <h3 className="imp__h3" ref={resultRef} tabIndex={-1}>
               {phase.stopped ? 'The import stopped before the end' : 'The import is done'}
             </h3>
             {tallyLines(tally).map((line) => (
@@ -350,7 +386,7 @@ export default function ImportContacts({ initialBatches, names, me, now }: Impor
           <p className="admin-sub">No imports yet.</p>
         ) : (
           <div className="table-wrap">
-            <table className="data">
+            <table className="data" aria-labelledby={`${id}-recent`}>
               <thead>
                 <tr>
                   <th scope="col">When</th>

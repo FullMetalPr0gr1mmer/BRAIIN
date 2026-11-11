@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  IMPORT_PIECE_MAX_BYTES,
   IMPORT_PIECE_ROWS,
   LAWFUL_BASES,
   type ImportColumn,
@@ -391,6 +392,13 @@ export async function importPiece(opts: {
   if (people.length !== opts.rowNumbers.length) {
     throw new ValidationError(fileProblemMessage('rows_mismatch'));
   }
+  // The piece's people, as bytes (the heading row is the import's own, not the file's): the
+  // database takes at most 256 KiB a piece, so a larger one is refused here, in words.
+  const headingLength = utf8Length(opts.csv.slice(0, opts.csv.search(/\r?\n/) + 1));
+  const bytes = Math.max(1, utf8Length(opts.csv) - headingLength);
+  if (bytes > IMPORT_PIECE_MAX_BYTES) {
+    throw new ValidationError('That part of the file is too large to send.');
+  }
 
   const problems: { row: number; problem: RowProblem }[] = [];
   const checked: CheckedRow[] = [];
@@ -412,9 +420,6 @@ export async function importPiece(opts: {
   );
   problems.push(...refused);
 
-  // The piece's people, as bytes (the heading row is the import's own, not the file's).
-  const headingLength = utf8Length(opts.csv.slice(0, opts.csv.search(/\r?\n/) + 1));
-  const bytes = Math.max(1, utf8Length(opts.csv) - headingLength);
   const { data, error } = await opts.svc.rpc('crm_import_rows', {
     p_tenant: opts.auth.tenantId,
     p_batch: opts.batchId,

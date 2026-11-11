@@ -16,6 +16,12 @@ export const IMPORT_MAX_BYTES = 2 * 1024 * 1024;
 export const IMPORT_PIECE_ROWS = 50;
 /** A piece's CSV text: 50 rows of the longest values allowed fit with room. */
 export const IMPORT_PIECE_MAX_CHARS = 200_000;
+/**
+ * A piece's people as UTF-8 bytes (its heading row aside): the database's own cap
+ * (crm_import_rows refuses a piece over 256 KiB). An Arabic letter is two bytes, so a piece
+ * well under the character cap can pass this one; the screen cuts pieces under both.
+ */
+export const IMPORT_PIECE_MAX_BYTES = 256 * 1024;
 /** The highest row number a file may name (the heading row is row 1). */
 export const IMPORT_MAX_ROW_NUMBER = 100_000;
 /** The lawful-basis statement the Admin confirms, by version (the screen's words). */

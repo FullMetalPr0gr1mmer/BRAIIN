@@ -5,6 +5,7 @@ import { writeAudit } from '@/lib/admin/audit';
 import { ValidationError } from '@/lib/admin/errors';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
+import { readBodyText } from '@/lib/auth/bodyLimit';
 import { claimPrivilegedOp, CRM_IMPORT_LIMITS } from '@/lib/admin/rateLimit';
 import { serviceClient } from '@/lib/supabase/server';
 import { tenantCountry } from '@/lib/crm/leadQuery';
@@ -23,19 +24,24 @@ import { importCounts, readImportBatches } from '@/lib/crm/importBatches';
 //           encrypted and blind-indexed, then public.crm_import_rows (dedupe, the totals)
 //   finish  public.crm_import_finish, then the OUTCOME audit row with the counts
 //
-// A body over its cap is refused before it is parsed. Every refusal names a column or row
-// number, never a value; nothing a row holds reaches an audit row, a log line or an answer.
+// The live recheck runs before the body is read, so a stale token makes the Worker read
+// nothing; a body over its cap is refused before it is read whole (a chunked one too: the
+// stream is cut at the cap). Every refusal names a column or row number, never a value;
+// nothing a row holds reaches an audit row, a log line or an answer.
 
 export const prerender = false;
 
 /** A piece's JSON: its CSV text (at most 200,000 characters, Arabic two bytes each) and more. */
 const BODY_CAP = 450_000;
+/**
+ * The bytes a body of BODY_CAP characters can take in UTF-8 (three a UTF-16 unit at most), so
+ * the read's cap never refuses a body the character cap would take.
+ */
+const BODY_BYTE_CAP = BODY_CAP * 3;
 
 async function readBody(request: Request): Promise<ImportRequest> {
-  const declared = Number(request.headers.get('content-length') ?? '0');
-  if (declared > BODY_CAP) throw new ValidationError('That part of the file is too large to send.');
-  const text = await request.text();
-  if (text.length > BODY_CAP)
+  const text = await readBodyText(request, BODY_BYTE_CAP);
+  if (text === null || text.length > BODY_CAP)
     throw new ValidationError('That part of the file is too large to send.');
   let raw: unknown;
   try {
@@ -57,8 +63,8 @@ export const GET = defineAdminRoute({
 export const POST = defineAdminRoute({
   cap: 'crm.import',
   handler: async ({ auth, sb, request }) => {
-    const input = await readBody(request);
     await liveRecheck(auth);
+    const input = await readBody(request);
     const svc = serviceClient();
 
     if (input.step === 'open') {

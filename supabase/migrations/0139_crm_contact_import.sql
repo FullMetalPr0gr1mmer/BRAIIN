@@ -25,7 +25,12 @@
 --      5,000 rows and the byte ceiling), crm_import_finish. Dedupe by blind index: an e-mail
 --      (or, with none, a phone) a contact holds already is skipped, under the link's own
 --      per-address lock (app.crm_email_holder); a repeat of an earlier row of the same batch
---      says which row. Answers are counts and row numbers only.
+--      says which row. Answers are counts and row numbers only. One open import per Admin
+--      (a partial unique index, and the open door takes the Admin's lock first).
+--   5. app.crm_import_sweep, hourly by pg_cron (crm-import-sweep): every import open longer
+--      than two hours, in any tenant, is stopped and gets its outcome audit row (counts only,
+--      no actor), so an abandoned import or one whose Admin was switched off mid-way is closed
+--      and recorded.
 --
 -- Production behaviour: none until C15's Worker deploys (no existing object changes).
 -- ─────────────────────────────────────────────────────────────────────────────────────────
@@ -81,6 +86,11 @@ create table public.crm_import_batches (
 create index crm_import_batches_recent_idx on public.crm_import_batches (tenant_id, created_at desc);
 -- An Admin's open batch (the open door stops it); and the creator key's own index.
 create index crm_import_batches_creator_idx on public.crm_import_batches (tenant_id, created_by, status);
+-- One open import per Admin, held by the database: two opens at once from the same Admin
+-- (two tabs) cannot both leave a batch open (the open door also serialises them, section 6).
+-- A batch whose Admin is gone (created_by null) is outside it. Also the hourly sweep's path.
+create unique index crm_import_batches_one_open on public.crm_import_batches (tenant_id, created_by)
+  where status = 'open';
 alter table public.crm_import_batches enable row level security;
 alter table public.crm_import_batches force row level security;
 
@@ -174,6 +184,9 @@ begin
   if p_attestation <> 'c15-v1' then
     raise exception using errcode = '22023', message = 'crm_import_open: an unknown attestation';
   end if;
+  -- One open at a time per Admin: a second open from another tab waits here, then (its next
+  -- statement reading afresh, READ COMMITTED) stops the batch the first one made.
+  perform pg_advisory_xact_lock(hashtextextended('crm-import:' || p_tenant::text || ':' || p_actor::text, 0));
   with s as (
     update public.crm_import_batches b
        set status = 'stopped', finished_at = now(), updated_at = now()
@@ -372,6 +385,54 @@ end $$;
 revoke all on function public.crm_import_finish(uuid, uuid, uuid, boolean) from public, anon, authenticated, service_role;
 grant execute on function public.crm_import_finish(uuid, uuid, uuid, boolean) to service_role;
 
+-- Imports left open (a closed tab, a Worker stopped mid-piece, an Admin switched off, demoted
+-- or locked mid-import, whose doors then refuse them): a batch takes no piece after two hours,
+-- so this stops every batch open longer than that, in every tenant, and writes its OUTCOME
+-- audit row with no actor (the schedule did it), the counts only, as the Worker's own outcome
+-- row for an import left open (`left_open`, plus `swept`). Without it such a batch stayed open
+-- with only its attempt row, unless the same Admin opened another. Returns how many it
+-- stopped. A definer for pg_cron (it runs as the job's owner); no API role executes it.
+create or replace function app.crm_import_sweep() returns int
+  language plpgsql volatile security definer set search_path = '' as $$
+declare
+  v_n int := 0;
+  b record;
+begin
+  for b in
+    update public.crm_import_batches x
+       set status = 'stopped', finished_at = pg_catalog.now(), updated_at = pg_catalog.now()
+     where x.status = 'open' and x.created_at <= pg_catalog.now() - interval '2 hours'
+    returning x.tenant_id, x.id, x.rows_seen, x.created_count, x.duplicate_count, x.repeat_count,
+              x.failed_count, x.phone_match_count, x.basis_counts
+  loop
+    insert into public.audit_log (tenant_id, actor_id, actor_role, action, entity_type, entity_id, detail)
+    values (b.tenant_id, null, null, 'crm.import.outcome', 'contact_import', b.id::text,
+            pg_catalog.jsonb_build_object(
+              'status', 'stopped', 'left_open', true, 'swept', true, 'rows', b.rows_seen,
+              'created', b.created_count, 'duplicates', b.duplicate_count, 'repeats', b.repeat_count,
+              'failed', b.failed_count, 'phone_matches', b.phone_match_count)
+            || coalesce((select pg_catalog.jsonb_object_agg('basis_' || k.key, k.value)
+                           from pg_catalog.jsonb_each(b.basis_counts) k
+                          where k.key in ('consent', 'contract', 'legitimate_interest', 'legal_obligation')),
+                        '{}'::jsonb));
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end $$;
+revoke all on function app.crm_import_sweep() from public, anon, authenticated, service_role;
+
+-- Hourly at :47, the 0060 pattern: where pg_cron is missing (a local stack without it) the job
+-- is a notice, and stale imports wait for the same Admin's next open.
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule(jobname) from cron.job where jobname = 'crm-import-sweep';
+    perform cron.schedule('crm-import-sweep', '47 * * * *', $job$ select app.crm_import_sweep() $job$);
+  else
+    raise notice 'pg_cron not installed: run app.crm_import_sweep() hourly by hand';
+  end if;
+end $$;
+
 -- ═══ 7. Postconditions (P-14: under both Supabase grant regimes) ═════════════════════════
 do $$
 declare
@@ -470,8 +531,44 @@ begin
      or not has_function_privilege('service_role', 'app.role_crm_import(text)', 'execute') then
     raise exception 'C15: app.role_crm_import must be executable by authenticated and the service role only';
   end if;
+  -- The sweep: a definer with an empty search_path that no API role executes, scheduled
+  -- hourly where pg_cron is installed. Nested: PL/pgSQL plans a condition when it first runs
+  -- it, so cron.job is never named on a server without the extension.
+  if not exists (select 1 from pg_proc f join pg_roles o on o.oid = f.proowner
+                  where f.oid = 'app.crm_import_sweep()'::regprocedure and f.prosecdef
+                    and f.proconfig[1] = 'search_path=""' and (o.rolsuper or o.rolbypassrls)) then
+    raise exception 'C15: app.crm_import_sweep is not a definer with an empty search_path owned by a role that bypasses RLS';
+  end if;
+  foreach r in array array['anon', 'authenticated', 'service_role'] loop
+    if has_function_privilege(r::name, 'app.crm_import_sweep()', 'execute') then
+      raise exception 'C15: % may execute app.crm_import_sweep()', r;
+    end if;
+  end loop;
+  if exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+              where p.oid = 'app.crm_import_sweep()'::regprocedure and a.grantee = 0) then
+    raise exception 'C15: PUBLIC may execute app.crm_import_sweep()';
+  end if;
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    if not exists (select 1 from cron.job
+                    where jobname = 'crm-import-sweep' and schedule = '47 * * * *'
+                      and command ~ 'app\.crm_import_sweep\(\)') then
+      raise exception 'C15: the crm-import-sweep job is not scheduled as stated';
+    end if;
+  end if;
+  -- One open import per Admin: the partial unique index, and the open door's lock.
+  if not exists (select 1 from pg_indexes
+                  where schemaname = 'public' and indexname = 'crm_import_batches_one_open'
+                    and indexdef ~ '^CREATE UNIQUE INDEX .* \(tenant_id, created_by\) WHERE \(status = ''open''::text\)$') then
+    raise exception 'C15: crm_import_batches_one_open must be unique on (tenant_id, created_by) where open';
+  end if;
+  if (select prosrc from pg_proc where oid = 'public.crm_import_open(uuid, uuid, integer, integer, text)'::regprocedure)
+       !~ 'pg_advisory_xact_lock\(hashtextextended\(''crm-import:''' then
+    raise exception 'C15: crm_import_open must take the Admin''s import lock';
+  end if;
+
   -- Every function here but the inlined helper pins its search_path (advisor lint 0011).
   foreach v_fn in array array['app.crm_import_actor_ok(uuid, uuid)',
+                              'app.crm_import_sweep()',
                               'app.crm_import_counts(public.crm_import_batches)',
                               'public.crm_import_open(uuid, uuid, integer, integer, text)',
                               'public.crm_import_rows(uuid, uuid, uuid, jsonb, integer, integer)',

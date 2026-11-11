@@ -17,10 +17,13 @@
 --   4. what was made: source 'import', the Admin as creator, the channels primary and
 --      'import', the lawful basis kept by row, and gone with the contact;
 --   5. the tables: only a live crm.import holder reads the batches, only a live crm.contacts
---      holder the bases, nothing across tenants, anon nothing, and no token writes either.
+--      holder the bases, nothing across tenants, anon nothing, and no token writes either;
+--   7. one open import per Admin (a unique index, and the open door's lock), and the hourly
+--      sweep: an import open longer than two hours, even one whose Admin was switched off, is
+--      stopped and gets its outcome audit row (counts only, no actor); the fresh ones stay.
 
 begin;
-select plan(52);
+select plan(62);
 
 insert into public.tenants (id, name) values
   ('c1500000-0000-4000-8000-000000000001', 'C15 T1'),
@@ -342,6 +345,57 @@ delete from public.crm_contacts where display_name = 'New Person';
 select is((select count(*)::int from public.crm_contact_imports where row_number = 2), 0,
   'a contact deleted (retention, erasure) takes its lawful-basis row with it');
 select is((select count(*)::int from public.crm_contact_imports), 2, 'and only its own');
+
+-- ── 7. Imports left open: one per Admin, and the hourly sweep closes the abandoned ────────
+set local role service_role;
+select is(c15_val($$ insert into public.crm_import_batches (tenant_id, created_by, attestation, expected_rows, expected_bytes)
+                     values ('c1500000-0000-4000-8000-000000000001', 'c1500000-0000-4000-8000-0000000000a1',
+                             'c15-v1', 1, 1) returning 'written' $$),
+  '23505', 'the database holds an Admin to one open import, even outside the open door (two tabs at once)');
+reset role;
+select ok((select prosrc ~ 'pg_advisory_xact_lock\(hashtextextended\(''crm-import:'''
+             from pg_proc where oid = 'public.crm_import_open(uuid, uuid, integer, integer, text)'::regprocedure),
+  'and the open door takes the Admin''s lock before it stops and opens, so a second open waits for the first');
+-- B's import is abandoned (opened three hours ago), then B is switched off: B's doors now
+-- refuse B, so only the sweep can close it.
+update public.crm_import_batches set created_at = now() - interval '3 hours'
+ where created_by = 'c1500000-0000-4000-8000-0000000000b1';
+update public.profiles set is_active = false where id = 'c1500000-0000-4000-8000-0000000000b1';
+set local role service_role;
+select is(c15_val($$ select public.crm_import_finish('c1500000-0000-4000-8000-000000000001',
+                      (select id from public.crm_import_batches where created_by = 'c1500000-0000-4000-8000-0000000000b1'),
+                      'c1500000-0000-4000-8000-0000000000b1', true)::text $$),
+  '42501', 'a switched-off Admin cannot close their own import');
+select ok(not has_function_privilege('service_role', 'app.crm_import_sweep()', 'execute')
+          and not has_function_privilege('authenticated', 'app.crm_import_sweep()', 'execute')
+          and not has_function_privilege('anon', 'app.crm_import_sweep()', 'execute'),
+  'no API role runs the sweep (pg_cron runs it as its owner)');
+reset role;
+select is(app.crm_import_sweep(), 1, 'the sweep stops the one import open longer than two hours');
+select is((select string_agg(coalesce(p.display_name, '?') || ':' || b.status || ':' || (b.finished_at is not null)::text,
+                             ' ' order by p.display_name)
+             from public.crm_import_batches b left join public.profiles p on p.id = b.created_by
+            where b.status = 'open' or b.created_by = 'c1500000-0000-4000-8000-0000000000b1'),
+  'C15 A:open:false C15 B:stopped:true C15 O:open:false',
+  'B''s abandoned import is stopped with its time; the imports opened within two hours stay open');
+select is((select a.detail::text || ' ' || (a.actor_id is null)::text || ' ' || a.tenant_id::text
+             from public.audit_log a
+            where a.action = 'crm.import.outcome' and a.entity_type = 'contact_import'
+              and a.entity_id = (select id::text from public.crm_import_batches
+                                  where created_by = 'c1500000-0000-4000-8000-0000000000b1')),
+  '{"rows": 0, "swept": true, "failed": 0, "status": "stopped", "created": 0, "repeats": 0, "left_open": true, '
+  '"duplicates": 0, "phone_matches": 0} true c1500000-0000-4000-8000-000000000001',
+  'and gets its outcome audit row in its own tenant: counts only, no actor, said to be left open');
+update public.crm_import_batches set rows_seen = 2, created_count = 2, basis_counts = '{"consent": 1, "contract": 1}',
+                                     created_at = now() - interval '5 hours'
+ where created_by = 'c1500000-0000-4000-8000-0000000000a1' and status = 'open';
+select is(app.crm_import_sweep(), 1, 'a later run stops only what is newly stale');
+select is((select (a.detail - 'status' - 'left_open' - 'swept')::text from public.audit_log a
+            where a.action = 'crm.import.outcome' and a.detail ->> 'created' = '2'),
+  '{"rows": 2, "failed": 0, "created": 2, "repeats": 0, "duplicates": 0, "basis_consent": 1, '
+  '"phone_matches": 0, "basis_contract": 1}',
+  'the outcome carries the count per lawful basis, by name, as the Worker''s outcome row does');
+select is(app.crm_import_sweep(), 0, 'and a run with nothing stale stops nothing');
 
 -- ── 6. The catalog ────────────────────────────────────────────────────────────────────────
 select ok((select bool_and(relrowsecurity and relforcerowsecurity) from pg_class

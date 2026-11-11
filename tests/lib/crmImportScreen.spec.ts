@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import ImportContacts, {
   batchStatus,
   importErrorWords,
+  importStatusText,
 } from '@/components/admin/screens/contacts-import/ImportContacts';
 import { AdminApiError } from '@/lib/admin/client';
 import {
@@ -15,9 +16,48 @@ import {
   rowList,
   tallyLines,
 } from '@/lib/crm/importScreen';
-import { parseCsv } from '@/lib/crm/importCsv';
-import { ImportRowsSchema, IMPORT_PIECE_ROWS } from '@schemas/crmImport';
+import { parseCsv, utf8Length } from '@/lib/crm/importCsv';
+import { importPiece } from '@/lib/crm/importRows';
+import { ImportRowsSchema, IMPORT_PIECE_MAX_BYTES, IMPORT_PIECE_ROWS } from '@schemas/crmImport';
 import type { ImportBatch } from '@/lib/crm/importBatches';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+const { LEAD_PII_ENC_KEY } = await import('astro:env/server');
+
+/**
+ * Sends each piece through the import route's own reading (importPiece), with a door that
+ * records what it was given: the browser's pieces must be pieces the server takes.
+ */
+async function sendPieces(pieces: readonly { rowNumbers: number[]; csv: string }[]) {
+  const calls: Record<string, unknown>[] = [];
+  const svc = {
+    rpc: async (_fn: string, args: Record<string, unknown>) => {
+      calls.push(args);
+      return {
+        data: { created: 0, duplicates: [], repeats: [], phone_matches: [], refused: [] },
+        error: null,
+      };
+    },
+  } as unknown as SupabaseClient;
+  for (const piece of pieces) {
+    await importPiece({
+      auth: {
+        userId: '11111111-1111-4111-8111-111111111111',
+        tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        role: 'admin',
+        isActive: true,
+        email: 'a@x',
+      },
+      svc,
+      rootKey: LEAD_PII_ENC_KEY,
+      batchId: '22222222-2222-4222-8222-222222222222',
+      rowNumbers: piece.rowNumbers,
+      csv: piece.csv,
+      tenantCountry: async () => 'SA',
+    });
+  }
+  return calls;
+}
 
 // Import contacts' screen (Admin v2 C15): the first render (no style attribute, states in
 // words, the statement to tick, the recent imports and who made them), the browser's reading of
@@ -61,6 +101,25 @@ describe('the first render', () => {
     expect(html).not.toMatch(/\sstyle=/);
   });
 
+  it('has its status region from the first render, so the result is announced (WCAG 4.1.3)', () => {
+    expect(html).toContain('<p class="visually-hidden" role="status"></p>');
+    // One status region; the result block is not a live region that appears with its words.
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(
+      readFileSync('src/components/admin/screens/contacts-import/ImportContacts.tsx', 'utf8'),
+    ).not.toMatch(/imp__result"[^>]*aria-live/);
+  });
+
+  it('names the recent imports table by its heading (the columns help is a table too)', () => {
+    const named = /<table class="data" aria-labelledby="([^"]+)">/.exec(html);
+    expect(named).not.toBeNull();
+    expect(html).toContain(`id="${named?.[1]}" class="card__t">Recent imports<`);
+  });
+
+  it('says an erased person comes back if an old file is imported', () => {
+    expect(html).toContain('importing an old file adds');
+  });
+
   it('offers the template, the columns, the file picker and the statement to tick', () => {
     expect(html).toContain('href="/api/admin/crm/contacts/import/template"');
     expect(html).toContain('Download the template');
@@ -90,6 +149,28 @@ describe('the first render', () => {
     );
     const words = readFileSync('src/lib/crm/importScreen.ts', 'utf8');
     for (const text of [html, source, words]) expect(text).not.toMatch(/[—–]/);
+  });
+});
+
+describe('the status region’s words', () => {
+  it('says nothing idle, the progress while running, then the result', () => {
+    expect(importStatusText({ kind: 'idle' }, EMPTY_TALLY)).toBe('');
+    expect(importStatusText({ kind: 'running', done: 50, total: 1200 }, EMPTY_TALLY)).toBe(
+      'Read 50 of 1,200 rows.',
+    );
+    const tally = addPiece(EMPTY_TALLY, 3, {
+      created: 1,
+      duplicates: [3],
+      repeats: [],
+      phoneMatches: [],
+      problems: [{ row: 6, problem: 'basis_missing' }],
+    });
+    expect(importStatusText({ kind: 'finished', stopped: false }, tally)).toBe(
+      'The import is done. Added 1 person. Already contacts, so left as they are: 1 row (3). Not imported: 1 row.',
+    );
+    expect(importStatusText({ kind: 'finished', stopped: true }, EMPTY_TALLY)).toBe(
+      'The import stopped before the end. Added 0 people.',
+    );
   });
 });
 
@@ -133,7 +214,7 @@ describe('reading a file in the browser', () => {
     });
   });
 
-  it('counts people (not blank rows), names the columns left out, and cuts pieces the route takes', () => {
+  it('counts people (not blank rows), names the columns left out, and cuts pieces the route takes', async () => {
     const lines = ['Name,Notes,Email,Lawful basis'];
     for (let i = 0; i < 120; i += 1) {
       lines.push(`Person ${i},private note ${i},p${i}@example.test,consent`);
@@ -162,6 +243,46 @@ describe('reading a file in the browser', () => {
       const back = parseCsv(piece.csv, { maxRecords: 300, maxColumns: 32, maxCellLength: 2000 });
       expect(back.ok && back.records.length - 1).toBe(piece.rowNumbers.length);
     }
+    expect(await sendPieces(reading.pieces)).toHaveLength(3);
+  });
+
+  it('a row filled only in a left-out column is nobody, in the browser as on the server', async () => {
+    const text =
+      'name,email,lawful_basis,notes\n' +
+      'Ali,ali@example.test,consent,\n' +
+      ',,,section B\n' +
+      'Sara,sara@example.test,consent,\n';
+    const reading = readImportFile(text, text.length);
+    if (!reading.ok) throw new Error(reading.message);
+    expect(reading.people).toBe(2);
+    expect(reading.pieces.map((p) => p.rowNumbers)).toEqual([[2, 4]]);
+    // The server reads the same piece without refusing it as "did not arrive as it was sent".
+    const calls = await sendPieces(reading.pieces);
+    expect(calls).toHaveLength(1);
+    expect((calls[0]?.['p_rows'] as unknown[]).length).toBe(2);
+  });
+
+  it('cuts pieces under the database’s byte cap when cells are long Arabic text', async () => {
+    const lines = ['name,email,title,company,lawful_basis'];
+    for (let i = 0; i < 50; i += 1) {
+      lines.push(`Person ${i},p${i}@example.test,${'ع'.repeat(2000)},${'ش'.repeat(1000)},consent`);
+    }
+    const text = `${lines.join('\n')}\n`;
+    const reading = readImportFile(text, utf8Length(text));
+    if (!reading.ok) throw new Error(reading.message);
+    expect(reading.people).toBe(50);
+    expect(reading.pieces.length).toBeGreaterThan(1);
+    expect(reading.pieces.flatMap((p) => p.rowNumbers)).toHaveLength(50);
+    for (const piece of reading.pieces) {
+      const heading = piece.csv.slice(0, piece.csv.indexOf('\n') + 1);
+      expect(utf8Length(piece.csv) - utf8Length(heading)).toBeLessThanOrEqual(
+        IMPORT_PIECE_MAX_BYTES,
+      );
+    }
+    // Every piece reaches the door, each within the bytes the door takes.
+    const calls = await sendPieces(reading.pieces);
+    expect(calls).toHaveLength(reading.pieces.length);
+    for (const call of calls) expect(call['p_bytes']).toBeLessThanOrEqual(262144);
   });
 });
 

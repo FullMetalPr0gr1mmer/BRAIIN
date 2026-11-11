@@ -1,11 +1,22 @@
 import {
   IMPORT_MAX_BYTES,
   IMPORT_MAX_ROWS,
+  IMPORT_PIECE_MAX_BYTES,
   IMPORT_PIECE_MAX_CHARS,
   IMPORT_PIECE_ROWS,
   type ImportColumn,
 } from '@schemas/crmImport';
-import { encodePiece, FILE_LIMITS, isBlankRecord, mapHeadings, parseCsv } from './importCsv';
+import {
+  encodePiece,
+  encodeRecord,
+  FILE_LIMITS,
+  isBlankRecord,
+  keptCells,
+  keptColumns,
+  mapHeadings,
+  parseCsv,
+  utf8Length,
+} from './importCsv';
 
 // The import screen's own reading of a file (Admin v2 C15): enough to show what the file holds
 // and to cut it into pieces at record boundaries, before anything is sent. It is the screen's
@@ -113,9 +124,12 @@ export function readImportFile(text: string, bytes: number): FileReading {
     }
   }
 
+  // Blank by the cells the import reads, as the server decides once the left-out columns
+  // are dropped: a row with only a note in a left-out column is nobody on both sides.
+  const kept = keptColumns(mapped.columns);
   const people: { row: number; record: string[] }[] = [];
   rest.forEach((record, index) => {
-    if (!isBlankRecord(record)) people.push({ row: index + 2, record });
+    if (!isBlankRecord(keptCells(kept, record))) people.push({ row: index + 2, record });
   });
   if (people.length === 0) {
     return { ok: false, message: 'The file has headings but nobody under them.' };
@@ -127,10 +141,13 @@ export function readImportFile(text: string, bytes: number): FileReading {
     };
   }
 
-  // Pieces of at most 50 people and well under the route's text cap.
+  // Pieces of at most 50 people, measured as they will be sent: under the route's text cap
+  // (characters, with room for the heading row) and the database's byte cap (UTF-8, the
+  // heading row aside, as the route counts them).
   const pieces: ImportPiece[] = [];
   let batch: { row: number; record: string[] }[] = [];
   let size = 0;
+  let pieceBytes = 0;
   const flush = () => {
     if (batch.length === 0) return;
     pieces.push({
@@ -142,12 +159,20 @@ export function readImportFile(text: string, bytes: number): FileReading {
     });
     batch = [];
     size = 0;
+    pieceBytes = 0;
   };
   for (const person of people) {
-    const length = person.record.reduce((n, cell) => n + cell.length + 3, 1);
-    if (batch.length >= IMPORT_PIECE_ROWS || size + length > IMPORT_PIECE_MAX_CHARS - 1000) flush();
+    const line = `${encodeRecord(kept, person.record)}\n`;
+    const lineBytes = utf8Length(line);
+    if (
+      batch.length >= IMPORT_PIECE_ROWS ||
+      size + line.length > IMPORT_PIECE_MAX_CHARS - 1000 ||
+      pieceBytes + lineBytes > IMPORT_PIECE_MAX_BYTES
+    )
+      flush();
     batch.push(person);
-    size += length;
+    size += line.length;
+    pieceBytes += lineBytes;
   }
   flush();
 

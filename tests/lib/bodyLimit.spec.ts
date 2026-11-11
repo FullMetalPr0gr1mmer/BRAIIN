@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PRE_AUTH_BODY_LIMIT, bodyWithinLimit } from '@/lib/auth/bodyLimit';
+import { PRE_AUTH_BODY_LIMIT, bodyWithinLimit, readBodyText } from '@/lib/auth/bodyLimit';
 import { safeNext } from '@/lib/auth/next';
 
 // The pre-auth body limit (Admin v2 F7, final review): anyone can post to the sign-in paths,
@@ -75,5 +75,35 @@ describe('bodyWithinLimit', () => {
       body,
     });
     expect(await bodyWithinLimit(form)).toBe(true);
+  });
+});
+
+describe('readBodyText (a handler reading a large body, Admin v2 C15)', () => {
+  it('reads a body up to its limit, in UTF-8, chunked or declared', async () => {
+    expect(await readBodyText(chunked(4, 100), 400)).toBe('a'.repeat(400));
+    const arabic = new Request(URL_, { method: 'POST', body: 'سارة' });
+    expect(await readBodyText(arabic, 8)).toBe('سارة');
+    expect(await readBodyText(new Request(URL_, { method: 'POST' }), 8)).toBe('');
+  });
+
+  it('refuses a declared Content-Length over the limit, or not a number, reading nothing', async () => {
+    const pulls = { count: 0 };
+    const declared = (length: string) =>
+      new Request(URL_, {
+        method: 'POST',
+        headers: { 'content-length': length },
+        body: chunked(4, 100, pulls).body,
+        duplex: 'half',
+      } as RequestInit);
+    expect(await readBodyText(declared('401'), 400)).toBeNull();
+    expect(await readBodyText(declared('4e2'), 400)).toBeNull();
+    expect(pulls.count).toBeLessThanOrEqual(2);
+  });
+
+  it('cuts a chunked body at the limit and reads no further', async () => {
+    const pulls = { count: 0 };
+    expect(await readBodyText(chunked(1000, 100, pulls), 400)).toBeNull();
+    // Five chunks pass 400 bytes; the default stream may pull one ahead.
+    expect(pulls.count).toBeLessThanOrEqual(7);
   });
 });

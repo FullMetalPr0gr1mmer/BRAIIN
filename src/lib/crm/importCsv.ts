@@ -232,13 +232,39 @@ export function encodePiece(
   columns: readonly (ImportColumn | null)[],
   records: readonly (readonly string[])[],
 ): string {
-  const kept = columns
+  const kept = keptColumns(columns);
+  const lines = [kept.map((c) => c.column).join(',')];
+  for (const record of records) lines.push(encodeRecord(kept, record));
+  return `${lines.join('\n')}\n`;
+}
+
+/** The columns a piece carries: the file's import columns, with their place in the file. */
+export function keptColumns(
+  columns: readonly (ImportColumn | null)[],
+): { column: ImportColumn; index: number }[] {
+  return columns
     .map((column, index) => ({ column, index }))
     .filter((c): c is { column: ImportColumn; index: number } => c.column !== null);
-  const lines = [kept.map((c) => c.column).join(',')];
-  for (const record of records)
-    lines.push(kept.map((c) => encodeCell(record[c.index] ?? '')).join(','));
-  return `${lines.join('\n')}\n`;
+}
+
+/** One person's line of a piece (no line break): the kept cells only. */
+export function encodeRecord(
+  kept: readonly { column: ImportColumn; index: number }[],
+  record: readonly string[],
+): string {
+  return kept.map((c) => encodeCell(record[c.index] ?? '')).join(',');
+}
+
+/**
+ * A record as the server will see it in a piece: its kept cells only. The browser decides who
+ * is blank from these, as the server does once the left-out columns are dropped, so a row
+ * filled only in a left-out column is nobody on both sides.
+ */
+export function keptCells(
+  kept: readonly { column: ImportColumn; index: number }[],
+  record: readonly string[],
+): string[] {
+  return kept.map((c) => record[c.index] ?? '');
 }
 
 /** UTF-8 bytes of a text, as the server counts a piece. */
