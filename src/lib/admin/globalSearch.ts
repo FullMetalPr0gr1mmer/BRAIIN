@@ -33,8 +33,9 @@ import {
 // Deliberate boundaries:
 //
 //   - TWO CALLERS, ONE FUNCTION. The server-rendered /admin/search page (zero client JS,
-//     the path that works without it) and GET /api/admin/search, which feeds the command
-//     palette's live suggestions (Admin v2 F3). Both return exactly what this function
+//     the path that works without it) and POST /api/admin/search (a POST since C7's review,
+//     so a typed term never sits in a URL), which feeds the command palette's live
+//     suggestions (Admin v2 F3). Both return exactly what this function
 //     does, so the palette can never show a result the results page would not.
 //   - LEADS ARE EXCLUDED. Lead data is Admin+Developer-gated PII behind its own page
 //     and audit trail; surfacing lead names in a cross-entity search box would create

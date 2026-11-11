@@ -125,6 +125,21 @@ const ADMIN_TASKS =
   /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]tasks[\\/]|islands[\\/]AdminTasks\.tsx$)/;
 const ADMIN_TASKS_LAZY =
   /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]tasks[\\/](TaskDrawer|TasksCard)\.tsx$/;
+// The contacts screens (Admin v2 C7): their two islands and their screen code, a family of
+// their own as the leads screens are, so the People list and a contact's page share one chunk
+// and no other admin screen loads it. Add a contact, a contact's new lead and the erasure are
+// reached only through import(): their own lazy group (ADMIN_CONTACTS_LAZY), below the field
+// kit, so a first load never carries them.
+const ADMIN_CONTACTS =
+  /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]contacts[\\/]|islands[\\/]AdminContact)/;
+const ADMIN_CONTACTS_LAZY =
+  /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]contacts[\\/](AddContactDrawer|EraseContactDialog|NewLeadDrawer)\.tsx$/;
+// What the two CRM families both run (Admin v2 C7): the late-answer rules and the leads' words
+// (the contact timeline names its leads' events in them). Their own group, above both
+// families, so neither family's chunk imports the other's (scripts/admin-bundle.mjs check 6).
+// Since the first build: also the CRM's schemas (their option lists), which the leads chunk held.
+const ADMIN_CRM =
+  /[\\/](src[\\/]lib[\\/]crm[\\/](lateAnswers|leadView)|packages[\\/]schemas[\\/]crm)\.ts$/;
 // The savebar and the publish dialog (Admin v2 R12): the AdminSavebar island and its screen
 // code. Their own group, never in admin-ui (every admin screen loads that, releases on or
 // off): AdminLayout renders the island only while releases are on, so with them off no page
@@ -308,6 +323,7 @@ export default defineConfig({
                     !ADMIN_EDITOR_SCREENS.test(id) &&
                     !ADMIN_LEADS.test(id) &&
                     !ADMIN_TASKS.test(id) &&
+                    !ADMIN_CONTACTS.test(id) &&
                     !ADMIN_CONTENT.test(id) &&
                     !ADMIN_PAGES.test(id) &&
                     !ADMIN_PAGE_PREVIEW.test(id) &&
@@ -325,6 +341,13 @@ export default defineConfig({
                 priority: 19,
               },
               {
+                // What both CRM families share (Admin v2 C7): above both, so each imports it
+                // from here and neither imports the other.
+                name: 'admin-crm',
+                test: ADMIN_CRM,
+                priority: 18,
+              },
+              {
                 // The leads screens (Admin v2 C4b): below admin-ui, so what both use stays in
                 // admin-ui and this chunk imports it from there; above the field kit, which no
                 // leads module reaches statically (tests/lib/adminBundle.spec.ts).
@@ -338,6 +361,13 @@ export default defineConfig({
                 name: 'admin-tasks',
                 test: (id) => ADMIN_TASKS.test(id) && !ADMIN_TASKS_LAZY.test(id),
                 priority: 16.5,
+              },
+              {
+                // The contacts screens (Admin v2 C7): as the leads screens, below them and above
+                // the field kit, which no contacts module reaches statically.
+                name: 'admin-contacts',
+                test: (id) => ADMIN_CONTACTS.test(id) && !ADMIN_CONTACTS_LAZY.test(id),
+                priority: 16,
               },
               {
                 // The field kit and the editors (F5a): below admin-ui, so a module both
@@ -362,6 +392,13 @@ export default defineConfig({
                 name: 'admin-tasks-lazy',
                 test: ADMIN_TASKS_LAZY,
                 priority: 14,
+              },
+              {
+                // The contacts screens' lazy pieces (C7): Add a contact, a new lead, the
+                // erasure, loaded on first use. Below the field kit, as the leads' are.
+                name: 'admin-contacts-lazy',
+                test: ADMIN_CONTACTS_LAZY,
+                priority: 14.05,
               },
               {
                 // The savebar and the publish dialog (Admin v2 R12): below the field kit, so a
