@@ -180,6 +180,11 @@ const ADMIN_PAGE_PREVIEW =
 // The theme editor (Admin v2 E4): its island, its screen code and the theme package (the colour
 // maths, the gate with its pairs, the compiler), a family of its own, so no other screen loads
 // the gate and the editor loads no other screen's code.
+// Import contacts (Admin v2 C15): its island, its screen code, and the reading of a file it
+// shares with the import route (the CSV parser, the screen's words, the request schemas). A
+// family of its own, so no other admin screen loads it (scripts/admin-bundle.mjs check 6).
+const ADMIN_IMPORT =
+  /[\\/](src[\\/]components[\\/]admin[\\/](islands[\\/]AdminImportContacts\.tsx$|screens[\\/]contacts-import[\\/])|src[\\/]lib[\\/]crm[\\/](importCsv|importScreen)\.ts$|packages[\\/]schemas[\\/]crmImport\.ts$)/;
 const ADMIN_THEME =
   /[\\/](src[\\/]components[\\/]admin[\\/](islands[\\/]AdminTheme\.tsx$|screens[\\/]theme[\\/])|packages[\\/]theme[\\/])/;
 // The releases preview's bridge (Admin v2 R9, P-4): the code a `/admin/preview/**` render
@@ -328,6 +333,7 @@ export default defineConfig({
                     !ADMIN_PAGES.test(id) &&
                     !ADMIN_PAGE_PREVIEW.test(id) &&
                     !ADMIN_THEME.test(id) &&
+                    !ADMIN_IMPORT.test(id) &&
                     !ADMIN_PREVIEW.test(id) &&
                     !ADMIN_RELEASE.test(id) &&
                     !ADMIN_VERSIONS.test(id) &&
@@ -456,6 +462,14 @@ export default defineConfig({
                 name: 'admin-theme',
                 test: ADMIN_THEME,
                 priority: 13.2,
+              },
+              {
+                // Import contacts (Admin v2 C15): below the field kit, so what both use stays in
+                // admin-ui or admin-fields; above admin-screens, whose path rule would claim it.
+                // It imports no other screen group.
+                name: 'admin-import',
+                test: ADMIN_IMPORT,
+                priority: 13.1,
               },
               {
                 // The screens admin-ui leaves (Admin v2 U4, Wave 3's chunk rule): an island

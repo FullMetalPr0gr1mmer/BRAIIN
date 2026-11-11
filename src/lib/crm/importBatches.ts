@@ -57,7 +57,7 @@ export async function readImportBatches(
     .order('id', { ascending: false })
     .limit(10);
   if (error) throw new Error(`import batches: ${error.code ?? 'no code'}`);
-  return ((data ?? []) as Record<string, unknown>[]).map(toImportBatch);
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(toImportBatch);
 }
 
 /** The counts a door answers, by name only (for the outcome audit row and the screen). */

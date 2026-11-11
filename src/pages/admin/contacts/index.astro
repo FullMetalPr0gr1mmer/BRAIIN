@@ -40,6 +40,15 @@ const subtitle = initial?.summary
 ---
 
 <AdminLayout title="Contacts" subtitle={subtitle} styles={['leads.css', 'contacts.css']}>
+  {/* Admin v2 C15: the CSV import, for crm.import holders (its page and route check again). */}
+  {
+    allowed && session && can(session.role, 'crm.import') === 'full' && (
+      <a slot="actions" class="btn" href="/admin/contacts/import">
+        <Icon name="upload" size={16} />
+        Import
+      </a>
+    )
+  }
   {
     allowed && (
       <button slot="actions" type="button" data-variant="primary" data-contact-add hidden>
