@@ -1,0 +1,156 @@
+/* The contacts screens (/admin/contacts, /admin/contacts/[id], Admin v2 C7): what only they
+   render. They also link leads.css and draw its CRM pieces (the search, the chips' row, the
+   filters, the star, the tags, the notes, the score bar, the two columns), so this sheet holds
+   the contacts' own: the tags in a row, the tag filter, the channels, the leads and the head's
+   controls. States are ARIA or data attributes, never a style attribute. Tokens only
+   (scripts/contrast-audit.mjs reads admin.css; a screen sheet declares no --ad-* of its own). */
+
+/* ---- The People list ------------------------------------------------------------------- */
+
+.ct-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.ct-tag {
+  padding: 2px 10px;
+}
+
+.ct-tagfilter {
+  margin: 0;
+  min-width: 0;
+}
+
+.ct-tagfilter__row {
+  display: flex;
+  gap: 6px;
+}
+
+.ct-tagfilter__row input {
+  inline-size: 10rem;
+  max-inline-size: 100%;
+}
+
+/* ---- One contact ----------------------------------------------------------------------- */
+
+.ct-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  margin: 0 0 16px;
+}
+
+.ct-head > .f {
+  margin: 0;
+}
+
+.ct-head__star {
+  align-self: center;
+}
+
+.ct-head__tags {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+
+.ct-channels,
+.ct-leads {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-channels__i {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  overflow-wrap: anywhere;
+}
+
+.ct-channels__k {
+  min-inline-size: 7rem;
+  color: var(--ad-dim);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ct-channels__a {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.ct-leads__i {
+  display: grid;
+  gap: 4px;
+  padding-block-end: 10px;
+  border-block-end: 1px solid var(--ad-line);
+}
+
+.ct-leads__i:last-child {
+  padding-block-end: 0;
+  border-block-end: 0;
+}
+
+.ct-leads__n,
+.ct-leads__m {
+  margin: 0;
+}
+
+.ct-leads__n a {
+  display: inline-block;
+  min-block-size: 24px;
+  font-weight: 600;
+}
+
+.ct-leads__m {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--ad-dim);
+  font-size: 13px;
+}
+
+.ct-leads__check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-warn-soft);
+}
+
+.ct-leads__check > p {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--ad-ink);
+  font-size: 13px;
+}
+
+/* A timeline line about one of their leads links to it: a 24px target at least (WCAG 2.5.8;
+   axe counts a lone link in its line as a target, not as text in a sentence). */
+.ct-tl {
+  display: inline-block;
+  min-block-size: 24px;
+}
+
+.ct-score {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.ct-data {
+  margin: 0;
+  line-height: 1.6;
+}

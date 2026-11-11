@@ -1,0 +1,66 @@
+---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminContactsList from '@/components/admin/islands/AdminContactsList';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { readContactPeople, readContactsListInitial } from '@/lib/crm/contactPage';
+import { contactQueryOf, parseContactFilters } from '@/lib/crm/contactUrl';
+import { contactsSubline } from '@/lib/crm/contactView';
+
+export const prerender = false;
+
+// The studio's time zone (Admin v2 U9): the island prints its dates in it, server and browser.
+const studioTz = await studioTimeZone(Astro.locals);
+
+// The People list (Admin v2 C7, crm.md §11 screen 5): the chips, the search, the filters, the
+// table and its bulk bar. The first view is rendered here, for the filters the address
+// carries (src/lib/crm/contactUrl.ts: never a search or a tag), so the page is complete
+// without JavaScript; the island takes over. `crm.contacts` (Admin; Sales from C10b): any other
+// role is refused here with a 403 and reads nothing, the U2 way (Refused.astro); RLS and the
+// live check refuse them again in the database.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = session !== null && can(session.role, 'crm.contacts') === 'full';
+if (!allowed) Astro.response.status = 403;
+
+const filters = parseContactFilters(Astro.url.searchParams);
+const [people, initial] =
+  allowed && session && sb
+    ? await Promise.all([
+        readContactPeople(sb, session),
+        readContactsListInitial(sb, session, contactQueryOf(filters)),
+      ])
+    : [[], null];
+const subtitle = initial?.summary
+  ? contactsSubline(initial.summary)
+  : 'The people behind your inquiries, and the ones you add.';
+---
+
+<AdminLayout title="Contacts" subtitle={subtitle} styles={['leads.css', 'contacts.css']}>
+  {
+    allowed && (
+      <button slot="actions" type="button" data-variant="primary" data-contact-add hidden>
+        <Icon name="plus" size={16} />
+        Add contact
+      </button>
+    )
+  }
+  {
+    !allowed ? (
+      <Refused />
+    ) : (
+      <AdminContactsList
+        client:load
+        tz={studioTz}
+        initial={{ summary: initial?.summary ?? null, page: initial?.page ?? null }}
+        filters={filters}
+        people={people}
+        me={session?.userId ?? ''}
+        now={new Date().toISOString()}
+      />
+    )
+  }
+</AdminLayout>

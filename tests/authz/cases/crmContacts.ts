@@ -38,6 +38,15 @@ export const cases: readonly Case[] = [
     read: true,
   },
   {
+    // Admin v2 C7: the same counts as a GET, the People page's JSON twin for the refusal e2e.
+    name: 'contacts counts (GET summary)',
+    load: () => import('@/pages/api/admin/crm/contacts/summary'),
+    method: 'GET',
+    url: '/api/admin/crm/contacts/summary',
+    allow: ['admin'],
+    read: true,
+  },
+  {
     name: 'contacts picker (POST lookup)',
     load: () => import('@/pages/api/admin/crm/contacts/lookup'),
     method: 'POST',

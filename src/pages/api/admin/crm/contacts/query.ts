@@ -1,8 +1,8 @@
 import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { ContactQuerySchema } from '@schemas/crm';
 import { defineAdminRoute } from '@/lib/admin/route';
-import { pick, tenantCountry, toRpcFilter } from '@/lib/crm/leadQuery';
-import { CONTACT_LIST_FIELDS, contactError } from '@/lib/crm/contacts';
+import { tenantCountry, toRpcFilter } from '@/lib/crm/leadQuery';
+import { readContactList } from '@/lib/crm/contactPage';
 
 // The People list (Admin v2 C6): `crm.contacts`. A POST, so the search never sits in a URL,
 // a log line or the browser history (verification D10). A whole e-mail or phone becomes its
@@ -24,16 +24,10 @@ export const POST = defineAdminRoute({
       input,
       tenantCountry(sb, auth.tenantId),
     );
-    const { data, error } = await sb.rpc('crm_contacts_list', {
-      p_tenant: auth.tenantId,
-      p_filter: filter,
-    });
-    if (error) throw contactError(error, 'the contact list');
-    const body = (data ?? {}) as { total?: unknown; rows?: unknown };
-    const rows = Array.isArray(body.rows) ? (body.rows as Record<string, unknown>[]) : [];
+    const page = await readContactList(sb, auth.tenantId, filter);
     return {
-      rows: rows.map((row) => pick(row, CONTACT_LIST_FIELDS)),
-      total: typeof body.total === 'number' ? body.total : 0,
+      rows: page.rows,
+      total: page.total,
       limit: input.limit ?? 25,
       offset: input.offset ?? 0,
     };

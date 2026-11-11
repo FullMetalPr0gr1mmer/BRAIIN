@@ -7,8 +7,12 @@ export const cases: readonly Case[] = [
   {
     name: 'admin search (the command palette)',
     load: () => import('@/pages/api/admin/search'),
-    method: 'GET',
-    url: '/api/admin/search?q=logo',
+    // A POST (C7 review, C7-SEC-1): the palette asks at every pause in typing, so a GET put
+    // half-typed e-mail addresses and numbers in URLs.
+    method: 'POST',
+    url: '/api/admin/search',
+    body: { q: 'logo' },
+    read: true,
     // Any staff role: what each one FINDS is gated per entity inside searchAdmin().
     allow: ['admin', 'content_creator', 'seo', 'developer', 'sales'],
   },

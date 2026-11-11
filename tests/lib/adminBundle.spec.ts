@@ -251,6 +251,50 @@ describe('the checks', () => {
     ).toContain('AdminLeadsList.I1.js import admin-leads-lazy.Z1.js statically');
   });
 
+  it('keep the contacts group on the contacts screens, apart from the leads (Admin v2 C7)', () => {
+    const CRM = {
+      ...GOOD,
+      'admin-fields.F1.js': 'import"./admin-ui.U1.js";export const f=1;',
+      'admin-crm.M1.js': 'import"./admin-ui.U1.js";export const m=1;',
+      'admin-leads.E1.js': 'import"./admin-ui.U1.js";import"./admin-crm.M1.js";',
+      'AdminLeadsList.I1.js': 'import"./admin-leads.E1.js";',
+      'admin-contacts.C1.js':
+        'import"./admin-ui.U1.js";import"./admin-crm.M1.js";const A=()=>import("./admin-contacts-lazy.Y1.js");',
+      'admin-contacts-lazy.Y1.js':
+        'import"./admin-contacts.C1.js";import"./admin-fields.F1.js";export const d=1;',
+      'AdminContactsList.I4.js': 'import"./admin-contacts.C1.js";',
+      'AdminContactDetail.I5.js': 'import"./admin-contacts.C1.js";',
+    };
+    expect(check(build(CRM)).problems).toEqual([]);
+    const problems = (files: Record<string, string>) =>
+      (check(build({ ...CRM, ...files })).problems as string[]).join('\n');
+    // The contacts code loading the leads' code, the field kit or its own lazy pieces.
+    for (const dep of ['admin-leads.E1.js', 'admin-fields.F1.js', 'admin-contacts-lazy.Y1.js']) {
+      expect(
+        problems({ 'admin-contacts.C1.js': `import"./admin-ui.U1.js";import"./${dep}";` }),
+        dep,
+      ).toContain(`admin-contacts.C1.js imports ${dep.split('.')[0]}. statically`);
+    }
+    // The leads code loading the contacts', and another island loading the contacts'.
+    expect(
+      problems({ 'admin-leads.E1.js': 'import"./admin-ui.U1.js";import"./admin-contacts.C1.js";' }),
+    ).toContain('admin-leads.E1.js imports admin-contacts.C1.js statically');
+    expect(problems({ 'AdminKit.K1.js': 'import"./admin-contacts.C1.js";' })).toContain(
+      'AdminKit.K1.js imports admin-contacts.C1.js statically',
+    );
+    // The shared CRM group never on every screen.
+    expect(problems({ 'admin-ui.U1.js': 'import"./admin-crm.M1.js";export const u=1;' })).toContain(
+      'admin-ui imports admin-crm.M1.js statically',
+    );
+    // The drawers eagerly.
+    expect(
+      problems({
+        'AdminContactDetail.I5.js':
+          'import"./admin-contacts.C1.js";import"./admin-contacts-lazy.Y1.js";',
+      }),
+    ).toContain('AdminContactDetail.I5.js import admin-contacts-lazy.Y1.js statically');
+  });
+
   it('keep the Services and Projects group on their five islands (Admin v2 U5 + U6)', () => {
     const CONTENT = {
       ...GOOD,
@@ -553,6 +597,56 @@ describe('the leads screens have their own groups (Admin v2 C4b)', () => {
       for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
         const spec = m[1] as string;
         if (/fields\/|FormField|fieldErrors|AddLeadDrawer|EraseLeadDialog/.test(spec))
+          offenders.push(`${name} → ${spec}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('claims the contacts screens, their lazy pieces and what both CRM families share (C7)', () => {
+    for (const path of [
+      'src/components/admin/islands/AdminContactsList.tsx',
+      'src/components/admin/islands/AdminContactDetail.tsx',
+      'src/components/admin/screens/contacts/ContactsList.tsx',
+      'src/components/admin/screens/contacts/ContactDetail.tsx',
+      'src/components/admin/screens/contacts/shared.tsx',
+    ]) {
+      expect(claim(path), path).toBe('admin-contacts');
+    }
+    for (const name of ['AddContactDrawer', 'EraseContactDialog', 'NewLeadDrawer']) {
+      expect(claim(`src/components/admin/screens/contacts/${name}.tsx`), name).toBe(
+        'admin-contacts-lazy',
+      );
+    }
+    for (const path of [
+      'src/lib/crm/lateAnswers.ts',
+      'src/lib/crm/leadView.ts',
+      'packages/schemas/crm.ts',
+    ]) {
+      expect(claim(path), path).toBe('admin-crm');
+    }
+    expect(priority('admin-crm')).toBeGreaterThan(priority('admin-leads'));
+    expect(priority('admin-crm')).toBeLessThan(priority('admin-ui'));
+    expect(priority('admin-contacts')).toBeLessThan(priority('admin-leads'));
+    expect(priority('admin-contacts')).toBeGreaterThan(priority('admin-fields'));
+    expect(priority('admin-contacts-lazy')).toBeLessThan(priority('admin-fields'));
+    expect(priority('admin-contacts-lazy')).toBeGreaterThan(priority('admin-screens'));
+  });
+
+  it('no contacts module loads the leads screens, the field kit or its lazy pieces statically', () => {
+    const dir = join(process.cwd(), 'src/components/admin/screens/contacts');
+    const offenders: string[] = [];
+    for (const name of readdirSync(dir)) {
+      const path = `src/components/admin/screens/contacts/${name}`;
+      if (claim(path) !== 'admin-contacts') continue;
+      const source = readFileSync(join(dir, name), 'utf8');
+      for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
+        const spec = m[1] as string;
+        if (
+          /screens\/leads|fields\/|FormField|AddContactDrawer|EraseContactDialog|NewLeadDrawer/.test(
+            spec,
+          )
+        )
           offenders.push(`${name} → ${spec}`);
       }
     }

@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, MouseEvent } from 'react';
-import { adminFetch } from '@/lib/admin/client';
+import { AdminApiError, adminFetch } from '@/lib/admin/client';
 import {
   MIN_REMOTE_QUERY,
+  contactGroup,
   filterGroups,
   flatten,
+  looksLikeContactDetail,
   move,
   remoteGroups,
+  searchRequest,
   seeAll,
+  type ContactHit,
   type PaletteGroup,
   type RemoteGroup,
 } from '@/lib/admin/palette';
@@ -25,9 +29,17 @@ import Icon from '@/components/admin/kit/Icon';
 // so focus never leaves the field while the list changes under it.
 //
 // Results come from two places. The role's own screens and quick actions arrive as props
-// and match instantly. Records come from GET /api/admin/search (the server decides what
+// and match instantly. Records come from POST /api/admin/search (the server decides what
 // the role may find; leads, contacts and applications are never in it), asked 200 ms after
 // typing stops, with the stale request aborted. An option navigates; nothing executes.
+//
+// Contacts (Admin v2 C7, README's CRM track): for `crm.contacts` holders (`contacts`, decided
+// on the server from ROLE_CAPS) the query is also posted to POST /api/admin/crm/contacts/lookup,
+// in a body: at most 8 people, a name and a company each, never an e-mail or a phone. Leads and
+// applications stay out. No typed term goes into a URL on its own (C7 review, C7-SEC-1): both
+// searches are POSTs, asked at every pause in typing, so half an address typed so far stays in
+// a body too. The one URL a term can reach is "See all results", which the person picks, and it
+// is left out for a term that may hold an e-mail address or a phone number.
 
 const DEBOUNCE_MS = 200;
 const LIST_ID = 'cmd-list';
@@ -35,9 +47,11 @@ const LIST_ID = 'cmd-list';
 export interface CommandPaletteProps {
   /** The role's screens and quick actions, built on the server from ROLE_CAPS. */
   groups: PaletteGroup[];
+  /** The role holds crm.contacts: people are searched too (the server checks again). */
+  contacts?: boolean;
 }
 
-export default function CommandPalette({ groups }: CommandPaletteProps) {
+export default function CommandPalette({ groups, contacts = false }: CommandPaletteProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -49,7 +63,7 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
 
   const shown = useMemo(() => {
     const list = [...filterGroups(groups, query), ...remote];
-    if (query.trim().length >= MIN_REMOTE_QUERY)
+    if (query.trim().length >= MIN_REMOTE_QUERY && !looksLikeContactDetail(query))
       list.push({ title: 'More', items: [seeAll(query)] });
     return list;
   }, [groups, query, remote]);
@@ -107,16 +121,36 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setBusy(true);
+      const search = searchRequest(q);
       try {
-        const data = await adminFetch<{ groups?: RemoteGroup[]; failed?: string[] }>(
-          `/api/admin/search?q=${encodeURIComponent(q)}`,
-          { signal: controller.signal },
-        );
+        const [data, people] = await Promise.all([
+          adminFetch<{ groups?: RemoteGroup[]; failed?: string[] }>(search.url, {
+            ...search.init,
+            signal: controller.signal,
+          }),
+          // People: a POST, so the term stays out of every URL. A part of an address is
+          // refused (422) and finds nobody; any other failure is said below.
+          contacts
+            ? adminFetch<{ contacts?: ContactHit[] }>('/api/admin/crm/contacts/lookup', {
+                method: 'POST',
+                body: { q },
+                signal: controller.signal,
+              }).catch((err: unknown) =>
+                err instanceof AdminApiError && err.info.status === 422 ? { contacts: [] } : null,
+              )
+            : Promise.resolve({ contacts: [] }),
+        ]);
         if (!controller.signal.aborted) {
-          setRemote(remoteGroups(data.groups ?? []));
+          setRemote([...contactGroup(people?.contacts ?? []), ...remoteGroups(data.groups ?? [])]);
           // An area the server could not search (it logs why) is missing from the list,
           // which must not read as "nothing there".
-          setNote((data.failed ?? []).length > 0 ? 'Some areas could not be searched.' : '');
+          setNote(
+            people === null
+              ? 'Contacts could not be searched just now.'
+              : (data.failed ?? []).length > 0
+                ? 'Some areas could not be searched.'
+                : '',
+          );
         }
       } catch {
         // Aborted by the next keystroke: nothing to say. A failed search: the local
@@ -131,7 +165,7 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [query, contacts]);
 
   // A new list starts at its first option, so Enter takes the best match.
   useEffect(() => {
@@ -179,7 +213,11 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
             aria-controls={LIST_ID}
             aria-autocomplete="list"
             aria-activedescendant={active >= 0 && items[active] ? `cmd-opt-${active}` : undefined}
-            placeholder="Search pages, services, projects…"
+            placeholder={
+              contacts
+                ? 'Search pages, services, projects, people…'
+                : 'Search pages, services, projects…'
+            }
             autoComplete="off"
             spellCheck={false}
             maxLength={64}
@@ -217,8 +255,8 @@ export default function CommandPalette({ groups }: CommandPaletteProps) {
                     onClick={() => go(own)}
                   >
                     <Icon name={item.icon} size={16} />
-                    <span>{item.label}</span>
-                    {item.detail && <i>{item.detail}</i>}
+                    <span dir={item.dir}>{item.label}</span>
+                    {item.detail && <i dir={item.dir}>{item.detail}</i>}
                   </div>
                 );
               })}

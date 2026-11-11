@@ -23,7 +23,10 @@
 //   6. a screen family's own group stays on its own screens (Admin v2 C4b, the leads): only
 //      its islands and its lazy pieces import admin-leads statically, admin-leads imports
 //      neither the field kit nor its lazy pieces statically, and nothing imports the lazy
-//      pieces (admin-leads-lazy: Add a lead, Erase) but through import().
+//      pieces (admin-leads-lazy: Add a lead, Erase) but through import(). Admin v2 C7: the
+//      contacts screens are a family too (admin-contacts, admin-contacts-lazy), never loading
+//      the leads' code nor the leads theirs; what both run sits in admin-crm, which admin-ui
+//      never imports.
 //   7. the preview bridge (Admin v2 R9) loads neither React nor admin-ui: a `/admin/preview/**`
 //      render runs a public page, and its bridge needs zod and the envelope only (admin-zod).
 //   8. the savebar (Admin v2 R12, admin-release) is the savebar island's and the kit gallery's
@@ -105,6 +108,9 @@ const OFF_SCREEN_GROUPS = [
   'admin-dashboard.',
   'admin-leads.',
   'admin-leads-lazy.',
+  'admin-contacts.',
+  'admin-contacts-lazy.',
+  'admin-crm.',
   'admin-preview.',
   'admin-release.',
   'admin-versions.',
@@ -114,6 +120,8 @@ const OFF_SCREEN_GROUPS = [
 // A screen family's group and the chunks allowed to import it statically (check 6).
 const FAMILY_GROUPS = [
   { group: 'admin-leads.', importers: /^(?:AdminLead|admin-leads-lazy\.)/ },
+  // Admin v2 C7: the contacts screens' own group, on their two islands and their lazy part.
+  { group: 'admin-contacts.', importers: /^(?:AdminContact|admin-contacts-lazy\.)/ },
   // Admin v2 R12: the savebar's island, and the kit's gallery that draws it.
   // Admin v2 R13: the dashboard's publish card, and Backups & versions' list, which reuses the
   // publish dialog's schedule rules (both drawn only while releases are on).
@@ -141,7 +149,9 @@ const FAMILY_GROUPS = [
 ];
 // What a family's group must never import statically: the field kit, and its own lazy part.
 const FAMILY_NEVER = {
-  'admin-leads.': ['admin-fields.', 'admin-leads-lazy.'],
+  'admin-leads.': ['admin-fields.', 'admin-leads-lazy.', 'admin-contacts.'],
+  // C7: the contacts screens load neither the field kit nor the leads' code.
+  'admin-contacts.': ['admin-fields.', 'admin-contacts-lazy.', 'admin-leads.', 'admin-leads-lazy.'],
   'admin-release.': ['admin-fields.'],
   'admin-versions.': ['admin-fields.'],
   // E1: the page editor loads the field kit, never another screen family's code.
@@ -167,7 +177,12 @@ const FAMILY_NEVER = {
 };
 // Groups reached only through import() (check 6). Admin v2 R13: the history drawer. Admin v2
 // E2: the page editor's live preview column.
-const LAZY_ONLY_GROUPS = ['admin-leads-lazy.', 'admin-history.', 'admin-page-preview.'];
+const LAZY_ONLY_GROUPS = [
+  'admin-leads-lazy.',
+  'admin-contacts-lazy.',
+  'admin-history.',
+  'admin-page-preview.',
+];
 
 // The preview bridge's script (check 7) and what its eager graph must never hold.
 const PREVIEW_BRIDGE_FILE = /^AdminPreviewBridge\.astro_/;

@@ -210,7 +210,7 @@ describe('admin endpoints — {principal × capability} matrix', () => {
 // FINDS is decided per entity inside searchAdmin(), pinned role by role in
 // tests/lib/globalSearch.spec.ts; this checks the route hands it the caller rather than
 // anyone else. The stub answers a row from every table, so the groups are what it searched.
-describe('GET /api/admin/search searches as its caller', () => {
+describe('POST /api/admin/search searches as its caller', () => {
   it.each([
     ['developer', ['Pages', 'Media', 'Themes']],
     [
@@ -230,10 +230,20 @@ describe('GET /api/admin/search searches as its caller', () => {
       ],
     ],
   ] as const)('%s', async (role, groups) => {
-    const { GET } = (await import('@/pages/api/admin/search')) as { GET: APIRoute };
-    const response = (await GET(makeContext(role, '/api/admin/search?q=logo'))) as Response;
+    const { POST } = (await import('@/pages/api/admin/search')) as { POST: APIRoute };
+    const response = (await POST(
+      makeContext(role, '/api/admin/search', { q: 'logo' }, 'POST'),
+    )) as Response;
     const body = (await response.json()) as { data: { groups: { group: string }[] } };
     expect(body.data.groups.map((g) => g.group)).toEqual(groups);
+  });
+
+  // C7 review, C7-SEC-1: the palette asks at every pause in typing; a GET put whatever was in
+  // the box (half an e-mail address, the first digits of a number) in a URL.
+  it('has no GET: no typed term goes in a URL', async () => {
+    const route = (await import('@/pages/api/admin/search')) as Record<string, unknown>;
+    expect(route['GET']).toBeUndefined();
+    expect(typeof route['POST']).toBe('function');
   });
 });
 
