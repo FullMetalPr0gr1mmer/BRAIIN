@@ -26,10 +26,14 @@
 --          arrival, the nightly backfill, a person's confirm), a contact with no company that
 --          no person has edited is given the company the lead names (C5's name folding),
 --          found, oldest first, or made by the system;
---        • by domain: the Worker records the blind index of a non-freemail e-mail domain on
---          the lead's e-mail channel (public.crm_lead_domain, the service role's); the channel's
---          trigger links a contact with no company to the company holding that domain, or
---          teaches the contact's company its domain when no company holds it.
+--        • by domain: the Worker records the blind index of an e-mail domain that is not a
+--          consumer mailbox on the lead's e-mail channel (public.crm_lead_domain, the service
+--          role's); the channel's trigger teaches the domain to the contact's company only when
+--          the system made that company and no person has edited it, and links a contact with
+--          no company only to a company a person made or edited that holds the domain (C11
+--          review, C11-SEC-1 and C11-SEC-2: an inquiry never attaches its domain to a company
+--          a person curated, and an inquiry's own company never collects strangers). A domain
+--          goes when the last channel carrying it goes, and an Admin can forget it.
 --      Both write the contact from INSIDE a trigger, as C5's won rule and owner fill do, so the
 --      system's link never marks a contact as edited by a person (app.tg_crm_contact_row's
 --      staff_edited, which keeps an auto-contact after its inquiries' erasure, C5-SEC-1). Each
@@ -80,6 +84,9 @@ create table public.crm_companies (
   -- salted: crm.md §6.1), learnt from a non-freemail inquiry. Written by the system only;
   -- no staff grant reads or writes it.
   domain_hmac text check (domain_hmac is null or domain_hmac ~ '^[0-9a-f]{64}$'),
+  -- Whether it holds a learnt domain (never which): the drawer says so, and an Admin can
+  -- forget it (public.crm_company_forget_domain). Staff read this, never the index.
+  domain_learnt boolean generated always as (domain_hmac is not null) stored,
   -- A person has edited it (as crm_contacts.staff_edited, C5 review): set by a direct write
   -- that changes a chosen column, never by the system's, never cleared. An auto-company a
   -- person never edited goes with its last contact.
@@ -240,6 +247,11 @@ create trigger crm_contacts_company before insert or update of company_id, compa
 -- and named by no contact (a merge tombstone included) once this contact is gone or has moved.
 -- Its name came from an inquiry's free text, which can be a person's ("Sara Design"), so it
 -- must not outlive the inquiries it came from (retention, a lead's or a person's erasure).
+-- A person's unlink (or move) of its last contact takes it too: public.crm_contact_company
+-- answers its id (removed_company), which the Worker audits and the card says (C11-SEC-4,
+-- C11-COR-5). A direct PostgREST update of crm_contacts.company_id (the column grant the INVOKER
+-- door needs) removes it with no Worker audit row (and an unlink keeps company_name, so the
+-- contact's timeline has no line for it either): a residual recorded in the as-built.
 create or replace function app.tg_crm_company_orphan() returns trigger
   language plpgsql security definer set search_path = '' as $$
 begin
@@ -260,10 +272,19 @@ create trigger crm_contacts_company_orphan after delete or update of company_id 
 
 -- ═══ 5. Find-or-create at arrival ═════════════════════════════════════════════════════════
 -- What the system does for one contact, given what an inquiry says (a company name, the
--- blind index of a non-freemail domain). Answers what happened: 'domain' or 'name' (linked
--- to the company found), 'new' (a company made and linked), 'learned' (the contact's company
--- now knows the domain), or why nothing changed: 'missing', 'has_company', 'edited' (a
--- person edited the contact: their choice stands), 'no_name'.
+-- blind index of a domain that is not a consumer mailbox). Answers what happened: 'domain'
+-- or 'name' (linked to the company found), 'new' (a company made and linked), 'learned' (the
+-- contact's company now knows the domain), or why nothing changed: 'missing', 'has_company',
+-- 'edited' (a person edited the contact: their choice stands), 'no_name'.
+-- The domain's two rules (C11 review, C11-SEC-1 and C11-SEC-2):
+--   • LEARN only onto a company the system made and no person has edited. A visitor's own
+--     words decide which company their inquiry names, so a learnt domain onto a company a
+--     person made ("Acme Trading", a real client) would let anyone route that domain's later
+--     inquiries into it, and staff could neither see nor undo it.
+--   • JOIN only a company a person made or edited. An auto-company's domain is one visitor's
+--     (it may be a consumer mailbox the Worker's list misses), so it never collects other
+--     people; once a person has looked at the company and edited it, its domain is theirs to
+--     keep (the drawer says it holds one, and an Admin can forget it).
 -- CALLED ONLY FROM A TRIGGER (app.tg_lead_company, app.tg_crm_channel_company): its contact
 -- write must be at trigger depth 2, the system's, so it never marks the contact as edited by
 -- a person (C5-SEC-1). No API role executes it.
@@ -289,10 +310,12 @@ begin
   end if;
 
   if k.company_id is not null then
-    -- The contact's company learns the domain, when it has none and no company holds it.
+    -- The contact's company learns the domain, when the system made it, no person has edited
+    -- it, it has none and no company holds it (C11-SEC-1).
     if p_domain is not null then
       update public.crm_companies c set domain_hmac = p_domain
        where c.tenant_id = p_tenant and c.id = k.company_id and c.domain_hmac is null
+         and c.created_by is null and not c.staff_edited
          and not exists (select 1 from public.crm_companies o
                           where o.tenant_id = p_tenant and o.domain_hmac = p_domain);
       if found then
@@ -305,10 +328,12 @@ begin
     return 'edited';
   end if;
 
-  -- 1. The domain: exact, one company per domain.
+  -- 1. The domain: exact, one company per domain, and only a company a person made or
+  --    edited (C11-SEC-2: an auto-company's domain is one visitor's, never a meeting point).
   if p_domain is not null then
     select c.id into v_company from public.crm_companies c
-     where c.tenant_id = p_tenant and c.domain_hmac = p_domain;
+     where c.tenant_id = p_tenant and c.domain_hmac = p_domain
+       and (c.created_by is not null or c.staff_edited);
     if v_company is not null then
       v_how := 'domain';
     end if;
@@ -394,22 +419,48 @@ revoke all on function app.tg_crm_channel_company() from public, anon, authentic
 create trigger crm_contact_channels_company after insert or update of domain_hmac
   on public.crm_contact_channels for each row execute function app.tg_crm_channel_company();
 
+-- A learnt domain goes with the last channel carrying it (C11 review, C11-SEC-5): the index
+-- came from people's e-mail addresses, so once retention, a lead's or a person's erasure, or
+-- a person's edit has removed every channel in the tenant that carries it, no company keeps
+-- it (a company a person made or edited outlives its contacts; its domain does not). AFTER
+-- DELETE, and AFTER UPDATE OF domain_hmac when the index moved away. A definer (it writes a
+-- column no staff grant reaches); not in a sub-transaction: if this fails, the erasure fails
+-- with it rather than leaving the residue behind.
+create or replace function app.tg_crm_channel_domain_gone() returns trigger
+  language plpgsql security definer set search_path = '' as $$
+begin
+  if old.domain_hmac is null
+     or (tg_op = 'UPDATE' and new.domain_hmac is not distinct from old.domain_hmac) then
+    return null;
+  end if;
+  update public.crm_companies c set domain_hmac = null
+   where c.tenant_id = old.tenant_id and c.domain_hmac = old.domain_hmac
+     and not exists (select 1 from public.crm_contact_channels ch
+                      where ch.tenant_id = old.tenant_id and ch.domain_hmac = old.domain_hmac);
+  return null;
+end $$;
+revoke all on function app.tg_crm_channel_domain_gone() from public, anon, authenticated, service_role;
+create trigger crm_contact_channels_domain_gone after delete or update of domain_hmac
+  on public.crm_contact_channels for each row execute function app.tg_crm_channel_domain_gone();
+
 -- The Worker's half of the domain step (src/lib/crm/companyDomain.ts): after an inquiry is
--- in, the blind index of its non-freemail e-mail domain is recorded on the e-mail channel
--- the link copied from it (the lead's own e-mail index). The service role's alone; it reads
--- and writes nothing a person typed. Answers 'recorded', or why not: 'missing', 'unlinked'
--- (not linked, or linked by phone alone), 'spam', 'no_channel' (the lead's e-mail is not on
--- its contact: another contact holds it).
-create or replace function public.crm_lead_domain(p_tenant uuid, p_lead uuid, p_domain_hmac text)
-  returns text language plpgsql volatile security invoker set search_path = '' as $$
+-- in, the blind index of its e-mail domain (not a consumer mailbox) is recorded on the
+-- e-mail channel the link copied from it (the lead's own e-mail index). The service role's
+-- alone; it reads and writes nothing a person typed. Answers 'recorded', or why not:
+-- 'missing', 'unlinked' (not linked, or linked by phone alone), 'spam', 'no_channel' (the
+-- lead's e-mail is not on its contact: another contact holds it).
+-- The work is app.crm_lead_domain_core's, which carries `lock_timeout = '2s'` as C5's
+-- app.crm_link_lead_core does (C11 review, C11-SEC-3 and C11-COR-2): the public form waits
+-- for this step, so a colleague's long transaction on the contact, its channel or its company
+-- makes it give up (the Worker logs the code, the inquiry is answered) instead of holding the
+-- visitor's answer. A function setting holds only while the core runs, and it sits on the
+-- app.* core because no exposed function sets a setting (release_apply.test.sql).
+create or replace function app.crm_lead_domain_core(p_tenant uuid, p_lead uuid, p_domain_hmac text)
+  returns text language plpgsql volatile security definer
+  set search_path = '' set lock_timeout = '2s' as $$
 declare
   l record;
 begin
-  if p_tenant is null or p_lead is null
-     or p_domain_hmac is null or p_domain_hmac !~ '^[0-9a-f]{64}$' then
-    raise exception using errcode = '22023',
-      message = 'crm_lead_domain: a tenant, a lead and a domain index (64 hex) are required';
-  end if;
   select x.contact_id, x.contact_link, x.email_hmac, x.is_spam into l
     from public.leads x
    where x.tenant_id = p_tenant and x.id = p_lead;
@@ -430,6 +481,19 @@ begin
   end if;
   return 'recorded';
 end $$;
+revoke all on function app.crm_lead_domain_core(uuid, uuid, text) from public, anon, authenticated, service_role;
+grant execute on function app.crm_lead_domain_core(uuid, uuid, text) to service_role;
+
+create or replace function public.crm_lead_domain(p_tenant uuid, p_lead uuid, p_domain_hmac text)
+  returns text language plpgsql volatile security invoker set search_path = '' as $$
+begin
+  if p_tenant is null or p_lead is null
+     or p_domain_hmac is null or p_domain_hmac !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode = '22023',
+      message = 'crm_lead_domain: a tenant, a lead and a domain index (64 hex) are required';
+  end if;
+  return app.crm_lead_domain_core(p_tenant, p_lead, p_domain_hmac);
+end $$;
 revoke all on function public.crm_lead_domain(uuid, uuid, text) from public, anon, authenticated, service_role;
 grant execute on function public.crm_lead_domain(uuid, uuid, text) to service_role;
 
@@ -448,12 +512,13 @@ create policy crm_companies_live on public.crm_companies as restrictive for all 
   with check (tenant_id = app.effective_tenant_id() and app.role_crm_contacts((select app.live_role())));
 
 -- ═══ 7. Grants, stated (P-14: both Supabase regimes) ══════════════════════════════════════
--- Staff read every column but the domain index, insert and change only what a person
--- chooses (never the stamps, the version, staff_edited or the index), and remove.
+-- Staff read every column but the domain index (whether one is learnt, domain_learnt, is
+-- theirs to read), insert and change only what a person chooses (never the stamps, the
+-- version, staff_edited or the index), and remove.
 revoke all on public.crm_companies from public, anon, authenticated, service_role;
 grant select (id, tenant_id, name, name_key, sector_id, client_id, size, website, city, stage,
-              owner_id, notes, staff_edited, version, created_at, updated_at, created_by,
-              updated_by)
+              owner_id, notes, domain_learnt, staff_edited, version, created_at, updated_at,
+              created_by, updated_by)
   on public.crm_companies to authenticated;
 grant insert (tenant_id, name, sector_id, client_id, size, website, city, stage, owner_id, notes)
   on public.crm_companies to authenticated;
@@ -504,7 +569,10 @@ grant execute on function app.crm_company_won_value(uuid, uuid) to authenticated
 -- One company as the screens show it, read as the caller (RLS, the live check and the column
 -- grants decide): its own columns but the domain index, the sector's and the client's English
 -- names (when the caller reads them), whether the system made it, its contacts and its won
--- value. Null when the caller sees no such company.
+-- value. Null when the caller sees no such company. `domain` says whether it holds a learnt
+-- e-mail domain, never which (C11-SEC-1): null (none), 'learnt' (an auto-company no person has
+-- edited: the domain joins nobody to it yet) or 'joins' (inquiries from that domain naming no
+-- company join it).
 create or replace function app.crm_company_json(p_tenant uuid, p_company uuid) returns jsonb
   language sql stable security invoker set search_path = '' as $$
   select jsonb_build_object(
@@ -513,6 +581,9 @@ create or replace function app.crm_company_json(p_tenant uuid, p_company uuid) r
            'sector_id', c.sector_id, 'sector_name', s.name ->> 'en',
            'client_id', c.client_id, 'client_name', cl.name ->> 'en',
            'auto', c.created_by is null,
+           'domain', case when not c.domain_learnt then null
+                          when c.created_by is null and not c.staff_edited then 'learnt'
+                          else 'joins' end,
            'version', c.version, 'created_at', c.created_at, 'updated_at', c.updated_at,
            'contacts', app.crm_company_contacts(p_tenant, c.id),
            'won_value', app.crm_company_won_value(p_tenant, c.id))
@@ -787,7 +858,11 @@ grant execute on function public.crm_company_delete(uuid, uuid, integer) to auth
 --   'create' "Create company from this name": the company named by the contact's free text,
 --            found by C5's folding (oldest first) or made as the caller's, then linked.
 -- A person's choice: the contact is marked as edited by a person (C5's rule). Answers
--- {company_id, how: linked | found | created | unlinked}. P0002 for a contact the caller
+-- {company_id, how: linked | found | created | unlinked, removed_company}. removed_company
+-- (C11 review, C11-SEC-4 and C11-COR-5) is the id of the company this change removed: an
+-- auto-company no person edited goes with its last contact (app.tg_crm_company_orphan), and
+-- a person's unlink or move of that last contact is such a change; the Worker puts the id in
+-- the audit row and the card says so. Null when none went. P0002 for a contact the caller
 -- does not see (or a merge tombstone), 40001 when its version moved.
 create or replace function public.crm_contact_company(p_tenant uuid, p_contact uuid, p_version int,
                                                       p_action text, p_company uuid default null)
@@ -798,6 +873,7 @@ declare
   v_company uuid;
   v_key text;
   v_how text;
+  v_removed uuid;
 begin
   perform app.crm_company_tenant_ok(p_tenant);
   if p_action is null or p_action not in ('link', 'unlink', 'create') then
@@ -807,7 +883,7 @@ begin
     raise exception using errcode = '22023',
       message = 'contact company: send the version you read, and a company to link only';
   end if;
-  select c.version, c.company_name, c.merged_into into k from public.crm_contacts c
+  select c.version, c.company_name, c.company_id, c.merged_into into k from public.crm_contacts c
    where c.tenant_id = app.effective_tenant_id() and c.tenant_id = p_tenant and c.id = p_contact
    for update;
   if not found or k.merged_into is not null then
@@ -855,10 +931,68 @@ begin
   if not found then
     raise exception using errcode = '42501', message = 'contact company: the change was refused';
   end if;
-  return jsonb_build_object('company_id', v_company, 'how', v_how);
+  -- The company the contact left, when the orphan rule took it with this change.
+  if k.company_id is not null and k.company_id is distinct from v_company
+     and not exists (select 1 from public.crm_companies c
+                      where c.tenant_id = p_tenant and c.id = k.company_id) then
+    v_removed := k.company_id;
+  end if;
+  return jsonb_build_object('company_id', v_company, 'how', v_how, 'removed_company', v_removed);
 end $$;
 revoke all on function public.crm_contact_company(uuid, uuid, integer, text, uuid) from public, anon, authenticated, service_role;
 grant execute on function public.crm_contact_company(uuid, uuid, integer, text, uuid) to authenticated;
+
+-- An Admin forgets a company's learnt e-mail domain (C11 review, C11-SEC-1): inquiries from
+-- that domain stop joining it. crm.settings (Admin's: who joins which company is the CRM's
+-- configuration, owner item O-7) on top of crm.contacts, both read LIVE, at the version the
+-- drawer read (P0002 unseen, 40001 moved, 42501 refused). The INVOKER door decides who and
+-- which row under RLS; the narrow definer below only clears the column, which no staff grant
+-- reaches, and checks the same things again. Clearing is not an edit (no version, no stamp):
+-- the Worker audits it. Answers the company as the drawer shows it, and `forgot` (whether a
+-- domain was there to forget).
+create or replace function app.crm_company_forget_domain_core(p_tenant uuid, p_company uuid)
+  returns boolean language plpgsql volatile security definer set search_path = '' as $$
+begin
+  if p_tenant is null or p_tenant is distinct from app.effective_tenant_id()
+     or not coalesce(app.role_crm_contacts(app.live_role()), false)
+     or not coalesce(app.role_crm_settings(app.live_role()), false) then
+    raise exception using errcode = '42501', message = 'crm companies: forgetting a domain is an Admin''s';
+  end if;
+  update public.crm_companies c set domain_hmac = null
+   where c.tenant_id = p_tenant and c.id = p_company and c.domain_hmac is not null;
+  return found;
+end $$;
+revoke all on function app.crm_company_forget_domain_core(uuid, uuid) from public, anon, authenticated, service_role;
+grant execute on function app.crm_company_forget_domain_core(uuid, uuid) to authenticated;
+
+create or replace function public.crm_company_forget_domain(p_tenant uuid, p_company uuid, p_version int)
+  returns jsonb
+  language plpgsql volatile security invoker set search_path = '' as $$
+declare
+  v_version int;
+  v_forgot boolean;
+begin
+  perform app.crm_company_tenant_ok(p_tenant);
+  if p_version is null then
+    raise exception using errcode = '22023', message = 'company: send the version you read';
+  end if;
+  if not coalesce(app.role_crm_settings(app.live_role()), false) then
+    raise exception using errcode = '42501', message = 'crm companies: forgetting a domain is an Admin''s';
+  end if;
+  select c.version into v_version from public.crm_companies c
+   where c.tenant_id = app.effective_tenant_id() and c.tenant_id = p_tenant and c.id = p_company
+   for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'company: no such company';
+  end if;
+  if v_version <> p_version then
+    raise exception using errcode = '40001', message = 'company: someone else changed it';
+  end if;
+  v_forgot := app.crm_company_forget_domain_core(p_tenant, p_company);
+  return app.crm_company_json(p_tenant, p_company) || jsonb_build_object('forgot', v_forgot);
+end $$;
+revoke all on function public.crm_company_forget_domain(uuid, uuid, integer) from public, anon, authenticated, service_role;
+grant execute on function public.crm_company_forget_domain(uuid, uuid, integer) to authenticated;
 
 -- ═══ 9. Postconditions (P-14: under both Supabase grant regimes) ═════════════════════════
 do $$
@@ -956,6 +1090,7 @@ begin
                               'public.crm_company_update(uuid, uuid, integer, jsonb)',
                               'public.crm_company_delete(uuid, uuid, integer)',
                               'public.crm_contact_company(uuid, uuid, integer, text, uuid)',
+                              'public.crm_company_forget_domain(uuid, uuid, integer)',
                               'app.crm_company_json(uuid, uuid)',
                               'app.crm_company_contacts(uuid, uuid)',
                               'app.crm_company_won_value(uuid, uuid)',
@@ -979,11 +1114,33 @@ begin
      or not has_function_privilege('service_role', 'public.crm_lead_domain(uuid, uuid, text)', 'execute') then
     raise exception 'C11: public.crm_lead_domain must be an INVOKER the service role alone executes';
   end if;
+  -- Its core: a definer with an empty search_path and a 2 s lock bound (C11-SEC-3), owned by a
+  -- role that bypasses RLS, the service role's alone.
+  if not exists (select 1 from pg_proc f join pg_roles o on o.oid = f.proowner
+                  where f.oid = 'app.crm_lead_domain_core(uuid, uuid, text)'::regprocedure and f.prosecdef
+                    and f.proconfig = array['search_path=""', 'lock_timeout=2s']
+                    and (o.rolsuper or o.rolbypassrls))
+     or has_function_privilege('anon', 'app.crm_lead_domain_core(uuid, uuid, text)', 'execute')
+     or has_function_privilege('authenticated', 'app.crm_lead_domain_core(uuid, uuid, text)', 'execute')
+     or not has_function_privilege('service_role', 'app.crm_lead_domain_core(uuid, uuid, text)', 'execute') then
+    raise exception 'C11: app.crm_lead_domain_core must be a definer bounded by lock_timeout 2s that the service role alone executes';
+  end if;
+  -- The forget door's core: a definer with an empty search_path, authenticated's alone (the
+  -- INVOKER door calls it as the caller; it checks the tenant and both live roles itself).
+  if not exists (select 1 from pg_proc f join pg_roles o on o.oid = f.proowner
+                  where f.oid = 'app.crm_company_forget_domain_core(uuid, uuid)'::regprocedure and f.prosecdef
+                    and f.proconfig = array['search_path=""'] and (o.rolsuper or o.rolbypassrls))
+     or has_function_privilege('anon', 'app.crm_company_forget_domain_core(uuid, uuid)', 'execute')
+     or has_function_privilege('service_role', 'app.crm_company_forget_domain_core(uuid, uuid)', 'execute')
+     or not has_function_privilege('authenticated', 'app.crm_company_forget_domain_core(uuid, uuid)', 'execute') then
+    raise exception 'C11: app.crm_company_forget_domain_core must be a definer authenticated alone executes';
+  end if;
   -- The definers: an empty search_path, owned by a role that bypasses RLS, executable by no
   -- API role (triggers run them).
   foreach v_fn in array array['app.tg_crm_company_row()', 'app.tg_crm_company_rename()',
                               'app.tg_crm_contact_company()', 'app.tg_crm_company_orphan()',
                               'app.tg_lead_company()', 'app.tg_crm_channel_company()',
+                              'app.tg_crm_channel_domain_gone()',
                               'app.crm_company_autolink(uuid, uuid, text, text)'] loop
     if not exists (select 1 from pg_proc f join pg_roles o on o.oid = f.proowner
                     where f.oid = v_fn::regprocedure and f.prosecdef
@@ -1003,6 +1160,7 @@ begin
                               'public.crm_company_update(uuid, uuid, integer, jsonb)',
                               'public.crm_company_delete(uuid, uuid, integer)',
                               'public.crm_contact_company(uuid, uuid, integer, text, uuid)',
+                              'public.crm_company_forget_domain(uuid, uuid, integer)',
                               'public.crm_lead_domain(uuid, uuid, text)',
                               'app.crm_company_json(uuid, uuid)', 'app.crm_company_tenant_ok(uuid)',
                               'app.crm_company_contacts(uuid, uuid)', 'app.crm_company_won_value(uuid, uuid)',
@@ -1028,8 +1186,9 @@ begin
           where (tgrelid, tgname) in (('public.crm_contacts'::regclass, 'crm_contacts_company'),
                                       ('public.crm_contacts'::regclass, 'crm_contacts_company_orphan'),
                                       ('public.leads'::regclass, 'leads_contact_company'),
-                                      ('public.crm_contact_channels'::regclass, 'crm_contact_channels_company'))
-            and tgenabled::text = 'O') <> 4 then
+                                      ('public.crm_contact_channels'::regclass, 'crm_contact_channels_company'),
+                                      ('public.crm_contact_channels'::regclass, 'crm_contact_channels_domain_gone'))
+            and tgenabled::text = 'O') <> 5 then
     raise exception 'C11: the company triggers on contacts, leads and channels are not all in place';
   end if;
 

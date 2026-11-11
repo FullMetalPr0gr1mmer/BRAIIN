@@ -19,16 +19,20 @@
 --      answers 42501 before the owner rule (no membership oracle);
 --   4. find-or-create at arrival: by name (made by the system, joined by a second inquiry
 --      naming it differently cased, never for a phone match), by domain (the Worker's door:
---      a contact with no company joins the company holding the domain; a company learns its
---      domain once; one domain, one company), the system's link never marks a contact as a
---      person's edit, a person-edited contact keeps its choice, and an arrival whose company
---      step fails stays in and linked;
+--      an auto-company learns its domain once, but joins nobody to it until a person edits it;
+--      then a contact with no company joins it; one domain, one company), the system's link
+--      never marks a contact as a person's edit, a person-edited contact keeps its choice, an
+--      arrival whose company step fails stays in and linked; an Admin forgets a learnt domain
+--      (and nobody else can);
 --   5. an auto-company goes with its last contact (a lead's erasure, a person's erasure,
---      retention); one a person made or edited stays;
+--      retention, a person's unlink, which the door reports); one a person made or edited
+--      stays, but its learnt domain goes with the last channel carrying it; an inquiry naming
+--      a company a person made never teaches it a domain, and an auto-company's domain never
+--      collects another person (C11 review);
 --   6. the list's filter, sorts and derived totals.
 
 begin;
-select plan(82);
+select plan(115);
 
 insert into public.tenants (id, name) values
   ('c1100000-0000-4000-8000-000000000001', 'C11 T1'),
@@ -107,7 +111,7 @@ create function c11_lead(p_id text, p_name text, p_company text, p_email text, p
     'id', p_id, 'kind', 'contact', 'locale', 'en', 'name', p_name, 'company', p_company,
     'message', 'Hello', 'consent_marketing', true, 'source', 'web_form',
     'email_enc', 'enc-' || coalesce(p_email, 'none'),
-    'email_hmac', case when p_email is not null then repeat(p_email, 64) end,
+    'email_hmac', case when p_email is not null then left(repeat(p_email, 64), 64) end,
     'phone_enc', case when p_phone is not null then 'enc-' || p_phone end,
     'phone_hmac', case when p_phone is not null then repeat(p_phone, 64) end,
     'score_signals', '[]'::jsonb))
@@ -397,9 +401,24 @@ set local role service_role;
 select is(public.crm_lead_domain('c1100000-0000-4000-8000-000000000001',
             'c1100000-0000-4000-8000-00000000ab04', repeat('d', 64)), 'recorded', 'its domain is recorded');
 reset role;
+select is(c11_company_of('c1100000-0000-4000-8000-00000000ab04'), '(none)',
+  'an auto-company no person has edited joins nobody to it by its domain (C11-SEC-2)');
+set local role authenticated;
+select c11_as('A');
+select is(c11_val($$ select public.crm_company_read('c1100000-0000-4000-8000-000000000001',
+             (select id from public.crm_companies where name = 'Blue Fig')) -> 'company' ->> 'domain' $$),
+  'learnt', 'the drawer says the auto-company holds a learnt domain (never which), not yet joining');
+select is(c11_val($$ select public.crm_company_update('c1100000-0000-4000-8000-000000000001',
+             (select id from public.crm_companies where name = 'Blue Fig'), 1, '{"city": "Riyadh"}') ->> 'domain' $$),
+  'joins', 'once a person edits the company, its domain joins');
+reset role;
+set local role service_role;
+select is(public.crm_lead_domain('c1100000-0000-4000-8000-000000000001',
+            'c1100000-0000-4000-8000-00000000ab04', repeat('d', 64)), 'recorded', 'the domain is recorded again');
+reset role;
 select is(c11_company_of('c1100000-0000-4000-8000-00000000ab04') || ' ' ||
           (select staff_edited from public.crm_contacts where id = c11_contact('c1100000-0000-4000-8000-00000000ab04')),
-  'Blue Fig false', 'it joins the company holding the domain, as the system''s link');
+  'Blue Fig false', 'now it joins the company holding the domain, as the system''s link');
 -- A company named differently, from a domain another company holds: no second holder.
 set local role service_role;
 select lives_ok($$ select c11_ingest(c11_lead('c1100000-0000-4000-8000-00000000ab05', 'Faris', 'Green Leaf', '5')) $$,
@@ -459,6 +478,50 @@ reset role;
 select is((select company_name || ' ' || staff_edited || ' ' || version from public.crm_contacts
             where id = c11_contact('c1100000-0000-4000-8000-00000000ab11')),
   'Plain Co Ltd false 3', 'its contact shows the new name; its version moves; it is not a person''s edit of the contact');
+-- An Admin forgets a learnt domain (C11-SEC-1); nobody else can, through the door or its core.
+set local role authenticated;
+do $do$
+declare
+  p text;
+begin
+  foreach p in array array['C', 'S', 'D', 'L', 'O', 'Ad', 'Ao', 'Al'] loop
+    perform c11_as(p);
+    insert into c11_out values ('forget:' || p,
+      c11_val($$ select public.crm_company_forget_domain('c1100000-0000-4000-8000-000000000001',
+                  (select id from public.crm_companies where name = 'Blue Fig'), 2)::text $$)
+      || ' ' ||
+      c11_val($$ select app.crm_company_forget_domain_core('c1100000-0000-4000-8000-000000000001',
+                  (select id from public.crm_companies where name = 'Blue Fig'))::text $$));
+  end loop;
+end $do$;
+select is((select string_agg(who || '=' || res, ',' order by who collate "C") from c11_out where who like 'forget:%'),
+  'forget:Ad=42501 42501,forget:Al=42501 42501,forget:Ao=42501 42501,forget:C=42501 42501,'
+  || 'forget:D=42501 42501,forget:L=42501 42501,forget:O=42501 42501,forget:S=42501 42501',
+  'no other role, other tenant or stale token forgets a domain, through the door or its core');
+reset role;
+select is((select domain_hmac from public.crm_companies where name = 'Blue Fig'), repeat('d', 64),
+  'and the domain is still there');
+set local role authenticated;
+select c11_as('A');
+select is(c11_val($$ select public.crm_company_forget_domain('c1100000-0000-4000-8000-000000000001',
+             (select id from public.crm_companies where name = 'Blue Fig'), 1)::text $$),
+  '40001', 'forgetting at a stale version is a conflict');
+select is(c11_val($$ select x ->> 'forgot' || ' ' || coalesce(x ->> 'domain', 'none') || ' ' || (x ->> 'version')
+                      from public.crm_company_forget_domain('c1100000-0000-4000-8000-000000000001',
+                        (select id from public.crm_companies where name = 'Blue Fig'), 2) x $$),
+  'true none 2', 'a live Admin forgets the learnt domain at the version read; not an edit (no version)');
+reset role;
+select is(coalesce((select domain_hmac from public.crm_companies where name = 'Blue Fig'), 'no domain'), 'no domain',
+  'the index is gone from the company');
+set local role service_role;
+select lives_ok($$ select c11_ingest(c11_lead('c1100000-0000-4000-8000-00000000ab20', 'After', null, 'a7')) $$,
+  'an inquiry naming no company arrives');
+select is(public.crm_lead_domain('c1100000-0000-4000-8000-000000000001',
+            'c1100000-0000-4000-8000-00000000ab20', repeat('d', 64)), 'recorded', 'from the forgotten domain');
+reset role;
+select is(c11_company_of('c1100000-0000-4000-8000-00000000ab20') || ' ' ||
+          coalesce((select domain_hmac from public.crm_companies where name = 'Blue Fig'), 'no domain'),
+  '(none) no domain', 'it joins nothing, and a company a person edited never learns the domain again');
 
 -- ── 5. An auto-company goes with its last contact ─────────────────────────────────────────
 set local role service_role;
@@ -492,7 +555,11 @@ select is((select count(*)::int from public.crm_companies where name = 'Old Co')
 set local role service_role;
 select lives_ok($$ select c11_ingest(c11_lead('c1100000-0000-4000-8000-00000000ab10', 'Kept', 'Kept Co', 'b')) $$,
   'an inquiry naming a company arrives');
+select is(public.crm_lead_domain('c1100000-0000-4000-8000-000000000001',
+            'c1100000-0000-4000-8000-00000000ab10', repeat('9', 64)), 'recorded', 'its domain is recorded');
 reset role;
+select is((select domain_learnt::text from public.crm_companies where name = 'Kept Co'), 'true',
+  'and its auto-company learns it');
 set local role authenticated;
 select c11_as('A');
 select is(c11_val($$ select public.crm_company_update('c1100000-0000-4000-8000-000000000001',
@@ -503,6 +570,70 @@ select is((select public.crm_erase_lead('c1100000-0000-4000-8000-000000000001', 
                                         'c1100000-0000-4000-8000-0000000000a1') ->> 'contacts')
           || ' ' || (select count(*)::int from public.crm_companies where name = 'Kept Co'),
   '1 1', 'its last contact goes; the company a person edited stays');
+select is(coalesce((select domain_hmac from public.crm_companies where name = 'Kept Co'), 'no domain'), 'no domain',
+  'but its learnt domain went with the last channel carrying it (C11-SEC-5)');
+-- An inquiry naming a company a person made never teaches it a domain (C11-SEC-1), so a
+-- later inquiry naming no company from that domain does not join it.
+set local role service_role;
+select lives_ok($$ select c11_ingest(c11_lead('c1100000-0000-4000-8000-00000000ab14', 'Mallory', 'ACME trading', 'a1')) $$,
+  'an inquiry naming a company a person made arrives');
+select is(public.crm_lead_domain('c1100000-0000-4000-8000-000000000001',
+            'c1100000-0000-4000-8000-00000000ab14', repeat('e', 64)), 'recorded', 'its domain is recorded');
+reset role;
+select is(c11_company_of('c1100000-0000-4000-8000-00000000ab14') || ' ' ||
+          coalesce((select domain_hmac from public.crm_companies where name = 'Acme Trading'), 'no domain'),
+  'Acme Trading no domain', 'its contact joins the company by name, which learns no domain');
+set local role service_role;
+select lives_ok($$ select c11_ingest(c11_lead('c1100000-0000-4000-8000-00000000ab15', 'Next', null, 'a2')) $$,
+  'an inquiry naming no company arrives');
+select is(public.crm_lead_domain('c1100000-0000-4000-8000-000000000001',
+            'c1100000-0000-4000-8000-00000000ab15', repeat('e', 64)), 'recorded', 'from the same domain');
+reset role;
+select is(c11_company_of('c1100000-0000-4000-8000-00000000ab15'), '(none)',
+  'it does not join the company a person made');
+-- A sole trader's auto-company learns a consumer domain the Worker's list missed: another
+-- person from it never joins, and the trader's erasure takes the company (C11-SEC-2).
+set local role service_role;
+select lives_ok($$ select c11_ingest(c11_lead('c1100000-0000-4000-8000-00000000ab16', 'Sara', 'Sara Design', 'a3')) $$,
+  'a sole trader''s inquiry arrives');
+select is(public.crm_lead_domain('c1100000-0000-4000-8000-000000000001',
+            'c1100000-0000-4000-8000-00000000ab16', repeat('8', 64)), 'recorded', 'its domain is recorded');
+select lives_ok($$ select c11_ingest(c11_lead('c1100000-0000-4000-8000-00000000ab17', 'Bilal', null, 'a4')) $$,
+  'a stranger on the same mailbox provider arrives');
+select is(public.crm_lead_domain('c1100000-0000-4000-8000-000000000001',
+            'c1100000-0000-4000-8000-00000000ab17', repeat('8', 64)), 'recorded', 'from the same domain');
+reset role;
+select is(c11_company_of('c1100000-0000-4000-8000-00000000ab16') || ', ' ||
+          c11_company_of('c1100000-0000-4000-8000-00000000ab17'),
+  'Sara Design, (none)', 'the stranger is not joined to the trader''s auto-company');
+select is(public.crm_erase_lead('c1100000-0000-4000-8000-000000000001', 'c1100000-0000-4000-8000-00000000ab16',
+                                'c1100000-0000-4000-8000-0000000000a1') ->> 'contacts',
+  '1', 'the trader''s inquiry is erased, with its contact');
+select is((select count(*)::int from public.crm_companies where name = 'Sara Design'), 0,
+  'and the trader''s company with it');
+-- A person's unlink of an auto-company's last contact removes it, and the door says which
+-- (C11-SEC-4, C11-COR-5); an unlink from a company a person made removes nothing.
+set local role service_role;
+select lives_ok($$ select c11_ingest(c11_lead('c1100000-0000-4000-8000-00000000ab19', 'Gone', 'Gone Co', 'a5')) $$,
+  'an inquiry naming a company arrives');
+reset role;
+create temp table c11_gone as select id from public.crm_companies where name = 'Gone Co';
+grant select on c11_gone to authenticated;
+set local role authenticated;
+select c11_as('A');
+select is(c11_val(format($$ select public.crm_contact_company('c1100000-0000-4000-8000-000000000001', %L,
+             (select version from public.crm_contacts where id = %L), 'unlink') ->> 'removed_company' $$,
+             c11_contact('c1100000-0000-4000-8000-00000000ab19'), c11_contact('c1100000-0000-4000-8000-00000000ab19'))),
+  (select id::text from c11_gone), 'a person unlinks its last contact: the door answers the company it removed');
+select is(c11_val($$ select coalesce(public.crm_contact_company('c1100000-0000-4000-8000-000000000001',
+             'c1100000-0000-4000-8000-00000000c003',
+             (select version from public.crm_contacts where id = 'c1100000-0000-4000-8000-00000000c003'),
+             'unlink') ->> 'removed_company', 'none') $$),
+  'none', 'unlinking from a company a person made removes nothing');
+reset role;
+select is((select count(*)::int from public.crm_companies where name = 'Gone Co') || ' ' ||
+          (select count(*)::int from public.crm_companies where name = 'Fresh Ideas'),
+  '0 1', 'the auto-company went; the one a person made stays');
 -- A company a person made stays when its last contact is unlinked.
 select is((select count(*)::int from public.crm_companies where name = 'Acme Trading'), 1,
   'a company a person made stays with no contacts');
@@ -576,6 +707,11 @@ select is((select string_agg(tgname, ',' order by tgname collate "C") from pg_tr
               and tgname in ('crm_contacts_company', 'crm_contacts_company_orphan', 'crm_contacts_row')),
   'crm_contacts_company,crm_contacts_company_orphan,crm_contacts_row',
   'the mirror fires before C5''s row rules (name order)');
+select is((select proconfig::text from pg_proc where oid = to_regprocedure('app.crm_lead_domain_core(uuid, uuid, text)'))
+          || ' ' ||
+          (select proconfig::text from pg_proc where oid = to_regprocedure('public.crm_lead_domain(uuid, uuid, text)')),
+  '{"search_path=\"\"",lock_timeout=2s} {"search_path=\"\""}',
+  'the domain step waits at most 2 s for a lock, a setting on its app.* core only (C11-SEC-3)');
 select ok(exists (select 1 from pg_constraint where conname = 'sectors_tenant_id_id')
           and exists (select 1 from pg_constraint where conname = 'clients_tenant_id_id')
           and exists (select 1 from pg_constraint where conname = 'crm_contacts_company_fk'),
