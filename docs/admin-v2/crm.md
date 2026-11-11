@@ -724,7 +724,7 @@ alter type public.app_role add value if not exists 'sales';
   - Merge must keep both consent histories.
 - **Suppressions:** `crm_suppressions(kind, value_hmac, reason, at)` survives erasure (HMAC only) and is fed by unsubscribe, bounces, STOP and erasure-with-do-not-contact.
 - **Messaging settings:** `crm_messaging_settings` with its own capability (crm.messaging): sender name and address (defaulting to `site_profile.contact_email`), reply-to, signature {en, ar} with `{brand}`, WhatsApp number and display (defaulting to `site_profile`), business hours, away message {en, ar}, quiet hours, daily limit, unsubscribe footer {en, ar} (always on, locked). Provider secrets are Worker Secrets via astro:env only.
-- **Import CSV:** a capability `crm.import` (Admin) and `POST /api/admin/crm/contacts/import`.
+- **Import CSV:** a capability `crm.import` (Admin) and `POST /api/admin/crm/contacts/import`. *(Built by C15, held with C5 to C8: [as-built/C15.md](as-built/C15.md). The import is a batch of pieces of at most 50 rows, each parsed by the server, for the Free plan's CPU; a lawful basis per row; consent attestation per channel stays with the consent hooks above.)*
   - Server-side parse; at most 5000 rows and 2 MB; Zod per row; blind-index dedupe.
   - Per-channel consent attestation with evidence.
   - `claimPrivilegedOp` plus attempt and outcome audits with counts; `crm_import_batches`.
