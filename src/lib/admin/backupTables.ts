@@ -149,6 +149,8 @@ export const FORBIDDEN_BACKUP_TABLES: readonly string[] = [
   'crm_contact_events',
   // The tasks (0134, Admin v2 C8): follow-ups about people, their titles and notes.
   'crm_tasks',
+  // The companies (Admin v2 C11): organisations the studio works with, their notes and owner.
+  'crm_companies',
   'job_applications',
   'applications_safe',
   'cv_deletion_queue',

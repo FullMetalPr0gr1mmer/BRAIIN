@@ -9,6 +9,7 @@ import { canonicalServiceSlug } from '@/lib/services/retired';
 import { normalizeEmail, normalizePhone } from '@/lib/crm/normalize';
 import { blindIndex } from '@/lib/crm/blindIndex';
 import { leadSignals } from '@/lib/crm/score';
+import { recordLeadDomain } from '@/lib/crm/companyDomain';
 import { writeSystemLog } from '@/lib/data/systemLog';
 
 // Server-side lead creation (the "submit-contact-form" path). Resolves the tenant
@@ -93,7 +94,12 @@ export async function createLead(input: LeadInput): Promise<CreateLeadResult> {
   };
 
   const { error } = await sb.rpc('crm_ingest_lead', { p_tenant: tenantId, p_lead: lead });
-  if (!error) return { ok: true };
+  if (!error) {
+    // (Admin v2 C11) The company by e-mail domain, after the lead is in: never blocks or
+    // changes this answer (src/lib/crm/companyDomain.ts).
+    await companyByDomain(tenantId, id, input.email);
+    return { ok: true };
+  }
 
   if (!isRpcUnavailable(error)) {
     // Codes and the field set only: never the lead.
@@ -170,7 +176,28 @@ export async function ingestManualLead(
     p_lead: lead,
   });
   if (error) return { ok: false, code: error.code ?? null };
+  // (Admin v2 C11) The company by e-mail domain, as on the public form.
+  await companyByDomain(tenantId, id, input.email);
   return { ok: true, id };
+}
+
+/**
+ * (Admin v2 C11) The domain half of find-or-create at arrival: never throws, never changes the
+ * inquiry's answer; a failure is a warning with its code only.
+ */
+async function companyByDomain(
+  tenantId: string,
+  leadId: string,
+  email: string | null | undefined,
+): Promise<void> {
+  await recordLeadDomain(serviceClient(), LEAD_PII_ENC_KEY, tenantId, leadId, email, (code) => {
+    void writeSystemLog({
+      level: 'warn',
+      source: 'contact:company',
+      message: `the company step by e-mail domain was skipped (${code})`,
+      detail: { code },
+    });
+  });
 }
 
 export type ContactLeadResult =
