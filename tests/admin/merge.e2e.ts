@@ -12,6 +12,9 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *   not a dup     "Not a duplicate" takes the pair away, and the finder never offers it again;
  *   a merge       "Merge into older" shows what moves, "Swap, keep the other" swaps the two,
  *                 "Merge now" merges: the older record stays, the other is a 404;
+ *   focus         every press keeps focus in the dialog (C12 review, C12-COR-2): the confirm
+ *                 group's Cancel when it opens, the pair's "Merge into older" after Cancel,
+ *                 the next pair's first action (or the empty state) when a pair leaves;
  *   a conflict    a merge at a version that moved on is a 409, and nothing is merged;
  *   refusals      every other role gets a 403 from the three routes.
  * Every contact is added through the real routes and named with this run's token (each pair
@@ -34,6 +37,15 @@ async function csrf(page: Page): Promise<string> {
   if (!(await find())) await page.goto('/admin', { waitUntil: 'domcontentloaded' });
   return find();
 }
+
+/** The words on the focused element when it is inside the open dialog, else null. */
+const focusedInDialog = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.activeElement;
+    return el instanceof HTMLElement && el.closest('dialog[open]') !== null
+      ? (el.textContent ?? '').trim()
+      : null;
+  });
 
 async function visit(page: Page, path: string) {
   const res = await page.goto(path);
@@ -130,11 +142,22 @@ test.describe('as admin', () => {
     await twins.getByRole('button', { name: 'Not a duplicate', exact: true }).click();
     await expect(page.locator('#admin-toasts')).toContainText('They will not be suggested again.');
     await expect(dialog.getByRole('listitem').filter({ hasText: twinCompany })).toHaveCount(0);
+    // Focus went to the next pair's first action (the older and newer pair is still listed).
+    await expect.poll(() => focusedInDialog(page)).toBe('Merge into older');
     expect(offered(await pairs(page), twinOne.id, twinTwo.id)).toBe(false);
 
-    // A merge: the preview, a swap and back, then Merge now keeps the older record.
-    await pair.getByRole('button', { name: 'Merge into older', exact: true }).click();
+    // A merge: the preview (focus on its Cancel), Cancel (focus back), the preview again, a
+    // swap and back, then Merge now keeps the older record.
+    const start = pair.getByRole('button', { name: 'Merge into older', exact: true });
+    await start.click();
     const confirm = pair.getByRole('group', { name: 'Confirm the merge' });
+    const cancel = confirm.getByRole('button', { name: 'Cancel', exact: true });
+    await expect(cancel).toBeFocused();
+    await cancel.click();
+    await expect(confirm).toHaveCount(0);
+    await expect(start).toBeFocused();
+    await start.click();
+    await expect(cancel).toBeFocused();
     await expect(confirm).toContainText(`${newer.name} is merged into ${older.name}.`);
     await expect(confirm).toContainText('notes, tasks and timeline move.');
     await confirm.getByRole('button', { name: 'Swap, keep the other', exact: true }).click();
@@ -144,6 +167,10 @@ test.describe('as admin', () => {
     await confirm.getByRole('button', { name: 'Merge now', exact: true }).click();
     await expect(page.locator('#admin-toasts')).toContainText(`Merged into ${older.name}.`);
     await expect(dialog.getByRole('listitem').filter({ hasText: older.name })).toHaveCount(0);
+    // Focus stays in the dialog: another pair's first action, or the empty state.
+    await expect
+      .poll(() => focusedInDialog(page))
+      .toMatch(/^(Merge into older|No likely duplicates)$/);
 
     expect((await page.request.get(`/api/admin/crm/contacts/${newer.id}`)).status()).toBe(404);
     expect((await page.request.get(`/api/admin/crm/contacts/${older.id}`)).status()).toBe(200);
