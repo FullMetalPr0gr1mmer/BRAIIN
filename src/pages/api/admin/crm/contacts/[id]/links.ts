@@ -28,8 +28,10 @@ import { contactError, getContact, requireContactId } from '@/lib/crm/contacts';
 // lead's e-mail and phone into the contact, and the contact's next reveal decrypts them. A
 // role that cannot export (Sales: `leads.pii` one lead at a time, never `export.csv`) spends a
 // slot of the reveal's own limiter for it (`pii-reveal`, fail-closed, after the live recheck
-// and before anything is read), as if it had revealed that lead; so every value a Sales
-// reveal shows has cost it a slot, and C6's ceiling (ten of each kind) bounds the rest. Admin
+// and before anything is read), as if it had revealed that lead; so what a confirm brings has
+// cost it a slot, and every door that adds a channel keeps to C6's ceiling (ten of each kind;
+// the arrival's link too since the C10b review), so one reveal shows at most twenty values.
+// Any later door that moves another record's channels into a contact does the same. Admin
 // and Developer may take every lead's details at once anyway (`receivesLeadPiiUnasked`), so
 // their confirm spends none. A detach copies nothing and spends none.
 

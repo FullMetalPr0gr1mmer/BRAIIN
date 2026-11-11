@@ -44,7 +44,7 @@
         "t": "ol",
         "x": [
           "Export leads to a file: the Export CSV button does not show.",
-          "Erase a lead or a contact, delete a contact's note, or receive a new lead's contact details in a notification. Sales reveals them on the lead's or the contact's page instead, one at a time.",
+          "Erase a lead or a contact, remove a contact's e-mail or phone, delete a contact's note, or receive a new lead's contact details in a notification. Sales reveals them on the lead's or the contact's page instead, one at a time.",
           "Change content, the site's settings, people or the theme, or read job applications, the logs or the activity log."
         ]
       },
@@ -82,7 +82,7 @@
         "t": "ol",
         "x": [
           "تصدير العملاء المحتملين إلى ملف: لا يظهر له زر Export CSV.",
-          "محو عميل محتمل أو جهة اتصال، أو حذف ملاحظة جهة اتصال، أو تلقّي بيانات التواصل لعميل محتمل جديد في إشعار. يكشفها Sales في صفحة العميل المحتمل أو جهة الاتصال بدلًا من ذلك، واحدًا في كل مرة.",
+          "محو عميل محتمل أو جهة اتصال، أو إزالة بريد إلكتروني أو رقم هاتف من جهة اتصال، أو حذف ملاحظة جهة اتصال، أو تلقّي بيانات التواصل لعميل محتمل جديد في إشعار. يكشفها Sales في صفحة العميل المحتمل أو جهة الاتصال بدلًا من ذلك، واحدًا في كل مرة.",
           "تغيير المحتوى أو إعدادات الموقع أو الأشخاص أو المظهر، أو قراءة طلبات التوظيف أو السجلات أو سجل النشاط."
         ]
       },

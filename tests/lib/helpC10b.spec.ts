@@ -121,14 +121,21 @@ describe('the-sales-role: contacts and tasks, one person at a time, no erasure',
     expect(crm).toEqual(['Leads', 'Contacts', 'Tasks']);
   });
 
-  it('says what Sales still cannot do: erase a lead, a contact or a contact note', () => {
+  it('says what Sales still cannot do: erase a lead, a contact, a channel or a contact note', () => {
     const en = words(after(), 'en');
     expect(en).toContain(
-      "Erase a lead or a contact, delete a contact's note, or receive a new lead's contact details in a notification.",
+      "Erase a lead or a contact, remove a contact's e-mail or phone, delete a contact's note, or receive a new lead's contact details in a notification.",
     );
     expect(ROLE_CAPS.sales['crm.erase']).toBe('none');
     expect(source('src/pages/api/admin/crm/contacts/[id]/notes/[noteId].ts')).toContain(
       "cap: 'crm.erase'",
+    );
+    // (C10b review, C10B-SEC-2) A removal is crm.erase's in the Worker and in the door.
+    expect(source('src/pages/api/admin/crm/contacts/[id].ts')).toContain(
+      "(input.channels.remove?.length ?? 0) > 0 && can(auth.role, 'crm.erase') !== 'full'",
+    );
+    expect(source('supabase/migrations/0136_crm_sales_contacts.sql')).toContain(
+      'if cardinality(v_remove) > 0 and not app.crm_eraser_ok(p_tenant, p_actor) then',
     );
     expect(ROLE_CAPS.sales['export.csv']).toBe('none');
     expect(en).toContain('the Export CSV button does not show');
@@ -140,6 +147,7 @@ describe('the-sales-role: contacts and tasks, one person at a time, no erasure',
     expect(ar).toContain('يفتح Contacts');
     expect(ar).toContain('في Tasks');
     expect(ar).toContain('محو عميل محتمل أو جهة اتصال');
+    expect(ar).toContain('إزالة بريد إلكتروني أو رقم هاتف من جهة اتصال');
     expect(ar).toContain('يُحتسب تأكيد التطابق كشفًا');
     expect(ar).toContain(`${PII_REVEAL_LIMITS.perUser} مرة`);
     expect(ar).toContain(`${PII_REVEAL_LIMITS.perTenant} مرة`);

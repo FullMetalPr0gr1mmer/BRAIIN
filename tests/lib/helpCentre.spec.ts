@@ -2665,9 +2665,10 @@ describe('the Sales guides (C10a): the-sales-role, and roles-and-access with fiv
     expect(source('src/pages/admin/leads/index.astro')).toContain(
       "canExport: allowed && can(session.role, 'export.csv') === 'full'",
     );
-    // C10b: nor a contact, nor a contact's note (crm.erase stays Admin's).
+    // C10b: nor a contact, nor a contact's e-mail or phone (C10b review), nor a contact's note
+    // (crm.erase stays Admin's).
     expect(en).toContain(
-      "Erase a lead or a contact, delete a contact's note, or receive a new lead's contact details in a notification",
+      "Erase a lead or a contact, remove a contact's e-mail or phone, delete a contact's note, or receive a new lead's contact details in a notification",
     );
     expect(ROLE_CAPS.sales['crm.erase']).toBe('none');
     expect(source('src/pages/api/hooks/notify-lead.ts')).toContain('receivesLeadPiiUnasked(role)');
