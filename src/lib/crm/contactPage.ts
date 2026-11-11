@@ -26,7 +26,7 @@ import { isRole } from '@/lib/auth/types';
 // caller, for the caller's tenant, so RLS, the live check and the column grants decide again.
 //
 // Round trips on top of the layout's shell (P-15, the Workers Free plan):
-//   list     people, summary, page 1                                            = 3
+//   list     people, summary, page 1, (C11) the companies' count                 = 4
 //   contact  the row, then its channels (presence), its leads, its first timeline page,
 //            the lead stages, the people, the retention months, the view's audit row = 8
 //            (C8b: for a crm.tasks holder the Tasks card's owners come from the same people

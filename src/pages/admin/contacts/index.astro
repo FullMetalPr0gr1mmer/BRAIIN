@@ -8,6 +8,7 @@ import { can } from '@/lib/authz/matrix';
 import { readContactPeople, readContactsListInitial } from '@/lib/crm/contactPage';
 import { contactQueryOf, parseContactFilters } from '@/lib/crm/contactUrl';
 import { contactsSubline } from '@/lib/crm/contactView';
+import { readCompanyCount } from '@/lib/crm/companies';
 
 export const prerender = false;
 
@@ -27,15 +28,17 @@ const allowed = session !== null && can(session.role, 'crm.contacts') === 'full'
 if (!allowed) Astro.response.status = 403;
 
 const filters = parseContactFilters(Astro.url.searchParams);
-const [people, initial] =
+const [people, initial, companies] =
   allowed && session && sb
     ? await Promise.all([
         readContactPeople(sb, session),
         readContactsListInitial(sb, session, contactQueryOf(filters)),
+        // (Admin v2 C11) "· {n} companies" on the sub-line: one HEAD count.
+        readCompanyCount(sb, session),
       ])
-    : [[], null];
+    : [[], null, null];
 const subtitle = initial?.summary
-  ? contactsSubline(initial.summary)
+  ? contactsSubline(initial.summary, companies)
   : 'The people behind your inquiries, and the ones you add.';
 ---
 
@@ -60,6 +63,7 @@ const subtitle = initial?.summary
         people={people}
         me={session?.userId ?? ''}
         now={new Date().toISOString()}
+        companies={companies}
       />
     )
   }

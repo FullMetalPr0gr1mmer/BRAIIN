@@ -33,6 +33,7 @@ import {
   type ContactLead,
 } from '@/lib/crm/contactView';
 import ContactChannelsCard, { type RevealedValues } from './ContactChannelsCard';
+import ContactCompanyCard, { type CompanyChange } from './ContactCompanyCard';
 import ContactDetailsCard from './ContactDetailsCard';
 import ContactLeadsCard from './ContactLeadsCard';
 import ContactNotes from './ContactNotes';
@@ -219,12 +220,14 @@ export default function ContactDetail(props: ContactDetailProps) {
     body: Record<string, unknown>,
     versioned: boolean,
     after?: (answer: ContactAnswer) => void,
+    // (Admin v2 C11) A write to another of the contact's routes (its company), same rules.
+    via: { path: string; method: 'POST' } | null = null,
   ): Promise<boolean> {
     setMessage(null);
     return writeInTurn(queue, {
       send: (signal) =>
-        adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}`, {
-          method: 'PATCH',
+        adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}${via?.path ?? ''}`, {
+          method: via?.method ?? 'PATCH',
           body: versioned ? { ...body, version: row.current.version } : body,
           signal,
         }),
@@ -462,6 +465,16 @@ export default function ContactDetail(props: ContactDetailProps) {
             customFields={props.customFields}
             busy={busy}
             save={(patch: ContactPatch) => write(patch as Record<string, unknown>, true)}
+          />
+          <ContactCompanyCard
+            contact={contact}
+            busy={busy}
+            change={(change: CompanyChange) =>
+              write(change as Record<string, unknown>, true, undefined, {
+                path: '/company',
+                method: 'POST',
+              })
+            }
           />
           <ContactLeadsCard
             leads={leads}

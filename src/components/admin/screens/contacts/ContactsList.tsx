@@ -75,6 +75,8 @@ export interface ContactsListProps {
   me: string;
   /** The server's clock when it rendered, so the first render's "3 h ago" matches. */
   now: string;
+  /** (Admin v2 C11) How many companies the tenant holds, for the sub-line; null unread. */
+  companies?: number | null | undefined;
 }
 
 /** What the bulk route answers. */
@@ -219,6 +221,7 @@ export default function ContactsList({
   people,
   me,
   now: renderedAt,
+  companies,
 }: ContactsListProps) {
   const { formatDateTime, relTime } = useClock();
   const tagId = useId();
@@ -325,7 +328,7 @@ export default function ContactsList({
 
   useEffect(() => {
     const line = document.querySelector('.admin-header .admin-sub');
-    if (line && summary) line.textContent = contactsSubline(summary);
+    if (line && summary) line.textContent = contactsSubline(summary, companies);
   }, [summary]);
 
   const versions = useMemo(
