@@ -575,6 +575,13 @@ describe('admin.css keeps the hooks the markup renders', () => {
         'src/pages/admin/leads/board.astro',
         'src/pages/admin/leads/index.astro',
       ]);
+      // The Tasks screen (C8), the lead's page (its Tasks card) and, since C8b, a contact's page
+      // (the same card, loaded with import()).
+      expect(pagesFor('tasks.css')).toEqual([
+        'src/pages/admin/contacts/[id].astro',
+        'src/pages/admin/leads/[id].astro',
+        'src/pages/admin/tasks.astro',
+      ]);
       // The sign-in screens (F7) render login.css's classes in their pages and in the shell
       // they share, src/layouts/AuthLayout.astro, which the walk traces to all four (the
       // invite page joined in U12b).

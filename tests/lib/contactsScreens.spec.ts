@@ -13,7 +13,12 @@ import {
 } from '@/components/admin/screens/contacts/AddContactDrawer';
 import { forgetOnLeave } from '@/components/admin/screens/contacts/shared';
 import CommandPalette from '@/components/admin/screens/chrome/CommandPalette';
-import { eraseStep } from '@/components/admin/screens/contacts/EraseContactDialog';
+import {
+  erasedLine,
+  erasedTasks,
+  eraseStep,
+  type ErasePreview,
+} from '@/components/admin/screens/contacts/EraseContactDialog';
 import { detailsPatch } from '@/components/admin/screens/contacts/ContactDetailsCard';
 import ContactLeadsCard, {
   copiedWords,
@@ -465,6 +470,79 @@ describe('the erasure needs a reason and a second press', () => {
     expect(source).toContain(
       'body: { reason, ...(ticked.size > 0 ? { extraLeads: [...ticked] } : {}) }',
     );
+  });
+});
+
+// Admin v2 C8b: the preview counts the tasks that go (C8: the person's own, `counts.tasks`; C8
+// review, C8-SEC-4: each phone match's own, which the erasure takes only when it is ticked).
+describe('the erasure says how many tasks go, ticks included (C8b)', () => {
+  const preview: ErasePreview = {
+    counts: { leads: 2, unindexed: 0, channels: 1, notes: 1, tasks: 3 },
+    phoneMatches: [
+      { id: OTHER, lead_number: 12, name: 'N.', company: null, created_at: null, tasks: 1 },
+      { id: SARA, lead_number: 13, name: 'N.', company: null, created_at: null, tasks: 0 },
+      { id: WON, lead_number: 14, name: 'N.', company: null, created_at: null, tasks: 2 },
+    ],
+  };
+  it('the person’s own tasks, plus each ticked match’s', () => {
+    expect(erasedTasks(preview, new Set())).toBe(3);
+    expect(erasedTasks(preview, new Set([OTHER]))).toBe(4);
+    expect(erasedTasks(preview, new Set([OTHER, SARA, WON]))).toBe(6);
+    // A tick on something that is not a match adds nothing.
+    expect(erasedTasks(preview, new Set([NEW]))).toBe(3);
+  });
+  it('says them in the preview’s line, in words', () => {
+    expect(erasedLine(preview, new Set())).toBe('2 leads, 1 note, 3 tasks, 1 e-mail or phone.');
+    expect(erasedLine(preview, new Set([WON]))).toBe(
+      '2 leads, 1 note, 5 tasks, 1 e-mail or phone.',
+    );
+    const none = { counts: { ...preview.counts, tasks: 0 }, phoneMatches: [] };
+    expect(erasedLine(none, new Set())).toBe('2 leads, 1 note, 0 tasks, 1 e-mail or phone.');
+    const one = { counts: { ...preview.counts, leads: 1, tasks: 1 }, phoneMatches: [] };
+    expect(erasedLine(one, new Set())).toBe('1 lead, 1 note, 1 task, 1 e-mail or phone.');
+  });
+  it('the dialog draws that line, follows the ticks, and names a match’s tasks', () => {
+    const source = readFileSync(
+      'src/components/admin/screens/contacts/EraseContactDialog.tsx',
+      'utf8',
+    );
+    expect(source).toContain('<span dir="auto">{name}</span>: {erasedLine(preview, ticked)}');
+    expect(source).toContain("{lead.tasks > 0 && `, with ${n(lead.tasks, 'task', 'tasks')}`}");
+    expect(source).toContain('their leads, notes, tasks, e-mails and phone numbers');
+  });
+});
+
+// Admin v2 C8b: the Tasks card on a contact's page, for crm.tasks holders, loaded once the page
+// is up (C8 built it to take a contact; C7 built the page).
+describe('a contact’s page carries the Tasks card (C8b)', () => {
+  const island = readFileSync('src/components/admin/screens/contacts/ContactDetail.tsx', 'utf8');
+  const page = readFileSync('src/pages/admin/contacts/[id].astro', 'utf8');
+  it('loads it with import(), only when the page hands over the task owners', () => {
+    expect(island).toMatch(/if \(!props\.tasks\) return;\s*import\('\.\.\/tasks\/TasksCard'\)/);
+    const card = island.slice(
+      island.lastIndexOf('<TasksCard'),
+      island.indexOf('/>', island.lastIndexOf('<TasksCard')),
+    );
+    expect(island).toContain('{props.tasks && TasksCard && (');
+    expect(card).toContain('contact={{');
+    expect(card).toContain('id: contact.id');
+    expect(card).toContain('owners={props.tasks.owners}');
+  });
+  it('reads the contact and its timeline again after a task changes', () => {
+    const card = island.slice(
+      island.lastIndexOf('<TasksCard'),
+      island.indexOf('<section', island.lastIndexOf('<TasksCard')),
+    );
+    expect(card).toContain('queue.run(() => readContact(true))');
+    expect(card).toContain('reloadEvents()');
+  });
+  it('the page hands the owners to crm.tasks holders only, and links tasks.css', () => {
+    expect(page).toContain(
+      "const canTasks = allowed && can(session.role, 'crm.tasks') === 'full';",
+    );
+    expect(page).toContain('canTasks ? readTaskOwners(sb, session) : Promise.resolve([])');
+    expect(page).toContain('tasks={tasks}');
+    expect(page).toContain("styles={['leads.css', 'contacts.css', 'tasks.css']}");
   });
 });
 

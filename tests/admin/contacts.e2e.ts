@@ -14,7 +14,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *   a contact    an Arabic name in its own direction; the reveal shows the e-mail and writes one
  *                audit row; a note; Details saved, then a conflict from another tab; a phone
  *                match confirmed; a new lead from the contact;
- *   the erasure  the preview, the reason, the second confirm; a 404 after;
+ *   the erasure  the preview (since C8b with the person's tasks counted), the reason, the
+ *                second confirm; a 404 after, and the task gone with them;
  *   the palette  finds a person by name and by whole e-mail, typed key by key; no part of a
  *                typed term goes into a URL;
  *   refusals     every other role gets a 403 page (and API) for a real contact, with no name
@@ -275,12 +276,26 @@ test.describe('as admin', () => {
 
   test('the erasure: the preview, the reason, a second confirm; gone after', async ({ page }) => {
     const person = await addContact(page, 'erase');
+    // (C8b) A task about them: the preview counts it, and it goes with them.
+    const task = await page.request.post('/api/admin/crm/tasks', {
+      headers: { 'x-csrf-token': await csrf(page) },
+      data: {
+        title: `E2E ${RUN} call before the erasure`,
+        type: 'call',
+        dueDate: '2030-01-15',
+        dueTime: '10:00',
+        contactId: person.id,
+      },
+    });
+    expect(task.status()).toBe(200);
+    const taskId = ((await task.json()) as { data: { id: string } }).data.id;
+    expect((await page.request.get(`/api/admin/crm/tasks/${taskId}`)).status()).toBe(200);
     await visit(page, `/admin/contacts/${person.id}`, { waitUntil: 'networkidle' });
     await page.getByText('More actions').click();
     await page.getByRole('button', { name: 'Erase everything about them…' }).click();
     const dialog = page.getByRole('dialog', { name: 'Erase everything about them' });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/0 leads, 0 notes, 1 e-mail or phone\./)).toBeVisible();
+    await expect(dialog.getByText(/0 leads, 0 notes, 1 task, 1 e-mail or phone\./)).toBeVisible();
     await axe(page, 'the erase dialog');
     // No reason: refused before anything is sent.
     await dialog.getByRole('button', { name: 'Erase everything about them' }).click();
@@ -293,6 +308,8 @@ test.describe('as admin', () => {
     await expect(page.locator('#admin-toasts')).toContainText('Everything about them was erased');
     const gone = await page.request.get(`/admin/contacts/${person.id}`);
     expect(gone.status()).toBe(404);
+    // The task went with them (ON DELETE CASCADE): read before, gone after.
+    expect((await page.request.get(`/api/admin/crm/tasks/${taskId}`)).status()).toBe(404);
   });
 
   test('the palette finds a person by name and by whole e-mail; no typed term reaches a URL', async ({

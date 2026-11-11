@@ -7,8 +7,9 @@ import { withFlash } from '@/lib/admin/flash';
 // Erasing a person (Admin v2 C7, crm.md §11 screen 8): an Admin's (`crm.erase`), behind "More
 // actions" on the contact's page. Loaded with import() on first use. On opening it asks POST
 // …/erase-preview (its own limit; it reveals no contact detail) for what would go: their
-// leads, notes and e-mails and phones, and the leads that match them by phone number alone,
-// which the Admin ticks if they are this person's. Then the reason, the danger button "Erase
+// leads, notes, tasks and e-mails and phones, and the leads that match them by phone number
+// alone, which the Admin ticks if they are this person's (Admin v2 C8b: each with the tasks
+// that go with it, added to the count as it is ticked). Then the reason, the danger button "Erase
 // everything about them", and a second confirm, before POST …/erase writes the attempt to the
 // activity log and erases (src/pages/api/admin/crm/contacts/[id]/erase.ts). The modal cannot
 // be dismissed by a stray press.
@@ -34,18 +35,46 @@ export function eraseStep(
   return step === 'choose' ? { next: 'confirm', error: '' } : { next: 'erase', error: '' };
 }
 
-interface Preview {
-  counts: { leads: number; unindexed: number; channels: number; notes: number };
+export interface ErasePreview {
+  /** (C8) `tasks`: the follow-ups about the person or their certain leads. */
+  counts: { leads: number; unindexed: number; channels: number; notes: number; tasks: number };
   phoneMatches: {
     id: string;
     lead_number: number | null;
     name: string | null;
     company: string | null;
     created_at: string | null;
+    /**
+     * (C8 review, C8-SEC-4) The tasks on this lead that go too when it is ticked: none of them
+     * is in `counts.tasks`.
+     */
+    tasks: number;
   }[];
 }
 
 const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+/**
+ * The tasks the erasure would remove as it stands (Admin v2 C8b): the person's own
+ * (`counts.tasks`) plus those of each phone match ticked, so the count follows the ticks. A
+ * missing number (an answer from before C8) counts as none.
+ */
+export function erasedTasks(preview: ErasePreview, ticked: ReadonlySet<string>): number {
+  const own = Number.isInteger(preview.counts.tasks) ? preview.counts.tasks : 0;
+  return preview.phoneMatches.reduce(
+    (sum, lead) => (ticked.has(lead.id) && Number.isInteger(lead.tasks) ? sum + lead.tasks : sum),
+    own,
+  );
+}
+
+/** The preview's first line after the name: "2 leads, 1 note, 3 tasks, 2 e-mails and phones." */
+export function erasedLine(preview: ErasePreview, ticked: ReadonlySet<string>): string {
+  return (
+    `${n(preview.counts.leads, 'lead', 'leads')}, ${n(preview.counts.notes, 'note', 'notes')}, ` +
+    `${n(erasedTasks(preview, ticked), 'task', 'tasks')}, ` +
+    `${n(preview.counts.channels, 'e-mail or phone', 'e-mails and phones')}.`
+  );
+}
 
 export default function EraseContactDialog({
   open,
@@ -55,7 +84,7 @@ export default function EraseContactDialog({
 }: EraseContactDialogProps) {
   const { formatDate } = useClock();
   const group = useId();
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [preview, setPreview] = useState<ErasePreview | null>(null);
   const [ticked, setTicked] = useState<Set<string>>(() => new Set());
   const [reason, setReason] = useState<EraseReason>('');
   const [step, setStep] = useState<'choose' | 'confirm'>('choose');
@@ -70,7 +99,7 @@ export default function EraseContactDialog({
     setPreview(null);
     setTicked(new Set());
     const controller = new AbortController();
-    adminFetch<Preview>(`/api/admin/crm/contacts/${contactId}/erase-preview`, {
+    adminFetch<ErasePreview>(`/api/admin/crm/contacts/${contactId}/erase-preview`, {
       method: 'POST',
       signal: controller.signal,
     })
@@ -128,7 +157,7 @@ export default function EraseContactDialog({
       onClose={onClose}
       dismissible={false}
       title="Erase everything about them"
-      sub="This deletes the person, their leads, notes, e-mails and phone numbers. It cannot be undone. Logged in the audit log. Answer within 30 days."
+      sub="This deletes the person, their leads, notes, tasks, e-mails and phone numbers. It cannot be undone. Logged in the audit log. Answer within 30 days."
       footer={
         <>
           <button type="button" data-autofocus="" onClick={onClose} disabled={busy}>
@@ -150,9 +179,7 @@ export default function EraseContactDialog({
       ) : (
         <>
           <p>
-            <span dir="auto">{name}</span>: {n(preview.counts.leads, 'lead', 'leads')},{' '}
-            {n(preview.counts.notes, 'note', 'notes')},{' '}
-            {n(preview.counts.channels, 'e-mail or phone', 'e-mails and phones')}.
+            <span dir="auto">{name}</span>: {erasedLine(preview, ticked)}
           </p>
           {preview.counts.unindexed > 0 && (
             <p className="f__hint">
@@ -182,6 +209,7 @@ export default function EraseContactDialog({
                       </>
                     )}
                     {lead.created_at && `, ${formatDate(lead.created_at)}`}
+                    {lead.tasks > 0 && `, with ${n(lead.tasks, 'task', 'tasks')}`}
                   </span>
                 </label>
               ))}

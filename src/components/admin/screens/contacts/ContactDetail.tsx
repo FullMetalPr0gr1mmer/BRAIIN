@@ -1,4 +1,12 @@
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type FormEvent,
+} from 'react';
 import { flushSync } from 'react-dom';
 import Icon from '@/components/admin/kit/Icon';
 import Note from '@/components/admin/kit/Note';
@@ -31,6 +39,8 @@ import ContactNotes from './ContactNotes';
 import ContactTimeline, { type TimelineKind } from './ContactTimeline';
 import type { EraseContactDialogProps } from './EraseContactDialog';
 import type { NewLeadDrawerProps } from './NewLeadDrawer';
+import type { TasksCardProps } from '../tasks/TasksCard';
+import type { TaskPerson } from '../tasks/shared';
 import { forgetOnLeave, useLazy, type ContactPerson, type ContactsPermissions } from './shared';
 
 // One contact (Admin v2 C7, crm.md §11 screen 6). The page renders the head (the name as the
@@ -51,6 +61,12 @@ export interface ContactDetailProps extends ContactDetailInitial {
   permissions: ContactsPermissions;
   me: { id: string; name: string };
   now: string;
+  /**
+   * (Admin v2 C8b) For a crm.tasks holder: who a task may be given to. The Tasks card is drawn
+   * only then (a UX hint: the task routes refuse anyone else), loaded with import() once the
+   * page is up, so the contact page's first load does not carry it.
+   */
+  tasks?: { owners: TaskPerson[] } | null | undefined;
 }
 
 interface ContactAnswer {
@@ -87,6 +103,7 @@ export default function ContactDetail(props: ContactDetailProps) {
   );
   const [tagDraft, setTagDraft] = useState('');
   const [now, setNow] = useState(() => Date.parse(props.now));
+  const [TasksCard, setTasksCard] = useState<ComponentType<TasksCardProps> | null>(null);
   const [queue] = useState(() => new Serial(setBusy));
   const [timeline] = useState(() => new Latest());
   // The row as last drawn, for a queued write to read its version when it leaves.
@@ -261,6 +278,14 @@ export default function ContactDetail(props: ContactDetailProps) {
   }
 
   useEffect(() => showFlash(), []);
+
+  // (Admin v2 C8b) The Tasks card, for crm.tasks holders, loaded once the page is up.
+  useEffect(() => {
+    if (!props.tasks) return;
+    import('../tasks/TasksCard')
+      .then((module) => setTasksCard(() => module.default))
+      .catch(() => undefined);
+  }, []);
 
   // Revealed details go when the page is left, and stay gone if the browser brings the page
   // back from its back/forward cache: drawn away before the page is frozen (flushSync), so the
@@ -452,6 +477,24 @@ export default function ContactDetail(props: ContactDetailProps) {
               void reloadEvents();
             }}
           />
+          {props.tasks && TasksCard && (
+            <TasksCard
+              contact={{
+                id: contact.id,
+                name,
+                company:
+                  typeof contact['company_name'] === 'string' ? contact['company_name'] : null,
+              }}
+              owners={props.tasks.owners}
+              me={me}
+              onChanged={() => {
+                // A task ticked off is the contact's activity (C8): "last activity" and "kept
+                // until" follow it; a task added or ticked is a line on the timeline.
+                void queue.run(() => readContact(true));
+                void reloadEvents();
+              }}
+            />
+          )}
           <section className="card" aria-labelledby={`${id}-score`}>
             <h2 id={`${id}-score`} className="card-title">
               Score

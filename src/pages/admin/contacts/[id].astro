@@ -14,6 +14,7 @@ import {
   type ContactDetailInitial,
 } from '@/lib/crm/contactPage';
 import type { ContactPerson } from '@/lib/crm/contactView';
+import { readTaskOwners } from '@/lib/crm/taskPage';
 import { contactName, roleLine } from '@/lib/crm/contactView';
 
 export const prerender = false;
@@ -50,6 +51,10 @@ const permissions = {
 let detail: ContactDetailInitial | null = null;
 let stages: StageView[] = [];
 let people: ContactPerson[] = [];
+// (Admin v2 C8b) The Tasks card's owners, for crm.tasks holders only (its routes check again):
+// the same directory read as `people` (src/lib/crm/people.ts), so no extra round trip.
+const canTasks = allowed && can(session.role, 'crm.tasks') === 'full';
+let tasks: { owners: { id: string; name: string }[] } | null = null;
 let failed = false;
 let notFound = false;
 
@@ -58,11 +63,14 @@ if (allowed && session && sb) {
     notFound = true;
   } else {
     try {
-      [detail, stages, people] = await Promise.all([
+      let owners: { id: string; name: string }[] = [];
+      [detail, stages, people, owners] = await Promise.all([
         readContactDetail(sb, session, id),
         readStages(sb, session),
         readContactPeople(sb, session),
+        canTasks ? readTaskOwners(sb, session) : Promise.resolve([]),
       ]);
+      if (canTasks) tasks = { owners };
     } catch (err) {
       if (err instanceof NotFoundError) notFound = true;
       else failed = true;
@@ -87,7 +95,7 @@ const me = session
   headingDir={name ? 'auto' : undefined}
   subtitle={subtitle}
   subtitleDir={subtitle ? 'auto' : undefined}
-  styles={['leads.css', 'contacts.css']}
+  styles={['leads.css', 'contacts.css', 'tasks.css']}
 >
   {
     allowed && (
@@ -120,6 +128,7 @@ const me = session
         permissions={permissions}
         me={me}
         now={new Date().toISOString()}
+        tasks={tasks}
       />
     )
   }

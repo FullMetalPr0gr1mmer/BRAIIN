@@ -13,6 +13,7 @@ import {
   type TimelinePage,
 } from './contacts';
 import { customFieldDefinitions } from './contactCustom';
+import { crmPeople } from './people';
 import type { ContactLead, ContactPerson, ContactSummary } from './contactView';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
 import { isRole } from '@/lib/auth/types';
@@ -28,21 +29,26 @@ import { isRole } from '@/lib/auth/types';
 //   list     people, summary, page 1                                            = 3
 //   contact  the row, then its channels (presence), its leads, its first timeline page,
 //            the lead stages, the people, the retention months, the view's audit row = 8
+//            (C8b: for a crm.tasks holder the Tasks card's owners come from the same people
+//            read, src/lib/crm/people.ts, so the count stays 8; the card reads its tasks
+//            itself, after the page is up)
 // Never a channel's value or index, a note, a score reason or a decrypted value: those are
 // read by the island, through the audited routes, and only on request.
 
 /**
  * The people the screens name (public.crm_people: the tenant's active CRM members, names and
  * roles only), each marked with whether the owner rule accepts them: an active holder of
- * `crm.contacts` (crm_contacts_owner_active). Empty when the directory cannot be read.
+ * `crm.contacts` (crm_contacts_owner_active). Empty when the directory cannot be read. The
+ * directory is read once per request (crmPeople, C8b): the Tasks card's owners
+ * (taskPage's readTaskOwners) come from the same read.
  */
 export async function readContactPeople(
   sb: SupabaseClient,
   auth: AuthContext,
 ): Promise<ContactPerson[]> {
-  const { data, error } = await sb.rpc('crm_people', { p_tenant: auth.tenantId });
-  if (error || !Array.isArray(data)) return [];
-  return (data as Record<string, unknown>[]).flatMap((person) => {
+  const data = await crmPeople(sb, auth.tenantId);
+  if (!data) return [];
+  return data.flatMap((person) => {
     if (typeof person['id'] !== 'string') return [];
     const role = person['role'];
     const name =
