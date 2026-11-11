@@ -1496,6 +1496,17 @@ The numbers are assigned at merge (`scripts/renumber-migration.mjs`): read them 
 5. **Rollback**: an enum value cannot be dropped. Change every Sales user to another role (or
    switch them off) and leave the value unused: no policy or helper grants it anything but
    what 0097 names, and reverting 0097's grants is a new forward migration.
+6. **Contacts and tasks for Sales (Admin v2 C10b, one migration, held until O-11 like the
+   rest of the contacts chain).** It re-creates `app.role_crm_contacts` and `app.role_crm_tasks`
+   with Sales, adds `public.crm_contact_retention_months()` and puts the two Sales guides
+   again. Apply it in the same window as the Worker that merges with it: before the deploy a
+   live Sales token can already read the contacts and tasks through PostgREST (what the new
+   Worker offers it), and the old Worker still refuses Sales every contacts and tasks screen;
+   with the code first, those screens open for Sales but read nothing until the migration.
+   Then run its read-back (`readback_c10b.sql`, the expected values in its header) and check
+   that a Sales user's sidebar shows Leads, Contacts and Tasks, that a contact's page shows
+   "kept until", and that it offers no "More actions" (erasure stays Admin's). Rollback: a
+   forward migration that re-creates the two helpers with Admin alone.
 
 ### 6m. The FAQ moves into the database (migration 0098, Admin v2 U7)
 
