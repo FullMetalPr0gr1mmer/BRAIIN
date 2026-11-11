@@ -614,6 +614,8 @@ alter type public.app_role add value if not exists 'sales';
 
 **C10b, contacts for Sales: one reveal must stay one person (C6 review, C6-SEC-3).** Confirming a phone match copies that lead's e-mail and phone into the contact, and the contact reveal decrypts every channel of a contact for one slot of the `pii-reveal` limiter. While only Admin holds `crm.contacts` this adds nothing (Admin can export). Before C10b gives Sales `crm.contacts` ("no bulk PII"), keep these: a contact keeps at most ten e-mails and ten phones that a person adds or copies (`app.crm_channel_cap()`, 0133: a confirm into a full contact copies nothing and answers `full`, a channel edit past it is refused whole), so one reveal shows at most twenty values. C10b should also decide whether a Sales confirm spends a reveal slot or a limit of its own, and whether the reveal shows a Sales user only the primary of each kind. Register L-3 records it.
 
+**C12, a merge is a copy too (C12 review, C12-SEC-R2-1).** A merge moves the other record's e-mails and phones onto the one kept, and the next reveal of it decrypts both people's. So `POST /api/admin/crm/contacts/merge` spends one slot of the reveal's own limiter (`pii-reveal`, fail-closed, after the live recheck and before anything is read) for a role that may not take every lead's details at once (`receivesLeadPiiUnasked` false: Sales once C10b gives it `crm.contacts`), as the C10b link confirm does. The rule for any new path that moves or copies channels into a contact: every value a Sales reveal shows has cost it a slot. Admin spends none.
+
 ## 11. UI contract for the UI architect
 
 **General**
