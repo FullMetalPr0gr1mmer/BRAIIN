@@ -157,6 +157,7 @@ From `ROLE_CAPS` in `src/lib/authz/matrix.ts`. **Byte-for-byte identical to arch
 | Leads / analytics / activity — export CSV | ✅ | ❌ | ❌ | ✅ | ❌ |
 | CRM — contacts (view, edit, notes; the people behind leads) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | CRM — tasks (follow-ups for leads and contacts) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| CRM — contact files (add, download, remove) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Leads & contacts — erase a person's data (DSAR) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | CRM settings — pipeline stages, scoring, response time, assignment | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Job applications — view / manage status / notes / erase | ✅ | ❌ | ❌ | ❌ | ❌ |
