@@ -69,7 +69,9 @@ describe('the first render', () => {
     expect(html).toContain('I confirm we may hold each person’s details on the lawful basis');
     expect(html).toContain('None of these lets us send marketing.');
     // Nothing to import until a file is read.
-    expect(html).toMatch(/<button type="submit" data-variant="primary" disabled="">Import<\/button>/);
+    expect(html).toMatch(
+      /<button type="submit" data-variant="primary" disabled="">Import<\/button>/,
+    );
   });
 
   it('lists the recent imports with who made them and their state in words', () => {
@@ -82,7 +84,10 @@ describe('the first render', () => {
   });
 
   it('keeps P-12: no em or en dash in the screen’s words', () => {
-    const source = readFileSync('src/components/admin/screens/contacts-import/ImportContacts.tsx', 'utf8');
+    const source = readFileSync(
+      'src/components/admin/screens/contacts-import/ImportContacts.tsx',
+      'utf8',
+    );
     const words = readFileSync('src/lib/crm/importScreen.ts', 'utf8');
     for (const text of [html, source, words]) expect(text).not.toMatch(/[—–]/);
   });
@@ -190,7 +195,12 @@ describe('the result in words', () => {
   });
 
   it('a long list of rows is cut short', () => {
-    expect(rowList(Array.from({ length: 35 }, (_, i) => i + 2), 30)).toMatch(/and 5 more$/);
+    expect(
+      rowList(
+        Array.from({ length: 35 }, (_, i) => i + 2),
+        30,
+      ),
+    ).toMatch(/and 5 more$/);
     expect(rowList([9])).toBe('9');
   });
 
@@ -203,7 +213,11 @@ describe('the result in words', () => {
     );
     expect(
       importErrorWords(
-        new AdminApiError({ error: 'validation', status: 422, detail: 'Column 3 repeats a heading.' }),
+        new AdminApiError({
+          error: 'validation',
+          status: 422,
+          detail: 'Column 3 repeats a heading.',
+        }),
       ),
     ).toBe('Column 3 repeats a heading.');
   });
