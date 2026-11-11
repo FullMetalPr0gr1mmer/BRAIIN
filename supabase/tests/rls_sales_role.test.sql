@@ -11,7 +11,10 @@
 --   2. the CRM: a live Sales token reads and works leads (the stages, the timeline, the
 --      settings, the people it may assign to) through RLS and the pipeline's column grant,
 --      and writes nothing else of a lead: no insert, no delete, no ciphertext, no notes
---      table (and the legacy status and notes field are gone since C14b);
+--      table (and the legacy status and notes field are gone since C14b); since C10b it
+--      reads the contacts and the tasks too (crm.contacts, crm.tasks), never a channel's
+--      ciphertext or blind index nor the notes table (crm_sales_contacts.test.sql proves
+--      the writes, the doors and the erasure refused);
 --   3. everything else, FROM THE CATALOG: for every relation in public that `authenticated`
 --      can read at all, outside the CRM and the member's own rows, a Sales token reads no
 --      more rows than anon, and wherever it reads a row it reads no column anon cannot read
@@ -33,7 +36,7 @@
 --      lead, no timeline and nobody in the directory.
 
 begin;
-select plan(66);
+select plan(68);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- T1 is created older than any seeded tenant, so inside this transaction it is the launch
@@ -127,9 +130,9 @@ insert into public.blog_posts (id, tenant_id, slug, title, status) values
    '{"en":"Post","ar":"مقال"}', 'published');
 
 -- Staff-only rows, one at least in each relation `authenticated` holds more of than anon.
--- The contacts (0131, Admin v2 C5): Admin's alone until C10b gives Sales crm.contacts, so here
--- they are compared like any staff-only relation (a Sales token reads none). The contact's
--- `created` and `channel_added` events come from its triggers.
+-- The contacts (0131, Admin v2 C5): Sales holds crm.contacts since C10b, so they are proven on
+-- their own in section 2 (and in crm_sales_contacts.test.sql), not compared with anon. The
+-- contact's `created` and `channel_added` events come from its triggers.
 insert into public.crm_contacts (id, tenant_id, display_name) values
   ('93000000-0000-0000-0000-00000000c5c1', '93000000-0000-0000-0000-000000000001', 'C5 contact');
 insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc, value_hmac, is_primary) values
@@ -137,7 +140,7 @@ insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc,
    repeat('c', 64), true);
 insert into public.crm_contact_notes (tenant_id, contact_id, body) values
   ('93000000-0000-0000-0000-000000000001', '93000000-0000-0000-0000-00000000c5c1', 'a note');
--- A task (0134, Admin v2 C8): Admin's alone until C10b gives Sales crm.tasks.
+-- A task (0134, Admin v2 C8): Sales holds crm.tasks since C10b (section 2).
 insert into public.crm_tasks (tenant_id, title, due_at, contact_id) values
   ('93000000-0000-0000-0000-000000000001', 'C8 task', now() + interval '1 day',
    '93000000-0000-0000-0000-00000000c5c1');
@@ -304,9 +307,11 @@ grant execute on function _as(text, text, text), _sales(), _run(text), _val(text
   _readable(), _extra_columns(regclass), _has_tenant(regclass) to anon, authenticated, service_role;
 grant insert, select on _seen, _t1_staff to anon, authenticated;
 
--- The CRM, a member's own rows and the stats analytics.read gives: proven on their own below.
+-- The CRM, a member's own rows and the stats analytics.read gives: proven on their own below
+-- (the contacts and the tasks since C10b gives Sales crm.contacts and crm.tasks).
 create function _not_compared() returns text[] language sql immutable as $$
   select array['leads', 'leads_safe', 'lead_stages', 'lead_events', 'crm_settings',
+               'crm_contacts', 'crm_contact_channels', 'crm_contact_events', 'crm_tasks',
                'profiles', 'admin_user_prefs', 'tenants', 'help_articles',
                'admin_role_defaults', 'rollup_daily_pageviews', 'team_notes',
                'rollup_daily_visits', 'rollup_daily_events', 'rollup_hourly_pageviews',
@@ -342,8 +347,8 @@ select is(
             app.role_crm_settings(r)::int, app.role_manages_integrations(r)::int,
             app.role_crm_contacts(r)::int, app.role_crm_tasks(r)::int), ' ' order by r)
      from unnest(enum_range(null::public.app_role)::text[] || array['anon']) r),
-  'admin:111111111111 anon:000000000000 content_creator:010000000000 developer:110011100000 sales:110000000000 seo:010000010100',
-  'each helper answers its capability for each role: Sales works leads and reads the stats, nothing else');
+  'admin:111111111111 anon:000000000000 content_creator:010000000000 developer:110011100000 sales:110000000011 seo:010000010100',
+  'each helper answers its capability for each role: Sales works leads, contacts and tasks and reads the stats, nothing else');
 
 select is(
   (select with_check from pg_policies
@@ -418,6 +423,16 @@ select is(
      from public.staff_directory('93000000-0000-0000-0000-000000000001')),
   'Amal, Dana, Sami',
   'the directory gives Sales the same, and no CMS colleague (P-7)');
+-- The contacts and the tasks (Admin v2 C10b): read like the leads, through C5's column grants.
+select is(_count('public.crm_contacts') || '/' || _count('public.crm_contact_channels') || '/'
+          || (select (count(*) > 0)::text from public.crm_contact_events) || '/' || _count('public.crm_tasks'),
+  '1/1/true/1',
+  'Sales reads its tenant''s contact, the channel''s safe columns, the contact''s timeline and the task (C10b)');
+select is(_val($$ select value_enc from public.crm_contact_channels $$) || ' '
+          || _val($$ select value_hmac from public.crm_contact_channels $$) || ' '
+          || _run($$ select * from public.crm_contact_notes $$),
+  '42501 42501 42501',
+  'but never a channel''s ciphertext or blind index, nor the notes table (the audited door reads it)');
 reset role;
 
 -- ── 3. everything else, from the catalog ───────────────────────────────────────
@@ -601,24 +616,32 @@ select _as(null, null, null);
 set local role authenticated;
 select _as('93000000-0000-0000-0000-0000000000b2', 'sales', '93000000-0000-0000-0000-000000000001');
 select is(_count('public.leads') + _count('public.lead_events') + _count('public.help_articles')
+          + _count('public.crm_contacts') + _count('public.crm_contact_events') + _count('public.crm_tasks')
           + (select count(*) from public.crm_people('93000000-0000-0000-0000-000000000001')), 0::bigint,
-  'a demoted Sales token (the profile says content_creator) reads no lead, timeline, guide or colleague');
+  'a demoted Sales token (the profile says content_creator) reads no lead, timeline, guide, contact, task or colleague');
 select is(_count('public.admin_role_defaults') + _count('public.team_notes'), 0::bigint,
   'nor its old role''s preset or the team note');
 select _as('93000000-0000-0000-0000-0000000000b3', 'sales', '93000000-0000-0000-0000-000000000001');
 select is(_count('public.leads') + _count('public.lead_events')
+          + _count('public.crm_contacts') + _count('public.crm_contact_events') + _count('public.crm_tasks')
           + (select count(*) from public.crm_people('93000000-0000-0000-0000-000000000001')), 0::bigint,
   'a deactivated Sales token reads none of them');
 select _as('93000000-0000-0000-0000-0000000000b4', 'sales', '93000000-0000-0000-0000-000000000001');
 select is(_count('public.leads') + _count('public.lead_events')
+          + _count('public.crm_contacts') + _count('public.crm_contact_events') + _count('public.crm_tasks')
           + (select count(*) from public.crm_people('93000000-0000-0000-0000-000000000001')), 0::bigint,
   'a locked Sales token reads none of them');
-select is(_run($$ update public.leads set is_starred = false $$), 'ok:0', 'and changes no lead');
+select is(_run($$ update public.leads set is_starred = false $$) || ' '
+          || _run($$ update public.crm_contacts set is_starred = true $$) || ' '
+          || _run($$ update public.crm_tasks set title = 'x' $$),
+  'ok:0 ok:0 ok:0', 'and changes no lead, contact or task');
 select _as('93000000-0000-0000-0000-0000000000b5', 'sales', '93000000-0000-0000-0000-0000000000ff');
 select is(
   (select count(*)::int from public.leads where tenant_id = '93000000-0000-0000-0000-000000000001')
-    + (select count(*)::int from public.crm_people('93000000-0000-0000-0000-000000000001')),
-  0, 'another tenant''s Sales reads none of T1''s leads or people');
+    + (select count(*)::int from public.crm_people('93000000-0000-0000-0000-000000000001'))
+    + (select count(*)::int from public.crm_contacts where tenant_id = '93000000-0000-0000-0000-000000000001')
+    + (select count(*)::int from public.crm_tasks where tenant_id = '93000000-0000-0000-0000-000000000001'),
+  0, 'another tenant''s Sales reads none of T1''s leads, people, contacts or tasks');
 select is((select count(*)::int from public.leads), 1, 'and its own tenant''s lead only');
 select is((select string_agg(tenant_id::text, ',') from public.admin_role_defaults),
   '93000000-0000-0000-0000-0000000000ff', 'and its own tenant''s preset only');
