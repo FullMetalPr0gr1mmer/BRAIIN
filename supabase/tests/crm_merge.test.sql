@@ -433,7 +433,9 @@ delete from public.crm_contacts where display_name = 'Flood Person';
 
 -- Two records the system made (no person, nothing to fill between them): c005 holds a lead's
 -- phone and ten more from arrivals (eleven: an arrival adds a phone without the ceiling);
--- c006 holds the same phone, typed by a person.
+-- c006 holds the same phone, typed by a person. (No token while they are made: a session's
+-- person would be put down as their maker.)
+select set_config('request.jwt.claims', '', true);
 insert into public.crm_contacts (id, tenant_id, display_name, last_activity_at) values
   ('c1200000-0000-4000-8000-00000000c005', 'c1200000-0000-4000-8000-000000000001', 'Reem Hamad', now() - interval '20 days'),
   ('c1200000-0000-4000-8000-00000000c006', 'c1200000-0000-4000-8000-000000000001', 'Reem H', now() - interval '2 days');
@@ -461,7 +463,8 @@ select is((select concat_ws(' ', ch.value_enc, ch.source, ch.created_by, ch.is_p
             where ch.contact_id = 'c1200000-0000-4000-8000-00000000c005' and ch.kind = 'phone' and ch.value_hmac = repeat('6', 64)),
   'enc-p6 manual c1200000-0000-4000-8000-0000000000a1 t',
   'a phone both held stays once, and the copy kept takes the person''s source and maker (C12-COR-1)');
-select is((select staff_edited from public.crm_contacts where id = 'c1200000-0000-4000-8000-00000000c005'), true,
+select is((select concat_ws(' ', created_by is null, staff_edited) from public.crm_contacts
+            where id = 'c1200000-0000-4000-8000-00000000c005'), 't t',
   'two records the system made, nothing filled: the survivor is a person''s edit all the same (C12-COR-4)');
 set local role service_role;
 select is(c12_val($$ select public.crm_erase_lead('c1200000-0000-4000-8000-000000000001',
