@@ -852,6 +852,67 @@ describe('POST /[id]/links (C6 review, C6-SEC-3, C6-COR-2)', () => {
         detail: { lead: OTHER, action: 'confirm', email: 'full', phone: 'kept' },
       },
     ]);
+    // An Admin may export every lead's details anyway: its confirm spends no reveal slot.
+    expect(claims).toEqual([]);
+  });
+
+  // Admin v2 C10b (crm.md §10, C6-SEC-3): one reveal stays one person. A confirm copies the
+  // lead's e-mail and phone into the contact the next reveal decrypts, so a role that cannot
+  // export (Sales) spends a slot of the reveal's own limiter for it.
+  describe('Sales (C10b): a confirm spends a reveal slot', () => {
+    const asSales = () => {
+      sessionRole = 'sales';
+      liveProfile = { role: 'sales', is_active: true, locked_until: null };
+    };
+    const post = (action: 'confirm' | 'detach') =>
+      links.POST(
+        ctx(`/api/admin/crm/contacts/${CONTACT}/links`, 'POST', { leadId: OTHER, action }),
+      );
+
+    it('the live recheck, then the pii-reveal slot, then the read and the door', async () => {
+      asSales();
+      rpcAnswers['crm_contact_link_lead'] = {
+        data: { link: 'staff', email: 'added', phone: 'kept' },
+        error: null,
+      };
+      const res = await post('confirm');
+      expect(res.status).toBe(200);
+      expect(events.slice(0, 4)).toEqual([
+        'svc:profiles',
+        'ops:pii-reveal',
+        'rls:crm_contacts',
+        'svc:rpc:crm_contact_link_lead',
+      ]);
+      expect(claims).toEqual([{ op: 'pii-reveal', limits: PII_REVEAL_LIMITS }]);
+      expect(audits.map((a) => a.action)).toEqual(['crm.contact.link']);
+    });
+
+    it('past the limit: a 429, nothing read, nothing copied, nothing audited', async () => {
+      asSales();
+      limited = true;
+      const res = await post('confirm');
+      expect(res.status).toBe(429);
+      expect(events).not.toContain('rls:crm_contacts');
+      expect(rpcCalls).toEqual([]);
+      expect(audits).toEqual([]);
+    });
+
+    it('a detach copies nothing and spends no slot', async () => {
+      asSales();
+      rpcAnswers['crm_contact_link_lead'] = { data: { link: 'detached' }, error: null };
+      const res = await post('detach');
+      expect(res.status).toBe(200);
+      expect(claims).toEqual([]);
+    });
+
+    it('a Sales profile demoted since the token was issued is refused before any slot', async () => {
+      sessionRole = 'sales';
+      liveProfile = { role: 'content_creator', is_active: true, locked_until: null };
+      const res = await post('confirm');
+      expect(res.status).toBe(403);
+      expect(claims).toEqual([]);
+      expect(rpcCalls).toEqual([]);
+    });
   });
 
   it('a lead that is not this contact’s phone match is a 422', async () => {

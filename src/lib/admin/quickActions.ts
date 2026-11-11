@@ -183,7 +183,7 @@ export const QUICK_DEFAULTS: Readonly<Record<Role, readonly string[]>> = {
   content_creator: ['add-service', 'add-project', 'write-post', 'upload', 'edit-home', 'view-site'],
   seo: ['edit-seo', 'add-redirect', 'stats', 'view-site'],
   developer: ['open-leads', 'health', 'maintenance', 'upload', 'stats', 'view-site'],
-  sales: ['open-leads', 'stats', 'view-site'],
+  sales: ['open-leads', 'my-tasks', 'stats', 'view-site'],
 };
 
 const PALETTE: readonly QuickAction[] = QUICK_LIBRARY.flatMap((action) =>

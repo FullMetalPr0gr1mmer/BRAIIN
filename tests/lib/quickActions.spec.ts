@@ -164,15 +164,18 @@ describe('the library', () => {
     }
     expect(libraryFor('seo').map((a) => a.id)).not.toContain('open-leads');
     expect(libraryFor('content_creator').map((a) => a.id)).not.toContain('applications');
-    // (Admin v2 C8 review, C8-DESIGN-1) "My tasks": crm.tasks holders only (Admin until C10b).
+    // (Admin v2 C8 review, C8-DESIGN-1) "My tasks": crm.tasks holders only (Admin, and Sales
+    // since C10b).
     for (const role of ROLES) {
       expect(
         libraryFor(role)
           .map((a) => a.id)
           .includes('my-tasks'),
         role,
-      ).toBe(role === 'admin');
+      ).toBe(role === 'admin' || role === 'sales');
     }
+    // Sales starts with it (C10b): its day is leads and the follow-ups.
+    expect(QUICK_DEFAULTS.sales).toEqual(['open-leads', 'my-tasks', 'stats', 'view-site']);
     expect(QUICK_LIBRARY.find((a) => a.id === 'my-tasks')?.href).toBe('/admin/tasks?view=mine');
   });
 
