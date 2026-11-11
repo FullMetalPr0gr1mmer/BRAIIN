@@ -3,7 +3,8 @@ import { UUID, type Case } from '../harness';
 // The contacts API (Admin v2 C6, crm.md §9). `crm.contacts` is Admin's and, since C10b,
 // Sales' (owner default O-7: Developer none). A new lead for a contact also needs
 // `leads.manage` and `leads.pii`, which both hold; deleting a note, the erasure preview and
-// the erasure are `crm.erase` (Admin only: Sales is refused them). Developer holds leads.*
+// the erasure are `crm.erase` (Admin only: Sales is refused them), and so is removing an
+// e-mail or phone (C10b review, C10B-SEC-2). Developer holds leads.*
 // and is refused every row because it holds neither crm.contacts nor crm.erase.
 
 const NOTE = '22222222-2222-4222-8222-222222222222';
@@ -96,6 +97,15 @@ export const cases: readonly Case[] = [
     url: BASE,
     body: { version: 1, channels: { add: [{ kind: 'phone', value: '+966501234567' }] } },
     allow: ['admin', 'sales'],
+  },
+  {
+    // C10b review, C10B-SEC-2: a removal deletes a person's details, so it is erasure's.
+    name: 'contact e-mail or phone removal (PATCH channels.remove)',
+    load: () => import('@/pages/api/admin/crm/contacts/[id]'),
+    method: 'PATCH',
+    url: BASE,
+    body: { version: 1, channels: { remove: [NOTE] } },
+    allow: ['admin'],
   },
   {
     name: 'contact contact details (reveal)',

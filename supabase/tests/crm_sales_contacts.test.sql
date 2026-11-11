@@ -11,19 +11,23 @@
 --      summary, timeline, a whole address by its blind index), a detail change, the owner rule
 --      (a Sales colleague may own a contact, a Developer may not), bulk; no insert or delete;
 --   3. the doors as the service role with a Sales actor: add, channels, the phone match's
---      confirm, a new lead; never a note's deletion or the erasure (crm.erase stays Admin's);
+--      confirm, a new lead; never a channel's removal, a note's deletion or the erasure
+--      (crm.erase stays Admin's; C10b review, C10B-SEC-2); stale and foreign Sales actors on
+--      every door (C10B-COR-4); and an arrival keeps a contact within ten phones, so one Sales
+--      reveal shows at most ten e-mails and ten phones (C10b review, C10B-SEC-1);
 --   4. the tasks as a live Sales token: add, read, change, tick (stamped with its own name),
 --      remove, the badge; a Sales owner accepted, a Developer refused;
 --   5. the retention door (public.crm_contact_retention_months): the tenant's horizon for a
 --      live contacts holder, null for anyone else;
 --   6. stale Sales tokens (demoted, switched off, locked), another tenant's Sales, a
---      Developer, a Content Creator, SEO and anon: no contact, no task, no door.
+--      Developer, a Content Creator, SEO and anon: no contact, no task, no door; a stale Sales
+--      token's direct task insert learns nothing (C10b review, C10B-COR-4).
 -- Personas: A admin, L sales, L2 a second sales, D developer, C content_creator, S seo, Lx
 -- another tenant's sales, stale Sales tokens Ld (the profile now says content_creator), Lo
 -- (switched off), Ll (locked); N anon. Helpers are named c10b_* (never a pgTAP internal).
 
 begin;
-select plan(55);
+select plan(63);
 
 insert into public.tenants (id, name) values
   ('c1b00000-0000-4000-8000-000000000001', 'C10b T1'),
@@ -229,6 +233,20 @@ select is(c10b_val($$ select public.crm_edit_contact_channels('c1b00000-0000-400
              jsonb_build_array(jsonb_build_object('kind', 'phone', 'value_enc', 'enc-p2', 'value_hmac', repeat('6', 64))),
              null, null, 'c1b00000-0000-4000-8000-0000000000b1')::text $$),
   '{"added": 1, "removed": 0}', 'Sales adds a phone to a contact at the version it read');
+-- (C10b review, C10B-SEC-2) Removing an e-mail or phone deletes a person's details: erasure's.
+select is(c10b_val($$ select public.crm_edit_contact_channels('c1b00000-0000-4000-8000-000000000001',
+             'c1b00000-0000-4000-8000-00000000c001',
+             (select version from public.crm_contacts where id = 'c1b00000-0000-4000-8000-00000000c001'),
+             null, array[(select id from public.crm_contact_channels where value_hmac = repeat('6', 64))],
+             null, 'c1b00000-0000-4000-8000-0000000000b1')::text $$) || ' '
+          || c10b_val($$ select count(*) from public.crm_contact_channels where value_hmac = repeat('6', 64) $$),
+  '42501 1', 'but Sales never removes an e-mail or phone (crm.erase stays Admin''s), and nothing went');
+select is(c10b_val($$ select public.crm_edit_contact_channels('c1b00000-0000-4000-8000-000000000001',
+             'c1b00000-0000-4000-8000-00000000c001',
+             (select version from public.crm_contacts where id = 'c1b00000-0000-4000-8000-00000000c001'),
+             null, array[(select id from public.crm_contact_channels where value_hmac = repeat('6', 64))],
+             null, 'c1b00000-0000-4000-8000-0000000000a1')::text $$),
+  '{"added": 0, "removed": 1}', 'an Admin does');
 select is(c10b_val($$ select public.crm_contact_link_lead('c1b00000-0000-4000-8000-000000000001',
              'c1b00000-0000-4000-8000-00000000c001', 'c1b00000-0000-4000-8000-00000000aa02', 'confirm',
              'c1b00000-0000-4000-8000-0000000000b1')::text $$),
@@ -259,6 +277,21 @@ select is(c10b_actors(array['D', 'Lx', 'Ld', 'Lo', 'Ll'],
             $$ select public.crm_contact_link_lead('c1b00000-0000-4000-8000-000000000001',
                  'c1b00000-0000-4000-8000-00000000c001', 'c1b00000-0000-4000-8000-00000000aa01', 'detach', %L)::text $$),
   '42501 42501 42501 42501 42501', 'and so does the link door');
+-- (C10b review, C10B-COR-4) The stale and foreign Sales actors on the other two doors.
+select is(c10b_actors(array['Lx', 'Ld', 'Lo', 'Ll'],
+            $$ select public.crm_edit_contact_channels('c1b00000-0000-4000-8000-000000000001',
+                 'c1b00000-0000-4000-8000-00000000c001',
+                 (select version from public.crm_contacts where id = 'c1b00000-0000-4000-8000-00000000c001'),
+                 jsonb_build_array(jsonb_build_object('kind', 'phone', 'value_enc', 'enc-p7', 'value_hmac', repeat('7', 64))),
+                 null, null, %L)::text $$),
+  '42501 42501 42501 42501',
+  'the channel editor refuses another tenant''s Sales and the demoted, switched-off and locked Sales actors');
+select is(c10b_actors(array['Lx', 'Ld', 'Lo', 'Ll'],
+            $$ select public.crm_contact_new_lead('c1b00000-0000-4000-8000-000000000001',
+                 'c1b00000-0000-4000-8000-00000000c001',
+                 '{"id": "c1b00000-0000-4000-8000-00000000ab02", "name": "Huda", "message": "Again", "channel": "phone", "score_signals": []}',
+                 %L)::text $$),
+  '42501 42501 42501 42501', 'and so does the new-lead door');
 reset role;
 select is((select string_agg(e.kind, ',' order by e.id) from public.crm_contact_events e
             where e.contact_id = 'c1b00000-0000-4000-8000-00000000c001' and e.actor_id = 'c1b00000-0000-4000-8000-0000000000b1'
@@ -266,6 +299,40 @@ select is((select string_agg(e.kind, ',' order by e.id) from public.crm_contact_
   'the contact''s timeline names the Sales user for its changes');
 select is((select count(*)::int from public.crm_contact_notes where id = 'c1b00000-0000-4000-8000-0000000000e1'), 1,
   'the note Sales could not delete is still there');
+
+-- (C10b review, C10B-SEC-1) Twelve inquiries from one address, each with another number: the
+-- first makes the contact, the rest link by the e-mail, and the contact keeps ten phones. The
+-- two left over stay on their leads. One Sales reveal decrypts every channel of a contact, so
+-- it shows at most ten e-mails and ten phones, each one a person added or copied, or one that
+-- arrived.
+insert into public.leads (id, tenant_id, name, email_enc, email_hmac, phone_enc, phone_hmac, message,
+                          crm_indexed_at)
+  select ('c1b00000-0000-4000-8000-0000000ac0' || lpad(n::text, 2, '0'))::uuid,
+         'c1b00000-0000-4000-8000-000000000001', 'Arrival Person', 'ciphertext-b', repeat('b', 64),
+         'ciphertext-q' || n, repeat('3', 62) || lpad(n::text, 2, '0'), 'hello', now()
+    from generate_series(1, 12) n;
+set local role service_role;
+select is(c10b_val($$ select count(*) filter (where v = 'new') || '/' || count(*) filter (where v = 'email')
+             from (select public.crm_link_lead('c1b00000-0000-4000-8000-000000000001', x.id) v
+                     from public.leads x where x.name = 'Arrival Person' order by x.id) r $$),
+  '1/11', 'twelve arrivals from one address: one new contact, eleven linked by its e-mail');
+reset role;
+select is((select count(distinct x.contact_id) || ' ' || count(x.phone_hmac)
+             from public.leads x where x.name = 'Arrival Person')
+          || ' ' || (select string_agg(k.kind || ':' || k.n, ',' order by k.kind)
+                       from (select ch.kind, count(*) n from public.crm_contact_channels ch
+                              where ch.contact_id = (select x.contact_id from public.leads x
+                                                      where x.id = 'c1b00000-0000-4000-8000-0000000ac001')
+                              group by ch.kind) k),
+  '1 12 email:1,phone:10',
+  'one contact, every lead keeping its own phone, and the contact holding one e-mail and ten phones (the ceiling)');
+set local role authenticated;
+select c10b_as('L');
+select is(c10b_val($$ select count(*) from public.crm_contact_channels ch
+                      join public.crm_contacts c on c.id = ch.contact_id
+                     where c.display_name = 'Arrival Person' $$),
+  '11', 'what a Sales reveal of that contact decrypts: eleven values, within ten of each kind');
+reset role;
 
 -- ── 4. The tasks, as a live Sales token ─────────────────────────────────────────────────────
 set local role authenticated;
@@ -328,6 +395,13 @@ select is(c10b_val('select public.crm_contact_retention_months()'), '42501', 'an
 reset role;
 
 -- ── 6. Everyone else ───────────────────────────────────────────────────────────────────────
+-- A contact merged away in T1, and a table for the direct-insert oracle below.
+insert into public.crm_contacts (id, tenant_id, display_name) values
+  ('c1b00000-0000-4000-8000-00000000c002', 'c1b00000-0000-4000-8000-000000000001', 'Merged Away');
+update public.crm_contacts set merged_into = 'c1b00000-0000-4000-8000-00000000c001', merged_at = now()
+ where id = 'c1b00000-0000-4000-8000-00000000c002';
+create table c10b_out (who text, res text);
+grant all on c10b_out to authenticated;
 set local role authenticated;
 select c10b_as('Ld');
 select is(c10b_reads(), '0/0/false/0/0/0/0', 'a demoted Sales token (the profile says content_creator) reads nothing');
@@ -345,6 +419,36 @@ select is(c10b_run('update public.crm_contacts set title = ''x''') || ' '
           || c10b_run($$ insert into public.crm_tasks (tenant_id, title, due_at)
                          values ('c1b00000-0000-4000-8000-000000000001', 'x', now()) $$),
   'ok:0 42501', 'and changes or adds nothing, through the table either');
+-- (C10b review, C10B-COR-4) A stale Sales token inserting straight into the table gets RLS's
+-- answer whatever the row names (an Admin as owner, a made-up uuid, a merged contact), so it
+-- learns neither who is an Admin nor which contact was merged.
+select c10b_as('Ld');
+insert into c10b_out select 'Ld',
+  c10b_run($$ insert into public.crm_tasks (tenant_id, title, due_at, owner_id)
+              values ('c1b00000-0000-4000-8000-000000000001', 'x', now(), 'c1b00000-0000-4000-8000-0000000000a1') $$)
+  || ',' || c10b_run($$ insert into public.crm_tasks (tenant_id, title, due_at, owner_id)
+              values ('c1b00000-0000-4000-8000-000000000001', 'x', now(), 'c1b00000-0000-4000-8000-0000000000e9') $$)
+  || ',' || c10b_run($$ insert into public.crm_tasks (tenant_id, title, due_at, contact_id)
+              values ('c1b00000-0000-4000-8000-000000000001', 'x', now(), 'c1b00000-0000-4000-8000-00000000c002') $$);
+select c10b_as('Lo');
+insert into c10b_out select 'Lo',
+  c10b_run($$ insert into public.crm_tasks (tenant_id, title, due_at, owner_id)
+              values ('c1b00000-0000-4000-8000-000000000001', 'x', now(), 'c1b00000-0000-4000-8000-0000000000a1') $$)
+  || ',' || c10b_run($$ insert into public.crm_tasks (tenant_id, title, due_at, owner_id)
+              values ('c1b00000-0000-4000-8000-000000000001', 'x', now(), 'c1b00000-0000-4000-8000-0000000000e9') $$)
+  || ',' || c10b_run($$ insert into public.crm_tasks (tenant_id, title, due_at, contact_id)
+              values ('c1b00000-0000-4000-8000-000000000001', 'x', now(), 'c1b00000-0000-4000-8000-00000000c002') $$);
+select c10b_as('Ll');
+insert into c10b_out select 'Ll',
+  c10b_run($$ insert into public.crm_tasks (tenant_id, title, due_at, owner_id)
+              values ('c1b00000-0000-4000-8000-000000000001', 'x', now(), 'c1b00000-0000-4000-8000-0000000000a1') $$)
+  || ',' || c10b_run($$ insert into public.crm_tasks (tenant_id, title, due_at, owner_id)
+              values ('c1b00000-0000-4000-8000-000000000001', 'x', now(), 'c1b00000-0000-4000-8000-0000000000e9') $$)
+  || ',' || c10b_run($$ insert into public.crm_tasks (tenant_id, title, due_at, contact_id)
+              values ('c1b00000-0000-4000-8000-000000000001', 'x', now(), 'c1b00000-0000-4000-8000-00000000c002') $$);
+select is((select string_agg(who || '=' || res, ' ' order by who) from c10b_out),
+  'Ld=42501,42501,42501 Ll=42501,42501,42501 Lo=42501,42501,42501',
+  'no stale Sales token learns who is an Admin, or which contact was merged, from a direct insert');
 select c10b_as('Lx');
 select is(c10b_val('select count(*) from public.crm_contacts where tenant_id = ''c1b00000-0000-4000-8000-000000000001''')
           || '/' || c10b_val('select count(*) from public.crm_tasks where tenant_id = ''c1b00000-0000-4000-8000-000000000001''')

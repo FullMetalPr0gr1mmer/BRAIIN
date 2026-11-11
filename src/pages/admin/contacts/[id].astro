@@ -6,6 +6,7 @@ import EmptyState from '@/components/admin/ui/EmptyState.astro';
 import Icon from '@/components/admin/ui/Icon.astro';
 import Refused from '@/components/admin/ui/Refused.astro';
 import { can } from '@/lib/authz/matrix';
+import { receivesLeadPiiUnasked } from '@/lib/admin/leadFields';
 import { NotFoundError } from '@/lib/admin/errors';
 import { readStages, type StageView } from '@/lib/crm/leadPage';
 import {
@@ -46,6 +47,9 @@ const permissions = {
     allowed &&
     can(session.role, 'leads.manage') === 'full' &&
     can(session.role, 'leads.pii') === 'full',
+  // (C10b review, C10B-COR-3) The links route spends a reveal slot on a confirm for a role
+  // that cannot export (Sales); the button says so.
+  confirmIsReveal: allowed && !receivesLeadPiiUnasked(session.role),
 };
 
 let detail: ContactDetailInitial | null = null;

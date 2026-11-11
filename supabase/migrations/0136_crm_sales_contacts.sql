@@ -27,12 +27,23 @@
 --      (revision 5, as 0129 left it) say that Sales also works the contacts and the tasks,
 --      reveals one person at a time (a confirmed phone match counts as a reveal) and erases
 --      nothing. Each put re-seeds that one slug into every tenant and touches no other guide.
+--   4. (C10b review, C10B-SEC-1) app.crm_link_lead_core (C5) restated: an arrival linked by
+--      its e-mail adds its phone to the contact only below app.crm_channel_cap() (ten), as
+--      every other door that adds a channel does, so one reveal shows at most ten e-mails and
+--      ten phones. Before, each arrival with another number added one, without a ceiling.
+--   5. (C10b review, C10B-SEC-2) public.crm_edit_contact_channels (C6) restated: removing an
+--      e-mail or phone needs an actor who may erase (crm.erase, Admin); a crm.contacts holder
+--      alone (Sales) adds and makes primary. Nothing else in either function changes.
 --
 -- Production behaviour: none until C10b's Worker deploys and someone holds the Sales role.
 -- Rule 5 (the deployed Worker between the push and the deploy): the deployed Worker's
 -- ROLE_CAPS still refuses Sales every contacts and tasks route and page (assertCap), so the
 -- widened helpers are reachable only through PostgREST directly, where a live Sales token now
 -- reads and writes what the Worker will offer it; the new function has no deployed caller.
+-- Items 4 and 5 take effect at once for every caller of the two doors: a contact already at
+-- ten phones takes no more from an arrival (its lead keeps the phone), and an Admin, the only
+-- deployed actor of the channel editor, still removes. Neither table is in production before
+-- the contacts chain (C5, C6) is, and this migration merges after it.
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 
 -- ═══ 1. The capability helpers ═════════════════════════════════════════════════════════════
@@ -303,6 +314,246 @@ select app.put_help_guide($guide$
 }
 $guide$::jsonb, 5);
 
+-- ═══ 4. The arrival's phone, within the ceiling (C10b review, C10B-SEC-1) ════════════════════
+-- C5's app.crm_link_lead_core, restated with ONE change, in step 4: a lead linked by its
+-- e-mail (or making a new contact) adds its phone to the contact only while the contact keeps
+-- fewer than app.crm_channel_cap() phones (C6's ceiling, ten). Before, every arrival from one
+-- address with another number added one more phone, with no ceiling, and the contact's reveal
+-- decrypts every channel for one slot: one Sales reveal could show any number of phones. Now
+-- every door that adds a channel keeps to the ceiling (the add, the editor, the staff link
+-- and this), so one reveal shows at most ten e-mails and ten phones. A phone left out stays on
+-- its lead (revealing that lead shows it). Everything else as 0131 wrote it, the function's
+-- settings (an empty search_path, lock_timeout 2s) and its grants included.
+create or replace function app.crm_link_lead_core(p_tenant uuid, p_lead uuid) returns text
+  language plpgsql volatile security definer set search_path = '' set lock_timeout = '2s' as $$
+declare
+  l record;
+  v_contact uuid;
+  v_by text;
+  v_n int;
+begin
+  select x.id, x.name, x.company, x.locale, x.source, x.email_enc, x.phone_enc, x.email_hmac,
+         x.phone_hmac, x.contact_id, x.contact_link, x.is_spam, x.crm_indexed_at, x.created_at
+    into l
+    from public.leads x
+   where x.tenant_id = p_tenant and x.id = p_lead
+     for update;
+  if not found then
+    return 'missing';
+  end if;
+  if l.contact_id is not null or l.contact_link is not null then
+    return 'done';
+  end if;
+  if l.is_spam then
+    return 'spam';
+  end if;
+  if l.crm_indexed_at is null then
+    return 'unindexed';
+  end if;
+  if l.email_hmac is null and l.phone_hmac is null then
+    return 'no_index';
+  end if;
+
+  -- 1. The e-mail. The lock serialises two arrivals from one new address (the second
+  --    waits, then finds the first's contact); the unique index is the backstop below.
+  if l.email_hmac is not null then
+    perform pg_advisory_xact_lock(hashtextextended('crm-email:' || p_tenant::text || ':' || l.email_hmac, 0));
+    select ch.contact_id into v_contact
+      from public.crm_contact_channels ch
+     where ch.tenant_id = p_tenant and ch.kind = 'email' and ch.value_hmac = l.email_hmac;
+    if v_contact is not null then
+      v_by := 'email';
+    end if;
+  end if;
+
+  -- 2. The phone: shared lines exist, so this links AND flags (contact_link 'phone'), and
+  --    adds nothing to that contact; a person checks it (C6/C7).
+  if v_contact is null and l.phone_hmac is not null then
+    select ch.contact_id into v_contact
+      from public.crm_contact_channels ch
+      join public.crm_contacts k on k.tenant_id = ch.tenant_id and k.id = ch.contact_id
+     where ch.tenant_id = p_tenant and ch.kind = 'phone' and ch.value_hmac = l.phone_hmac
+       and k.merged_into is null
+     order by k.last_activity_at desc, k.id
+     limit 1;
+    if v_contact is not null then
+      v_by := 'phone';
+    end if;
+  end if;
+
+  -- 3. A new contact, from what the lead says about itself. Its activity starts at the
+  --    lead's arrival, not at this link (the backfill reaches old leads).
+  if v_contact is null then
+    insert into public.crm_contacts (tenant_id, display_name, company_name, locale, source,
+                                     last_activity_at)
+    values (p_tenant,
+            coalesce(nullif(left(btrim(regexp_replace(coalesce(l.name, ''), '[[:cntrl:]]', ' ', 'g')), 120), ''),
+                     'Unknown'),
+            nullif(left(btrim(regexp_replace(coalesce(l.company, ''), '[[:cntrl:]]', ' ', 'g')), 120), ''),
+            case when l.locale = 'ar' then 'ar' else 'en' end,
+            case when l.source in ('manual', 'import') then l.source else 'web_form' end,
+            l.created_at)
+    returning id into v_contact;
+    v_by := 'new';
+    if l.email_hmac is not null and l.email_enc is not null then
+      insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc, value_hmac,
+                                               is_primary, source)
+      values (p_tenant, v_contact, 'email', l.email_enc, l.email_hmac, true, 'lead')
+      on conflict (tenant_id, value_hmac) where kind = 'email' do nothing;
+      get diagnostics v_n = row_count;
+      if v_n = 0 then
+        -- Another arrival holds the address after all: that contact is the person's.
+        delete from public.crm_contacts c where c.tenant_id = p_tenant and c.id = v_contact;
+        select ch.contact_id into v_contact
+          from public.crm_contact_channels ch
+         where ch.tenant_id = p_tenant and ch.kind = 'email' and ch.value_hmac = l.email_hmac;
+        v_by := 'email';
+      end if;
+    end if;
+  end if;
+
+  -- 4. The lead's phone joins a contact it is the person's own (by e-mail, or new), unless
+  --    the contact keeps as many phones as it may (app.crm_channel_cap, C10b review,
+  --    C10B-SEC-1): the link stands and the phone stays on the lead alone, as the staff
+  --    link's 'full' does. The contact's row is locked first, as the channel editor locks it,
+  --    so two arrivals by two of its e-mails cannot both count nine.
+  if v_by in ('email', 'new') and l.phone_hmac is not null and l.phone_enc is not null then
+    perform 1 from public.crm_contacts c where c.tenant_id = p_tenant and c.id = v_contact for update;
+  end if;
+  if v_by in ('email', 'new') and l.phone_hmac is not null and l.phone_enc is not null
+     and (select count(*) from public.crm_contact_channels ch
+           where ch.tenant_id = p_tenant and ch.contact_id = v_contact and ch.kind = 'phone')
+         < app.crm_channel_cap() then
+    insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc, value_hmac,
+                                             is_primary, source)
+    values (p_tenant, v_contact, 'phone', l.phone_enc, l.phone_hmac,
+            not exists (select 1 from public.crm_contact_channels ch
+                         where ch.contact_id = v_contact and ch.kind = 'phone' and ch.is_primary),
+            'lead')
+    on conflict (tenant_id, contact_id, kind, value_hmac) do nothing;
+  end if;
+
+  -- 5. The link (not an edit: app.tg_lead_pipeline's c_derived). app.tg_lead_contact writes
+  --    the two timeline lines and the won and owner rules. (C5 review) A phone link is not
+  --    the contact's activity: it may be someone else's until a person confirms it.
+  update public.leads x set contact_id = v_contact, contact_link = v_by
+   where x.tenant_id = p_tenant and x.id = p_lead;
+  if v_by <> 'phone' then
+    perform app.crm_touch(p_tenant, v_contact, l.created_at);
+  end if;
+  return v_by;
+end $$;
+revoke all on function app.crm_link_lead_core(uuid, uuid) from public, anon, authenticated, service_role;
+grant execute on function app.crm_link_lead_core(uuid, uuid) to service_role;
+
+-- ═══ 5. Removing an e-mail or phone is erasure's (C10b review, C10B-SEC-2) ═══════════════════
+-- C6's public.crm_edit_contact_channels, restated with ONE change: a change that removes a
+-- channel needs an actor who may erase (app.crm_eraser_ok: crm.erase, a live Admin of the
+-- tenant), or it is a 42501 and nothing is written. A channel a person typed in has no copy
+-- on any lead, so removing it deletes that detail for good; C10b gave Sales crm.contacts, and
+-- the editor's removal would have been a Sales deletion with no limit and a queued audit row.
+-- Sales still adds and makes primary. Everything else as 0133 wrote it, grants included.
+create or replace function public.crm_edit_contact_channels(
+  p_tenant uuid, p_contact uuid, p_version int, p_add jsonb, p_remove uuid[], p_primary uuid[],
+  p_actor uuid)
+  returns jsonb
+  language plpgsql volatile security invoker set search_path = public, pg_temp as $$
+declare
+  v_add jsonb := coalesce(p_add, '[]'::jsonb);
+  v_remove uuid[] := coalesce(p_remove, '{}');
+  v_primary uuid[] := coalesce(p_primary, '{}');
+  v_version int;
+  v_holder uuid;
+  v_removed int := 0;
+  v_added int := 0;
+  r record;
+  v_id uuid;
+begin
+  if p_tenant is null or p_contact is null or p_version is null or p_actor is null then
+    raise exception using errcode = '22023', message = 'crm_edit_contact_channels: a tenant, a contact, a version and an actor are required';
+  end if;
+  if not app.crm_contacts_actor_ok(p_tenant, p_actor, false) then
+    raise exception using errcode = '42501', message = 'crm_edit_contact_channels: this person may not edit contacts';
+  end if;
+  if not app.crm_channels_ok(v_add) or cardinality(v_remove) > 10 or cardinality(v_primary) > 2
+     or array_position(v_remove, null) is not null or array_position(v_primary, null) is not null then
+    raise exception using errcode = '22023', message = 'crm_edit_contact_channels: a change has the wrong shape';
+  end if;
+  -- (C10b review, C10B-SEC-2) Removing an e-mail or phone deletes a person's details, and one
+  -- a person typed in has no copy anywhere else: erasure's (crm.erase, Admin), never a
+  -- crm.contacts holder's alone. Sales adds and makes primary; an Admin removes.
+  if cardinality(v_remove) > 0 and not app.crm_eraser_ok(p_tenant, p_actor) then
+    raise exception using errcode = '42501', message = 'crm_edit_contact_channels: this person may not remove an e-mail or phone';
+  end if;
+  select c.version into v_version
+    from public.crm_contacts c
+   where c.tenant_id = p_tenant and c.id = p_contact and c.merged_into is null
+     for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'crm_edit_contact_channels: no such contact';
+  end if;
+  if v_version <> p_version then
+    raise exception using errcode = '40001', message = 'crm_edit_contact_channels: the contact changed since it was read';
+  end if;
+  if exists (select 1 from unnest(v_remove || v_primary) x
+              where not exists (select 1 from public.crm_contact_channels ch
+                                 where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.id = x)) then
+    raise exception using errcode = '22023', message = 'crm_edit_contact_channels: a channel is not this contact''s';
+  end if;
+  if exists (select 1 from unnest(v_primary) x where x = any (v_remove)) then
+    raise exception using errcode = '22023', message = 'crm_edit_contact_channels: a removed channel cannot be made primary';
+  end if;
+  v_holder := app.crm_email_holder(p_tenant, v_add, p_contact);
+  if v_holder is not null then
+    return jsonb_build_object('duplicate', v_holder);
+  end if;
+
+  for r in delete from public.crm_contact_channels ch
+            where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.id = any (v_remove)
+            returning ch.kind, ch.source loop
+    insert into public.crm_contact_events (tenant_id, contact_id, actor_id, kind, detail)
+    values (p_tenant, p_contact, p_actor, 'channel_removed',
+            jsonb_build_object('kind', r.kind, 'source', r.source));
+    v_removed := v_removed + 1;
+  end loop;
+
+  insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc, value_hmac,
+                                           is_primary, source, created_by)
+  select p_tenant, p_contact, e ->> 'kind', e ->> 'value_enc', e ->> 'value_hmac', false, 'manual', p_actor
+    from jsonb_array_elements(v_add) e
+  on conflict do nothing;
+  get diagnostics v_added = row_count;
+  -- At most app.crm_channel_cap() of a kind this change adds to (C6 review, C6-SEC-3); the
+  -- whole change is refused, nothing half-saved. The message names the rule for the Worker's
+  -- map (src/lib/crm/contacts.ts CONTACT_CONSTRAINTS), as the owner rule's does.
+  if exists (select 1 from (select distinct e ->> 'kind' as kind from jsonb_array_elements(v_add) e) k
+              where (select count(*) from public.crm_contact_channels ch
+                      where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.kind = k.kind)
+                    > app.crm_channel_cap()) then
+    raise exception using errcode = '23514',
+      message = 'a contact keeps at most ten e-mails and ten phones (constraint "crm_contact_channels_cap")';
+  end if;
+
+  -- Primary: the one named, per kind; a newly added channel marked primary too.
+  foreach v_id in array v_primary || array(
+      select ch.id from public.crm_contact_channels ch
+        join jsonb_array_elements(v_add) e
+          on e ->> 'kind' = ch.kind and e ->> 'value_hmac' = ch.value_hmac
+       where ch.tenant_id = p_tenant and ch.contact_id = p_contact
+         and coalesce((e ->> 'is_primary')::boolean, false)) loop
+    update public.crm_contact_channels ch set is_primary = false
+     where ch.contact_id = p_contact and ch.is_primary and ch.id <> v_id
+       and ch.kind = (select x.kind from public.crm_contact_channels x where x.id = v_id);
+    update public.crm_contact_channels ch set is_primary = true where ch.id = v_id;
+  end loop;
+  perform app.crm_fill_primary(p_tenant, p_contact);
+  return jsonb_build_object('added', v_added, 'removed', v_removed);
+end $$;
+revoke all on function public.crm_edit_contact_channels(uuid, uuid, int, jsonb, uuid[], uuid[], uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.crm_edit_contact_channels(uuid, uuid, int, jsonb, uuid[], uuid[], uuid)
+  to service_role;
+
 -- ═══ Postconditions ════════════════════════════════════════════════════════════════════════
 do $$
 declare
@@ -385,4 +636,30 @@ begin
   if v_bad is not null then
     raise exception 'C10b: tenants without the new Sales guides: %', v_bad;
   end if;
+
+  -- 5. The two restated doors (C10b review): the arrival's link keeps to the ceiling and stays
+  --    a definer with its two settings; the channel editor asks for an eraser before a removal
+  --    and stays INVOKER; both executable by the service role alone.
+  if not exists (select 1 from pg_proc
+                  where oid = 'app.crm_link_lead_core(uuid, uuid)'::regprocedure
+                    and prosecdef and 'search_path=""' = any (proconfig)
+                    and 'lock_timeout=2s' = any (proconfig)
+                    and prosrc like '%app.crm_channel_cap()%') then
+    raise exception 'C10b: crm_link_lead_core must be a definer with its settings, keeping to app.crm_channel_cap()';
+  end if;
+  if not exists (select 1 from pg_proc
+                  where oid = 'public.crm_edit_contact_channels(uuid, uuid, int, jsonb, uuid[], uuid[], uuid)'::regprocedure
+                    and not prosecdef and prosrc like '%app.crm_eraser_ok(p_tenant, p_actor)%') then
+    raise exception 'C10b: crm_edit_contact_channels must be INVOKER and ask app.crm_eraser_ok before a removal';
+  end if;
+  foreach v_fn in array array['app.crm_link_lead_core(uuid, uuid)',
+                              'public.crm_edit_contact_channels(uuid, uuid, int, jsonb, uuid[], uuid[], uuid)'] loop
+    if has_function_privilege('anon', v_fn, 'execute')
+       or has_function_privilege('authenticated', v_fn, 'execute')
+       or not has_function_privilege('service_role', v_fn, 'execute')
+       or exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                   where p.oid = v_fn::regprocedure and a.grantee = 0) then
+      raise exception 'C10b: % must be executable by the service role alone', v_fn;
+    end if;
+  end loop;
 end $$;

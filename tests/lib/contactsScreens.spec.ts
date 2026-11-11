@@ -21,8 +21,11 @@ import {
 } from '@/components/admin/screens/contacts/EraseContactDialog';
 import { detailsPatch } from '@/components/admin/screens/contacts/ContactDetailsCard';
 import ContactLeadsCard, {
+  checkErrorText,
   copiedWords,
 } from '@/components/admin/screens/contacts/ContactLeadsCard';
+import { REVEAL_LIMIT_TEXT } from '@/components/admin/screens/contacts/ContactChannelsCard';
+import { AdminApiError } from '@/lib/admin/client';
 import { ContactCreateSchema, ContactPatchSchema, ContactQuerySchema } from '@schemas/crm';
 import {
   DEFAULT_CONTACT_FILTERS,
@@ -214,11 +217,16 @@ describe('a contact’s page', () => {
   };
   const admin = html(ContactDetail, {
     ...props,
-    permissions: { canErase: true, canAddLead: true },
+    permissions: { canErase: true, canAddLead: true, confirmIsReveal: false },
   } as never);
   const plain = html(ContactDetail, {
     ...props,
-    permissions: { canErase: false, canAddLead: false },
+    permissions: { canErase: false, canAddLead: false, confirmIsReveal: false },
+  } as never);
+  // Sales (C10b): adds leads, erases nothing, and a confirm costs it a reveal slot.
+  const sales = html(ContactDetail, {
+    ...props,
+    permissions: { canErase: false, canAddLead: true, confirmIsReveal: true },
   } as never);
 
   it('draws no style attribute, and masks the details until the audited reveal', () => {
@@ -255,6 +263,30 @@ describe('a contact’s page', () => {
   it('keeps names in their own direction', () => {
     expect(admin).toMatch(/<span dir="auto">Nora Haddad<\/span>/);
   });
+
+  // C10b review, C10B-COR-3: for a role that pays a reveal slot to confirm, the button says so.
+  it('says a confirm is a logged reveal to the roles it costs one', () => {
+    expect(sales).toContain('Yes, same person (counts as a logged reveal)');
+    expect(admin).toContain('Yes, same person');
+    expect(admin).not.toContain('counts as a logged reveal');
+  });
+});
+
+describe('the contact page words a confirm by the role (C10b review, C10B-COR-3)', () => {
+  it('a confirm past the reveal limit says so in the reveal’s own words', () => {
+    const limited = new AdminApiError({ error: 'rate-limit', status: 429 });
+    expect(checkErrorText(limited)).toBe(REVEAL_LIMIT_TEXT);
+    expect(checkErrorText(new Error('boom'))).not.toBe(REVEAL_LIMIT_TEXT);
+  });
+  it('the page tells the card who pays a reveal slot, from the export rule the route uses', () => {
+    const page = readFileSync('src/pages/admin/contacts/[id].astro', 'utf8');
+    expect(page).toContain('confirmIsReveal: allowed && !receivesLeadPiiUnasked(session.role)');
+    const route = readFileSync('src/pages/api/admin/crm/contacts/[id]/links.ts', 'utf8');
+    expect(route).toContain("input.action === 'confirm' && !receivesLeadPiiUnasked(auth.role)");
+    const detail = readFileSync('src/components/admin/screens/contacts/ContactDetail.tsx', 'utf8');
+    expect(detail).toContain('confirmIsReveal={permissions.confirmIsReveal}');
+    expect(detail).toContain('canRemove={permissions.canErase}');
+  });
 });
 
 describe('the contact details card after a reveal', () => {
@@ -269,6 +301,7 @@ describe('the contact details card after a reveal', () => {
       revealed,
       onRevealed: () => undefined,
       busy: false,
+      canRemove: true,
       edit: async () => true,
     });
 
@@ -295,12 +328,34 @@ describe('the contact details card after a reveal', () => {
       revealed: null,
       onRevealed: () => undefined,
       busy: false,
+      canRemove: false,
       edit: async () => true,
     });
     expect(out).toContain('No e-mail address or phone number yet.');
     expect(out).not.toContain('Reveal contact details');
     expect(out).toContain('An e-mail address');
     expect(out).toMatch(/<button type="submit"[^>]*>Add<\/button>/);
+  });
+
+  // C10b review, C10B-SEC-2: removing a detail is erasure's (Admin); Sales adds and makes main.
+  it('offers Remove only to the roles that may erase', () => {
+    const revealed = new Map([
+      [OTHER, 'nora@example.test'],
+      [SARA, '+966551234567'],
+    ]);
+    expect(card(revealed)).toContain('Remove<span class="visually-hidden">');
+    const without = html(ContactChannelsCard, {
+      contactId: ID,
+      channels: [...channels, { id: NEW, kind: 'phone', is_primary: false, source: 'manual' }],
+      revealed: new Map([...revealed, [NEW, '+966551234568']]),
+      onRevealed: () => undefined,
+      busy: false,
+      canRemove: false,
+      edit: async () => true,
+    });
+    expect(without).not.toContain('Remove');
+    expect(without).toContain('Make main');
+    expect(without).toMatch(/<button type="submit"[^>]*>Add<\/button>/);
   });
 
   it('keeps a channel that arrived after the reveal hidden, and offers the reveal again', () => {
@@ -319,6 +374,7 @@ describe('New lead waits for an e-mail or phone (C7-UX-5)', () => {
       stages: STAGES,
       contactId: ID,
       canAddLead: true,
+      confirmIsReveal: false,
       hasChannel,
       onNewLead: () => undefined,
       onChecked: () => undefined,

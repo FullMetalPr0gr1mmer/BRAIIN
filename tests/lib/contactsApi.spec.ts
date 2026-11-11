@@ -994,6 +994,57 @@ describe('PATCH /[id] (C6 review, C6-SEC-4, C6-COR-2)', () => {
     }
   });
 
+  // C10b review, C10B-SEC-2: removing an e-mail or phone deletes a person's details, so it is
+  // erasure's (crm.erase, Admin); Sales adds and makes primary.
+  describe('Sales (C10b review): a removal is erasure, refused', () => {
+    const asSales = () => {
+      sessionRole = 'sales';
+      liveProfile = { role: 'sales', is_active: true, locked_until: null };
+    };
+
+    it('a removal is a 403 before anything is read, written or audited', async () => {
+      asSales();
+      rpcAnswers['crm_edit_contact_channels'] = { data: { added: 0, removed: 1 }, error: null };
+      const res = await patch({ version: 3, channels: { remove: [OTHER] } });
+      expect(res.status).toBe(403);
+      expect(events).toEqual([]);
+      expect(rpcCalls).toEqual([]);
+      expect(audits).toEqual([]);
+    });
+
+    it('a removal sent with an add is refused whole', async () => {
+      asSales();
+      const res = await patch({
+        version: 3,
+        channels: { add: [{ kind: 'phone', value: '+966501234567' }], remove: [OTHER] },
+      });
+      expect(res.status).toBe(403);
+      expect(rpcCalls).toEqual([]);
+    });
+
+    it('an add and a new main still reach the door', async () => {
+      asSales();
+      rpcAnswers['crm_edit_contact_channels'] = { data: { added: 1, removed: 0 }, error: null };
+      const res = await patch({
+        version: 3,
+        channels: { add: [{ kind: 'phone', value: '+966501234567' }], primary: [OTHER] },
+      });
+      expect(res.status).toBe(200);
+      const call = rpcCalls.find((c) => c.fn === 'crm_edit_contact_channels')!;
+      expect(call.args['p_remove']).toEqual([]);
+      expect(call.args['p_primary']).toEqual([OTHER]);
+    });
+
+    it('the door’s own refusal of a removal is a 403, audited nothing', async () => {
+      // An Admin demoted between the live recheck and the door: the database's
+      // app.crm_eraser_ok refuses it.
+      rpcAnswers['crm_edit_contact_channels'] = { data: null, error: { code: '42501' } };
+      const res = await patch({ version: 3, channels: { remove: [OTHER] } });
+      expect(res.status).toBe(403);
+      expect(audits).toEqual([]);
+    });
+  });
+
   it('details and channels in one request are a 422, before anything is read', async () => {
     const res = await patch({ version: 3, displayName: 'Sara S', channels: { remove: [OTHER] } });
     expect(res.status).toBe(422);
