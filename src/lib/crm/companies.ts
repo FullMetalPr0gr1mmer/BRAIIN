@@ -146,7 +146,9 @@ export function parseCompanyRead(data: unknown): {
       const id = str(row['id']);
       const name = str(row['display_name']);
       if (!id || name === null) return [];
-      return [{ id, display_name: name, title: str(row['title']), stage: str(row['stage']) ?? 'lead' }];
+      return [
+        { id, display_name: name, title: str(row['title']), stage: str(row['stage']) ?? 'lead' },
+      ];
     }),
     more: body['more'] === true,
   };
@@ -174,7 +176,8 @@ export function companyBody(input: CompanyCreate | CompanyPatch): Record<string,
   for (const [field, column] of COLUMNS) {
     const value = source[field];
     if (value === undefined) continue;
-    body[column] = typeof value === 'string' && value.trim() === '' ? null : (value as string | null);
+    body[column] =
+      typeof value === 'string' && value.trim() === '' ? null : (value as string | null);
   }
   return body;
 }
@@ -221,7 +224,10 @@ export const COMPANY_CONSTRAINTS: ConstraintFields = {
     field: 'clientId',
     message: 'That client is not there any more. Pick another one.',
   },
-  crm_companies_name_check: { field: 'name', message: 'Give the company a name, in 120 characters.' },
+  crm_companies_name_check: {
+    field: 'name',
+    message: 'Give the company a name, in 120 characters.',
+  },
   crm_companies_website_check: {
     field: 'website',
     message: 'Use an address that starts with https://, in 2048 characters.',

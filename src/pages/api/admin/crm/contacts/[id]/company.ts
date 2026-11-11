@@ -36,7 +36,12 @@ export const POST = defineAdminRoute({
       action: 'crm.contact.update',
       entityType: 'contact',
       entityId: id,
-      detail: { fields: ['company'], action: input.action, how, ...(companyId ? { company: companyId } : {}) },
+      detail: {
+        fields: ['company'],
+        action: input.action,
+        how,
+        ...(companyId ? { company: companyId } : {}),
+      },
     });
     const { merged_into: _merged, ...contact } = await getContact(sb, auth, id);
     return { contact, companyId, how };

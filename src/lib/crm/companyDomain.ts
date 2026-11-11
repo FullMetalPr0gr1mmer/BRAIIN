@@ -24,14 +24,7 @@ export interface DomainRpcClient {
 
 /** What happened, for the tests and the log line (never a value). */
 export type DomainOutcome =
-  | 'recorded'
-  | 'missing'
-  | 'unlinked'
-  | 'spam'
-  | 'no_channel'
-  | 'no_domain'
-  | 'freemail'
-  | 'failed';
+  'recorded' | 'missing' | 'unlinked' | 'spam' | 'no_channel' | 'no_domain' | 'freemail' | 'failed';
 
 /** The domain's blind index of a typed e-mail, or why there is none. Pure apart from WebCrypto. */
 export async function domainIndex(
