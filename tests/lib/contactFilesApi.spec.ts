@@ -156,7 +156,7 @@ function ctx(request: Request, params: Record<string, string> = {}): APIContext 
 const BASE = `https://admin.example.test/api/admin/crm/contacts/${CONTACT}/files`;
 
 /** A multipart upload as the browser sends it, with its Content-Length. */
-async function uploadRequest(bytes: Uint8Array | string, name = 'Huda contract.pdf') {
+async function uploadRequest(bytes: Uint8Array<ArrayBuffer> | string, name = 'Huda contract.pdf') {
   const form = new FormData();
   form.set('file', new Blob([bytes], { type: 'text/plain' }), 'whatever.txt');
   form.set('name', name);
@@ -173,7 +173,7 @@ async function uploadRequest(bytes: Uint8Array | string, name = 'Huda contract.p
 }
 
 const PDF = '%PDF-1.7\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n';
-function png(): Uint8Array {
+function png(): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(45);
   out.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13], 0);
   out.set(
@@ -182,7 +182,7 @@ function png(): Uint8Array {
   );
   return out;
 }
-function webp(size = 30): Uint8Array {
+function webp(size = 30): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(size);
   const ascii = (s: string, at: number) =>
     out.set(

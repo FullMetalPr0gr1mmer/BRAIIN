@@ -37,7 +37,15 @@ export function eraseStep(
 
 export interface ErasePreview {
   /** (C8) `tasks`: the follow-ups about the person or their certain leads. */
-  counts: { leads: number; unindexed: number; channels: number; notes: number; tasks: number };
+  counts: {
+    leads: number;
+    unindexed: number;
+    channels: number;
+    notes: number;
+    tasks: number;
+    /** (Admin v2 C16) The files kept with the person, removed first. */
+    files?: number | undefined;
+  };
   phoneMatches: {
     id: string;
     lead_number: number | null;
@@ -74,6 +82,11 @@ export function erasedLine(preview: ErasePreview, ticked: ReadonlySet<string>): 
     `${n(erasedTasks(preview, ticked), 'task', 'tasks')}, ` +
     `${n(preview.counts.channels, 'e-mail or phone', 'e-mails and phones')}.`
   );
+}
+
+/** (Admin v2 C16) "Their 2 files go too, removed from storage first." */
+export function erasedFilesLine(files: number): string {
+  return `Their ${n(files, 'file', 'files')} ${files === 1 ? 'goes' : 'go'} too, removed from storage first.`;
 }
 
 export default function EraseContactDialog({
@@ -181,6 +194,10 @@ export default function EraseContactDialog({
           <p>
             <span dir="auto">{name}</span>: {erasedLine(preview, ticked)}
           </p>
+          {/* (Admin v2 C16) The files kept with them go first. */}
+          {(preview.counts.files ?? 0) > 0 ? (
+            <p>{erasedFilesLine(preview.counts.files ?? 0)}</p>
+          ) : null}
           {preview.counts.unindexed > 0 && (
             <p className="f__hint">
               {n(preview.counts.unindexed, 'recent lead', 'recent leads')} could not be checked

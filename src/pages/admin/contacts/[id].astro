@@ -55,6 +55,8 @@ let people: ContactPerson[] = [];
 // the same directory read as `people` (src/lib/crm/people.ts), so no extra round trip.
 const canTasks = allowed && can(session.role, 'crm.tasks') === 'full';
 let tasks: { owners: { id: string; name: string }[] } | null = null;
+// (Admin v2 C16) The Files card, for crm.files holders only (its routes check again).
+const canFiles = allowed && can(session.role, 'crm.files') === 'full';
 let failed = false;
 let notFound = false;
 
@@ -129,6 +131,7 @@ const me = session
         me={me}
         now={new Date().toISOString()}
         tasks={tasks}
+        files={canFiles}
       />
     )
   }

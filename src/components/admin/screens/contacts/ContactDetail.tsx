@@ -40,6 +40,7 @@ import ContactTimeline, { type TimelineKind } from './ContactTimeline';
 import type { EraseContactDialogProps } from './EraseContactDialog';
 import type { NewLeadDrawerProps } from './NewLeadDrawer';
 import type { TasksCardProps } from '../tasks/TasksCard';
+import type { ContactFilesCardProps } from './ContactFilesCard';
 import type { TaskPerson } from '../tasks/shared';
 import { forgetOnLeave, useLazy, type ContactPerson, type ContactsPermissions } from './shared';
 
@@ -67,6 +68,11 @@ export interface ContactDetailProps extends ContactDetailInitial {
    * page is up, so the contact page's first load does not carry it.
    */
   tasks?: { owners: TaskPerson[] } | null | undefined;
+  /**
+   * (Admin v2 C16) For a crm.files holder: the Files card, drawn only then (a UX hint: the file
+   * routes refuse anyone else), loaded with import() once the page is up.
+   */
+  files?: boolean | undefined;
 }
 
 interface ContactAnswer {
@@ -104,6 +110,7 @@ export default function ContactDetail(props: ContactDetailProps) {
   const [tagDraft, setTagDraft] = useState('');
   const [now, setNow] = useState(() => Date.parse(props.now));
   const [TasksCard, setTasksCard] = useState<ComponentType<TasksCardProps> | null>(null);
+  const [FilesCard, setFilesCard] = useState<ComponentType<ContactFilesCardProps> | null>(null);
   const [queue] = useState(() => new Serial(setBusy));
   const [timeline] = useState(() => new Latest());
   // The row as last drawn, for a queued write to read its version when it leaves.
@@ -284,6 +291,14 @@ export default function ContactDetail(props: ContactDetailProps) {
     if (!props.tasks) return;
     import('../tasks/TasksCard')
       .then((module) => setTasksCard(() => module.default))
+      .catch(() => undefined);
+  }, []);
+
+  // (Admin v2 C16) The Files card, for crm.files holders, loaded once the page is up.
+  useEffect(() => {
+    if (!props.files) return;
+    import('./ContactFilesCard')
+      .then((module) => setFilesCard(() => module.default))
       .catch(() => undefined);
   }, []);
 
@@ -495,6 +510,17 @@ export default function ContactDetail(props: ContactDetailProps) {
               }}
             />
           )}
+          {props.files && FilesCard ? (
+            <FilesCard
+              contactId={contact.id}
+              people={peopleById}
+              onChanged={() => {
+                // A file added is the contact's activity (C16): "last activity" and "kept until"
+                // follow it.
+                void queue.run(() => readContact(true));
+              }}
+            />
+          ) : null}
           <section className="card" aria-labelledby={`${id}-score`}>
             <h2 id={`${id}-score`} className="card-title">
               Score
