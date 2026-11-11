@@ -572,6 +572,9 @@ describe('POST /[id]/erase', () => {
       'ops:crm-erase',
       'rls:crm_contacts',
       'audit:crm.erase.attempt',
+      // (Admin v2 C16) the person's files first: their tombstones, then their files (none).
+      'svc:list:crm_contacts',
+      'svc:list:crm_contact_files',
       'svc:rpc:crm_erase_person',
       'audit:crm.erase.outcome',
     ]);
@@ -591,6 +594,7 @@ describe('POST /[id]/erase', () => {
       leads: 2,
       phone_leads: 1,
       channels: 3,
+      files: 0,
     });
   });
 
@@ -773,7 +777,7 @@ describe('POST /[id]/erase-preview (C6 review, C6-SEC-2, C6-COR-2)', () => {
     expect(rpcCalls.at(-1)!.args).toEqual({ p_tenant: TENANT, p_contact: CONTACT, p_actor: USER });
     expect(await data(res)).toEqual({
       // (C8) tasks: the door's answer here names none, so the route says 0.
-      counts: { leads: 2, unindexed: 0, channels: 3, notes: 1, tasks: 0 },
+      counts: { leads: 2, unindexed: 0, channels: 3, notes: 1, tasks: 0, files: 0 },
       // (C8 review, C8-SEC-4) Each match says how many of its own tasks go if it is ticked.
       phoneMatches: [
         {
