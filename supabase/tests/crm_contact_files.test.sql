@@ -16,7 +16,7 @@
 -- The bucket and the orphan reader: storage_crm_files.test.sql.
 
 begin;
-select plan(58);
+select plan(59);
 
 insert into public.tenants (id, name) values
   ('c1600000-0000-4000-8000-000000000001', 'C16 T1'),
@@ -311,6 +311,9 @@ select ok(not has_table_privilege('service_role', 'public.crm_contact_files', 'u
   'not even the service role updates a file row');
 select ok(not has_function_privilege('authenticated', 'app.crm_files_actor_ok(uuid, uuid)', 'execute'),
   'the actor check is the service role''s');
+select ok(has_function_privilege('service_role', 'app.crm_contact_is_orphan(uuid, uuid)', 'execute')
+          and not has_function_privilege('authenticated', 'app.crm_contact_is_orphan(uuid, uuid)', 'execute'),
+  'the restated orphan rule keeps 0134''s grants: crm_erase_lead (the service role''s) still asks it');
 select is((select string_agg(policyname || ':' || permissive, ' ' order by policyname)
              from pg_policies where tablename = 'crm_contact_files'),
   'crm_contact_files_live:RESTRICTIVE crm_contact_files_read:PERMISSIVE',

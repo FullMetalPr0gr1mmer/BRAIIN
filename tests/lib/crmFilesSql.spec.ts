@@ -35,6 +35,22 @@ describe('0140 restates the orphan rule with its marked lines only', () => {
     expect(after.split('\n').filter((l) => / {2}-- C16$/.test(l))).toHaveLength(2);
   });
 
+  it('app.crm_contact_is_orphan keeps 0134’s grants: the service role still executes it', () => {
+    // crm_erase_lead is an INVOKER the service role runs, and it asks the orphan rule; a restated
+    // copy that revokes without granting back breaks every lead erasure (the PGlite replay of
+    // crm_contacts_orphans and crm_contacts_retention_erase: 42501).
+    const grants = (sql: string) => {
+      const end = fn(sql, 'app.crm_contact_is_orphan', '$$;');
+      const from = sql.indexOf(end) + end.length;
+      return sql
+        .slice(from, sql.indexOf('\n\n', from))
+        .split('\n')
+        .filter((l) => /^(revoke|grant) /.test(l));
+    };
+    expect(grants(C8)).toHaveLength(2);
+    expect(grants(C16)).toEqual(grants(C8));
+  });
+
   it('the doors and the sweep reader are SECURITY INVOKER with an empty search_path', () => {
     for (const name of [
       'public.crm_file_add',

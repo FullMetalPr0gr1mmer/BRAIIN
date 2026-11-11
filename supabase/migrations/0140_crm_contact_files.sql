@@ -247,6 +247,8 @@ create or replace function app.crm_contact_is_orphan(p_tenant uuid, p_contact uu
                           and ch.source <> 'lead'))
 $$;
 revoke all on function app.crm_contact_is_orphan(uuid, uuid) from public, anon, authenticated, service_role;
+-- crm_erase_lead (an INVOKER the service role runs) asks it.
+grant execute on function app.crm_contact_is_orphan(uuid, uuid) to service_role;
 
 -- ═══ 8. Orphaned objects ══════════════════════════════════════════════════════════════════
 -- Objects in the bucket no row names: a contact deleted by retention (app.purge_crm, pg_cron)
@@ -419,7 +421,8 @@ begin
     raise exception 'C16: app.role_crm_files must be executable by authenticated and the service role only';
   end if;
   -- The definers: an empty search_path, owned by a role that bypasses RLS, executable by no
-  -- API role (a trigger and the definer doors of C5 call them).
+  -- API role but the one the orphan rule has kept since 0131: the service role, because
+  -- public.crm_erase_lead (an INVOKER it runs) asks it. A trigger and C5's definers call them.
   foreach v_fn in array array['app.tg_crm_contact_file_activity()',
                               'app.crm_contact_is_orphan(uuid, uuid)'] loop
     if not exists (select 1 from pg_proc f join pg_roles o on o.oid = f.proowner
@@ -427,11 +430,15 @@ begin
                       and (o.rolbypassrls or o.rolsuper)) then
       raise exception 'C16: % must be a definer owned by a role that bypasses RLS', v_fn;
     end if;
-    foreach r in array array['anon', 'authenticated', 'service_role'] loop
+    foreach r in array array['anon', 'authenticated'] loop
       if has_function_privilege(r::name, v_fn, 'execute') then
         raise exception 'C16: % can execute %', r, v_fn;
       end if;
     end loop;
+    if has_function_privilege('service_role', v_fn, 'execute')
+       is distinct from (v_fn = 'app.crm_contact_is_orphan(uuid, uuid)') then
+      raise exception 'C16: the service role''s EXECUTE on % is not as 0134 left it', v_fn;
+    end if;
   end loop;
   -- Every function this migration makes or restates pins its search_path, but the inlined
   -- capability helper (as every app.role_* helper).
