@@ -541,6 +541,10 @@ describe('a contact’s page carries the Tasks card (C8b)', () => {
       "const canTasks = allowed && can(session.role, 'crm.tasks') === 'full';",
     );
     expect(page).toContain('canTasks ? readTaskOwners(sb, session) : Promise.resolve([])');
+    // The card itself is handed over only under the same rule (the C78 check: without this line
+    // a role with crm.contacts but not crm.tasks would be drawn a card its routes then refuse).
+    expect(page).toContain('if (canTasks) tasks = { owners };');
+    expect(page).not.toMatch(/^\s*tasks = \{ owners \};/m);
     expect(page).toContain('tasks={tasks}');
     expect(page).toContain("styles={['leads.css', 'contacts.css', 'tasks.css']}");
   });
