@@ -29,6 +29,8 @@
 --      scrubbed tombstone, and the crm.contact.merge audit row.
 --   5. app.purge_crm restated (C5's copy plus the lines marked `-- C12`): tombstones go on the
 --      next run (crm.md §8.1), after anything that raced onto one moves to its survivor.
+--   6. public.crm_erase_person restated (C8's copy plus the lines marked `-- C12`): a record a
+--      merge made a tombstone while the erasure waited is not erased (P0002).
 --
 -- Production behaviour: none until the Worker that calls these deploys; nothing reads or calls
 -- what this file adds, and the nightly run purges no tombstone because none exists before the
@@ -119,17 +121,34 @@ grant select, insert, delete on public.crm_merge_dismissals to service_role;
 -- active pairs; at most p_limit (1 to 50). A definer, because it compares blind indexes,
 -- which no staff token reads (C5's column grant); it answers nothing unless the caller's LIVE
 -- role holds crm.contacts, and reads only the token's own tenant.
+--
+-- (C12 review, C12-SEC-R2-4) The name rule skips a name-and-company group of more than five
+-- live records. Anyone on the public form can make a contact named as they choose (a new
+-- e-mail always makes one), so without a bound a batch of copies of one person's name and
+-- company would cost every finder call a square of pairs. A real person is rarely on file six
+-- times; a group that large is a flood or a common name, and the phone rule still finds its
+-- members. A planted copy inside the bound is still offered: register L-5 question 1.
 create or replace function app.crm_duplicate_candidates(p_limit int)
   returns table (contact_a uuid, contact_b uuid, reasons text[], ord int)
   language plpgsql stable security definer set search_path = '' as $$
 declare
   v_tenant uuid := app.effective_tenant_id();
+  c_group constant int := 5;
 begin
   if v_tenant is null or not coalesce(app.role_crm_contacts(app.live_role()), false) then
     return;
   end if;
   return query
-  with found as (
+  with named as (
+    select c.id, c.name_key, app.crm_name_key(c.company_name) as company_key
+      from public.crm_contacts c
+     where c.tenant_id = v_tenant and c.merged_into is null and c.name_key <> ''
+  ), sized as (
+    select g.id, g.name_key, g.company_key,
+           count(*) over (partition by g.name_key, g.company_key) as size
+      from named g
+     where g.company_key <> ''
+  ), found as (
     select x.contact_id as a, y.contact_id as b, 'phone'::text as reason
       from public.crm_contact_channels x
       join public.crm_contact_channels y
@@ -138,13 +157,10 @@ begin
      where x.tenant_id = v_tenant and x.kind = 'phone'
     union all
     select x.id, y.id, 'name_company'::text
-      from public.crm_contacts x
-      join public.crm_contacts y
-        on y.tenant_id = x.tenant_id and y.name_key = x.name_key and y.id > x.id
-       and y.merged_into is null
-     where x.tenant_id = v_tenant and x.merged_into is null and x.name_key <> ''
-       and app.crm_name_key(x.company_name) <> ''
-       and app.crm_name_key(x.company_name) = app.crm_name_key(y.company_name)
+      from sized x
+      join sized y
+        on y.name_key = x.name_key and y.company_key = x.company_key and y.id > x.id
+     where x.size <= c_group
   ), pairs as (
     select f.a, f.b, array_agg(distinct f.reason order by f.reason) as reasons
       from found f
@@ -243,18 +259,25 @@ grant execute on function public.crm_dismiss_duplicate(uuid, uuid, uuid) to auth
 -- this checks the acting profile itself, live (app.crm_contacts_actor_ok). 22023 for a bad
 -- call, 42501 for an actor who may not, P0002 for a contact the tenant does not hold (or a
 -- tombstone), 40001 when either version moved on, 23514 naming crm_contact_channels_cap when
--- the two together hold more than ten e-mails or ten phones (nothing is half-merged).
+-- the other would take the survivor past ten e-mails or ten phones (nothing is half-merged).
 --
 -- The survivor keeps its own name, language and source; a blank title, company, city, country
 -- or owner is filled from the other record (an owner only while they may own contacts); tags
 -- are united (the survivor's first, at most 10); starred if either was; custom values filled
--- (the survivor's win); the stage by precedence, client > lead > past > partner; edited by a
--- person if either was or the other was added by one (so the orphan rule never takes what a
--- person made). The merge is a person's work on the record, so it is activity (C5 counted a
--- merge so). Then:
+-- (the survivor's win); the stage by precedence, client > lead > past > partner. (C12 review,
+-- C12-COR-4) A merge is a person's edit of the survivor, always: a person decided the two are
+-- one and which record stays, so the orphan rule no longer takes it as a record nobody worked
+-- on (retention and erasure still do). One rule, whatever the merge happened to fill (C5's row
+-- trigger marks a direct write that changes a detail, which made the answer depend on it).
+-- The merge is a person's work on the record, so it is activity too (C5 counted a merge so).
+-- Then:
 --   • channels: the other's move (a phone both hold stays once; a moved one is the survivor's
 --     main of its kind if it had none), keeping where each came from, so erasing a lead still
---     takes back the copies only that lead carried (C5 review);
+--     takes back the copies only that lead carried (C5 review). (C12 review, C12-COR-1) When
+--     the copy that stays came from a lead and the other's did not (a person typed it, or an
+--     import brought it), the copy that stays takes the other's source and maker first: a
+--     lead's erasure never takes a value a person added, and that value still keeps an
+--     auto-contact from the orphan rule, as it did on the record it came from;
 --   • notes: moved with their ids, words, authors and times (no API role may UPDATE a note, so
 --     each is re-added and the original removed in this transaction);
 --   • tasks and leads: re-pointed. A lead keeps how it was linked (a phone match is still one
@@ -344,10 +367,22 @@ begin
   end loop;
 
   -- 2. The ceiling (C6 review, C6-SEC-3): one reveal never shows more than ten of a kind.
-  if exists (select 1 from public.crm_contact_channels ch
-              where ch.tenant_id = p_tenant and ch.contact_id in (p_keep, p_drop)
-              group by ch.kind
-             having count(distinct ch.value_hmac) > app.crm_channel_cap()) then
+  --    (C12 review, C12-COR-5) Counted as C6 counts a change: only a kind the other record
+  --    adds a new value to, against what the survivor holds. A lead's arrival adds a phone
+  --    without the ceiling, so a survivor can hold more than ten already; a merge that adds
+  --    it nothing of that kind is not refused for it.
+  if exists (select 1
+               from (select ch.kind,
+                            count(*) filter (where ch.contact_id = p_keep) as kept,
+                            count(*) filter (
+                              where ch.contact_id = p_drop
+                                and not exists (select 1 from public.crm_contact_channels y
+                                                 where y.tenant_id = p_tenant and y.contact_id = p_keep
+                                                   and y.kind = ch.kind and y.value_hmac = ch.value_hmac)) as added
+                       from public.crm_contact_channels ch
+                      where ch.tenant_id = p_tenant and ch.contact_id in (p_keep, p_drop)
+                      group by ch.kind) t
+              where t.added > 0 and t.kept + t.added > app.crm_channel_cap()) then
     raise exception using errcode = '23514',
       message = 'a contact keeps at most ten e-mails and ten phones (constraint "crm_contact_channels_cap")';
   end if;
@@ -383,11 +418,18 @@ begin
          is_starred = k.is_starred or d.is_starred,
          stage = case when array_position(c_rank, d.stage) > array_position(c_rank, k.stage)
                       then d.stage else k.stage end,
-         staff_edited = k.staff_edited or d.staff_edited or d.created_by is not null,
+         staff_edited = true,
          last_activity_at = greatest(k.last_activity_at, d.last_activity_at, now())
    where c.tenant_id = p_tenant and c.id = p_keep;
 
-  -- 4. Channels.
+  -- 4. Channels. A value both hold keeps the survivor's copy, which takes the other's source
+  --    and maker when only the other's was not a lead's (C12-COR-1).
+  update public.crm_contact_channels y
+     set source = x.source, created_by = x.created_by
+    from public.crm_contact_channels x
+   where y.tenant_id = p_tenant and y.contact_id = p_keep and y.source = 'lead'
+     and x.tenant_id = p_tenant and x.contact_id = p_drop and x.kind = y.kind
+     and x.value_hmac = y.value_hmac and x.source <> 'lead';
   delete from public.crm_contact_channels x
    where x.tenant_id = p_tenant and x.contact_id = p_drop
      and exists (select 1 from public.crm_contact_channels y
@@ -547,6 +589,93 @@ begin
 end $$;
 revoke all on function app.purge_crm() from public, anon, authenticated, service_role;
 
+-- ═══ 6b. C5's person erasure, restated (C8's copy in its migration plus the lines marked `-- C12`)
+-- (C12 review, C12-COR-3) An erasure that waited on a merge's lock of the same record, or that
+-- the Worker read before a merge committed, would otherwise erase the scrubbed tombstone and
+-- say it was done, while the person's leads, channels and notes sit on the survivor. It is a
+-- P0002 instead (the Worker's 404): the person reloads and erases the survivor.
+create or replace function public.crm_erase_person(p_tenant uuid, p_contact uuid,
+                                                   p_extra_leads uuid[], p_actor uuid)
+  returns jsonb
+  language plpgsql volatile security invoker set search_path = public, pg_temp as $$
+declare
+  v_sure uuid[];
+  v_maybe uuid[];
+  v_leads uuid[];
+  v_extra uuid[] := coalesce(p_extra_leads, '{}');
+  v_lead_notes int;
+  v_lead_events int;
+  v_channels int;
+  v_notes int;
+  v_events int;
+  v_link_lines int;
+  v_tasks int;  -- C8
+  v_n int;
+begin
+  if p_tenant is null or p_contact is null or p_actor is null then
+    raise exception using errcode = '22023', message = 'crm_erase_person: a tenant, a contact and an actor are required';
+  end if;
+  if not app.crm_eraser_ok(p_tenant, p_actor) then
+    raise exception using errcode = '42501', message = 'crm_erase_person: this person may not erase';
+  end if;
+  perform 1 from public.crm_contacts c where c.tenant_id = p_tenant and c.id = p_contact for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'crm_erase_person: no such contact';
+  end if;
+  -- A merge that held the row first leaves a tombstone: the person is on the survivor now.  -- C12
+  if exists (select 1 from public.crm_contacts c  -- C12
+              where c.tenant_id = p_tenant and c.id = p_contact and c.merged_into is not null) then  -- C12
+    raise exception using errcode = 'P0002', message = 'crm_erase_person: no such contact';  -- C12
+  end if;  -- C12
+  select coalesce(array_agg(p.lead_id) filter (where p.certain), '{}'),
+         coalesce(array_agg(p.lead_id) filter (where not p.certain), '{}')
+    into v_sure, v_maybe
+    from app.crm_person_leads(p_tenant, p_contact) p;
+  if cardinality(v_extra) > 100 or exists (select 1 from unnest(v_extra) x where x is null or not x = any (v_maybe)) then
+    raise exception using errcode = '22023', message = 'crm_erase_person: a ticked lead is not one of this person''s phone matches';
+  end if;
+  v_leads := v_sure || array(select distinct x from unnest(v_extra) x);
+
+  select count(*)::int into v_lead_notes from public.lead_notes n
+   where n.tenant_id = p_tenant and n.lead_id = any (v_leads);
+  select count(*)::int into v_lead_events from public.lead_events e
+   where e.tenant_id = p_tenant and e.lead_id = any (v_leads);
+  select count(*)::int into v_channels from public.crm_contact_channels ch
+   where ch.tenant_id = p_tenant and ch.contact_id = p_contact;
+  select count(*)::int into v_notes from public.crm_contact_notes n
+   where n.tenant_id = p_tenant and n.contact_id = p_contact;
+  select count(*)::int into v_events from public.crm_contact_events e
+   where e.tenant_id = p_tenant and e.contact_id = p_contact;
+  select count(*)::int into v_tasks from public.crm_tasks tk  -- C8
+   where tk.tenant_id = p_tenant and (tk.contact_id = p_contact or tk.lead_id = any (v_leads));  -- C8
+
+  delete from public.leads l where l.tenant_id = p_tenant and l.id = any (v_leads);
+  -- A lead left behind (an unticked phone match) keeps no timeline line naming the erased
+  -- contact: the link it describes is gone, and no row should point at the person.
+  delete from public.lead_events e
+   where e.tenant_id = p_tenant and e.kind = 'contact_linked'
+     and e.detail ->> 'contact_id' = p_contact::text;
+  get diagnostics v_link_lines = row_count;
+  -- (C5 review) Nor does another contact's timeline keep a line naming an erased lead (one
+  -- of the person's leads linked to someone else by phone, say).
+  delete from public.crm_contact_events e
+   where e.tenant_id = p_tenant and e.kind = 'lead_linked' and e.contact_id <> p_contact
+     and e.detail ->> 'lead_id' = any (v_leads::text[]);
+  get diagnostics v_n = row_count;
+  v_link_lines := v_link_lines + v_n;
+  delete from public.crm_contacts c where c.tenant_id = p_tenant and c.id = p_contact;
+  return jsonb_build_object(
+    'contacts', 1, 'leads', cardinality(v_sure), 'phone_leads', cardinality(v_leads) - cardinality(v_sure),
+    'lead_notes', v_lead_notes, 'lead_events', v_lead_events, 'link_lines', v_link_lines,
+    'channels', v_channels, 'notes', v_notes, 'events', v_events,
+    'tasks', v_tasks,  -- C8
+    -- (C5 review) What this erasure could not check (crm_erase_preview says why).
+    'unindexed', (select count(*)::int from public.leads l
+                   where l.tenant_id = p_tenant and l.crm_indexed_at is null));
+end $$;
+revoke all on function public.crm_erase_person(uuid, uuid, uuid[], uuid) from public, anon, authenticated, service_role;
+grant execute on function public.crm_erase_person(uuid, uuid, uuid[], uuid) to service_role;
+
 -- ═══ 7. Postconditions (P-14: under both Supabase grant regimes) ══════════════════════════
 do $$
 declare
@@ -645,16 +774,18 @@ begin
      or not has_function_privilege('authenticated', 'app.crm_duplicate_candidates(integer)', 'execute') then
     raise exception 'C12: app.crm_duplicate_candidates must be executable by authenticated alone';
   end if;
-  -- The merge: INVOKER, the service role's alone.
-  v_fn := 'public.crm_merge_contacts(uuid, uuid, integer, uuid, integer, uuid)';
-  if exists (select 1 from pg_proc where oid = v_fn::regprocedure and prosecdef)
-     or has_function_privilege('anon', v_fn, 'execute')
-     or has_function_privilege('authenticated', v_fn, 'execute')
-     or not has_function_privilege('service_role', v_fn, 'execute')
-     or exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-                 where p.oid = v_fn::regprocedure and a.grantee = 0) then
-    raise exception 'C12: % must be SECURITY INVOKER and executable by the service role alone', v_fn;
-  end if;
+  -- The merge and the restated erasure: INVOKER, the service role's alone.
+  foreach v_fn in array array['public.crm_merge_contacts(uuid, uuid, integer, uuid, integer, uuid)',
+                              'public.crm_erase_person(uuid, uuid, uuid[], uuid)'] loop
+    if exists (select 1 from pg_proc where oid = v_fn::regprocedure and prosecdef)
+       or has_function_privilege('anon', v_fn, 'execute')
+       or has_function_privilege('authenticated', v_fn, 'execute')
+       or not has_function_privilege('service_role', v_fn, 'execute')
+       or exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                   where p.oid = v_fn::regprocedure and a.grantee = 0) then
+      raise exception 'C12: % must be SECURITY INVOKER and executable by the service role alone', v_fn;
+    end if;
+  end loop;
   -- The trigger function and the purge: pinned definers no API role executes.
   foreach v_fn in array array['app.tg_crm_merge_dismissal()', 'app.purge_crm()'] loop
     if not exists (select 1 from pg_proc f join pg_roles o on o.oid = f.proowner

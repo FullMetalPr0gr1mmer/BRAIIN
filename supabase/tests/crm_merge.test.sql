@@ -16,10 +16,20 @@
 --      blanks fill and its stage follows precedence; the other becomes a scrubbed tombstone;
 --      the audit row is there; tombstones follow the survivor;
 --   5. the finder's plan reads through the indexes and answers at most 50 pairs;
---   6. retention: the next run removes tombstones, after moving what raced onto one.
+--   6. retention: the next run removes tombstones, after moving what raced onto one;
+--   7. the review's cases (C12 review): a flood of one name at one company is not offered; a
+--      value both records hold keeps a person's source; a merge is a person's edit whatever it
+--      fills; the ceiling counts only what the other adds; a tombstone is not erased.
+--
+-- C10b + C12 integration: these lines assert that Sales is refused (crm.contacts is Admin's
+-- here). When C10b re-creates app.role_crm_contacts as ('admin', 'sales'), whichever of the
+-- two merges second flips them to allowed and adds a Sales success row: section 1's "a
+-- Content Creator, SEO, a Developer and Sales find nothing" (Sales finds the pairs), section
+-- 2's "nobody but a live Admin of the tenant says so" (L) and "only a live Admin of the
+-- tenant reads the dismissals" (L), and section 3's refused actors (the Sales actor ...051).
 
 begin;
-select plan(60);
+select plan(71);
 
 insert into public.tenants (id, name) values
   ('c1200000-0000-4000-8000-000000000001', 'C12 T1'),
@@ -185,10 +195,10 @@ reset role;
 
 -- ── 2. "Not a duplicate" ──────────────────────────────────────────────────────────────────
 set local role authenticated;
-select is(c12_each(array['C', 'D', 'L', 'O', 'Ad', 'Ao', 'Al'],
+select is(c12_each(array['C', 'S', 'D', 'L', 'O', 'Ad', 'Ao', 'Al'],
                    $$ select public.crm_dismiss_duplicate('c1200000-0000-4000-8000-000000000001',
                         'c1200000-0000-4000-8000-00000000c001', 'c1200000-0000-4000-8000-00000000c003')::text $$),
-  'P0002 P0002 P0002 P0002 P0002 P0002 P0002', 'nobody but a live Admin of the tenant says so');
+  'P0002 P0002 P0002 P0002 P0002 P0002 P0002 P0002', 'nobody but a live Admin of the tenant says so');
 select c12_as('A');
 select is(c12_val($$ select public.crm_dismiss_duplicate('c1200000-0000-4000-8000-000000000001',
              'c1200000-0000-4000-8000-00000000c003', 'c1200000-0000-4000-8000-00000000c001')::text $$),
@@ -219,9 +229,19 @@ select is(c12_each(array['Ad', 'C'],
                       values ('c1200000-0000-4000-8000-000000000001', 'c1200000-0000-4000-8000-00000000c001',
                               'c1200000-0000-4000-8000-00000000c0dd') returning 'x' $$),
   '42501 42501', 'a stale or unentitled token is refused first too (no tombstone oracle)');
-select is(c12_each(array['A', 'C', 'Ad'],
+select is(c12_each(array['A', 'C', 'S', 'D', 'L', 'O', 'Ad', 'Ao', 'Al'],
                    $$ select count(*)::text from public.crm_merge_dismissals $$),
-  '1 0 0', 'only a live Admin reads the dismissals');
+  '1 0 0 0 0 0 0 0 0',
+  'only a live Admin of the tenant reads the dismissals (not another tenant''s Admin, nor a stale token)');
+reset role;
+select set_config('request.jwt.claims', '', true);
+set local role anon;
+select is(c12_val($$ select count(*)::text from public.crm_merge_dismissals $$), '42501',
+  'anon reads no dismissal');
+select is(c12_val($$ insert into public.crm_merge_dismissals (tenant_id, contact_a, contact_b)
+                     values ('c1200000-0000-4000-8000-000000000001', 'c1200000-0000-4000-8000-00000000c001',
+                             'c1200000-0000-4000-8000-00000000c004') returning 'x' $$),
+  '42501', 'nor adds one');
 reset role;
 select is((select created_by::text from public.crm_merge_dismissals),
   'c1200000-0000-4000-8000-0000000000a1', 'a dismissal is put down to the person who made it');
@@ -392,6 +412,75 @@ select c12_as('A');
 select is(c12_pairs(), '', 'no tombstone is offered');
 reset role;
 
+-- ── 7. The review's cases (C12 review) ────────────────────────────────────────────────────
+-- (C12-SEC-R2-4) One name at one company six times (the public form makes a contact named as
+-- anyone likes): a flood, which the name rule leaves out; five are offered, every pair.
+insert into public.crm_contacts (id, tenant_id, display_name, company_name)
+select ('c1200000-0000-4000-8000-0000000020' || lpad(g::text, 2, '0'))::uuid,
+       'c1200000-0000-4000-8000-000000000001', 'Flood Person', 'Flood Co'
+  from generate_series(1, 6) g;
+set local role authenticated;
+select c12_as('A');
+select is(c12_pairs(), '', 'six records of one name at one company are a flood: the name rule offers none');
+reset role;
+delete from public.crm_contacts where id = 'c1200000-0000-4000-8000-000000002006';
+set local role authenticated;
+select c12_as('A');
+select is(c12_val($$ select jsonb_array_length(public.crm_duplicate_pairs('c1200000-0000-4000-8000-000000000001'))::text $$),
+  '10', 'five are offered, every pair of them, for a person to decide');
+reset role;
+delete from public.crm_contacts where display_name = 'Flood Person';
+
+-- Two records the system made (no person, nothing to fill between them): c005 holds a lead's
+-- phone and ten more from arrivals (eleven: an arrival adds a phone without the ceiling);
+-- c006 holds the same phone, typed by a person.
+insert into public.crm_contacts (id, tenant_id, display_name, last_activity_at) values
+  ('c1200000-0000-4000-8000-00000000c005', 'c1200000-0000-4000-8000-000000000001', 'Reem Hamad', now() - interval '20 days'),
+  ('c1200000-0000-4000-8000-00000000c006', 'c1200000-0000-4000-8000-000000000001', 'Reem H', now() - interval '2 days');
+insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc, value_hmac, is_primary, source, created_by) values
+  ('c1200000-0000-4000-8000-000000000001', 'c1200000-0000-4000-8000-00000000c005', 'phone', 'enc-p6', repeat('6', 64), true, 'lead', null),
+  ('c1200000-0000-4000-8000-000000000001', 'c1200000-0000-4000-8000-00000000c006', 'phone', 'enc-p6m', repeat('6', 64), true, 'manual',
+   'c1200000-0000-4000-8000-0000000000a1');
+insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc, value_hmac)
+select 'c1200000-0000-4000-8000-000000000001', 'c1200000-0000-4000-8000-00000000c005', 'phone', 'enc-arr' || g,
+       lpad(to_hex(2000 + g), 64, 'f')
+  from generate_series(1, 10) g;
+insert into public.leads (id, tenant_id, name, email_enc, email_hmac, phone_enc, phone_hmac, message, crm_indexed_at) values
+  ('c1200000-0000-4000-8000-00000000aa06', 'c1200000-0000-4000-8000-000000000001', 'Reem', 'enc-e8',
+   repeat('8', 64), 'enc-p6', repeat('6', 64), 'call me', now());
+update public.leads set contact_id = 'c1200000-0000-4000-8000-00000000c005', contact_link = 'new'
+ where id = 'c1200000-0000-4000-8000-00000000aa06';
+set local role service_role;
+select is(c12_val($$ select public.crm_merge_contacts('c1200000-0000-4000-8000-000000000001',
+            'c1200000-0000-4000-8000-00000000c005', (select version from public.crm_contacts where id = 'c1200000-0000-4000-8000-00000000c005'),
+            'c1200000-0000-4000-8000-00000000c006', (select version from public.crm_contacts where id = 'c1200000-0000-4000-8000-00000000c006'),
+            'c1200000-0000-4000-8000-0000000000a1') ->> 'duplicates' $$),
+  '1', 'a survivor already past ten phones takes a record that adds it none (C12-COR-5: only what the other adds counts)');
+reset role;
+select is((select concat_ws(' ', ch.value_enc, ch.source, ch.created_by, ch.is_primary) from public.crm_contact_channels ch
+            where ch.contact_id = 'c1200000-0000-4000-8000-00000000c005' and ch.kind = 'phone' and ch.value_hmac = repeat('6', 64)),
+  'enc-p6 manual c1200000-0000-4000-8000-0000000000a1 t',
+  'a phone both held stays once, and the copy kept takes the person''s source and maker (C12-COR-1)');
+select is((select staff_edited from public.crm_contacts where id = 'c1200000-0000-4000-8000-00000000c005'), true,
+  'two records the system made, nothing filled: the survivor is a person''s edit all the same (C12-COR-4)');
+set local role service_role;
+select is(c12_val($$ select public.crm_erase_lead('c1200000-0000-4000-8000-000000000001',
+            'c1200000-0000-4000-8000-00000000aa06', 'c1200000-0000-4000-8000-0000000000a1') ->> 'leads' $$),
+  '1', 'the lead that brought the phone is erased');
+reset role;
+select is((select count(*)::int from public.crm_contact_channels
+            where contact_id = 'c1200000-0000-4000-8000-00000000c005' and kind = 'phone' and value_hmac = repeat('6', 64)),
+  1, 'and the phone a person typed stays on the survivor');
+set local role service_role;
+select is(c12_val($$ select public.crm_erase_person('c1200000-0000-4000-8000-000000000001',
+            'c1200000-0000-4000-8000-00000000c006', '{}', 'c1200000-0000-4000-8000-0000000000a1')::text $$),
+  'P0002', 'erasing the tombstone a merge left is refused: the person is on the survivor (C12-COR-3)');
+reset role;
+select ok(exists (select 1 from public.crm_contacts
+                   where id = 'c1200000-0000-4000-8000-00000000c006'
+                     and merged_into = 'c1200000-0000-4000-8000-00000000c005'),
+  'and the tombstone stays for the next run');
+
 -- ── 5. The plan, and the bound ────────────────────────────────────────────────────────────
 -- Twelve people on one office line: 66 pairs.
 insert into public.crm_contacts (id, tenant_id, display_name)
@@ -431,14 +520,11 @@ select ok(c12_plan($$ select x.contact_id, y.contact_id from public.crm_contact_
                        where x.tenant_id = 'c1200000-0000-4000-8000-000000000001' and x.kind = 'phone' $$)
           ~ 'crm_contact_channels_lookup_idx',
   'the phone rule reads through the channels'' lookup index');
-select ok(c12_plan($$ select x.id, y.id from public.crm_contacts x
-                        join public.crm_contacts y
-                          on y.tenant_id = x.tenant_id and y.name_key = x.name_key and y.id > x.id
-                         and y.merged_into is null
-                       where x.tenant_id = 'c1200000-0000-4000-8000-000000000001' and x.merged_into is null
-                         and x.name_key <> '' $$)
+select ok(c12_plan($$ select c.id, c.name_key from public.crm_contacts c
+                       where c.tenant_id = 'c1200000-0000-4000-8000-000000000001' and c.merged_into is null
+                         and c.name_key <> '' $$)
           ~ 'crm_contacts_name_key_idx',
-  'the name rule reads through the name index');
+  'the name rule reads the tenant''s live named records through the name index');
 
 -- ── 6. Retention: tombstones go on the next run ───────────────────────────────────────────
 -- An inquiry and a task that raced onto a tombstone in the instant it was made.

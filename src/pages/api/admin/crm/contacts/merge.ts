@@ -1,9 +1,11 @@
 import { ContactMergeSchema } from '@schemas/crmMerge';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
-import { claimPrivilegedOp, MANUAL_LEAD_LIMITS } from '@/lib/admin/rateLimit';
+import { claimPrivilegedOp, MANUAL_LEAD_LIMITS, PII_REVEAL_LIMITS } from '@/lib/admin/rateLimit';
+import { receivesLeadPiiUnasked } from '@/lib/admin/leadFields';
 import { serviceClient } from '@/lib/supabase/server';
 import { getContact } from '@/lib/crm/contacts';
+import { CONTACT_REVEAL_OP } from '@/lib/crm/contactReveal';
 import { mergeError, parseMergeOutcome } from '@/lib/crm/merge';
 
 // Merge one contact into another (Admin v2 C12, crm.md §5.5 and §9): `crm.contacts`. The
@@ -16,10 +18,19 @@ import { mergeError, parseMergeOutcome } from '@/lib/crm/merge';
 // profile itself, live, and writes the `crm.contact.merge` audit row inside the merge's own
 // transaction (no row, no merge). Before it:
 //
-//   live recheck → a limit of its own (`crm-merge`, the manual add's numbers: 60 an hour per
+//   live recheck → a reveal slot, for a role that may not take every lead's details at once
+//   (below) → a limit of its own (`crm-merge`, the manual add's numbers: 60 an hour per
 //   person, 300 per tenant; a merge is irreversible, so a stolen session cannot fold the
 //   tenant's people together faster than anyone could notice) → the caller's own client must
 //   see both people (RLS, the live check; a merged record is a 404) → the door.
+//
+// The reveal slot (C12 review, C12-SEC-R2-1): a merge moves the other record's e-mails and
+// phones onto the one kept, and one reveal of it then decrypts both people's. So a role that
+// sees details one person at a time (Sales once C10b gives it crm.contacts: `leads.pii`
+// without `export.csv`) spends one slot of the reveal's own limiter here (`pii-reveal`,
+// fail-closed, before anything is read), as C10b's link confirm does: every value a Sales
+// reveal shows has cost it a slot. Admin may take every lead's details at once anyway
+// (`receivesLeadPiiUnasked`), so its merge spends none.
 //
 // The answer is counts and the kept record's new version, never a value.
 
@@ -30,6 +41,9 @@ export const POST = defineAdminRoute({
   input: ContactMergeSchema,
   handler: async ({ auth, sb, input }) => {
     await liveRecheck(auth);
+    if (!receivesLeadPiiUnasked(auth.role)) {
+      await claimPrivilegedOp(auth, CONTACT_REVEAL_OP, PII_REVEAL_LIMITS);
+    }
     await claimPrivilegedOp(auth, 'crm-merge', MANUAL_LEAD_LIMITS);
     await getContact(sb, auth, input.keepId, 'id');
     await getContact(sb, auth, input.dropId, 'id');

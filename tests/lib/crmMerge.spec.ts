@@ -5,6 +5,8 @@ import type { APIContext } from 'astro';
 import { ContactMergeSchema, DuplicateDismissSchema, DuplicatePairSchema } from '@schemas/crmMerge';
 import { movesLine, olderFirst, reasonLine } from '@/lib/crm/mergeView';
 import { parseDuplicatePairs, parseMergeOutcome } from '@/lib/crm/merge';
+import { ROLE_CAPS } from '@/lib/authz/matrix';
+import { PII_REVEAL_LIMITS } from '@/lib/admin/rateLimit';
 
 // Merging duplicate contacts (Admin v2 C12, crm.md §5.5 and §9): the merge runs its order (a
 // live recheck, its own limit, both people read as the caller, then the service role's door,
@@ -19,6 +21,9 @@ const KEEP = '22222222-2222-4222-8222-222222222222';
 const DROP = '33333333-3333-4333-8333-333333333333';
 
 let limited = false;
+// The ledger keys refused as spent (a 429 for that key alone).
+let limitedOps: Set<string> = new Set();
+const claims: { op: string; limits: unknown }[] = [];
 let rlsSees: Set<string> = new Set([KEEP, DROP]);
 let liveProfile: Record<string, unknown> = { role: 'admin', is_active: true, locked_until: null };
 const events: string[] = [];
@@ -45,9 +50,10 @@ vi.mock('@/lib/admin/rateLimit', async () => {
   const { RateLimitError } = await import('@/lib/admin/errors');
   return {
     ...actual,
-    claimPrivilegedOp: async (_a: unknown, op: string) => {
+    claimPrivilegedOp: async (_a: unknown, op: string, limits: unknown) => {
       events.push(`ops:${op}`);
-      if (limited) throw new RateLimitError(`${op}:user`);
+      claims.push({ op, limits });
+      if (limited || limitedOps.has(op)) throw new RateLimitError(`${op}:user`);
     },
   };
 });
@@ -83,7 +89,7 @@ function client(owner: 'svc' | 'rls') {
 
 vi.mock('@/lib/supabase/server', () => ({ serviceClient: () => client('svc') }));
 
-function ctx(path: string, method = 'GET', body?: unknown): APIContext {
+function ctx(path: string, method = 'GET', body?: unknown, role = 'admin'): APIContext {
   const url = new URL(`https://admin.example.test${path}`);
   return {
     request: new Request(url, {
@@ -95,7 +101,7 @@ function ctx(path: string, method = 'GET', body?: unknown): APIContext {
     url,
     params: {},
     locals: {
-      session: { userId: USER, tenantId: TENANT, role: 'admin', email: 'a@x', isActive: true },
+      session: { userId: USER, tenantId: TENANT, role, email: 'a@x', isActive: true },
       supabase: client('rls'),
     },
   } as unknown as APIContext;
@@ -135,6 +141,8 @@ function poisonedPair(): Record<string, unknown> {
 
 beforeEach(() => {
   limited = false;
+  limitedOps = new Set();
+  claims.length = 0;
   rlsSees = new Set([KEEP, DROP]);
   liveProfile = { role: 'admin', is_active: true, locked_until: null };
   events.length = 0;
@@ -186,6 +194,52 @@ describe('POST /api/admin/crm/contacts/merge', () => {
     });
     // The database writes the audit row in the merge's transaction; the Worker queues none.
     expect(audits).toEqual([]);
+  });
+
+  it('an Admin merge spends no reveal slot (Admin may take every lead’s details at once)', async () => {
+    const { POST } = await load();
+    const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY));
+    expect(res.status).toBe(200);
+    expect(claims.map((c) => c.op)).toEqual(['crm-merge']);
+  });
+
+  // (C12 review, C12-SEC-R2-1) Once C10b gives Sales crm.contacts, a Sales merge moves the
+  // other person's e-mails and phones onto the record its next reveal decrypts, so it spends a
+  // slot of the reveal's own limiter first, fail-closed, as C10b's link confirm does. Sales
+  // holds crm.contacts here only for these cases (C10b flips the matrix itself).
+  describe('as Sales (C10b gives it crm.contacts)', () => {
+    const before = ROLE_CAPS.sales['crm.contacts'];
+    beforeEach(() => {
+      ROLE_CAPS.sales['crm.contacts'] = 'full';
+      liveProfile = { role: 'sales', is_active: true, locked_until: null };
+      return () => {
+        ROLE_CAPS.sales['crm.contacts'] = before;
+      };
+    });
+
+    it('spends a pii-reveal slot after the live recheck and before anything is read', async () => {
+      const { POST } = await load();
+      const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
+      expect(res.status).toBe(200);
+      expect(events).toEqual([
+        'svc:profiles',
+        'ops:pii-reveal',
+        'ops:crm-merge',
+        'rls:crm_contacts',
+        'rls:crm_contacts',
+        'svc:rpc:crm_merge_contacts',
+      ]);
+      expect(claims[0]).toEqual({ op: 'pii-reveal', limits: PII_REVEAL_LIMITS });
+    });
+
+    it('with no reveal slot left: a 429, nothing read, no merge', async () => {
+      limitedOps = new Set(['pii-reveal']);
+      const { POST } = await load();
+      const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
+      expect(res.status).toBe(429);
+      expect(events).toEqual(['svc:profiles', 'ops:pii-reveal']);
+      expect(rpcCalls).toEqual([]);
+    });
   });
 
   it('a demoted, switched-off or locked profile is refused before anything else', async () => {
@@ -371,6 +425,7 @@ describe('the words', () => {
 const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
 const read = (file: string) => readFileSync(join(MIGRATIONS, file), 'utf8').replace(/\r\n/g, '\n');
 const C5 = read('0131_crm_contacts.sql');
+const C8 = read('0134_crm_tasks.sql');
 const C12 = read(readdirSync(MIGRATIONS).find((f) => /_crm_merge\.sql$/.test(f)) ?? '');
 
 function fn(sql: string, name: string, end: string): string {
@@ -394,6 +449,26 @@ describe('0138', () => {
         .filter((line) => !/ {2}-- C12$/.test(line))
         .join('\n'),
     ).toBe(before);
+  });
+
+  // (C12 review, C12-COR-3) An erasure that waited on a merge's lock would otherwise erase the
+  // tombstone and say it was done, while the person sits on the survivor.
+  it('restates public.crm_erase_person as C8 wrote it plus the lines marked -- C12 (a tombstone is P0002)', () => {
+    const before = fn(C8, 'public.crm_erase_person', 'end $$;');
+    const after = fn(C12, 'public.crm_erase_person', 'end $$;');
+    const marked = after.split('\n').filter((line) => / {2}-- C12$/.test(line));
+    expect(marked.join('\n')).toMatch(/merged_into is not null[\s\S]*'P0002'/);
+    expect(
+      after
+        .split('\n')
+        .filter((line) => !/ {2}-- C12$/.test(line))
+        .join('\n'),
+    ).toBe(before);
+    // The check comes after the row is locked, so it reads what a merge that held it wrote.
+    expect(after.indexOf('merged_into is not null')).toBeGreaterThan(after.indexOf('for update'));
+    expect(C12).toMatch(
+      /grant execute on function public\.crm_erase_person\(uuid, uuid, uuid\[\], uuid\) to service_role;/,
+    );
   });
 
   it('the merge is the service role’s INVOKER door, checking the actor live before it locks or moves anything', () => {
