@@ -105,6 +105,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'crmContacts: contact contact details (reveal)',
   'crmContacts: contact detail',
   'crmContacts: contact details change (versioned PATCH)',
+  'crmContacts: contact e-mail or phone removal (PATCH channels.remove)',
   'crmContacts: contact e-mails and phones change (PATCH channels)',
   'crmContacts: contact erase (crm.erase, Admin only)',
   'crmContacts: contact erase preview (crm.erase, Admin only)',
