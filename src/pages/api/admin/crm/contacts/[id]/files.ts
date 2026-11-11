@@ -60,8 +60,12 @@ export const GET = defineAdminRoute({
   },
 });
 
-function refusal(status: number, error: string, detail: string): Response {
-  return json({ ok: false, error, detail, field: 'file' }, status);
+/**
+ * A refusal the card says in words: the kernel's `validation` envelope (the admin client shows
+ * its `detail`), with the HTTP status that names it and a `reason` for machines.
+ */
+function refusal(status: number, reason: string, detail: string): Response {
+  return json({ ok: false, error: 'validation', reason, detail, field: 'file' }, status);
 }
 
 export const POST = defineAdminRoute({
