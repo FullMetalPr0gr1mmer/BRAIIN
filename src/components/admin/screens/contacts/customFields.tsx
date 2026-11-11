@@ -6,6 +6,12 @@ import type { ContactCustom, CustomFieldDefinition } from '@schemas/crm';
 // is a number for a number field, YYYY-MM-DD for a date (the date input's own form), trimmed
 // text, or null to clear a field. The server checks each value against its field again, and
 // the database once more (app.tg_crm_contact_custom).
+//
+// A number is typed in a text box (inputMode decimal), never type=number: a number box the
+// browser cannot read ("1-2", "1e") reports its value as '' and the form took that for a
+// cleared box, sending null and deleting what was stored (C9b review, C9B-COR-2). A date keeps
+// the browser's date picker, which does the same for a partly typed date, so the form asks the
+// box itself (validity.badInput, unreadableBoxes) before it saves and refuses while it is set.
 
 /** A field's values as the form holds them: the field's key → what is in its box. */
 export type CustomFormValues = Record<string, string>;
@@ -14,7 +20,41 @@ export type CustomFormValues = Record<string, string>;
 export const CUSTOM_LIMITS = { maxText: 500, maxNumber: 1e15 } as const;
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const CONTROL = /[\u0000-\u001f\u007f]/;
+/** A number as a person types it: an optional sign, digits with an optional point, an exponent. */
+const NUMBER = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+/** What a text value may not hold: the schema's CUSTOM_FIELD_CONTROL (a test holds them equal). */
+export const CUSTOM_CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+
+/** A real calendar day written YYYY-MM-DD, as the Worker's isCustomDate (year 0000 is not one). */
+export function isDateText(text: string): boolean {
+  if (!DATE.test(text) || text.startsWith('0000')) return false;
+  const time = Date.parse(`${text}T00:00:00Z`);
+  return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === text;
+}
+
+/** The part of a box the form asks about: whether the browser could read what is in it. */
+interface Readable {
+  validity?: { badInput?: boolean };
+}
+
+/**
+ * The keys of the boxes holding something the browser could not read (a partly typed date):
+ * such a box reports '' like an empty one, so it is asked, never its value. `find` is
+ * `document.getElementById` in the screens.
+ */
+export function unreadableBoxes(
+  fields: readonly CustomFieldDefinition[],
+  idPrefix: string,
+  find: (id: string) => Readable | null,
+): Set<string> {
+  const out = new Set<string>();
+  for (const field of fields) {
+    if (find(`${idPrefix}-c-${field.key}`)?.validity?.badInput) out.add(field.key);
+  }
+  return out;
+}
+
+const NONE: ReadonlySet<string> = new Set();
 
 /** The boxes' starting values from what a contact holds (nothing for a new contact). */
 export function customFormValues(
@@ -60,32 +100,34 @@ export function customPatch(
   return Object.keys(patch).length > 0 ? patch : null;
 }
 
-/** What the form refuses before it asks the server, by field key, in plain words (P-12). */
+/**
+ * What the form refuses before it asks the server, by field key, in plain words (P-12).
+ * `unreadable` names the boxes the browser could not read (unreadableBoxes): each is refused,
+ * so the save never sends null for a value nobody cleared.
+ */
 export function customErrors(
   fields: readonly CustomFieldDefinition[],
   values: CustomFormValues,
+  unreadable: ReadonlySet<string> = NONE,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
   for (const field of fields) {
+    if (unreadable.has(field.key)) {
+      errors[field.key] = field.type === 'date' ? 'Enter a date.' : 'Enter a number.';
+      continue;
+    }
     const text = (values[field.key] ?? '').trim();
     if (text === '') continue;
     if (field.type === 'number') {
       const n = Number(text);
-      if (!Number.isFinite(n)) errors[field.key] = 'Enter a number.';
+      if (!NUMBER.test(text) || !Number.isFinite(n)) errors[field.key] = 'Enter a number.';
       else if (Math.abs(n) > CUSTOM_LIMITS.maxNumber)
         errors[field.key] = 'That number is too large.';
     } else if (field.type === 'date') {
-      const time = Date.parse(`${text}T00:00:00Z`);
-      if (
-        !DATE.test(text) ||
-        Number.isNaN(time) ||
-        new Date(time).toISOString().slice(0, 10) !== text
-      ) {
-        errors[field.key] = 'Enter a date.';
-      }
+      if (!isDateText(text)) errors[field.key] = 'Enter a date.';
     } else if (text.length > CUSTOM_LIMITS.maxText) {
       errors[field.key] = `Keep it to ${CUSTOM_LIMITS.maxText} characters.`;
-    } else if (CONTROL.test(text)) {
+    } else if (CUSTOM_CONTROL.test(text)) {
       errors[field.key] = 'Keep it to one line.';
     }
   }
@@ -101,7 +143,7 @@ interface InputsProps {
   onChange: (key: string, value: string) => void;
 }
 
-/** One labelled box per field: a text box, a number box or a date picker. */
+/** One labelled box per field: a text box (for a number too, see above) or a date picker. */
 export function CustomFieldInputs({
   fields,
   values,
@@ -121,12 +163,12 @@ export function CustomFieldInputs({
             </label>
             <input
               id={id}
-              type={field.type === 'text' ? 'text' : field.type}
+              type={field.type === 'date' ? 'date' : 'text'}
               value={values[field.key] ?? ''}
               autoComplete="off"
               dir={field.type === 'text' ? 'auto' : 'ltr'}
               {...(field.type === 'text' ? { maxLength: CUSTOM_LIMITS.maxText } : {})}
-              {...(field.type === 'number' ? { inputMode: 'decimal' as const, step: 'any' } : {})}
+              {...(field.type === 'number' ? { inputMode: 'decimal' as const } : {})}
               aria-invalid={error ? true : undefined}
               aria-describedby={error ? `${id}-error` : undefined}
               onChange={(event) => onChange(field.key, event.target.value)}

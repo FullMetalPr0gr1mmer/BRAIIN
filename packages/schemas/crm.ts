@@ -505,6 +505,13 @@ export const MAX_CUSTOM_TEXT = 500;
 /** A number field holds at most 10^15 either way (the database's bound). */
 export const MAX_CUSTOM_NUMBER = 1e15;
 export const CUSTOM_FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
+/**
+ * What a custom field's label and a text value may not hold: C0 and C1 controls, DEL and the
+ * line and paragraph separators. The C9b migration names the same characters (never a
+ * locale's [[:cntrl:]], which may or may not take C1 and U+2028/U+2029), so the Worker refuses
+ * exactly what the database refuses (C9b review, C9B-COR-4).
+ */
+export const CUSTOM_FIELD_CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 
 /**
  * Custom field values: a key per field the CRM settings define, each a short text, a number,
@@ -526,7 +533,7 @@ export const CustomFieldDefinitionSchema = z
       .trim()
       .min(1)
       .max(MAX_CUSTOM_FIELD_LABEL)
-      .refine((v) => !CONTROL.test(v), 'no control characters'),
+      .refine((v) => !CUSTOM_FIELD_CONTROL.test(v), 'no control characters'),
     type: z.enum(CUSTOM_FIELD_TYPES),
   })
   .strict();

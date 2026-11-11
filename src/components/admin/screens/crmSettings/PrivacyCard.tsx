@@ -5,8 +5,9 @@ import { retentionLine } from './copy';
 import EraseFinder, { type PickedContact } from './EraseFinder';
 import type { PrivacyRow } from './types';
 
-// The Data and privacy card (Admin v2 C9b, crm.md §11 screen 11). It states how long leads and
-// contacts are kept after their last activity (site_settings.retention, which General settings
+// The Data and privacy card (Admin v2 C9b, crm.md §11 screen 11). It states how long leads are
+// kept after they arrive and contacts after their last activity (site_settings.retention, which
+// General settings
 // changes: linked for `settings.general` holders), and, for `crm.erase` holders, starts an
 // erasure: find the person (EraseFinder), then C7's erase dialog, loaded with import() on the
 // first pick, so neither it nor the contacts' code rides on this screen's first load. The

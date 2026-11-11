@@ -33,7 +33,10 @@ export interface CrmSettingsView {
 
 /** (C9b) What the Data & privacy card says: the horizon, and what the viewer may do there. */
 export interface CrmPrivacyView {
-  /** Months leads and contacts are kept after their last activity, or null if unread. */
+  /**
+   * Months leads are kept after they arrive and contacts after their last activity (one
+   * setting, two clocks: docs/retention.md), or null if unread.
+   */
   retentionMonths: number | null;
   /** UX only: the erasure routes check `crm.erase` again. */
   canErase: boolean;
@@ -241,6 +244,10 @@ export async function saveCrmSettings(
       if (known) throw new ValidationError(known.detail, known.field);
       throw new ValidationError('Those settings are not allowed.');
     }
+    // A deadlock with a contact's value write (the C9b value trigger reads the definitions FOR
+    // SHARE; removing a field then waits on that contact, C9B-COR-1): PostgreSQL aborted this
+    // side, nothing was saved, so it is a 409 like a moved version.
+    if (error.code === '40P01') throw new OptimisticLockError('crm_settings');
     throw new Error(`crm_settings update: ${error.message}`);
   }
   // No row: the version moved on (someone else saved). A caller who may not write it was

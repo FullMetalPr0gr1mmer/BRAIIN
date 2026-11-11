@@ -1,9 +1,12 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { APIContext } from 'astro';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
   ContactCustomSchema,
   CrmSettingsSaveSchema,
+  CUSTOM_FIELD_CONTROL,
   CUSTOM_FIELD_KEY,
   CUSTOM_FIELD_TYPES,
   CustomFieldsSaveSchema,
@@ -13,7 +16,8 @@ import {
   MAX_CUSTOM_TEXT,
   type CustomFieldDefinition,
 } from '@schemas/crm';
-import { ValidationError } from '@/lib/admin/errors';
+import { OptimisticLockError, ValidationError } from '@/lib/admin/errors';
+import { contactError } from '@/lib/crm/contacts';
 import {
   isCustomDate,
   mergeCustom,
@@ -40,10 +44,14 @@ import {
 } from '@/components/admin/screens/crmSettings/CustomFieldsCard';
 import { foundWords } from '@/components/admin/screens/crmSettings/EraseFinder';
 import {
+  CUSTOM_CONTROL as FORM_CONTROL,
   CUSTOM_LIMITS as FORM_LIMITS,
+  CustomFieldInputs,
   customErrors,
   customFormValues,
   customPatch,
+  isDateText,
+  unreadableBoxes,
 } from '@/components/admin/screens/contacts/customFields';
 
 // Custom contact fields (Admin v2 C9b, crm.md §4.7, §5.1, "CRM-9"). Held here: the schemas and
@@ -326,8 +334,9 @@ describe('the audit row’s counts', () => {
 
 describe('the Data and privacy card', () => {
   it('states the horizon in words, or that it could not be read', () => {
+    // Leads count from their arrival, contacts from their last activity (C9B-COR-3).
     expect(retentionLine(24)).toBe(
-      'Leads and contacts are kept 24 months after their last activity.',
+      'Leads are kept 24 months after they arrive, and contacts 24 months after their last activity.',
     );
     expect(retentionLine(null)).toBe('How long leads and contacts are kept could not be read.');
   });
@@ -360,6 +369,108 @@ describe('the Data and privacy card', () => {
     ]) {
       expect(source(f), f).not.toMatch(/[–—]/);
     }
+  });
+});
+
+// ── The C9b review ──────────────────────────────────────────────────────────────────────────
+describe('the C9b review', () => {
+  const trigger = MIGRATION.slice(
+    MIGRATION.indexOf('create or replace function app.tg_crm_contact_custom'),
+    MIGRATION.indexOf('revoke all on function app.tg_crm_contact_custom'),
+  );
+
+  it('C9B-COR-1: the value trigger reads the definitions FOR SHARE, and only for a new value', () => {
+    expect(trigger).toMatch(
+      /from public\.crm_settings s where s\.tenant_id = new\.tenant_id\s+for share;/,
+    );
+    // The early return for a write that brings no new or changed value comes before the read.
+    expect(trigger.indexOf('if not exists (select 1')).toBeGreaterThan(-1);
+    expect(trigger.indexOf('if not exists (select 1')).toBeLessThan(trigger.indexOf('for share'));
+  });
+
+  it('C9B-COR-1: a deadlock with the other side is a 409 on either side, never a 500', () => {
+    expect(contactError({ code: '40P01' }, 'The contact')).toBeInstanceOf(OptimisticLockError);
+  });
+
+  it('C9B-COR-4: the database names the characters the Worker and the form refuse', () => {
+    expect(FORM_CONTROL.source).toBe(CUSTOM_FIELD_CONTROL.source);
+    // PostgreSQL text holds no NUL, so the database's set starts at U+0001.
+    const named = CUSTOM_FIELD_CONTROL.source.replace('\\u0000', '\\u0001');
+    const check = MIGRATION.slice(
+      MIGRATION.indexOf('create or replace function app.crm_custom_fields_ok'),
+      MIGRATION.indexOf('alter table public.crm_settings'),
+    );
+    expect(check).toContain(`(e ->> 'label') ~ '${named}'`);
+    expect(trigger).toContain(`(r.value #>> '{}') !~ '${named}'`);
+    expect(`${check}${trigger}`).not.toContain('[[:cntrl:]]');
+    for (const ch of ['\u0085', '\u009f', '\u2028', '\u2029', '\u0007', '\u007f']) {
+      expect(() => validateCustomValues(FIELDS, { industry_note: `a${ch}b` })).toThrow(
+        ValidationError,
+      );
+      expect(customErrors(FIELDS, { industry_note: `a${ch}b` })).toEqual({
+        industry_note: 'Keep it to one line.',
+      });
+      expect(
+        CustomFieldsSaveSchema.safeParse([{ key: 'a', label: `A${ch}B`, type: 'text' }]).success,
+      ).toBe(false);
+    }
+    expect(() => validateCustomValues(FIELDS, { industry_note: 'Retail, ¡olé!' })).not.toThrow();
+  });
+
+  it('C9B-COR-4: year 0000 is not a date (PostgreSQL refuses it)', () => {
+    expect(isCustomDate('0000-01-01')).toBe(false);
+    expect(isDateText('0000-01-01')).toBe(false);
+    expect(customErrors(FIELDS, { renewal: '0000-01-01' })).toEqual({ renewal: 'Enter a date.' });
+    expect(isCustomDate('0001-01-01')).toBe(true);
+    expect(isDateText('0001-01-01')).toBe(true);
+  });
+
+  it('C9B-COR-4: a value the database refuses is a 422 on the custom fields', () => {
+    const err = contactError(
+      {
+        code: '23514',
+        message:
+          'a custom value must be a defined field of this tenant and fit its type (constraint "crm_contacts_custom_fields")',
+      },
+      'The contact',
+    );
+    expect(err).toBeInstanceOf(ValidationError);
+    expect((err as ValidationError).field).toBe('custom');
+    expect((err as ValidationError).detail).toMatch(/changed in CRM settings/);
+  });
+
+  it('C9B-COR-2: a number is typed in a text box, so a box the browser cannot read never reads as empty', () => {
+    const html = renderToStaticMarkup(
+      createElement(CustomFieldInputs, {
+        fields: FIELDS,
+        values: { industry_note: '', renewal: '', seats: '' },
+        idPrefix: 'f',
+        onChange: () => undefined,
+      }),
+    );
+    expect(html).toMatch(/<input id="f-c-seats" type="text"[^>]*inputMode="decimal"/);
+    expect(html).not.toContain('type="number"');
+    expect(html).toMatch(/<input id="f-c-renewal" type="date"/);
+    for (const typed of ['1-2', '12..5', '1e', '0x10', 'Infinity', '٣']) {
+      expect(customErrors(FIELDS, { seats: typed }), typed).toEqual({ seats: 'Enter a number.' });
+    }
+    for (const typed of ['12', '-1.5', '.5', '3.', '1e3', '+7']) {
+      expect(customErrors(FIELDS, { seats: typed }), typed).toEqual({});
+    }
+  });
+
+  it('C9B-COR-2: a partly typed date (validity.badInput) is refused, never sent as a cleared value', () => {
+    const boxes: Record<string, { validity: { badInput: boolean } }> = {
+      'f-c-renewal': { validity: { badInput: true } },
+      'f-c-seats': { validity: { badInput: false } },
+    };
+    const unreadable = unreadableBoxes(FIELDS, 'f', (id) => boxes[id] ?? null);
+    expect([...unreadable]).toEqual(['renewal']);
+    // The box reports '' while it holds the partial date; the stored date must not be cleared.
+    expect(customErrors(FIELDS, { renewal: '', seats: '', industry_note: '' }, unreadable)).toEqual(
+      { renewal: 'Enter a date.' },
+    );
+    expect(customErrors(FIELDS, { renewal: '', seats: '', industry_note: '' })).toEqual({});
   });
 });
 

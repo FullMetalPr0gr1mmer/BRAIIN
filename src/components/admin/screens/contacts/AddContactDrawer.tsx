@@ -17,6 +17,7 @@ import {
   CustomFieldInputs,
   customErrors,
   customPatch,
+  unreadableBoxes,
   type CustomFormValues,
 } from './customFields';
 
@@ -215,7 +216,11 @@ export default function AddContactDrawer({
     setFailure('');
     setTaken(null);
     const local = checkContact(form);
-    const localCustom = customErrors(customFields, custom);
+    const localCustom = customErrors(
+      customFields,
+      custom,
+      unreadableBoxes(customFields, prefix, (box) => document.getElementById(box)),
+    );
     if (Object.keys(local).length > 0 || Object.keys(localCustom).length > 0) {
       return show(local, localCustom);
     }

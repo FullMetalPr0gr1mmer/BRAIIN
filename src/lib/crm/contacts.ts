@@ -195,6 +195,10 @@ export function contactError(
     case 'P0002':
       return new NotFoundError('contact');
     case '40001':
+    // A deadlock: a value written to a contact while an Admin's save removed a field that
+    // contact holds (the C9b value trigger reads the definitions FOR SHARE, C9B-COR-1).
+    // PostgreSQL aborted this side; the definitions changed meanwhile, so reload.
+    case '40P01':
       return new OptimisticLockError('crm_contacts');
     case '22023':
       return new ValidationError(`${what} was refused: check the values sent`);

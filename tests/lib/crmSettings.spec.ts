@@ -316,6 +316,13 @@ describe('saving the settings', () => {
     );
   });
 
+  it('a deadlock with a contact value write is a 409 too, never a 500 (C9B-COR-1)', async () => {
+    const { sb } = fakeDb({ error: { code: '40P01', message: 'deadlock detected' } });
+    await expect(
+      saveCrmSettings(sb, AUTH, { version: 3, customFields: [] }),
+    ).rejects.toBeInstanceOf(OptimisticLockError);
+  });
+
   it('a refused assignee is a 422 on its field, in plain words', async () => {
     const { sb } = fakeDb({
       error: {

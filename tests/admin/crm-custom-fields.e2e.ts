@@ -145,7 +145,11 @@ test.describe('as admin', () => {
   test('Data and privacy: find a person, and the erase dialog opens on them', async ({ page }) => {
     await visit(page, '/admin/crm/settings');
     await expect(page.getByRole('heading', { level: 2, name: 'Data and privacy' })).toBeVisible();
-    await expect(page.getByText(/^Leads and contacts are kept \d+ months/)).toBeVisible();
+    await expect(
+      page.getByText(
+        /^Leads are kept \d+ months after they arrive, and contacts \d+ months after their last activity\.$/,
+      ),
+    ).toBeVisible();
     await page.getByRole('button', { name: "Erase a person's data" }).click();
     const finder = page.getByRole('dialog', { name: "Erase a person's data" });
     await finder.getByLabel('Who', { exact: true }).fill(contactName);

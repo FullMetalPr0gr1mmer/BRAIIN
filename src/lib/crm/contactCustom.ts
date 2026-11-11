@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  CUSTOM_FIELD_CONTROL,
   CustomFieldDefinitionSchema,
   MAX_CUSTOM_NUMBER,
   MAX_CUSTOM_TEXT,
@@ -15,7 +16,6 @@ import { ValidationError } from '@/lib/admin/errors';
 // bounds the whole object (< 8 KB); this is the Worker's half, which says what is wrong in
 // words a person can act on.
 
-const CONTROL = /[\u0000-\u001f\u007f]/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -49,9 +49,12 @@ export function parseCustomFields(raw: unknown): CustomFieldDefinition[] {
   });
 }
 
-/** A real calendar day written YYYY-MM-DD (what a date input sends). */
+/**
+ * A real calendar day written YYYY-MM-DD (what a date input sends). Year 0000 is not one:
+ * JavaScript reads it, PostgreSQL refuses it (app.crm_custom_date_ok), C9B-COR-4.
+ */
 export function isCustomDate(value: string): boolean {
-  if (!DATE.test(value)) return false;
+  if (!DATE.test(value) || value.startsWith('0000')) return false;
   const time = Date.parse(`${value}T00:00:00Z`);
   return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === value;
 }
@@ -71,7 +74,7 @@ export function validateCustomValues(
       case 'text':
         if (typeof value !== 'string') throw bad('enter text.');
         if (value.length > MAX_CUSTOM_TEXT) throw bad('that is too long.');
-        if (CONTROL.test(value)) throw bad('keep it to one line.');
+        if (CUSTOM_FIELD_CONTROL.test(value)) throw bad('keep it to one line.');
         break;
       case 'number':
         if (typeof value !== 'number' || !Number.isFinite(value)) throw bad('enter a number.');

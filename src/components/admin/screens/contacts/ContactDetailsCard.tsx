@@ -7,7 +7,7 @@ import {
 import type { ContactDetailRow } from '@/lib/crm/contactPage';
 import { toast } from '@/lib/admin/toast';
 import { CONTACT_SOURCE_LABELS, sourceLabelOf } from '@/lib/crm/contactView';
-import { CustomFieldInputs, customErrors, customPatch } from './customFields';
+import { CustomFieldInputs, customErrors, customPatch, unreadableBoxes } from './customFields';
 
 // Details (Admin v2 C7, crm.md §11 screen 6): the contact's own words, with an explicit Save
 // (no autosave, P-5). One versioned PATCH of the fields that changed, through the page's queue
@@ -110,7 +110,8 @@ export default function ContactDetailsCard({ contact, customFields, busy, save }
       setError('Use a two-letter country code, such as SA.');
       return;
     }
-    const problems = customErrors(customFields, customOf(values, customFields));
+    const unreadable = unreadableBoxes(customFields, id, (box) => document.getElementById(box));
+    const problems = customErrors(customFields, customOf(values, customFields), unreadable);
     setCustomProblems(problems);
     const first = customFields.find((f) => problems[f.key]);
     if (first) {

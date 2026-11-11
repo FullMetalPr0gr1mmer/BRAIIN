@@ -36,6 +36,10 @@ set local lock_timeout = '5s';
 -- An array of at most 12 objects, each exactly {key, label, type}: a snake_case key of at most
 -- 40 characters starting with a letter, a label of 1 to 60 characters with no control character
 -- and no space at either end, a type of text, number or date; every key once.
+-- The characters refused are named, not a locale's [[:cntrl:]] (which, in a UTF-8 database,
+-- follows LC_CTYPE and may also take C1 controls or U+2028/U+2029; 0045 does the same), so the
+-- database refuses exactly what the Worker refuses (CUSTOM_FIELD_CONTROL, packages/schemas/crm.ts):
+-- C0 and C1 controls, DEL, and the line and paragraph separators (C9b review, C9B-COR-4).
 create or replace function app.crm_custom_fields_ok(p jsonb) returns boolean
   language sql immutable set search_path = '' as $$
   -- CASE, not AND: the array functions below raise on an object, and AND may run them first.
@@ -52,7 +56,7 @@ create or replace function app.crm_custom_fields_ok(p jsonb) returns boolean
            or (e ->> 'key') !~ '^[a-z][a-z0-9_]{0,39}$'
            or char_length(e ->> 'label') not between 1 and 60
            or (e ->> 'label') <> btrim(e ->> 'label')
-           or (e ->> 'label') ~ '[[:cntrl:]]'
+           or (e ->> 'label') ~ '[\u0001-\u001f\u007f-\u009f\u2028\u2029]'
            or (e ->> 'type') not in ('text', 'number', 'date'))
      and (select count(distinct e ->> 'key') from jsonb_array_elements(p) e) = jsonb_array_length(p)
   end
@@ -160,12 +164,26 @@ end $$;
 revoke all on function app.crm_custom_date_ok(text) from public, anon, authenticated, service_role;
 
 -- Each key whose value is new or changed must be a field of the contact's tenant, and the value
--- must fit its type: text a string of at most 500 characters with no control character, number
+-- must fit its type: text a string of at most 500 characters with no control character (the
+-- characters section 1 names), number
 -- a JSON number of at most 10^15 either way, date a real YYYY-MM-DD date. JSON null is allowed
 -- (an empty field). Values left as they were are not checked again (a removed field's values
 -- are already gone, section 4). A definer: it reads the tenant's definitions whoever writes.
 -- No staff token inserts a contact, and an UPDATE reaches only rows RLS lets it see, so the
 -- refusal tells nobody anything about another tenant.
+-- The definitions are read FOR SHARE (C9b review, C9B-SEC-1 / C9B-COR-1). A plain read raced a
+-- removal: a value written while an Admin's save removing its field was open passed against the
+-- old set, and the removal's cascade (section 4) never saw it, so the value outlived its field
+-- and came back under a later field of that key. FOR SHARE conflicts with the settings UPDATE's
+-- row lock: a value write waits for a definitions save already open and then reads the set it
+-- committed, and a definitions save waits for an open value write, so its cascade (a new
+-- snapshot) sees the value. The Worker's own read of the definitions is not that barrier. Only
+-- a write that brings a new or changed value takes the lock (an insert with no values, a
+-- cleared value and the cascade's own removals cannot leave an orphan). The two sides take their
+-- locks in opposite orders (the contact row, then the definitions; the definitions, then the
+-- contacts holding a removed key), so a value write to a contact that holds the very key being
+-- removed, at the same moment, can deadlock: PostgreSQL then aborts one of the two (40P01,
+-- mapped to "changed meanwhile, reload") and no value is left behind.
 create or replace function app.tg_crm_contact_custom() returns trigger
   language plpgsql security definer set search_path = '' as $$
 declare
@@ -176,8 +194,14 @@ begin
   if tg_op = 'UPDATE' and new.custom is not distinct from old.custom then
     return new;
   end if;
+  if not exists (select 1
+                   from jsonb_each(coalesce(new.custom, '{}'::jsonb)) n
+                  where tg_op = 'INSERT' or (old.custom -> n.key) is distinct from n.value) then
+    return new;
+  end if;
   select coalesce(s.custom_fields, '[]'::jsonb) into v_defs
-    from public.crm_settings s where s.tenant_id = new.tenant_id;
+    from public.crm_settings s where s.tenant_id = new.tenant_id
+     for share;
   for r in
     select n.key, n.value
       from jsonb_each(coalesce(new.custom, '{}'::jsonb)) n
@@ -191,7 +215,7 @@ begin
            and not case v_type
              when 'text' then jsonb_typeof(r.value) = 'string'
                               and char_length(r.value #>> '{}') <= 500
-                              and (r.value #>> '{}') !~ '[[:cntrl:]]'
+                              and (r.value #>> '{}') !~ '[\u0001-\u001f\u007f-\u009f\u2028\u2029]'
              when 'number' then jsonb_typeof(r.value) = 'number'
                                 and abs((r.value #>> '{}')::numeric) <= 1e15
              when 'date' then jsonb_typeof(r.value) = 'string'
@@ -285,7 +309,7 @@ select app.put_help_guide($guide$
       {
         "t": "ol",
         "x": [
-          "The card says how long leads and contacts are kept after their last activity. Change it in General settings.",
+          "The card says how long leads are kept after they arrive, and contacts after their last activity. Change it in General settings.",
           "Erase a person's data finds a contact by name or company and erases everything about them: their leads, notes, tasks, e-mails and phone numbers. It asks why, then asks again before it erases, and the erasure is recorded in the activity log.",
           "A person can ask what you hold about them, or ask for it to be erased. Answer within 30 days."
         ]
@@ -346,7 +370,7 @@ select app.put_help_guide($guide$
       {
         "t": "ol",
         "x": [
-          "تذكر البطاقة مدة الاحتفاظ بالعملاء المحتملين وجهات الاتصال بعد آخر نشاط لهم. وتغيّرها من General settings.",
+          "تذكر البطاقة مدة الاحتفاظ بالعملاء المحتملين من وصولهم، وبجهات الاتصال بعد آخر نشاط لها. وتغيّرها من General settings.",
           "يبحث زر Erase a person's data عن جهة اتصال بالاسم أو الشركة، ثم يمحو كل ما يخصها: العملاء المحتملين المرتبطين بها، والملاحظات، والمهام، وعناوين البريد الإلكتروني، وأرقام الهاتف. ويسألك عن السبب، ثم يطلب التأكيد مرة ثانية قبل المحو، ويُسجَّل المحو في سجل النشاط.",
           "يحق للشخص أن يسأل عما تحتفظ به عنه، أو أن يطلب محوه. أجب خلال 30 يومًا."
         ]

@@ -173,8 +173,12 @@ export const CONTACT_STAGE_COPY: readonly {
   },
 ];
 
-/** The retention line on the Data and privacy card. */
+/**
+ * The retention line on the Data and privacy card. One setting, two clocks: a lead goes N
+ * months after it arrived (app.purge_leads: created_at), a contact N months after its last
+ * activity (app.purge_crm: last_activity_at), docs/retention.md (C9b review, C9B-COR-3).
+ */
 export function retentionLine(months: number | null): string {
   if (months === null) return 'How long leads and contacts are kept could not be read.';
-  return `Leads and contacts are kept ${months} months after their last activity.`;
+  return `Leads are kept ${months} months after they arrive, and contacts ${months} months after their last activity.`;
 }

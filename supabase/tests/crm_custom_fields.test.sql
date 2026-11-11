@@ -15,14 +15,16 @@
 --      change;
 --   4. values: each new or changed key must be a field of the contact's tenant and fit its
 --      type, through the staff column grant and through the create door; JSON null is allowed;
---      an unchanged value is not checked again;
+--      an unchanged value is not checked again; the definitions are read FOR SHARE (a removal
+--      and a value write cannot pass each other); a key one tenant defines is refused on
+--      another tenant's contact; every persona and stale token (C9b review);
 --   5. removing a field deletes its values from every contact of the tenant (not another
 --      tenant's), moves their version, says so on their timeline, and never marks them edited
 --      by a person;
 --   6. grants and the functions' pins (P-14).
 
 begin;
-select plan(39);
+select plan(41);
 
 insert into public.tenants (id, name) values
   ('c9b00000-0000-4000-8000-000000000001', 'C9b T1'),
@@ -132,9 +134,11 @@ select is(
        '[{"key": "a", "label": " A", "type": "text"}]',
        '[{"key": "a", "label": "A", "type": 3}]',
        '{"key": "a"}',
-       '[{"key": "a", "label": "Line\nbreak", "type": "text"}]']) with ordinality u(d, n)),
-  '23514 23514 23514 23514 23514 23514 23514 23514 23514 23514',
-  'refused: a key twice, a key not snake_case or not starting with a letter, an unknown type, an unknown key in a field, an empty or untrimmed label, a type that is not text, an object for a set, a control character in a label');
+       '[{"key": "a", "label": "Line\nbreak", "type": "text"}]',
+       '[{"key": "a", "label": "Next\u0085line", "type": "text"}]',
+       '[{"key": "a", "label": "Line\u2029sep", "type": "text"}]']) with ordinality u(d, n)),
+  '23514 23514 23514 23514 23514 23514 23514 23514 23514 23514 23514 23514',
+  'refused: a key twice, a key not snake_case or not starting with a letter, an unknown type, an unknown key in a field, an empty or untrimmed label, a type that is not text, an object for a set, a control character in a label, a C1 control and a paragraph separator (named, C9B-COR-4)');
 update public.crm_settings set custom_fields = '[]' where tenant_id = 'c9b00000-0000-4000-8000-000000000001';
 
 -- ── 2. Who writes and reads the definitions ───────────────────────────────────────────────────
@@ -195,6 +199,14 @@ select is(c9b_define('[{"key": "industry_note", "label": "Sector notes", "type":
   'ok:1', 'its label can change');
 
 -- ── 4. Values fit their fields ─────────────────────────────────────────────────────────────
+-- The value trigger reads the definitions FOR SHARE (C9b review, C9B-SEC-1 / C9B-COR-1), so a
+-- removal and a value write cannot pass each other. pgTAP runs in one session and one
+-- transaction, which already holds the row it updated, so neither the race nor the lock can be
+-- seen here (a lock taken by the transaction that wrote the row changes nothing on it); the
+-- installed function is checked instead, as tests/lib/crmCustomFields.spec.ts checks the file.
+select ok(pg_get_functiondef('app.tg_crm_contact_custom()'::regprocedure)
+            ~ 'from public\.crm_settings s where s\.tenant_id = new\.tenant_id\s+for share;',
+  'the value trigger reads its tenant''s definitions FOR SHARE');
 select is(c9b_fill('{"industry_note": "Retail, three branches", "renewal": "2027-02-28", "seats": 12}'),
   'ok:1', 'a live Admin fills text, a date and a number');
 select is(c9b_fill('{"industry_note": "Retail, three branches", "renewal": null, "seats": 12.5}'),
@@ -209,9 +221,12 @@ select is(
        '{"seats": "12"}',
        '{"seats": 1e16}',
        '{"industry_note": 7}',
-       '{"industry_note": "line\nbreak"}']) with ordinality u(v, n)),
-  '23514 23514 23514 23514 23514 23514 23514 23514',
-  'refused: a key no field has, a date that does not exist, another date form, a date as a number, a number as text, a number past 10^15, text as a number, a control character in text');
+       '{"industry_note": "line\nbreak"}',
+       '{"industry_note": "next\u0085line"}',
+       '{"industry_note": "line separator"}',
+       '{"renewal": "0000-01-01"}']) with ordinality u(v, n)),
+  '23514 23514 23514 23514 23514 23514 23514 23514 23514 23514 23514',
+  'refused: a key no field has, a date that does not exist, another date form, a date as a number, a number as text, a number past 10^15, text as a number, a control character in text, a C1 control and a line separator (named, not the locale''s [[:cntrl:]]: C9B-COR-4), year 0000');
 select is(c9b_fill(format('{"industry_note": "%s"}', repeat('a', 501))), '23514',
   'text past 500 characters is refused');
 select is(c9b_fill(format('{"industry_note": "%s"}', repeat('ب', 500))), 'ok:1',
@@ -224,15 +239,45 @@ truncate c9b_out;
 set local role authenticated;
 select c9b_as('O');  insert into c9b_out values ('O', c9b_fill('{"seats": 3}'));
 select c9b_as('C');  insert into c9b_out values ('C', c9b_fill('{"seats": 3}'));
+select c9b_as('S');  insert into c9b_out values ('S', c9b_fill('{"seats": 3}'));
 select c9b_as('D');  insert into c9b_out values ('D', c9b_fill('{"seats": 3}'));
+select c9b_as('L');  insert into c9b_out values ('L', c9b_fill('{"seats": 3}'));
 select c9b_as('Ad'); insert into c9b_out values ('Ad', c9b_fill('{"seats": 3}'));
+select c9b_as('Ao'); insert into c9b_out values ('Ao', c9b_fill('{"seats": 3}'));
 select c9b_as('Al'); insert into c9b_out values ('Al', c9b_fill('{"seats": 3}'));
 reset role;
+set local role anon;
+select c9b_as('N');  insert into c9b_out values ('N', c9b_fill('{"seats": 3}'));
+reset role;
 select is((select string_agg(who || '=' || res, ' ' order by who collate "C") from c9b_out),
-  'Ad=ok:0 Al=ok:0 C=ok:0 D=ok:0 O=ok:0',
-  'nobody but a live contacts user of the tenant fills a value: every other token reaches no row');
+  'Ad=ok:0 Al=ok:0 Ao=ok:0 C=ok:0 D=ok:0 L=ok:0 N=42501 O=ok:0 S=ok:0',
+  'nobody but a live contacts user of the tenant fills a value: every other role, another tenant''s admin and every stale token reach no row, anon holds no grant (C9B-SEC-2, C9B-COR-5)');
 select is((select custom::text from public.crm_contacts where id = 'c9b00000-0000-4000-8000-00000000c001'),
   '{"industry_note": "' || repeat('ب', 500) || '"}', 'and Huda''s values are as the Admin left them');
+
+-- A key one tenant defines is refused on another tenant's contact, even as the migration role
+-- (C9B-SEC-2). Every other tenant defines both keys, so only the trigger's filter on the
+-- contact's tenant refuses them: without it the trigger reads whichever definitions row comes
+-- first, and at least one of the two writes would pass.
+select set_config('request.jwt.claims', '', true);
+update public.crm_settings
+   set custom_fields = custom_fields || '[{"key": "c9b_t1_only", "label": "T1 only", "type": "number"}]'
+ where tenant_id = 'c9b00000-0000-4000-8000-000000000001';
+update public.crm_settings
+   set custom_fields = custom_fields || '[{"key": "c9b_t2_only", "label": "T2 only", "type": "number"}]'
+ where tenant_id = 'c9b00000-0000-4000-8000-0000000000ff';
+update public.crm_settings
+   set custom_fields = custom_fields || '[{"key": "c9b_t1_only", "label": "T1 only", "type": "number"},
+                                          {"key": "c9b_t2_only", "label": "T2 only", "type": "number"}]'
+ where tenant_id not in ('c9b00000-0000-4000-8000-000000000001', 'c9b00000-0000-4000-8000-0000000000ff');
+select is(
+  c9b_run($$ update public.crm_contacts set custom = custom || '{"c9b_t1_only": 1}'
+              where id = 'c9b00000-0000-4000-8000-00000000c0ff' $$)
+  || ' ' ||
+  c9b_run($$ update public.crm_contacts set custom = custom || '{"c9b_t2_only": 1}'
+              where id = 'c9b00000-0000-4000-8000-00000000c001' $$),
+  '23514 23514',
+  'a key only T1 defines is refused on T2''s contact, and one only T2 defines on T1''s');
 
 -- The create door (the service role, acting for a live Admin) is checked the same way.
 set local role service_role;
@@ -332,7 +377,8 @@ select is(
   'app.tg_crm_contact_custom(),app.tg_crm_settings_custom_removed()',
   'the two that read or write every row are definers');
 select ok(app.crm_custom_date_ok('2028-02-29') and not app.crm_custom_date_ok('2027-02-29')
-          and not app.crm_custom_date_ok('2027-2-1') and not app.crm_custom_date_ok(null),
+          and not app.crm_custom_date_ok('2027-2-1') and not app.crm_custom_date_ok(null)
+          and not app.crm_custom_date_ok('0000-01-01'),
   'a date is a real calendar day written YYYY-MM-DD (a leap day only in a leap year)');
 select ok(exists (select 1 from public.help_articles
                    where tenant_id = 'c9b00000-0000-4000-8000-000000000001' and slug = 'crm-settings'
