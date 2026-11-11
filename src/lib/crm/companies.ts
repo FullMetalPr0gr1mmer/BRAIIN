@@ -21,6 +21,9 @@ export function requireCompanyId(params: Record<string, string | undefined>): st
   return id;
 }
 
+/** Whether a company holds a learnt e-mail domain (never which one). */
+export type CompanyDomainState = 'learnt' | 'joins' | null;
+
 /** One company as the screens show it: what app.crm_company_json answers. */
 export interface CompanyRow {
   id: string;
@@ -37,6 +40,12 @@ export interface CompanyRow {
   client_name: string | null;
   /** Made by the system from an inquiry (it goes with its last contact unless edited). */
   auto: boolean;
+  /**
+   * Whether it holds an e-mail domain learnt from an inquiry, never which (C11-SEC-1): null
+   * (none), 'learnt' (nobody has edited it, so the domain joins no one to it yet) or 'joins'
+   * (inquiries from that domain naming no company join it).
+   */
+  domain: CompanyDomainState;
   /** Its contacts (not merged), derived. */
   contacts: number;
   /** The won leads' value over its contacts (SAR), derived. */
@@ -61,6 +70,7 @@ export const COMPANY_FIELDS = [
   'client_id',
   'client_name',
   'auto',
+  'domain',
   'contacts',
   'won_value',
   'version',
@@ -99,6 +109,7 @@ export function pickCompany(value: unknown): CompanyRow | null {
     client_id: str(row['client_id']),
     client_name: str(row['client_name']),
     auto: row['auto'] === true,
+    domain: row['domain'] === 'learnt' || row['domain'] === 'joins' ? row['domain'] : null,
     contacts: num(row['contacts']),
     won_value: num(row['won_value']),
     version: row['version'],

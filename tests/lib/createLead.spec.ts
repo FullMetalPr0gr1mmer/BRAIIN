@@ -57,7 +57,8 @@ vi.mock('@/lib/data/systemLog', () => ({
   },
 }));
 
-const { createLead, isRpcUnavailable } = await import('@/lib/data/leads');
+const { createLead, ingestManualLead, isRpcUnavailable } = await import('@/lib/data/leads');
+const { LeadManualCreateSchema } = await import('@schemas/crm');
 const { LeadInputSchema } = await import('@schemas/lead');
 const { decryptPII } = await import('@/lib/crypto/pii');
 const { blindIndex } = await import('@/lib/crm/blindIndex');
@@ -263,5 +264,70 @@ describe('the company by e-mail domain, after the lead is in (Admin v2 C11)', ()
     rpcError = { code: 'PGRST202' };
     await createLead(input());
     expect(rpcs.map((r) => r.fn)).toEqual(['crm_ingest_lead', 'crm_ingest_lead']);
+  });
+});
+
+// (C11 review, C11-COR-3) A lead staff add by hand takes the same domain step as the public
+// form, after crm_ingest_lead answers, and it never changes that answer.
+describe('the company by e-mail domain on a lead added by hand (Admin v2 C11)', () => {
+  const ACTOR = '99999999-9999-4999-8999-999999999999';
+  const indexes = { email_hmac: 'e'.repeat(64), phone_hmac: null, score_signals: [] };
+  const manual = (over: Record<string, unknown> = {}) =>
+    LeadManualCreateSchema.parse({
+      name: 'Sara',
+      email: 'Sara@Acme.SA',
+      message: 'Met at the fair.',
+      channel: 'phone',
+      ...over,
+    });
+
+  it("sends the domain's blind index after the lead is in, for the lead it made", async () => {
+    const answer = await ingestManualLead(TENANT, ACTOR, manual(), indexes);
+    expect(answer.ok).toBe(true);
+    expect(rpcs.map((r) => r.fn)).toEqual(['crm_ingest_lead', 'crm_lead_domain']);
+    const args = rpcs[1]!.args as unknown as Record<string, unknown>;
+    expect(args['p_tenant']).toBe(TENANT);
+    expect(args['p_lead']).toBe(rpcs[0]!.args.p_lead['id']);
+    expect(answer).toEqual({ ok: true, id: rpcs[0]!.args.p_lead['id'] });
+    expect(args['p_domain_hmac']).toBe(
+      await blindIndex(LEAD_PII_ENC_KEY, 'domain', TENANT, 'acme.sa'),
+    );
+    expect(JSON.stringify(args)).not.toMatch(/acme|sara/i);
+  });
+
+  it('is not tried when the lead was refused, nor for a consumer mailbox or no e-mail', async () => {
+    rpcError = { code: '23514' };
+    expect(await ingestManualLead(TENANT, ACTOR, manual(), indexes)).toEqual({
+      ok: false,
+      code: '23514',
+    });
+    rpcError = null;
+    await ingestManualLead(TENANT, ACTOR, manual({ email: 'sara@yahoo.co.uk' }), indexes);
+    await ingestManualLead(
+      TENANT,
+      ACTOR,
+      manual({ email: undefined, phone: '050 123 4567' }),
+      indexes,
+    );
+    expect(rpcs.map((r) => r.fn)).toEqual([
+      'crm_ingest_lead',
+      'crm_ingest_lead',
+      'crm_ingest_lead',
+    ]);
+  });
+
+  it('a failed domain step leaves the answer as it was, with a code-only warning', async () => {
+    domainError = { code: '55P03' };
+    const refused = await ingestManualLead(TENANT, ACTOR, manual(), indexes);
+    domainThrows = true;
+    const lost = await ingestManualLead(TENANT, ACTOR, manual(), indexes);
+    expect(refused).toEqual({ ok: true, id: rpcs[0]!.args.p_lead['id'] });
+    expect(lost).toEqual({ ok: true, id: rpcs[2]!.args.p_lead['id'] });
+    const said = logs.filter((l) => /company step/.test(l.message));
+    expect(said.map((l) => l.message)).toEqual([
+      'the company step by e-mail domain was skipped (55P03)',
+      'the company step by e-mail domain was skipped (threw)',
+    ]);
+    expect(JSON.stringify(said)).not.toMatch(/acme|sara/i);
   });
 });

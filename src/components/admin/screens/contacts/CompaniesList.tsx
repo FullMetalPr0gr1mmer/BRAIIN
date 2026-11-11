@@ -31,6 +31,8 @@ export interface CompaniesListProps {
   me: string;
   /** A company to open at once (the address's `?company=`, an id the page checked is a uuid). */
   open?: string | null | undefined;
+  /** Whether the viewer may forget a company's learnt domain (crm.settings: Admin's). */
+  canForgetDomain?: boolean | undefined;
 }
 
 type Chip = 'all' | CompanyStage;
@@ -64,7 +66,13 @@ export function companyQueryBody(filters: Filters, q: string): Record<string, un
   return body;
 }
 
-export default function CompaniesList({ initial, choices, me, open }: CompaniesListProps) {
+export default function CompaniesList({
+  initial,
+  choices,
+  me,
+  open,
+  canForgetDomain = false,
+}: CompaniesListProps) {
   const ids = useId();
   const [filters, setFilters] = useState<Filters>({
     chip: 'all',
@@ -121,6 +129,7 @@ export default function CompaniesList({ initial, choices, me, open }: CompaniesL
       companyId: editing,
       choices,
       me,
+      canForgetDomain,
       onSaved: (company, created) => {
         if (company) toast(created ? 'Company added.' : 'Company saved.', 'ok');
         void load();

@@ -15,14 +15,22 @@ import {
   parseCompanyRead,
   pickCompany,
 } from '@/lib/crm/companies';
-import { domainIndex, recordLeadDomain, type DomainRpcClient } from '@/lib/crm/companyDomain';
+import {
+  domainIndex,
+  isConsumerMailbox,
+  recordLeadDomain,
+  type DomainRpcClient,
+} from '@/lib/crm/companyDomain';
+import { isFreemail } from '@/lib/crm/normalize';
 import { blindIndex } from '@/lib/crm/blindIndex';
 import { contactsSubline } from '@/lib/crm/contactView';
 import {
   checkCompany,
   companyRequest,
+  domainWords,
   formOf,
 } from '@/components/admin/screens/contacts/CompanyDrawer';
+import { changeWords } from '@/components/admin/screens/contacts/ContactCompanyCard';
 import { companyQueryBody } from '@/components/admin/screens/contacts/CompaniesList';
 import {
   companiesWord,
@@ -123,6 +131,13 @@ describe('answers are cut to named fields; totals are derived by the database', 
   it('reads a bigint total the database sends as text, and refuses a row with no id', () => {
     expect(pickCompany({ ...ROW, won_value: '120000' })!.won_value).toBe(120000);
     expect(pickCompany({ ...ROW, id: undefined })).toBeNull();
+  });
+
+  it('says whether a company holds a learnt domain, never which (C11-SEC-1)', () => {
+    expect(pickCompany(ROW)!.domain).toBeNull();
+    expect(pickCompany({ ...ROW, domain: 'learnt' })!.domain).toBe('learnt');
+    expect(pickCompany({ ...ROW, domain: 'joins' })!.domain).toBe('joins');
+    expect(pickCompany({ ...ROW, domain: 'b'.repeat(64) })!.domain).toBeNull();
     const page = parseCompanyList({ total: 4, rows: [ROW, { nope: true }] });
     expect(page.total).toBe(4);
     expect(page.rows).toHaveLength(1);
@@ -182,6 +197,45 @@ describe('the domain half of find-or-create at arrival', () => {
     ).not.toEqual(index);
   });
 
+  // (C11 review, C11-COR-1 and C11-SEC-2) The scoring list's exact .com domains missed every
+  // regional form of the same providers, and those joined strangers' records.
+  it('skips a consumer mailbox in any country form, not only the scoring list', async () => {
+    for (const email of [
+      'a@yahoo.co.uk',
+      'a@yahoo.fr',
+      'a@hotmail.fr',
+      'a@hotmail.co.uk',
+      'a@live.co.uk',
+      'a@live.com.sa',
+      'a@outlook.com.sa',
+      'a@outlook.fr',
+      'a@ymail.com',
+      'a@rocketmail.com',
+      'a@pm.me',
+      'a@gmx.de',
+      'a@gmx.net',
+      'a@web.de',
+      'a@mail.ru',
+      'a@yandex.ru',
+      'a@qq.com',
+      'a@163.com',
+      'a@mail.yahoo.co.uk',
+    ]) {
+      expect(await domainIndex(KEY, TENANT, email), email).toEqual({ skip: 'freemail' });
+    }
+    // A company's own domain still counts, whatever its country form.
+    for (const domain of [
+      'acme.sa',
+      'acme.com.sa',
+      'alrashid-trading.com',
+      'e2e-x.example.invalid',
+    ]) {
+      expect(isConsumerMailbox(domain), domain).toBe(false);
+    }
+    // The scoring list is left as C1 made it: this wider rule is the company step's alone.
+    expect(isFreemail('a@yahoo.co.uk')).toBe(false);
+  });
+
   it('skips a free mailbox and an address that does not read as one', async () => {
     expect(await domainIndex(KEY, TENANT, 'sara@gmail.com')).toEqual({ skip: 'freemail' });
     expect(await domainIndex(KEY, TENANT, 'not an address')).toEqual({ skip: 'no_domain' });
@@ -227,6 +281,20 @@ describe('the screens’ pure rules', () => {
     const fresh = companyRequest({ ...formOf(null, ROW.id, true), name: ' New Co ' }, null);
     expect(fresh).toEqual({ name: 'New Co', stage: 'lead', ownerId: ROW.id });
     expect(CompanyCreateSchema.safeParse(fresh).success).toBe(true);
+  });
+
+  it('the drawer says a learnt domain is held, and an unlink says what it removed', () => {
+    expect(domainWords('joins')).toMatch(/join it\.$/);
+    expect(domainWords('learnt')).toMatch(
+      /^This company learnt an e-mail domain.*Once someone edits/,
+    );
+    expect(changeWords('unlink', false)).toBe('Company unlinked.');
+    expect(changeWords('unlink', true)).toBe(
+      'Company unlinked. The company it left was made from an inquiry and had no other contacts, so it was removed.',
+    );
+    for (const words of [domainWords('joins'), domainWords('learnt'), changeWords('link', true)]) {
+      expect(words).not.toMatch(/[\u2013\u2014]/);
+    }
   });
 
   it('the drawer refuses a blank name and a website that is not https first', () => {

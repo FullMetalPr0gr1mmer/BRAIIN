@@ -106,6 +106,7 @@ export const CASE_MANIFEST: readonly string[] = [
   'crmCompanies: company change (versioned PATCH)',
   'crmCompanies: company read (the drawer)',
   'crmCompanies: company removed',
+  "crmCompanies: company's learnt domain forgotten",
   "crmCompanies: contact's company linked",
   "crmCompanies: contact's company made from its name",
   'crmContacts: contact added by hand',

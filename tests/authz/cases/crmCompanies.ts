@@ -49,6 +49,16 @@ export const cases: readonly Case[] = [
     allow: ['admin'],
   },
   {
+    // (C11 review, C11-SEC-1) crm.settings, Admin's: this row stays ['admin'] when C10b gives
+    // Sales crm.contacts.
+    name: "company's learnt domain forgotten",
+    load: () => import('@/pages/api/admin/crm/companies/[id]/domain'),
+    method: 'DELETE',
+    url: `${BASE}/domain`,
+    body: { version: 1 },
+    allow: ['admin'],
+  },
+  {
     name: "contact's company linked",
     load: () => import('@/pages/api/admin/crm/contacts/[id]/company'),
     method: 'POST',

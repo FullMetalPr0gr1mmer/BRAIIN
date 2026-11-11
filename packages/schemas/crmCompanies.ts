@@ -115,6 +115,9 @@ export type CompanyPatch = z.infer<typeof CompanyPatchSchema>;
 /** DELETE /api/admin/crm/companies/[id]: the version read. */
 export const CompanyDeleteSchema = z.object({ version: z.number().int().min(1) }).strict();
 
+/** DELETE /api/admin/crm/companies/[id]/domain: forget its learnt domain, at the version read. */
+export const CompanyForgetDomainSchema = z.object({ version: z.number().int().min(1) }).strict();
+
 /** POST /api/admin/crm/companies/query: the Companies tab's search, filters and page. */
 export const CompanyQuerySchema = z
   .object({

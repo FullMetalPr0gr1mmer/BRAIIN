@@ -63,7 +63,13 @@ function client() {
   };
 }
 
-function ctx(path: string, method = 'GET', body?: unknown, id = COMPANY): APIContext {
+function ctx(
+  path: string,
+  method = 'GET',
+  body?: unknown,
+  id = COMPANY,
+  role = 'admin',
+): APIContext {
   const url = new URL(`https://admin.example.test${path}`);
   return {
     request: new Request(url, {
@@ -75,7 +81,7 @@ function ctx(path: string, method = 'GET', body?: unknown, id = COMPANY): APICon
     url,
     params: { id },
     locals: {
-      session: { userId: USER, tenantId: TENANT, role: 'admin', email: 'a@x', isActive: true },
+      session: { userId: USER, tenantId: TENANT, role, email: 'a@x', isActive: true },
       supabase: client(),
     },
   } as unknown as APIContext;
@@ -244,6 +250,61 @@ describe('/api/admin/crm/companies/[id]', () => {
   });
 });
 
+describe('DELETE /api/admin/crm/companies/[id]/domain (C11 review, C11-SEC-1)', () => {
+  const url = `/api/admin/crm/companies/${COMPANY}/domain`;
+
+  it('forgets at the version read, answers the company without the index, audited', async () => {
+    const { DELETE } = await import('@/pages/api/admin/crm/companies/[id]/domain');
+    rpcAnswers['crm_company_forget_domain'] = {
+      data: { ...ROW, domain: null, forgot: true },
+      error: null,
+    };
+    const res = await DELETE(ctx(url, 'DELETE', { version: 3 }));
+    expect(res.status).toBe(200);
+    expect(rpcCalls).toEqual([
+      {
+        fn: 'crm_company_forget_domain',
+        args: { p_tenant: TENANT, p_company: COMPANY, p_version: 3 },
+      },
+    ]);
+    const body = (await json(res))['data'] as { company: Record<string, unknown>; forgot: boolean };
+    expect(body.forgot).toBe(true);
+    expect(body.company['domain']).toBeNull();
+    expect(JSON.stringify(body)).not.toContain('domain_hmac');
+    expect(audits).toEqual([
+      {
+        action: 'crm.company.update',
+        entityType: 'company',
+        entityId: COMPANY,
+        detail: { fields: ['domain'], how: 'forgotten', forgot: true },
+      },
+    ]);
+  });
+
+  it("is an Admin's (crm.settings): Developer and Sales are refused before the database", async () => {
+    const { DELETE } = await import('@/pages/api/admin/crm/companies/[id]/domain');
+    for (const role of ['developer', 'sales', 'seo', 'content_creator']) {
+      const res = await DELETE(ctx(url, 'DELETE', { version: 3 }, COMPANY, role));
+      expect(res.status, role).toBe(403);
+    }
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it('a moved version is a 409, an unseen company a 404, a refusal a 403; none audited', async () => {
+    const { DELETE } = await import('@/pages/api/admin/crm/companies/[id]/domain');
+    for (const [code, status] of [
+      ['40001', 409],
+      ['P0002', 404],
+      ['42501', 403],
+    ] as const) {
+      rpcAnswers['crm_company_forget_domain'] = { data: null, error: { code } };
+      expect((await DELETE(ctx(url, 'DELETE', { version: 3 }))).status, code).toBe(status);
+    }
+    expect((await DELETE(ctx(url, 'DELETE', {}))).status).toBe(422);
+    expect(audits).toEqual([]);
+  });
+});
+
 describe('POST /api/admin/crm/contacts/[id]/company', () => {
   it('links at the contact’s version, answers the contact as its page reads it, audited', async () => {
     const { POST } = await import('@/pages/api/admin/crm/contacts/[id]/company');
@@ -288,6 +349,41 @@ describe('POST /api/admin/crm/contacts/[id]/company', () => {
         entityType: 'contact',
         entityId: CONTACT,
         detail: { fields: ['company'], action: 'link', how: 'linked', company: COMPANY },
+      },
+    ]);
+  });
+
+  it('an unlink that removed an auto-company audits and answers its id (C11-SEC-4)', async () => {
+    const { POST } = await import('@/pages/api/admin/crm/contacts/[id]/company');
+    rpcAnswers['crm_contact_company'] = {
+      data: { company_id: null, how: 'unlinked', removed_company: COMPANY },
+      error: null,
+    };
+    contactRow = {
+      id: CONTACT,
+      display_name: 'Huda',
+      company_name: 'Acme Trading',
+      company_id: null,
+      version: 5,
+      merged_into: null,
+    };
+    const res = await POST(
+      ctx(
+        `/api/admin/crm/contacts/${CONTACT}/company`,
+        'POST',
+        { action: 'unlink', version: 4 },
+        CONTACT,
+      ),
+    );
+    expect(res.status).toBe(200);
+    const body = (await json(res))['data'] as { removedCompany: string | null };
+    expect(body.removedCompany).toBe(COMPANY);
+    expect(audits).toEqual([
+      {
+        action: 'crm.contact.update',
+        entityType: 'contact',
+        entityId: CONTACT,
+        detail: { fields: ['company'], action: 'unlink', how: 'unlinked', removedCompany: COMPANY },
       },
     ]);
   });

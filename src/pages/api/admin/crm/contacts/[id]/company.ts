@@ -10,6 +10,10 @@ import { companyError } from '@/lib/crm/companies';
 //   create  "Create company from this name": the company the contact's free text names, found
 //           by the names' folding or made as the caller's, then linked;
 //   unlink  the free text keeps the last name (C7's field keeps working).
+// An auto-company (made from an inquiry, never edited by a person) goes with its last contact,
+// so an unlink or a move can remove one: the database answers its id, which the audit row
+// carries (`removedCompany`) and the answer passes on so the card can say so (C11-SEC-4,
+// C11-COR-5).
 // While linked, the contact's company name is the company's (kept in step by the database).
 // The contact is answered as the contact page reads it, so the page draws the new version.
 // Audited `crm.contact.update` with the field and the action, never a name.
@@ -32,6 +36,8 @@ export const POST = defineAdminRoute({
     const answer = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
     const companyId = typeof answer['company_id'] === 'string' ? answer['company_id'] : null;
     const how = typeof answer['how'] === 'string' ? answer['how'] : input.action;
+    const removedCompany =
+      typeof answer['removed_company'] === 'string' ? answer['removed_company'] : null;
     audit({
       action: 'crm.contact.update',
       entityType: 'contact',
@@ -41,9 +47,10 @@ export const POST = defineAdminRoute({
         action: input.action,
         how,
         ...(companyId ? { company: companyId } : {}),
+        ...(removedCompany ? { removedCompany } : {}),
       },
     });
     const { merged_into: _merged, ...contact } = await getContact(sb, auth, id);
-    return { contact, companyId, how };
+    return { contact, companyId, how, removedCompany };
   },
 });

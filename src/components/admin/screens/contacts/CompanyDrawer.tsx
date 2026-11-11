@@ -23,6 +23,8 @@ import { CONFLICT, COMPANY_SIZE_LABELS, companyName, type CompanyChoices } from 
 // Removal asks first and carries the version too; the contacts stay, with the name as text.
 // The client select links the public clients row only: it publishes nothing (the logo's
 // visibility stays the portfolio's switch), and the drawer says so under it.
+// (C11 review, C11-SEC-1) A company that learnt an e-mail domain from an inquiry says so
+// (never which: staff never read the index), and an Admin (crm.settings) can forget it.
 
 export interface CompanyDrawerProps {
   open: boolean;
@@ -31,6 +33,8 @@ export interface CompanyDrawerProps {
   companyId: string | null;
   choices: CompanyChoices;
   me: string;
+  /** Whether the viewer may forget a learnt domain (crm.settings: Admin's). */
+  canForgetDomain: boolean;
   /** After a save (the company as the server answered, and whether it was new) or a conflict. */
   onSaved: (company: CompanyRow | null, created: boolean) => void;
   onDeleted: () => void;
@@ -128,12 +132,20 @@ export function companyRequest(
   );
 }
 
+/** What the drawer says about a learnt domain (it never knows which domain it is). */
+export function domainWords(state: 'learnt' | 'joins'): string {
+  return state === 'joins'
+    ? 'This company learnt an e-mail domain from an inquiry. New inquiries from that domain that name no company join it.'
+    : 'This company learnt an e-mail domain from an inquiry. Once someone edits the company, new inquiries from that domain that name no company join it.';
+}
+
 export default function CompanyDrawer({
   open,
   onClose,
   companyId,
   choices,
   me,
+  canForgetDomain,
   onSaved,
   onDeleted,
 }: CompanyDrawerProps) {
@@ -277,6 +289,31 @@ export default function CompanyDrawer({
       });
       onDeleted();
       onClose();
+    } catch (err) {
+      if (err instanceof AdminApiError && err.info.status === 409) {
+        await read(company.id, true);
+        return;
+      }
+      setFailure(describeError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Forgets the learnt domain at the version read; the form keeps what is typed in it. */
+  async function forget() {
+    if (!company) return;
+    setBusy(true);
+    setFailure('');
+    setNotice('');
+    try {
+      const answer = await adminFetch<{ company: CompanyRow; forgot: boolean }>(
+        `/api/admin/crm/companies/${company.id}/domain`,
+        { method: 'DELETE', body: { version: company.version } },
+      );
+      setCompany(answer.company);
+      onSaved(null, false);
+      setNotice('Domain forgotten. Inquiries from it no longer join this company.');
     } catch (err) {
       if (err instanceof AdminApiError && err.info.status === 409) {
         await read(company.id, true);
@@ -525,6 +562,21 @@ export default function CompanyDrawer({
           { hint: 'Only your team sees these. Write about the company, not about a person.' },
         )}
       </form>
+      {company?.domain && (
+        <section aria-labelledby={`${prefix}-domain`}>
+          <h3 id={`${prefix}-domain`} className="card-title">
+            E-mail domain
+          </h3>
+          <p className="f__hint">{domainWords(company.domain)}</p>
+          {canForgetDomain && (
+            <p>
+              <button type="button" data-size="sm" disabled={busy} onClick={() => void forget()}>
+                Forget the domain
+              </button>
+            </p>
+          )}
+        </section>
+      )}
       {company && (
         <section aria-labelledby={`${prefix}-people`}>
           <h3 id={`${prefix}-people`} className="card-title">

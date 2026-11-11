@@ -78,6 +78,10 @@ describe("a contact's Company card", () => {
     expect(out).toContain(`href="/admin/contacts/companies?company=${ID}"`);
     expect(out).toContain('Unlink');
     expect(out).not.toContain('Create company from this name');
+    // (C11 review, C11-COR-5) An unlink can remove a company made from an inquiry: said first.
+    expect(out).toContain(
+      'A company made from an inquiry is removed when its last contact is unlinked.',
+    );
   });
 
   it('typed but not linked: "Create company from this name" and the search', () => {

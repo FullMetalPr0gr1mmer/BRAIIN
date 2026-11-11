@@ -10,6 +10,8 @@ import type { ContactDetailRow } from '@/lib/crm/contactPage';
 // one (a POST body, never an address; names only). Each change is one request at the
 // contact's version, through the page's queue (`change`); the page reads the contact again.
 // Linking publishes nothing; while linked, the contact shows the company's name.
+// (C11 review, C11-COR-5) A company made from an inquiry goes with its last contact, so the
+// card says so beside Unlink, and says so again when an unlink removed one.
 
 export type CompanyChange =
   { action: 'link'; companyId: string } | { action: 'create' } | { action: 'unlink' };
@@ -23,11 +25,22 @@ interface Found {
 export interface ContactCompanyCardProps {
   contact: ContactDetailRow;
   busy: boolean;
-  /** One change through the page's queue; resolves true when it was saved. */
-  change: (body: CompanyChange) => Promise<boolean>;
+  /**
+   * One change through the page's queue; resolves true when it was saved, 'removed' when it
+   * was saved and took the company the contact left with it, false otherwise.
+   */
+  change: (body: CompanyChange) => Promise<boolean | 'removed'>;
 }
 
 const str = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+/** The toast after a change (C11-COR-5: a removed auto-company is said, never silent). */
+export function changeWords(action: CompanyChange['action'], removed: boolean): string {
+  const done = action === 'unlink' ? 'Company unlinked.' : 'Company linked.';
+  return removed
+    ? `${done} The company it left was made from an inquiry and had no other contacts, so it was removed.`
+    : done;
+}
 
 export default function ContactCompanyCard({ contact, busy, change }: ContactCompanyCardProps) {
   const id = useId();
@@ -79,10 +92,11 @@ export default function ContactCompanyCard({ contact, busy, change }: ContactCom
   }, [query]);
 
   async function run(body: CompanyChange) {
-    if (await change(body)) {
+    const saved = await change(body);
+    if (saved) {
       setQuery('');
       setFound(null);
-      toast(body.action === 'unlink' ? 'Company unlinked.' : 'Company linked.', 'ok');
+      toast(changeWords(body.action, saved === 'removed'), 'ok');
     }
   }
 
@@ -110,6 +124,9 @@ export default function ContactCompanyCard({ contact, busy, change }: ContactCom
             </button>
           </p>
           <p className="f__hint">A new name for the company shows here too.</p>
+          <p className="f__hint">
+            A company made from an inquiry is removed when its last contact is unlinked.
+          </p>
         </>
       ) : (
         <>

@@ -13,8 +13,11 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *   a contact    "Create company from this name" links the typed name; the Details field is
  *                read-only while linked; a second contact linked through the search; a rename
  *                reaches both; Unlink keeps the name as text;
- *   arrival      two inquiries naming one company (folded alike) share it, and a third with no
- *                company but the same e-mail domain joins it (the Worker's domain step);
+ *   arrival      two inquiries naming one company (folded alike) share it, and it learns their
+ *                e-mail domain; a third with no company from that domain joins it only once a
+ *                person has edited the company (C11 review: an auto-company's domain collects
+ *                no one); the drawer says a domain is held, and the Admin forgets it, after which
+ *                that domain joins no one;
  *   refusals     every other role gets a 403 page (and API) naming no company.
  * axe runs with the drawer open. Everything is named with this run's token and made through
  * the real routes; nothing reads or writes the database directly.
@@ -55,6 +58,7 @@ interface Company {
   version: number;
   contacts: number;
   auto: boolean;
+  domain: 'learnt' | 'joins' | null;
 }
 
 /** A company added through the real route. */
@@ -263,22 +267,57 @@ test.describe('as admin', () => {
     expect((await companyOf(page, companyId)).company.contacts).toBe(1);
   });
 
-  test('arrival: inquiries naming one company share it, and the same e-mail domain joins it', async ({
+  test('arrival: inquiries naming one company share it, and its domain joins once a person edits it', async ({
     page,
   }) => {
     const domain = `e2e-${RUN}.example.invalid`;
-    // Named twice, folded alike (case and spaces): one company, made by the system.
-    await addLead(page, 'arrival one', `one-${RUN}@${domain}`, `E2E ${RUN} Arrival Co`);
+    const arrival = `E2E ${RUN} Arrival Co`;
+    // Named twice, folded alike (case and spaces): one company, made by the system, which
+    // learns the inquiries' e-mail domain (not a consumer mailbox).
+    await addLead(page, 'arrival one', `one-${RUN}@${domain}`, arrival);
     await addLead(page, 'arrival two', `two-${RUN}@${domain}`, `e2e ${RUN}  ARRIVAL co`);
     let found = await findCompanies(page, `${RUN} arrival`);
-    expect(found.map((c) => [c.name, c.contacts, c.auto])).toEqual([
-      [`E2E ${RUN} Arrival Co`, 2, true],
+    expect(found.map((c) => [c.name, c.contacts, c.auto, c.domain])).toEqual([
+      [arrival, 2, true, 'learnt'],
     ]);
-    // No company typed, but the same e-mail domain (not a free mailbox): it joins the company
-    // the first inquiry's domain taught (the Worker's domain step after the lead is in).
+    const company = found[0]!;
+    // No company typed, the same domain: nobody has edited the company, so it collects no one.
     await addLead(page, 'arrival three', `three-${RUN}@${domain}`);
     found = await findCompanies(page, `${RUN} arrival`);
+    expect(found.map((c) => c.contacts)).toEqual([2]);
+    // A person edits it: from now on, that domain joins it.
+    const edited = await page.request.patch(`/api/admin/crm/companies/${company.id}`, {
+      headers: { 'x-csrf-token': await csrf(page) },
+      data: { version: company.version, stage: 'client' },
+    });
+    expect(edited.status()).toBe(200);
+    expect(((await edited.json()) as { data: Company }).data.domain).toBe('joins');
+    await addLead(page, 'arrival four', `four-${RUN}@${domain}`);
+    found = await findCompanies(page, `${RUN} arrival`);
     expect(found.map((c) => c.contacts)).toEqual([3]);
+
+    // The drawer says a domain is held (never which), and the Admin forgets it.
+    await visit(page, `/admin/contacts/companies?company=${company.id}`);
+    const drawer = page.getByRole('dialog', { name: arrival });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole('heading', { level: 3, name: 'E-mail domain' })).toBeVisible();
+    await expect(drawer).toContainText(
+      'This company learnt an e-mail domain from an inquiry. New inquiries from that domain that name no company join it.',
+    );
+    await expect(drawer).not.toContainText(domain);
+    await axe(page, 'a company holding a learnt domain');
+    await drawer.getByRole('button', { name: 'Forget the domain', exact: true }).click();
+    await expect(
+      drawer
+        .getByRole('status')
+        .filter({ hasText: 'Domain forgotten. Inquiries from it no longer join this company.' }),
+    ).toBeVisible();
+    await expect(drawer.getByRole('heading', { level: 3, name: 'E-mail domain' })).toHaveCount(0);
+    expect((await companyOf(page, company.id)).company.domain).toBeNull();
+    // That domain joins no one now.
+    await addLead(page, 'arrival five', `five-${RUN}@${domain}`);
+    found = await findCompanies(page, `${RUN} arrival`);
+    expect(found.map((c) => [c.contacts, c.domain])).toEqual([[3, null]]);
 
     // The People list's sub-line counts companies.
     await visit(page, '/admin/contacts');
@@ -319,6 +358,7 @@ for (const role of ['content_creator', 'seo', 'developer', 'sales'] as const) {
         ['get', `/api/admin/crm/companies/${company.id}`, null],
         ['patch', `/api/admin/crm/companies/${company.id}`, { version: 1, city: 'Riyadh' }],
         ['delete', `/api/admin/crm/companies/${company.id}`, { version: 1 }],
+        ['delete', `/api/admin/crm/companies/${company.id}/domain`, { version: 1 }],
       ] as const;
       for (const [method, api, data] of asks) {
         const headers = { 'x-csrf-token': await csrf(page) };

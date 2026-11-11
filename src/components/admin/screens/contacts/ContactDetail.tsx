@@ -72,6 +72,8 @@ export interface ContactDetailProps extends ContactDetailInitial {
 
 interface ContactAnswer {
   contact: ContactDetailRow;
+  /** (Admin v2 C11 review) The auto-company a company change removed, if any. */
+  removedCompany?: string | null;
   channels?: ChannelPresence[];
   leads?: ContactLead[];
   moreLeads?: boolean;
@@ -472,15 +474,23 @@ export default function ContactDetail(props: ContactDetailProps) {
           <ContactCompanyCard
             contact={contact}
             busy={busy}
-            change={(change: CompanyChange) =>
-              write(change as Record<string, unknown>, true, undefined, (sent, signal) =>
-                adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}/company`, {
-                  method: 'POST',
-                  body: sent,
-                  signal,
-                }),
-              )
-            }
+            change={async (change: CompanyChange) => {
+              let removed = false;
+              const saved = await write(
+                change as Record<string, unknown>,
+                true,
+                (answer) => {
+                  removed = typeof answer.removedCompany === 'string';
+                },
+                (sent, signal) =>
+                  adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}/company`, {
+                    method: 'POST',
+                    body: sent,
+                    signal,
+                  }),
+              );
+              return saved && removed ? 'removed' : saved;
+            }}
           />
           <ContactLeadsCard
             leads={leads}

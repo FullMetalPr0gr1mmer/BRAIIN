@@ -16,7 +16,9 @@ export const prerender = false;
 // company drawer. `crm.contacts` (crm.md §2.1, "contacts & companies"; Admin, Sales from
 // C10b): any other role is refused here with a 403 and reads nothing (Refused.astro); RLS
 // and the live check refuse them again in the database. The address carries a company's id
-// only (`?company=<id>`, its drawer), never a name.
+// only (`?company=<id>`, its drawer), never a name. Forgetting a company's learnt e-mail
+// domain is crm.settings' (Admin's, C11 review): the drawer offers it to those holders only,
+// and the route and the database refuse everyone else.
 //
 // Round trips on top of the layout's shell (P-15): the people, page 1, the sectors and the
 // clients = 4.
@@ -66,6 +68,7 @@ const subtitle = initial
         choices={{ sectors: options.sectors, clients: options.clients, people }}
         me={session?.userId ?? ''}
         open={open}
+        canForgetDomain={session !== null && can(session.role, 'crm.settings') === 'full'}
       />
     )
   }
