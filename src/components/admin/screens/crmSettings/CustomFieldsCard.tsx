@@ -32,8 +32,15 @@ export function fieldDrafts(fields: readonly CustomField[]): FieldDraft[] {
   return fields.map((f) => ({ ...f, local: `saved-${f.key}`, saved: true, keyTyped: true }));
 }
 
-/** What would stop this set saving, in words, or null. The server checks it again. */
-export function fieldsProblem(drafts: readonly FieldDraft[]): string | null {
+/**
+ * What would stop this set saving, in words, or null. The server checks it again. A new field
+ * may not take the key of a saved field (`loaded`), even one this save removes: the database
+ * would treat it as the same field, keep its values and refuse a change of type.
+ */
+export function fieldsProblem(
+  drafts: readonly FieldDraft[],
+  loaded: readonly CustomField[] = [],
+): string | null {
   if (drafts.length > CUSTOM_LIMITS.maxFields) {
     return `Up to ${CUSTOM_LIMITS.maxFields} custom fields.`;
   }
@@ -46,6 +53,10 @@ export function fieldsProblem(drafts: readonly FieldDraft[]): string | null {
   }
   if (new Set(drafts.map((d) => d.key)).size !== drafts.length) {
     return 'Each field needs its own key.';
+  }
+  const savedKeys = new Set(loaded.map((f) => f.key));
+  if (drafts.some((d) => !d.saved && savedKeys.has(d.key))) {
+    return 'A new field needs a key no saved field has used. Choose another key.';
   }
   return null;
 }
@@ -97,7 +108,10 @@ export default function CustomFieldsCard({ settings, version, onSaved }: Props) 
         const nextDraft = { ...d, ...patch };
         // A new field's key follows its label until someone types a key.
         if (patch.label !== undefined && !d.saved && !d.keyTyped) {
-          const taken = new Set(list.filter((o) => o.local !== local).map((o) => o.key));
+          const taken = new Set([
+            ...loaded.map((f) => f.key),
+            ...list.filter((o) => o.local !== local).map((o) => o.key),
+          ]);
           nextDraft.key = keyFromLabel(patch.label, taken, list.indexOf(d) + 1);
         }
         return nextDraft;
@@ -114,7 +128,7 @@ export default function CustomFieldsCard({ settings, version, onSaved }: Props) 
   const remove = (local: string) => setDrafts((list) => list.filter((d) => d.local !== local));
   const add = () =>
     setDrafts((list) => {
-      const taken = new Set(list.map((d) => d.key));
+      const taken = new Set([...loaded.map((f) => f.key), ...list.map((d) => d.key)]);
       return [
         ...list,
         {
@@ -129,7 +143,7 @@ export default function CustomFieldsCard({ settings, version, onSaved }: Props) 
     });
 
   async function save() {
-    const problem = fieldsProblem(drafts);
+    const problem = fieldsProblem(drafts, loaded);
     if (problem) {
       setError(problem);
       return;

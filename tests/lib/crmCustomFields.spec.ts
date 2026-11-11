@@ -245,9 +245,14 @@ describe('the settings card’s rules', () => {
   it('names the saved fields a save removes, and asks before it deletes their values', () => {
     const loaded = FIELDS;
     const kept = fieldDrafts(loaded).filter((d) => d.key !== 'seats');
-    // A new field reusing a removed key does not keep the old values: it is still a removal.
+    expect(removedFields(loaded, kept).map((f) => f.key)).toEqual(['seats']);
+    // A new field may not take a removed field's key in the same save: the database would
+    // keep the old values under it (and refuse a new type), so the question would be untrue.
     const reused = [...kept, ...drafts([{ key: 'seats', type: 'text' }])];
-    expect(removedFields(loaded, reused).map((f) => f.key)).toEqual(['seats']);
+    expect(fieldsProblem(reused, loaded)).toBe(
+      'A new field needs a key no saved field has used. Choose another key.',
+    );
+    expect(fieldsProblem(kept, loaded)).toBeNull();
     expect(removedFields(loaded, fieldDrafts(loaded))).toEqual([]);
     expect(removeQuestion([FIELDS[2]!])).toBe(
       'Remove Seats? What every contact holds in it is deleted. This cannot be undone.',
