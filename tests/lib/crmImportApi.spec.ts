@@ -344,7 +344,11 @@ describe('finish', () => {
     };
     const res = await route.POST(ctx(URL_, 'POST', { step: 'finish', batchId: BATCH }));
     expect(res.status).toBe(200);
-    expect(events).toEqual(['svc:profiles', 'svc:rpc:crm_import_finish', 'audit:crm.import.outcome']);
+    expect(events).toEqual([
+      'svc:profiles',
+      'svc:rpc:crm_import_finish',
+      'audit:crm.import.outcome',
+    ]);
     expect(audits[0]).toEqual({
       action: 'crm.import.outcome',
       entityType: 'contact_import',

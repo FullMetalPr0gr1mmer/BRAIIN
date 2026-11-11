@@ -57,7 +57,8 @@ const COLUMN_HELP: Readonly<Record<ImportColumn, string>> = {
   language: 'en or ar. English if empty.',
   stage: 'lead, client, past or partner. Lead if empty.',
   tags: 'Up to 10, separated by ; or |.',
-  lawful_basis: 'Required for each person: consent, contract, legitimate_interest or legal_obligation.',
+  lawful_basis:
+    'Required for each person: consent, contract, legitimate_interest or legal_obligation.',
 };
 
 const STALE_MS = 2 * 60 * 60 * 1000;
@@ -89,7 +90,10 @@ export default function ImportContacts({ initialBatches, names, me, now }: Impor
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      setReading({ ok: false, message: 'The file is larger than 2 MB. Split it into smaller files.' });
+      setReading({
+        ok: false,
+        message: 'The file is larger than 2 MB. Split it into smaller files.',
+      });
       return;
     }
     setReading(readImportFile(await file.text(), file.size));
@@ -166,8 +170,8 @@ export default function ImportContacts({ initialBatches, names, me, now }: Impor
           1. Prepare the file
         </h2>
         <p className="card__sub">
-          A CSV file (in your spreadsheet, save as “CSV UTF-8”), up to 2 MB and 5,000 people,
-          with these headings in the first row. Other columns are left out.
+          A CSV file (in your spreadsheet, save as “CSV UTF-8”), up to 2 MB and 5,000 people, with
+          these headings in the first row. Other columns are left out.
         </p>
         <p>
           <a className="btn" href={`${API}/template`} download>
@@ -205,13 +209,18 @@ export default function ImportContacts({ initialBatches, names, me, now }: Impor
           ))}
         </ul>
         <p className="admin-sub">
-          None of these lets us send marketing. People already in Contacts (the same e-mail, or
-          the same phone when there is no e-mail) are left as they are, so a file can be imported
-          again after fixing its rows.
+          None of these lets us send marketing. People already in Contacts (the same e-mail, or the
+          same phone when there is no e-mail) are left as they are, so a file can be imported again
+          after fixing its rows.
         </p>
       </section>
 
-      <form className="card" aria-labelledby={`${id}-file`} onSubmit={(e) => void run(e)} noValidate>
+      <form
+        className="card"
+        aria-labelledby={`${id}-file`}
+        onSubmit={(e) => void run(e)}
+        noValidate
+      >
         <h2 id={`${id}-file`} className="card__t">
           2. Import
         </h2>
@@ -259,8 +268,8 @@ export default function ImportContacts({ initialBatches, names, me, now }: Impor
               }}
             />
             <span>
-              I confirm we may hold each person’s details on the lawful basis in their row, and
-              that they know, or will be told, how we use them.
+              I confirm we may hold each person’s details on the lawful basis in their row, and that
+              they know, or will be told, how we use them.
             </span>
           </label>
           {attestError && (
@@ -368,7 +377,9 @@ export default function ImportContacts({ initialBatches, names, me, now }: Impor
                 {batches.map((batch) => (
                   <tr key={batch.id}>
                     <td>
-                      <time dateTime={batch.createdAt}>{clock.formatDateTime(batch.createdAt)}</time>
+                      <time dateTime={batch.createdAt}>
+                        {clock.formatDateTime(batch.createdAt)}
+                      </time>
                     </td>
                     <td dir="auto">
                       {batch.createdBy === me

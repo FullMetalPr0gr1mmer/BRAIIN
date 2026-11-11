@@ -1,8 +1,4 @@
-import {
-  IMPORT_COLUMNS,
-  IMPORT_MAX_ROW_NUMBER,
-  type ImportColumn,
-} from '@schemas/crmImport';
+import { IMPORT_COLUMNS, IMPORT_MAX_ROW_NUMBER, type ImportColumn } from '@schemas/crmImport';
 
 // Reading a contacts CSV (Admin v2 C15). Pure: no I/O, no keys. The import screen runs it to
 // show what a file holds and to cut it into pieces at record boundaries; the import route runs
@@ -12,12 +8,7 @@ import {
 
 /** Why a file (or a piece) cannot be read at all. */
 export type CsvProblem =
-  | 'empty'
-  | 'binary'
-  | 'unclosed_quote'
-  | 'too_many_columns'
-  | 'cell_too_long'
-  | 'too_many_rows';
+  'empty' | 'binary' | 'unclosed_quote' | 'too_many_columns' | 'cell_too_long' | 'too_many_rows';
 
 export interface CsvLimits {
   /** Records, the heading row included. */
@@ -34,8 +25,7 @@ export const FILE_LIMITS: CsvLimits = {
 };
 
 export type CsvResult =
-  | { ok: true; records: string[][] }
-  | { ok: false; problem: CsvProblem; row?: number };
+  { ok: true; records: string[][] } | { ok: false; problem: CsvProblem; row?: number };
 
 /** The separator a file uses: the one its heading row holds most of, outside quotes. */
 export function detectDelimiter(text: string): ',' | ';' | '\t' {
@@ -57,7 +47,11 @@ export function detectDelimiter(text: string): ',' | ';' | '\t' {
  * LF or CR; a quote inside an unquoted field is kept as it is; a BOM is dropped; a final line
  * break adds no record. Row numbers in problems count the heading as row 1.
  */
-export function parseCsv(input: string, limits: CsvLimits, delimiter = detectDelimiter(input)): CsvResult {
+export function parseCsv(
+  input: string,
+  limits: CsvLimits,
+  delimiter = detectDelimiter(input),
+): CsvResult {
   const text = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
   if (text.trim() === '') return { ok: false, problem: 'empty' };
   if (text.includes('\u0000')) return { ok: false, problem: 'binary' };
@@ -112,7 +106,8 @@ export function parseCsv(input: string, limits: CsvLimits, delimiter = detectDel
     }
     if (ch === '\r' || ch === '\n') {
       const problem = endRecord();
-      if (problem) return { ok: false, problem, row: records.length + (problem === 'too_many_rows' ? 0 : 1) };
+      if (problem)
+        return { ok: false, problem, row: records.length + (problem === 'too_many_rows' ? 0 : 1) };
       i += ch === '\r' && text[i + 1] === '\n' ? 2 : 1;
       continue;
     }
@@ -123,7 +118,8 @@ export function parseCsv(input: string, limits: CsvLimits, delimiter = detectDel
   if (quoted) return { ok: false, problem: 'unclosed_quote', row: records.length + 1 };
   if (!(fresh && record.length === 0 && cell === '')) {
     const problem = endRecord();
-    if (problem) return { ok: false, problem, row: records.length + (problem === 'too_many_rows' ? 0 : 1) };
+    if (problem)
+      return { ok: false, problem, row: records.length + (problem === 'too_many_rows' ? 0 : 1) };
   }
   return { ok: true, records };
 }
@@ -148,7 +144,16 @@ function foldHeading(raw: string): string {
 const HEADINGS: Readonly<Record<ImportColumn, readonly string[]>> = {
   name: ['name', 'full name', 'display name', 'الاسم', 'الاسم الكامل'],
   email: ['email', 'e mail', 'email address', 'e mail address', 'البريد الإلكتروني', 'البريد'],
-  phone: ['phone', 'phone number', 'mobile', 'whatsapp', 'الهاتف', 'رقم الهاتف', 'الجوال', 'الواتساب'],
+  phone: [
+    'phone',
+    'phone number',
+    'mobile',
+    'whatsapp',
+    'الهاتف',
+    'رقم الهاتف',
+    'الجوال',
+    'الواتساب',
+  ],
   company: ['company', 'company name', 'organisation', 'organization', 'الشركة', 'اسم الشركة'],
   title: ['title', 'job title', 'position', 'role', 'المسمى الوظيفي', 'المنصب'],
   city: ['city', 'المدينة'],
@@ -231,7 +236,8 @@ export function encodePiece(
     .map((column, index) => ({ column, index }))
     .filter((c): c is { column: ImportColumn; index: number } => c.column !== null);
   const lines = [kept.map((c) => c.column).join(',')];
-  for (const record of records) lines.push(kept.map((c) => encodeCell(record[c.index] ?? '')).join(','));
+  for (const record of records)
+    lines.push(kept.map((c) => encodeCell(record[c.index] ?? '')).join(','));
   return `${lines.join('\n')}\n`;
 }
 

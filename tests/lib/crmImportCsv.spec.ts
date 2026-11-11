@@ -167,7 +167,10 @@ describe('checkRow', () => {
       },
       'tags',
     ],
-    [{ name: 'Sara', email: 'a@b.co', company: 'x'.repeat(121), lawful_basis: 'consent' }, 'company'],
+    [
+      { name: 'Sara', email: 'a@b.co', company: 'x'.repeat(121), lawful_basis: 'consent' },
+      'company',
+    ],
     [{ name: 'Sa\u0007ra', email: 'a@b.co', lawful_basis: 'consent' }, 'name'],
   ])('refuses %j as %s, with its row number and nothing it holds', (values, problem) => {
     const result = row(values);
@@ -248,7 +251,8 @@ describe('the door answer and the words', () => {
 describe('the request bodies', () => {
   it('are strict, and refuse a piece of more than 50 people or a file of more than 5,000', () => {
     expect(
-      ImportRequestSchema.safeParse({ step: 'open', rows: 5001, bytes: 10, attested: true }).success,
+      ImportRequestSchema.safeParse({ step: 'open', rows: 5001, bytes: 10, attested: true })
+        .success,
     ).toBe(false);
     expect(
       ImportRequestSchema.safeParse({ step: 'open', rows: 5, bytes: 10, attested: false }).success,
@@ -278,9 +282,7 @@ describe('the template and the keys', () => {
     expect(toCsv(['=cmd', '+1', '-2', '@x', 'name'], [])).toBe(
       '﻿"\'=cmd","\'+1","\'-2","\'@x","name"\r\n',
     );
-    expect(toCsv(IMPORT_COLUMNS, [])).toBe(
-      `﻿${IMPORT_COLUMNS.map((c) => `"${c}"`).join(',')}\r\n`,
-    );
+    expect(toCsv(IMPORT_COLUMNS, [])).toBe(`﻿${IMPORT_COLUMNS.map((c) => `"${c}"`).join(',')}\r\n`);
   });
 
   it('a key made once gives the same blind index, and a ciphertext the reveal reads', async () => {

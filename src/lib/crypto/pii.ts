@@ -36,7 +36,10 @@ export async function importPIIKey(keyMaterial: string): Promise<CryptoKey> {
  * Returns base64(iv ‖ ciphertext+tag). With the key material, or (Admin v2 C15: the CSV
  * import encrypts many values) a key importPIIKey already made from it.
  */
-export async function encryptPII(plaintext: string, keyMaterial: string | CryptoKey): Promise<string> {
+export async function encryptPII(
+  plaintext: string,
+  keyMaterial: string | CryptoKey,
+): Promise<string> {
   const key = typeof keyMaterial === 'string' ? await importPIIKey(keyMaterial) : keyMaterial;
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(

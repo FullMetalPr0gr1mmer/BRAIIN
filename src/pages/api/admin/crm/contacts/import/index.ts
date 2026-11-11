@@ -35,7 +35,8 @@ async function readBody(request: Request): Promise<ImportRequest> {
   const declared = Number(request.headers.get('content-length') ?? '0');
   if (declared > BODY_CAP) throw new ValidationError('That part of the file is too large to send.');
   const text = await request.text();
-  if (text.length > BODY_CAP) throw new ValidationError('That part of the file is too large to send.');
+  if (text.length > BODY_CAP)
+    throw new ValidationError('That part of the file is too large to send.');
   let raw: unknown;
   try {
     raw = JSON.parse(text);
