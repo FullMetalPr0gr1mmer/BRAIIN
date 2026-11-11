@@ -614,6 +614,8 @@ alter type public.app_role add value if not exists 'sales';
 
 **C10b, contacts for Sales: one reveal must stay one person (C6 review, C6-SEC-3).** Confirming a phone match copies that lead's e-mail and phone into the contact, and the contact reveal decrypts every channel of a contact for one slot of the `pii-reveal` limiter. While only Admin holds `crm.contacts` this adds nothing (Admin can export). Before C10b gives Sales `crm.contacts` ("no bulk PII"), keep these: a contact keeps at most ten e-mails and ten phones that a person adds or copies (`app.crm_channel_cap()`, 0133: a confirm into a full contact copies nothing and answers `full`, a channel edit past it is refused whole), so one reveal shows at most twenty values. C10b should also decide whether a Sales confirm spends a reveal slot or a limit of its own, and whether the reveal shows a Sales user only the primary of each kind. Register L-3 records it.
 
+**C10b as built ([C10B.md](as-built/C10B.md)).** A Sales confirm spends a slot of the reveal's own limiter (`pii-reveal`), not a limit of its own: the confirm brings that lead's details to the contact, which is what revealing the lead would cost, so every value a Sales reveal shows has cost it a slot. The rule is "a role that cannot export" (`receivesLeadPiiUnasked` false), so Admin's confirm is unchanged. The reveal shows a Sales user every channel, not only the primary of each kind: the channel editor (make primary, remove) needs them, and the ceiling bounds them at twenty values of one person. The SQL change is the two helpers alone; erasure and the CRM settings stay Admin's, and Developer still holds no `crm.*` (O-7).
+
 ## 11. UI contract for the UI architect
 
 **General**
