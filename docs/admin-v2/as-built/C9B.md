@@ -15,7 +15,7 @@
 
 ## Plan (written before building; kept current)
 
-Status: building (2026-11-11).
+Status: built (2026-11-12), held. Every gate below ran on the head of `feat/c9b-custom-fields`.
 
 ### Scope
 
@@ -97,3 +97,70 @@ Status: building (2026-11-11).
   contact routes against definitions, the screen's rules, the guide, the copy rules.
 - e2e (CI only): CRM settings as Admin (define a field, see it on a contact, fill it, remove
   it with the confirm), traced against the markup.
+
+## As built
+
+Everything in the plan above, in these places:
+
+- **SQL** `supabase/migrations/0135_crm_custom_fields.sql` (expand only): `app.crm_custom_fields_ok`
+  and the CHECK `crm_settings_custom_fields_ok`; `crm_settings.custom_fields` in the staff UPDATE
+  column grant; the three stamp triggers restated with it; `crm_settings_custom_fields` (a kept
+  field keeps its type, 23514 `crm_settings_custom_field_type`); `crm_settings_custom_removed`
+  (definer: a removed field's values leave every contact of the tenant in the same statement);
+  `app.crm_custom_date_ok` and `crm_contacts_custom_fields` (definer: each new or changed value is
+  a field of the contact's tenant and fits its type, 23514 `crm_contacts_custom_fields`); the
+  `crm-settings` guide's next revision. pgTAP `supabase/tests/crm_custom_fields.test.sql` (39):
+  admin, content_creator, seo, developer, sales, another tenant's admin, anon, and stale tokens
+  (demoted, switched off, locked); `crm_settings.test.sql` follows the new column.
+- **Worker** `packages/schemas/crm.ts` (the definition and save schemas, three types, 12 fields);
+  `src/lib/crm/contactCustom.ts` (read as the caller, validate, merge); `src/lib/crm/settings.ts`
+  and `GET/PUT /api/admin/crm/settings` (the definitions, the privacy view, audit counts only);
+  the contact routes (`POST …/contacts`, `GET/PATCH …/contacts/[id]`) and pages read and check
+  the definitions (C6's refusal of every custom value is lifted per definition).
+- **Screens** CRM settings: `CustomFieldsCard`, `ContactStagesCard` (read-only),
+  `PrivacyCard` with `EraseFinder` (C7's erase dialog loaded with `import()` on the first pick);
+  a contact's Details and the Add contact drawer draw the fields (`contacts/customFields.tsx`).
+- **Tests** vitest `tests/lib/crmCustomFields.spec.ts` (schemas against the migration, the value
+  check and merge, both routes, the cards' rules, the guide); `contactsApi.spec.ts` and
+  `crmSettings.spec.ts` follow; e2e (CI only) `tests/admin/crm-custom-fields.e2e.ts`;
+  `EraseFinder` joins the Z1 dialog axe matrix (`tests/admin/dialogs.ts`).
+- **Docs** CLAUDE.md §8, README (C9 row), `migrations.md`, `deviations.md`, register L-5.
+
+Fix on resume (2026-11-12): a new field could take the key of a saved field the same save
+removed. The card's question then said the values were deleted while the database, seeing the
+same key, kept them (or refused a changed type). The card now derives new keys clear of saved
+ones and refuses a reused key before asking (`fieldsProblem(drafts, loaded)`; guarded in
+`crmCustomFields.spec.ts`, which fails without the fix).
+
+### Departures from the design
+
+1. A field's key and type are fixed once saved (the prototype edits both): a changed type would
+   leave values of the old kind. A renamed key is a removal and a new field.
+2. Removing a field deletes its values from every contact (the design only warned of orphaned
+   values); nothing is kept that no screen shows.
+3. The field kinds are text, number and date only (C6's speculative select and boolean dropped;
+   none could exist yet).
+4. Data and privacy states the retention horizon and links to General settings instead of the
+   prototype's own 2, 3 or 5 years select (retention is General's, at most 24 months).
+5. Round trips: the contact page 8 to 9, the contacts list 3 to 4 (P-15), one read each of the
+   definitions.
+
+### Gates (2026-11-12, head of the branch)
+
+- `astro check`: 0 errors, 0 warnings, 72 hints; `tsc --noEmit`: clean.
+- `prettier --check .`: clean (one file reformatted on resume).
+- vitest, full suite with `--testTimeout=60000`: 458 files passed, 1 failed
+  (`adminBundle.spec.ts`, the known hook timeout under load), 1 skipped; 11768 tests passed.
+  Re-run alone with `crmCustomFields.spec.ts`: 2 files, 95 tests passed.
+- `check-migrations origin/main`: ok (0131, 0133, 0134, 0135 added; origin/main's highest 0130).
+- PGlite replay of all 92 SQL suites at0048: everything passes except the two known ones,
+  `audit_chain` #12 (the lock check) and `grants_app_schema` section 8.
+  `crm_custom_fields.test.sql`: all 39 passed.
+- Production read-back (`readback_c9b.sql`, replayed): 26 expectations, one mismatch,
+  `server_version_num` (PGlite 17.5 against production's 17.6).
+- Build with the CI environment: ok. `admin-bundle.mjs`: the chunk plan holds; eager graphs
+  AdminCrmSettings 235.3 kB, AdminContactDetail and AdminContactsList 174.1 kB (each <= 300).
+  `npm run size`: public 26.85 kB; the admin sum 469.72 kB against the 450 kB tripwire (the
+  known, open owner question; not raised here).
+- `contrast-audit.mjs` (admin CSS changed: `crm-settings.css`): PASS.
+
