@@ -1,4 +1,4 @@
-import { hmacHex } from '@/lib/crypto/hmac';
+import { hmacHex, hmacHexWith, hmacKey } from '@/lib/crypto/hmac';
 import { CRM_INDEX_LABEL, labelledKeyMaterial } from '@/lib/applications/keys';
 
 // Blind indexes (Admin v2, crm.md §6.1): an HMAC of a normalised e-mail or phone, so the
@@ -22,4 +22,19 @@ export function blindIndex(
     labelledKeyMaterial(rootKey, CRM_INDEX_LABEL),
     `${kind}\u0000${tenantId}\u0000${normalized}`,
   );
+}
+
+/** The blind-index key, made once for many indexes (Admin v2 C15: the CSV import). */
+export function blindIndexKey(rootKey: string): Promise<CryptoKey> {
+  return hmacKey(labelledKeyMaterial(rootKey, CRM_INDEX_LABEL));
+}
+
+/** blindIndex with a key blindIndexKey made: the same index, without importing the key again. */
+export function blindIndexWith(
+  key: CryptoKey,
+  kind: BlindIndexKind,
+  tenantId: string,
+  normalized: string,
+): Promise<string> {
+  return hmacHexWith(key, `${kind}\u0000${tenantId}\u0000${normalized}`);
 }

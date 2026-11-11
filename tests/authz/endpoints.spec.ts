@@ -165,8 +165,12 @@ describe('admin endpoints — {principal × capability} matrix', () => {
     // The companion to the test above: filtering on the right tenant is worthless if a
     // handler forgets to filter on any tenant. Checked over the list endpoints, where
     // an unscoped read would return every tenant's rows.
+    // (Admin v2 C15) The import's template is a fixed heading row: it reads nothing.
     const listCases = CASES.filter(
-      (c) => (c.method === 'GET' || c.read) && !c.url.includes('export'),
+      (c) =>
+        (c.method === 'GET' || c.read) &&
+        !c.url.includes('export') &&
+        c.url !== '/api/admin/crm/contacts/import/template',
     );
     for (const testCase of listCases) {
       const module = await testCase.load();

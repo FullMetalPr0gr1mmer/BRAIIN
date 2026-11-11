@@ -82,6 +82,18 @@ export const CRM_ERASE_LIMITS: RateLimitOptions = {
 };
 
 /**
+ * Importing contacts from a CSV file (Admin v2 C15): 5 imports an hour per person and 10 per
+ * tenant. One import is up to 5,000 people, so the ceiling bounds how fast a stolen Admin
+ * session could fill the CRM with invented people or test which addresses are contacts;
+ * fixing a file's refused rows and importing it again stays well inside it.
+ */
+export const CRM_IMPORT_LIMITS: RateLimitOptions = {
+  perUser: 5,
+  perTenant: 10,
+  windowMinutes: 60,
+};
+
+/**
  * Site health's Check now (Admin v2 G2): 6 an hour per person and 12 per tenant. Each check
  * is up to six outbound requests (the uptime monitor, the RDAP bootstrap and registry), and
  * the monitor's own API allows 10 a minute on its free plan; the 10-minute schedule reads

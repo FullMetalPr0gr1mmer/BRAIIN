@@ -32,9 +32,12 @@ export async function importPIIKey(keyMaterial: string): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
-/** Returns base64(iv ‖ ciphertext+tag). */
-export async function encryptPII(plaintext: string, keyMaterial: string): Promise<string> {
-  const key = await importPIIKey(keyMaterial);
+/**
+ * Returns base64(iv ‖ ciphertext+tag). With the key material, or (Admin v2 C15: the CSV
+ * import encrypts many values) a key importPIIKey already made from it.
+ */
+export async function encryptPII(plaintext: string, keyMaterial: string | CryptoKey): Promise<string> {
+  const key = typeof keyMaterial === 'string' ? await importPIIKey(keyMaterial) : keyMaterial;
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = new Uint8Array(
     await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(plaintext)),
