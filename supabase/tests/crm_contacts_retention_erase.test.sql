@@ -76,8 +76,10 @@ insert into public.leads (id, tenant_id, name, email_enc, message, contact_id, c
 update public.crm_contacts set last_activity_at = now() - interval '25 months'
  where id = 'c5200000-0000-4000-8000-00000000c007';
 
-select is((app.run_retention() ->> 'contacts_purged')::int, 4,
-  'the nightly run purges four contacts and says so');
+-- Five since Admin v2 C12 (0138): the tombstone is purged on the next run in its own right
+-- (counted), before its survivor expires and would have taken it by cascade (uncounted).
+select is((app.run_retention() ->> 'contacts_purged')::int, 5,
+  'the nightly run purges four contacts and the tombstone, and says so');
 select is(
   (select string_agg(display_name, ', ' order by display_name) from public.crm_contacts
     where tenant_id in ('c5200000-0000-4000-8000-000000000001', 'c5200000-0000-4000-8000-0000000000ff')),

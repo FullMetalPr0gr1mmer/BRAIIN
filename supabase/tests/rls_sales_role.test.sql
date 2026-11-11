@@ -141,6 +141,12 @@ insert into public.crm_contact_notes (tenant_id, contact_id, body) values
 insert into public.crm_tasks (tenant_id, title, due_at, contact_id) values
   ('93000000-0000-0000-0000-000000000001', 'C8 task', now() + interval '1 day',
    '93000000-0000-0000-0000-00000000c5c1');
+-- "Not a duplicate" (0138, Admin v2 C12): a pair, so a second contact. Admin's alone until C10b.
+insert into public.crm_contacts (id, tenant_id, display_name) values
+  ('93000000-0000-0000-0000-00000000c5c2', '93000000-0000-0000-0000-000000000001', 'C12 contact');
+insert into public.crm_merge_dismissals (tenant_id, contact_a, contact_b) values
+  ('93000000-0000-0000-0000-000000000001', '93000000-0000-0000-0000-00000000c5c1',
+   '93000000-0000-0000-0000-00000000c5c2');
 insert into public.site_settings (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.site_integrations (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.ai_config (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
