@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { CRM_FILE_NAME_REFUSED, CrmFileNameSchema } from '@schemas/crmFiles';
 
 // Admin v2 C16 (0140) restates one function as 0134 left it (C8's copy of C5's): the orphan rule,
 // with the lines marked `-- C16` (an auto-contact with a file a person added is not an
@@ -62,6 +63,61 @@ describe('0140 restates the orphan rule with its marked lines only', () => {
       expect(head, name).not.toMatch(/security definer/);
       expect(head, name).toMatch(/set search_path = ''/);
     }
+  });
+
+  it('the name CHECK refuses exactly what CRM_FILE_NAME_REFUSED refuses (C16-SEC-4)', () => {
+    const table = C16.slice(C16.indexOf('create table public.crm_contact_files ('));
+    const source = /name !~ '\[([^'\]]*)\]'/.exec(table)?.[1];
+    expect(source, 'the refused class in the name CHECK').toBeTruthy();
+    // `\uXXXX` / `\UXXXXXXXX` escapes and ranges between them, every character accounted for.
+    const escape = String.raw`\\u([0-9A-F]{4})|\\U([0-9A-F]{8})`;
+    const item = new RegExp(`(?:${escape})(?:-(?:${escape}))?`, 'gy');
+    const ranges: [number, number][] = [];
+    let consumed = 0;
+    for (const m of source!.matchAll(item)) {
+      const from = parseInt(m[1] ?? m[2] ?? '', 16);
+      const end = m[3] ?? m[4];
+      ranges.push([from, end ? parseInt(end, 16) : from]);
+      consumed += m[0].length;
+    }
+    expect(consumed, 'every character of the SQL set is an escape or a range').toBe(source!.length);
+    const mismatches: string[] = [];
+    // From 1: NUL cannot reach a text value. Surrogates are no code point a text value holds.
+    for (let cp = 1; cp <= 0x10ffff; cp += 1) {
+      if (cp >= 0xd800 && cp <= 0xdfff) continue;
+      const js = CRM_FILE_NAME_REFUSED.test(String.fromCodePoint(cp));
+      const sql = ranges.some(([from, to]) => cp >= from && cp <= to);
+      if (js !== sql) mismatches.push(cp.toString(16).toUpperCase());
+    }
+    // A new Unicode version that adds a format character fails here: add it to the class.
+    expect(mismatches).toEqual([]);
+    // The slash and the backslash: a second, plain class.
+    const backslash = String.fromCharCode(92);
+    expect(table).toContain(`and name !~ '[/${backslash}${backslash}]'),`);
+  });
+
+  it('the schema refuses a bidi override and keeps an Arabic name', () => {
+    expect(CrmFileNameSchema.safeParse('invoice\u202Efdp.exe').success).toBe(false);
+    expect(CrmFileNameSchema.safeParse('a\u2066b.pdf').success).toBe(false);
+    expect(CrmFileNameSchema.safeParse('عقد هدى.pdf').success).toBe(true);
+  });
+
+  it('the storage belt is checked, not assumed (0045’s postcondition, C16-SEC-2)', () => {
+    const post = C16.slice(C16.indexOf('═══ 10. Postconditions'));
+    // The belt, when present, must be exactly the one §9 creates.
+    expect(post).toContain(
+      "'RESTRICTIVE ALL {anon,authenticated} (bucket_id <> ''crm-files''::text) (bucket_id <> ''crm-files''::text)'",
+    );
+    // Without it, a permissive storage.objects policy admitting anon or authenticated refuses
+    // the push, by membership, PUBLIC included.
+    expect(post).toMatch(/pl\.polpermissive/);
+    expect(post).toMatch(/x\.role_oid = 0/);
+    expect(post).toMatch(/pg_has_role\('anon', x\.role_oid, 'member'\)/);
+    expect(post).toMatch(/pg_has_role\('authenticated', x\.role_oid, 'member'\)/);
+    expect(post).toMatch(/has_table_privilege\('service_role', 'storage\.objects', 'select'\)/);
+    // §9 no longer waves a missing belt through with a warning.
+    const bucket = C16.slice(C16.indexOf('═══ 9. The bucket'), C16.indexOf('═══ 10.'));
+    expect(bucket).not.toMatch(/raise warning 'C16: not permitted/);
   });
 
   it('each door checks the actor live before it reads or writes a file', () => {

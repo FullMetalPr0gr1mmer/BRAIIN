@@ -36,6 +36,9 @@ describe('contact files: the bucket and the paths', () => {
     expect(named(/['"]crm-files['"]/)).toEqual(['src/lib/crm/files.ts']);
     expect(named(/\bobject_path\b/)).toEqual([
       'src/lib/crm/files.ts',
+      // The person erasure keeps the paths it read until the door has erased, then removes
+      // those objects (C16 review, C16-SEC-1); it returns none of them.
+      'src/pages/api/admin/crm/contacts/[id]/erase.ts',
       // The upload hands the door the path it just stored the object under.
       'src/pages/api/admin/crm/contacts/[id]/files.ts',
     ]);
@@ -56,14 +59,17 @@ describe('contact files: the bucket and the paths', () => {
     expect(named(/\bremoveFileObjects\(/)).toEqual([
       // The sweep: objects no row names.
       'src/lib/crm/fileOrphans.ts',
-      // removePersonFiles, for the person erasure.
+      // Its definition.
       'src/lib/crm/files.ts',
+      // The person erasure: the objects after crm_erase_person has erased (C16-SEC-1).
+      'src/pages/api/admin/crm/contacts/[id]/erase.ts',
       // The upload's compensation for a refused row.
       'src/pages/api/admin/crm/contacts/[id]/files.ts',
       // The removal: the object first.
       'src/pages/api/admin/crm/contacts/[id]/files/[fileId].ts',
     ]);
-    expect(named(/\bremovePersonFiles\(/)).toEqual([
+    // A person's paths (the service role): the erasure, and the preview's count in files.ts.
+    expect(named(/\bpersonFiles\(/)).toEqual([
       'src/lib/crm/files.ts',
       'src/pages/api/admin/crm/contacts/[id]/erase.ts',
     ]);

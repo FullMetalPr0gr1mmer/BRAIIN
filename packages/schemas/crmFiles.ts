@@ -37,7 +37,14 @@ export const CRM_FILES_PER_CONTACT = 20;
 /** The longest name staff may give a file. */
 export const CRM_FILE_NAME_MAX = 120;
 
-const NO_CONTROL = /^[^\p{Cc}\p{Cs}\p{Zl}\p{Zp}]*$/u;
+/**
+ * No control or format character, no line or paragraph separator (C16 review, C16-SEC-4): a
+ * format character such as the bidi override U+202E reorders what the card and the removal's
+ * confirm show ('invoice<U+202E>fdp.exe' reads 'invoiceexe.pdf'). 0140's CHECK refuses the same
+ * code points (tests/lib/crmFilesSql.spec.ts compares them one by one).
+ */
+export const CRM_FILE_NAME_REFUSED = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u;
+const NO_CONTROL = /^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]*$/u;
 
 /**
  * The name staff see for a file: its own name as their computer had it, or one they type, with

@@ -29,7 +29,8 @@
 --      retention takes its rows by cascade; an upload whose row was never written), for the
 --      Worker's sweep (src/lib/crm/fileOrphans.ts). The service role's only.
 --   6. The bucket `crm-files`: private, ≤ 10 MiB, PDF, .docx, PNG, JPEG, WebP; a RESTRICTIVE
---      belt on storage.objects for anon and authenticated (0029's).
+--      belt on storage.objects for anon and authenticated (0029's), checked, not assumed
+--      (0045's postcondition: without the belt, no permissive storage policy may admit either).
 --
 -- Production behaviour: none until C16's Worker deploys (no route reads or writes the table
 -- before it). Rule 5: no existing table, column, grant or policy changes; the orphan rule
@@ -56,9 +57,15 @@ create table public.crm_contact_files (
   -- shape only, and always under the row's own tenant.
   object_path text not null
     check (object_path ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(pdf|docx|png|jpg|webp)$'),
-  -- What staff see. Never part of the path.
+  -- What staff see. Never part of the path. No control or format character (C16 review,
+  -- C16-SEC-4: a bidi override such as U+202E would show 'invoice<U+202E>fdp.exe' as
+  -- 'invoiceexe.pdf' on the card and in the removal's confirm), no line or paragraph
+  -- separator, no slash: exactly what CrmFileNameSchema refuses (tests/lib/crmFilesSql.spec.ts
+  -- compares the two code point by code point; 0044's class plus U+2028 and U+2029).
   name text not null
-    check (char_length(btrim(name)) between 1 and 120 and name !~ '[[:cntrl:]/\\]'),
+    check (char_length(btrim(name)) between 1 and 120
+           and name !~ '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u2028-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0001\U000E0020-\U000E007F]'
+           and name !~ '[/\\]'),
   -- Decided by the bytes (src/lib/crm/fileSniff.ts), never by the browser.
   content_type text not null check (content_type in (
     'application/pdf',
@@ -304,8 +311,10 @@ begin
         allowed_mime_types = excluded.allowed_mime_types;
 
   -- The belt: a RESTRICTIVE policy no permissive storage policy added later (for some other
-  -- bucket) can widen to this one. If the migration role may not add it, the bucket is still
-  -- unreachable to anon and authenticated (no policy names it): say so, do not fail the push.
+  -- bucket) can widen to this one. Creating a policy on storage.objects needs its owner's
+  -- rights. If this project's migration role lacks them, the push goes on only if the
+  -- postconditions below find that no permissive storage.objects policy admits anon or
+  -- authenticated at all (0045's rule, C16 review, C16-SEC-2); otherwise they refuse it.
   begin
     execute 'drop policy if exists crm_files_bucket_service_only on storage.objects';
     execute $p$
@@ -315,7 +324,7 @@ begin
         with check (bucket_id <> 'crm-files')
     $p$;
   exception when insufficient_privilege then
-    raise warning 'C16: not permitted to add the storage.objects belt policy; the private bucket with no policy naming it still denies anon and authenticated';
+    null;  -- checked, not assumed: the postconditions below
   end;
 end $$;
 
@@ -325,6 +334,8 @@ declare
   v_maintain boolean := current_setting('server_version_num')::int >= 170000;
   v_got text[];
   v_fn text;
+  v_belt text;
+  v_bad text;
   r text;
 begin
   -- ---- RLS and policies ---------------------------------------------------------------------
@@ -462,6 +473,54 @@ begin
   if to_regclass('storage.buckets') is not null then
     if not exists (select 1 from storage.buckets where id = 'crm-files' and public = false) then
       raise exception 'C16: the crm-files bucket is missing or public';
+    end if;
+    if not has_table_privilege('service_role', 'storage.objects', 'select') then
+      raise warning 'C16: the service role cannot read storage.objects; the contact-files sweep will fail (and log it)';
+    end if;
+
+    -- ---- Neither anon nor authenticated can read, write or delete in the bucket (C16 review,
+    -- C16-SEC-2: 0045's check). Checked, not assumed: neither role bypasses RLS, RLS is on for
+    -- storage.objects (or neither role holds a privilege on it), and either the belt is exactly
+    -- what §9 creates, or there is no belt and no permissive policy on storage.objects names
+    -- PUBLIC, either role, or any role either is a member of (MEMBER, not USAGE: a NOINHERIT
+    -- member can still SET ROLE), so no row of any bucket is theirs ----
+    if exists (select 1 from pg_roles
+                where rolname in ('anon', 'authenticated') and (rolsuper or rolbypassrls)) then
+      raise exception 'C16: anon or authenticated bypasses RLS; no storage policy can keep it out of the crm-files bucket';
+    end if;
+    if not (select relrowsecurity from pg_class where oid = 'storage.objects'::regclass)
+       and (has_table_privilege('anon', 'storage.objects', 'select, insert, update, delete')
+            or has_table_privilege('authenticated', 'storage.objects', 'select, insert, update, delete')) then
+      raise exception 'C16: row level security is off on storage.objects, and anon or authenticated holds a privilege on it';
+    end if;
+    select format('%s %s %s %s %s', permissive, cmd, roles, qual, with_check)
+      into v_belt
+      from pg_policies
+     where schemaname = 'storage' and tablename = 'objects'
+       and policyname = 'crm_files_bucket_service_only';
+    if v_belt is not null then
+      if v_belt is distinct from
+         'RESTRICTIVE ALL {anon,authenticated} (bucket_id <> ''crm-files''::text) (bucket_id <> ''crm-files''::text)' then
+        raise exception 'C16: crm_files_bucket_service_only is not the belt this migration creates: %', v_belt;
+      end if;
+    else
+      select string_agg(pl.polname, ', ' order by pl.polname)
+        into v_bad
+        from pg_policy pl
+       where pl.polrelid = 'storage.objects'::regclass and pl.polpermissive
+         and exists (select 1 from unnest(pl.polroles) as x(role_oid)
+                      where x.role_oid = 0
+                         or pg_has_role('anon', x.role_oid, 'member')
+                         or pg_has_role('authenticated', x.role_oid, 'member'));
+      if v_bad is not null then
+        raise exception using
+          errcode = 'insufficient_privilege',
+          message = format('C16: the belt could not be added (this role may not create a policy '
+                           || 'on storage.objects), and permissive storage.objects policies admit '
+                           || 'anon or authenticated: %s; either could reach the crm-files bucket', v_bad),
+          hint = 'Push as the owner of storage.objects, or narrow those policies, then push again (runbook 6i, step 1).';
+      end if;
+      raise warning 'C16: no belt on storage.objects (this role may not create a policy there); checked: no permissive storage.objects policy admits anon or authenticated, so neither can reach the crm-files bucket. A permissive policy added later would open it: report this warning (runbook 6i)';
     end if;
   end if;
 end $$;

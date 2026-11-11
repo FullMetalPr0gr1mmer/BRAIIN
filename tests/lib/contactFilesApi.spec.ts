@@ -6,9 +6,10 @@ import type { APIContext } from 'astro';
 // refused row by removing the object; the download runs the CV's order (live recheck, limit,
 // the caller's read, the path as the service role, an audit row WRITTEN before the file) and
 // answers an attachment that no browser renders; the removal takes the object first and is
-// audited before and after; the person erasure removes the files' objects, then their rows,
-// before the door, and stops when an object stays; the sweep removes what no row names and
-// logs counts only; no answer carries an object path or a file's name into the audit log.
+// audited before and after; the person erasure reads the files' paths, lets the door erase
+// (its refusals leave every file in place, C16 review) and only then removes the objects,
+// leaving a failed removal to the sweep; the sweep removes what no row names and logs counts
+// only; no answer carries an object path or a file's name into the audit log.
 
 const TENANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER = '11111111-1111-4111-8111-111111111111';
@@ -21,6 +22,8 @@ let limited = false;
 let rlsSeesFile = true;
 let rlsSeesContact = true;
 let storageOk = true;
+let configured = true;
+let personFilesFail = false;
 let sessionRole = 'admin';
 let liveProfile: Record<string, unknown> = { role: 'admin', is_active: true, locked_until: null };
 let personFileRows: { id: string; object_path: string }[] = [];
@@ -51,7 +54,7 @@ vi.mock('@/lib/data/systemLog', () => ({
     return true;
   },
 }));
-vi.mock('@/lib/supabase/client', () => ({ supabaseConfigured: () => true }));
+vi.mock('@/lib/supabase/client', () => ({ supabaseConfigured: () => configured }));
 vi.mock('@/lib/admin/rateLimit', async () => {
   const actual =
     await vi.importActual<typeof import('@/lib/admin/rateLimit')>('@/lib/admin/rateLimit');
@@ -99,6 +102,9 @@ function builder(table: string, owner: 'svc' | 'rls') {
   };
   b['then'] = (ok: (v: unknown) => unknown) => {
     events.push(`${owner}:list:${table}`);
+    if (owner === 'svc' && table === 'crm_contact_files' && personFilesFail) {
+      return Promise.resolve({ data: null, error: { code: '57014' } }).then(ok);
+    }
     let data: unknown[] = [];
     if (table === 'crm_contact_files') data = owner === 'svc' ? personFileRows : [FILE_ROW];
     if (table === 'crm_contacts') data = [];
@@ -211,6 +217,8 @@ beforeEach(() => {
   rlsSeesFile = true;
   rlsSeesContact = true;
   storageOk = true;
+  configured = true;
+  personFilesFail = false;
   sessionRole = 'admin';
   liveProfile = { role: 'admin', is_active: true, locked_until: null };
   personFileRows = [];
@@ -407,6 +415,82 @@ describe('POST /[id]/files (upload)', () => {
     expect(res.status).toBe(502);
     expect(rpcCalls).toEqual([]);
   });
+
+  // (C16 review, C16-COR-3) Every refusal the route has, each before the bucket.
+  const raw = (body: BodyInit | null, headers: Record<string, string>) =>
+    new Request(BASE, { method: 'POST', body, headers });
+
+  it('is a 411 without a length and a 400 for one it cannot read, before anything else', async () => {
+    // A ReadableStream body leaves no Content-Length for the Request to add.
+    const stream = new ReadableStream({ start: (c) => c.close() });
+    const none = await list.POST(
+      ctx(new Request(BASE, { method: 'POST', body: stream, duplex: 'half' } as RequestInit)),
+    );
+    expect(none.status).toBe(411);
+    const bad = await list.POST(ctx(raw('x', { 'content-length': 'abc' })));
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { reason: string }).reason).toBe('bad-length');
+    expect(events).toEqual([]);
+  });
+
+  it('is a 503 where files are not set up, before the live recheck', async () => {
+    configured = false;
+    const res = await list.POST(ctx(await uploadRequest(PDF)));
+    expect(res.status).toBe(503);
+    expect(events).toEqual([]);
+  });
+
+  it('is a 400 for a form it cannot read, and a 422 on `file` for a form with no file', async () => {
+    const broken = await list.POST(
+      ctx(
+        raw('not a form', {
+          'content-type': 'multipart/form-data; boundary=nope',
+          'content-length': '10',
+        }),
+      ),
+    );
+    expect(broken.status).toBe(400);
+    expect(((await broken.json()) as { reason: string }).reason).toBe('bad-form');
+
+    const form = new FormData();
+    form.set('name', 'Brief.pdf');
+    const encoded = new Response(form);
+    const body = await encoded.arrayBuffer();
+    const noFile = await list.POST(
+      ctx(
+        raw(body, {
+          'content-type': encoded.headers.get('content-type') ?? '',
+          'content-length': String(body.byteLength),
+        }),
+      ),
+    );
+    expect(noFile.status).toBe(422);
+    expect(((await noFile.json()) as { field: string }).field).toBe('file');
+    expect(uploads).toEqual([]);
+  });
+
+  it('refuses a name with a bidi override (422 on `name`) before the bucket (C16-SEC-4)', async () => {
+    const res = await list.POST(ctx(await uploadRequest(PDF, 'invoice\u202Efdp.exe')));
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { field: string }).field).toBe('name');
+    expect(uploads).toEqual([]);
+  });
+
+  it('when the door refuses the actor (42501): a 403, and the object removed again', async () => {
+    rpcAnswers['crm_file_add'] = { data: null, error: { code: '42501' } };
+    const res = await list.POST(ctx(await uploadRequest(PDF)));
+    expect(res.status).toBe(403);
+    expect(removed).toEqual([[uploads[0]!.path]]);
+    expect(audits).toEqual([]);
+  });
+
+  it('when the door refuses the file (22023): a 422 on `name`, and the object removed again', async () => {
+    rpcAnswers['crm_file_add'] = { data: null, error: { code: '22023' } };
+    const res = await list.POST(ctx(await uploadRequest(PDF)));
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { field: string }).field).toBe('name');
+    expect(removed).toEqual([[uploads[0]!.path]]);
+  });
 });
 
 describe('GET /[id]/files/[fileId] (download)', () => {
@@ -510,59 +594,140 @@ describe('DELETE /[id]/files/[fileId]', () => {
     expect(removed).toEqual([]);
     expect(rpcCalls).toEqual([]);
   });
+
+  // (C16 review, C16-COR-3)
+  it('is a 404 for a file the caller cannot see: no audit row, no storage call', async () => {
+    rlsSeesFile = false;
+    const res = await one.DELETE(ctx(req(), { fileId: FILE }));
+    expect(res.status).toBe(404);
+    expect(audits).toEqual([]);
+    expect(removed).toEqual([]);
+    expect(events).not.toContain('svc:crm_contact_files');
+  });
+
+  it('refuses a demoted Admin (live recheck) before anything is read', async () => {
+    liveProfile = { role: 'content_creator', is_active: true, locked_until: null };
+    const res = await one.DELETE(ctx(req(), { fileId: FILE }));
+    expect(res.status).toBe(403);
+    expect(events).toEqual(['svc:profiles']);
+  });
+
+  it.each([
+    ['P0002', 404, 'not_found'],
+    ['42501', 403, 'refused'],
+  ])(
+    'when the door answers %s after the object went: %s, the outcome says %s',
+    async (code, status, said) => {
+      rpcAnswers['crm_file_remove'] = { data: null, error: { code } };
+      const res = await one.DELETE(ctx(req(), { fileId: FILE }));
+      expect(res.status).toBe(status);
+      expect(removed).toEqual([[PATH]]);
+      expect(audits.at(-1)!).toMatchObject({
+        action: 'crm.file.delete.outcome',
+        detail: { file: FILE, status: said, code },
+      });
+    },
+  );
 });
 
-describe('the person erasure takes the files first (C6’s route, C16’s step)', () => {
+describe('the person erasure: the door first, the files’ objects after (C6’s route, C16’s step)', () => {
   const req = () =>
     new Request(`https://admin.example.test/api/admin/crm/contacts/${CONTACT}/erase`, {
       method: 'POST',
       body: JSON.stringify({ reason: 'dsar' }),
       headers: { 'content-type': 'application/json' },
     });
+  const TWO = [
+    { id: FILE, object_path: PATH },
+    { id: 'f2', object_path: `${TENANT}/${CONTACT}/f2.png` },
+  ];
 
-  it('removes the objects, then the rows, then calls the door; counts the files', async () => {
-    personFileRows = [
-      { id: FILE, object_path: PATH },
-      { id: 'f2', object_path: `${TENANT}/${CONTACT}/f2.png` },
-    ];
+  it('reads the paths, lets the door erase (the rows go with the contact), then removes the objects', async () => {
+    personFileRows = TWO;
     rpcAnswers['crm_erase_person'] = { data: { contacts: 1, leads: 0 }, error: null };
     const res = await erase.POST(ctx(req()));
     expect(res.status).toBe(200);
     const at = (e: string) => events.indexOf(e);
-    expect(at('audit:crm.erase.attempt')).toBeLessThan(at('storage:remove:crm-files'));
-    expect(at('storage:remove:crm-files')).toBeLessThan(at('svc:delete:crm_contact_files'));
-    expect(at('svc:delete:crm_contact_files')).toBeLessThan(at('svc:rpc:crm_erase_person'));
+    expect(at('audit:crm.erase.attempt')).toBeLessThan(at('svc:list:crm_contact_files'));
+    expect(at('svc:list:crm_contact_files')).toBeLessThan(at('svc:rpc:crm_erase_person'));
+    // (C16 review, C16-SEC-1) Nothing that cannot be undone before the door's own checks.
+    expect(at('svc:rpc:crm_erase_person')).toBeLessThan(at('storage:remove:crm-files'));
+    // The door's cascade takes the rows (0140 pgTAP: the contact's and its tombstones').
+    expect(events).not.toContain('svc:delete:crm_contact_files');
     expect(removed).toEqual([[PATH, `${TENANT}/${CONTACT}/f2.png`]]);
     expect(audits.at(-1)!.detail).toMatchObject({ status: 'ok', files: 2 });
+    expect(audits.at(-1)!.detail).not.toHaveProperty('file_objects');
+    expect(logs).toEqual([]);
   });
 
-  it('stops before the door when an object cannot be removed', async () => {
-    personFileRows = [{ id: FILE, object_path: PATH }];
-    storageOk = false;
+  it.each([
+    ['22023', 422, 'a ticked lead is no longer a phone match'],
+    ['42501', 403, 'the database refuses the actor (crm_eraser_ok)'],
+    ['P0002', 404, 'the contact is gone'],
+  ])('when the door answers %s (%s, %s), every file stays', async (code, status) => {
+    personFileRows = TWO;
+    rpcAnswers['crm_erase_person'] = { data: null, error: { code } };
+    const res = await erase.POST(ctx(req()));
+    expect(res.status).toBe(status);
+    expect(events).not.toContain('storage:remove:crm-files');
+    expect(events).not.toContain('svc:delete:crm_contact_files');
+    expect(removed).toEqual([]);
+    expect(audits.at(-1)!).toMatchObject({
+      action: 'crm.erase.outcome',
+      detail: { target: 'contact', status: 'failed', code },
+    });
+  });
+
+  it('when the paths cannot be read, stops before the door: nothing erased', async () => {
+    personFileRows = TWO;
+    personFilesFail = true;
     const res = await erase.POST(ctx(req()));
     expect(res.status).toBe(500);
     expect(rpcCalls.map((c) => c.fn)).not.toContain('crm_erase_person');
-    expect(events).not.toContain('svc:delete:crm_contact_files');
+    expect(removed).toEqual([]);
     expect(audits.at(-1)!).toMatchObject({
       action: 'crm.erase.outcome',
       detail: { target: 'contact', status: 'failed', code: 'files' },
     });
   });
 
-  it('the preview counts the person’s files', async () => {
-    personFileRows = [{ id: FILE, object_path: PATH }];
-    rpcAnswers['crm_erase_preview'] = { data: { leads: 1 }, error: null };
-    const res = await erasePreview.POST(
+  it('when the objects cannot be removed after the erasure, logs it and leaves them to the sweep', async () => {
+    personFileRows = TWO;
+    storageOk = false;
+    rpcAnswers['crm_erase_person'] = { data: { contacts: 1 }, error: null };
+    const res = await erase.POST(ctx(req()));
+    expect(res.status).toBe(200);
+    expect(audits.at(-1)!.detail).toMatchObject({ status: 'ok', files: 2, file_objects: 'sweep' });
+    expect(logs).toEqual([expect.objectContaining({ level: 'warn', source: 'crm.erase' })]);
+    expect(JSON.stringify(logs)).not.toContain(TENANT);
+  });
+
+  const preview = () =>
+    erasePreview.POST(
       ctx(
         new Request(`https://admin.example.test/api/admin/crm/contacts/${CONTACT}/erase-preview`, {
           method: 'POST',
         }),
       ),
     );
+
+  it('the preview counts the person’s files', async () => {
+    personFileRows = [{ id: FILE, object_path: PATH }];
+    rpcAnswers['crm_erase_preview'] = { data: { leads: 1 }, error: null };
+    const res = await preview();
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: { counts: Record<string, number> } };
     expect(body.data.counts['files']).toBe(1);
     expect(JSON.stringify(body)).not.toContain(PATH);
+  });
+
+  it('the preview fails rather than say 0 files when the count cannot be read (C16-SEC-3)', async () => {
+    personFileRows = [{ id: FILE, object_path: PATH }];
+    personFilesFail = true;
+    rpcAnswers['crm_erase_preview'] = { data: { leads: 1 }, error: null };
+    const res = await preview();
+    expect(res.status).toBe(500);
+    expect(await res.text()).not.toMatch(/"files"\s*:\s*0/);
   });
 });
 

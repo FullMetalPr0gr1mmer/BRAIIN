@@ -16,7 +16,7 @@
 -- The bucket and the orphan reader: storage_crm_files.test.sql.
 
 begin;
-select plan(59);
+select plan(62);
 
 insert into public.tenants (id, name) values
   ('c1600000-0000-4000-8000-000000000001', 'C16 T1'),
@@ -157,6 +157,8 @@ select is(c16_add('A', c16_file('c1600000-0000-4000-8000-0000000f0006') || '{"cr
   '22023', 'an unknown key is refused');
 select is(c16_add('A', c16_file('c1600000-0000-4000-8000-0000000f0007', p_extra => '{"name": "a/b.pdf"}'::jsonb)),
   '23514', 'a name with a slash is refused');
+select is(c16_add('A', c16_file('c1600000-0000-4000-8000-0000000f000b', p_extra => '{"name": "invoice\u202Efdp.exe"}'::jsonb)),
+  '23514', 'a name with a bidi override is refused (C16-SEC-4: it would show as invoiceexe.pdf)');
 select is(c16_add('A', c16_file('c1600000-0000-4000-8000-0000000f0008', p_extra => '{"content_type": "image/png"}'::jsonb)),
   '23514', 'a type that does not match the extension is refused');
 select is(c16_add('A', c16_file('c1600000-0000-4000-8000-0000000f0009', p_extra => '{"bytes": 10485761}'::jsonb)),
@@ -300,6 +302,23 @@ delete from public.crm_contacts where id = 'c1600000-0000-4000-8000-00000000c003
 select is((select count(*)::int from public.crm_contact_files
             where contact_id = 'c1600000-0000-4000-8000-00000000c003'), 0,
   'the file rows go with their contact (the cascade); the sweep removes the objects');
+-- (C16 review, C16-SEC-1) The person erasure runs public.crm_erase_person BEFORE it removes
+-- any object, so it relies on the door taking every file row of the person: the contact's own
+-- (crm_contact_files_contact_fk) and its merge tombstones' (crm_contacts_merged_fk cascades the
+-- tombstone, which cascades its files). A file on the tombstone, as a merge would leave it:
+insert into public.crm_contact_files (id, tenant_id, contact_id, object_path, name, content_type, bytes) values
+  ('c1600000-0000-4000-8000-0000000f0041', 'c1600000-0000-4000-8000-000000000001',
+   'c1600000-0000-4000-8000-00000000c002',
+   'c1600000-0000-4000-8000-000000000001/c1600000-0000-4000-8000-00000000c002/c1600000-0000-4000-8000-0000000f0041.pdf',
+   'Before the merge.pdf', 'application/pdf', 100);
+set local role service_role;
+select is((public.crm_erase_person('c1600000-0000-4000-8000-000000000001', 'c1600000-0000-4000-8000-00000000c001',
+             '{}'::uuid[], (select sub from c16_persona where code = 'A'))) ->> 'contacts', '1',
+  'a live Admin erases the person through the door');
+reset role;
+select is((select count(*)::int from public.crm_contact_files
+            where contact_id in ('c1600000-0000-4000-8000-00000000c001', 'c1600000-0000-4000-8000-00000000c002')), 0,
+  'the erasure took every file row of the person, their tombstone''s too; the route removes the objects after');
 
 -- ── 7. Grants and the helper ──────────────────────────────────────────────────────────────
 select ok(not has_table_privilege('anon', 'public.crm_contact_files', 'select'), 'anon: no SELECT');

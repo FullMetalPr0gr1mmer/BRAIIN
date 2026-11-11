@@ -76,8 +76,26 @@ describe('the card’s words and checks', () => {
   });
 
   it('the erasure says how many files go', () => {
-    expect(erasedFilesLine(1)).toBe('Their 1 file goes too, removed from storage first.');
-    expect(erasedFilesLine(3)).toBe('Their 3 files go too, removed from storage first.');
+    expect(erasedFilesLine(1)).toBe('Their 1 file goes too.');
+    expect(erasedFilesLine(3)).toBe('Their 3 files go too.');
+  });
+
+  it('announces a refusal: alerts under the fields, and a removal’s on the card (C16-COR-5)', () => {
+    const source = readFileSync(
+      'src/components/admin/screens/contacts/ContactFilesCard.tsx',
+      'utf8',
+    );
+    expect(source).toContain('id={`${id}-file-error`} className="field-error f__err" role="alert"');
+    expect(source).toContain('id={`${id}-name-error`} className="field-error f__err" role="alert"');
+    // A removal failure is the card's, never tied to the file input.
+    const remove = source.slice(
+      source.indexOf('async function remove('),
+      source.indexOf('const full ='),
+    );
+    expect(remove).toContain("setError({ field: 'card', message: describeError(err) })");
+    expect(source).toMatch(
+      /\{cardError \? \(\s*<p className="msg" data-kind="error" role="alert">/,
+    );
   });
 
   it('keeps the admin copy rules: no em or en dash', () => {

@@ -29,11 +29,14 @@ export function fileSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-/** The name a chosen file starts with: its own, without a folder, cut to what may be stored. */
+/**
+ * The name a chosen file starts with: its own, without a folder or a character the server
+ * refuses (CRM_FILE_NAME_REFUSED: control and format characters), cut to what may be stored.
+ */
 export function defaultFileName(fileName: string): string {
   const base = fileName.split(/[/\\]/).pop() ?? '';
   return base
-    .replace(/[\p{Cc}\p{Cs}\p{Zl}\p{Zp}]/gu, '')
+    .replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/gu, '')
     .trim()
     .slice(0, 120);
 }

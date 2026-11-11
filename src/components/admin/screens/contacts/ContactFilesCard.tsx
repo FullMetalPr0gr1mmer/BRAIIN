@@ -42,7 +42,13 @@ export default function ContactFilesCard({ contactId, people, onChanged }: Conta
   const [unavailable, setUnavailable] = useState('');
   const [chosen, setChosen] = useState<File | null>(null);
   const [name, setName] = useState('');
-  const [error, setError] = useState<{ field: 'file' | 'name'; message: string } | null>(null);
+  // Where a refusal is drawn: under the file input or the name (an upload), or on the card (a
+  // removal, which has no field of its own). Each is an alert, so it is announced (C16 review,
+  // C16-COR-5, WCAG 4.1.3).
+  const [error, setError] = useState<{
+    field: 'file' | 'name' | 'card';
+    message: string;
+  } | null>(null);
   const [said, setSaid] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -114,7 +120,7 @@ export default function ContactFilesCard({ contactId, people, onChanged }: Conta
       setSaid('File removed.');
       onChanged();
     } catch (err) {
-      setError({ field: 'file', message: describeError(err) });
+      setError({ field: 'card', message: describeError(err) });
     } finally {
       setBusy(false);
     }
@@ -123,6 +129,7 @@ export default function ContactFilesCard({ contactId, people, onChanged }: Conta
   const full = files !== null && files.length >= CRM_FILES_PER_CONTACT;
   const fileError = error?.field === 'file' ? error.message : '';
   const nameError = error?.field === 'name' ? error.message : '';
+  const cardError = error?.field === 'card' ? error.message : '';
 
   return (
     <section className="card" aria-labelledby={`${id}-h`}>
@@ -134,6 +141,11 @@ export default function ContactFilesCard({ contactId, people, onChanged }: Conta
           <p className="card__sub">Files are not virus-scanned. Open them in an up-to-date app.</p>
         </div>
       </div>
+      {cardError ? (
+        <p className="msg" data-kind="error" role="alert">
+          {cardError}
+        </p>
+      ) : null}
       {unavailable ? (
         <p className="msg" data-kind="error" role="alert">
           {unavailable}
@@ -203,7 +215,7 @@ export default function ContactFilesCard({ contactId, people, onChanged }: Conta
               them: no ID cards, passports or health records.
             </p>
             {fileError ? (
-              <p id={`${id}-file-error`} className="field-error f__err">
+              <p id={`${id}-file-error`} className="field-error f__err" role="alert">
                 {fileError}
               </p>
             ) : null}
@@ -224,7 +236,7 @@ export default function ContactFilesCard({ contactId, people, onChanged }: Conta
                 onChange={(event) => setName(event.target.value)}
               />
               {nameError ? (
-                <p id={`${id}-name-error`} className="field-error f__err">
+                <p id={`${id}-name-error`} className="field-error f__err" role="alert">
                   {nameError}
                 </p>
               ) : null}

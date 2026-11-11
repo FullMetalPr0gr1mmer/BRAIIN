@@ -43,7 +43,7 @@ export interface ErasePreview {
     channels: number;
     notes: number;
     tasks: number;
-    /** (Admin v2 C16) The files kept with the person, removed first. */
+    /** (Admin v2 C16) The files kept with the person (a count the server could not read is an error, never 0). */
     files?: number | undefined;
   };
   phoneMatches: {
@@ -84,9 +84,9 @@ export function erasedLine(preview: ErasePreview, ticked: ReadonlySet<string>): 
   );
 }
 
-/** (Admin v2 C16) "Their 2 files go too, removed from storage first." */
+/** (Admin v2 C16) "Their 2 files go too." */
 export function erasedFilesLine(files: number): string {
-  return `Their ${n(files, 'file', 'files')} ${files === 1 ? 'goes' : 'go'} too, removed from storage first.`;
+  return `Their ${n(files, 'file', 'files')} ${files === 1 ? 'goes' : 'go'} too.`;
 }
 
 export default function EraseContactDialog({
@@ -194,7 +194,7 @@ export default function EraseContactDialog({
           <p>
             <span dir="auto">{name}</span>: {erasedLine(preview, ticked)}
           </p>
-          {/* (Admin v2 C16) The files kept with them go first. */}
+          {/* (Admin v2 C16) The files kept with them go too. */}
           {(preview.counts.files ?? 0) > 0 ? (
             <p>{erasedFilesLine(preview.counts.files ?? 0)}</p>
           ) : null}

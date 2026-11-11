@@ -572,7 +572,8 @@ describe('POST /[id]/erase', () => {
       'ops:crm-erase',
       'rls:crm_contacts',
       'audit:crm.erase.attempt',
-      // (Admin v2 C16) the person's files first: their tombstones, then their files (none).
+      // (Admin v2 C16) the person's file paths (their tombstones, then their files: none), read
+      // before the door; nothing is removed before it (C16 review, C16-SEC-1).
       'svc:list:crm_contacts',
       'svc:list:crm_contact_files',
       'svc:rpc:crm_erase_person',

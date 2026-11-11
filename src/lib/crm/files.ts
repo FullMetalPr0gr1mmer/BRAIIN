@@ -7,7 +7,8 @@ import { AuthorizationError } from '@/lib/authz/errors';
 
 // Contact files (Admin v2 C16, migration 0140): the private bucket `crm-files` and the rows that
 // name its objects. Only the SERVICE ROLE reaches the bucket: the upload route writes, the
-// download route reads, the removal route, the person erasure and the sweep delete. Every
+// download route reads, the removal route, the person erasure (after the database has erased,
+// C16 review) and the sweep delete. Every
 // function here that touches Storage or an object path takes the service client, and
 // tests/lib/contactFileGrants.spec.ts names every file that calls them.
 //
@@ -252,56 +253,17 @@ export async function personFiles(
 }
 
 /**
- * A person's files gone before their erasure (Admin v2 C16, the erase route): the OBJECTS
- * first, then their rows, so a failure leaves rows that name files still there (the erasure
- * stops and can be tried again) and never a file nothing names. Answers how many went, or
- * null when a step failed (nothing after it ran).
+ * How many files a person has (the erasure preview's count), as the service role. A read that
+ * fails THROWS (C16 review, C16-SEC-3): the preview then answers an error the dialog shows,
+ * never a count of 0 the Admin would take for "no files" before an erasure that cannot be
+ * undone.
  */
-export async function removePersonFiles(
-  svc: SupabaseClient,
-  tenantId: string,
-  contactId: string,
-): Promise<number | null> {
-  let files: { id: string; object_path: string }[];
-  try {
-    files = await personFiles(svc, tenantId, contactId);
-  } catch {
-    return null;
-  }
-  if (files.length === 0) return 0;
-  if (
-    !(await removeFileObjects(
-      svc,
-      files.map((f) => f.object_path),
-    ))
-  )
-    return null;
-  try {
-    const { error } = await svc
-      .from('crm_contact_files')
-      .delete()
-      .eq('tenant_id', tenantId)
-      .in(
-        'id',
-        files.map((f) => f.id),
-      );
-    return error ? null : files.length;
-  } catch {
-    return null;
-  }
-}
-
-/** How many files a person has (the erasure preview's count), as the service role. */
 export async function countPersonFiles(
   svc: SupabaseClient,
   tenantId: string,
   contactId: string,
 ): Promise<number> {
-  try {
-    return (await personFiles(svc, tenantId, contactId)).length;
-  } catch {
-    return 0;
-  }
+  return (await personFiles(svc, tenantId, contactId)).length;
 }
 
 /**
