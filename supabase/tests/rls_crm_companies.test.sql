@@ -28,7 +28,7 @@
 --   6. the list's filter, sorts and derived totals.
 
 begin;
-select plan(81);
+select plan(82);
 
 insert into public.tenants (id, name) values
   ('c1100000-0000-4000-8000-000000000001', 'C11 T1'),
@@ -367,14 +367,18 @@ select is(c11_company_of('c1100000-0000-4000-8000-00000000ab02') || ' ' ||
           (select count(*) from public.crm_companies where tenant_id = 'c1100000-0000-4000-8000-000000000001'
                                                          and name_key = 'blue fig'),
   'Blue Fig 1', 'it joins the same company (one company, the folding matches)');
--- A new address sharing the first inquiry's phone links by phone (flagged): no company step.
+-- A new address sharing a company-less contact's phone links by phone (flagged): no company
+-- step, so a stranger on a shared line never gives that contact a company.
 set local role service_role;
-select lives_ok($$ select c11_ingest(c11_lead('c1100000-0000-4000-8000-00000000ab03', 'Someone', 'Red Co', '3', '7')) $$,
+select lives_ok($$ select c11_ingest(c11_lead('c1100000-0000-4000-8000-00000000ab12', 'No Co', null, 'e', '6')) $$,
+  'an inquiry naming no company, with a phone, arrives');
+select lives_ok($$ select c11_ingest(c11_lead('c1100000-0000-4000-8000-00000000ab03', 'Someone', 'Red Co', '3', '6')) $$,
   'an inquiry matched by phone alone arrives');
 reset role;
 select is((select contact_link from public.leads where id = 'c1100000-0000-4000-8000-00000000ab03') || ' ' ||
-          (select count(*) from public.crm_companies where name = 'Red Co'),
-  'phone 0', 'a phone match makes no company and changes none (it may be someone else''s)');
+          (select count(*) from public.crm_companies where name = 'Red Co') || ' ' ||
+          c11_company_of('c1100000-0000-4000-8000-00000000ab12'),
+  'phone 0 (none)', 'a phone match makes no company and gives the matched contact none (it may be someone else''s)');
 -- The domain: the Worker's door records it; the contact's company learns it, once.
 set local role service_role;
 select is(public.crm_lead_domain('c1100000-0000-4000-8000-000000000001',
