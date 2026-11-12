@@ -55,12 +55,14 @@ Labels are the strings `matrix.spec` parses. Every other §5 row gets Sales = �
 | CRM — tasks | crm.tasks | ✅ | ❌ | ❌ | ❌ | ✅ | CRM-8 / CRM-10 |
 | CRM — settings (pipeline stages, scoring, custom fields, response time, assignment) | crm.settings | ✅ | ❌ | ❌ | ❌ | ❌ | CRM-9 |
 | Leads & contacts — erase a person's data (DSAR) | crm.erase | ✅ | ❌ | ❌ | ❌ | ❌ | CRM-3 |
+| CRM — contact files (add, download, remove) | crm.files | ✅ | ❌ | ❌ | ❌ | ❌ (C16-Q3) | C16 (as built, [as-built/C16.md](as-built/C16.md)) |
 
 The count goes from 32 to 36 capabilities.
 
 **Invariants,** unit-tested over every role in `ROLE_CAPS` and mirrored in pgTAP over the SQL helpers:
 - `crm.contacts ⇒ leads.manage ∧ leads.pii`
 - `crm.tasks ⇒ crm.contacts`
+- `crm.files ⇒ crm.contacts` (C16)
 - `crm.erase ⇒ crm.contacts ∧ leads.pii`
 - `export.csv ⇒ leads.pii`
 
@@ -107,7 +109,8 @@ Beyond the caps:
 | /crm/settings: pipeline stages, scoring, custom fields, response time / assignment | crm.settings |
 | Retention value | settings.general (single source `site_settings.retention`) |
 | Delete a person's data button | crm.erase |
-| Inbox, Campaigns, Automations, Templates, CRM reports, Export & audiences, Import CSV, consent toggles, Unsubscribe, Files, Segments | not built (LATER, §12) |
+| Contact Files card: list, Add a file, Download, Remove (C16) | crm.files |
+| Inbox, Campaigns, Automations, Templates, CRM reports, Export & audiences, Import CSV, consent toggles, Unsubscribe, Segments | not built (LATER, §12) |
 
 ## 3. SQL authorization layer (CRM-1, extended by CRM-10)
 
@@ -681,7 +684,7 @@ alter type public.app_role add value if not exists 'sales';
      - Leads (linked; New lead).
      - Score ("Rules live in CRM settings").
      - Data card: "Added {date} · last activity {ago} · kept until {date} unless there is new activity".
-   - **No** Consent card and **no** Files card (LATER).
+   - **No** Consent card (LATER). The Files card (crm.files) came with C16 ([as-built/C16.md](as-built/C16.md)).
 7. **Add contact drawer.** Name\*; Title; E-mail; Phone or WhatsApp; Company (typeahead, or free text); Stage (Lead); Owner (me); Language (English); City (no default — the mockup's hard-coded 'Jeddah' is dropped); Source (Manual); Tags. Validation: "Give them a name"; a duplicate e-mail shows "Someone with this e-mail already exists" with an Open link. **Consent toggles are not shown** (LATER).
 8. **Erase dialog** (Admin).
    - Contact picker (CRM lookup).
@@ -731,7 +734,7 @@ alter type public.app_role add value if not exists 'sales';
   - `source = 'import'` is already reserved.
 - **Export & audiences:** the export.csv lockdown extended to contacts and segments; hashing on the server for ad audiences; exports listed from `audit_log` rows.
 - **Reports:** `rollup_crm_daily` (leads per stage per day, won value, first response).
-- **Files:** a **private** bucket with byte sniffing and an audited download (the applications pattern). Never the public A5 media bucket.
+- **Files:** a **private** bucket with byte sniffing and an audited download (the applications pattern). Never the public A5 media bucket. Built in C16 (`crm.files`, `crm_contact_files`, the `crm-files` bucket; [as-built/C16.md](as-built/C16.md)).
 - **Future roles** (Marketer, Account manager): edit the per-capability helpers plus `ROLE_CAPS` and §5. Row-scoped Sales (only assigned leads) would be a policy change in `role_works_leads` callers.
 
 ## 13. Tests
@@ -1129,7 +1132,7 @@ Islands ContactsList, ContactDetail, AddContactDrawer and EraseDialog per UI con
 - Stage chips, filters and the Expiring-soon chip; the bulk bar has no export or delete.
 - Masked contact details with the audited reveal.
 - The timeline with the note composer ('Only your team sees notes.'); explicit Save on Details.
-- No Consent card, Files card, Import or Export.
+- No Consent card, Files card, Import or Export (the Files card came later, with C16).
 The sidebar Contacts item is gated on crm.contacts. Islands go into both size-limit lists.
 
 **Key files:**
@@ -1427,7 +1430,7 @@ After at least one release with no legacy writers, migration 0041 drops the sync
 - O9: Default assignment rule: Manual (recommended) or Round robin over a chosen pool once Sales users exist.
 - O10: Sidebar Tasks badge counts MY overdue tasks (recommended) rather than everyone's (mockup).
 - O11: Approve the seeded stages and tones: New/klein, Contacted/sky, Proposal sent/warn, Won/ok, Lost/gray. Also the tenant time zone Asia/Riyadh.
-- O12: Confirm the deferrals the client will notice: consent toggles and unsubscribe, Files, Import CSV, Export and Segments, Suggested reply and Send, Inbox. They need the LATER phase (channels, consent design, public opt-ins) to be honest under PDPL.
+- O12: Confirm the deferrals the client will notice: consent toggles and unsubscribe, Files (since built, in C16), Import CSV, Export and Segments, Suggested reply and Send, Inbox. They need the LATER phase (channels, consent design, public opt-ins) to be honest under PDPL.
 - O13: Invite the first Sales users after CRM-10 ships, with display names set so assignees are readable.
 
 ## Open questions
@@ -1457,7 +1460,7 @@ After at least one release with no legacy writers, migration 0041 drops the sync
 - Retention: 'Keep contacts for 2/3/5 years… flagged for review, not deleted silently' becomes one horizon of at most 24 months after the last activity, shown under 'Expiring soon' for 30 days, then deleted (PDPL; legal sign-off pending).
 - Consent toggles, 'Mark unsubscribed / Resubscribe', the Consent column and the Consent card are not built in the core. Consent belongs with the campaigns phase and the public form's versioned opt-ins; the existing checkbox is consent to reply, not marketing consent.
 - Lead detail 'Suggested reply', 'Send email' and the Inbox 'Send' are not built (no outbound channel). They become mailto and wa.me links after a reveal plus 'Log contact'.
-- Contact 'Files' card is not built. Files will later use a private bucket with audited downloads, never the public media bucket.
+- Contact 'Files' card: built in C16, after this list was written (a private bucket, uploads checked by their bytes, audited downloads, never the public media bucket; [as-built/C16.md](as-built/C16.md)).
 - Import CSV, Export, Segments, 'Add to campaign' and the campaign or segment links on Contacts are hidden (LATER phase).
 - Inbox, Campaigns, Automations, Templates, CRM reports, Export & audiences and the Get-connected banners are absent from the sidebar and from the CRM settings cards (Email sending, WhatsApp Business, Sending rules).
 - Tasks 'Send' becomes 'Open contact'. The due time is chosen (default 10:00) instead of fixed. All time arithmetic uses the tenant time zone (Asia/Riyadh) on the server, not the browser.
