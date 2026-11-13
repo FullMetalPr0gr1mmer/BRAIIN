@@ -47,12 +47,13 @@ const MAINTENANCE_SPEC = /[\\/]tests[\\/]admin[\\/]maintenance\.e2e\.ts$/;
 // modes since Admin v2 R14b: with E2E_RELEASES=on it runs after the drill (`releases-mode`), as
 // page visibility did, and publishes only its own sections.
 const BLOCKS_SPEC = /[\\/]tests[\\/]admin[\\/]section-(?:blocks|appearance)\.e2e\.ts$/;
-// The release-mode rehearsal (Admin v2 R14-prep; .github/workflows/releases-rehearsal.yml, plan
-// B5): with E2E_RELEASES=on the whole suite runs with releases switched ON for the e2e tenant.
+// Release mode (Admin v2 R14-prep's rehearsal, plan B5; since R14c the required e2e job,
+// perf-seo-a11y.yml `e2e`): with E2E_RELEASES=on the whole suite runs with releases switched ON
+// for the e2e tenant.
 // `releases-on` (tests/admin/releases.setup.ts) runs `app.enable_releases` as the owner after the
 // sample rows and before every public and admin spec; `releases-mode` (the publish, scheduled
 // release and rollback drill) runs alone after them, because Publish puts every selected change
-// live. Unset (the required e2e job, every PR) the projects are exactly what they were:
+// live. Unset (the releases-off job, `e2e-releases-off`) the projects are exactly what they were:
 // tests/ci/releasesRehearsal.spec.ts holds both shapes.
 const RELEASES = process.env['E2E_RELEASES'] === 'on';
 const RELEASES_MODE_SPEC = /[\\/]tests[\\/]admin[\\/]releases-mode\.e2e\.ts$/;
@@ -79,7 +80,7 @@ const releaseProjects = RELEASES
 // `compare`, only by the hand-run .github/workflows/admin-visual.yml) one more project,
 // `admin-visual`, takes tests/visual/admin.visual.ts's pictures right after the sample rows, before
 // any spec writes, against baselines under tests/visual/admin-baselines/<platform>/. The file
-// ends in `.ts`, so no other project collects it. Unset (the required e2e job, every PR) the
+// ends in `.ts`, so no other project collects it. Unset (the e2e jobs, every PR) the
 // projects are exactly what they were (tests/ci/adminVisual.spec.ts holds both shapes). With
 // E2E_RELEASES=on as well (the workflow's env is the e2e job's, so from R14c's flip) it waits for
 // the switch instead, so every picture is of release mode, never of a tenant switching on.
@@ -158,7 +159,8 @@ export default defineConfig({
       testDir: './tests/admin',
       testMatch: BLOCKS_SPEC,
       use: { ...devices['Desktop Chrome'] },
-      // Releases on (the rehearsal): after the drill, which publishes every change it selects.
+      // Releases on (the required e2e job since R14c): after the drill, which publishes every
+      // change it selects.
       dependencies: RELEASES ? ['releases-mode'] : ['chromium', 'admin'],
     },
     {

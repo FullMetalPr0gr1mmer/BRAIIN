@@ -5,9 +5,9 @@ import { RELEASES_SWITCH_SQL, loopbackPsqlTarget, psqlEnv } from './releasesSwit
 import { SKIP_REASON, STAFF_IDS, releasesOn, staffEnv } from './staff';
 
 /*
- * The release-mode rehearsal's switch (Admin v2 R14-prep; plan B5: "rehearsed first in CI,
- * where the whole e2e suite runs in release mode"). Only with E2E_RELEASES=on
- * (.github/workflows/releases-rehearsal.yml): playwright.config.ts then runs this project after
+ * The release-mode switch (Admin v2 R14-prep; plan B5: "rehearsed first in CI, where the whole
+ * e2e suite runs in release mode"; since R14c the required e2e job's). Only with
+ * E2E_RELEASES=on (perf-seo-a11y.yml `e2e`): playwright.config.ts then runs this project after
  * `admin-samples` (the sample rows exist live first, as production's content does before its
  * switch) and before every public and admin spec.
  *
@@ -21,7 +21,7 @@ import { SKIP_REASON, STAFF_IDS, releasesOn, staffEnv } from './staff';
  * outlives one run: already on, it says so and changes nothing.
  */
 
-setup.skip(!releasesOn(), 'releases stay off: the rehearsal sets E2E_RELEASES=on');
+setup.skip(!releasesOn(), 'releases stay off: the release-mode e2e job sets E2E_RELEASES=on');
 
 setup('switch releases on for the e2e tenant, as the owner', () => {
   expect(staffEnv(), `the rehearsal runs the admin harness: ${SKIP_REASON}`).not.toBeNull();

@@ -7,8 +7,8 @@ import { releasesOn, staffEnv } from './staff';
 /*
  * The steps the admin specs written for releases off take to run in both modes (Admin v2 R14b;
  * R14a's conversion plan). With releases off every helper here is either a no-op or returns
- * exactly what the spec sent before, so the required e2e job runs what it ran. With releases on
- * (the rehearsal, E2E_RELEASES=on):
+ * exactly what the spec sent before, so the releases-off job runs what it ran. With releases on
+ * (E2E_RELEASES=on: the required e2e job since R14c):
  *
  *   - a direct save names the pending change its row carries (`draftId` + `draftVersion`) and
  *     says it was made in release mode (`staged: true`), or names the live version when nothing
