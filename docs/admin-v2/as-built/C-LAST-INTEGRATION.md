@@ -317,3 +317,63 @@ Gates, as run on the review's head:
 - `npm run size`: the public routes 26.85 KB; the admin sum 485.55 KB, over the 450 KB
   tripwire, unchanged by the review (CINT-W-2). Not raised, its glob unchanged.
 - `contrast-audit.mjs`: not run (no admin CSS changed).
+
+## 10. The owner's decisions of 2026-11-13 (plan written first; kept current)
+
+Status: planned. The owner answered C10b's first two questions and this note's two file
+questions; C10b's third (a Sales confirm of a phone match costs a reveal slot) was not
+answered and stays as built.
+
+### Plan
+
+1. **A Sales reveal shows the main e-mail and the main phone only.** Admin's reveal is
+   unchanged. Who sees every channel is one rule in both layers: the holder of `crm.erase`
+   (Admin), the same person who may remove one (C10B-SEC-2), because seeing the whole set and
+   correcting it go together. `seesEveryContactChannel(role)` in `src/lib/crm/contactReveal.ts`
+   (the Worker) and `app.crm_eraser_ok` (the database).
+   - Database (0141, a new door): `public.crm_contact_reveal_channels(p_tenant, p_contact,
+     p_actor)`, the service role's alone, INVOKER, `search_path` pinned: the actor checked
+     live (`app.crm_contacts_actor_ok`), a tombstone or another tenant's contact P0002, every
+     channel for an eraser, the primaries only otherwise. The reveal reads ciphertext through
+     it, never the table, so the database decides what a Sales reveal can decrypt.
+   - Worker: the reveal keeps its order (live recheck, the `pii-reveal` slot, the RLS read,
+     the audit row written first, then the door) and filters to the primaries again for a
+     role that does not see every channel (a belt). The audit row says which (`scope`:
+     `main` or `all`). The contact GET, the PATCH answer and the contact page list the
+     primaries only to such a role (`channelPresence`), so the screen offers no reveal it
+     cannot answer.
+   - The channel editor: making a channel the main one changes what the next reveal shows,
+     so it is the eraser's in both layers: the PATCH route refuses `primary`, or an added
+     channel marked primary, before the live recheck or any read (403), and 0141 restates
+     `crm_edit_contact_channels` from 0136 with `-- C-int` lines raising 42501. **Adding stays
+     Sales'**: the screen checks neither duplicates nor the ceiling on its own list (the add
+     form sends the typed value; the door finds a duplicate by its blind index and counts the
+     ceiling itself), so adding needs no channel Sales cannot see. What Sales adds becomes the
+     main one only when the contact has none of that kind; otherwise it is kept and not shown
+     to Sales. The card says so, and hides Make main from Sales (Remove was already hidden).
+   - Every other place a Sales token could read a channel, checked and recorded (section
+     10, "Where Sales could see a channel").
+2. **Removing an e-mail or phone stays Admin's** (C10B-SEC-2): confirmed by the new suite's
+   persona rows and the existing route and authz rows.
+3. **A merge where either record holds a file needs an Admin.** Both layers: the merge route
+   checks, after the live recheck and BEFORE the reveal slot, the merge limit or any read of
+   the two people, whether either record holds a file (a count as the service role, for a
+   role without `crm.files`), and refuses with a 403 naming `crm.files`; the dialog words it
+   ("One of these records holds files, so an Admin needs to merge them. Ask an Admin.").
+   0141's `crm_merge_contacts` gains `-- C-int` lines: with both rows locked (a file add's key
+   check waits on those locks, so none slips in between) and before anything moves, a merge
+   of records holding a file by an actor who is not `app.crm_files_actor_ok` is 42501. An
+   Admin's merge of such a pair still works. This tells a Sales user that the person has
+   files: accepted by the owner. With such merges Admin's, a survivor past 20 files after a
+   merge is the Admin's call: allowed (the add door's ceiling still refuses more until it is
+   under).
+4. **Docs and guides.** CLAUDE.md (the C10b and C-int bullets), crm.md §10, C10B.md, this
+   note, the register only where a line states what Sales sees (L-3 question 5), and the
+   Sales guide (`the-sales-role`, 0136's put on this unmerged branch, and its filed copy).
+5. **Tests.** pgTAP `supabase/tests/crm_owner_decisions.test.sql` over admin, sales,
+   content_creator, seo, developer, anon, other_tenant and stale Sales actors and tokens for
+   each change; vitest: `contactsApi.spec` (the reveal's door and filter, the PATCH refusals),
+   `crmMerge.spec` (the files check before any slot), `contactsScreens.spec` (the card),
+   `crmLastIntegrationSql.spec` (the restatements), `helpC10b.spec` (the guide), an authz row
+   for making a channel main. The read-back gains the new door and lines. Red proofs on a
+   `git archive` copy under `scratchpad/cint2_mut/`.
