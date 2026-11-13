@@ -61,6 +61,7 @@ const { DAILY_JOBS } = await import('@/lib/cron/jobs');
 const { HEALTH_JOBS } = await import('@/lib/cron/health');
 const { MAINTENANCE_RECONCILE_JOB } = await import('@/lib/cron/maintenanceReconcile');
 const { RELEASE_JOBS } = await import('@/lib/cron/releases');
+const { CRM_FILE_ORPHANS_JOB } = await import('@/lib/crm/fileOrphans');
 const { runJobs } = await import('@/lib/cron/daily');
 
 /** wrangler.jsonc's crons, read from the file as deployed. */
@@ -89,7 +90,12 @@ describe('the schedules (src/lib/cron/schedules.ts)', () => {
     expect(SCHEDULES['23 3 * * *']).toBe(DAILY_JOBS);
     // Every 10 minutes: the health probes, then maintenance's reconcile (Admin v2 U9b joined
     // G2's schedule, the plan's §5.7 default, rather than taking a trigger of its own).
-    expect(SCHEDULES['*/10 * * * *']).toEqual([...HEALTH_JOBS, MAINTENANCE_RECONCILE_JOB]);
+    // Admin v2 C16: the contact-files sweep joins it (the daily schedule declares all 50).
+    expect(SCHEDULES['*/10 * * * *']).toEqual([
+      ...HEALTH_JOBS,
+      MAINTENANCE_RECONCILE_JOB,
+      CRM_FILE_ORPHANS_JOB,
+    ]);
     // Admin v2 R7: what published releases still owe the edge, every minute.
     expect(SCHEDULES['* * * * *']).toBe(RELEASE_JOBS);
   });
@@ -112,7 +118,7 @@ describe('the schedules (src/lib/cron/schedules.ts)', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('dispatches by cron string: the 10-minute schedule runs its two jobs, in order', async () => {
+  it('dispatches by cron string: the 10-minute schedule runs its three jobs, in order', async () => {
     const ran: string[] = [];
     const jobs = SCHEDULES['*/10 * * * *']! as unknown as {
       name: string;
@@ -129,7 +135,7 @@ describe('the schedules (src/lib/cron/schedules.ts)', () => {
     } finally {
       jobs.forEach((job, i) => (job.run = originals[i]!));
     }
-    expect(ran).toEqual(['health-probes', 'maintenance-reconcile']);
+    expect(ran).toEqual(['health-probes', 'maintenance-reconcile', 'crm-file-orphans']);
     expect(state.requests).toEqual([]);
   });
 

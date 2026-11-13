@@ -19,6 +19,7 @@ Every entry carries a **close condition** as well as an expiry. An expiry alone 
 | EXC-011 | 2026-10-03 | Developer (tech@purecoffee.sa) | 2026-11-30 | Open | `http-cache-semantics` GHSA-ch52-4w7c-c8xp allowlisted in the prod audit gate — every release is affected (no fix exists); its only importer is Astro's build-time remote-image cache, which this site never uses, and it is absent from the Worker |
 | EXC-012 | 2026-10-14 | Developer (tech@purecoffee.sa) | 2027-01-31 | Open (accepted platform exception; amended 2026-10-14) | pg_net's queue and response tables (`net.http_request_queue`, `net._http_response`) grant **ALL to PUBLIC** on Supabase (SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER and, on PostgreSQL 17, MAINTAIN), and `postgres` cannot revoke them. TRIGGER lets any login role that has a function to call attach code that runs as whoever writes the table. Since 0048 a queued lead notification holds only a timestamp and a signature for one lead (never the secret), nothing is queued while any trigger is on the queue, and `net` must stay out of the exposed API schemas |
 | EXC-013 | 2026-10-25 | Developer (tech@purecoffee.sa) | 2026-12-31 | Open | `zod` GHSA-mrhx-c7xc-m3w5 allowlisted in the prod audit gate — every 3.x release is affected and no 3.x fix exists; Astro's zod 4 is overridden to the fixed 4.6.7, and every public write is now capped at 128 KB before any handler parses it (H14) |
+| EXC-014 (proposed; the number is set at merge) | 2026-11-11 | The owner, to sign before the held C16 PR merges | 2026-12-31 | Proposed (held with Admin v2 C16) | Contact files (PDF, .docx, PNG, JPEG, WebP, ≤ 10 MB) are stored and downloaded **without a virus scan**, as Join CVs are (EXC-008). Compensated by a check of the bytes at upload, a private bucket, Admin-only, attachment-only download under a sandbox CSP, and a "Not virus-scanned" badge |
 
 ---
 
@@ -945,3 +946,42 @@ it the blocking production gate fails every pull request.
 `GHSA-mrhx-c7xc-m3w5` entry REMOVED from `scripts/audit-gate.mjs`. The 128 KB public body cap
 stays either way (it bounds more than this advisory). If nothing lands by expiry, re-justify —
 never extend silently.
+
+## EXC-014 (proposed) — Contact files are not virus-scanned
+
+**Pillar:** 1 (Security) — CLAUDE.md §3 (Pillar 1, contact files) and crm.md §12 ("Files: a private
+bucket with byte sniffing and an audited download").
+**Opened:** 2026-11-11 (proposed with Admin v2 C16, a held PR) · **Owner:** the owner, to sign
+before the PR merges · **Expiry:** 2026-12-31, with EXC-008
+**Status:** Proposed. The number is set at merge (another held slice may take 014 first).
+
+### What deviates
+An Admin can keep up to 20 files with a CRM contact (`POST /api/admin/crm/contacts/[id]/files`),
+up to 10 MB each, in the private Supabase Storage bucket `crm-files`, and download them. No
+antivirus engine looks at them at any point, for the reason EXC-008 records: there is none on the
+Cloudflare Workers free plan or the current Supabase plan.
+
+### What still holds (compensating controls)
+- **A check of the bytes before anything is stored** (`src/lib/crm/fileSniff.ts`): the bytes, not
+  the browser's type or the name, decide. A PDF and a Word `.docx` go through the Join check
+  (EXC-008's first control, every refusal included: macros, ActiveX, embedded objects, links out
+  of the file, encrypted or ambiguous archives); a PNG must open with its signature and IHDR, a
+  JPEG with its start-of-image marker, a WebP with a RIFF header whose size is the file's own.
+  SVG, HTML, legacy Office formats and archives are refused outright.
+- **Nobody but an Admin can reach a file:** `crm.files` in both server layers (RLS with a
+  RESTRICTIVE live check, and `assertCap`), the bucket is private, no storage policy names it (a
+  RESTRICTIVE belt where the migration role may add one), staff tokens never read an object path,
+  and the only way out is `GET /api/admin/crm/contacts/[id]/files/[fileId]`: live-rechecked,
+  rate-limited, audited before the file is sent.
+- **The browser never renders it:** `Content-Disposition: attachment` (under an ASCII name the
+  server makes, with the kind's own extension), `nosniff`, `no-store`, and a CSP `sandbox` for a
+  URL opened in a tab.
+- **The reader is told:** the Files card says "Files are not virus-scanned" and puts "Not
+  virus-scanned" beside every download.
+- **What it does not cover:** an exploit aimed at the application that opens the file (a PDF
+  reader, an image decoder, Word's field codes in a document's text). That is the residual risk
+  this entry records; open files in an up-to-date application and keep Word's Protected View on.
+
+### Close condition
+EXC-008's: an antivirus scan runs on every file before it is downloadable, and the badge is
+driven by its verdict.
