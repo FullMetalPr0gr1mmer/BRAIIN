@@ -260,3 +260,13 @@ finding real).
   `npm run size`: public 26.85 kB; the admin sum 469.95 kB against the 450 kB tripwire (the
   known, open owner question; not raised here).
 - `contrast-audit.mjs`: not run, no CSS changed in the review fixes.
+
+## Since the six-slice integration (C-int, [C-LAST-INTEGRATION.md](C-LAST-INTEGRATION.md))
+
+- Sales holds `crm.contacts` (C10b), so it fills custom values; `crm_custom_fields.test.sql`'s
+  refused-values row no longer lists it, and `crm_last_integration.test.sql` proves its write.
+- The privacy card reads the horizon through C10b's door `public.crm_contact_retention_months`
+  (one reader, `readRetentionMonths(sb)`), not `site_settings`.
+- A merge (C12) carries the other record's values survivor-first and only for fields that
+  still exist (0141).
+- The register line stays L-5.
