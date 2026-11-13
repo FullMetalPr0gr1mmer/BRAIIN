@@ -2,7 +2,7 @@
 -- C15 — CSV import of contacts (Admin v2 C15, crm.md §12 "Import CSV"). Forward-only, EXPAND
 -- only. HELD with C5 to C8: the PR merges only after C5 (the contacts schema), C6 (the
 -- contacts API), C7, C8 and the C7 + C8 integration, which merge after the owner's lawyer signs
--- off the privacy-notice update (owner item O-11, register L-2 and L-C15). The number is a
+-- off the privacy-notice update (owner item O-11, register L-2 and L-8). The number is a
 -- placeholder: the merge train assigns it (scripts/renumber-migration.mjs). Depends on 0033
 -- (app.live_role), 0041 (profiles (tenant_id, id)), 0129 (the live write rule) and C5's and
 -- C6's migrations (crm_contacts, crm_contact_channels, app.crm_channels_ok,

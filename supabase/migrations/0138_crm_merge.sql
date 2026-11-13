@@ -127,7 +127,7 @@ grant select, insert, delete on public.crm_merge_dismissals to service_role;
 -- e-mail always makes one), so without a bound a batch of copies of one person's name and
 -- company would cost every finder call a square of pairs. A real person is rarely on file six
 -- times; a group that large is a flood or a common name, and the phone rule still finds its
--- members. A planted copy inside the bound is still offered: register L-5 question 1.
+-- members. A planted copy inside the bound is still offered: register L-7 question 1.
 create or replace function app.crm_duplicate_candidates(p_limit int)
   returns table (contact_a uuid, contact_b uuid, reasons text[], ord int)
   language plpgsql stable security definer set search_path = '' as $$
