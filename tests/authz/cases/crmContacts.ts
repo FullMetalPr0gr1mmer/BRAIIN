@@ -1,10 +1,11 @@
 import { UUID, type Case } from '../harness';
 
-// The contacts API (Admin v2 C6, crm.md §9). `crm.contacts` is Admin's alone until C10b gives
-// it to Sales (owner default O-7: Developer none), so every row allows Admin only. A new lead
-// for a contact also needs `leads.manage` and `leads.pii`; deleting a note, the erasure
-// preview and the erasure are `crm.erase` (Admin only). Developer and Sales hold leads.* and
-// are refused here because neither holds crm.contacts or crm.erase.
+// The contacts API (Admin v2 C6, crm.md §9). `crm.contacts` is Admin's and, since C10b,
+// Sales' (owner default O-7: Developer none). A new lead for a contact also needs
+// `leads.manage` and `leads.pii`, which both hold; deleting a note, the erasure preview and
+// the erasure are `crm.erase` (Admin only: Sales is refused them), and so is removing an
+// e-mail or phone (C10b review, C10B-SEC-2). Developer holds leads.*
+// and is refused every row because it holds neither crm.contacts nor crm.erase.
 
 const NOTE = '22222222-2222-4222-8222-222222222222';
 const BASE = `/api/admin/crm/contacts/${UUID}`;
@@ -16,7 +17,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: '/api/admin/crm/contacts/query',
     body: { stage: 'client', owner: 'me', q: 'Sara', limit: 25 },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
     read: true,
   },
   {
@@ -25,7 +26,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: '/api/admin/crm/contacts/query',
     body: { q: 'sara@example.test' },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
     read: true,
   },
   {
@@ -34,7 +35,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: '/api/admin/crm/contacts/summary',
     body: {},
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
     read: true,
   },
   {
@@ -43,7 +44,7 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/crm/contacts/summary'),
     method: 'GET',
     url: '/api/admin/crm/contacts/summary',
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
     read: true,
   },
   {
@@ -52,7 +53,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: '/api/admin/crm/contacts/lookup',
     body: { q: 'Sara' },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
     read: true,
   },
   {
@@ -64,14 +65,14 @@ export const cases: readonly Case[] = [
       displayName: 'Sara',
       channels: [{ kind: 'email', value: 'sara@example.test', isPrimary: true }],
     },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'contact detail',
     load: () => import('@/pages/api/admin/crm/contacts/[id]'),
     method: 'GET',
     url: BASE,
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'contact details change (versioned PATCH)',
@@ -79,7 +80,7 @@ export const cases: readonly Case[] = [
     method: 'PATCH',
     url: BASE,
     body: { version: 1, stage: 'client', tags: ['VIP'] },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'contact star (unversioned PATCH)',
@@ -87,7 +88,7 @@ export const cases: readonly Case[] = [
     method: 'PATCH',
     url: BASE,
     body: { isStarred: true },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'contact e-mails and phones change (PATCH channels)',
@@ -95,6 +96,15 @@ export const cases: readonly Case[] = [
     method: 'PATCH',
     url: BASE,
     body: { version: 1, channels: { add: [{ kind: 'phone', value: '+966501234567' }] } },
+    allow: ['admin', 'sales'],
+  },
+  {
+    // C10b review, C10B-SEC-2: a removal deletes a person's details, so it is erasure's.
+    name: 'contact e-mail or phone removal (PATCH channels.remove)',
+    load: () => import('@/pages/api/admin/crm/contacts/[id]'),
+    method: 'PATCH',
+    url: BASE,
+    body: { version: 1, channels: { remove: [NOTE] } },
     allow: ['admin'],
   },
   {
@@ -102,14 +112,14 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/crm/contacts/[id]/reveal'),
     method: 'POST',
     url: `${BASE}/reveal`,
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'contact notes (read)',
     load: () => import('@/pages/api/admin/crm/contacts/[id]/notes'),
     method: 'GET',
     url: `${BASE}/notes`,
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'contact notes (add)',
@@ -117,7 +127,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: `${BASE}/notes`,
     body: { body: 'Met at the expo.' },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'contact note delete (crm.erase, Admin only)',
@@ -132,7 +142,7 @@ export const cases: readonly Case[] = [
     load: () => import('@/pages/api/admin/crm/contacts/[id]/timeline'),
     method: 'GET',
     url: `${BASE}/timeline?kind=notes&limit=30`,
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'contacts bulk change',
@@ -140,7 +150,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: '/api/admin/crm/contacts/bulk',
     body: { action: 'stage', value: 'client', items: [{ id: UUID, version: 1 }] },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'contact phone match check (confirm or detach)',
@@ -148,7 +158,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: `${BASE}/links`,
     body: { leadId: NOTE, action: 'confirm' },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'contact new lead (crm.contacts + leads.manage + leads.pii)',
@@ -156,7 +166,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: `${BASE}/leads`,
     body: { message: 'Wants a brand refresh', channel: 'phone' },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'contact erase preview (crm.erase, Admin only)',

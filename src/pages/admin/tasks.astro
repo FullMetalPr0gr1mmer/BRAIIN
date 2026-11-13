@@ -15,8 +15,8 @@ const studioTz = await studioTimeZone(Astro.locals);
 
 // Tasks (Admin v2 C8, crm.md §11 screen 10): the follow-ups, grouped Overdue, Today, Upcoming
 // and Done in the studio's zone by public.crm_tasks_grouped. The first view is rendered here,
-// so the page is complete without JavaScript; the island takes over. `crm.tasks` (Admin only
-// until C10b): any other role is refused here with a 403 and reads nothing (Refused.astro);
+// so the page is complete without JavaScript; the island takes over. `crm.tasks` (Admin and,
+// since C10b, Sales): any other role is refused here with a 403 and reads nothing (Refused.astro);
 // RLS and the live check refuse them again in the database.
 //
 // My tasks is the default, falling back to Everyone when I have no open task (crm.md §11); an

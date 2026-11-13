@@ -77,7 +77,8 @@ export const ROLE_LABELS: Readonly<Record<Role, string>> = {
 
 /**
  * One line per role, shown under the role picker in Users & roles (Admin v2 C10a, crm.md
- * §10): what choosing it gives, in the matrix's words. Plain copy (P-12): no dashes, no brand.
+ * §10; Sales' gains the contacts and tasks in C10b): what choosing it gives, in the matrix's
+ * words. Plain copy (P-12): no dashes, no brand.
  */
 export const ROLE_DESCRIPTIONS: Readonly<Record<Role, string>> = {
   admin: 'Everything, including people and their roles, erasing data and job applications.',
@@ -87,7 +88,7 @@ export const ROLE_DESCRIPTIONS: Readonly<Record<Role, string>> = {
   developer:
     'Settings, maintenance, the theme, media, leads, site health and the logs. No content or job applications.',
   sales:
-    'Works leads. Sees a lead’s contact details and budget one lead at a time, and each look is logged. No content, settings, exports or job applications.',
+    'Works leads, the contacts behind them and follow-up tasks. Sees one lead’s or one contact’s details at a time, and each look is logged. No content, settings, exports, erasing or job applications.',
 };
 
 /** The line for one capability at one access level, or null when the role has none. */

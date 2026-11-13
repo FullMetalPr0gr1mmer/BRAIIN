@@ -444,7 +444,7 @@ export const DIALOG_CASES: readonly DialogCase[] = [
   {
     id: 'tasks-new',
     screen: '/admin/tasks',
-    // The screen is crm.tasks's (Admin until C10b); its New task button opens the drawer.
+    // The screen is crm.tasks's (Admin and, since C10b, Sales); its New task button opens it.
     who: full('crm.tasks'),
     open: [{ click: { role: 'button', name: 'New task' } }],
     name: 'New task',

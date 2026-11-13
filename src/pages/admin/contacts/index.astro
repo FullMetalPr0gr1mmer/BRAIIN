@@ -17,8 +17,8 @@ const studioTz = await studioTimeZone(Astro.locals);
 // The People list (Admin v2 C7, crm.md §11 screen 5): the chips, the search, the filters, the
 // table and its bulk bar. The first view is rendered here, for the filters the address
 // carries (src/lib/crm/contactUrl.ts: never a search or a tag), so the page is complete
-// without JavaScript; the island takes over. `crm.contacts` (Admin; Sales from C10b): any other
-// role is refused here with a 403 and reads nothing, the U2 way (Refused.astro); RLS and the
+// without JavaScript; the island takes over. `crm.contacts` (Admin and, since C10b, Sales): any
+// other role is refused here with a 403 and reads nothing, the U2 way (Refused.astro); RLS and the
 // live check refuse them again in the database.
 
 const session = Astro.locals.session;

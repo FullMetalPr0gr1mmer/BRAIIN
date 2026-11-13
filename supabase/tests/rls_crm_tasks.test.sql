@@ -1,6 +1,8 @@
 -- pgTAP: CRM tasks (0134, Admin v2 C8, crm.md §5.4, §8.1, §9, §13). Run with `supabase test db`.
 --
--- crm.tasks is Admin's alone in C8 (Developer none, owner default O-7; Sales only from C10b).
+-- crm.tasks is Admin's in C8, and Sales' too since C10b (Developer none, owner default O-7;
+-- Sales' reads, writes and stale tokens are proven in crm_sales_contacts.test.sql, so here it
+-- is no longer among the refused; it still counts its sidebar badge below).
 -- Personas, each a token as PostgREST carries it: A admin, A2 a second admin, C content_creator,
 -- S seo, D developer, L sales, O another tenant's admin, N anon; stale Admin tokens Ad (the
 -- profile now says content_creator), Ao (switched off), Al (locked). Proven here:
@@ -213,10 +215,6 @@ select c8_as('D');
 insert into c8_out select 'D', c8_val($$ select count(*) from public.crm_tasks $$) || '/'
   || c8_val($$ select (public.crm_tasks_grouped('c8000000-0000-4000-8000-000000000001', '{}') -> 'counts')::text $$) || '/'
   || c8_val($$ select public.crm_my_overdue_tasks('c8000000-0000-4000-8000-000000000001') $$);
-select c8_as('L');
-insert into c8_out select 'L', c8_val($$ select count(*) from public.crm_tasks $$) || '/'
-  || c8_val($$ select (public.crm_tasks_grouped('c8000000-0000-4000-8000-000000000001', '{}') -> 'counts')::text $$) || '/'
-  || c8_val($$ select public.crm_my_overdue_tasks('c8000000-0000-4000-8000-000000000001') $$);
 select c8_as('Ad');
 insert into c8_out select 'Ad', c8_val($$ select count(*) from public.crm_tasks $$) || '/'
   || c8_val($$ select (public.crm_tasks_grouped('c8000000-0000-4000-8000-000000000001', '{}') -> 'counts')::text $$) || '/'
@@ -235,7 +233,6 @@ select is((select string_agg(who || '=' || res, ' ' order by who) from c8_out),
   || 'Ao=0/{"done": 0, "today": 0, "overdue": 0, "upcoming": 0}/0 '
   || 'C=0/{"done": 0, "today": 0, "overdue": 0, "upcoming": 0}/0 '
   || 'D=0/{"done": 0, "today": 0, "overdue": 0, "upcoming": 0}/0 '
-  || 'L=0/{"done": 0, "today": 0, "overdue": 0, "upcoming": 0}/0 '
   || 'S=0/{"done": 0, "today": 0, "overdue": 0, "upcoming": 0}/0',
   'no other role, and no stale Admin token (demoted, switched off, locked), reads a task through the table, the grouping or the badge');
 select c8_as('Ao');
@@ -247,7 +244,7 @@ select is(c8_val($$ select public.crm_nav_counts('c8000000-0000-4000-8000-000000
   'a Developer''s Leads badge keeps C4a''s rule (spam and the later stage left out), and counts no task');
 select c8_as('L');
 select is(c8_val($$ select public.crm_nav_counts('c8000000-0000-4000-8000-000000000001')::text $$),
-  '{"leads": 1, "tasks": 0}', 'and so does a Sales token''s');
+  '{"leads": 1, "tasks": 0}', 'and so does a Sales token''s (a tasks user since C10b, with no overdue task of its own)');
 select c8_as('C');
 select is(c8_val($$ select public.crm_nav_counts('c8000000-0000-4000-8000-000000000001')::text $$),
   '{"leads": 0, "tasks": 0}', 'a Content Creator counts neither');
@@ -342,9 +339,6 @@ insert into c8_out select 'S', c8_run($$ update public.crm_tasks set title = 'x'
 select c8_as('D');
 insert into c8_out select 'D', c8_run($$ update public.crm_tasks set title = 'x' $$) || ',' || c8_run($$ delete from public.crm_tasks $$)
   || ',' || c8_val($$ select public.crm_task_create('c8000000-0000-4000-8000-000000000001', c8_body('x')) $$);
-select c8_as('L');
-insert into c8_out select 'L', c8_run($$ update public.crm_tasks set title = 'x' $$) || ',' || c8_run($$ delete from public.crm_tasks $$)
-  || ',' || c8_val($$ select public.crm_task_create('c8000000-0000-4000-8000-000000000001', c8_body('x')) $$);
 select c8_as('O');
 insert into c8_out select 'O', c8_run($$ update public.crm_tasks set title = 'x' where tenant_id = 'c8000000-0000-4000-8000-000000000001' $$)
   || ',' || c8_run($$ delete from public.crm_tasks where tenant_id = 'c8000000-0000-4000-8000-000000000001' $$)
@@ -360,7 +354,7 @@ insert into c8_out select 'Al', c8_run($$ update public.crm_tasks set title = 'x
   || ',' || c8_val($$ select public.crm_task_create('c8000000-0000-4000-8000-000000000001', c8_body('x')) $$);
 select is((select string_agg(who || '=' || res, ' ' order by who) from c8_out),
   'Ad=ok:0,ok:0,42501 Al=ok:0,ok:0,42501 Ao=ok:0,ok:0,42501 C=ok:0,ok:0,42501 D=ok:0,ok:0,42501 '
-  || 'L=ok:0,ok:0,42501 O=ok:0,ok:0,42501 S=ok:0,ok:0,42501',
+  || 'O=ok:0,ok:0,42501 S=ok:0,ok:0,42501',
   'no other principal, and no stale Admin token, changes, removes or adds a task');
 select c8_as('O');
 select is(c8_val($$ select public.crm_task_update('c8000000-0000-4000-8000-000000000001',
@@ -432,14 +426,6 @@ insert into c8_out select 'C',
             values ('c8000000-0000-4000-8000-0000000000ff', 'x', now(), 'c8000000-0000-4000-8000-0000000000e9') $$)
   || ',' || c8_run($$ insert into public.crm_tasks (tenant_id, title, due_at, contact_id)
             values ('c8000000-0000-4000-8000-000000000001', 'x', now(), 'c8000000-0000-4000-8000-00000000c002') $$);
-select c8_as('L');
-insert into c8_out select 'L',
-  c8_run($$ insert into public.crm_tasks (tenant_id, title, due_at, owner_id)
-            values ('c8000000-0000-4000-8000-000000000001', 'x', now(), 'c8000000-0000-4000-8000-0000000000a1') $$)
-  || ',' || c8_run($$ insert into public.crm_tasks (tenant_id, title, due_at, owner_id)
-            values ('c8000000-0000-4000-8000-000000000001', 'x', now(), 'c8000000-0000-4000-8000-0000000000e9') $$)
-  || ',' || c8_run($$ insert into public.crm_tasks (tenant_id, title, due_at, contact_id)
-            values ('c8000000-0000-4000-8000-000000000001', 'x', now(), 'c8000000-0000-4000-8000-00000000c002') $$);
 select c8_as('Ad');
 insert into c8_out select 'Ad',
   c8_run($$ insert into public.crm_tasks (tenant_id, title, due_at, owner_id)
@@ -449,7 +435,7 @@ insert into c8_out select 'Ad',
   || ',' || c8_run($$ insert into public.crm_tasks (tenant_id, title, due_at, contact_id)
             values ('c8000000-0000-4000-8000-000000000001', 'x', now(), 'c8000000-0000-4000-8000-00000000c002') $$);
 select is((select string_agg(who || '=' || res, ' ' order by who) from c8_out),
-  'Ad=42501,42501,42501 C=42501,42501,42501 L=42501,42501,42501',
+  'Ad=42501,42501,42501 C=42501,42501,42501',
   'no token without a live tasks role learns who is an Admin, or which contact was merged, from a direct insert');
 reset role;
 
@@ -615,8 +601,8 @@ select is((select string_agg(f, ',' order by f) from unnest(array[
   null, 'the zone and input helpers pin an empty search_path (C8-SEC-5)');
 select is((select string_agg(r || ':' || app.role_crm_tasks(r)::int, ' ' order by r)
              from unnest(enum_range(null::public.app_role)::text[] || array['anon']) r),
-  'admin:1 anon:0 content_creator:0 developer:0 sales:0 seo:0',
-  'app.role_crm_tasks answers Admin alone (CLAUDE.md §5: Sales from C10b)');
+  'admin:1 anon:0 content_creator:0 developer:0 sales:1 seo:0',
+  'app.role_crm_tasks answers Admin and Sales (CLAUDE.md §5, since C10b)');
 
 select * from finish();
 rollback;

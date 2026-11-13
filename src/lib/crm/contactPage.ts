@@ -157,18 +157,17 @@ export interface ContactDetailInitial {
   retentionMonths: number | null;
 }
 
-/** How long a contact is kept after its last activity (site_settings.retention), or null. */
-async function readRetentionMonths(sb: SupabaseClient, auth: AuthContext): Promise<number | null> {
-  const { data, error } = await sb
-    .from('site_settings')
-    .select('retention')
-    .eq('tenant_id', auth.tenantId)
-    .maybeSingle<{ retention: unknown }>();
+/**
+ * How long a contact is kept after its last activity (site_settings.retention.leads_months,
+ * the database's own 24 when unset), or null when it cannot be read. Through
+ * public.crm_contact_retention_months (Admin v2 C10b), which answers any live crm.contacts
+ * holder for the caller's own tenant: the page read site_settings as the caller before, and
+ * only CMS staff read that table (app.is_staff()), so a Sales user lost the "kept until" line.
+ */
+export async function readRetentionMonths(sb: SupabaseClient): Promise<number | null> {
+  const { data, error } = await sb.rpc('crm_contact_retention_months');
   if (error) return null;
-  const months = (data?.retention as { leads_months?: unknown } | null | undefined)?.leads_months;
-  // The database's own default (app.lead_retention_months) when nothing is set.
-  if (months === undefined || months === null) return data ? 24 : null;
-  return typeof months === 'number' && Number.isInteger(months) && months > 0 ? months : null;
+  return typeof data === 'number' && Number.isInteger(data) && data > 0 ? data : null;
 }
 
 /**
@@ -192,7 +191,7 @@ export async function readContactDetail(
       p_contact: id,
       p_filter: { limit: 30 },
     }),
-    readRetentionMonths(sb, auth),
+    readRetentionMonths(sb),
     writeAudit(sb, auth, {
       action: 'crm.contact.view',
       entityType: 'contact',

@@ -2,6 +2,8 @@ import { LEAD_PII_ENC_KEY } from 'astro:env/server';
 import { ContactPatchSchema } from '@schemas/crm';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { NotFoundError, ValidationError } from '@/lib/admin/errors';
+import { AuthorizationError } from '@/lib/authz/errors';
+import { can } from '@/lib/authz/matrix';
 import { updateRow } from '@/lib/admin/crud';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { tenantCountry } from '@/lib/crm/leadQuery';
@@ -35,6 +37,11 @@ import { customFieldDefinitions, validateCustomValues } from '@/lib/crm/contactC
 // carry ciphertext no staff token may write, so they are live-rechecked and go through
 // public.crm_edit_contact_channels as the service role, checked at the version read. One or
 // the other per request, never both, so a refusal never leaves half a save.
+//
+// Removing an e-mail or phone deletes a person's details (one typed in by hand has no copy on
+// any lead), so it is erasure's: `crm.erase` (Admin), checked here before anything is read and
+// again by the door (C10b review, C10B-SEC-2). A `crm.contacts` holder alone (Sales) adds and
+// makes primary.
 
 export const prerender = false;
 
@@ -85,6 +92,9 @@ export const PATCH = defineAdminRoute({
       // The schema refuses a channel change without it; this keeps the types honest.
       if (input.version === undefined) {
         throw new ValidationError('send the version you read', 'version');
+      }
+      if ((input.channels.remove?.length ?? 0) > 0 && can(auth.role, 'crm.erase') !== 'full') {
+        throw new AuthorizationError('crm.erase', 'removing an e-mail or phone is erasure');
       }
       await liveRecheck(auth);
       // Seen by the caller first (RLS, the live check): an unseen contact is a 404.

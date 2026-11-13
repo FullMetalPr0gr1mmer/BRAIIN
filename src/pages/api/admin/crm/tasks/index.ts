@@ -4,7 +4,7 @@ import { ValidationError } from '@/lib/admin/errors';
 import { createBody, parseGroups, pickTask, taskError } from '@/lib/crm/tasks';
 
 // Tasks (Admin v2 C8, crm.md §9): the list, grouped (GET), and a new task (POST). `crm.tasks`
-// (Admin only until C10b). Both run as the caller through SECURITY INVOKER functions (0134):
+// (Admin and, since C10b, Sales). Both run as the caller through SECURITY INVOKER functions (0134):
 // RLS and the live check decide what is read and written, the Worker names the tenant and the
 // database refuses any other. Every moment is worked out in SQL in the studio's zone
 // (site_settings.timezone): the lists are grouped there (overdue, today, upcoming, done) and a

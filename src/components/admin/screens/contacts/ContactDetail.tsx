@@ -455,6 +455,7 @@ export default function ContactDetail(props: ContactDetailProps) {
             revealed={revealed}
             onRevealed={setRevealed}
             busy={busy}
+            canRemove={permissions.canErase}
             edit={editChannels}
           />
           <ContactDetailsCard
@@ -469,6 +470,7 @@ export default function ContactDetail(props: ContactDetailProps) {
             stages={leadStages}
             contactId={contact.id}
             canAddLead={permissions.canAddLead}
+            confirmIsReveal={permissions.confirmIsReveal}
             hasChannel={channels.length > 0}
             onNewLead={newLead.open}
             onChecked={(said) => {

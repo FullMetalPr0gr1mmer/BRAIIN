@@ -609,10 +609,11 @@ const SIDEBAR: Record<Role, Record<string, string[]>> = {
     ],
   },
   // Sales (C10a): works leads and reads the stats; no content, media, site settings or logs.
-  // Its own bell's settings (Admin v2 U11) are every member's, as the account is.
+  // Its own bell's settings (Admin v2 U11) are every member's, as the account is. C10b: the
+  // contacts and the tasks (crm.contacts, crm.tasks), never the CRM settings.
   sales: {
     Overview: ['Dashboard /admin'],
-    CRM: ['Leads /admin/leads'],
+    CRM: ['Leads /admin/leads', 'Contacts /admin/contacts', 'Tasks /admin/tasks'],
     Growth: ['Website stats /admin/analytics'],
     Settings: ['Notifications /admin/settings/notifications'],
   },

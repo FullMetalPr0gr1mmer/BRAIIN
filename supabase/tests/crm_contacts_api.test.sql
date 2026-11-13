@@ -3,8 +3,10 @@
 --
 -- Personas, each a token as PostgREST carries it: A admin, C content_creator, S seo, D
 -- developer, L sales, O another tenant's admin, N anon; stale Admin tokens Ad (the profile
--- now says content_creator), Ao (switched off), Al (locked). crm.contacts is Admin's alone
--- (Developer none, O-7; Sales from C10b). Proven here:
+-- now says content_creator), Ao (switched off), Al (locked). crm.contacts is Admin's and,
+-- since C10b, Sales' (Developer none, O-7): here Sales lists and counts as an Admin does,
+-- and is no longer among the refused; crm_sales_contacts.test.sql proves its readers, doors
+-- and stale tokens. Proven here:
 --   1. the readers (INVOKER): only a live Admin of the tenant lists, counts, pages a timeline
 --      or bulk-changes contacts; the tenant the caller names must be the token's; the filter is
 --      allow-listed; an address is found by its blind index only; no value or index leaves;
@@ -16,7 +18,7 @@
 --      user of the tenant; add (a taken e-mail is a duplicate, nothing written), channels, a
 --      note's deletion (crm.erase), the phone match's confirm and detach, a new lead; a contact
 --      keeps at most ten e-mails and ten phones a person adds or copies (C6 review, C6-SEC-3).
--- Every reader and bulk runs as each of C S D L O and the stale tokens Ad Ao Al, and every
+-- Every reader and bulk runs as each of C S D O and the stale tokens Ad Ao Al, and every
 -- door names each of them as its actor (C6 review, C6-SEC-1 and C6-COR-1).
 
 begin;
@@ -130,15 +132,15 @@ begin
   return array_to_string(v_out, ' ');
 end $$;
 -- One door call (its actor written %L) with each actor who may not act for T1: a Content
--- Creator, SEO, a Developer, Sales, another tenant's Admin, then the demoted, switched-off and
--- locked Admins.
+-- Creator, SEO, a Developer, another tenant's Admin, then the demoted, switched-off and
+-- locked Admins (Sales may since C10b).
 create function c6_refusals(p_sql text) returns text language plpgsql as $$
 declare
   v_actor text;
   v_out text[] := '{}';
 begin
   foreach v_actor in array array['c6000000-0000-4000-8000-0000000000c1', 'c6000000-0000-4000-8000-0000000000e1',
-                                 'c6000000-0000-4000-8000-0000000000d1', 'c6000000-0000-4000-8000-000000000051',
+                                 'c6000000-0000-4000-8000-0000000000d1',
                                  'c6000000-0000-4000-8000-0000000000f1', 'c6000000-0000-4000-8000-0000000000a2',
                                  'c6000000-0000-4000-8000-0000000000a3', 'c6000000-0000-4000-8000-0000000000a4'] loop
     v_out := v_out || c6_val(format(p_sql, v_actor));
@@ -187,7 +189,7 @@ select is(c6_total('T1') || ' ' || c6_total('T1', '{"contact_kind": "email", "co
           || ' ' || c6_sum('T1'),
   '0 0 0', 'a Developer lists none, finds no address and counts none (owner default O-7)');
 select c6_as('L');
-select is(c6_total('T1') || ' ' || c6_sum('T1'), '0 0', 'Sales lists and counts none (not until C10b)');
+select is(c6_total('T1') || ' ' || c6_sum('T1'), '2 2', 'Sales lists and counts the tenant''s contacts, as an Admin does (C10b)');
 select c6_as('O');
 select is(c6_total('T1') || ' ' || c6_total('T2') || ' ' || c6_sum('T1') || ' ' || c6_sum('T2'), '0 1 0 1',
   'another tenant''s Admin lists and counts only its own tenant''s');
@@ -253,11 +255,11 @@ select is(c6_val($$ select public.crm_contact_timeline('c6000000-0000-4000-8000-
 select c6_as('Ad');
 select is(c6_val($$ select public.crm_contact_timeline('c6000000-0000-4000-8000-000000000001',
              'c6000000-0000-4000-8000-00000000c001')::text $$), 'P0002', 'nor does a stale token');
-select is(c6_each(array['C', 'S', 'L', 'Ao', 'Al'],
+select is(c6_each(array['C', 'S', 'Ao', 'Al'],
             $$ select public.crm_contact_timeline('c6000000-0000-4000-8000-000000000001',
                  'c6000000-0000-4000-8000-00000000c001')::text $$),
-  'P0002 P0002 P0002 P0002 P0002',
-  'nor a Content Creator, SEO, Sales, or a switched-off or locked Admin''s token');
+  'P0002 P0002 P0002 P0002',
+  'nor a Content Creator, SEO, or a switched-off or locked Admin''s token');
 select c6_as('A');
 select is(c6_val($$ select public.crm_contact_timeline('c6000000-0000-4000-8000-000000000001',
              'c6000000-0000-4000-8000-00000000c0dd')::text $$), 'P0002',
@@ -291,11 +293,11 @@ select is(c6_val($$ select string_agg(outcome, ',') from public.crm_contacts_bul
 select c6_as('Ao');
 select is(c6_val($$ select string_agg(outcome, ',') from public.crm_contacts_bulk_update('c6000000-0000-4000-8000-000000000001', 'star', 'false',
                         '[{"id": "c6000000-0000-4000-8000-00000000c001"}]') $$), 'missing', 'nor does a switched-off Admin''s token');
-select is(c6_each(array['C', 'S', 'L', 'O', 'Ad', 'Al'],
+select is(c6_each(array['C', 'S', 'O', 'Ad', 'Al'],
             $$ select string_agg(outcome, ',') from public.crm_contacts_bulk_update('c6000000-0000-4000-8000-000000000001',
                  'tagAdd', '"Probe"', '[{"id": "c6000000-0000-4000-8000-00000000c001", "version": 3}]') $$),
-  'missing missing missing missing missing missing',
-  'nor a Content Creator, SEO, Sales, another tenant''s Admin naming T1, or a demoted or locked Admin''s token, at the version read');
+  'missing missing missing missing missing',
+  'nor a Content Creator, SEO, another tenant''s Admin naming T1, or a demoted or locked Admin''s token, at the version read');
 reset role;
 select is((select array_to_string(tags, ',') || ' ' || is_starred || ' ' || version from public.crm_contacts
             where id = 'c6000000-0000-4000-8000-00000000c001'), 'VIP true 3', 'what applied, applied once (the won rule had moved Huda to version 2)');
@@ -348,8 +350,8 @@ select is(c6_val($$ select public.crm_create_contact('c6000000-0000-4000-8000-00
   '22023', 'a field outside the allow-list is refused');
 select is(c6_refusals($$ select public.crm_create_contact('c6000000-0000-4000-8000-000000000001',
                           '{"display_name": "X"}', %L)::text $$),
-  '42501 42501 42501 42501 42501 42501 42501 42501',
-  'the door refuses an actor who is a Content Creator, SEO, a Developer, Sales, another tenant''s Admin, demoted, switched off or locked');
+  '42501 42501 42501 42501 42501 42501 42501',
+  'the door refuses an actor who is a Content Creator, SEO, a Developer, another tenant''s Admin, demoted, switched off or locked');
 
 -- Channels.
 select is(c6_val($$ select public.crm_edit_contact_channels('c6000000-0000-4000-8000-000000000001',
@@ -379,7 +381,7 @@ select is(c6_val($$ select detail::text from public.crm_contact_events
   '{"kind": "phone", "source": "lead"}', 'the removal is on the timeline (kind and source, never the value)');
 select is(c6_refusals($$ select public.crm_edit_contact_channels('c6000000-0000-4000-8000-000000000001',
              'c6000000-0000-4000-8000-00000000c002', 1, null, null, null, %L)::text $$),
-  '42501 42501 42501 42501 42501 42501 42501 42501',
+  '42501 42501 42501 42501 42501 42501 42501',
   'none of the refused actors may edit channels');
 
 -- A note's deletion (crm.erase).
@@ -388,7 +390,7 @@ select is(c6_val($$ select public.crm_delete_contact_note('c6000000-0000-4000-80
              'c6000000-0000-4000-8000-0000000000a1')::text $$), 'P0002', 'a note is deleted only from its own contact');
 select is(c6_refusals($$ select public.crm_delete_contact_note('c6000000-0000-4000-8000-000000000001',
              'c6000000-0000-4000-8000-00000000c001', 'c6000000-0000-4000-8000-0000000000b1', %L)::text $$),
-  '42501 42501 42501 42501 42501 42501 42501 42501', 'none of the refused actors may delete it');
+  '42501 42501 42501 42501 42501 42501 42501', 'none of the refused actors may delete it');
 select is(c6_val($$ select public.crm_delete_contact_note('c6000000-0000-4000-8000-000000000001',
              'c6000000-0000-4000-8000-00000000c001', 'c6000000-0000-4000-8000-0000000000b1',
              'c6000000-0000-4000-8000-0000000000a1')::text $$), 'c6000000-0000-4000-8000-0000000000b1', 'an Admin may');
@@ -403,7 +405,7 @@ select is(c6_val($$ select public.crm_contact_link_lead('c6000000-0000-4000-8000
              'c6000000-0000-4000-8000-0000000000a1')::text $$), '22023', 'only a phone match is confirmed');
 select is(c6_refusals($$ select public.crm_contact_link_lead('c6000000-0000-4000-8000-000000000001',
              'c6000000-0000-4000-8000-00000000c001', 'c6000000-0000-4000-8000-00000000aa02', 'confirm', %L)::text $$),
-  '42501 42501 42501 42501 42501 42501 42501 42501', 'none of the refused actors may confirm one');
+  '42501 42501 42501 42501 42501 42501 42501', 'none of the refused actors may confirm one');
 select is(c6_val($$ select public.crm_contact_link_lead('c6000000-0000-4000-8000-000000000001',
              'c6000000-0000-4000-8000-00000000c001', 'c6000000-0000-4000-8000-00000000aa02', 'confirm',
              'c6000000-0000-4000-8000-0000000000a1')::text $$),
@@ -448,8 +450,8 @@ select is(c6_val($$ select public.crm_contact_new_lead('c6000000-0000-4000-8000-
 select is(c6_refusals($$ select public.crm_contact_new_lead('c6000000-0000-4000-8000-000000000001',
              'c6000000-0000-4000-8000-00000000c001', '{"id": "c6000000-0000-4000-8000-00000000ab01", "name": "Huda", "message": "Rebrand"}',
              %L)::text $$),
-  '42501 42501 42501 42501 42501 42501 42501 42501',
-  'none of the refused actors may add one (a Developer and Sales work leads, but not contacts)');
+  '42501 42501 42501 42501 42501 42501 42501',
+  'none of the refused actors may add one (a Developer works leads, but not contacts)');
 select is(c6_val($$ select public.crm_contact_new_lead('c6000000-0000-4000-8000-000000000001',
              'c6000000-0000-4000-8000-00000000c001',
              '{"id": "c6000000-0000-4000-8000-00000000ab01", "name": "Huda", "message": "Rebrand", "channel": "phone", "score_signals": []}',
