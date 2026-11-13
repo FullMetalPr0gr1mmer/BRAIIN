@@ -363,6 +363,8 @@ on the way.
    the two people, whether either record holds a file (a count as the service role, for a
    role without `crm.files`), and refuses with a 403 naming `crm.files`; the dialog words it
    ("One of these records holds files, so an Admin needs to merge them. Ask an Admin.").
+   (Reordered by the second review, section 11, CINT2-SEC-2: the count now runs after the
+   merge limit and the route's own reads of both people, still before the reveal slot.)
    0141's `crm_merge_contacts` gains `-- C-int` lines: with both rows locked (a file add's key
    check waits on those locks, so none slips in between) and before anything moves, a merge
    of records holding a file by an actor who is not `app.crm_files_actor_ok` is 42501. An
@@ -401,9 +403,11 @@ on the way.
   contact page, the GET and the PATCH answer list Sales the primaries only. The PATCH route
   refuses `primary`, or an add marked `isPrimary`, with a 403 (`crm.erase`) before the live
   recheck or any read. The merge route counts the two records' files as the service role for a
-  role without `crm.files`, after the live recheck and before the reveal slot, the merge limit
-  or any read; a count above zero (or none) is a 403 naming `crm.files`, a failed count a 500
-  (fail-closed); `mergeError` maps the door's own files refusal to the same 403.
+  role without `crm.files`, after the live recheck, the merge limit and its own reads of both
+  people (ids only) and before the reveal slot (section 11, CINT2-SEC-2; as first built it ran
+  before the limit and the reads); a count above zero (or none) is a 403 naming `crm.files`, a
+  failed count a 500 (fail-closed); `mergeError` maps the door's own files refusal to the same
+  403.
 - **Screens.** `ContactChannelsCard`'s `canRemove` became `managesChannels` (`crm.erase`):
   Make main and Remove show only to it; to anyone else the Add form says "You see the main
   e-mail and the main phone. What you add is kept with the others, which an Admin sees and
@@ -432,7 +436,8 @@ on the way.
 | The timeline | "an e-mail or phone was added or removed", with kind and source | metadata only |
 | Exports, backups | nothing | Sales holds neither `export.csv` nor `export.backup` |
 | The palette, the list, the lookup | names, company, stage; whether the contact has an e-mail or a phone; a whole typed address finds its person by blind index | no value returned; the user already typed it |
-| The new-lead door | copies the contact's main e-mail and phone to the new lead | already primaries only (0133) |
+| The new-lead door | copies the contact's main e-mail and phone to the new lead | 0133 fell back to the oldest when a kind had no main one; 0141 restates it to copy the main ones only (section 11, CINT2-SEC-1) |
+| A lead's erasure (Admin) | takes back the lead's copies; the oldest left of a kind whose main copy went becomes the main one | 0141 restates `crm_erase_lead` with the fill, as the editor and the merge do (section 11, CINT2-SEC-1); before, a kind could be left with no main one, which hid it from Sales and let the next Sales add, link or confirm make a hidden detail the main one |
 | A lead's own reveal | the e-mail and phone that lead arrived with, one lead at a time, a slot each | C10a's `leads.pii`: a lead's own details, unchanged. A contact's non-primary detail that came with an inquiry stays reachable this way; one typed in, imported or merged in does not. Owner question below |
 | The add's answers | a refusal when the contact already holds ten of a kind (23514) or the e-mail belongs to another contact | counts and existence, never a value; the door keeps its checks |
 
@@ -446,8 +451,9 @@ on the way.
    own list); an add marked primary is refused, a plain add is kept and becomes the main one
    only when the contact had none of that kind.
 3. The merge's files rule uses `crm.files` (Admin) in both layers; the refusal comes before
-   any reveal slot or any read of the two people, and tells a Sales user the person has files
-   (accepted by the owner). An Admin's merge may pass the 20-file ceiling (allowed).
+   any reveal slot (since section 11, after the merge limit and the reads of both people, so
+   it is no free lookup), and tells a Sales user the person has files (accepted by the
+   owner). An Admin's merge may pass the 20-file ceiling (allowed).
 4. A Sales merge of a pair without files still claims its `pii-reveal` slot, and a Sales
    confirm still does (question 4, as built).
 
@@ -537,3 +543,51 @@ set-based moves. Replayed in PGlite: every one matched but `server_version_num` 
 - Carried: C10b's third question (as built), C16-Q1 (EXC-014), the register lines for the
   lawyer with O-11. The admin bundle tripwire goes to 500 KB on main with PR #156 (not changed
   here).
+
+## 11. The second review (2026-11-13, the owner's decisions)
+
+Six findings on section 10's build (security and correctness lenses), each checked against the
+code before it was touched. None was refuted by a skeptic, and none on re-check: all six are
+real; four changed behaviour or a guard, two were documents. Red/green: the new and changed
+tests run against a `git archive` copy of the reviewed head (68659d7e) under
+`scratchpad/cint2_fix_mut`, its `node_modules` junction removed before the copy was deleted.
+
+| Finding | Verdict | What changed | Guarded by (red on 68659d7e) |
+|---|---|---|---|
+| CINT2-SEC-1 (a lead's erasure could leave a kind with no main one: Sales then saw none of it, the new-lead door copied a non-primary value, and the next Sales add, staff link or confirm made the oldest hidden detail the main one) | Real (traced: `crm_erase_lead`, latest in 0134, deletes the lead-sourced copies and never fills; every other channel delete, the editor's and the merge's, ends in `app.crm_fill_primary`; every insert already keeps a main one; the new-lead door ordered `is_primary desc` and fell back to the oldest) | 0141 items 7 and 8: `crm_erase_lead` restated from 0134 with four `-- C-int` lines (after the take-back, `app.crm_fill_primary`: the oldest left of that kind becomes the main one, as after an Admin's removal in the editor; who erases is `crm.erase`, Admin, so the main one is still set by an Admin's act); `crm_contact_new_lead` restated from 0133 with `and ch.is_primary` on both reads (a contact with no main one of either kind is the door's existing 22023). Postconditions hold both. Not done: a backfill of contacts left with no main one (0131 to 0141 are held and in no environment's history, so no such row exists) | pgTAP `crm_owner_decisions` #35 to #42 (red: #36 Sales saw nothing, #37 no main one, #39 the Sales add turned `''` into `e-typed`, #41 the new lead took `e-hidden`, #42 a new lead from a contact with no main detail); spec: both restatements are their source plus marked lines, and a new one: every function whose latest definition deletes from `crm_contact_channels` (today the editor, the merge and the lead erasure) calls `app.crm_fill_primary` after its last delete (red: the lead erasure) |
+| CINT2-SEC-2 (the Sales file check ran before the merge limit and any read, so it answered "does contact X hold files" for any id, free and unaudited) | Real | The route's order is now: live recheck, `crm-merge` limit (60 an hour per person, 300 per tenant), the caller's own reads of both people (ids, RLS), then the file count, then the `pii-reveal` slot, then the door. A refusal still spends no reveal slot (the owner's rule); each question now costs a merge slot and needs two people the caller can see. The optional audit row for a refused attempt was not added: the limiter bounds it, and the door's own refusal writes none either | `crmMerge.spec` (red: 5): the order with the count after the reads and before the slot; past the merge limit no count; a person the caller cannot see is a 404 before the count; the 403 and the fail-closed 500 spend only the merge slot |
+| CINT2-SEC-3 (no anon or Admin-token row for the editor and the merge door) | Real (a test gap: the 0141 postconditions already refuse a migration that grants either to anon or authenticated) | Four rows: anon and an Admin token (authenticated) call each door with literal arguments through `cod_denied`, which reports the SQLSTATE and whether the role lacked EXECUTE, so a 42501 from a table read first cannot pass for it | pgTAP #21, #22, #33, #34. Coverage, green on 68659d7e too; a grant to either role cannot get past the postconditions, so no mutation run |
+| CINT2-DOC-1 (L-3 question 5 still asked about every stored e-mail and phone) | Real | The register's question now asks about a person's main e-mail and main phone, and, one inquiry at a time, the details each inquiry arrived with | docs only |
+| CINT2-TEST-1 (`crm_contact_reveal_channels` had no named caller in `contactGrants.spec`) | Real | The row `['crm_contact_reveal_channels', 'src/lib/crm/contactReveal.ts']` | `contactGrants.spec`. Coverage, green on 68659d7e; proven to bite on the copy: a second file calling the door fails it (1 red), and passes without the row |
+| CINT2-DOC-2 (stale texts) | Real | The 0136 comment and so its 0141 restatement: "Sales adds; an Admin removes and (C-int, the owner's decision of 2026-11-13) chooses the main one" (0136 is on no environment's history; the restatement check still holds); a superseded note on crm.md's C10b as-built and review paragraphs and on C10B.md decision 2; CLAUDE.md's C16 line notes an Admin's merge may leave a contact past 20 files; `contactsApi.spec`'s comment | docs and comments only |
+
+Also brought up to date by these fixes: CLAUDE.md's C-int bullet and crm.md's owner-decisions
+paragraph (the merge route's order, every kind keeps a main one), section 10's plan item 3, its
+"As built" and decision 3, and the "Where a Sales token could meet a non-primary channel" table
+(the new-lead door's row, a row for a lead's erasure). The e2e specs are unchanged: `merge.e2e`
+"as sales" still gets its 403 naming `crm.files` (Sales sees both records it made, so the reads
+pass and the count runs), now after spending one `crm-merge` slot.
+
+Gates, as run on this review's fixes (2026-11-13):
+
+- `astro check`: 0 errors, 0 warnings (80 hints); then `tsc --noEmit`: clean.
+- `prettier --check .`: clean.
+- vitest, the specs these fixes touch (`crmLastIntegrationSql`, `crmMerge`, `contactGrants`,
+  `contactsApi`, the authz endpoints): 2 884 passed; the whole suite with
+  `--testTimeout=60000`: 475 files passed, 1 skipped; 12 230 tests passed, 21 skipped; nothing
+  to re-run.
+- `check-migrations.mjs origin/main`: ok (0131, 0133 to 0141 over 0130).
+- The PGlite replay of every migration with all 100 SQL suites: 98 pass; `audit_chain` #12 and
+  `grants_app_schema` section 8 fail, as on main. `crm_owner_decisions` 42 of 42,
+  `crm_last_integration` 50, `crm_merge` 72, `crm_sales_contacts` 63, `crm_contacts_api` 81,
+  `crm_contacts_retention_erase` 29.
+- `npm run build` with the CI dummy environment (and `ALLOW_LOCAL_SITE_URL=1`): ok.
+- `node scripts/admin-bundle.mjs`: the chunk plan holds; the contacts screens 177.3 KB,
+  AdminImportContacts 163.8 KB, the heaviest screen 235.3 KB (every screen within 300 KB).
+- `npm run size`: the public routes 26.85 KB; the admin sum 485.7 KB, over the 450 KB tripwire
+  on this branch (under the 500 KB PR #156 sets on main, the owner's decision of 2026-11-13;
+  not changed here).
+- `contrast-audit.mjs`: not run (no admin CSS changed). e2e runs only in CI; none changed
+  (`merge.e2e` "as sales" traced above).
+- The read-back (`scratchpad/readback_cint.sql`) was not extended for items 7 and 8: their
+  postconditions in 0141 check the same facts at migration time.
