@@ -711,6 +711,23 @@ describe('the leads screens have their own groups (Admin v2 C4b)', () => {
     expect(offenders).toEqual([]);
   });
 
+  // Admin v2 C12: Merge duplicates is one of the contacts' lazy pieces, reached only through
+  // import() from the People list.
+  it('claims Merge duplicates as a contacts lazy piece, never imported statically (C12)', () => {
+    expect(claim('src/components/admin/screens/contacts/MergeDuplicatesDialog.tsx')).toBe(
+      'admin-contacts-lazy',
+    );
+    const dir = join(process.cwd(), 'src/components/admin/screens/contacts');
+    const offenders: string[] = [];
+    for (const name of readdirSync(dir)) {
+      const source = readFileSync(join(dir, name), 'utf8');
+      for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
+        if (/MergeDuplicatesDialog/.test(m[1] as string)) offenders.push(name);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('claims the Tasks screen and its lazy pieces, beside the other CRM families (C8)', () => {
     for (const path of [
       'src/components/admin/islands/AdminTasks.tsx',

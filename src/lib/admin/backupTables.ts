@@ -151,6 +151,8 @@ export const FORBIDDEN_BACKUP_TABLES: readonly string[] = [
   'crm_tasks',
   // The companies (Admin v2 C11): organisations the studio works with, their notes and owner.
   'crm_companies',
+  // "Not a duplicate" (0138, Admin v2 C12): pairs of people, by their contact ids.
+  'crm_merge_dismissals',
   'job_applications',
   'applications_safe',
   'cv_deletion_queue',
