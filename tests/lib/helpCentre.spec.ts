@@ -41,6 +41,7 @@ import HelpGuideList from '@/components/admin/screens/help/HelpGuideList';
 import { COLLECTIONS } from '@/components/admin/screens/collection/collections';
 import { clientsUi } from '@/lib/admin/ui/clients';
 import { faqUi } from '@/lib/admin/ui/faq';
+import { redirectsUi } from '@/lib/admin/ui/redirects';
 import { faqShown } from '@/lib/sections/contact';
 import { EXTRA_LINKS, pageFileFor } from '../admin/routes';
 import { MAX_GOALS } from '@schemas/analyticsGoals';
@@ -2217,10 +2218,34 @@ describe('seo-and-redirects says what the SEO screen does (Admin v2 U10)', () =>
     expect(source('src/pages/sitemap.xml.ts')).toContain('max-age=3600');
     // Redirects: the edge's minute, and Sync to edge.
     expect(en).toContain('within a minute of saving');
-    expect(source('src/lib/admin/ui/redirects.ts')).toContain(
-      'Takes effect at the edge within a minute of saving.',
-    );
     expect(en).toContain('Sync to edge');
+  });
+
+  it('says when a redirect takes effect in both ways of publishing, as the form’s help does (R14c)', () => {
+    // Releases off a save rebuilds the edge map; releases on a rule is staged and the map is
+    // rebuilt when it is published (R14F "For R14c's copy"). Neither the guide nor the form's
+    // help may say "within a minute of saving" alone any more.
+    const en = text('en');
+    const ar = text('ar');
+    const help = redirectsUi.fields.find((f) => f.name === 'status')?.help ?? '';
+    expect(help).toContain(
+      'Until publishing in releases is switched on, a rule takes effect at the edge within a minute of saving; once it is, within a minute of being published.',
+    );
+    expect(en).toContain(
+      'A rule takes effect within a minute of saving until publishing in releases is switched on for your site; once it is, within a minute of being published.',
+    );
+    expect(ar).toContain(
+      'إلى أن يُفعَّل النشر عبر الإصدارات لموقعك، تسري القاعدة خلال دقيقة من الحفظ',
+    );
+    expect(ar).toContain('تسري خلال دقيقة من نشرها');
+    for (const words of [help, en]) {
+      expect(words).not.toMatch(/within a minute of saving\./);
+      expect(words).toContain('within a minute of being published');
+    }
+    // The release registry stages redirects, so the "published" half is true (R14F).
+    expect(source('src/components/admin/screens/seo/RedirectsTab.tsx')).toContain(
+      'then "within a minute of being published"',
+    );
   });
 
   it('names the share image’s fallbacks in the order the head resolves them', () => {

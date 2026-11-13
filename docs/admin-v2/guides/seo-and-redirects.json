@@ -63,7 +63,7 @@
           "From is the old path, such as /old-page. A path that still shows a page is refused: a redirect only covers addresses that would otherwise find nothing.",
           "To is where it leads: a path on this site or a full https:// address. Point at the final address, because a redirect to another redirect is refused.",
           "301 is a permanent move and 302 a temporary one. 308 is permanent too, for addresses that receive forms.",
-          "A rule takes effect within a minute of saving, and a rule for an English path also covers its Arabic twin under /ar."
+          "A rule takes effect within a minute of saving until publishing in releases is switched on for your site; once it is, within a minute of being published. A rule for an English path also covers its Arabic twin under /ar."
         ]
       },
       {
@@ -134,7 +134,7 @@
           "From هو المسار القديم، مثل /old-page. يُرفض المسار الذي ما زال يعرض صفحة، فإعادة التوجيه تغطي فقط العناوين التي لن تجد شيئًا بدونها.",
           "To هو الوجهة: مسار في هذا الموقع أو عنوان كامل يبدأ بـ https://. وجّهها إلى العنوان النهائي، لأن إعادة التوجيه إلى إعادة توجيه أخرى تُرفض.",
           "301 نقل دائم و302 نقل مؤقت، و308 نقل دائم أيضًا للعناوين التي تستقبل النماذج.",
-          "تسري القاعدة خلال دقيقة من الحفظ، والقاعدة الخاصة بمسار إنجليزي تشمل نظيره العربي تحت /ar."
+          "إلى أن يُفعَّل النشر عبر الإصدارات لموقعك، تسري القاعدة خلال دقيقة من الحفظ؛ وبعد تفعيله، تسري خلال دقيقة من نشرها. والقاعدة الخاصة بمسار إنجليزي تشمل نظيره العربي تحت /ar."
         ]
       },
       {

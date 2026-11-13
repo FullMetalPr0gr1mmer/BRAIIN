@@ -16,11 +16,11 @@ import { editLanded } from '@/lib/admin/closeOnSave';
 // a save closes the drawer and re-reads the list and the edge line. The rows' links and
 // /admin/redirects/new and /admin/redirects/<id> still work without JavaScript.
 //
-// Releases off (production today), a redirect reaches the edge at once (KV, rebuilt by every
-// save), as the form's help says ("within a minute of saving"). Releases on, a rule is staged
-// like any registry row and the edge map is rebuilt when it is published (the registry's
-// `redirect` entry), and the list's Delete confirms "Remove" (ResourceTable). The help's
-// "of saving", here and in the seo-and-redirects guide, is R14c's switch-on copy (R14F.md).
+// Releases off, a redirect reaches the edge at once (KV, rebuilt by every save). Releases on, a
+// rule is staged like any registry row and the edge map is rebuilt when it is published (the
+// registry's `redirect` entry), and the list's Delete confirms "Remove" (ResourceTable). The
+// form's help and the seo-and-redirects guide say both (R14c: "within a minute of saving" until
+// releases are switched on, then "within a minute of being published").
 
 const RESOURCE = 'redirects';
 
