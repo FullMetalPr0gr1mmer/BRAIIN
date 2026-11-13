@@ -363,6 +363,20 @@ const EXACT: Readonly<Record<string, Label>> = {
     },
     noun: 'contacts from a file',
   },
+  // Contact files (Admin v2 C16): ids, the kind and the size only, never a file's name.
+  'crm.file.list': { kind: 'leads', verb: 'Opened the files of', noun: 'a contact' },
+  'crm.file.upload': { kind: 'leads', verb: 'Added a file to', noun: 'a contact' },
+  'crm.file.download': { kind: 'leads', verb: 'Downloaded a file of', noun: 'a contact' },
+  'crm.file.delete.attempt': {
+    kind: 'leads',
+    verb: 'Started removing a file from',
+    noun: 'a contact',
+  },
+  'crm.file.delete.outcome': {
+    kind: 'leads',
+    verb: outcome('Removed a file from', 'Could not remove a file from'),
+    noun: 'a contact',
+  },
   'export.csv.attempt': { kind: 'leads', verb: 'Started exporting', noun: 'the leads' },
   'export.csv.outcome': {
     kind: 'leads',

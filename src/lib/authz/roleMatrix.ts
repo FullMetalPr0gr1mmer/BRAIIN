@@ -39,6 +39,7 @@ export const CAP_GROUPS: readonly CapGroup[] = [
       'export.csv',
       'crm.contacts',
       'crm.tasks',
+      'crm.files',
       'crm.erase',
       'crm.import',
       'crm.settings',

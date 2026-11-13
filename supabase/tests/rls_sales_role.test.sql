@@ -160,6 +160,11 @@ insert into public.crm_import_batches (id, tenant_id, attestation, expected_rows
 insert into public.crm_contact_imports (tenant_id, contact_id, batch_id, row_number, basis) values
   ('93000000-0000-0000-0000-000000000001', '93000000-0000-0000-0000-00000000c5c1',
    '93000000-0000-0000-0000-00000000c15b', 2, 'consent');
+-- A file kept with the contact (0140, Admin v2 C16): Admin's alone (crm.files; Sales none).
+insert into public.crm_contact_files (tenant_id, contact_id, object_path, name, content_type, bytes) values
+  ('93000000-0000-0000-0000-000000000001', '93000000-0000-0000-0000-00000000c5c1',
+   '93000000-0000-0000-0000-000000000001/93000000-0000-0000-0000-00000000c5c1/93000000-0000-4000-8000-00000000c16f.pdf',
+   'C16 file', 'application/pdf', 1);
 insert into public.site_settings (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.site_integrations (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.ai_config (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
@@ -356,15 +361,16 @@ select ok(not app.is_member(), 'no role claim is no member');
 
 -- Every helper, for every value of the enum and none: a literal copy of CLAUDE.md §5.
 select is(
-  (select string_agg(format('%s:%s%s%s%s%s%s%s%s%s%s%s%s', r,
+  (select string_agg(format('%s:%s%s%s%s%s%s%s%s%s%s%s%s%s', r,
             app.role_works_leads(r)::int, app.role_analytics_read(r)::int, app.role_crm_erase(r)::int,
             app.role_manages_users(r)::int, app.role_views_audit(r)::int, app.role_site_health(r)::int,
             app.role_manages_visibility(r)::int, app.role_analytics_goals(r)::int,
             app.role_crm_settings(r)::int, app.role_manages_integrations(r)::int,
-            app.role_crm_contacts(r)::int, app.role_crm_tasks(r)::int), ' ' order by r)
+            app.role_crm_contacts(r)::int, app.role_crm_tasks(r)::int,
+            app.role_crm_files(r)::int), ' ' order by r)
      from unnest(enum_range(null::public.app_role)::text[] || array['anon']) r),
-  'admin:111111111111 anon:000000000000 content_creator:010000000000 developer:110011100000 sales:110000000011 seo:010000010100',
-  'each helper answers its capability for each role: Sales works leads, contacts and tasks and reads the stats, nothing else');
+  'admin:1111111111111 anon:0000000000000 content_creator:0100000000000 developer:1100111000000 sales:1100000000110 seo:0100000101000',
+  'each helper answers its capability for each role: Sales works leads, contacts and tasks and reads the stats, nothing else (no files: C16-Q3)');
 
 select is(
   (select with_check from pg_policies

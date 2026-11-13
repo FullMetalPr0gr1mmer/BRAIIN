@@ -48,6 +48,7 @@ export const CAP_LABELS: Readonly<Record<Capability, CapLabel>> = {
   'export.csv': { full: 'Export inquiries, stats and the activity log as CSV' },
   'crm.contacts': { full: 'See and manage contacts, the people behind inquiries' },
   'crm.tasks': { full: 'Plan and tick off follow-up tasks for inquiries and contacts' },
+  'crm.files': { full: 'Add, download and remove the files kept with a contact' },
   'crm.erase': { full: 'Erase an inquiry and its notes for good' },
   'crm.import': { full: 'Import contacts from a spreadsheet (CSV)' },
   'crm.settings': {

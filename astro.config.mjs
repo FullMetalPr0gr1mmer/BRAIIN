@@ -129,13 +129,13 @@ const ADMIN_TASKS_LAZY =
 // their own as the leads screens are, so the People list and a contact's page share one chunk
 // and no other admin screen loads it. Add a contact, a contact's new lead and the erasure are
 // reached only through import(): their own lazy group (ADMIN_CONTACTS_LAZY), below the field
-// kit, so a first load never carries them.
+// kit, so a first load never carries them. Admin v2 C16: a contact's Files card joins them.
 // Admin v2 C11: the Companies tab (CompaniesList, AdminContactCompanies) is of the family;
 // its drawer (CompanyDrawer) is lazy.
 const ADMIN_CONTACTS =
   /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]contacts[\\/]|islands[\\/]AdminContact)/;
 const ADMIN_CONTACTS_LAZY =
-  /[\/]src[\/]components[\/]admin[\/]screens[\/]contacts[\/](AddContactDrawer|EraseContactDialog|MergeDuplicatesDialog|NewLeadDrawer|CompanyDrawer)\.tsx$/;
+  /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]contacts[\\/](AddContactDrawer|EraseContactDialog|MergeDuplicatesDialog|NewLeadDrawer|CompanyDrawer|ContactFilesCard)\.tsx$/;
 // What the two CRM families both run (Admin v2 C7): the late-answer rules and the leads' words
 // (the contact timeline names its leads' events in them). Their own group, above both
 // families, so neither family's chunk imports the other's (scripts/admin-bundle.mjs check 6).

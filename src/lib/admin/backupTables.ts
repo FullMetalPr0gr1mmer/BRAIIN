@@ -157,6 +157,8 @@ export const FORBIDDEN_BACKUP_TABLES: readonly string[] = [
   // each imported contact came with.
   'crm_import_batches',
   'crm_contact_imports',
+  // Contact files (0140, Admin v2 C16): their names and object paths.
+  'crm_contact_files',
   'job_applications',
   'applications_safe',
   'cv_deletion_queue',

@@ -671,7 +671,13 @@ describe('the leads screens have their own groups (Admin v2 C4b)', () => {
     ]) {
       expect(claim(path), path).toBe('admin-contacts');
     }
-    for (const name of ['AddContactDrawer', 'EraseContactDialog', 'NewLeadDrawer']) {
+    // Admin v2 C16: the Files card, loaded with import() on a crm.files holder's contact page.
+    for (const name of [
+      'AddContactDrawer',
+      'EraseContactDialog',
+      'NewLeadDrawer',
+      'ContactFilesCard',
+    ]) {
       expect(claim(`src/components/admin/screens/contacts/${name}.tsx`), name).toBe(
         'admin-contacts-lazy',
       );
@@ -701,7 +707,7 @@ describe('the leads screens have their own groups (Admin v2 C4b)', () => {
       for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
         const spec = m[1] as string;
         if (
-          /screens\/leads|fields\/|FormField|AddContactDrawer|EraseContactDialog|NewLeadDrawer/.test(
+          /screens\/leads|fields\/|FormField|AddContactDrawer|EraseContactDialog|NewLeadDrawer|ContactFilesCard/.test(
             spec,
           )
         )

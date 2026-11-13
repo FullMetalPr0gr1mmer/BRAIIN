@@ -33,6 +33,7 @@ const LABEL_TO_CAP: Record<string, Capability> = {
   'Leads / analytics / activity — export CSV': 'export.csv',
   'CRM — contacts (view, edit, notes; the people behind leads)': 'crm.contacts',
   'CRM — tasks (follow-ups for leads and contacts)': 'crm.tasks',
+  'CRM — contact files (add, download, remove)': 'crm.files',
   "Leads & contacts — erase a person's data (DSAR)": 'crm.erase',
   'CRM — import contacts from a CSV file': 'crm.import',
   'CRM settings — pipeline stages, scoring, response time, assignment': 'crm.settings',
@@ -172,6 +173,7 @@ describe('Sales holds leads, contacts, tasks and the stats, nothing else', () =>
     // exports, backups and erasure: no bulk contact details; nor the CRM's settings
     'export.csv',
     'export.backup',
+    'crm.files',
     'crm.erase',
     'crm.import',
     'crm.settings',
@@ -211,6 +213,9 @@ describe('Sales holds leads, contacts, tasks and the stats, nothing else', () =>
       // An import makes contacts (Admin v2 C15): whoever imports can see whom they added.
       if (ROLE_CAPS[role]['crm.import'] === 'full')
         expect(ROLE_CAPS[role]['crm.contacts'], `${role}: crm.import`).toBe('full');
+      // A file is kept with a contact (Admin v2 C16): whoever holds files sees whose they are.
+      if (ROLE_CAPS[role]['crm.files'] === 'full')
+        expect(ROLE_CAPS[role]['crm.contacts'], `${role}: crm.files`).toBe('full');
     }
   });
 

@@ -7,6 +7,7 @@ import { claimPrivilegedOp, CRM_ERASE_LIMITS } from '@/lib/admin/rateLimit';
 import { serviceClient } from '@/lib/supabase/server';
 import { newIndexRun, runLeadIndexBackfill } from '@/lib/crm/indexBackfill';
 import { getContact, requireContactId } from '@/lib/crm/contacts';
+import { countPersonFiles } from '@/lib/crm/files';
 
 // What erasing a person would remove (Admin v2 C6, crm.md §8.2): `crm.erase`, Admin only. The
 // Admin's review before the erasure: counts, and the leads that match the person by phone
@@ -97,6 +98,8 @@ export const POST = defineAdminRoute({
       counts[key] = typeof body[key] === 'number' ? body[key] : 0;
     }
     const matches = phoneMatches(body['phone_matches']);
+    // (Admin v2 C16) The files that go with the person.
+    counts['files'] = await countPersonFiles(svc, auth.tenantId, id);
 
     audit({
       action: 'crm.erase.preview',
