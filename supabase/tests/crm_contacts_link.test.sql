@@ -91,7 +91,9 @@ select is(
   (select c.display_name || ' | ' || c.company_name || ' | ' || c.locale || ' | ' || c.source || ' | '
           || coalesce(c.created_by::text, 'system') || ' | v' || c.version || ' | ' || c.stage
      from public.crm_contacts c where c.id = c5l_contact('c5100000-0000-4000-8000-00000000aa01')),
-  'Huda 01 | Acme | ar | web_form | system | v1 | lead',
+  -- (C11) v2: the system then linked the company the lead names ("Acme"), from inside a
+  -- trigger, so it is not a person's edit (staff_edited stays false: crm_contacts_orphans).
+  'Huda 01 | Acme | ar | web_form | system | v2 | lead',
   'from what the lead says about itself, made by the system, never edited');
 select is(
   (select string_agg(ch.kind || ':' || ch.value_enc || ':' || ch.is_primary || ':' || ch.source, ', ' order by ch.kind)

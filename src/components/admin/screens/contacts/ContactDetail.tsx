@@ -33,6 +33,7 @@ import {
   type ContactLead,
 } from '@/lib/crm/contactView';
 import ContactChannelsCard, { type RevealedValues } from './ContactChannelsCard';
+import ContactCompanyCard, { type CompanyChange } from './ContactCompanyCard';
 import ContactDetailsCard from './ContactDetailsCard';
 import ContactLeadsCard from './ContactLeadsCard';
 import ContactNotes from './ContactNotes';
@@ -71,6 +72,8 @@ export interface ContactDetailProps extends ContactDetailInitial {
 
 interface ContactAnswer {
   contact: ContactDetailRow;
+  /** (Admin v2 C11 review) The auto-company a company change removed, if any. */
+  removedCompany?: string | null;
   channels?: ChannelPresence[];
   leads?: ContactLead[];
   moreLeads?: boolean;
@@ -219,15 +222,20 @@ export default function ContactDetail(props: ContactDetailProps) {
     body: Record<string, unknown>,
     versioned: boolean,
     after?: (answer: ContactAnswer) => void,
+    // (Admin v2 C11) A write to another of the contact's routes (its company), same rules.
+    send: (sent: Record<string, unknown>, signal: AbortSignal) => Promise<ContactAnswer> = (
+      sent,
+      signal,
+    ) =>
+      adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}`, {
+        method: 'PATCH',
+        body: sent,
+        signal,
+      }),
   ): Promise<boolean> {
     setMessage(null);
     return writeInTurn(queue, {
-      send: (signal) =>
-        adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}`, {
-          method: 'PATCH',
-          body: versioned ? { ...body, version: row.current.version } : body,
-          signal,
-        }),
+      send: (signal) => send(versioned ? { ...body, version: row.current.version } : body, signal),
       saved: (answer) => {
         show(answer.contact);
         if (answer.channels) setChannels(answer.channels);
@@ -462,6 +470,27 @@ export default function ContactDetail(props: ContactDetailProps) {
             customFields={props.customFields}
             busy={busy}
             save={(patch: ContactPatch) => write(patch as Record<string, unknown>, true)}
+          />
+          <ContactCompanyCard
+            contact={contact}
+            busy={busy}
+            change={async (change: CompanyChange) => {
+              let removed = false;
+              const saved = await write(
+                change as Record<string, unknown>,
+                true,
+                (answer) => {
+                  removed = typeof answer.removedCompany === 'string';
+                },
+                (sent, signal) =>
+                  adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}/company`, {
+                    method: 'POST',
+                    body: sent,
+                    signal,
+                  }),
+              );
+              return saved && removed ? 'removed' : saved;
+            }}
           />
           <ContactLeadsCard
             leads={leads}

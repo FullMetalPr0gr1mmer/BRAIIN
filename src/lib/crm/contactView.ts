@@ -89,12 +89,14 @@ export interface ContactSummary {
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** "12 people · 3 clients · 8 leads · 1 past client" (crm.md §11 screen 5). */
-export function contactsSubline(summary: ContactSummary): string {
+export function contactsSubline(summary: ContactSummary, companies?: number | null): string {
   return [
     count(summary.total, 'person', 'people'),
     count(summary.client, 'client', 'clients'),
     count(summary.lead, 'lead', 'leads'),
     count(summary.past, 'past client', 'past clients'),
+    // (Admin v2 C11) crm.md §11 screen 5: "· {n} companies" once there are companies.
+    ...(typeof companies === 'number' ? [count(companies, 'company', 'companies')] : []),
   ].join(' · ');
 }
 

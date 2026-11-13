@@ -157,7 +157,20 @@ export default function ContactDetailsCard({ contact, customFields, busy, save }
       <form onSubmit={(event) => void submit(event)} noValidate>
         {text('display_name', 'Name', { maxLength: 120, dir: 'auto', 'aria-required': true })}
         {text('title', 'Title', { maxLength: 120, dir: 'auto' })}
-        {text('company_name', 'Company', { maxLength: 120, dir: 'auto' })}
+        {text('company_name', 'Company', {
+          maxLength: 120,
+          dir: 'auto',
+          // (Admin v2 C11) While linked to a company record the name is the record's: it is
+          // changed there (a rename reaches every contact), or the contact is unlinked first.
+          ...(typeof contact['company_id'] === 'string'
+            ? { readOnly: true, 'aria-describedby': `${id}-company-hint` }
+            : {}),
+        })}
+        {typeof contact['company_id'] === 'string' && (
+          <p id={`${id}-company-hint`} className="f__hint">
+            Linked to a company record. Rename it there, or unlink it under Company.
+          </p>
+        )}
         <div className="lead-add__row">
           {text('city', 'City', { maxLength: 80, dir: 'auto' })}
           {text('country', 'Country code', { maxLength: 2, dir: 'ltr' })}

@@ -561,15 +561,17 @@ describe('admin.css keeps the hooks the markup renders', () => {
       expect(pagesFor('activity.css')).toEqual(['src/pages/admin/audit.astro']);
       expect(pagesFor('help.css')).toEqual(['src/pages/admin/help.astro']);
       expect(pagesFor('kit.css')).toEqual(['src/pages/admin/kit.astro']);
-      // The contacts screens (C7): their two pages, and no other.
+      // The contacts screens (C7): their two pages, and since C11 the Companies tab.
       expect(pagesFor('contacts.css')).toEqual([
         'src/pages/admin/contacts/[id].astro',
+        'src/pages/admin/contacts/companies.astro',
         'src/pages/admin/contacts/index.astro',
       ]);
       // The leads screens (C4b): their three pages; and since C7 the contacts screens, which
       // draw its CRM pieces (the search, the star, the tags, the notes) and link it.
       expect(pagesFor('leads.css')).toEqual([
         'src/pages/admin/contacts/[id].astro',
+        'src/pages/admin/contacts/companies.astro',
         'src/pages/admin/contacts/index.astro',
         'src/pages/admin/leads/[id].astro',
         'src/pages/admin/leads/board.astro',

@@ -418,7 +418,7 @@ The TDD's *product* requirements are the spec. Its *stack* suggestions are mappe
 | C8c | The rest of the contact side of tasks: the contact's open tasks in `GET /api/admin/crm/contacts/[id]` (crm.md §9, for `crm.tasks` holders) and the timeline's Tasks chip (a `tasks` kind for `crm_contact_timeline`, a SQL restatement, crm.md §11) | C8b | Not built (the card already reads the contact's open tasks itself; task lines show under All and Changes until then) |
 | C9 | CRM settings (stages with a colour picker + AA gate, scoring, custom fields, SLA, assignment) | C4, C7 | Lead settings built: [C9a](as-built/C9a.md); contact settings and custom fields come with C7 |
 | C10 | **Sales role** (enum file alone, then helpers; `ROLE_CAPS`, §5, architecture §3.4 parsed by CI; catalog-driven exposure test; `analytics.read`) | C4, C7, C8, C9 | Built for leads: [C10a](as-built/C10a.md); contacts and tasks for Sales come with C7 and C8 |
-| C11 | Companies + find-or-create at ingest | C7, C10 | Not built (after C7) |
+| C11 | Companies + find-or-create at ingest | C7, C10 | Built, held: [C11](as-built/C11.md) (on the C7 + C8 integration branch; merges after C5 to C8b, so after O-11; register L-C11) |
 | C12 | Merge duplicates | C7, C10 | Not built (after C7) |
 | C13 | Lead attribution (consent-gated) + privacy notice — **blocked on O-11** | C2 | Not built: waits on O-11 (legal) |
 | C14 | Contract (drop legacy status / internal_notes / ip_inet) | C4, C10 | Built: [C14a](as-built/C14a.md), [C14b](as-built/C14b.md) |

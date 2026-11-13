@@ -339,6 +339,10 @@ const EXACT: Readonly<Record<string, Label>> = {
   },
   'crm.task.delete': { kind: 'leads', verb: 'Removed', noun: 'a task' },
   'crm.task.ics': { kind: 'leads', verb: 'Downloaded the calendar file of', noun: 'a task' },
+  // Companies (Admin v2 C11).
+  'crm.company.create': { kind: 'leads', verb: 'Added', noun: 'a company' },
+  'crm.company.update': { kind: 'leads', verb: 'Updated', noun: 'a company' },
+  'crm.company.delete': { kind: 'leads', verb: 'Removed', noun: 'a company' },
   'export.csv.attempt': { kind: 'leads', verb: 'Started exporting', noun: 'the leads' },
   'export.csv.outcome': {
     kind: 'leads',

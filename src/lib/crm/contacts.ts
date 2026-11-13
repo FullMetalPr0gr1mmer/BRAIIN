@@ -27,7 +27,9 @@ export function requireContactId(params: Record<string, string | undefined>): st
 /** A contact's own columns a staff token reads (never a channel: those are a separate table). */
 export const CONTACT_DETAIL_COLUMNS =
   'id,display_name,title,company_name,stage,source,owner_id,locale,city,country,tags,custom,' +
-  'is_starred,last_activity_at,created_at,updated_at,created_by,updated_by,version,merged_into';
+  'is_starred,last_activity_at,created_at,updated_at,created_by,updated_by,version,merged_into,' +
+  // (Admin v2 C11) The contact's company record; company_name is its name while linked.
+  'company_id';
 
 /** The safe fields of a People list row; anything else an RPC returned is dropped. */
 export const CONTACT_LIST_FIELDS = [

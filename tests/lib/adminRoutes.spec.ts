@@ -414,6 +414,7 @@ describe('the locked screens the refusals e2e opens', () => {
       '/admin/audit',
       '/admin/backups',
       '/admin/contacts',
+      '/admin/contacts/companies',
       '/admin/forms',
       '/admin/integrations',
       '/admin/leads',
