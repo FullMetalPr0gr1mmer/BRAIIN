@@ -151,6 +151,8 @@ describe('the screen stylesheets (public/styles/admin/)', () => {
       'header.css',
       'health.css',
       'help.css',
+      // Admin v2 C15: Import contacts.
+      'import.css',
       'integrations.css',
       'kit.css',
       'leads.css',
@@ -561,6 +563,8 @@ describe('admin.css keeps the hooks the markup renders', () => {
       expect(pagesFor('activity.css')).toEqual(['src/pages/admin/audit.astro']);
       expect(pagesFor('help.css')).toEqual(['src/pages/admin/help.astro']);
       expect(pagesFor('kit.css')).toEqual(['src/pages/admin/kit.astro']);
+      // Import contacts (C15): its one page.
+      expect(pagesFor('import.css')).toEqual(['src/pages/admin/contacts/import.astro']);
       // The contacts screens (C7): their two pages, and since C11 the Companies tab.
       expect(pagesFor('contacts.css')).toEqual([
         'src/pages/admin/contacts/[id].astro',

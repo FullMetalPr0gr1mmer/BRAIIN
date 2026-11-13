@@ -1,0 +1,82 @@
+---
+import { studioTimeZone } from '@/lib/admin/studioTimeZone';
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminImportContacts from '@/components/admin/islands/AdminImportContacts';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { readImportBatches, type ImportBatch } from '@/lib/crm/importBatches';
+import { crmPeople } from '@/lib/crm/people';
+
+export const prerender = false;
+
+// The studio's time zone (Admin v2 U9): the recent imports' dates print in it.
+const studioTz = await studioTimeZone(Astro.locals);
+
+// Import contacts from a CSV file (Admin v2 C15, crm.md §12). `crm.import`, Admin only: any
+// other role is refused here with a 403 and reads nothing (Refused.astro, the U2 way); the
+// route and the database refuse them again. The page reads the tenant's recent imports (counts
+// only, as the caller) and the CRM's directory for "By"; the file never reaches the server
+// except through the import route, piece by piece. The Contacts link lights it (its path is
+// under /admin/contacts).
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = session !== null && can(session.role, 'crm.import') === 'full';
+if (!allowed) Astro.response.status = 403;
+
+let batches: ImportBatch[] = [];
+let names: Record<string, string> = {};
+let failed = false;
+if (allowed && session && sb) {
+  try {
+    const [read, people] = await Promise.all([
+      readImportBatches(sb, session),
+      crmPeople(sb, session.tenantId),
+    ]);
+    batches = read;
+    names = Object.fromEntries(
+      (people ?? []).flatMap((p) =>
+        typeof p['id'] === 'string' && typeof p['display_name'] === 'string'
+          ? [[p['id'], p['display_name']]]
+          : [],
+      ),
+    );
+  } catch {
+    failed = true;
+  }
+}
+---
+
+<AdminLayout
+  title="Import contacts"
+  subtitle="Add people from a spreadsheet, up to 5,000 at a time."
+  styles={['import.css']}
+>
+  {
+    allowed && (
+      <a slot="actions" class="btn" href="/admin/contacts">
+        <Icon name="back" size={16} />
+        Back<span class="visually-hidden"> to the contacts</span>
+      </a>
+    )
+  }
+  {
+    !allowed ? (
+      <Refused />
+    ) : failed ? (
+      <p class="msg" data-kind="error" role="alert">
+        The imports could not be loaded just now. Try again in a moment.
+      </p>
+    ) : (
+      <AdminImportContacts
+        client:load
+        tz={studioTz}
+        initialBatches={batches}
+        names={names}
+        me={session?.userId ?? ''}
+        now={new Date().toISOString()}
+      />
+    )
+  }
+</AdminLayout>

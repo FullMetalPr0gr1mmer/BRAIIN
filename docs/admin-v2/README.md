@@ -422,7 +422,7 @@ The TDD's *product* requirements are the spec. Its *stack* suggestions are mappe
 | C12 | Merge duplicates | C7, C10 | Built, held: [C12](as-built/C12.md) (on the C7 + C8 integration; merges after C5 to C8, so after O-11; register L-5). C10b + C12 integration: whichever merges second flips `crm_merge.test.sql`'s Sales refusals to allowed (C12 departure 8) |
 | C13 | Lead attribution (consent-gated) + privacy notice — **blocked on O-11** | C2 | Not built: waits on O-11 (legal) |
 | C14 | Contract (drop legacy status / internal_notes / ip_inet) | C4, C10 | Built: [C14a](as-built/C14a.md), [C14b](as-built/C14b.md) |
-| C15 | CSV import (`crm.import`, Admin): server parse, ≤ 5,000 rows / 2 MB, per-row lawful basis, blind-index dedupe, rate-limited, audited counts | C7 | Not built (after C7) |
+| C15 | CSV import (`crm.import`, Admin): server parse, ≤ 5,000 rows / 2 MB, per-row lawful basis, blind-index dedupe, rate-limited, audited counts | C7 | Built, held: [C15](as-built/C15.md) (on the C7 + C8 integration; merges after C5 to C8 and #148, so after O-11; register L-C15) |
 | C16 | Contact files (private bucket, byte-sniffed, audited download) | C7 | Not built (after C7) |
 
 **Phase 5 — Growth within the standard**

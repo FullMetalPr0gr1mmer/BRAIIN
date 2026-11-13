@@ -153,6 +153,13 @@ insert into public.crm_contacts (id, tenant_id, display_name) values
 insert into public.crm_merge_dismissals (tenant_id, contact_a, contact_b) values
   ('93000000-0000-0000-0000-000000000001', '93000000-0000-0000-0000-00000000c5c1',
    '93000000-0000-0000-0000-00000000c5c2');
+-- An import and the lawful basis it recorded (Admin v2 C15): Admin's alone (crm.import, and
+-- crm.contacts for the basis).
+insert into public.crm_import_batches (id, tenant_id, attestation, expected_rows, expected_bytes) values
+  ('93000000-0000-0000-0000-00000000c15b', '93000000-0000-0000-0000-000000000001', 'c15-v1', 1, 10);
+insert into public.crm_contact_imports (tenant_id, contact_id, batch_id, row_number, basis) values
+  ('93000000-0000-0000-0000-000000000001', '93000000-0000-0000-0000-00000000c5c1',
+   '93000000-0000-0000-0000-00000000c15b', 2, 'consent');
 insert into public.site_settings (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.site_integrations (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.ai_config (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;

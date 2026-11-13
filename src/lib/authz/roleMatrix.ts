@@ -40,6 +40,7 @@ export const CAP_GROUPS: readonly CapGroup[] = [
       'crm.contacts',
       'crm.tasks',
       'crm.erase',
+      'crm.import',
       'crm.settings',
     ],
   },

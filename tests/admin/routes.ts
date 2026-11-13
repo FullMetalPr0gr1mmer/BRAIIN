@@ -481,6 +481,8 @@ export const EXTRA_LINKS: readonly NavTab[] = [
     label: 'Backups, a version’s details',
     caps: [...RELEASE_READ_CAPS],
   },
+  // Import contacts (Admin v2 C15): reached from the People list's head, crm.import holders.
+  { href: '/admin/contacts/import', label: 'Import contacts', caps: ['crm.import'] },
 ];
 
 /**
