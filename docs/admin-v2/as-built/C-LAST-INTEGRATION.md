@@ -71,7 +71,13 @@ resolution restored it byte-equal to the other groups.
      now open the Companies tab, its drawer and the Merge dialog as Sales.
 4. **Legal register numbers.** C9b, C12 and C16 each filed L-5; C11 filed L-C11 and C15
    L-C15 (item f).
-5. **Counts checked and found consistent:** the case manifest (sorted, every new row named),
+5. **A planner check tipped by the merged suites (C12's `crm_merge` #67).** Run after the
+   other slices' suites in one database (the PGlite replay of every suite), the planner read
+   the phone rule's few rows by an index-only scan of C5's unique channel index
+   (`crm_contact_channels_once`, tenant first) instead of the lookup index; alone, the suite
+   passed. The check now accepts either tenant-first channels index and still refuses a
+   whole-table scan.
+6. **Counts checked and found consistent:** the case manifest (sorted, every new row named),
    the help guides (C9b `crm-settings` rev 2, C10b `the-sales-role` rev 3 and
    `roles-and-access` rev 6: no guide is put by two slices), the restated SQL functions (no
    function is restated by two of the six; each restates from its latest definition), the
@@ -218,6 +224,41 @@ EXC-013 on this branch and on main; no pre-existing row was touched.
   the file is missing and every case fails.
 - The flipped suites and rows of section 2.
 
-## 7. Gates
+Red for the flipped rows of section 2: before the flips, the full PGlite replay failed
+`crm_custom_fields` (5), `crm_merge` (10 and an abort), `rls_crm_companies` (6),
+`crm_contacts_import` (1) and `rls_sales_role` (3), and the full vitest failed 12 (`endpoints`
+10, `crmCustomFields` 1, `crmSettings` 1). Red for `crmLastIntegrationSql.spec` on a
+`git archive` copy (`scratchpad/cint_mut`, its `node_modules` junction removed before the copy
+was deleted): without 0141 the file fails to load; with the merge's follow line taken out 2
+fail, with the company line taken out 1 fails; the copy with 0141 as built passes 5 of 5.
 
-See the end of this note (filled in as they ran).
+## 7. Gates (2026-11-13, the branch head)
+
+- `astro check`: 0 errors, 0 warnings (80 hints); `tsc --noEmit`: clean.
+- `prettier --check .`: clean.
+- vitest, the whole suite with `--testTimeout=60000` (on 5c90472e, the wiring's head; only docs
+  and one pgTAP file changed after it): 475 files passed, 1 skipped; 12 190 tests passed, 21
+  skipped; no failure to re-run. After the docs: the 68 specs that read CLAUDE.md, the README,
+  crm.md, retention.md or migrations.md, with `crmMerge.spec`: 4 419 passed.
+- `check-migrations.mjs origin/main`: ok (0131, 0133 to 0141 over 0130).
+- The PGlite replay of every migration with all 99 suites: 97 pass; `audit_chain` #12 and
+  `grants_app_schema` section 8 fail, as on main. `crm_last_integration` 32 of 32.
+- Read-back `scratchpad/readback_cint.sql` (copy in the ops backup), replayed: 23
+  expectations, every one matched but `server_version_num` (PGlite 170005, production 170006).
+- `npm run build` with the CI dummy environment: ok.
+- `node scripts/admin-bundle.mjs`: the chunk plan holds; AdminContactsList, AdminContactDetail
+  and AdminContactCompanies 177.2 KB, AdminImportContacts 163.8 KB, AdminCrmSettings 235.3 KB,
+  the heaviest screen 235.3 KB (every screen within 300 KB).
+- `npm run size`: the public routes 26.85 KB; the admin sum **485.55 KB, over the 450 KB
+  tripwire** (each slice measured 466 to 473 KB alone; the six together add their lazy chunks).
+  Not raised, its glob unchanged: the open owner question.
+- `contrast-audit.mjs`: PASS (the merged admin CSS of C9b, C12 and C15).
+- e2e runs only in CI; the steps added in `companies.e2e.ts` and `merge.e2e.ts` were traced
+  against the markup and the routes (the `h1` "Companies", the 403 of the forget-domain route,
+  the duplicates GET, the merge POST and the 404 of the record merged away).
+
+## 8. Visual baselines
+
+Sales' sidebar and screens change with C10b (Contacts and Tasks) and now with the Companies tab
+and the Merge duplicates button: re-make the Sales pictures with the hand-run "Admin visual
+baselines" workflow after the merge.
