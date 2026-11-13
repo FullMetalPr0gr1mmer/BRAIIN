@@ -20,7 +20,7 @@ import {
   requireContactId,
   sealChannels,
 } from '@/lib/crm/contacts';
-import { customFieldDefinitions, validateCustomValues } from '@/lib/crm/contactCustom';
+import { mergeCustom, readCustomFields, validateCustomValues } from '@/lib/crm/contactCustom';
 
 // One contact (Admin v2 C6, crm.md §9): its page (GET) and a change (PATCH). `crm.contacts`.
 //
@@ -28,7 +28,7 @@ import { customFieldDefinitions, validateCustomValues } from '@/lib/crm/contactC
 // columns, whether it has an e-mail or a phone (kind, primary, where from; never the value:
 // that is the audited reveal), its leads (the safe lead columns lead workers read anyway,
 // with how each was linked, so a phone match shows as one to check), the first page of its
-// timeline (metadata only) and the custom field definitions (none until C9b). Everything is
+// timeline (metadata only) and the custom field definitions (C9b). Everything is
 // read as the caller: RLS and the live check decide. Audited `crm.contact.view` (queued, as
 // `lead.view` is: it reveals nothing gated).
 //
@@ -50,7 +50,7 @@ export const GET = defineAdminRoute({
   handler: async ({ auth, sb, params, audit }) => {
     const id = requireContactId(params);
     const contact = await getContact(sb, auth, id);
-    const [channels, leadPage, timelineResult] = await Promise.all([
+    const [channels, leadPage, timelineResult, customFields] = await Promise.all([
       channelPresence(sb, auth, id),
       contactLeads(sb, auth, id),
       sb.rpc('crm_contact_timeline', {
@@ -58,6 +58,7 @@ export const GET = defineAdminRoute({
         p_contact: id,
         p_filter: { limit: 30 },
       }),
+      readCustomFields(sb, auth),
     ]);
     if (timelineResult.error) throw contactError(timelineResult.error, 'the contact timeline');
 
@@ -70,7 +71,7 @@ export const GET = defineAdminRoute({
       // True when the contact has more leads than the page lists (C6 review, C6-COR-7).
       moreLeads: leadPage.more,
       timeline: parseTimeline(timelineResult.data),
-      customFields: customFieldDefinitions(),
+      customFields,
     };
   },
 });
@@ -139,7 +140,6 @@ export const PATCH = defineAdminRoute({
       };
     }
 
-    if (input.custom !== undefined) validateCustomValues(customFieldDefinitions(), input.custom);
     const detailFields = Object.keys(values).filter((column) => column !== 'is_starred');
 
     let row: Record<string, unknown>;
@@ -149,7 +149,19 @@ export const PATCH = defineAdminRoute({
       }
       // updateRow reads any row the caller sees; a merge tombstone (C12) is not a contact,
       // so it is a 404 here as on every other contact path (C6 review, C6-SEC-4).
-      await getContact(sb, auth, id, 'id');
+      const stored = await getContact(
+        sb,
+        auth,
+        id,
+        input.custom !== undefined ? 'id,custom' : 'id',
+      );
+      if (input.custom !== undefined) {
+        // C9b: the values sent are checked against the tenant's fields, then laid over the
+        // stored ones (a null or an empty text clears a field; the others are kept). The write
+        // is at the version read, so a value stored meanwhile is never lost: that is a 409.
+        validateCustomValues(await readCustomFields(sb, auth), input.custom);
+        values['custom'] = mergeCustom(stored['custom'], input.custom);
+      }
       row = await updateRow<Record<string, unknown>>(
         sb,
         'crm_contacts',

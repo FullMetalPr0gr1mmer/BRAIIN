@@ -707,7 +707,7 @@ alter type public.app_role add value if not exists 'sales';
     - Contact stages: the four, read-only, with the mockup's descriptions.
     - Custom fields: up to 12 rows of key, label, type; a warning that renaming a key orphans stored values.
     - Response time and assignment: SLA hours; rule Manual, Round robin (pool) or Always to one person. The Notifications architect's "Assignment rule" and "Answer within" fields write here.
-    - Data & privacy: "Leads and contacts are kept {N} months after their last activity" (editable only by settings.general holders: 12, 18 or 24 months); "Erase a person's data" (crm.erase); the PDPL note "…Answer within 30 days."
+    - Data & privacy: "Leads are kept {N} months after they arrive, and contacts {N} months after their last activity" (C9b review: leads count from arrival, docs/retention.md) (editable only by settings.general holders: 12, 18 or 24 months); "Erase a person's data" (crm.erase); the PDPL note "…Answer within 30 days."
     - The Email sending, WhatsApp Business and Sending rules cards are **not shown** (LATER).
 
 **Sidebar badges** are server-rendered in AdminLayout on each Tier C render, gated by capability: Leads = initial-stage, non-spam count; Tasks = **my** overdue count. No polling.

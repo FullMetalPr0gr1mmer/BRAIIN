@@ -7,11 +7,19 @@ import {
   CONTACT_STAGES,
   type ContactCreate,
   type ContactStage,
+  type CustomFieldDefinition,
 } from '@schemas/crm';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { withFlash } from '@/lib/admin/flash';
 import { CONTACT_SOURCE_LABELS, CONTACT_STAGE_LABELS } from '@/lib/crm/contactView';
 import type { ContactPerson } from './shared';
+import {
+  CustomFieldInputs,
+  customErrors,
+  customPatch,
+  unreadableBoxes,
+  type CustomFormValues,
+} from './customFields';
 
 // "Add contact" (Admin v2 C7, crm.md §11 screen 7): someone met at an event, a referral, a
 // call. Loaded with import() when the button is first pressed, so neither this form nor the kit
@@ -23,7 +31,8 @@ import type { ContactPerson } from './shared';
 //   422  each field's own message, and a summary first
 //   429  the hourly limit, said inline
 // No consent toggles (crm.md §11: LATER). What was typed is never put in an address, in storage
-// or in a toast.
+// or in a toast. The custom fields CRM settings define (C9b) follow the contact's own fields;
+// only the filled ones are sent.
 
 export interface AddContactDrawerProps {
   open: boolean;
@@ -31,6 +40,8 @@ export interface AddContactDrawerProps {
   people: readonly ContactPerson[];
   /** The signed-in person: the default owner. */
   me: string;
+  /** (C9b) The custom fields CRM settings define, in their order. */
+  customFields?: readonly CustomFieldDefinition[];
 }
 
 export interface ContactForm {
@@ -145,7 +156,15 @@ export function checkContact(form: ContactForm): Partial<Record<keyof ContactFor
   return errors;
 }
 
-export default function AddContactDrawer({ open, onClose, people, me }: AddContactDrawerProps) {
+const NO_FIELDS: readonly CustomFieldDefinition[] = [];
+
+export default function AddContactDrawer({
+  open,
+  onClose,
+  people,
+  me,
+  customFields = NO_FIELDS,
+}: AddContactDrawerProps) {
   const prefix = useId();
   const id = (key: keyof ContactForm) => `${prefix}-${key}`;
   const owners = people.filter((p) => p.canOwn);
@@ -162,6 +181,8 @@ export default function AddContactDrawer({ open, onClose, people, me }: AddConta
     source: 'manual',
     tags: '',
   }));
+  const [custom, setCustom] = useState<CustomFormValues>({});
+  const [customProblems, setCustomProblems] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Partial<Record<keyof ContactForm, string>>>({});
   const [summary, setSummary] = useState<FieldError[]>([]);
   const [failure, setFailure] = useState('');
@@ -171,14 +192,23 @@ export default function AddContactDrawer({ open, onClose, people, me }: AddConta
   const set = (key: keyof ContactForm) => (value: string) =>
     setForm((f) => ({ ...f, [key]: value }) as ContactForm);
 
-  function show(found: Partial<Record<keyof ContactForm, string>>) {
+  function show(
+    found: Partial<Record<keyof ContactForm, string>>,
+    customFound: Record<string, string> = {},
+  ) {
     setErrors(found);
-    setSummary(
-      (Object.entries(found) as [keyof ContactForm, string][]).map(([key, message]) => ({
+    setCustomProblems(customFound);
+    setSummary([
+      ...(Object.entries(found) as [keyof ContactForm, string][]).map(([key, message]) => ({
         id: id(key),
         message: `${LABELS[key]}: ${message}`,
       })),
-    );
+      ...customFields.flatMap((f) =>
+        customFound[f.key]
+          ? [{ id: `${prefix}-c-${f.key}`, message: `${f.label}: ${customFound[f.key]}` }]
+          : [],
+      ),
+    ]);
   }
 
   async function submit(event: FormEvent) {
@@ -186,10 +216,19 @@ export default function AddContactDrawer({ open, onClose, people, me }: AddConta
     setFailure('');
     setTaken(null);
     const local = checkContact(form);
-    if (Object.keys(local).length > 0) return show(local);
+    const localCustom = customErrors(
+      customFields,
+      custom,
+      unreadableBoxes(customFields, prefix, (box) => document.getElementById(box)),
+    );
+    if (Object.keys(local).length > 0 || Object.keys(localCustom).length > 0) {
+      return show(local, localCustom);
+    }
     show({});
     setBusy(true);
     const sent = contactBody(form);
+    const customValues = customPatch(customFields, {}, custom);
+    if (customValues) sent.custom = customValues;
     try {
       const added = await adminFetch<{ id: string }>('/api/admin/crm/contacts', {
         method: 'POST',
@@ -363,6 +402,13 @@ export default function AddContactDrawer({ open, onClose, people, me }: AddConta
         <p id={`${id('tags')}-hint`} className="f__hint">
           Separate tags with commas. Up to 10.
         </p>
+        <CustomFieldInputs
+          fields={customFields}
+          values={custom}
+          idPrefix={prefix}
+          errors={customProblems}
+          onChange={(key, value) => setCustom((c) => ({ ...c, [key]: value }))}
+        />
       </form>
     </Drawer>
   );

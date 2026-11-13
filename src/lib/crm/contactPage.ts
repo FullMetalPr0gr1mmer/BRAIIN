@@ -12,7 +12,7 @@ import {
   parseTimeline,
   type TimelinePage,
 } from './contacts';
-import { customFieldDefinitions } from './contactCustom';
+import { readCustomFields } from './contactCustom';
 import { crmPeople } from './people';
 import type { ContactLead, ContactPerson, ContactSummary } from './contactView';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
@@ -26,11 +26,12 @@ import { isRole } from '@/lib/auth/types';
 // caller, for the caller's tenant, so RLS, the live check and the column grants decide again.
 //
 // Round trips on top of the layout's shell (P-15, the Workers Free plan):
-//   list     people, summary, page 1                                            = 3
+//   list     people, summary, page 1, the custom fields (C9b)                   = 4
 //   contact  the row, then its channels (presence), its leads, its first timeline page,
-//            the lead stages, the people, the retention months, the view's audit row = 8
+//            the lead stages, the people, the retention months, the custom fields (C9b),
+//            the view's audit row                                                     = 9
 //            (C8b: for a crm.tasks holder the Tasks card's owners come from the same people
-//            read, src/lib/crm/people.ts, so the count stays 8; the card reads its tasks
+//            read, src/lib/crm/people.ts, so it costs nothing more; the card reads its tasks
 //            itself, after the page is up)
 // Never a channel's value or index, a note, a score reason or a decrypted value: those are
 // read by the island, through the audited routes, and only on request.
@@ -183,7 +184,7 @@ export async function readContactDetail(
   id: string,
 ): Promise<ContactDetailInitial> {
   const row = await getContact(sb, auth, id);
-  const [channels, leadPage, timeline, retentionMonths] = await Promise.all([
+  const [channels, leadPage, timeline, retentionMonths, customFields] = await Promise.all([
     channelPresence(sb, auth, id),
     contactLeads(sb, auth, id),
     sb.rpc('crm_contact_timeline', {
@@ -192,6 +193,9 @@ export async function readContactDetail(
       p_filter: { limit: 30 },
     }),
     readRetentionMonths(sb),
+    // C9b: the fields Details draws (none when they cannot be read; a save is checked
+    // against the definitions the route reads itself).
+    readCustomFields(sb, auth).catch(() => []),
     writeAudit(sb, auth, {
       action: 'crm.contact.view',
       entityType: 'contact',
@@ -207,7 +211,7 @@ export async function readContactDetail(
     leads: leadPage.leads as unknown as ContactLead[],
     moreLeads: leadPage.more,
     timeline: parseTimeline(timeline.data),
-    customFields: customFieldDefinitions(),
+    customFields,
     retentionMonths,
   };
 }
