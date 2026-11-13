@@ -1,10 +1,11 @@
 import { useId, useState } from 'react';
 import { Badge } from '@/components/admin/kit/StatusBadge';
 import { useClock } from '@/components/admin/kit/clock';
-import { adminFetch, describeError } from '@/lib/admin/client';
+import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { isoOf } from '@/lib/admin/relTime';
 import type { StageView } from '@/lib/crm/leadPage';
 import type { ContactLead } from '@/lib/crm/contactView';
+import { REVEAL_LIMIT_TEXT } from './ContactChannelsCard';
 
 // A contact's leads (Admin v2 C7, crm.md §11 screen 6): every lead linked to the person,
 // newest first, each with its number, stage and arrival, linked to its page. A lead matched by
@@ -12,12 +13,23 @@ import type { ContactLead } from '@/lib/crm/contactView';
 // asks "Is this the same person?" and sends POST …/links, `confirm` (it is: the lead's e-mail
 // and phone join the contact) or `detach` (it is not: the lead leaves the contact for good).
 // The answer says what was copied, by kind, never a value.
+//
+// For a role that cannot export (Sales), a confirm spends a slot of the reveal's limiter, since
+// the next reveal of the contact shows what it copied (C10b): the button says so, and a 429 says
+// the reveal limit was reached, in the words the reveal itself uses (C10b review, C10B-COR-3).
 
 /** What POST …/links answers. */
 interface LinkAnswer {
   link: string;
   email: string | null;
   phone: string | null;
+}
+
+/** The words for a refused check: the reveal limit in the reveal's own words, else the usual. */
+export function checkErrorText(err: unknown): string {
+  return err instanceof AdminApiError && err.info.status === 429
+    ? REVEAL_LIMIT_TEXT
+    : describeError(err);
 }
 
 /** What a confirmed match copied, in words ('' when everything went as expected). */
@@ -38,6 +50,8 @@ interface Props {
   stages: readonly StageView[];
   contactId: string;
   canAddLead: boolean;
+  /** A confirm counts as a logged reveal for this role (Sales). A UX hint: the route decides. */
+  confirmIsReveal: boolean;
   /**
    * The contact has an e-mail or a phone: a new lead copies them, and the route refuses one
    * for a contact with neither (422 NO_CHANNEL), so the button waits for one (C7-UX-5).
@@ -54,6 +68,7 @@ export default function ContactLeadsCard({
   stages,
   contactId,
   canAddLead,
+  confirmIsReveal,
   hasChannel,
   onNewLead,
   onChecked,
@@ -78,7 +93,7 @@ export default function ContactLeadsCard({
           : 'The lead no longer belongs to this contact.',
       );
     } catch (err) {
-      setError(describeError(err));
+      setError(checkErrorText(err));
     } finally {
       setBusy(false);
     }
@@ -141,7 +156,9 @@ export default function ContactLeadsCard({
                       disabled={busy}
                       onClick={() => void check(lead, 'confirm')}
                     >
-                      Yes, same person<span className="visually-hidden"> ({label})</span>
+                      Yes, same person
+                      {confirmIsReveal && ' (counts as a logged reveal)'}
+                      <span className="visually-hidden"> ({label})</span>
                     </button>
                     <button
                       type="button"

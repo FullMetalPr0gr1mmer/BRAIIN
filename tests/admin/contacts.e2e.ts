@@ -5,8 +5,9 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 /*
  * The contacts screens, end to end (Admin v2 C7, crm.md §11 screens 5 to 8, and the palette's
- * contacts), on the real Worker and the local stack, as the Admin (and, for the refusals, as
- * Content Creator, SEO, Developer and Sales, none of whom holds crm.contacts):
+ * contacts), on the real Worker and the local stack, as the Admin, as Sales (Admin v2 C10b:
+ * crm.contacts, never crm.erase) and, for the refusals, as Content Creator, SEO and Developer,
+ * none of whom holds crm.contacts:
  *   the list     a filter writes the address; a whole e-mail finds its person through the
  *                blind index and never reaches the address or the page; the star; a bulk stage;
  *   the drawer   add by hand onto the contact's page; a taken e-mail is said, with an Open link;
@@ -18,6 +19,10 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *                second confirm; a 404 after, and the task gone with them;
  *   the palette  finds a person by name and by whole e-mail, typed key by key; no part of a
  *                typed term goes into a URL;
+ *   Sales        (C10b) Contacts in its menu; a contact it added, opened, revealed once (one
+ *                audit row, read back by an Admin), with the "kept until" line (the retention
+ *                door: Sales reads no site_settings); no More actions, no note deletion, and
+ *                the erasure and the lead export refused by the server;
  *   refusals     every other role gets a 403 page (and API) for a real contact, with no name
  *                or company of theirs in it.
  * axe runs with each dialog open. Every contact it adds is named with this run's token and
@@ -362,7 +367,74 @@ test.describe('as admin', () => {
   });
 });
 
-for (const role of ['content_creator', 'seo', 'developer', 'sales'] as const) {
+// Admin v2 C10b: Sales holds crm.contacts (and crm.tasks), never crm.erase or export.csv.
+test.describe('as sales', () => {
+  test.use({ storageState: authFile('sales') });
+  test.describe.configure({ mode: 'serial' });
+
+  test('Contacts in the menu; a contact added, opened, revealed once and logged; no erasure', async ({
+    page,
+    browser,
+  }) => {
+    // Added by Sales through the real route (crm.contacts).
+    const person = await addContact(page, 'sales', { company: `Sales Co ${RUN}` });
+    await visit(page, '/admin/contacts', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { level: 1, name: 'Contacts' })).toBeVisible();
+    await expect(page.locator('nav.admin-sidebar a[href="/admin/contacts"]')).toHaveCount(1);
+    await expect(page.locator('nav.admin-sidebar a[href="/admin/tasks"]')).toHaveCount(1);
+
+    await visit(page, `/admin/contacts/${person.id}`, { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { level: 1, name: person.name })).toBeVisible();
+    expect(await page.content()).not.toContain(person.email!);
+    // The retention horizon reaches Sales through its door (it reads no site_settings row).
+    await expect(page.getByText(/kept until .+ unless there is new activity/)).toBeVisible();
+    // No erasure for Sales: no More actions, and no note can be deleted.
+    await expect(page.getByText('More actions', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Erase everything about them…' })).toHaveCount(0);
+    await page.getByLabel('New note').fill(`Sales note (${RUN})`);
+    await page.getByRole('button', { name: 'Add note' }).click();
+    await expect(page.getByText(`Sales note (${RUN})`)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete note' })).toHaveCount(0);
+
+    await page
+      .getByRole('button', { name: 'Reveal contact details (this access is logged)' })
+      .click();
+    await expect(page.getByText(person.email!, { exact: true })).toBeVisible();
+    await axe(page, 'a contact revealed, as Sales');
+
+    // One audit row for the reveal, read back by an Admin (Sales reads no activity log).
+    expect(
+      (
+        await page.request.get(`/api/admin/audit?entityType=contact&entityId=${person.id}`)
+      ).status(),
+    ).toBe(403);
+    const admin = await browser.newContext({ storageState: authFile('admin') });
+    const audit = await admin.request.get(
+      `/api/admin/audit?entityType=contact&entityId=${person.id}`,
+    );
+    expect(audit.status()).toBe(200);
+    const entries = ((await audit.json()) as { data: { rows: { verb: string }[] } }).data.rows;
+    expect(entries.filter((e) => e.verb === 'Revealed the e-mails and phones of')).toHaveLength(1);
+    await admin.close();
+
+    // The server refuses the erasure, its preview and the lead export to Sales.
+    for (const api of [
+      `/api/admin/crm/contacts/${person.id}/erase-preview`,
+      `/api/admin/crm/contacts/${person.id}/erase`,
+    ]) {
+      const res = await page.request.post(api, {
+        headers: { 'x-csrf-token': await csrf(page) },
+        data: {},
+      });
+      expect(res.status(), api).toBe(403);
+    }
+    expect((await page.request.get('/api/admin/leads/export')).status()).toBe(403);
+    // Still there: nothing was erased.
+    expect((await page.request.get(`/api/admin/crm/contacts/${person.id}`)).status()).toBe(200);
+  });
+});
+
+for (const role of ['content_creator', 'seo', 'developer'] as const) {
   test.describe(`as ${role}`, () => {
     test.use({ storageState: authFile(role) });
 

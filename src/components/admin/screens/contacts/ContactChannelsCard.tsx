@@ -11,7 +11,9 @@ import type { ChannelPresence } from '@/lib/crm/contactPage';
 // never storage, never the address, gone when the page is left (ContactDetail clears it on
 // pagehide and on a return from the back/forward cache). The Email, Call and WhatsApp links
 // exist only after a reveal, and so does editing: add, make main, remove (one versioned PATCH
-// each, sent through the page's queue, `edit`). A contact with no e-mail or phone has nothing to
+// each, sent through the page's queue, `edit`). Remove is offered to `crm.erase` holders only
+// (Admin): it deletes a person's details, and the route and the door refuse anyone else (C10b
+// review, C10B-SEC-2). A contact with no e-mail or phone has nothing to
 // reveal: the Add form is there at once, and no reveal is offered (no reveal slot spent, no
 // audit row for nothing; C7 review, C7-UX-5).
 
@@ -34,6 +36,8 @@ interface Props {
   revealed: RevealedValues | null;
   onRevealed: (values: RevealedValues) => void;
   busy: boolean;
+  /** May this person remove an e-mail or phone (`crm.erase`)? A UX hint: the route checks. */
+  canRemove: boolean;
   /** One channel change through the page's queue; resolves to whether it saved. */
   edit: (change: {
     add?: { kind: 'email' | 'phone'; value: string }[];
@@ -48,6 +52,7 @@ export default function ContactChannelsCard({
   revealed,
   onRevealed,
   busy,
+  canRemove,
   edit,
 }: Props) {
   const id = useId();
@@ -165,15 +170,17 @@ export default function ContactChannelsCard({
                         Make main<span className="visually-hidden"> {label}</span>
                       </button>
                     )}
-                    <button
-                      type="button"
-                      data-size="sm"
-                      data-variant="ghost"
-                      disabled={busy}
-                      onClick={() => void edit({ remove: [channel.id] })}
-                    >
-                      Remove<span className="visually-hidden"> {label}</span>
-                    </button>
+                    {canRemove && (
+                      <button
+                        type="button"
+                        data-size="sm"
+                        data-variant="ghost"
+                        disabled={busy}
+                        onClick={() => void edit({ remove: [channel.id] })}
+                      >
+                        Remove<span className="visually-hidden"> {label}</span>
+                      </button>
+                    )}
                   </span>
                 )}
               </li>

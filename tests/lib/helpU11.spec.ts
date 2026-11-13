@@ -154,6 +154,12 @@ describe('the-sales-role names the one setting Sales opens (the bell settings, U
     HelpArticleSeedSchema.parse(BEFORE.set.find((g) => g.slug === 'the-sales-role'));
   const flat = (g: HelpArticleRow, lang: 'en' | 'ar') =>
     g.body[lang].flatMap((b) => (Array.isArray(b.x) ? b.x : [b.x]));
+  // Read as the integrations migration leaves it: Admin v2 C10b puts the guide again (the
+  // contacts and the tasks), and tests/lib/helpC10b.spec.ts holds that text.
+  const atU11 = () =>
+    HelpArticleSeedSchema.parse(AFTER.set.find((g) => g.slug === 'the-sales-role'));
+  const words = (lang: 'en' | 'ar') =>
+    [lang === 'en' ? atU11().title : atU11().title_ar, ...flat(atU11(), lang)].join('\n');
 
   it('Sales sees Settings › Notifications in its menu, and nothing else of Settings', () => {
     const groups = visibleNav('sales');
@@ -171,9 +177,9 @@ describe('the-sales-role names the one setting Sales opens (the bell settings, U
       g.tags,
       g.screens,
     ];
-    expect(keep(guide('the-sales-role'))).toEqual(keep(before()));
-    const en = text('the-sales-role', 'en');
-    const ar = text('the-sales-role', 'ar');
+    expect(keep(atU11())).toEqual(keep(before()));
+    const en = words('en');
+    const ar = words('ar');
     expect(en).not.toContain('it opens no page, setting,');
     expect(en).toContain('it opens no page, site setting, media or job application');
     expect(en).toContain(
@@ -185,16 +191,14 @@ describe('the-sales-role names the one setting Sales opens (the bell settings, U
     // One line added in each language, and every other block as C10a left it but the two
     // words that become "site settings".
     for (const lang of ['en', 'ar'] as const) {
-      const added = flat(guide('the-sales-role'), lang).filter(
-        (line) => !flat(before(), lang).includes(line),
-      );
+      const added = flat(atU11(), lang).filter((line) => !flat(before(), lang).includes(line));
       expect(added, lang).toHaveLength(3);
       expect(
-        guide('the-sales-role').body[lang].map((b) => b.t),
+        atU11().body[lang].map((b) => b.t),
         lang,
       ).toEqual(before().body[lang].map((b) => b.t));
     }
-    expect(flat(guide('the-sales-role'), 'en')).toHaveLength(flat(before(), 'en').length + 1);
+    expect(flat(atU11(), 'en')).toHaveLength(flat(before(), 'en').length + 1);
   });
 });
 

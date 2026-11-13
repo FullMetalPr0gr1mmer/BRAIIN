@@ -127,10 +127,18 @@ describe('the roles', () => {
 // ── Sales (Admin v2 C10a, owner decision A4) ────────────────────────────────────────────
 // Leads, one lead's PII at a time, and the website stats. Everything else is pinned off,
 // capability by capability, so a later edit that hands Sales one more fails here by name.
-describe('Sales holds leads and the stats, nothing else', () => {
-  const SALES_HOLDS: Capability[] = ['leads.manage', 'leads.pii', 'analytics.read'];
+// Admin v2 C10a gave Sales the leads and the stats; C10b the contacts and the tasks
+// (crm.md §2.1). Never the erasure, the CRM's settings or an export.
+describe('Sales holds leads, contacts, tasks and the stats, nothing else', () => {
+  const SALES_HOLDS: Capability[] = [
+    'leads.manage',
+    'leads.pii',
+    'crm.contacts',
+    'crm.tasks',
+    'analytics.read',
+  ];
 
-  it('holds exactly leads.manage, leads.pii and analytics.read, in full', () => {
+  it('holds exactly leads.manage, leads.pii, crm.contacts, crm.tasks and analytics.read, in full', () => {
     expect(CAPABILITIES.filter((cap) => ROLE_CAPS.sales[cap] !== 'none').sort()).toEqual(
       [...SALES_HOLDS].sort(),
     );
@@ -163,8 +171,6 @@ describe('Sales holds leads and the stats, nothing else', () => {
     // exports, backups and erasure: no bulk contact details; nor the CRM's settings
     'export.csv',
     'export.backup',
-    'crm.contacts',
-    'crm.tasks',
     'crm.erase',
     'crm.settings',
     // hiring, logs, the activity log, site health, search analytics, the stats' goals
@@ -201,5 +207,19 @@ describe('Sales holds leads and the stats, nothing else', () => {
       if (ROLE_CAPS[role]['crm.tasks'] === 'full')
         expect(ROLE_CAPS[role]['crm.contacts'], `${role}: crm.tasks`).toBe('full');
     }
+  });
+
+  it('Developer still holds no crm.* (owner default O-7), and only Admin erases', () => {
+    for (const cap of ['crm.contacts', 'crm.tasks', 'crm.erase', 'crm.settings'] as const)
+      expect(ROLE_CAPS.developer[cap], cap).toBe('none');
+    expect(ROLES.filter((role) => ROLE_CAPS[role]['crm.erase'] !== 'none')).toEqual(['admin']);
+    expect(ROLES.filter((role) => ROLE_CAPS[role]['crm.contacts'] !== 'none')).toEqual([
+      'admin',
+      'sales',
+    ]);
+    expect(ROLES.filter((role) => ROLE_CAPS[role]['crm.tasks'] !== 'none')).toEqual([
+      'admin',
+      'sales',
+    ]);
   });
 });

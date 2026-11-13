@@ -852,6 +852,67 @@ describe('POST /[id]/links (C6 review, C6-SEC-3, C6-COR-2)', () => {
         detail: { lead: OTHER, action: 'confirm', email: 'full', phone: 'kept' },
       },
     ]);
+    // An Admin may export every lead's details anyway: its confirm spends no reveal slot.
+    expect(claims).toEqual([]);
+  });
+
+  // Admin v2 C10b (crm.md §10, C6-SEC-3): one reveal stays one person. A confirm copies the
+  // lead's e-mail and phone into the contact the next reveal decrypts, so a role that cannot
+  // export (Sales) spends a slot of the reveal's own limiter for it.
+  describe('Sales (C10b): a confirm spends a reveal slot', () => {
+    const asSales = () => {
+      sessionRole = 'sales';
+      liveProfile = { role: 'sales', is_active: true, locked_until: null };
+    };
+    const post = (action: 'confirm' | 'detach') =>
+      links.POST(
+        ctx(`/api/admin/crm/contacts/${CONTACT}/links`, 'POST', { leadId: OTHER, action }),
+      );
+
+    it('the live recheck, then the pii-reveal slot, then the read and the door', async () => {
+      asSales();
+      rpcAnswers['crm_contact_link_lead'] = {
+        data: { link: 'staff', email: 'added', phone: 'kept' },
+        error: null,
+      };
+      const res = await post('confirm');
+      expect(res.status).toBe(200);
+      expect(events.slice(0, 4)).toEqual([
+        'svc:profiles',
+        'ops:pii-reveal',
+        'rls:crm_contacts',
+        'svc:rpc:crm_contact_link_lead',
+      ]);
+      expect(claims).toEqual([{ op: 'pii-reveal', limits: PII_REVEAL_LIMITS }]);
+      expect(audits.map((a) => a.action)).toEqual(['crm.contact.link']);
+    });
+
+    it('past the limit: a 429, nothing read, nothing copied, nothing audited', async () => {
+      asSales();
+      limited = true;
+      const res = await post('confirm');
+      expect(res.status).toBe(429);
+      expect(events).not.toContain('rls:crm_contacts');
+      expect(rpcCalls).toEqual([]);
+      expect(audits).toEqual([]);
+    });
+
+    it('a detach copies nothing and spends no slot', async () => {
+      asSales();
+      rpcAnswers['crm_contact_link_lead'] = { data: { link: 'detached' }, error: null };
+      const res = await post('detach');
+      expect(res.status).toBe(200);
+      expect(claims).toEqual([]);
+    });
+
+    it('a Sales profile demoted since the token was issued is refused before any slot', async () => {
+      sessionRole = 'sales';
+      liveProfile = { role: 'content_creator', is_active: true, locked_until: null };
+      const res = await post('confirm');
+      expect(res.status).toBe(403);
+      expect(claims).toEqual([]);
+      expect(rpcCalls).toEqual([]);
+    });
   });
 
   it('a lead that is not this contact’s phone match is a 422', async () => {
@@ -931,6 +992,57 @@ describe('PATCH /[id] (C6 review, C6-SEC-4, C6-COR-2)', () => {
     if (answer.error?.code === '23514') {
       expect(JSON.stringify(await res.json())).toContain('up to 10 e-mail addresses');
     }
+  });
+
+  // C10b review, C10B-SEC-2: removing an e-mail or phone deletes a person's details, so it is
+  // erasure's (crm.erase, Admin); Sales adds and makes primary.
+  describe('Sales (C10b review): a removal is erasure, refused', () => {
+    const asSales = () => {
+      sessionRole = 'sales';
+      liveProfile = { role: 'sales', is_active: true, locked_until: null };
+    };
+
+    it('a removal is a 403 before anything is read, written or audited', async () => {
+      asSales();
+      rpcAnswers['crm_edit_contact_channels'] = { data: { added: 0, removed: 1 }, error: null };
+      const res = await patch({ version: 3, channels: { remove: [OTHER] } });
+      expect(res.status).toBe(403);
+      expect(events).toEqual([]);
+      expect(rpcCalls).toEqual([]);
+      expect(audits).toEqual([]);
+    });
+
+    it('a removal sent with an add is refused whole', async () => {
+      asSales();
+      const res = await patch({
+        version: 3,
+        channels: { add: [{ kind: 'phone', value: '+966501234567' }], remove: [OTHER] },
+      });
+      expect(res.status).toBe(403);
+      expect(rpcCalls).toEqual([]);
+    });
+
+    it('an add and a new main still reach the door', async () => {
+      asSales();
+      rpcAnswers['crm_edit_contact_channels'] = { data: { added: 1, removed: 0 }, error: null };
+      const res = await patch({
+        version: 3,
+        channels: { add: [{ kind: 'phone', value: '+966501234567' }], primary: [OTHER] },
+      });
+      expect(res.status).toBe(200);
+      const call = rpcCalls.find((c) => c.fn === 'crm_edit_contact_channels')!;
+      expect(call.args['p_remove']).toEqual([]);
+      expect(call.args['p_primary']).toEqual([OTHER]);
+    });
+
+    it('the door’s own refusal of a removal is a 403, audited nothing', async () => {
+      // An Admin demoted between the live recheck and the door: the database's
+      // app.crm_eraser_ok refuses it.
+      rpcAnswers['crm_edit_contact_channels'] = { data: null, error: { code: '42501' } };
+      const res = await patch({ version: 3, channels: { remove: [OTHER] } });
+      expect(res.status).toBe(403);
+      expect(audits).toEqual([]);
+    });
   });
 
   it('details and channels in one request are a 422, before anything is read', async () => {

@@ -78,10 +78,20 @@ describe('the roles as Users & roles shows them', () => {
     expect(ROLE_LABELS.sales).toBe('Sales');
   });
 
-  it('says what Sales is: leads, one lead at a time and logged, no exports', () => {
-    expect(ROLE_DESCRIPTIONS.sales).toContain('one lead at a time');
+  it('says what Sales is: leads, contacts and tasks, one at a time and logged, no exports or erasing', () => {
+    expect(ROLE_DESCRIPTIONS.sales).toContain(
+      'Works leads, the contacts behind them and follow-up tasks',
+    );
+    expect(ROLE_DESCRIPTIONS.sales).toContain('one lead’s or one contact’s details at a time');
     expect(ROLE_DESCRIPTIONS.sales).toContain('logged');
-    expect(ROLE_DESCRIPTIONS.sales).toContain('No content, settings, exports or job applications');
+    expect(ROLE_DESCRIPTIONS.sales).toContain(
+      'No content, settings, exports, erasing or job applications',
+    );
+    // What it names is what ROLE_CAPS gives (Admin v2 C10b), and what it rules out is withheld.
+    expect(ROLE_CAPS.sales['crm.contacts']).toBe('full');
+    expect(ROLE_CAPS.sales['crm.tasks']).toBe('full');
+    expect(ROLE_CAPS.sales['crm.erase']).toBe('none');
+    expect(ROLE_CAPS.sales['export.csv']).toBe('none');
   });
 
   it('an invite or a role change to Sales passes the schema the users routes read', () => {

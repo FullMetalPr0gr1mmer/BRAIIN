@@ -1,6 +1,9 @@
 import { ContactLinkSchema } from '@schemas/crm';
 import { defineAdminRoute } from '@/lib/admin/route';
 import { liveRecheck } from '@/lib/admin/liveRecheck';
+import { claimPrivilegedOp, PII_REVEAL_LIMITS } from '@/lib/admin/rateLimit';
+import { receivesLeadPiiUnasked } from '@/lib/admin/leadFields';
+import { CONTACT_REVEAL_OP } from '@/lib/crm/contactReveal';
 import { serviceClient } from '@/lib/supabase/server';
 import { contactError, getContact, requireContactId } from '@/lib/crm/contacts';
 
@@ -20,6 +23,17 @@ import { contactError, getContact, requireContactId } from '@/lib/crm/contacts';
 // profile itself, live; the Worker rechecks it first, and the caller's own client must see
 // the contact (RLS, the live check: a 404 otherwise). Audited `crm.contact.link` with the
 // lead's id, the action and what was copied (kinds, never values).
+//
+// One reveal stays one person (Admin v2 C10b, crm.md §10, C6-SEC-3): a confirm copies that
+// lead's e-mail and phone into the contact, and the contact's next reveal decrypts them. A
+// role that cannot export (Sales: `leads.pii` one lead at a time, never `export.csv`) spends a
+// slot of the reveal's own limiter for it (`pii-reveal`, fail-closed, after the live recheck
+// and before anything is read), as if it had revealed that lead; so what a confirm brings has
+// cost it a slot, and every door that adds a channel keeps to C6's ceiling (ten of each kind;
+// the arrival's link too since the C10b review), so one reveal shows at most twenty values.
+// Any later door that moves another record's channels into a contact does the same. Admin
+// and Developer may take every lead's details at once anyway (`receivesLeadPiiUnasked`), so
+// their confirm spends none. A detach copies nothing and spends none.
 
 export const prerender = false;
 
@@ -33,6 +47,9 @@ export const POST = defineAdminRoute({
   handler: async ({ auth, sb, input, params, audit }) => {
     const id = requireContactId(params);
     await liveRecheck(auth);
+    if (input.action === 'confirm' && !receivesLeadPiiUnasked(auth.role)) {
+      await claimPrivilegedOp(auth, CONTACT_REVEAL_OP, PII_REVEAL_LIMITS);
+    }
     await getContact(sb, auth, id, 'id');
 
     const { data, error } = await serviceClient().rpc('crm_contact_link_lead', {
