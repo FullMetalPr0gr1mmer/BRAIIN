@@ -86,9 +86,10 @@ describe('the-sales-role: contacts and tasks, one person at a time, no erasure',
         after().body[lang].map((b) => b.t),
         lang,
       ).toEqual(before().body[lang].map((b) => b.t));
-      // Two lines more (Contacts, Tasks); the bell-settings line, the notes line, the dashboard
-      // line, the export line and the "cannot change content" line stay word for word.
-      expect(flat(after(), lang), lang).toHaveLength(flat(before(), lang).length + 2);
+      // Three lines more (Contacts, Tasks and, since the owner's decisions of 2026-11-13, what
+      // an Admin does); the bell-settings line, the notes line, the dashboard line, the export
+      // line and the "cannot change content" line stay word for word.
+      expect(flat(after(), lang), lang).toHaveLength(flat(before(), lang).length + 3);
       const kept = flat(before(), lang).filter((line) => flat(after(), lang).includes(line));
       expect(kept.length, lang).toBe(flat(before(), lang).length - 3);
     }
@@ -100,7 +101,7 @@ describe('the-sales-role: contacts and tasks, one person at a time, no erasure',
     expect(ROLE_CAPS.sales['crm.contacts']).toBe('full');
     expect(ROLE_CAPS.sales['crm.tasks']).toBe('full');
     expect(en).toContain(
-      "Reveal one lead's contact details, budget and timeline at a time, or one contact's e-mails and phones.",
+      "Reveal one lead's contact details, budget and timeline at a time, or one contact's main e-mail and main phone.",
     );
     expect(en).toContain(
       `up to ${PII_REVEAL_LIMITS.perUser} an hour for each person and ${PII_REVEAL_LIMITS.perTenant} an hour for the whole team, leads and contacts together`,
@@ -108,7 +109,10 @@ describe('the-sales-role: contacts and tasks, one person at a time, no erasure',
     // One limiter for both reveals (the contact reveal claims the lead reveal's key).
     expect(CONTACT_REVEAL_OP).toBe('pii-reveal');
     expect(source('src/lib/crm/reveal.ts')).toContain("'pii-reveal'");
-    expect(en).toContain('Confirming a match counts as a reveal');
+    expect(en).toContain('Confirming a match or merging two records counts as a reveal');
+    expect(source('src/pages/api/admin/crm/contacts/merge.ts')).toContain(
+      'claimPrivilegedOp(auth, CONTACT_REVEAL_OP, PII_REVEAL_LIMITS)',
+    );
     expect(source('src/pages/api/admin/crm/contacts/[id]/links.ts')).toContain(
       'claimPrivilegedOp(auth, CONTACT_REVEAL_OP, PII_REVEAL_LIMITS)',
     );
@@ -141,6 +145,33 @@ describe('the-sales-role: contacts and tasks, one person at a time, no erasure',
     expect(en).toContain('the Export CSV button does not show');
   });
 
+  // The owner's decisions of 2026-11-13 (C-LAST-INTEGRATION.md section 10), each pinned to
+  // the code that makes it true.
+  it('says Sales sees the main e-mail and phone only, and what an Admin does instead', () => {
+    const en = words(after(), 'en');
+    expect(en).toContain(
+      "See a contact's other e-mails and phones, choose which one is the main one, or merge two records when either of them holds files. An Admin does those.",
+    );
+    expect(ROLE_CAPS.sales['crm.erase']).toBe('none');
+    expect(ROLE_CAPS.sales['crm.files']).toBe('none');
+    expect(source('src/lib/crm/contacts.ts')).toContain(
+      "return can(role, 'crm.erase') === 'full';",
+    );
+    expect(source('src/lib/crm/contactReveal.ts')).toContain(
+      "if (!every && row['is_primary'] !== true) continue;",
+    );
+    const cint = readMigrations().find((f) => /_crm_last_integration\.sql$/.test(f.name))!.sql;
+    expect(cint).toContain('and (v_every or ch.is_primary)');
+    expect(cint).toContain('may not choose the main e-mail or phone');
+    expect(cint).toContain('holds files, so an Admin merges them');
+    expect(source('src/pages/api/admin/crm/contacts/merge.ts')).toContain(
+      "can(auth.role, 'crm.files') !== 'full'",
+    );
+    // Sales still adds an e-mail or phone (the editor's add reaches the door).
+    expect(en).toContain('add an e-mail or phone');
+    expect(en).toContain('merge two records of one person');
+  });
+
   it('says the same in Arabic, the screen names kept in English as the admin shows them', () => {
     const ar = words(after(), 'ar');
     expect(ar).toContain('وجهات الاتصال التي تقف خلفهم ومهام المتابعة');
@@ -148,7 +179,10 @@ describe('the-sales-role: contacts and tasks, one person at a time, no erasure',
     expect(ar).toContain('في Tasks');
     expect(ar).toContain('محو عميل محتمل أو جهة اتصال');
     expect(ar).toContain('إزالة بريد إلكتروني أو رقم هاتف من جهة اتصال');
-    expect(ar).toContain('يُحتسب تأكيد التطابق كشفًا');
+    expect(ar).toContain('يُحتسب تأكيد التطابق أو دمج سجلين كشفًا');
+    expect(ar).toContain('البريد الإلكتروني الرئيسي ورقم الهاتف الرئيسي');
+    expect(ar).toContain('اختيار أيٍّ منها هو الرئيسي');
+    expect(ar).toContain('إذا كانت لدى أيٍّ منهما ملفات');
     expect(ar).toContain(`${PII_REVEAL_LIMITS.perUser} مرة`);
     expect(ar).toContain(`${PII_REVEAL_LIMITS.perTenant} مرة`);
     // P-12: no em or en dash in the new words.

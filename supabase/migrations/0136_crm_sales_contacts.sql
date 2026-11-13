@@ -73,7 +73,10 @@ grant execute on function public.crm_contact_retention_months() to authenticated
 -- ═══ 3. The help guides ════════════════════════════════════════════════════════════════════
 -- H11's app.put_help_guide (0069). the-sales-role is at revision 2 (U11's put, 0105, on C10a's):
 -- its opening line, the reveal line, two new lines (Contacts, Tasks) and the erasure line,
--- in both languages, and three minutes. roles-and-access is at revision 5 (H16's put, 0129):
+-- in both languages, and three minutes. (Owner decisions of 2026-11-13, at the C-int
+-- integration, this branch unmerged: the reveal line says the main e-mail and the main phone,
+-- the Contacts line names adding a detail and merging, and a third new line says what an
+-- Admin does: the other e-mails and phones, the main one, a merge of records holding files.) roles-and-access is at revision 5 (H16's put, 0129):
 -- the Sales line of its list, in both languages, and nothing else.
 select app.put_help_guide($guide$
 {
@@ -106,9 +109,9 @@ select app.put_help_guide($guide$
         "t": "ol",
         "x": [
           "See every lead, move it through the stages, assign it, star it, tag it and give it a value, like anyone who works leads.",
-          "Reveal one lead's contact details, budget and timeline at a time, or one contact's e-mails and phones. Each reveal is logged against the account that made it, up to 60 an hour for each person and 300 an hour for the whole team, leads and contacts together.",
+          "Reveal one lead's contact details, budget and timeline at a time, or one contact's main e-mail and main phone. Each reveal is logged against the account that made it, up to 60 an hour for each person and 300 an hour for the whole team, leads and contacts together.",
           "Read and add notes, log a call or a message, and add a lead by hand. Opening a lead's notes is logged too, within a limit of the same size.",
-          "Open Contacts: see the people behind the leads, add and edit them, add notes, and say whether a lead matched by phone number is the same person. Confirming a match counts as a reveal, because it brings that lead's contact details to the contact.",
+          "Open Contacts: see the people behind the leads, add and edit them, add an e-mail or phone, add notes, merge two records of one person, and say whether a lead matched by phone number is the same person. Confirming a match or merging two records counts as a reveal, because it brings that person's contact details to the contact.",
           "Plan follow-up tasks in Tasks, for themselves or a colleague, and tick them off.",
           "Open the dashboard and the website stats.",
           "Choose what the bell shows in Settings › Notifications. That setting is the account's own, and the only one Sales opens."
@@ -123,6 +126,7 @@ select app.put_help_guide($guide$
         "x": [
           "Export leads to a file: the Export CSV button does not show.",
           "Erase a lead or a contact, remove a contact's e-mail or phone, delete a contact's note, or receive a new lead's contact details in a notification. Sales reveals them on the lead's or the contact's page instead, one at a time.",
+          "See a contact's other e-mails and phones, choose which one is the main one, or merge two records when either of them holds files. An Admin does those.",
           "Change content, the site's settings, people or the theme, or read job applications, the logs or the activity log."
         ]
       },
@@ -144,9 +148,9 @@ select app.put_help_guide($guide$
         "t": "ol",
         "x": [
           "يرى كل العملاء المحتملين، وينقلهم عبر المراحل، ويسندهم، ويميّزهم بنجمة، ويضع لهم الوسوم والقيمة، مثل كل من يعمل على العملاء المحتملين.",
-          "يكشف بيانات التواصل والميزانية والمدة الزمنية لعميل محتمل واحد في كل مرة، أو عناوين البريد الإلكتروني وأرقام الهاتف لجهة اتصال واحدة. يُسجَّل كل كشف باسم الحساب الذي قام به، بحد أقصى 60 مرة في الساعة لكل شخص و300 مرة في الساعة للفريق كله، للعملاء المحتملين وجهات الاتصال معًا.",
+          "يكشف بيانات التواصل والميزانية والمدة الزمنية لعميل محتمل واحد في كل مرة، أو البريد الإلكتروني الرئيسي ورقم الهاتف الرئيسي لجهة اتصال واحدة. يُسجَّل كل كشف باسم الحساب الذي قام به، بحد أقصى 60 مرة في الساعة لكل شخص و300 مرة في الساعة للفريق كله، للعملاء المحتملين وجهات الاتصال معًا.",
           "يقرأ الملاحظات ويضيفها، ويسجّل مكالمة أو رسالة، ويضيف عميلًا محتملًا يدويًا. يُسجَّل فتح ملاحظات العميل المحتمل أيضًا، ضمن حد بالحجم نفسه.",
-          "يفتح Contacts: يرى الأشخاص الذين يقفون خلف العملاء المحتملين، ويضيفهم ويعدّلهم، ويضيف الملاحظات، ويحدد ما إذا كان عميل محتمل طابق رقم هاتفه هو الشخص نفسه. يُحتسب تأكيد التطابق كشفًا، لأنه ينقل بيانات التواصل لذلك العميل المحتمل إلى جهة الاتصال.",
+          "يفتح Contacts: يرى الأشخاص الذين يقفون خلف العملاء المحتملين، ويضيفهم ويعدّلهم، ويضيف بريدًا إلكترونيًا أو رقم هاتف، ويضيف الملاحظات، ويدمج سجلين للشخص نفسه، ويحدد ما إذا كان عميل محتمل طابق رقم هاتفه هو الشخص نفسه. يُحتسب تأكيد التطابق أو دمج سجلين كشفًا، لأنه ينقل بيانات التواصل لذلك الشخص إلى جهة الاتصال.",
           "يخطط لمهام المتابعة في Tasks، لنفسه أو لزميل، ويؤشّر عليها عند إنجازها.",
           "يفتح لوحة المعلومات وإحصاءات الموقع.",
           "يختار ما يعرضه الجرس من Settings › Notifications. هذا الإعداد خاص بحسابه، وهو الإعداد الوحيد الذي يفتحه Sales."
@@ -161,6 +165,7 @@ select app.put_help_guide($guide$
         "x": [
           "تصدير العملاء المحتملين إلى ملف: لا يظهر له زر Export CSV.",
           "محو عميل محتمل أو جهة اتصال، أو إزالة بريد إلكتروني أو رقم هاتف من جهة اتصال، أو حذف ملاحظة جهة اتصال، أو تلقّي بيانات التواصل لعميل محتمل جديد في إشعار. يكشفها Sales في صفحة العميل المحتمل أو جهة الاتصال بدلًا من ذلك، واحدًا في كل مرة.",
+          "رؤية عناوين البريد الإلكتروني وأرقام الهاتف الأخرى لجهة اتصال، أو اختيار أيٍّ منها هو الرئيسي، أو دمج سجلين إذا كانت لدى أيٍّ منهما ملفات. يتولى المسؤول (Admin) ذلك.",
           "تغيير المحتوى أو إعدادات الموقع أو الأشخاص أو المظهر، أو قراءة طلبات التوظيف أو السجلات أو سجل النشاط."
         ]
       },
