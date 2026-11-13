@@ -20,27 +20,29 @@ import { mergeError, parseMergeOutcome } from '@/lib/crm/merge';
 // profile itself, live, and writes the `crm.contact.merge` audit row inside the merge's own
 // transaction (no row, no merge). Before it:
 //
-//   live recheck → for a role without crm.files (Sales), whether either record holds a file
-//   (below) → a reveal slot, for a role that may not take every lead's details at once
-//   (below) → a limit of its own (`crm-merge`, the manual add's numbers: 60 an hour per
+//   live recheck → a limit of its own (`crm-merge`, the manual add's numbers: 60 an hour per
 //   person, 300 per tenant; a merge is irreversible, so a stolen session cannot fold the
 //   tenant's people together faster than anyone could notice) → the caller's own client must
-//   see both people (RLS, the live check; a merged record is a 404) → the door.
+//   see both people (RLS, the live check; a merged record is a 404; their ids only) → for a
+//   role without crm.files (Sales), whether either record holds a file (below) → a reveal
+//   slot, for a role that may not take every lead's details at once (below) → the door.
 //
 // The reveal slot (C12 review, C12-SEC-R2-1): a merge moves the other record's e-mails and
 // phones onto the one kept, and one reveal of it then decrypts both people's. So a role that
 // sees details one person at a time (Sales once C10b gives it crm.contacts: `leads.pii`
 // without `export.csv`) spends one slot of the reveal's own limiter here (`pii-reveal`,
-// fail-closed, before anything is read), as C10b's link confirm does: every value a Sales
-// reveal shows has cost it a slot. Admin may take every lead's details at once anyway
-// (`receivesLeadPiiUnasked`), so its merge spends none.
+// fail-closed, before the door moves anything; the reads before it are ids only), as C10b's
+// link confirm does: every value a Sales reveal shows has cost it a slot. Admin may take every
+// lead's details at once anyway (`receivesLeadPiiUnasked`), so its merge spends none.
 //
 // Files (the owner's decision of 2026-11-13): a merge where either record holds a file needs an
 // Admin (crm.files). For any other role the route counts the two records' files as the service
-// role (Sales reads no file row) BEFORE the reveal slot, the merge limit or any read of the two
-// people, so a refusal spends nothing and moves nothing: a 403 naming crm.files, which the
-// Merge dialog words as "ask an Admin". The door refuses it again with both rows locked (0141).
-// The refusal tells a Sales user that the person has files: accepted by the owner. A count
+// role (Sales reads no file row) BEFORE the reveal slot, so a refusal spends no reveal and moves
+// nothing: a 403 naming crm.files, which the Merge dialog words as "ask an Admin". The door
+// refuses it again with both rows locked (0141). The refusal tells a Sales user that the person
+// has files: accepted by the owner. The count runs only AFTER the merge limit and the caller's
+// own reads of both people (C-int review, CINT2-SEC-2), so it is never a free lookup: each
+// question costs one of the 60 merges an hour and needs two people the caller can see. A count
 // that fails refuses too (fail-closed).
 //
 // The answer is counts and the kept record's new version, never a value.
@@ -52,6 +54,9 @@ export const POST = defineAdminRoute({
   input: ContactMergeSchema,
   handler: async ({ auth, sb, input }) => {
     await liveRecheck(auth);
+    await claimPrivilegedOp(auth, 'crm-merge', MANUAL_LEAD_LIMITS);
+    await getContact(sb, auth, input.keepId, 'id');
+    await getContact(sb, auth, input.dropId, 'id');
     if (can(auth.role, 'crm.files') !== 'full') {
       const { count, error: filesError } = await serviceClient()
         .from('crm_contact_files')
@@ -69,9 +74,6 @@ export const POST = defineAdminRoute({
     if (!receivesLeadPiiUnasked(auth.role)) {
       await claimPrivilegedOp(auth, CONTACT_REVEAL_OP, PII_REVEAL_LIMITS);
     }
-    await claimPrivilegedOp(auth, 'crm-merge', MANUAL_LEAD_LIMITS);
-    await getContact(sb, auth, input.keepId, 'id');
-    await getContact(sb, auth, input.dropId, 'id');
 
     const { data, error } = await serviceClient().rpc('crm_merge_contacts', {
       p_tenant: auth.tenantId,

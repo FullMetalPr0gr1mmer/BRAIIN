@@ -1102,7 +1102,8 @@ describe('PATCH /[id] (C6 review, C6-SEC-4, C6-COR-2)', () => {
   });
 
   // C10b review, C10B-SEC-2: removing an e-mail or phone deletes a person's details, so it is
-  // erasure's (crm.erase, Admin); Sales adds and makes primary.
+  // erasure's (crm.erase, Admin); Sales adds (choosing the main one is an Admin's too since the
+  // owner's decision of 2026-11-13).
   describe('Sales (C10b review): a removal is erasure, refused', () => {
     const asSales = () => {
       sessionRole = 'sales';

@@ -15,10 +15,15 @@
 --   3. a merge where either record holds a file needs an Admin: Sales is refused before
 --      anything moves, whichever side holds the file; a Sales merge of a pair with no file
 --      still works; an Admin's merge of a pair with files works, and may leave the survivor
---      past the add door's 20 files (the owner's call: allowed).
+--      past the add door's 20 files (the owner's call: allowed);
+--   4. (C-int review, CINT2-SEC-1) every kind a contact holds keeps a main one: erasing a lead
+--      whose copy was the main e-mail or phone makes the oldest left of that kind the main
+--      one, so Sales still sees one and a later Sales add does not choose it; a new lead for a
+--      contact copies its main e-mail and phone only, never another one;
+--   and (CINT2-SEC-3) neither anon nor an Admin token executes the editor or the merge door.
 
 begin;
-select plan(30);
+select plan(42);
 
 insert into public.tenants (id, name) values
   ('c1420000-0000-4000-8000-000000000001', 'C-int owner T1'),
@@ -101,6 +106,16 @@ create function cod_files(p_contact text, p_n int) returns void language sql as 
          'File ' || g, 'application/pdf', 10
     from generate_series(1, p_n) g
 $$;
+-- A call to a service-role door: the SQLSTATE, and whether the role lacked EXECUTE (so a 42501
+-- cannot come from a table the call happened to read first).
+create function cod_denied(p_sql text) returns text language plpgsql as $$
+begin
+  execute p_sql;
+  return 'ran';
+exception when others then
+  return sqlstate || case when sqlerrm like 'permission denied for function %' then ' no-execute' else '' end;
+end $$;
+grant execute on function cod_denied(text) to anon, authenticated, service_role;
 grant execute on function cod_actor(text), cod_as(text), cod_val(text), cod_reveal(text, text, text),
   cod_edit(text, text, jsonb, uuid[], uuid[]), cod_merge(text, text, text)
   to anon, authenticated, service_role;
@@ -125,6 +140,28 @@ insert into public.crm_contact_channels (id, tenant_id, contact_id, kind, value_
   ('c1420000-0000-4000-8000-0000000c0003', 'c1420000-0000-4000-8000-000000000001', 'c1420000-0000-4000-8000-aaaa00000001', 'phone', 'p-main', repeat('3', 64), true, 'lead'),
   ('c1420000-0000-4000-8000-0000000c0004', 'c1420000-0000-4000-8000-000000000001', 'c1420000-0000-4000-8000-aaaa00000001', 'phone', 'p-other', repeat('4', 64), false, 'lead'),
   ('c1420000-0000-4000-8000-0000000c0005', 'c1420000-0000-4000-8000-000000000002', 'c1420000-0000-4000-8000-ffff00000001', 'email', 'o-main', repeat('5', 64), true, 'lead');
+-- (CINT2-SEC-1) eeee..01: a main e-mail and phone copied from its lead, then two e-mails typed
+-- in later (the older one first); eeee..02: no main e-mail (a state no door leaves, stored
+-- directly) and a main phone; eeee..03: only an e-mail that is not the main one.
+insert into public.crm_contacts (id, tenant_id, display_name, created_by)
+  select ('c1420000-0000-4000-8000-' || x.id)::uuid, 'c1420000-0000-4000-8000-000000000001', x.name,
+         'c1420000-0000-4000-8000-0000000000a1'
+    from (values ('eeee00000001', 'Erased Lead'), ('eeee00000002', 'No Main Mail'),
+                 ('eeee00000003', 'Hidden Only')) x (id, name);
+insert into public.crm_contact_channels (id, tenant_id, contact_id, kind, value_enc, value_hmac, is_primary, source, created_at) values
+  ('c1420000-0000-4000-8000-0000000c0011', 'c1420000-0000-4000-8000-000000000001', 'c1420000-0000-4000-8000-eeee00000001', 'email', 'e-lead', repeat('8', 64), true, 'lead', now() - interval '3 days'),
+  ('c1420000-0000-4000-8000-0000000c0012', 'c1420000-0000-4000-8000-000000000001', 'c1420000-0000-4000-8000-eeee00000001', 'email', 'e-typed', repeat('9', 64), false, 'manual', now() - interval '2 days'),
+  ('c1420000-0000-4000-8000-0000000c0013', 'c1420000-0000-4000-8000-000000000001', 'c1420000-0000-4000-8000-eeee00000001', 'email', 'e-later', repeat('a', 64), false, 'manual', now() - interval '1 day'),
+  ('c1420000-0000-4000-8000-0000000c0014', 'c1420000-0000-4000-8000-000000000001', 'c1420000-0000-4000-8000-eeee00000001', 'phone', 'p-lead', repeat('b', 64), true, 'lead', now() - interval '3 days'),
+  ('c1420000-0000-4000-8000-0000000c0021', 'c1420000-0000-4000-8000-000000000001', 'c1420000-0000-4000-8000-eeee00000002', 'email', 'e-hidden', repeat('d', 64), false, 'manual', now() - interval '2 days'),
+  ('c1420000-0000-4000-8000-0000000c0022', 'c1420000-0000-4000-8000-000000000001', 'c1420000-0000-4000-8000-eeee00000002', 'phone', 'p-shown', repeat('e', 64), true, 'manual', now() - interval '2 days'),
+  ('c1420000-0000-4000-8000-0000000c0031', 'c1420000-0000-4000-8000-000000000001', 'c1420000-0000-4000-8000-eeee00000003', 'email', 'e-only-hidden', repeat('f', 64), false, 'manual', now() - interval '2 days');
+insert into public.leads (id, tenant_id, name, email_enc, email_hmac, phone_enc, phone_hmac, message,
+                          crm_indexed_at) values
+  ('c1420000-0000-4000-8000-00000000ee01', 'c1420000-0000-4000-8000-000000000001', 'Erased Lead',
+   'e-lead', repeat('8', 64), 'p-lead', repeat('b', 64), 'hello', now());
+update public.leads set contact_id = 'c1420000-0000-4000-8000-eeee00000001', contact_link = 'email'
+ where id = 'c1420000-0000-4000-8000-00000000ee01';
 select cod_files('bbbb00000001', 1);
 select cod_files('dddd00000001', 15);
 select cod_files('dddd00000002', 10);
@@ -198,7 +235,18 @@ set local role authenticated;
 select cod_as('L');
 select is(cod_edit('L', 'aaaa00000001', '[]', '{}', array['c1420000-0000-4000-8000-0000000c0001'::uuid]),
   '42501', 'a Sales token cannot reach the editor at all (the service role''s door)');
+select cod_as('A');
+select is(cod_denied($$ select public.crm_edit_contact_channels('c1420000-0000-4000-8000-000000000001',
+            'c1420000-0000-4000-8000-aaaa00000001', 1, '[]'::jsonb, '{}'::uuid[],
+            array['c1420000-0000-4000-8000-0000000c0001'::uuid], 'c1420000-0000-4000-8000-0000000000a1') $$),
+  '42501 no-execute', 'nor can an Admin token (CINT2-SEC-3): only the Worker, as the service role, edits');
 select set_config('request.jwt.claims', '', true);
+reset role;
+set local role anon;
+select is(cod_denied($$ select public.crm_edit_contact_channels('c1420000-0000-4000-8000-000000000001',
+            'c1420000-0000-4000-8000-aaaa00000001', 1, '[]'::jsonb, '{}'::uuid[],
+            array['c1420000-0000-4000-8000-0000000c0001'::uuid], 'c1420000-0000-4000-8000-0000000000a1') $$),
+  '42501 no-execute', 'anon cannot execute the editor (CINT2-SEC-3)');
 reset role;
 
 -- ── 3. A merge where either record holds a file needs an Admin ─────────────────────────────
@@ -239,7 +287,51 @@ set local role authenticated;
 select cod_as('L');
 select is(cod_merge('L', 'cccc00000001', 'dddd00000001'), '42501',
   'a Sales token cannot reach the merge door at all (the service role''s)');
+select cod_as('A');
+select is(cod_denied($$ select public.crm_merge_contacts('c1420000-0000-4000-8000-000000000001',
+            'c1420000-0000-4000-8000-bbbb00000002', 1, 'c1420000-0000-4000-8000-cccc00000001', 1,
+            'c1420000-0000-4000-8000-0000000000a1') $$),
+  '42501 no-execute', 'nor can an Admin token (CINT2-SEC-3): only the Worker, as the service role, merges');
 select set_config('request.jwt.claims', '', true);
+reset role;
+set local role anon;
+select is(cod_denied($$ select public.crm_merge_contacts('c1420000-0000-4000-8000-000000000001',
+            'c1420000-0000-4000-8000-bbbb00000002', 1, 'c1420000-0000-4000-8000-cccc00000001', 1,
+            'c1420000-0000-4000-8000-0000000000a1') $$),
+  '42501 no-execute', 'anon cannot execute the merge door (CINT2-SEC-3)');
+reset role;
+
+-- ── 4. Every kind a contact holds keeps a main one (C-int review, CINT2-SEC-1) ──────────────
+set local role service_role;
+select is(public.crm_erase_lead('c1420000-0000-4000-8000-000000000001', 'c1420000-0000-4000-8000-00000000ee01',
+                                'c1420000-0000-4000-8000-0000000000a1') ->> 'contacts',
+  '0', 'an Admin erases a lead whose copies were the person''s main e-mail and phone; the person stays');
+select is(cod_reveal('L', 'eeee00000001'), 'email:true:e-typed',
+  'Sales still sees a main e-mail: the oldest left became the main one (no phone is left)');
+select is(cod_reveal('A', 'eeee00000001'), 'email:true:e-typed email:false:e-later',
+  'and an Admin sees the one left beside it, not the main one');
+-- What Sales sees before its add, to hold the add to it (the add must not choose the main one).
+select set_config('cod.before_add', cod_reveal('L', 'eeee00000001'), true);
+select is(cod_edit('L', 'eeee00000001',
+                   jsonb_build_array(jsonb_build_object('kind', 'email', 'value_enc', 'e-sales-2',
+                                     'value_hmac', repeat('c', 64), 'is_primary', false)), '{}', '{}'),
+  '{"added": 1, "removed": 0}', 'Sales adds an e-mail to that person');
+select is(current_setting('cod.before_add') || ' -> ' || cod_reveal('L', 'eeee00000001'),
+  'email:true:e-typed -> email:true:e-typed',
+  'which leaves the main one as it was: a Sales add never chooses it');
+select is(cod_val($$ select (public.crm_contact_new_lead('c1420000-0000-4000-8000-000000000001',
+             'c1420000-0000-4000-8000-eeee00000002',
+             '{"id": "c1420000-0000-4000-8000-00000000ee02", "name": "No Main Mail", "message": "Hello", "channel": "phone", "score_signals": []}',
+             'c1420000-0000-4000-8000-000000000051') ->> 'id') $$),
+  'c1420000-0000-4000-8000-00000000ee02', 'Sales adds a new lead for a person with no main e-mail');
+select is((select coalesce(l.email_enc, '(none)') || ' ' || coalesce(l.phone_enc, '(none)')
+             from public.leads l where l.id = 'c1420000-0000-4000-8000-00000000ee02'),
+  '(none) p-shown', 'which copies the main phone and no e-mail that is not the main one');
+select is(cod_val($$ select (public.crm_contact_new_lead('c1420000-0000-4000-8000-000000000001',
+             'c1420000-0000-4000-8000-eeee00000003',
+             '{"id": "c1420000-0000-4000-8000-00000000ee03", "name": "Hidden Only", "message": "Hello", "channel": "phone", "score_signals": []}',
+             'c1420000-0000-4000-8000-000000000051') ->> 'id') $$),
+  '22023', 'and a person with no main e-mail or phone gets no new lead (nothing is copied)');
 reset role;
 
 select * from finish();

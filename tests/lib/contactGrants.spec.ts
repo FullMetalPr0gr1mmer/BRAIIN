@@ -63,6 +63,9 @@ describe('the service role contact doors have named callers', () => {
   it.each([
     ['crm_create_contact', 'src/pages/api/admin/crm/contacts/index.ts'],
     ['crm_edit_contact_channels', 'src/pages/api/admin/crm/contacts/[id].ts'],
+    // The owner's decision of 2026-11-13 (C-int review, CINT2-TEST-1): the reveal's ciphertext,
+    // every channel for an Admin and the main ones for Sales, read by the reveal alone.
+    ['crm_contact_reveal_channels', 'src/lib/crm/contactReveal.ts'],
     ['crm_delete_contact_note', 'src/pages/api/admin/crm/contacts/[id]/notes/[noteId].ts'],
     ['crm_contact_link_lead', 'src/pages/api/admin/crm/contacts/[id]/links.ts'],
     // ingestContactLead, called by POST /api/admin/crm/contacts/[id]/leads.

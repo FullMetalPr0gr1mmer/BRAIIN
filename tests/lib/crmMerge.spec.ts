@@ -12,7 +12,7 @@ import {
 } from '@/lib/crm/mergeView';
 import { parseDuplicatePairs, parseMergeOutcome } from '@/lib/crm/merge';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
-import { PII_REVEAL_LIMITS } from '@/lib/admin/rateLimit';
+import { MANUAL_LEAD_LIMITS, PII_REVEAL_LIMITS } from '@/lib/admin/rateLimit';
 
 // Merging duplicate contacts (Admin v2 C12, crm.md §5.5 and §9): the merge runs its order (a
 // live recheck, its own limit, both people read as the caller, then the service role's door,
@@ -240,35 +240,62 @@ describe('POST /api/admin/crm/contacts/merge', () => {
       };
     });
 
-    it('spends a pii-reveal slot after the live recheck and before anything is read', async () => {
+    // (C-int review, CINT2-SEC-2) The merge limit and the caller's own reads of both people
+    // (ids only) come first, then the file count, then the reveal slot, then the door.
+    it('spends a pii-reveal slot after the limit, the reads and the file count, before the door', async () => {
       const { POST } = await load();
       const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
       expect(res.status).toBe(200);
       expect(events).toEqual([
         'svc:profiles',
-        'svc:count:crm_contact_files',
-        'ops:pii-reveal',
         'ops:crm-merge',
         'rls:crm_contacts',
         'rls:crm_contacts',
+        'svc:count:crm_contact_files',
+        'ops:pii-reveal',
         'svc:rpc:crm_merge_contacts',
       ]);
-      expect(claims[0]).toEqual({ op: 'pii-reveal', limits: PII_REVEAL_LIMITS });
+      expect(claims).toEqual([
+        { op: 'crm-merge', limits: MANUAL_LEAD_LIMITS },
+        { op: 'pii-reveal', limits: PII_REVEAL_LIMITS },
+      ]);
     });
 
-    it('with no reveal slot left: a 429, nothing read, no merge', async () => {
+    it('with no reveal slot left: a 429, no merge', async () => {
       limitedOps = new Set(['pii-reveal']);
       const { POST } = await load();
       const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
       expect(res.status).toBe(429);
-      expect(events).toEqual(['svc:profiles', 'svc:count:crm_contact_files', 'ops:pii-reveal']);
+      expect(events.at(-1)).toBe('ops:pii-reveal');
+      expect(rpcCalls).toEqual([]);
+    });
+
+    // CINT2-SEC-2: the file count is no free oracle. Past the merge limit, or naming a person the
+    // caller cannot see (another tenant's, a merged record, a made-up id), it never runs.
+    it('past the merge limit, a Sales request never counts files', async () => {
+      filesCount = 1;
+      limitedOps = new Set(['crm-merge']);
+      const { POST } = await load();
+      const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
+      expect(res.status).toBe(429);
+      expect(events).toEqual(['svc:profiles', 'ops:crm-merge']);
+    });
+
+    it('naming a person the caller cannot see is a 404 before the files are counted', async () => {
+      filesCount = 1;
+      rlsSees = new Set([KEEP]);
+      const { POST } = await load();
+      const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
+      expect(res.status).toBe(404);
+      expect(events).not.toContain('svc:count:crm_contact_files');
+      expect(claims.map((c) => c.op)).toEqual(['crm-merge']);
       expect(rpcCalls).toEqual([]);
     });
 
     // The owner's decision of 2026-11-13: a merge where either record holds a file needs an
-    // Admin. Refused before any reveal slot, the merge limit, a read of either person or the
-    // door, so nothing is spent and nothing moves.
-    it('a pair where either record holds a file: a 403 naming crm.files, before any slot', async () => {
+    // Admin. Refused before any reveal slot or the door, so no reveal is spent and nothing
+    // moves; the merge limit is spent (CINT2-SEC-2: every such question costs one).
+    it('a pair where either record holds a file: a 403 naming crm.files, before the reveal slot', async () => {
       filesCount = 1;
       const { POST } = await load();
       const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
@@ -276,19 +303,25 @@ describe('POST /api/admin/crm/contacts/merge', () => {
       const body = (await res.json()) as Record<string, unknown>;
       expect(body['capability']).toBe('crm.files');
       expect(isFilesRefusal(res.status, body)).toBe(true);
-      expect(events).toEqual(['svc:profiles', 'svc:count:crm_contact_files']);
-      expect(claims).toEqual([]);
+      expect(events).toEqual([
+        'svc:profiles',
+        'ops:crm-merge',
+        'rls:crm_contacts',
+        'rls:crm_contacts',
+        'svc:count:crm_contact_files',
+      ]);
+      expect(claims.map((c) => c.op)).toEqual(['crm-merge']);
       expect(rpcCalls).toEqual([]);
       // Counted for this tenant and these two people only.
       expect(JSON.parse(fileFilters[0]!)).toEqual({ tenant_id: TENANT, contact_id: [KEEP, DROP] });
     });
 
-    it('a count that fails refuses too (fail-closed), before any slot', async () => {
+    it('a count that fails refuses too (fail-closed), before the reveal slot', async () => {
       filesError = { code: '57014' };
       const { POST } = await load();
       const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
       expect(res.status).toBe(500);
-      expect(claims).toEqual([]);
+      expect(claims.map((c) => c.op)).toEqual(['crm-merge']);
       expect(rpcCalls).toEqual([]);
     });
 

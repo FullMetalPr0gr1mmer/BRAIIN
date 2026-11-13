@@ -486,7 +486,8 @@ begin
   end if;
   -- (C10b review, C10B-SEC-2) Removing an e-mail or phone deletes a person's details, and one
   -- a person typed in has no copy anywhere else: erasure's (crm.erase, Admin), never a
-  -- crm.contacts holder's alone. Sales adds and makes primary; an Admin removes.
+  -- crm.contacts holder's alone. Sales adds; an Admin removes and (C-int, the owner's decision
+  -- of 2026-11-13) chooses the main one.
   if cardinality(v_remove) > 0 and not app.crm_eraser_ok(p_tenant, p_actor) then
     raise exception using errcode = '42501', message = 'crm_edit_contact_channels: this person may not remove an e-mail or phone';
   end if;

@@ -56,6 +56,14 @@
 --      Sales still adds. And in item 2's merge (owner decision, same day): a merge where
 --      either record holds a file needs an actor who may handle files (crm.files, Admin),
 --      checked with both rows locked and before anything moves; 42501 otherwise.
+--   7. (C-int review, CINT2-SEC-1) public.crm_erase_lead restated (0134's copy plus `-- C-int`
+--      lines): when it takes back a lead's copies from the person, the oldest e-mail or phone
+--      left of a kind whose main one went becomes the main one (app.crm_fill_primary), as the
+--      editor and the merge already do, so every kind a contact holds keeps a main one and a
+--      Sales reveal, add, link or confirm never surfaces a detail Sales was not shown.
+--   8. (C-int review, CINT2-SEC-1) public.crm_contact_new_lead restated (0133's copy plus
+--      `-- C-int` lines): a new lead for a contact copies its main e-mail and phone only, never
+--      a non-primary one as a fallback (Sales may add a lead and then reveal it).
 --
 -- Production behaviour: none until the six slices and the Worker deploy. Nothing calls the
 -- merge before C12's route ships and no tombstone exists before the first merge, so the
@@ -564,7 +572,8 @@ begin
   end if;
   -- (C10b review, C10B-SEC-2) Removing an e-mail or phone deletes a person's details, and one
   -- a person typed in has no copy anywhere else: erasure's (crm.erase, Admin), never a
-  -- crm.contacts holder's alone. Sales adds and makes primary; an Admin removes.
+  -- crm.contacts holder's alone. Sales adds; an Admin removes and (C-int, the owner's decision
+  -- of 2026-11-13) chooses the main one.
   if cardinality(v_remove) > 0 and not app.crm_eraser_ok(p_tenant, p_actor) then
     raise exception using errcode = '42501', message = 'crm_edit_contact_channels: this person may not remove an e-mail or phone';
   end if;
@@ -646,7 +655,144 @@ revoke all on function public.crm_edit_contact_channels(uuid, uuid, int, jsonb, 
 grant execute on function public.crm_edit_contact_channels(uuid, uuid, int, jsonb, uuid[], uuid[], uuid)
   to service_role;
 
--- ═══ 7. Postconditions ════════════════════════════════════════════════════════════════════
+-- ═══ 7. A lead's erasure leaves a main e-mail and phone (C-int review, CINT2-SEC-1) ═══════════
+-- C8's public.crm_erase_lead (0134's copy of C5's, its latest definition), restated with the
+-- lines marked `-- C-int`. It takes back the e-mail and phone a lead copied to its person, and
+-- one of those may be the person's main one. Since the owner's decision of 2026-11-13 a Sales
+-- reveal shows the main ones only, so a kind left with no main one hid what remains from
+-- Sales, and the next Sales add, staff link or confirm (each ends in app.crm_fill_primary)
+-- made a detail Sales was never shown the main one. Every other door that removes a channel
+-- (the editor, the merge) already fills the main one after it; this one now does too. Who
+-- erases is crm.erase (Admin), so the main one is still chosen by an Admin's act.
+create or replace function public.crm_erase_lead(p_tenant uuid, p_lead uuid, p_actor uuid)
+  returns jsonb
+  language plpgsql volatile security invoker set search_path = public, pg_temp as $$
+declare
+  v_number int;
+  v_notes int;
+  v_events int;
+  v_tasks int;  -- C8
+  v_contact uuid;
+  v_link text;
+  v_email_hmac text;
+  v_phone_hmac text;
+  v_contacts int := 0;
+begin
+  if p_tenant is null or p_lead is null or p_actor is null then
+    raise exception using errcode = '22023', message = 'crm_erase_lead: a tenant, a lead and an actor are required';
+  end if;
+  if not app.crm_eraser_ok(p_tenant, p_actor) then
+    raise exception using errcode = '42501', message = 'crm_erase_lead: this person may not erase';
+  end if;
+  select l.lead_number, l.contact_id, l.contact_link, l.email_hmac, l.phone_hmac
+    into v_number, v_contact, v_link, v_email_hmac, v_phone_hmac
+    from public.leads l
+   where l.tenant_id = p_tenant and l.id = p_lead
+     for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'crm_erase_lead: no such lead';
+  end if;
+  select count(*)::int into v_notes from public.lead_notes n
+   where n.tenant_id = p_tenant and n.lead_id = p_lead;
+  select count(*)::int into v_events from public.lead_events e
+   where e.tenant_id = p_tenant and e.lead_id = p_lead;
+  select count(*)::int into v_tasks from public.crm_tasks tk  -- C8
+   where tk.tenant_id = p_tenant and tk.lead_id = p_lead;  -- C8
+  delete from public.leads l where l.tenant_id = p_tenant and l.id = p_lead;
+  delete from public.crm_contact_events e
+   where e.tenant_id = p_tenant and e.kind = 'lead_linked' and e.detail ->> 'lead_id' = p_lead::text;
+  if v_contact is not null and app.crm_contact_is_orphan(p_tenant, v_contact) then
+    delete from public.lead_events e
+     where e.tenant_id = p_tenant and e.kind = 'contact_linked'
+       and e.detail ->> 'contact_id' = v_contact::text;
+    delete from public.crm_contacts c where c.tenant_id = p_tenant and c.id = v_contact;
+    v_contacts := 1;
+  elsif v_contact is not null and v_link is distinct from 'phone' then
+    -- A phone link copied nothing to the contact, so only a lead of the person's own has
+    -- copies to take back: the channels made from it that no remaining lead of the person
+    -- (linked other than by phone) carries.
+    delete from public.crm_contact_channels ch
+     where ch.tenant_id = p_tenant and ch.contact_id = v_contact and ch.source = 'lead'
+       and ((ch.kind = 'email' and ch.value_hmac = v_email_hmac)
+            or (ch.kind = 'phone' and ch.value_hmac = v_phone_hmac))
+       and not exists (select 1 from public.leads l
+                        where l.tenant_id = p_tenant and l.contact_id = v_contact
+                          and l.contact_link is distinct from 'phone'
+                          and ((ch.kind = 'email' and l.email_hmac = ch.value_hmac)
+                               or (ch.kind = 'phone' and l.phone_hmac = ch.value_hmac)));
+    -- (C-int review, CINT2-SEC-1) A copy taken back may have been the main one of its kind:  -- C-int
+    -- the oldest left of that kind becomes the main one, as after an Admin's removal in the  -- C-int
+    -- editor, so a Sales reveal (the main ones only) never meets a kind with no main one.  -- C-int
+    perform app.crm_fill_primary(p_tenant, v_contact);  -- C-int
+  end if;
+  return jsonb_build_object('lead_number', v_number, 'leads', 1, 'notes', v_notes, 'events', v_events,
+                            'tasks', v_tasks,  -- C8
+                            'contacts', v_contacts);
+end $$;
+revoke all on function public.crm_erase_lead(uuid, uuid, uuid) from public, anon, authenticated, service_role;
+grant execute on function public.crm_erase_lead(uuid, uuid, uuid) to service_role;
+
+-- ═══ 8. A new lead for a contact copies its main e-mail and phone only (CINT2-SEC-1) ═══════════
+-- C6's public.crm_contact_new_lead (0133), restated with the lines marked `-- C-int`. Sales may
+-- call it (crm.contacts with leads.manage and leads.pii) and then reveals the new lead, so
+-- what it copies must be what a Sales reveal of the contact would show: the main ones. It used
+-- to fall back to the oldest when a kind had no main one; with item 7 every kind a contact
+-- holds has one, and this keeps the rule even if a later door forgets.
+create or replace function public.crm_contact_new_lead(p_tenant uuid, p_contact uuid, p_lead jsonb,
+                                                       p_actor uuid)
+  returns jsonb
+  language plpgsql volatile security invoker set search_path = public, pg_temp as $$
+declare
+  v_email record;
+  v_phone record;
+  v_lead jsonb;
+  v_id uuid;
+  v_out jsonb;
+begin
+  if p_tenant is null or p_contact is null or p_actor is null or p_lead is null
+     or jsonb_typeof(p_lead) <> 'object' then
+    raise exception using errcode = '22023', message = 'crm_contact_new_lead: a tenant, a contact, a lead and an actor are required';
+  end if;
+  if not app.crm_contacts_actor_ok(p_tenant, p_actor, true) then
+    raise exception using errcode = '42501', message = 'crm_contact_new_lead: this person may not add leads for contacts';
+  end if;
+  if exists (select 1 from jsonb_object_keys(p_lead) k
+              where k not in ('id', 'locale', 'name', 'company', 'budget_enc', 'timeline_text_enc',
+                              'message', 'service_of_interest', 'discipline_of_interest',
+                              'channel', 'score_signals')) then
+    raise exception using errcode = '22023', message = 'crm_contact_new_lead: unknown lead field';
+  end if;
+  perform 1 from public.crm_contacts c
+   where c.tenant_id = p_tenant and c.id = p_contact and c.merged_into is null
+     for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'crm_contact_new_lead: no such contact';
+  end if;
+  select ch.value_enc, ch.value_hmac into v_email
+    from public.crm_contact_channels ch
+   where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.kind = 'email'
+     and ch.is_primary  -- C-int
+   order by ch.is_primary desc, ch.created_at, ch.id limit 1;
+  select ch.value_enc, ch.value_hmac into v_phone
+    from public.crm_contact_channels ch
+   where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.kind = 'phone'
+     and ch.is_primary  -- C-int
+   order by ch.is_primary desc, ch.created_at, ch.id limit 1;
+  if v_email.value_enc is null and v_phone.value_enc is null then
+    raise exception using errcode = '22023', message = 'crm_contact_new_lead: the contact has no e-mail or phone';
+  end if;
+  v_lead := p_lead || jsonb_strip_nulls(jsonb_build_object(
+    'email_enc', v_email.value_enc, 'email_hmac', v_email.value_hmac,
+    'phone_enc', v_phone.value_enc, 'phone_hmac', v_phone.value_hmac,
+    'source', 'manual', 'created_by', p_actor));
+  v_id := public.crm_ingest_lead(p_tenant, v_lead);
+  v_out := app.crm_staff_link(p_tenant, p_contact, v_id);
+  return jsonb_build_object('id', v_id, 'link', v_out ->> 'link');
+end $$;
+revoke all on function public.crm_contact_new_lead(uuid, uuid, jsonb, uuid) from public, anon, authenticated, service_role;
+grant execute on function public.crm_contact_new_lead(uuid, uuid, jsonb, uuid) to service_role;
+
+-- ═══ 9. Postconditions ════════════════════════════════════════════════════════════════════
 do $$
 declare
   v_fn text;
@@ -744,6 +890,28 @@ begin
      or exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                  where p.oid = v_fn::regprocedure and a.grantee = 0) then
     raise exception 'C-int: % must stay INVOKER, pinned, the service role''s alone, an eraser choosing the main one', v_fn;
+  end if;
+  -- A lead's erasure fills the main one after it takes copies back; a new lead for a contact
+  -- copies the main ones only. Both stay INVOKER, pinned, the service role's alone (CINT2-SEC-1).
+  v_fn := 'public.crm_erase_lead(uuid, uuid, uuid)';
+  if exists (select 1 from pg_proc where oid = v_fn::regprocedure and prosecdef)
+     or not exists (select 1 from pg_proc where oid = v_fn::regprocedure
+                     and proconfig = array['search_path=public, pg_temp']
+                     and prosrc like '%perform app.crm_fill_primary(p_tenant, v_contact);%')
+     or has_function_privilege('anon', v_fn, 'execute')
+     or has_function_privilege('authenticated', v_fn, 'execute')
+     or not has_function_privilege('service_role', v_fn, 'execute') then
+    raise exception 'C-int: % must stay INVOKER, pinned, the service role''s alone, and fill the main one', v_fn;
+  end if;
+  v_fn := 'public.crm_contact_new_lead(uuid, uuid, jsonb, uuid)';
+  if exists (select 1 from pg_proc where oid = v_fn::regprocedure and prosecdef)
+     or not exists (select 1 from pg_proc where oid = v_fn::regprocedure
+                     and proconfig = array['search_path=public, pg_temp']
+                     and prosrc like '%and ch.is_primary  -- C-int%')
+     or has_function_privilege('anon', v_fn, 'execute')
+     or has_function_privilege('authenticated', v_fn, 'execute')
+     or not has_function_privilege('service_role', v_fn, 'execute') then
+    raise exception 'C-int: % must stay INVOKER, pinned, the service role''s alone, and copy the main ones only', v_fn;
   end if;
   -- Every basis row a contact carries: no one-per-contact key, an index on the contact.
   if exists (select 1 from pg_constraint where conname = 'crm_contact_imports_one'

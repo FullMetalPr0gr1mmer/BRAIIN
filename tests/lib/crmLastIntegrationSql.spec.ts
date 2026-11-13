@@ -16,6 +16,8 @@ const read = (pattern: RegExp) =>
 const C12 = read(/_crm_merge\.sql$/);
 const C16 = read(/_crm_contact_files\.sql$/);
 const C10B = read(/_crm_sales_contacts\.sql$/);
+const C6 = read(/_crm_contacts_api\.sql$/);
+const C8 = read(/_crm_tasks\.sql$/);
 const CINT = read(/_crm_last_integration\.sql$/);
 const MARK = / {2}-- C-int$/;
 
@@ -141,6 +143,65 @@ describe('the integration migration (C-int)', () => {
     expect(follow).toMatch(
       /update public\.crm_contact_imports i set contact_id = v_keep\n\s+where i\.tenant_id = p_tenant and i\.contact_id = p_tombstone;/,
     );
+  });
+
+  // The C-int review (CINT2-SEC-1): the rule "Sales sees the main ones" holds only while every
+  // kind a contact holds has a main one.
+  it('restates the lead erasure as 0134 wrote it plus -- C-int lines that fill the main one after the take-back', () => {
+    const after = fn(CINT, 'public.crm_erase_lead');
+    expect(unmarked(after)).toBe(fn(C8, 'public.crm_erase_lead'));
+    expect(marked(after)).toMatch(/perform app\.crm_fill_primary\(p_tenant, v_contact\);/);
+    // After the channels are taken back, inside that branch (not for an orphan, already gone).
+    const fill = after.indexOf('perform app.crm_fill_primary(p_tenant, v_contact);');
+    expect(fill).toBeGreaterThan(after.indexOf('delete from public.crm_contact_channels ch'));
+    expect(fill).toBeGreaterThan(
+      after.indexOf("elsif v_contact is not null and v_link is distinct from 'phone' then"),
+    );
+    expect(fill).toBeLessThan(after.indexOf('return jsonb_build_object'));
+    expect(CINT).toMatch(
+      /revoke all on function public\.crm_erase_lead\(uuid, uuid, uuid\) from public, anon, authenticated, service_role;\ngrant execute on function public\.crm_erase_lead\(uuid, uuid, uuid\) to service_role;/,
+    );
+  });
+
+  it('restates the new-lead door as 0133 wrote it plus -- C-int lines: the main e-mail and phone only', () => {
+    const after = fn(CINT, 'public.crm_contact_new_lead');
+    expect(unmarked(after)).toBe(fn(C6, 'public.crm_contact_new_lead'));
+    expect(marked(after).match(/^ +and ch\.is_primary {2}-- C-int$/gm)).toHaveLength(2);
+    expect(CINT).toMatch(
+      /revoke all on function public\.crm_contact_new_lead\(uuid, uuid, jsonb, uuid\) from public, anon, authenticated, service_role;\ngrant execute on function public\.crm_contact_new_lead\(uuid, uuid, jsonb, uuid\) to service_role;/,
+    );
+  });
+
+  it('every door that deletes a channel of a contact it keeps fills the main one after it', () => {
+    // The editor, the merge and the lead erasure; the person's erasure and the purge take the
+    // whole contact. A new door that deletes channels fails here until it is named.
+    const migrations = readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    const latest = new Map<string, string>();
+    for (const file of migrations) {
+      const sql = readFileSync(join(MIGRATIONS, file), 'utf8').replace(/\r\n/g, '\n');
+      for (const m of sql.matchAll(/create or replace function ([\w.]+)\(/g)) {
+        // The function's body: its first $$-quoted string (bodies quote inner SQL as $q$).
+        const open = sql.indexOf('$$', m.index);
+        const close = sql.indexOf('$$', open + 2);
+        latest.set(m[1]!, sql.slice(m.index, close + 2));
+      }
+    }
+    const deleters = [...latest.entries()]
+      .filter(([, body]) => /delete from public\.crm_contact_channels\b/.test(body))
+      .map(([name]) => name)
+      .sort();
+    expect(deleters).toEqual([
+      'public.crm_edit_contact_channels',
+      'public.crm_erase_lead',
+      'public.crm_merge_contacts',
+    ]);
+    for (const name of deleters) {
+      const body = latest.get(name)!;
+      const lastDelete = body.lastIndexOf('delete from public.crm_contact_channels');
+      expect(body.indexOf('app.crm_fill_primary(', lastDelete), name).toBeGreaterThan(lastDelete);
+    }
   });
 
   // The owner's decisions of 2026-11-13 (C-LAST-INTEGRATION.md section 10).
