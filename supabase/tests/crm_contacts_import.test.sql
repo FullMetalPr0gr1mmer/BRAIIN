@@ -314,8 +314,8 @@ select is(c15_each(array['A', 'B', 'C', 'S', 'D', 'L', 'O', 'Ad', 'Ao', 'Al'],
   'the batches: a live Admin reads the tenant''s four, another tenant''s Admin only theirs, every other token none');
 select is(c15_each(array['A', 'C', 'S', 'D', 'L', 'O', 'Ad', 'Ao', 'Al'],
                    $$ select count(*)::text from public.crm_contact_imports $$),
-  '3 0 0 0 0 0 0 0 0',
-  'the bases: a live crm.contacts holder reads the tenant''s three, every other token none');
+  '3 0 0 0 3 0 0 0 0',
+  'the bases: a live crm.contacts holder (Admin, and Sales since C10b; C-int) reads the tenant''s three, every other token none');
 select c15_as('A');
 select is(c15_val($$ insert into public.crm_import_batches (tenant_id, attestation, expected_rows, expected_bytes)
                      values ('c1500000-0000-4000-8000-000000000001', 'c15-v1', 1, 1) returning 'written' $$),

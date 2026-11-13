@@ -2,7 +2,7 @@
 -- `supabase test db`.
 --
 -- The definitions live in crm_settings.custom_fields (crm.settings: Admin); the values in
--- crm_contacts.custom (crm.contacts: Admin until C10b). Personas, each a token as PostgREST
+-- crm_contacts.custom (crm.contacts: Admin, and Sales since C10b). Personas, each a token as PostgREST
 -- carries it, each naming a live profile unless it is a stale one (H16): A admin, C
 -- content_creator, S seo, D developer, L sales, O another tenant's admin, N anon; stale Admin
 -- tokens Ad (the profile now says content_creator), Ao (switched off), Al (locked). Proven here:
@@ -241,7 +241,6 @@ select c9b_as('O');  insert into c9b_out values ('O', c9b_fill('{"seats": 3}'));
 select c9b_as('C');  insert into c9b_out values ('C', c9b_fill('{"seats": 3}'));
 select c9b_as('S');  insert into c9b_out values ('S', c9b_fill('{"seats": 3}'));
 select c9b_as('D');  insert into c9b_out values ('D', c9b_fill('{"seats": 3}'));
-select c9b_as('L');  insert into c9b_out values ('L', c9b_fill('{"seats": 3}'));
 select c9b_as('Ad'); insert into c9b_out values ('Ad', c9b_fill('{"seats": 3}'));
 select c9b_as('Ao'); insert into c9b_out values ('Ao', c9b_fill('{"seats": 3}'));
 select c9b_as('Al'); insert into c9b_out values ('Al', c9b_fill('{"seats": 3}'));
@@ -250,8 +249,8 @@ set local role anon;
 select c9b_as('N');  insert into c9b_out values ('N', c9b_fill('{"seats": 3}'));
 reset role;
 select is((select string_agg(who || '=' || res, ' ' order by who collate "C") from c9b_out),
-  'Ad=ok:0 Al=ok:0 Ao=ok:0 C=ok:0 D=ok:0 L=ok:0 N=42501 O=ok:0 S=ok:0',
-  'nobody but a live contacts user of the tenant fills a value: every other role, another tenant''s admin and every stale token reach no row, anon holds no grant (C9B-SEC-2, C9B-COR-5)');
+  'Ad=ok:0 Al=ok:0 Ao=ok:0 C=ok:0 D=ok:0 N=42501 O=ok:0 S=ok:0',
+  'nobody but a live contacts user of the tenant fills a value: every other role, another tenant''s admin and every stale token reach no row, anon holds no grant (C9B-SEC-2, C9B-COR-5; Sales holds crm.contacts since C10b, so it left this row and fills a value in crm_last_integration.test.sql)');
 select is((select custom::text from public.crm_contacts where id = 'c9b00000-0000-4000-8000-00000000c001'),
   '{"industry_note": "' || repeat('ب', 500) || '"}', 'and Huda''s values are as the Admin left them');
 

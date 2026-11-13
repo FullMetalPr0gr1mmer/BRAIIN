@@ -300,13 +300,15 @@ begin
   end loop;
 end $do$;
 select is((select string_agg(who || '=' || res, ',' order by who collate "C") from c11_out where who like 'read:%'),
-  'read:A=3 3,read:A2=3 3,read:Ad=0 0,read:Al=0 0,read:Ao=0 0,read:C=0 0,read:D=0 0,read:L=0 0,read:O=0 42501,read:S=0 0',
-  'only a live Admin of the tenant reads its companies; every other principal and stale token reads none');
+  'read:A=3 3,read:A2=3 3,read:Ad=0 0,read:Al=0 0,read:Ao=0 0,read:C=0 0,read:D=0 0,read:L=3 3,read:O=0 42501,read:S=0 0',
+  'only a live Admin or Sales user of the tenant reads its companies (crm.contacts, Sales since C10b; C-int); every other principal and stale token reads none');
 do $do$
 declare
   p text;
 begin
-  foreach p in array array['C', 'S', 'D', 'L', 'O', 'Ad', 'Ao', 'Al'] loop
+  -- Sales holds crm.contacts since C10b, so it writes companies: its success is in
+  -- crm_last_integration.test.sql (here it would change the fixtures the later lines read).
+  foreach p in array array['C', 'S', 'D', 'O', 'Ad', 'Ao', 'Al'] loop
     perform c11_as(p);
     insert into c11_out values ('write:' || p,
       c11_val($$ select public.crm_company_create('c1100000-0000-4000-8000-000000000001', '{"name": "Mine"}')::text $$)
@@ -329,7 +331,7 @@ end $do$;
 select is((select string_agg(who || '=' || res, ',' order by who collate "C") from c11_out where who like 'write:%'),
   'write:Ad=42501 P0002 P0002 P0002 42501 ok:0,write:Al=42501 P0002 P0002 P0002 42501 ok:0,'
   || 'write:Ao=42501 P0002 P0002 P0002 42501 ok:0,write:C=42501 P0002 P0002 P0002 42501 ok:0,'
-  || 'write:D=42501 P0002 P0002 P0002 42501 ok:0,write:L=42501 P0002 P0002 P0002 42501 ok:0,'
+  || 'write:D=42501 P0002 P0002 P0002 42501 ok:0,'
   || 'write:O=42501 42501 42501 42501 42501 ok:0,write:S=42501 P0002 P0002 P0002 42501 ok:0',
   'nobody else adds, changes, removes or links a company; a direct insert naming an owner of any tenant is refused before the owner rule (no oracle)');
 reset role;

@@ -36,7 +36,7 @@
 --      lead, no timeline and nobody in the directory.
 
 begin;
-select plan(68);
+select plan(69);
 
 -- ── fixtures (as the migration role) ─────────────────────────────────────────
 -- T1 is created older than any seeded tenant, so inside this transaction it is the launch
@@ -144,17 +144,18 @@ insert into public.crm_contact_notes (tenant_id, contact_id, body) values
 insert into public.crm_tasks (tenant_id, title, due_at, contact_id) values
   ('93000000-0000-0000-0000-000000000001', 'C8 task', now() + interval '1 day',
    '93000000-0000-0000-0000-00000000c5c1');
--- A company (Admin v2 C11): crm.contacts' too, so compared the same way.
+-- A company (Admin v2 C11): crm.contacts' too, so Sales reads it since C10b (section 2; C-int).
 insert into public.crm_companies (tenant_id, name) values
   ('93000000-0000-0000-0000-000000000001', 'C11 company');
--- "Not a duplicate" (0138, Admin v2 C12): a pair, so a second contact. Admin's alone until C10b.
+-- "Not a duplicate" (0138, Admin v2 C12): a pair, so a second contact. crm.contacts', so Sales
+-- reads it since C10b (section 2; C-int).
 insert into public.crm_contacts (id, tenant_id, display_name) values
   ('93000000-0000-0000-0000-00000000c5c2', '93000000-0000-0000-0000-000000000001', 'C12 contact');
 insert into public.crm_merge_dismissals (tenant_id, contact_a, contact_b) values
   ('93000000-0000-0000-0000-000000000001', '93000000-0000-0000-0000-00000000c5c1',
    '93000000-0000-0000-0000-00000000c5c2');
--- An import and the lawful basis it recorded (Admin v2 C15): Admin's alone (crm.import, and
--- crm.contacts for the basis).
+-- An import and the lawful basis it recorded (Admin v2 C15): the batch is crm.import's (Admin
+-- alone, so compared with anon); the basis is crm.contacts', so Sales reads it (section 2; C-int).
 insert into public.crm_import_batches (id, tenant_id, attestation, expected_rows, expected_bytes) values
   ('93000000-0000-0000-0000-00000000c15b', '93000000-0000-0000-0000-000000000001', 'c15-v1', 1, 10);
 insert into public.crm_contact_imports (tenant_id, contact_id, batch_id, row_number, basis) values
@@ -329,10 +330,12 @@ grant execute on function _as(text, text, text), _sales(), _run(text), _val(text
 grant insert, select on _seen, _t1_staff to anon, authenticated;
 
 -- The CRM, a member's own rows and the stats analytics.read gives: proven on their own below
--- (the contacts and the tasks since C10b gives Sales crm.contacts and crm.tasks).
+-- (the contacts and the tasks since C10b gives Sales crm.contacts and crm.tasks; the companies,
+-- the dismissals and the import bases, crm.contacts' too, since the C-int integration).
 create function _not_compared() returns text[] language sql immutable as $$
   select array['leads', 'leads_safe', 'lead_stages', 'lead_events', 'crm_settings',
                'crm_contacts', 'crm_contact_channels', 'crm_contact_events', 'crm_tasks',
+               'crm_companies', 'crm_merge_dismissals', 'crm_contact_imports',
                'profiles', 'admin_user_prefs', 'tenants', 'help_articles',
                'admin_role_defaults', 'rollup_daily_pageviews', 'team_notes',
                'rollup_daily_visits', 'rollup_daily_events', 'rollup_hourly_pageviews',
@@ -448,8 +451,13 @@ select is(
 -- The contacts and the tasks (Admin v2 C10b): read like the leads, through C5's column grants.
 select is(_count('public.crm_contacts') || '/' || _count('public.crm_contact_channels') || '/'
           || (select (count(*) > 0)::text from public.crm_contact_events) || '/' || _count('public.crm_tasks'),
-  '1/1/true/1',
-  'Sales reads its tenant''s contact, the channel''s safe columns, the contact''s timeline and the task (C10b)');
+  '2/1/true/1',
+  'Sales reads its tenant''s two contacts, the channel''s safe columns, the contact''s timeline and the task (C10b)');
+select is(_count('public.crm_companies') || '/' || _count('public.crm_merge_dismissals') || '/'
+          || _count('public.crm_contact_imports') || '/' || _count('public.crm_import_batches') || '/'
+          || _count('public.crm_contact_files'),
+  '1/1/1/0/0',
+  'and, crm.contacts'' too, the company, the dismissal and the import basis; never the import batch (crm.import) or a file (crm.files, C16-Q3) (C-int)');
 select is(_val($$ select value_enc from public.crm_contact_channels $$) || ' '
           || _val($$ select value_hmac from public.crm_contact_channels $$) || ' '
           || _run($$ select * from public.crm_contact_notes $$),

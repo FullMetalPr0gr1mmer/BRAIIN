@@ -3,8 +3,9 @@
 --
 -- Personas, each a token as PostgREST carries it: A admin, C content_creator, S seo, D
 -- developer, L sales, O another tenant's admin, N anon; stale Admin tokens Ad (the profile now
--- says content_creator), Ao (switched off), Al (locked). crm.contacts is Admin's alone (Sales
--- from C10b). Proven here:
+-- says content_creator), Ao (switched off), Al (locked). crm.contacts is Admin's and, since
+-- C10b, Sales' (the C-int note: the lines below that named Sales as refused now hold it allowed,
+-- and crm_last_integration.test.sql merges as Sales). Proven here:
 --   1. the finder: only a live Admin of the tenant gets pairs (same phone; same name and
 --      company), never a value, nothing across tenants, no tombstone; the limit is bounded;
 --   2. "Not a duplicate": as the caller, both people seen, idempotent, never a tombstone, the
@@ -21,15 +22,15 @@
 --      value both records hold keeps a person's source; a merge is a person's edit whatever it
 --      fills; the ceiling counts only what the other adds; a tombstone is not erased.
 --
--- C10b + C12 integration: these lines assert that Sales is refused (crm.contacts is Admin's
--- here). When C10b re-creates app.role_crm_contacts as ('admin', 'sales'), whichever of the
--- two merges second flips them to allowed and adds a Sales success row: section 1's "a
--- Content Creator, SEO, a Developer and Sales find nothing" (Sales finds the pairs), section
--- 2's "nobody but a live Admin of the tenant says so" (L) and "only a live Admin of the
--- tenant reads the dismissals" (L), and section 3's refused actors (the Sales actor ...051).
+-- C10b + C12 integration (docs/admin-v2/as-built/C-LAST-INTEGRATION.md, C-int): C10b re-creates
+-- app.role_crm_contacts as ('admin', 'sales'), so the lines that asserted Sales refused now
+-- assert it allowed: section 1, Sales finds the pairs; section 2, Sales reads the dismissals
+-- (and leaves the refused personas of "Not a duplicate", whose fixture its own success would
+-- change); section 3, the Sales actor leaves the refused actors. Sales' own dismissal and merge
+-- (a reveal slot claimed by the Worker first) are in crm_last_integration.test.sql.
 
 begin;
-select plan(71);
+select plan(72);
 
 insert into public.tenants (id, name) values
   ('c1200000-0000-4000-8000-000000000001', 'C12 T1'),
@@ -148,7 +149,7 @@ declare
   v_out text[] := '{}';
 begin
   foreach v_actor in array array['c1200000-0000-4000-8000-0000000000c1', 'c1200000-0000-4000-8000-0000000000e1',
-                                 'c1200000-0000-4000-8000-0000000000d1', 'c1200000-0000-4000-8000-000000000051',
+                                 'c1200000-0000-4000-8000-0000000000d1',
                                  'c1200000-0000-4000-8000-0000000000f1', 'c1200000-0000-4000-8000-0000000000a2',
                                  'c1200000-0000-4000-8000-0000000000a3', 'c1200000-0000-4000-8000-0000000000a4'] loop
     v_out := v_out || c12_val(format(p_sql, v_actor));
@@ -176,8 +177,11 @@ select is(c12_val($$ select (p -> 'b' ->> 'leads') || ' ' || (p -> 'b' ->> 'emai
 select is(c12_pairs('T2'), '', 'a tenant that is not the token''s gives nothing');
 select is(c12_val($$ select public.crm_duplicate_pairs('c1200000-0000-4000-8000-000000000001', 51)::text $$),
   '22023', 'a limit past 50 is refused');
-select is(c12_each(array['C', 'S', 'D', 'L'], $$ select public.crm_duplicate_pairs('c1200000-0000-4000-8000-000000000001')::text $$),
-  '[] [] [] []', 'a Content Creator, SEO, a Developer and Sales find nothing');
+select is(c12_each(array['C', 'S', 'D'], $$ select public.crm_duplicate_pairs('c1200000-0000-4000-8000-000000000001')::text $$),
+  '[] [] []', 'a Content Creator, SEO and a Developer find nothing');
+select c12_as('L');
+select is(c12_pairs(), 'c001-c003:phone c001-c002:name_company',
+  'a live Sales user of the tenant finds the same pairs (crm.contacts since C10b; C-int)');
 select c12_as('O');
 select is(c12_pairs('T1') || '|' || c12_pairs('T2'), '|',
   'another tenant''s Admin finds nothing of T1, and its own tenant has one Huda');
@@ -195,10 +199,10 @@ reset role;
 
 -- ── 2. "Not a duplicate" ──────────────────────────────────────────────────────────────────
 set local role authenticated;
-select is(c12_each(array['C', 'S', 'D', 'L', 'O', 'Ad', 'Ao', 'Al'],
+select is(c12_each(array['C', 'S', 'D', 'O', 'Ad', 'Ao', 'Al'],
                    $$ select public.crm_dismiss_duplicate('c1200000-0000-4000-8000-000000000001',
                         'c1200000-0000-4000-8000-00000000c001', 'c1200000-0000-4000-8000-00000000c003')::text $$),
-  'P0002 P0002 P0002 P0002 P0002 P0002 P0002 P0002', 'nobody but a live Admin of the tenant says so');
+  'P0002 P0002 P0002 P0002 P0002 P0002 P0002', 'nobody but a live contacts user of the tenant says so');
 select c12_as('A');
 select is(c12_val($$ select public.crm_dismiss_duplicate('c1200000-0000-4000-8000-000000000001',
              'c1200000-0000-4000-8000-00000000c003', 'c1200000-0000-4000-8000-00000000c001')::text $$),
@@ -231,8 +235,8 @@ select is(c12_each(array['Ad', 'C'],
   '42501 42501', 'a stale or unentitled token is refused first too (no tombstone oracle)');
 select is(c12_each(array['A', 'C', 'S', 'D', 'L', 'O', 'Ad', 'Ao', 'Al'],
                    $$ select count(*)::text from public.crm_merge_dismissals $$),
-  '1 0 0 0 0 0 0 0 0',
-  'only a live Admin of the tenant reads the dismissals (not another tenant''s Admin, nor a stale token)');
+  '1 0 0 0 1 0 0 0 0',
+  'only a live Admin or Sales user of the tenant reads the dismissals (not another tenant''s Admin, nor a stale token; C-int)');
 reset role;
 select set_config('request.jwt.claims', '', true);
 set local role anon;
@@ -259,8 +263,8 @@ select ok(not has_function_privilege('authenticated', 'public.crm_merge_contacts
 set local role service_role;
 select is(c12_refusals($$ select public.crm_merge_contacts('c1200000-0000-4000-8000-000000000001',
             'c1200000-0000-4000-8000-00000000c001', 1, 'c1200000-0000-4000-8000-00000000c002', 1, %L)::text $$),
-  '42501 42501 42501 42501 42501 42501 42501 42501',
-  'it refuses a Content Creator, SEO, a Developer, Sales, another tenant''s Admin, a demoted, a switched-off and a locked Admin');
+  '42501 42501 42501 42501 42501 42501 42501',
+  'it refuses a Content Creator, SEO, a Developer, another tenant''s Admin, a demoted, a switched-off and a locked Admin (Sales merges since C10b: crm_last_integration.test.sql)');
 select is(c12_val($$ select public.crm_merge_contacts('c1200000-0000-4000-8000-000000000001',
             'c1200000-0000-4000-8000-00000000c001', 1, 'c1200000-0000-4000-8000-00000000c0ff', 1,
             'c1200000-0000-4000-8000-0000000000a1')::text $$),
