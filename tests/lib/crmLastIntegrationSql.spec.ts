@@ -15,6 +15,7 @@ const read = (pattern: RegExp) =>
   ).replace(/\r\n/g, '\n');
 const C12 = read(/_crm_merge\.sql$/);
 const C16 = read(/_crm_contact_files\.sql$/);
+const C10B = read(/_crm_sales_contacts\.sql$/);
 const CINT = read(/_crm_last_integration\.sql$/);
 const MARK = / {2}-- C-int$/;
 
@@ -140,5 +141,55 @@ describe('the integration migration (C-int)', () => {
     expect(follow).toMatch(
       /update public\.crm_contact_imports i set contact_id = v_keep\n\s+where i\.tenant_id = p_tenant and i\.contact_id = p_tombstone;/,
     );
+  });
+
+  // The owner's decisions of 2026-11-13 (C-LAST-INTEGRATION.md section 10).
+  it('a merge where either record holds a file needs an actor who may handle files, before anything moves', () => {
+    const merge = fn(CINT, 'public.crm_merge_contacts');
+    const lines = marked(merge);
+    expect(lines).toMatch(/if not app\.crm_files_actor_ok\(p_tenant, p_actor\)/);
+    expect(lines).toMatch(/f\.tenant_id = p_tenant and f\.contact_id in \(p_keep, p_drop\)/);
+    expect(lines).toMatch(/errcode = '42501'/);
+    expect(lines).toMatch(/holds files, so an Admin merges them/);
+    // With both rows locked and their versions checked, and before the ceiling, the survivor's
+    // details or any move.
+    const check = merge.indexOf('app.crm_files_actor_ok(p_tenant, p_actor)');
+    expect(check).toBeGreaterThan(merge.indexOf('for update'));
+    expect(check).toBeGreaterThan(merge.indexOf("errcode = '40001'"));
+    expect(check).toBeLessThan(merge.indexOf('crm_contact_channels_cap'));
+    expect(check).toBeLessThan(merge.indexOf('update public.crm_contacts c'));
+    expect(check).toBeLessThan(merge.indexOf('update public.crm_contact_channels'));
+  });
+
+  it("restates the channel editor as 0136 wrote it plus the lines marked -- C-int (the main one is an Admin's)", () => {
+    const after = fn(CINT, 'public.crm_edit_contact_channels');
+    expect(unmarked(after)).toBe(fn(C10B, 'public.crm_edit_contact_channels'));
+    const lines = marked(after);
+    expect(lines).toMatch(/if \(cardinality\(v_primary\) > 0/);
+    expect(lines).toMatch(/e -> 'is_primary' = 'true'::jsonb/);
+    expect(lines).toMatch(/and not app\.crm_eraser_ok\(p_tenant, p_actor\) then/);
+    // Before the contact is locked or anything is written.
+    expect(after.indexOf("e -> 'is_primary' = 'true'::jsonb")).toBeLessThan(
+      after.indexOf('for update'),
+    );
+    expect(CINT).toMatch(
+      /revoke all on function public\.crm_edit_contact_channels\(uuid, uuid, int, jsonb, uuid\[\], uuid\[\], uuid\)\n  from public, anon, authenticated, service_role;\ngrant execute on function public\.crm_edit_contact_channels\(uuid, uuid, int, jsonb, uuid\[\], uuid\[\], uuid\)\n  to service_role;/,
+    );
+  });
+
+  it('the reveal reads through a door that answers the primaries only to anyone but an eraser', () => {
+    const door = fn(CINT, 'public.crm_contact_reveal_channels');
+    expect(door).toMatch(/security invoker set search_path = ''/);
+    expect(door).toMatch(/app\.crm_contacts_actor_ok\(p_tenant, p_actor, false\)/);
+    expect(door).toMatch(/v_every := app\.crm_eraser_ok\(p_tenant, p_actor\);/);
+    expect(door).toMatch(/and \(v_every or ch\.is_primary\)/);
+    expect(door).toMatch(/c\.merged_into is null/);
+    expect(CINT).toMatch(
+      /revoke all on function public\.crm_contact_reveal_channels\(uuid, uuid, uuid\)\n  from public, anon, authenticated, service_role;\ngrant execute on function public\.crm_contact_reveal_channels\(uuid, uuid, uuid\) to service_role;/,
+    );
+    // The Worker's reveal reads ciphertext through it alone, never the table.
+    const reveal = readFileSync(join('src', 'lib', 'crm', 'contactReveal.ts'), 'utf8');
+    expect(reveal).toContain("rpc('crm_contact_reveal_channels'");
+    expect(reveal).not.toMatch(/from\('crm_contact_channels'\)/);
   });
 });

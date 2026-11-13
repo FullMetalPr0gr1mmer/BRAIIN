@@ -6,6 +6,7 @@ import {
   type MergeOutcome,
 } from '@schemas/crmMerge';
 import { OptimisticLockError } from '@/lib/admin/errors';
+import { AuthorizationError } from '@/lib/authz/errors';
 import { contactError } from './contacts';
 
 // Merging duplicate contacts (Admin v2 C12, crm.md §5.5): the Worker's half. The rules live in
@@ -108,5 +109,10 @@ interface DbError {
  */
 export function mergeError(error: DbError, what: string): Error {
   if (error.code === '40P01') return new OptimisticLockError('crm_contacts');
+  // (Owner decision 2026-11-13) The door's own files rule (a file added after the route's
+  // check): the same 403 the route gives, naming crm.files, so the dialog says "ask an Admin".
+  if (error.code === '42501' && (error.message ?? '').includes('holds files')) {
+    return new AuthorizationError('crm.files', `${what}: records holding files need an Admin`);
+  }
   return contactError(error, what);
 }

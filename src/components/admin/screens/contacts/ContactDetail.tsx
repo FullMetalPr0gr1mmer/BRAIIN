@@ -478,7 +478,7 @@ export default function ContactDetail(props: ContactDetailProps) {
             revealed={revealed}
             onRevealed={setRevealed}
             busy={busy}
-            canRemove={permissions.canErase}
+            managesChannels={permissions.canErase}
             edit={editChannels}
           />
           <ContactDetailsCard

@@ -3,7 +3,13 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { APIContext } from 'astro';
 import { ContactMergeSchema, DuplicateDismissSchema, DuplicatePairSchema } from '@schemas/crmMerge';
-import { movesLine, olderFirst, reasonLine } from '@/lib/crm/mergeView';
+import {
+  FILES_NEED_ADMIN_TEXT,
+  isFilesRefusal,
+  movesLine,
+  olderFirst,
+  reasonLine,
+} from '@/lib/crm/mergeView';
 import { parseDuplicatePairs, parseMergeOutcome } from '@/lib/crm/merge';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
 import { PII_REVEAL_LIMITS } from '@/lib/admin/rateLimit';
@@ -30,6 +36,10 @@ const events: string[] = [];
 const audits: { action: string; entityId?: string; detail?: Record<string, unknown> }[] = [];
 const rpcCalls: { owner: string; fn: string; args: Record<string, unknown> }[] = [];
 let rpcAnswers: Record<string, { data: unknown; error: unknown }> = {};
+// The two records' files as the service role counts them (the owner's decision of 2026-11-13).
+let filesCount: number | null = 0;
+let filesError: { code: string } | null = null;
+const fileFilters: string[] = [];
 
 vi.mock('@/lib/admin/audit', () => ({
   writeAudit: async (
@@ -65,6 +75,16 @@ function builder(table: string, owner: 'svc' | 'rls') {
   b['eq'] = (column: string, value: unknown) => {
     filters[column] = value;
     return b;
+  };
+  b['in'] = (column: string, values: unknown[]) => {
+    filters[column] = values;
+    return b;
+  };
+  // A head count (`select('id', { count: 'exact', head: true })`), awaited directly.
+  b['then'] = (ok: (v: unknown) => unknown) => {
+    events.push(`${owner}:count:${table}`);
+    fileFilters.push(JSON.stringify(filters));
+    return Promise.resolve({ count: filesCount, error: filesError }).then(ok);
   };
   b['maybeSingle'] = async () => {
     events.push(`${owner}:${table}`);
@@ -149,6 +169,9 @@ beforeEach(() => {
   audits.length = 0;
   rpcCalls.length = 0;
   rpcAnswers = {};
+  filesCount = 0;
+  filesError = null;
+  fileFilters.length = 0;
 });
 
 describe('POST /api/admin/crm/contacts/merge', () => {
@@ -223,6 +246,7 @@ describe('POST /api/admin/crm/contacts/merge', () => {
       expect(res.status).toBe(200);
       expect(events).toEqual([
         'svc:profiles',
+        'svc:count:crm_contact_files',
         'ops:pii-reveal',
         'ops:crm-merge',
         'rls:crm_contacts',
@@ -237,9 +261,59 @@ describe('POST /api/admin/crm/contacts/merge', () => {
       const { POST } = await load();
       const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
       expect(res.status).toBe(429);
-      expect(events).toEqual(['svc:profiles', 'ops:pii-reveal']);
+      expect(events).toEqual(['svc:profiles', 'svc:count:crm_contact_files', 'ops:pii-reveal']);
       expect(rpcCalls).toEqual([]);
     });
+
+    // The owner's decision of 2026-11-13: a merge where either record holds a file needs an
+    // Admin. Refused before any reveal slot, the merge limit, a read of either person or the
+    // door, so nothing is spent and nothing moves.
+    it('a pair where either record holds a file: a 403 naming crm.files, before any slot', async () => {
+      filesCount = 1;
+      const { POST } = await load();
+      const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body['capability']).toBe('crm.files');
+      expect(isFilesRefusal(res.status, body)).toBe(true);
+      expect(events).toEqual(['svc:profiles', 'svc:count:crm_contact_files']);
+      expect(claims).toEqual([]);
+      expect(rpcCalls).toEqual([]);
+      // Counted for this tenant and these two people only.
+      expect(JSON.parse(fileFilters[0]!)).toEqual({ tenant_id: TENANT, contact_id: [KEEP, DROP] });
+    });
+
+    it('a count that fails refuses too (fail-closed), before any slot', async () => {
+      filesError = { code: '57014' };
+      const { POST } = await load();
+      const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
+      expect(res.status).toBe(500);
+      expect(claims).toEqual([]);
+      expect(rpcCalls).toEqual([]);
+    });
+
+    it('the door refusing a file added since the count is the same 403', async () => {
+      rpcAnswers['crm_merge_contacts'] = {
+        data: null,
+        error: {
+          code: '42501',
+          message: 'crm_merge_contacts: one of these records holds files, so an Admin merges them',
+        },
+      };
+      const { POST } = await load();
+      const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY, 'sales'));
+      expect(res.status).toBe(403);
+      expect(((await res.json()) as Record<string, unknown>)['capability']).toBe('crm.files');
+    });
+  });
+
+  it('an Admin never counts files, and merges a pair holding files', async () => {
+    filesCount = 3;
+    const { POST } = await load();
+    const res = await POST(ctx('/api/admin/crm/contacts/merge', 'POST', MERGE_BODY));
+    expect(res.status).toBe(200);
+    expect(events).not.toContain('svc:count:crm_contact_files');
+    expect(rpcCalls.map((c) => c.fn)).toEqual(['crm_merge_contacts']);
   });
 
   it('a demoted, switched-off or locked profile is refused before anything else', async () => {
@@ -385,6 +459,22 @@ describe('the schemas are strict', () => {
 });
 
 describe('the words', () => {
+  it('a merge refused for files tells the person to ask an Admin (P-12: no dashes)', () => {
+    expect(FILES_NEED_ADMIN_TEXT).toBe(
+      'One of these two records holds files, so an Admin needs to merge them. Ask an Admin.',
+    );
+    expect(FILES_NEED_ADMIN_TEXT).not.toMatch(/[–—]/);
+    expect(isFilesRefusal(403, { capability: 'crm.files' })).toBe(true);
+    expect(isFilesRefusal(403, { capability: 'crm.contacts' })).toBe(false);
+    expect(isFilesRefusal(409, { capability: 'crm.files' })).toBe(false);
+    const dialog = readFileSync(
+      'src/components/admin/screens/contacts/MergeDuplicatesDialog.tsx',
+      'utf8',
+    );
+    expect(dialog).toContain('isFilesRefusal(err.info.status, err.body)');
+    expect(dialog).toContain('setPairError({ key, text: FILES_NEED_ADMIN_TEXT })');
+  });
+
   const [pair] = parseDuplicatePairs([poisonedPair()]);
 
   it('say why, never what matched (P-12: no dashes)', () => {

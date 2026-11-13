@@ -54,6 +54,8 @@ let mergedInto: string | null = null;
 let notesCount = 1;
 let leadsCount = 1;
 const orders: string[] = [];
+/** Every `.eq()` filter a read made: `owner:table:column=value`. */
+const eqs: string[] = [];
 const limits: Record<string, number> = {};
 const backfillCalls: { batch: unknown; tenantId: unknown }[] = [];
 
@@ -160,7 +162,11 @@ function listRows(table: string, owner: string): Record<string, unknown>[] {
 
 function builder(table: string, owner: 'svc' | 'rls') {
   const b: Record<string, unknown> = {};
-  for (const method of ['in', 'is', 'eq']) b[method] = () => b;
+  for (const method of ['in', 'is']) b[method] = () => b;
+  b['eq'] = (column: string, value: unknown) => {
+    eqs.push(`${owner}:${table}:${column}=${String(value)}`);
+    return b;
+  };
   b['order'] = (column: string, options?: { ascending?: boolean }) => {
     orders.push(`${table}:${column}:${options?.ascending === false ? 'desc' : 'asc'}`);
     return b;
@@ -293,11 +299,22 @@ beforeEach(() => {
   notesCount = 1;
   leadsCount = 1;
   orders.length = 0;
+  eqs.length = 0;
   for (const key of Object.keys(limits)) delete limits[key];
   backfillCalls.length = 0;
 });
 
 describe('POST /[id]/reveal', () => {
+  // What the reveal's door answers (public.crm_contact_reveal_channels, 0141): the database
+  // decides which rows an actor gets; these are what it would answer an Admin.
+  const DOOR_ROWS = [
+    { id: OTHER, kind: 'email', is_primary: true, source: 'lead', value_enc: 'enc:sara@acme.sa' },
+    { id: NOTE, kind: 'phone', is_primary: true, source: 'manual', value_enc: 'garbled' },
+  ];
+  beforeEach(() => {
+    rpcAnswers['crm_contact_reveal_channels'] = { data: DOOR_ROWS, error: null };
+  });
+
   it('live recheck, the shared limiter, RLS read, written audit, then the ciphertext', async () => {
     const res = await reveal.POST(ctx(`/api/admin/crm/contacts/${CONTACT}/reveal`, 'POST'));
     expect(res.status).toBe(200);
@@ -306,7 +323,15 @@ describe('POST /[id]/reveal', () => {
       'ops:pii-reveal',
       'rls:crm_contacts',
       'audit:crm.contact.view_pii',
-      'svc:list:crm_contact_channels',
+      'svc:rpc:crm_contact_reveal_channels',
+    ]);
+    // The ciphertext comes through the door, naming the acting person, never the table.
+    expect(rpcCalls).toEqual([
+      {
+        owner: 'svc',
+        fn: 'crm_contact_reveal_channels',
+        args: { p_tenant: TENANT, p_contact: CONTACT, p_actor: USER },
+      },
     ]);
     // One allowance with the lead reveal: the same key, the reveal's numbers.
     expect(claims).toEqual([{ op: 'pii-reveal', limits: PII_REVEAL_LIMITS }]);
@@ -320,7 +345,87 @@ describe('POST /[id]/reveal', () => {
     expect(audits[0]).toMatchObject({
       action: 'crm.contact.view_pii',
       entityId: CONTACT,
-      detail: { pii: true, fields: ['emails', 'phones'] },
+      detail: { pii: true, fields: ['emails', 'phones'], scope: 'all' },
+    });
+  });
+
+  // The owner's decision of 2026-11-13: a Sales reveal shows the main e-mail and the main phone
+  // only. The door decides from the live profile; the Worker drops a non-primary row again.
+  describe('as Sales: the main e-mail and the main phone only', () => {
+    const asSales = () => {
+      sessionRole = 'sales';
+      liveProfile = { role: 'sales', is_active: true, locked_until: null };
+    };
+    const ALL_ROWS = [
+      { id: OTHER, kind: 'email', is_primary: true, source: 'lead', value_enc: 'enc:main@acme.sa' },
+      {
+        id: NOTE,
+        kind: 'email',
+        is_primary: false,
+        source: 'manual',
+        value_enc: 'enc:second@acme.sa',
+      },
+      { id: CONTACT, kind: 'phone', is_primary: true, source: 'lead', value_enc: 'enc:+9665' },
+      { id: USER, kind: 'phone', is_primary: false, source: 'lead', value_enc: 'enc:+9666' },
+    ];
+
+    it('never answers a non-primary channel, even if the door sent one', async () => {
+      asSales();
+      rpcAnswers['crm_contact_reveal_channels'] = { data: ALL_ROWS, error: null };
+      const res = await reveal.POST(ctx(`/api/admin/crm/contacts/${CONTACT}/reveal`, 'POST'));
+      expect(res.status).toBe(200);
+      const body = (await data(res)) as { channels: { value: string; isPrimary: boolean }[] };
+      expect(body.channels.map((c) => c.value)).toEqual(['main@acme.sa', '+9665']);
+      expect(body.channels.every((c) => c.isPrimary)).toBe(true);
+      expect(JSON.stringify(body)).not.toContain('second@acme.sa');
+      expect(JSON.stringify(body)).not.toContain('+9666');
+    });
+
+    it('still spends its reveal slot and writes its audit row first, saying "main"', async () => {
+      asSales();
+      const res = await reveal.POST(ctx(`/api/admin/crm/contacts/${CONTACT}/reveal`, 'POST'));
+      expect(res.status).toBe(200);
+      expect(claims).toEqual([{ op: 'pii-reveal', limits: PII_REVEAL_LIMITS }]);
+      expect(events.indexOf('audit:crm.contact.view_pii')).toBeLessThan(
+        events.indexOf('svc:rpc:crm_contact_reveal_channels'),
+      );
+      expect(audits[0]!.detail).toEqual({
+        pii: true,
+        fields: ['emails', 'phones'],
+        scope: 'main',
+      });
+    });
+
+    it('an Admin gets every channel the door answers', async () => {
+      rpcAnswers['crm_contact_reveal_channels'] = { data: ALL_ROWS, error: null };
+      const res = await reveal.POST(ctx(`/api/admin/crm/contacts/${CONTACT}/reveal`, 'POST'));
+      const body = (await data(res)) as { channels: { value: string }[] };
+      expect(body.channels.map((c) => c.value)).toEqual([
+        'main@acme.sa',
+        'second@acme.sa',
+        '+9665',
+        '+9666',
+      ]);
+    });
+
+    it('the door refusing the actor (demoted since the recheck) is a 403', async () => {
+      asSales();
+      rpcAnswers['crm_contact_reveal_channels'] = { data: null, error: { code: '42501' } };
+      const res = await reveal.POST(ctx(`/api/admin/crm/contacts/${CONTACT}/reveal`, 'POST'));
+      expect(res.status).toBe(403);
+    });
+
+    it('the contact page lists Sales the main ones only, and an Admin every one', async () => {
+      asSales();
+      const res = await detail.GET(ctx(`/api/admin/crm/contacts/${CONTACT}`));
+      expect(res.status).toBe(200);
+      expect(eqs).toContain('rls:crm_contact_channels:is_primary=true');
+      sessionRole = 'admin';
+      liveProfile = { role: 'admin', is_active: true, locked_until: null };
+      eqs.length = 0;
+      await detail.GET(ctx(`/api/admin/crm/contacts/${CONTACT}`));
+      expect(eqs).toContain(`rls:crm_contact_channels:contact_id=${CONTACT}`);
+      expect(eqs).not.toContain('rls:crm_contact_channels:is_primary=true');
     });
   });
 
@@ -328,7 +433,7 @@ describe('POST /[id]/reveal', () => {
     auditOk = false;
     const res = await reveal.POST(ctx(`/api/admin/crm/contacts/${CONTACT}/reveal`, 'POST'));
     expect(res.status).toBe(403);
-    expect(events).not.toContain('svc:list:crm_contact_channels');
+    expect(events).not.toContain('svc:rpc:crm_contact_reveal_channels');
     expect(JSON.stringify(await res.json())).not.toContain('sara@acme.sa');
   });
 
@@ -1024,16 +1129,48 @@ describe('PATCH /[id] (C6 review, C6-SEC-4, C6-COR-2)', () => {
       expect(rpcCalls).toEqual([]);
     });
 
-    it('an add and a new main still reach the door', async () => {
+    // The owner's decision of 2026-11-13: the main one is what a Sales reveal shows, so
+    // choosing it is an Admin's; an add still reaches the door.
+    it('a new main is a 403 before anything is read, written or audited', async () => {
+      asSales();
+      rpcAnswers['crm_edit_contact_channels'] = { data: { added: 0, removed: 0 }, error: null };
+      const res = await patch({ version: 3, channels: { primary: [OTHER] } });
+      expect(res.status).toBe(403);
+      expect(events).toEqual([]);
+      expect(rpcCalls).toEqual([]);
+      expect(audits).toEqual([]);
+    });
+
+    it('an add marked as the main one is refused whole', async () => {
+      asSales();
+      const res = await patch({
+        version: 3,
+        channels: { add: [{ kind: 'phone', value: '+966501234567', isPrimary: true }] },
+      });
+      expect(res.status).toBe(403);
+      expect(rpcCalls).toEqual([]);
+    });
+
+    it('a plain add still reaches the door, and the answer lists the main ones only', async () => {
       asSales();
       rpcAnswers['crm_edit_contact_channels'] = { data: { added: 1, removed: 0 }, error: null };
       const res = await patch({
         version: 3,
-        channels: { add: [{ kind: 'phone', value: '+966501234567' }], primary: [OTHER] },
+        channels: { add: [{ kind: 'phone', value: '+966501234567' }] },
       });
       expect(res.status).toBe(200);
       const call = rpcCalls.find((c) => c.fn === 'crm_edit_contact_channels')!;
       expect(call.args['p_remove']).toEqual([]);
+      expect(call.args['p_primary']).toEqual([]);
+      expect((call.args['p_add'] as { is_primary: boolean }[])[0]!.is_primary).toBe(false);
+      expect(eqs).toContain('rls:crm_contact_channels:is_primary=true');
+    });
+
+    it('an Admin still makes another one the main one', async () => {
+      rpcAnswers['crm_edit_contact_channels'] = { data: { added: 0, removed: 0 }, error: null };
+      const res = await patch({ version: 3, channels: { primary: [OTHER] } });
+      expect(res.status).toBe(200);
+      const call = rpcCalls.find((c) => c.fn === 'crm_edit_contact_channels')!;
       expect(call.args['p_primary']).toEqual([OTHER]);
     });
 

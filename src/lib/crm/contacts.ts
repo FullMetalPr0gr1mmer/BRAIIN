@@ -1,8 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import type { ContactChannelInput, ContactPatch } from '@schemas/crm';
-import type { AuthContext } from '@/lib/auth/types';
-import type { Capability } from '@/lib/authz/matrix';
+import type { AuthContext, Role } from '@/lib/auth/types';
+import { can, type Capability } from '@/lib/authz/matrix';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { constraintOf, getRow, type ConstraintFields } from '@/lib/admin/crud';
 import { NotFoundError, OptimisticLockError, ValidationError } from '@/lib/admin/errors';
@@ -287,17 +287,33 @@ export async function sealChannels(
   return sealed;
 }
 
-/** Channel presence for a contact's page: kind, primary, where from. Never a value. */
+/**
+ * Does this role see every e-mail and phone of a contact (and choose the main one, and remove
+ * one)? The holder of crm.erase: Admin. Sales sees the main e-mail and the main phone only
+ * (the owner's decision of 2026-11-13). The database's half is app.crm_eraser_ok.
+ */
+export function seesEveryContactChannel(role: Role): boolean {
+  return can(role, 'crm.erase') === 'full';
+}
+
+/**
+ * Channel presence for a contact's page: kind, primary, where from. Never a value. A role that
+ * does not see every channel (Sales) is listed the main e-mail and the main phone only, the
+ * ones its reveal answers (the owner's decision of 2026-11-13), so the page offers no reveal
+ * it cannot answer.
+ */
 export async function channelPresence(
   sb: SupabaseClient,
   auth: AuthContext,
   contactId: string,
 ): Promise<{ id: string; kind: string; is_primary: boolean; source: string }[]> {
-  const { data, error } = await sb
+  let query = sb
     .from('crm_contact_channels')
     .select('id,kind,is_primary,source')
     .eq('tenant_id', auth.tenantId)
-    .eq('contact_id', contactId)
+    .eq('contact_id', contactId);
+  if (!seesEveryContactChannel(auth.role)) query = query.eq('is_primary', true);
+  const { data, error } = await query
     .order('kind', { ascending: true })
     .order('created_at', { ascending: true });
   if (error) throw new Error(`contact channels: ${error.code ?? 'no code'}`);

@@ -4,7 +4,13 @@ import { useClock } from '@/components/admin/kit/clock';
 import { AdminApiError, adminFetch, describeError } from '@/lib/admin/client';
 import { toast } from '@/lib/admin/toast';
 import type { DuplicatePair, DuplicateSide, MergeOutcome } from '@schemas/crmMerge';
-import { movesLine, olderFirst, reasonLine } from '@/lib/crm/mergeView';
+import {
+  FILES_NEED_ADMIN_TEXT,
+  isFilesRefusal,
+  movesLine,
+  olderFirst,
+  reasonLine,
+} from '@/lib/crm/mergeView';
 import { ContactStageBadge } from './shared';
 
 // Merge duplicates (Admin v2 C12, crm.md §11 screen 9): a large modal from the People list,
@@ -248,6 +254,10 @@ export default function MergeDuplicatesDialog({
           key,
           text: 'You have merged a lot in the last hour. Try again later.',
         });
+        focusNext.current = { to: 'confirm', key };
+      } else if (err instanceof AdminApiError && isFilesRefusal(err.info.status, err.body)) {
+        // The owner's decision of 2026-11-13: records holding files are merged by an Admin.
+        setPairError({ key, text: FILES_NEED_ADMIN_TEXT });
         focusNext.current = { to: 'confirm', key };
       } else {
         setPairError({ key, text: describeError(err) });

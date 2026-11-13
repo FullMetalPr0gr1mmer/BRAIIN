@@ -108,6 +108,16 @@ export const cases: readonly Case[] = [
     allow: ['admin'],
   },
   {
+    // The owner's decision of 2026-11-13: the main one is what a Sales reveal shows, so
+    // choosing it is an Admin's (crm.erase), as removing one is.
+    name: 'contact main e-mail or phone chosen (PATCH channels.primary)',
+    load: () => import('@/pages/api/admin/crm/contacts/[id]'),
+    method: 'PATCH',
+    url: BASE,
+    body: { version: 1, channels: { primary: [NOTE] } },
+    allow: ['admin'],
+  },
+  {
     name: 'contact contact details (reveal)',
     load: () => import('@/pages/api/admin/crm/contacts/[id]/reveal'),
     method: 'POST',

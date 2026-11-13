@@ -19,6 +19,7 @@ import {
   parseTimeline,
   requireContactId,
   sealChannels,
+  seesEveryContactChannel,
 } from '@/lib/crm/contacts';
 import { mergeCustom, readCustomFields, validateCustomValues } from '@/lib/crm/contactCustom';
 
@@ -40,8 +41,9 @@ import { mergeCustom, readCustomFields, validateCustomValues } from '@/lib/crm/c
 //
 // Removing an e-mail or phone deletes a person's details (one typed in by hand has no copy on
 // any lead), so it is erasure's: `crm.erase` (Admin), checked here before anything is read and
-// again by the door (C10b review, C10B-SEC-2). A `crm.contacts` holder alone (Sales) adds and
-// makes primary.
+// again by the door (C10b review, C10B-SEC-2). Choosing the main one is an Admin's too since
+// the owner's decision of 2026-11-13 (a Sales reveal shows the main ones only). A
+// `crm.contacts` holder alone (Sales) adds; GET and the answer list it the main ones only.
 
 export const prerender = false;
 
@@ -96,6 +98,17 @@ export const PATCH = defineAdminRoute({
       }
       if ((input.channels.remove?.length ?? 0) > 0 && can(auth.role, 'crm.erase') !== 'full') {
         throw new AuthorizationError('crm.erase', 'removing an e-mail or phone is erasure');
+      }
+      // (Owner decision 2026-11-13) Which e-mail or phone is the main one decides what a Sales
+      // reveal shows (the main ones only), so choosing it is an Admin's too: naming a primary,
+      // or adding one marked primary. Sales still adds (kept; the main one only when the
+      // contact has none of that kind). The door refuses it again (0141).
+      if (
+        !seesEveryContactChannel(auth.role) &&
+        ((input.channels.primary?.length ?? 0) > 0 ||
+          (input.channels.add ?? []).some((channel) => channel.isPrimary === true))
+      ) {
+        throw new AuthorizationError('crm.erase', 'choosing the main e-mail or phone');
       }
       await liveRecheck(auth);
       // Seen by the caller first (RLS, the live check): an unseen contact is a 404.

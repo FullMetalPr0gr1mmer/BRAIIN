@@ -7,7 +7,7 @@ import { liveRecheck } from '@/lib/admin/liveRecheck';
 import { claimPrivilegedOp, PII_REVEAL_LIMITS } from '@/lib/admin/rateLimit';
 import { decryptPII } from '@/lib/crypto/pii';
 import { serviceClient } from '@/lib/supabase/server';
-import { getContact } from './contacts';
+import { contactError, getContact, seesEveryContactChannel } from './contacts';
 
 // Revealing one contact's e-mails and phones (Admin v2 C6, crm.md §9): the single path that
 // decrypts a contact channel, POST /api/admin/crm/contacts/[id]/reveal. The caller has
@@ -23,9 +23,18 @@ import { getContact } from './contacts';
 //                            included); an unseen contact or a tombstone is a 404 here
 //   4. audit row, WRITTEN    fail-closed: no row, no reveal (PDPL accountability); field
 //                            names and counts only, never a value
-//   5. ciphertext            as the service role, this contact and tenant only: staff tokens
-//                            cannot read value_enc at all (C5's column grant)
+//   5. ciphertext            as the service role, through the reveal's door
+//                            (public.crm_contact_reveal_channels, 0141), this contact and
+//                            tenant only: staff tokens cannot read value_enc at all (C5's
+//                            column grant), and the door checks the actor live and decides
+//                            which channels it answers (below)
 //   6. decrypt               in the Worker; a value that will not decrypt is null
+//
+// Which channels (the owner's decision of 2026-11-13): a role that sees every channel
+// (`seesEveryContactChannel`: the holder of crm.erase, Admin, who also removes one and chooses
+// the main one) gets every e-mail and phone; anyone else (Sales) the main e-mail and the main
+// phone only. Decided twice: by the door from the actor's live profile (app.crm_eraser_ok),
+// and here again from the role (a belt: a non-primary row never leaves for such a role).
 
 /** The ledger key the lead reveal claims (src/lib/crm/reveal.ts): one allowance for both. */
 export const CONTACT_REVEAL_OP = 'pii-reveal';
@@ -48,28 +57,28 @@ export async function revealContact(
   await claimPrivilegedOp(auth, CONTACT_REVEAL_OP, PII_REVEAL_LIMITS);
   await getContact(sb, auth, id, 'id');
 
+  const every = seesEveryContactChannel(auth.role);
   const logged = await writeAudit(sb, auth, {
     action: 'crm.contact.view_pii',
     entityType: 'contact',
     entityId: id,
-    detail: { pii: true, fields: ['emails', 'phones'] },
+    // `scope`: every channel (Admin) or the main e-mail and phone only (Sales).
+    detail: { pii: true, fields: ['emails', 'phones'], scope: every ? 'all' : 'main' },
   });
   if (!logged) throw new AuthorizationError('crm.contacts', 'audit unavailable, refused');
 
-  const { data, error } = await serviceClient()
-    .from('crm_contact_channels')
-    .select('id,kind,is_primary,source,value_enc')
-    .eq('tenant_id', auth.tenantId)
-    .eq('contact_id', id)
-    .order('kind', { ascending: true })
-    .order('is_primary', { ascending: false })
-    .order('created_at', { ascending: true });
-  if (error) throw new Error(`read contact channels: ${error.code ?? 'no code'}`);
+  const { data, error } = await serviceClient().rpc('crm_contact_reveal_channels', {
+    p_tenant: auth.tenantId,
+    p_contact: id,
+    p_actor: auth.userId,
+  });
+  if (error) throw contactError(error, 'the contact details');
 
   const out: RevealedChannel[] = [];
-  for (const row of (data ?? []) as Record<string, unknown>[]) {
+  for (const row of (Array.isArray(data) ? data : []) as Record<string, unknown>[]) {
     const kind = row['kind'];
     if (kind !== 'email' && kind !== 'phone') continue;
+    if (!every && row['is_primary'] !== true) continue;
     const ciphertext = row['value_enc'];
     let value: string | null = null;
     if (typeof ciphertext === 'string' && ciphertext.length > 0) {

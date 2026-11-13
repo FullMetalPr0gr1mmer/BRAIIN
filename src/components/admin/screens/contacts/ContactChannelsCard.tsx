@@ -11,9 +11,13 @@ import type { ChannelPresence } from '@/lib/crm/contactPage';
 // never storage, never the address, gone when the page is left (ContactDetail clears it on
 // pagehide and on a return from the back/forward cache). The Email, Call and WhatsApp links
 // exist only after a reveal, and so does editing: add, make main, remove (one versioned PATCH
-// each, sent through the page's queue, `edit`). Remove is offered to `crm.erase` holders only
-// (Admin): it deletes a person's details, and the route and the door refuse anyone else (C10b
-// review, C10B-SEC-2). A contact with no e-mail or phone has nothing to
+// each, sent through the page's queue, `edit`). Make main and Remove are offered to `crm.erase`
+// holders only (Admin, `managesChannels`): removing deletes a person's details (C10b review,
+// C10B-SEC-2), and the main one is what a Sales reveal shows, since the owner's decision of
+// 2026-11-13 (Sales sees the main e-mail and the main phone only, and is listed only those).
+// The route and the door refuse anyone else either way. Sales still adds; what it adds is kept
+// and becomes the main one only when there is none of that kind, and the card says so. A
+// contact with no e-mail or phone has nothing to
 // reveal: the Add form is there at once, and no reveal is offered (no reveal slot spent, no
 // audit row for nothing; C7 review, C7-UX-5).
 
@@ -22,6 +26,10 @@ export type RevealedValues = ReadonlyMap<string, string | null>;
 
 export const REVEAL_LIMIT_TEXT =
   'You have revealed 60 contact details in the last hour. Try again later.';
+
+/** What a role that sees the main ones only (Sales) is told under the Add form. */
+export const MAIN_ONLY_TEXT =
+  'You see the main e-mail and the main phone. What you add is kept with the others, which an Admin sees and manages.';
 
 /** WhatsApp's link for a phone number: its digits only. */
 export function whatsappHref(phone: string): string {
@@ -36,8 +44,12 @@ interface Props {
   revealed: RevealedValues | null;
   onRevealed: (values: RevealedValues) => void;
   busy: boolean;
-  /** May this person remove an e-mail or phone (`crm.erase`)? A UX hint: the route checks. */
-  canRemove: boolean;
+  /**
+   * Does this person see every e-mail and phone, and may make one the main one or remove one
+   * (`crm.erase`, Admin)? Otherwise (Sales) the page lists the main ones only. A UX hint: the
+   * route and the door check.
+   */
+  managesChannels: boolean;
   /** One channel change through the page's queue; resolves to whether it saved. */
   edit: (change: {
     add?: { kind: 'email' | 'phone'; value: string }[];
@@ -52,7 +64,7 @@ export default function ContactChannelsCard({
   revealed,
   onRevealed,
   busy,
-  canRemove,
+  managesChannels,
   edit,
 }: Props) {
   const id = useId();
@@ -158,7 +170,7 @@ export default function ContactChannelsCard({
                 ) : (
                   <span dir="ltr">{shown ?? 'Could not be read'}</span>
                 )}
-                {revealed && (
+                {revealed && managesChannels && (
                   <span className="ct-channels__a">
                     {!channel.is_primary && (
                       <button
@@ -170,17 +182,15 @@ export default function ContactChannelsCard({
                         Make main<span className="visually-hidden"> {label}</span>
                       </button>
                     )}
-                    {canRemove && (
-                      <button
-                        type="button"
-                        data-size="sm"
-                        data-variant="ghost"
-                        disabled={busy}
-                        onClick={() => void edit({ remove: [channel.id] })}
-                      >
-                        Remove<span className="visually-hidden"> {label}</span>
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      data-size="sm"
+                      data-variant="ghost"
+                      disabled={busy}
+                      onClick={() => void edit({ remove: [channel.id] })}
+                    >
+                      Remove<span className="visually-hidden"> {label}</span>
+                    </button>
                   </span>
                 )}
               </li>
@@ -231,6 +241,7 @@ export default function ContactChannelsCard({
           <button type="submit" disabled={busy}>
             Add
           </button>
+          {!managesChannels && <p className="f__hint">{MAIN_ONLY_TEXT}</p>}
         </form>
       )}
     </section>

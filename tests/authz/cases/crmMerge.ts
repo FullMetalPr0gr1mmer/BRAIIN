@@ -31,6 +31,19 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: '/api/admin/crm/contacts/merge',
     body: { keepId: UUID, keepVersion: 1, dropId: OTHER, dropVersion: 1 },
+    // Neither record holds a file.
+    serviceCount: 0,
     allow: ['admin', 'sales'],
+  },
+  {
+    // The owner's decision of 2026-11-13: a merge where either record holds a file needs an
+    // Admin (crm.files); Sales is refused before any reveal slot is spent.
+    name: 'merge two contacts holding files (POST merge)',
+    load: () => import('@/pages/api/admin/crm/contacts/merge'),
+    method: 'POST',
+    url: '/api/admin/crm/contacts/merge',
+    body: { keepId: UUID, keepVersion: 1, dropId: OTHER, dropVersion: 1 },
+    serviceCount: 1,
+    allow: ['admin'],
   },
 ];

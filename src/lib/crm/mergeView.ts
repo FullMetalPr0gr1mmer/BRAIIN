@@ -39,3 +39,15 @@ export function movesLine(drop: DuplicateSide): string {
   if (drop.phones > 0) parts.push(n(drop.phones, 'phone number', 'phone numbers'));
   return `Their ${parts.join(', ')}, notes, tasks and timeline move.`;
 }
+
+/**
+ * A merge refused because one of the two records holds files (the owner's decision of
+ * 2026-11-13: such a merge is an Admin's, `crm.files`). The route's 403 names crm.files.
+ */
+export const FILES_NEED_ADMIN_TEXT =
+  'One of these two records holds files, so an Admin needs to merge them. Ask an Admin.';
+
+/** Is this refusal the files rule (a 403 naming crm.files)? */
+export function isFilesRefusal(status: number, body: Readonly<Record<string, unknown>>): boolean {
+  return status === 403 && body['capability'] === 'crm.files';
+}
