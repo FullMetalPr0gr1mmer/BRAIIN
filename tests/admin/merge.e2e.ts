@@ -18,7 +18,10 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *                 the next pair's first action (or the empty state) when a pair leaves;
  *   a conflict    a merge at a version that moved on is a 409, and nothing is merged;
  *   as sales      the finder offers a pair Sales added, and its merge through the route keeps
- *                 the older record (the other is a 404), as the Admin's does;
+ *                 the older record (the other is a 404), as the Admin's does; a pair where one
+ *                 record holds a file (added by an Admin) is a 403 naming crm.files with both
+ *                 records still there, and the Admin merges it (the owner's decision of
+ *                 2026-11-13);
  *   refusals      every other role gets a 403 from the three routes.
  * Every contact is added through the real routes and named with this run's token (each pair
  * shares a phone number of its own, so the finder offers it among the phone matches, the
@@ -93,6 +96,13 @@ async function pairs(page: Page): Promise<{ a: { id: string }; b: { id: string }
 }
 const offered = (list: { a: { id: string }; b: { id: string } }[], x: string, y: string) =>
   list.some((p) => (p.a.id === x && p.b.id === y) || (p.a.id === y && p.b.id === x));
+
+/** A contact's version as its page's GET answers it. */
+async function versionOf(page: Page, id: string): Promise<number> {
+  const res = await page.request.get(`/api/admin/crm/contacts/${id}`);
+  expect(res.status()).toBe(200);
+  return ((await res.json()) as { data: { contact: { version: number } } }).data.contact.version;
+}
 
 test.describe('as admin', () => {
   test.use({ storageState: authFile('admin') });
@@ -220,6 +230,59 @@ test.describe('as sales', () => {
     expect((await page.request.get(`/api/admin/crm/contacts/${newer.id}`)).status()).toBe(404);
     expect((await page.request.get(`/api/admin/crm/contacts/${older.id}`)).status()).toBe(200);
     expect(offered(await pairs(page), older.id, newer.id)).toBe(false);
+  });
+
+  // The owner's decision of 2026-11-13: a merge where either record holds a file needs an
+  // Admin. Sales is refused before anything moves (crmMerge.spec: before any reveal slot), and
+  // the Admin's merge of the same pair goes through.
+  test('a pair where one record holds a file is refused to Sales, and an Admin merges it', async ({
+    page,
+    browser,
+  }) => {
+    const shared = phone();
+    const older = await addContact(page, 'sales-f1', { phone: shared });
+    const newer = await addContact(page, 'sales-f2', { phone: shared });
+    const admin = await browser.newContext({ storageState: authFile('admin') });
+    const adminPage = await admin.newPage();
+    const upload = await adminPage.request.post(`/api/admin/crm/contacts/${newer.id}/files`, {
+      headers: { 'x-csrf-token': await csrf(adminPage) },
+      multipart: {
+        name: `Brief ${RUN}`,
+        file: {
+          name: 'brief.pdf',
+          mimeType: 'application/pdf',
+          buffer: Buffer.from('%PDF-1.7\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n'),
+        },
+      },
+    });
+    expect(upload.status()).toBe(200);
+
+    const refused = await page.request.post('/api/admin/crm/contacts/merge', {
+      headers: { 'x-csrf-token': await csrf(page) },
+      data: {
+        keepId: older.id,
+        keepVersion: await versionOf(page, older.id),
+        dropId: newer.id,
+        dropVersion: await versionOf(page, newer.id),
+      },
+    });
+    expect(refused.status()).toBe(403);
+    expect(((await refused.json()) as { capability?: string }).capability).toBe('crm.files');
+    expect((await page.request.get(`/api/admin/crm/contacts/${newer.id}`)).status()).toBe(200);
+    expect((await page.request.get(`/api/admin/crm/contacts/${older.id}`)).status()).toBe(200);
+
+    const merged = await adminPage.request.post('/api/admin/crm/contacts/merge', {
+      headers: { 'x-csrf-token': await csrf(adminPage) },
+      data: {
+        keepId: older.id,
+        keepVersion: await versionOf(adminPage, older.id),
+        dropId: newer.id,
+        dropVersion: await versionOf(adminPage, newer.id),
+      },
+    });
+    expect(merged.status()).toBe(200);
+    expect((await adminPage.request.get(`/api/admin/crm/contacts/${newer.id}`)).status()).toBe(404);
+    await admin.close();
   });
 });
 

@@ -400,6 +400,19 @@ test.describe('as sales', () => {
       .getByRole('button', { name: 'Reveal contact details (this access is logged)' })
       .click();
     await expect(page.getByText(person.email!, { exact: true })).toBeVisible();
+    // The owner's decision of 2026-11-13: Sales sees the main e-mail and phone only, and the
+    // card says so; choosing the main one is an Admin's, refused by the server.
+    await expect(
+      page.getByText(
+        'You see the main e-mail and the main phone. What you add is kept with the others, which an Admin sees and manages.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Make main/ })).toHaveCount(0);
+    const chooseMain = await page.request.patch(`/api/admin/crm/contacts/${person.id}`, {
+      headers: { 'x-csrf-token': await csrf(page) },
+      data: { version: 1, channels: { primary: [person.id] } },
+    });
+    expect(chooseMain.status()).toBe(403);
     await axe(page, 'a contact revealed, as Sales');
 
     // One audit row for the reveal, read back by an Admin (Sales reads no activity log).
