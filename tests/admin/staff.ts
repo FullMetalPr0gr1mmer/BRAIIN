@@ -123,23 +123,24 @@ export const SKIP_REASON =
   'needs the e2e job: a LOCAL seeded Supabase, its service key, and a loopback preview built against it';
 
 /**
- * The release-mode rehearsal (Admin v2 R14-prep; .github/workflows/releases-rehearsal.yml): the
- * whole suite with releases switched ON for the e2e tenant (tests/admin/releases.setup.ts runs
- * `app.enable_releases` after the sample rows). Unset in the required e2e job, where releases
- * stay off as in production until R14.
+ * Release mode (Admin v2 R14-prep's rehearsal; since R14c the required e2e job, perf-seo-a11y.yml
+ * `e2e`): the whole suite with releases switched ON for the e2e tenant
+ * (tests/admin/releases.setup.ts runs `app.enable_releases` after the sample rows). Unset in the
+ * releases-off job (`e2e-releases-off`), where releases stay off, as in production until the
+ * owner switches them on (launch runbook §6p).
  */
 export function releasesOn(env: Record<string, string | undefined> = process.env): boolean {
   return env['E2E_RELEASES'] === 'on';
 }
 
 /**
- * Why a describe skips in the rehearsal: it asserts what releases off looks like (the screens
+ * Why a describe skips in release mode: it asserts what releases off looks like (the screens
  * and drawers that exist only while publishing in releases is off). R14b converted the specs
  * that change the whole site, and R14d the other nine (blog, collections, faq, fields, pages,
  * projects, reorder, seo, services), to run in both modes (tests/admin/releaseSteps.ts). What
  * still skips is true releases-off behaviour (backups' and releases-ui's releases-off describes,
  * backups' history drawers, the dashboard's arranging; tests/ci/releaseConversions.spec.ts holds
- * the list), which the releases-off run that R14c keeps goes on covering.
+ * the list), which the releases-off job R14c keeps (`e2e-releases-off`) goes on covering.
  */
 export const RELEASES_OFF_ONLY =
   'releases-off behaviour (what the screens show while publishing in releases is off): the releases-off run covers it; the release path is tests/admin/releases-mode.e2e.ts';

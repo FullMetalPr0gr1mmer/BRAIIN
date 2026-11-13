@@ -130,7 +130,7 @@ describe('docs/launch-runbook.md §6p', () => {
     );
   });
 
-  it('names the freeze, the read-back before and after, the rehearsal, the drill and the discard rule', () => {
+  it('names the freeze, the read-back before and after, the release-mode run, the drill and the discard rule', () => {
     expect(section).toMatch(/about 15 minutes/);
     expect(section).toContain('scripts/releases-switch-readback.sql');
     expect(existsSync('scripts/releases-switch-readback.sql')).toBe(true);
@@ -138,13 +138,42 @@ describe('docs/launch-runbook.md §6p', () => {
     expect(section).toContain('Expected after the switch');
     expect(readback).toContain('-- Expected before the switch:');
     expect(readback).toContain('-- Expected after the switch');
-    expect(section).toContain('Releases rehearsal');
-    expect(existsSync('.github/workflows/releases-rehearsal.yml')).toBe(true);
+    // Since Admin v2 R14c the rehearsal is the required e2e job itself (release mode), and the
+    // hand-run workflow is retired: the runbook names the check, and how to run it again.
+    expect(section).toContain('`perf-seo-a11y / E2E + axe + CSP + video bytes`');
+    expect(section).toContain('Actions → *Perf / SEO / A11y / E2E* → Run workflow');
+    expect(existsSync('.github/workflows/perf-seo-a11y.yml')).toBe(true);
+    expect(section).not.toContain('*Releases rehearsal* → Run workflow');
+    expect(existsSync('.github/workflows/releases-rehearsal.yml')).toBe(false);
+    expect(section).toContain('2. ✓ **The required e2e job in release mode (R14c).**');
     expect(section).toContain('tests/admin/releases-mode.e2e.ts');
     expect(section).toMatch(/\*Publish vN again\*/);
     expect(section).toContain('**The discard rule**');
     expect(section).toContain('not_restored');
     // The Worker's rollback line while releases are on.
     expect(section).toContain('42b61c6f');
+  });
+
+  it('records the two R14 blockers as accepted residual risks, never as compliant (owner, 2026-11-13)', async () => {
+    const flat = section.replace(/\s+/g, ' ');
+    expect(flat).toContain('**Two accepted residual risks** (owner, 2026-11-13;');
+    expect(flat).toContain('the legal review (O-12, history redaction R16) is left to the end');
+    // Accepted, never "compliant": the one use of the word says the opposite.
+    expect(flat.match(/\bcompliant\b/g)).toHaveLength(1);
+    expect(flat).toContain('nothing here makes the site compliant with anything');
+    expect(flat).toContain('`docs/legal/review-register.md`, L-10');
+    // The words History shows for a team member are the code's.
+    const { HISTORY_COPY: HISTORY } = await import('@/components/admin/screens/history/model');
+    expect(HISTORY.teamNoHistory).toBe('History isn’t kept for team members yet.');
+    expect(flat).toContain(`("${HISTORY.teamNoHistory}")`);
+    const register = readFileSync('docs/admin-v2/deviations.md', 'utf8').replace(/\s+/g, ' ');
+    // Both R14 blockers, each accepted in its heading.
+    expect(
+      register.match(/an R14 blocker, accepted for the switch-on by the owner on 2026-11-13/g),
+    ).toHaveLength(2);
+    const legal = readFileSync('docs/legal/review-register.md', 'utf8');
+    expect(legal).toMatch(
+      /^\| L-10 \| 2026-11-13 \| Personal data: release history .*\| open \| \|$/m,
+    );
   });
 });

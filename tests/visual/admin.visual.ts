@@ -30,9 +30,10 @@ import {
  * Both release modes (Admin v2 R14b): with E2E_RELEASES=on as well, the project waits for
  * `releases-on` (playwright.config.ts), so every picture is of release mode (the dashboard's
  * publish card, the editors' release forms) and nothing is pending yet. The baselines are of the
- * mode the workflow runs in: its env is the e2e job's (tests/ci/adminVisual.spec.ts), so R14c's
- * flip of that job to release mode is followed by an `update` run. The savebar's words, which
- * count pending changes, are masked like every other count.
+ * mode the workflow runs in: its env is the releases-off e2e job's (`e2e-releases-off`,
+ * tests/ci/adminVisual.spec.ts), so they stay releases off until the owner has them re-made in
+ * release mode (E2E_RELEASES set in admin-visual.yml, then an `update` run). The savebar's words,
+ * which count pending changes, are masked like every other count.
  *
  * The activity log's list grows with every write anywhere (R14d): on that screen alone the list
  * takes a fixed, masked frame and its chain note is left out (adminVisualSteady.ts FRAMED).

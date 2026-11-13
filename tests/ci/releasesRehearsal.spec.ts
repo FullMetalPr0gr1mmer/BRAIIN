@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { parse } from 'yaml';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -10,15 +10,18 @@ import {
 import { releasesOn } from '../admin/staff';
 
 /*
- * The release-mode rehearsal (Admin v2 R14-prep; plan B5): the whole e2e suite with releases ON
- * for the e2e tenant, by hand, before the production switch-on. Held here:
- *   - the workflow runs only by hand, is read-only, is never a required check nor a need of
- *     the deploy, and is the e2e job of perf-seo-a11y.yml step for step but for its two named
- *     differences (the switch's psql client, `wrangler dev --test-scheduled`) and the design
- *     capture it leaves out;
- *   - Playwright's projects are exactly main's while E2E_RELEASES is unset (the required job),
- *     and with it on the switch runs after the sample rows and before every other project, the
- *     drill alone after them;
+ * Release mode in the required e2e job (Admin v2 R14c, the owner's go of 2026-11-13; before it
+ * the hand-run release-mode rehearsal of R14-prep, plan B5). Held here:
+ *   - perf-seo-a11y.yml's `e2e` job keeps its id and its name, so the required check is still
+ *     "perf-seo-a11y / E2E + axe + CSP + video bytes", and runs with E2E_RELEASES=on: the
+ *     rehearsal's job step for step (the switch's psql client before the preview,
+ *     `wrangler dev --test-scheduled`, no design capture);
+ *   - a second job, "E2E with releases off", is main's e2e job as it was (the capture included)
+ *     with E2E_RELEASES unset, and is never a required check;
+ *   - the rehearsal workflow is retired: the required job does what it did;
+ *   - Playwright's projects are exactly main's while E2E_RELEASES is unset (the releases-off
+ *     job), and with it on the switch runs after the sample rows and before every other project,
+ *     the drill alone after them;
  *   - the switch the setup sends is migration 0112's function, on a loopback database only.
  */
 
@@ -46,12 +49,17 @@ interface Workflow {
   jobs: Record<string, Job>;
 }
 
-const load = (file: string) => parse(readFileSync(`.github/workflows/${file}`, 'utf8')) as Workflow;
-const rehearsal = load('releases-rehearsal.yml');
+const DIR = '.github/workflows';
+const load = (file: string) => parse(readFileSync(`${DIR}/${file}`, 'utf8')) as Workflow;
 const gates = load('perf-seo-a11y.yml');
 const ci = load('ci.yml');
-const job = rehearsal.jobs['e2e-releases-on']!;
+/** The required e2e job: release mode since R14c. */
 const e2e = gates.jobs['e2e']!;
+/** Main's e2e job as it was before R14c: releases off, not required. */
+const off = gates.jobs['e2e-releases-off']!;
+const protection = readFileSync('.github/branch-protection.json', 'utf8');
+const REQUIRED_E2E = 'perf-seo-a11y / E2E + axe + CSP + video bytes';
+const RELEASES_OFF_CHECK = 'perf-seo-a11y / E2E with releases off';
 
 /** An action without its ref (a tag or a commit): the pins are checked on their own. */
 const actionOf = (uses: string | undefined) => (uses === undefined ? null : uses.split('@')[0]!);
@@ -66,23 +74,51 @@ const acts = (step: Step) => ({
   timeout: step['timeout-minutes'] ?? null,
 });
 
-describe('.github/workflows/releases-rehearsal.yml', () => {
-  it('runs only by hand, read-only, with a timeout, and sets E2E_RELEASES=on', () => {
-    expect(Object.keys(rehearsal.on as Record<string, unknown>)).toEqual(['workflow_dispatch']);
-    expect(rehearsal.permissions).toEqual({ contents: 'read' });
-    expect(Object.keys(rehearsal.jobs)).toEqual(['e2e-releases-on']);
-    expect(job['timeout-minutes']).toBeGreaterThan(0);
-    expect(job['timeout-minutes']).toBeLessThanOrEqual(60);
-    expect(job.env?.['E2E_RELEASES']).toBe('on');
-    // Nothing else of the e2e job's environment differs.
-    const { E2E_RELEASES: _on, ...rest } = job.env ?? {};
-    expect(rest).toEqual(e2e.env);
-    expect(rehearsal.env).toEqual(gates.env);
+const PSQL_STEP: Step = {
+  name: 'psql (the client the switch is sent with)',
+  run: [
+    'command -v psql >/dev/null 2>&1 ||',
+    '  { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends postgresql-client; }',
+    'psql --version',
+    '',
+  ].join('\n'),
+};
+
+describe('.github/workflows/perf-seo-a11y.yml: the required e2e job in release mode (R14c)', () => {
+  it('has the release-mode job, the releases-off job and Lighthouse, and nothing else', () => {
+    expect(Object.keys(gates.jobs)).toEqual(['e2e', 'e2e-releases-off', 'lighthouse']);
   });
 
-  it('is the e2e job step for step, but for the psql client, --test-scheduled and no capture', () => {
+  it('keeps the required job’s id and name, and runs it with E2E_RELEASES=on', () => {
+    expect(e2e.name).toBe('E2E + axe + CSP + video bytes');
+    expect(protection).toContain(`"${REQUIRED_E2E}"`);
+    expect(e2e.env?.['E2E_RELEASES']).toBe('on');
+    // Nothing else of the environment differs from the releases-off job's.
+    const { E2E_RELEASES: _on, ...rest } = e2e.env ?? {};
+    expect(rest).toEqual(off.env);
+    expect(e2e['timeout-minutes']).toBeGreaterThan(0);
+    expect(e2e['timeout-minutes']).toBeLessThanOrEqual(60);
+  });
+
+  it('keeps a releases-off job of its own name, with E2E_RELEASES unset, never required', () => {
+    expect(off.name).toBe('E2E with releases off');
+    expect(Object.keys(off.env ?? {})).not.toContain('E2E_RELEASES');
+    expect(protection).not.toContain(RELEASES_OFF_CHECK);
+    expect(protection).not.toContain('releases off');
+    expect(off['timeout-minutes']).toBeGreaterThan(0);
+    expect(off['timeout-minutes']).toBeLessThanOrEqual(60);
+    // The release mode is the job's own: the shared env and the Lighthouse job never set it.
+    expect(Object.keys(gates.env ?? {})).not.toContain('E2E_RELEASES');
+    expect(Object.keys(gates.jobs['lighthouse']!.env ?? {})).not.toContain('E2E_RELEASES');
+  });
+
+  it('is the releases-off job step for step, but for the psql client, --test-scheduled and no capture', () => {
     const capture = (step: Step) => step['continue-on-error'] === true;
-    const expected = (e2e.steps ?? [])
+    expect((off.steps ?? []).filter(capture).map((step) => step.name ?? step.uses)).toEqual([
+      'Design capture (public + admin full-page screenshots for the mockup comparison, not assertions)',
+      'Upload design capture',
+    ]);
+    const expected = (off.steps ?? [])
       .filter((step) => !capture(step))
       .flatMap((step) => {
         if (step.name === 'Start preview (wrangler dev)') {
@@ -94,51 +130,64 @@ describe('.github/workflows/releases-rehearsal.yml', () => {
         return [step];
       })
       .map(acts);
-    // The comments and the CLI pin's note may differ; what each step does may not.
-    expect((job.steps ?? []).map(acts)).toEqual(expected);
+    // The comments may differ; what each step does may not.
+    expect((e2e.steps ?? []).map(acts)).toEqual(expected);
   });
 
-  it('pins every action to the commit the e2e job pins (CLAUDE.md §3 supply chain; O-26)', () => {
-    // The e2e job's pins are the ones already trusted; checkout and setup-node are also the
-    // deploy job's.
-    const e2ePins = new Map(
-      (e2e.steps ?? [])
-        .filter((step) => step.uses !== undefined)
-        .map((step) => [actionOf(step.uses)!, step.uses!]),
+  it('installs psql right before the preview starts, and the preview takes the scheduled trigger', () => {
+    const names = (e2e.steps ?? []).map((step) => step.name ?? '');
+    const psql = names.indexOf(PSQL_STEP.name!);
+    const preview = names.indexOf('Start preview (wrangler dev)');
+    const tests = names.indexOf(
+      'Playwright (e2e, axe WCAG 2.2 AA, CSP, served HTML, video bytes, admin sweep)',
     );
-    const deployPins = new Map(
-      (ci.jobs['deploy']!.steps ?? [])
-        .filter((step) => step.uses !== undefined)
-        .map((step) => [actionOf(step.uses)!, step.uses!]),
+    expect(psql).toBeGreaterThan(0);
+    expect(preview).toBe(psql + 1);
+    expect(tests).toBeGreaterThan(preview);
+    expect(e2e.steps![preview]!.run).toMatch(/ --test-scheduled &$/);
+    const offPreview = (off.steps ?? []).find((s) => s.name === 'Start preview (wrangler dev)');
+    expect(offPreview?.run).toBe(
+      'npx wrangler dev --port 8788 --env-file dist/server/.preview.env &',
     );
-    for (const step of job.steps ?? []) {
+    expect(JSON.stringify(off.steps)).not.toContain('psql');
+  });
+
+  it('pins every action of the job to the releases-off job’s and the deploy’s commit (CLAUDE.md §3; O-26)', () => {
+    const pinsOf = (steps: Step[] | undefined) =>
+      new Map(
+        (steps ?? [])
+          .filter((step) => step.uses !== undefined)
+          .map((step) => [actionOf(step.uses)!, step.uses!]),
+      );
+    const offPins = pinsOf(off.steps);
+    const deployPins = pinsOf(ci.jobs['deploy']!.steps);
+    for (const step of e2e.steps ?? []) {
       if (step.uses === undefined) continue;
       expect(step.uses).toMatch(/@[0-9a-f]{40}$/);
-      expect(step.uses).toBe(e2ePins.get(actionOf(step.uses)!));
+      expect(step.uses).toBe(offPins.get(actionOf(step.uses)!));
       const deployPin = deployPins.get(actionOf(step.uses)!);
       if (deployPin !== undefined) expect(step.uses).toBe(deployPin);
     }
   });
 
-  it('is never a need of the deploy, nor a required check, nor called by ci.yml', () => {
+  it('retires the hand-run rehearsal: the required job does what it did', () => {
+    expect(existsSync(`${DIR}/releases-rehearsal.yml`)).toBe(false);
+    for (const file of readdirSync(DIR).filter((f) => /\.ya?ml$/.test(f))) {
+      // E2E_RELEASES is set by the required job alone.
+      const setting = Object.values(load(file).jobs).filter(
+        (job) => job.env?.['E2E_RELEASES'] !== undefined,
+      );
+      expect(
+        setting.map((job) => job.name),
+        file,
+      ).toEqual(file === 'perf-seo-a11y.yml' ? ['E2E + axe + CSP + video bytes'] : []);
+    }
     for (const [id, gate] of Object.entries(ci.jobs)) {
       expect(gate.uses ?? '', id).not.toContain('releases-rehearsal');
     }
-    const protection = readFileSync('.github/branch-protection.json', 'utf8');
-    expect(protection).not.toContain('releases on');
     expect(protection).not.toContain('Releases rehearsal');
   });
 });
-
-const PSQL_STEP: Step = {
-  name: 'psql (the client the switch is sent with)',
-  run: [
-    'command -v psql >/dev/null 2>&1 ||',
-    '  { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends postgresql-client; }',
-    'psql --version',
-    '',
-  ].join('\n'),
-};
 
 describe('playwright.config.ts', () => {
   afterEach(() => {
@@ -160,7 +209,7 @@ describe('playwright.config.ts', () => {
     );
   }
 
-  it('unset (the required e2e job): main’s projects, no switch and no drill', async () => {
+  it('unset (the releases-off job): main’s projects, no switch and no drill', async () => {
     const off = await projects(false);
     expect([...off.keys()]).toEqual([
       'chromium',
@@ -268,7 +317,7 @@ describe('playwright.config.ts', () => {
     ]);
   });
 
-  it('on: the switch after the samples and before every spec; the drill alone after them', async () => {
+  it('on (the required e2e job since R14c): the switch after the samples and before every spec; the drill alone after them', async () => {
     const on = await projects(true);
     expect(on.get('releases-on')!.dependencies).toEqual(['admin-samples']);
     expect(on.get('chromium')!.dependencies).toEqual(['releases-on']);
@@ -313,7 +362,7 @@ describe('playwright.config.ts', () => {
   });
 });
 
-describe('the switch the rehearsal sends', () => {
+describe('the switch the release-mode job sends', () => {
   const migration = readFileSync('supabase/migrations/0112_release_schedule.sql', 'utf8');
   const T = '00000000-0000-0000-0000-0000000000b1';
   const A = 'e2e00000-0000-4000-8000-000000000001';

@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import { CONSENT_VERSION } from '@consent/gate';
 import { HelpArticleSeedSchema } from '@schemas/help';
@@ -163,19 +164,22 @@ ${line}
     expect(code(read('.github/workflows/ci.yml'), '#')).not.toContain('GA4_NOTICE_READY');
   });
 
-  it('the e2e job turns it on for its own build; the Lighthouse job and the shared env never do', () => {
-    const workflow = code(read('.github/workflows/perf-seo-a11y.yml'), '#');
-    const jobs = workflow.indexOf('\njobs:\n');
-    const e2e = workflow.indexOf('\n  e2e:\n');
-    const lighthouse = workflow.indexOf('\n  lighthouse:\n');
-    expect(jobs).toBeGreaterThan(0);
-    expect(e2e).toBeGreaterThan(jobs);
-    expect(lighthouse).toBeGreaterThan(e2e);
-    expect(workflow.slice(0, jobs)).not.toContain('GA4_NOTICE_READY');
-    expect(workflow.slice(e2e, lighthouse).match(/GA4_NOTICE_READY: (.*)/g)).toEqual([
-      "GA4_NOTICE_READY: 'true'",
-    ]);
-    expect(workflow.slice(lighthouse)).not.toContain('GA4_NOTICE_READY');
+  it('the e2e jobs turn it on for their own builds; the Lighthouse job and the shared env never do', () => {
+    // Admin v2 R14c: two e2e jobs, the required one in release mode and the releases-off one;
+    // tests/admin/ga4.e2e.ts runs in both. Read as YAML, each job's own env.
+    const workflow = parse(read('.github/workflows/perf-seo-a11y.yml')) as {
+      env?: Record<string, unknown>;
+      jobs: Record<string, { env?: Record<string, unknown> }>;
+    };
+    expect(Object.keys(workflow.env ?? {})).not.toContain('GA4_NOTICE_READY');
+    expect(Object.keys(workflow.jobs).sort()).toEqual(['e2e', 'e2e-releases-off', 'lighthouse']);
+    for (const id of ['e2e', 'e2e-releases-off']) {
+      expect(workflow.jobs[id]!.env?.['GA4_NOTICE_READY'], id).toBe('true');
+    }
+    expect(Object.keys(workflow.jobs['lighthouse']!.env ?? {})).not.toContain('GA4_NOTICE_READY');
+    // Set nowhere else in the file (a step's env, a run line).
+    const text = code(read('.github/workflows/perf-seo-a11y.yml'), '#');
+    expect(text.match(/GA4_NOTICE_READY/g)).toHaveLength(2);
   });
 });
 

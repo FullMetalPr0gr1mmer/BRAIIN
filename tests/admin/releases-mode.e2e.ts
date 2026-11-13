@@ -6,8 +6,8 @@ import { STAFF_IDS, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff'
 
 /*
  * The release drill in CI (Admin v2 R14-prep; plan B5: "rehearsed first in CI ... then a
- * publish and a rollback drill"). Runs ONLY in the release-mode rehearsal (E2E_RELEASES=on,
- * .github/workflows/releases-rehearsal.yml): tests/admin/releases.setup.ts has switched releases
+ * publish and a rollback drill"). Runs ONLY in release mode (E2E_RELEASES=on: since R14c the
+ * required e2e job, perf-seo-a11y.yml `e2e`): tests/admin/releases.setup.ts has switched releases
  * on for the e2e tenant with `app.enable_releases`, as the launch runbook's §6p does in
  * production. Its own project (playwright.config.ts `releases-mode`), after every public and
  * admin spec and before the ones that change the whole site, because Publish puts every
@@ -46,7 +46,7 @@ import { STAFF_IDS, SKIP_REASON, authFile, releasesOn, staffEnv } from './staff'
  * "Scheduled" card on the retry, and would fire with the drill's own.
  */
 
-test.skip(!releasesOn(), 'releases are off: the rehearsal sets E2E_RELEASES=on');
+test.skip(!releasesOn(), 'releases are off: the release-mode e2e job sets E2E_RELEASES=on');
 test.skip(!staffEnv(), SKIP_REASON);
 test.use({ storageState: authFile('admin'), contextOptions: { reducedMotion: 'reduce' } });
 test.describe.configure({ mode: 'serial' });

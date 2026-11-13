@@ -665,8 +665,14 @@ seven required checks — `migrations`, `build-test`, `supply-chain`, `deploy-pr
 `db-tests / pgtap`, `perf-seo-a11y / E2E + axe + CSP + video bytes` and
 `perf-seo-a11y / Lighthouse budgets` — each pinned to the GitHub Actions app (id 15368), so
 a status posted with a token cannot stand in for a check. `tests/ci/workflows.spec.ts` fails
-unless they are exactly the checks the workflows produce. `deploy-guard-preview` is
-deliberately not required: it reads production and runs only on the owner's PRs.
+unless they are exactly the checks the workflows produce, but for the ones named as not required.
+`deploy-guard-preview` is deliberately not required: it reads production and runs only on the
+owner's PRs. Nor is `perf-seo-a11y / E2E with releases off` (Admin v2 R14c, owner decision
+2026-11-13): since R14c the required `perf-seo-a11y / E2E + axe + CSP + video bytes` runs every
+spec with releases ON, and this second job runs the same suite with releases off. The deploy on
+`main` still waits for it, as for every job of the `perf-seo-a11y` call, so a red releases-off
+run would hold the deploy, and every fix queued behind it, although it never blocked the merge.
+So it is a merge rule, not a check GitHub enforces: see "Merging and deploys" below.
 
 **Apply** (owner's `gh`, from a checkout of the PR that last changed the file, once its
 checks have reported — a required context that never reports blocks every PR):
@@ -703,6 +709,21 @@ The deploy follows ~30 min later, when `main`'s own run has every gate green. Wh
 merges land close together, the older run's `deploy` fails its freshness step ("main is at
 …") — benign: the newer run deploys both. To retry a deploy after a flaky Lighthouse or e2e
 result, re-run the failed jobs of the **newest** `main` run; an older run cannot deploy.
+
+**Merge only with the releases-off job green as well** (Admin v2 R14c). Branch protection does
+not wait for `perf-seo-a11y / E2E with releases off`, but the deploy does, so a PR merged with
+it red or still running can stall every deploy after it, a security fix included. Before any
+merge to `main`, read its row on the tested head:
+
+```bash
+gh pr checks <n> | grep -F 'E2E with releases off'
+```
+
+It must read `pass`. A red or pending run is fixed or waited for on the PR, never merged and
+fixed forward. Until the owner switches releases on (§6p), releases off is also the mode
+production runs, so this run is the only end-to-end proof of what visitors and editors get.
+Making it a required check instead (and applying the file as above) is the owner's call
+(`docs/admin-v2/as-built/R14C.md`, owner question 1); until then this rule holds for every merge.
 
 **Break-glass** — a fix must merge while a required check cannot go green for a reason
 outside the code (GitHub Actions down, a runner image regression): lift admin enforcement,
@@ -1167,12 +1188,15 @@ the edge until it is snapshotted once.
    curl -s -o /dev/null -w '%{http_code}\n' $BASE/<the-target>    # 200 — a live page is never shadowed
    ```
 
-From then on no step is needed: a save is live within a minute. A rule whose source renders
+From then on no step is needed: a save is live within a minute while releases are off; once
+releases are switched on (§6p) a rule is staged like any other change and is live within a
+minute of being published (the publish rebuilds the map). A rule whose source renders
 a page (a static route, or a live service, project or post) is refused at save time
 — "this path renders a page; a redirect from it would never apply" — as are chains (point
 at the final destination — judged through the `/ar` twin fallback too), loops, a rule
 pointing at its own `/ar` twin, and the reserved paths (`/admin`, `/api/`, `/healthz`, the
-asset routes). Deleting a rule stops it at the edge within a minute; a browser that cached
+asset routes). Deleting a rule stops it at the edge within a minute (of the delete, or with
+releases on of publishing the removal); a browser that cached
 a 301/308 keeps it for up to a day (`max-age=86400`), while a 302 is never cached.
 
 ### 6g. Join — the careers page and job applications (migration 0029)
@@ -1665,14 +1689,18 @@ and the fallback scheduler.
    password at once and lets a release write the message above the box), and R14d: the
    release-mode fixes to the editors' saves found converting the last nine specs (no migration).
    The switch itself needs only R11's (0112).
-2. **The required e2e job in release mode (R14c).** The owner's go for the switch-on is also the
-   go for R14c, the CI change that seeds releases on and makes the required e2e job run every
-   spec in release mode (the change list is in `docs/admin-v2/as-built/R14B.md`). It merges, and
-   its required checks pass, before production's switch.
-3. **A green rehearsal.** In GitHub: Actions → *Releases rehearsal* → Run workflow, on `main`.
-   It runs the whole e2e suite with releases ON for a throwaway local database, including the
-   drill below (`tests/admin/releases-mode.e2e.ts`). The owner's final go (decision 2026-10-28)
-   comes after a green run of the commit production is about to run. A red run stops here.
+2. ✓ **The required e2e job in release mode (R14c).** Done: the owner's go of 2026-11-13 for
+   the switch-on was also the go for R14c (`docs/admin-v2/as-built/R14C.md`), the CI change that
+   makes the required e2e job run every spec in release mode. It merged, with its required
+   checks green, before production's switch.
+3. **A green release-mode run.** Since R14c the rehearsal is the required check
+   `perf-seo-a11y / E2E + axe + CSP + video bytes` itself (the hand-run *Releases rehearsal*
+   workflow is retired): it runs the whole e2e suite with releases ON for a throwaway local
+   database, including the drill below (`tests/admin/releases-mode.e2e.ts`). It must be green on
+   the `main` commit production is about to run: the CI run of that push, or, to run it again,
+   Actions → *Perf / SEO / A11y / E2E* → Run workflow, on `main`. The owner's final go (decision
+   2026-10-28; given 2026-11-13) holds only for a green run of that commit. A red run stops
+   here.
 4. **Staging first** (README, "Before R14"): run steps 2 to 6 below on `braiin-staging` with the
    same SQL, walk the editors' flows there, and measure the Worker's CPU for a publish of many
    changes and for the scheduled release's fire (owner item O-16; Workers Free plan: 10 ms).
@@ -1692,6 +1720,15 @@ and the fallback scheduler.
    left open across the switch saves into the new path on its next save, which is safe, but the
    person would not expect it). The public site stays up throughout: there is no maintenance
    page, and visitors see no change.
+7. **Two accepted residual risks** (owner, 2026-11-13; `docs/admin-v2/deviations.md`, the two
+   "R14 blocker" entries). They are accepted for the switch-on, not resolved, and nothing here
+   makes the site compliant with anything: the legal review (O-12, history redaction R16) is
+   left to the end, for the client's Saudi-licensed lawyer (`docs/legal/review-register.md`,
+   L-10). (a) Team members are guarded but not captured: a release cannot restore a team
+   member, and History says so ("History isn’t kept for team members yet."). (b) A removed
+   quote stays in staff history: its words, the person's
+   name and role and its consent record remain in the release ledger and the version history,
+   and a version's preview shows it to staff; no restore re-publishes it.
 
 **The switch** (in the window):
 
@@ -1802,10 +1839,10 @@ to saving live, and nothing published is undone.
 4. Tell the editors: Save goes live at once again, and every screen open across the switch-off
    must be reloaded (a save it sends marked as made in release mode is refused with "Publishing
    was switched off. Reload to edit the live site.", so nothing is written live by surprise).
-   CI needs no change: after R14c the required e2e job proves release mode, and the unit suites
-   hold every route's releases-off path (`releaseOffWrites.spec.ts`, `stagedKernel.spec.ts`,
-   `stagedPageVisibility.spec.ts`); to prove releases off end to end again, run the e2e job with
-   `E2E_RELEASES` unset (R14c keeps that switch).
+   CI needs no change: since R14c the required e2e job proves release mode, the releases-off
+   job (`perf-seo-a11y / E2E with releases off`) runs the same suite with releases off on every
+   PR and every push to `main`, and the unit suites hold every route's releases-off path
+   (`releaseOffWrites.spec.ts`, `stagedKernel.spec.ts`, `stagedPageVisibility.spec.ts`).
 
 **A Worker rollback while releases are on** (§10): roll back only to a build that contains R13
 (#117, merged as `42b61c6f`), the first with the whole release interface

@@ -38,7 +38,7 @@ export const redirectsUi: ResourceUi = {
         { value: '302', label: '302 — temporary' },
         { value: '308', label: '308 — permanent, method-preserving' },
       ],
-      help: 'Takes effect at the edge within a minute of saving. Browsers may keep a permanent redirect (301, 308) for up to a day; a temporary one (302) is never cached, so it can be changed or removed at once.',
+      help: 'Until publishing in releases is switched on, a rule takes effect at the edge within a minute of saving; once it is, within a minute of being published. Browsers may keep a permanent redirect (301, 308) for up to a day; a temporary one (302) is never cached, so it can be changed or removed at once.',
     },
   ],
 };
