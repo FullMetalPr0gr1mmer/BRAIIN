@@ -48,6 +48,7 @@ import {
   type ContactSummary,
 } from '@/lib/crm/contactView';
 import type { AddContactDrawerProps } from './AddContactDrawer';
+import type { MergeDuplicatesDialogProps } from './MergeDuplicatesDialog';
 import {
   ContactSearch,
   ContactStageBadge,
@@ -251,6 +252,20 @@ export default function ContactsList({
     (open, close) => ({ open, onClose: close, people, me }),
   );
   usePageButton('[data-contact-add]', true, addContact.open);
+  // (Admin v2 C12) Merge duplicates: a large modal, loaded on first use. A merge reads the list
+  // and its counts again (a record went, another changed).
+  const mergeDuplicates = useLazy<MergeDuplicatesDialogProps>(
+    () => import('./MergeDuplicatesDialog'),
+    (open, close) => ({
+      open,
+      onClose: close,
+      onMerged: () => {
+        setRelist((n) => n + 1);
+        setRecount((n) => n + 1);
+      },
+    }),
+  );
+  usePageButton('[data-contact-merge]', true, mergeDuplicates.open);
 
   // A confirmation the last page sent here (a contact erased): shown once, then taken out of
   // the address. First, before the address is rewritten from the filters.
@@ -664,6 +679,7 @@ export default function ContactsList({
         }}
       />
       {addContact.element}
+      {mergeDuplicates.element}
     </>
   );
 }

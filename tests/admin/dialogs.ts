@@ -439,6 +439,16 @@ export const DIALOG_CASES: readonly DialogCase[] = [
     name: /^New lead for /,
     sources: [`${C}/contacts/NewLeadDrawer.tsx`],
   },
+  {
+    // Admin v2 C12: the page head's button, drawn for crm.contacts holders like Add contact. It
+    // opens on a read of the likely duplicates, which writes nothing (merge.e2e.ts merges).
+    id: 'contacts-merge',
+    screen: '/admin/contacts',
+    who: full('crm.contacts'),
+    open: [{ click: { role: 'button', name: 'Merge duplicates', exact: true } }],
+    name: 'Merge duplicates',
+    sources: [`${C}/contacts/MergeDuplicatesDialog.tsx`],
+  },
 
   // ---- Tasks (C8; tasks.e2e.ts) -----------------------------------------------------------
   {

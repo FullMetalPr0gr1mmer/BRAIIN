@@ -133,7 +133,7 @@ const ADMIN_TASKS_LAZY =
 const ADMIN_CONTACTS =
   /[\\/]src[\\/]components[\\/]admin[\\/](screens[\\/]contacts[\\/]|islands[\\/]AdminContact)/;
 const ADMIN_CONTACTS_LAZY =
-  /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]contacts[\\/](AddContactDrawer|EraseContactDialog|NewLeadDrawer)\.tsx$/;
+  /[\\/]src[\\/]components[\\/]admin[\\/]screens[\\/]contacts[\\/](AddContactDrawer|EraseContactDialog|MergeDuplicatesDialog|NewLeadDrawer)\.tsx$/;
 // What the two CRM families both run (Admin v2 C7): the late-answer rules and the leads' words
 // (the contact timeline names its leads' events in them). Their own group, above both
 // families, so neither family's chunk imports the other's (scripts/admin-bundle.mjs check 6).

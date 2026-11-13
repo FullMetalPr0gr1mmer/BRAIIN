@@ -329,6 +329,14 @@ const EXACT: Readonly<Record<string, Label>> = {
         : 'Confirmed a lead matched by phone on',
     noun: 'a contact',
   },
+  // Merging duplicates (Admin v2 C12): ids and counts only. The merge's row is written by the
+  // database, in the merge's own transaction (0138).
+  'crm.contact.merge': { kind: 'leads', verb: 'Merged another record into', noun: 'a contact' },
+  'crm.contact.duplicate_dismiss': {
+    kind: 'leads',
+    verb: 'Said two records are different people, starting with',
+    noun: 'a contact',
+  },
   // Tasks (Admin v2 C8): ids, the type and field names only, never a title or a note.
   'crm.task.create': { kind: 'leads', verb: 'Added', noun: 'a task' },
   'crm.task.update': {

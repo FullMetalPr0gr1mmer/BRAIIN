@@ -42,6 +42,14 @@ const subtitle = initial?.summary
 <AdminLayout title="Contacts" subtitle={subtitle} styles={['leads.css', 'contacts.css']}>
   {
     allowed && (
+      <button slot="actions" type="button" data-contact-merge hidden>
+        <Icon name="users" size={16} />
+        Merge duplicates
+      </button>
+    )
+  }
+  {
+    allowed && (
       <button slot="actions" type="button" data-variant="primary" data-contact-add hidden>
         <Icon name="plus" size={16} />
         Add contact
