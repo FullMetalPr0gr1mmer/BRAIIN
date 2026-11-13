@@ -40,8 +40,10 @@ export const CAPABILITIES = [
   'leads.pii',
   'export.csv',
   'crm.contacts',
+  'crm.files',
   'crm.tasks',
   'crm.erase',
+  'crm.import',
   'crm.settings',
   'applications.manage',
   'applications.pii',
@@ -87,8 +89,10 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': F,
     'export.csv': F,
     'crm.contacts': F,
+    'crm.files': F,
     'crm.tasks': F,
     'crm.erase': F,
+    'crm.import': F,
     'crm.settings': F,
     'applications.manage': F,
     'applications.pii': F,
@@ -128,8 +132,10 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': N,
     'export.csv': N,
     'crm.contacts': N,
+    'crm.files': N,
     'crm.tasks': N,
     'crm.erase': N,
+    'crm.import': N,
     'crm.settings': N,
     'applications.manage': N,
     'applications.pii': N,
@@ -169,8 +175,10 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': N,
     'export.csv': N,
     'crm.contacts': N,
+    'crm.files': N,
     'crm.tasks': N,
     'crm.erase': N,
+    'crm.import': N,
     'crm.settings': N,
     'applications.manage': N,
     'applications.pii': N,
@@ -217,8 +225,10 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.pii': F,
     'export.csv': F,
     'crm.contacts': N,
+    'crm.files': N,
     'crm.tasks': N,
     'crm.erase': N,
+    'crm.import': N,
     'crm.settings': N,
     'applications.manage': N,
     'applications.pii': N,
@@ -237,9 +247,11 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
   // assignment, notes and the timeline (leads.manage), and a lead's contact details, budget
   // and timeline one lead at a time, live-rechecked, rate-limited and audited before anything
   // is decrypted (leads.pii, owner default O-6), plus the website stats (analytics.read,
-  // prototype parity). NO content, NO settings (the CRM's included), NO exports or backups,
-  // NO job applications, NO logs, activity log or site health, NO users, NO erasure, NO bulk
-  // contact details.
+  // prototype parity). Since C10b also the contacts, the people behind the leads (crm.contacts:
+  // a contact's e-mails and phones one person at a time, through the same reveal and its
+  // limiter) and the follow-up tasks (crm.tasks). NO content, NO settings (the CRM's
+  // included), NO exports or backups, NO job applications, NO logs, activity log or site
+  // health, NO users, NO erasure (crm.erase stays Admin's), NO bulk contact details.
   // Sales is not CMS staff: app.is_staff() stays the four roles above (P-6).
   sales: {
     'users.manage': N,
@@ -263,9 +275,11 @@ export const ROLE_CAPS: Record<Role, Record<Capability, Access>> = {
     'leads.manage': F,
     'leads.pii': F,
     'export.csv': N,
-    'crm.contacts': N,
-    'crm.tasks': N,
+    'crm.contacts': F,
+    'crm.files': N,
+    'crm.tasks': F,
     'crm.erase': N,
+    'crm.import': N,
     'crm.settings': N,
     'applications.manage': N,
     'applications.pii': N,

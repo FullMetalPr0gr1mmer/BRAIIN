@@ -154,3 +154,84 @@
   margin: 0;
   line-height: 1.6;
 }
+
+/* ── Merge duplicates (Admin v2 C12) ────────────────────────────────────────────────────────
+   The large modal from the People list: one card per likely pair, the two people side by side
+   (stacked on a narrow screen), the reason in words above them, the actions under them. */
+.ct-merge {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-merge__pair {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-r);
+}
+
+.ct-merge__why {
+  margin: 0;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.ct-merge__people {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.ct-merge__p {
+  min-inline-size: 0;
+  padding: 8px 10px;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-bg);
+}
+
+.ct-merge__p p {
+  margin: 0 0 4px;
+  overflow-wrap: anywhere;
+}
+
+.ct-merge__role {
+  color: var(--ad-dim);
+  font-size: 12px;
+}
+
+.ct-merge__name {
+  font-weight: 700;
+}
+
+/* A lone link in its line: a 24px target at least (WCAG 2.5.8). */
+.ct-merge__name a {
+  display: inline-block;
+  min-block-size: 24px;
+}
+
+.ct-merge__confirm {
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--ad-r-sm);
+  background: var(--ad-warn-soft);
+}
+
+.ct-merge__confirm > p {
+  margin: 0;
+  color: var(--ad-ink);
+}
+
+.ct-merge__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ct-merge__empty p {
+  margin: 0 0 4px;
+}

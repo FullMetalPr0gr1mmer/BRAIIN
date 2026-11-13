@@ -7,14 +7,17 @@ import {
 import type { ContactDetailRow } from '@/lib/crm/contactPage';
 import { toast } from '@/lib/admin/toast';
 import { CONTACT_SOURCE_LABELS, sourceLabelOf } from '@/lib/crm/contactView';
+import { CustomFieldInputs, customErrors, customPatch, unreadableBoxes } from './customFields';
 
 // Details (Admin v2 C7, crm.md §11 screen 6): the contact's own words, with an explicit Save
 // (no autosave, P-5). One versioned PATCH of the fields that changed, through the page's queue
 // (`save`): a success is a toast, "Details saved." (crm.md §11, toasts for success only); a 409 says "Someone else changed this. Refreshed." and the form takes the stored
-// values. The custom fields the CRM settings define (C9b) are drawn here too; until then there
-// are none. E-mails and phones are edited in Contact details, after a reveal.
+// values. The custom fields the CRM settings define (C9b) are drawn here too, after the
+// contact's own fields; a changed one is sent as itself (a cleared box as null), and the
+// server lays it over what is stored. E-mails and phones are edited in Contact details, after
+// a reveal.
 
-type Values = Record<string, string | boolean>;
+type Values = Record<string, string>;
 
 const BASE: readonly [keyof ContactPatch, string][] = [
   ['displayName', 'display_name'],
@@ -34,8 +37,7 @@ function valuesOf(contact: ContactDetailRow, fields: readonly CustomFieldDefinit
   const custom = (contact['custom'] ?? {}) as Record<string, unknown>;
   for (const field of fields) {
     const v = custom[field.key];
-    out[`custom.${field.key}`] =
-      field.type === 'boolean' ? v === true : v === null || v === undefined ? '' : String(v);
+    out[`custom.${field.key}`] = typeof v === 'string' || typeof v === 'number' ? String(v) : '';
   }
   return out;
 }
@@ -55,23 +57,14 @@ export function detailsPatch(
     if (now === str(before[column]).trim()) continue;
     patch[key] = key === 'displayName' || key === 'locale' || key === 'source' ? now : now || null;
   }
-  const custom: Record<string, string | number | boolean | null> = {};
-  let customChanged = false;
-  for (const field of fields) {
-    const k = `custom.${field.key}`;
-    const v = after[k];
-    custom[field.key] =
-      field.type === 'boolean'
-        ? v === true
-        : str(v).trim() === ''
-          ? null
-          : field.type === 'number'
-            ? Number(v)
-            : str(v).trim();
-    if (v !== before[k]) customChanged = true;
-  }
-  if (customChanged) patch['custom'] = custom;
+  const custom = customPatch(fields, customOf(before, fields), customOf(after, fields));
+  if (custom) patch['custom'] = custom;
   return Object.keys(patch).length > 0 ? (patch as ContactPatch) : null;
+}
+
+/** The custom boxes of a form's values, by field key. */
+function customOf(values: Values, fields: readonly CustomFieldDefinition[]): Values {
+  return Object.fromEntries(fields.map((f) => [f.key, str(values[`custom.${f.key}`])]));
 }
 
 interface Props {
@@ -86,6 +79,7 @@ export default function ContactDetailsCard({ contact, customFields, busy, save }
   const id = useId();
   const [values, setValues] = useState<Values>(() => valuesOf(contact, customFields));
   const [error, setError] = useState('');
+  const [customProblems, setCustomProblems] = useState<Record<string, string>>({});
   const [said, setSaid] = useState('');
 
   const base = useRef<Values>(values);
@@ -116,6 +110,14 @@ export default function ContactDetailsCard({ contact, customFields, busy, save }
       setError('Use a two-letter country code, such as SA.');
       return;
     }
+    const unreadable = unreadableBoxes(customFields, id, (box) => document.getElementById(box));
+    const problems = customErrors(customFields, customOf(values, customFields), unreadable);
+    setCustomProblems(problems);
+    const first = customFields.find((f) => problems[f.key]);
+    if (first) {
+      setError(`${first.label}: ${problems[first.key]}`);
+      return;
+    }
     const patch = detailsPatch(valuesOf(contact, customFields), values, customFields);
     if (!patch) {
       setError('');
@@ -128,8 +130,7 @@ export default function ContactDetailsCard({ contact, customFields, busy, save }
     if (await save(patch)) toast('Details saved.', 'ok');
   }
 
-  const set = (key: string) => (value: string | boolean) =>
-    setValues((v) => ({ ...v, [key]: value }));
+  const set = (key: string) => (value: string) => setValues((v) => ({ ...v, [key]: value }));
   const text = (key: string, label: string, attrs: Record<string, unknown> = {}) => (
     <div className="f">
       <label className="f__l" htmlFor={`${id}-${key}`}>
@@ -157,7 +158,20 @@ export default function ContactDetailsCard({ contact, customFields, busy, save }
       <form onSubmit={(event) => void submit(event)} noValidate>
         {text('display_name', 'Name', { maxLength: 120, dir: 'auto', 'aria-required': true })}
         {text('title', 'Title', { maxLength: 120, dir: 'auto' })}
-        {text('company_name', 'Company', { maxLength: 120, dir: 'auto' })}
+        {text('company_name', 'Company', {
+          maxLength: 120,
+          dir: 'auto',
+          // (Admin v2 C11) While linked to a company record the name is the record's: it is
+          // changed there (a rename reaches every contact), or the contact is unlinked first.
+          ...(typeof contact['company_id'] === 'string'
+            ? { readOnly: true, 'aria-describedby': `${id}-company-hint` }
+            : {}),
+        })}
+        {typeof contact['company_id'] === 'string' && (
+          <p id={`${id}-company-hint`} className="f__hint">
+            Linked to a company record. Rename it there, or unlink it under Company.
+          </p>
+        )}
         <div className="lead-add__row">
           {text('city', 'City', { maxLength: 80, dir: 'auto' })}
           {text('country', 'Country code', { maxLength: 2, dir: 'ltr' })}
@@ -193,44 +207,13 @@ export default function ContactDetailsCard({ contact, customFields, busy, save }
             </select>
           </div>
         </div>
-        {customFields.map((field) =>
-          field.type === 'boolean' ? (
-            <label key={field.key} className="field-inline">
-              <input
-                type="checkbox"
-                checked={values[`custom.${field.key}`] === true}
-                onChange={(event) => set(`custom.${field.key}`)(event.target.checked)}
-              />
-              <span>{field.label}</span>
-            </label>
-          ) : field.type === 'select' ? (
-            <div className="f" key={field.key}>
-              <label className="f__l" htmlFor={`${id}-c-${field.key}`}>
-                {field.label}
-              </label>
-              <select
-                id={`${id}-c-${field.key}`}
-                value={str(values[`custom.${field.key}`])}
-                onChange={(event) => set(`custom.${field.key}`)(event.target.value)}
-              >
-                <option value="">Not set</option>
-                {(field.options ?? []).map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div key={field.key}>
-              {text(`custom.${field.key}`, field.label, {
-                type: field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text',
-                dir: 'auto',
-                maxLength: field.maxLength ?? 500,
-              })}
-            </div>
-          ),
-        )}
+        <CustomFieldInputs
+          fields={customFields}
+          values={customOf(values, customFields)}
+          idPrefix={id}
+          errors={customProblems}
+          onChange={(key, value) => set(`custom.${key}`)(value)}
+        />
         {error && (
           <p className="msg" data-kind="error" role="alert">
             {error}

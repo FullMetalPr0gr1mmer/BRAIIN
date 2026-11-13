@@ -671,7 +671,13 @@ describe('the leads screens have their own groups (Admin v2 C4b)', () => {
     ]) {
       expect(claim(path), path).toBe('admin-contacts');
     }
-    for (const name of ['AddContactDrawer', 'EraseContactDialog', 'NewLeadDrawer']) {
+    // Admin v2 C16: the Files card, loaded with import() on a crm.files holder's contact page.
+    for (const name of [
+      'AddContactDrawer',
+      'EraseContactDialog',
+      'NewLeadDrawer',
+      'ContactFilesCard',
+    ]) {
       expect(claim(`src/components/admin/screens/contacts/${name}.tsx`), name).toBe(
         'admin-contacts-lazy',
       );
@@ -701,11 +707,28 @@ describe('the leads screens have their own groups (Admin v2 C4b)', () => {
       for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
         const spec = m[1] as string;
         if (
-          /screens\/leads|fields\/|FormField|AddContactDrawer|EraseContactDialog|NewLeadDrawer/.test(
+          /screens\/leads|fields\/|FormField|AddContactDrawer|EraseContactDialog|NewLeadDrawer|ContactFilesCard/.test(
             spec,
           )
         )
           offenders.push(`${name} → ${spec}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  // Admin v2 C12: Merge duplicates is one of the contacts' lazy pieces, reached only through
+  // import() from the People list.
+  it('claims Merge duplicates as a contacts lazy piece, never imported statically (C12)', () => {
+    expect(claim('src/components/admin/screens/contacts/MergeDuplicatesDialog.tsx')).toBe(
+      'admin-contacts-lazy',
+    );
+    const dir = join(process.cwd(), 'src/components/admin/screens/contacts');
+    const offenders: string[] = [];
+    for (const name of readdirSync(dir)) {
+      const source = readFileSync(join(dir, name), 'utf8');
+      for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
+        if (/MergeDuplicatesDialog/.test(m[1] as string)) offenders.push(name);
       }
     }
     expect(offenders).toEqual([]);

@@ -329,6 +329,21 @@ const EXACT: Readonly<Record<string, Label>> = {
         : 'Confirmed a lead matched by phone on',
     noun: 'a contact',
   },
+  // Merging duplicates (Admin v2 C12): ids and counts only. The merge's row is written by the
+  // database, in the merge's own transaction (0138).
+  'crm.contact.merge': { kind: 'leads', verb: 'Merged another record into', noun: 'a contact' },
+  // The company that merge removed: an automatic one only the merged record named (C-int
+  // review, CINT-W-4). Its id only, in the merge's own transaction.
+  'crm.contact.merge.company_removed': {
+    kind: 'leads',
+    verb: 'Merged a record whose unused company was removed into',
+    noun: 'a contact',
+  },
+  'crm.contact.duplicate_dismiss': {
+    kind: 'leads',
+    verb: 'Said two records are different people, starting with',
+    noun: 'a contact',
+  },
   // Tasks (Admin v2 C8): ids, the type and field names only, never a title or a note.
   'crm.task.create': { kind: 'leads', verb: 'Added', noun: 'a task' },
   'crm.task.update': {
@@ -339,6 +354,36 @@ const EXACT: Readonly<Record<string, Label>> = {
   },
   'crm.task.delete': { kind: 'leads', verb: 'Removed', noun: 'a task' },
   'crm.task.ics': { kind: 'leads', verb: 'Downloaded the calendar file of', noun: 'a task' },
+  // Companies (Admin v2 C11).
+  'crm.company.create': { kind: 'leads', verb: 'Added', noun: 'a company' },
+  'crm.company.update': { kind: 'leads', verb: 'Updated', noun: 'a company' },
+  'crm.company.delete': { kind: 'leads', verb: 'Removed', noun: 'a company' },
+  // The CSV import (Admin v2 C15): the batch's id and counts, never a row.
+  'crm.import.attempt': { kind: 'leads', verb: 'Started importing', noun: 'contacts from a file' },
+  'crm.import.outcome': {
+    kind: 'leads',
+    verb: (detail) => {
+      const status = str(detail['status']);
+      if (status === 'done') return 'Imported';
+      if (status === 'stopped') return 'Stopped importing';
+      return 'Could not finish importing';
+    },
+    noun: 'contacts from a file',
+  },
+  // Contact files (Admin v2 C16): ids, the kind and the size only, never a file's name.
+  'crm.file.list': { kind: 'leads', verb: 'Opened the files of', noun: 'a contact' },
+  'crm.file.upload': { kind: 'leads', verb: 'Added a file to', noun: 'a contact' },
+  'crm.file.download': { kind: 'leads', verb: 'Downloaded a file of', noun: 'a contact' },
+  'crm.file.delete.attempt': {
+    kind: 'leads',
+    verb: 'Started removing a file from',
+    noun: 'a contact',
+  },
+  'crm.file.delete.outcome': {
+    kind: 'leads',
+    verb: outcome('Removed a file from', 'Could not remove a file from'),
+    noun: 'a contact',
+  },
   'export.csv.attempt': { kind: 'leads', verb: 'Started exporting', noun: 'the leads' },
   'export.csv.outcome': {
     kind: 'leads',

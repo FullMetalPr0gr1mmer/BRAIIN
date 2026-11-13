@@ -81,3 +81,43 @@ export async function bodyWithinLimit(
     reader.cancel().catch(() => undefined);
   }
 }
+
+/**
+ * A handler's own read of a body, never past `limit` bytes: the text, or null when the body
+ * is larger. A declared Content-Length over the limit (or not a number) is refused without a
+ * read; without one (a chunked body), the stream is read until it ends or passes the limit,
+ * and then cancelled, so a large body is never buffered whole. For a handler that must read
+ * a body larger than the middleware's own caps (the contacts import, Admin v2 C15).
+ */
+export async function readBodyText(request: Request, limit: number): Promise<string | null> {
+  const declared = request.headers.get('content-length');
+  if (declared !== null) {
+    const value = declared.trim();
+    if (!DECLARED_LENGTH.test(value) || Number(value) > limit) return null;
+  }
+  const reader = request.body?.getReader();
+  if (!reader) return '';
+  const chunks: Uint8Array[] = [];
+  let seen = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      seen += value.byteLength;
+      if (seen > limit) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(seen);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}

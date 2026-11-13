@@ -439,12 +439,32 @@ export const DIALOG_CASES: readonly DialogCase[] = [
     name: /^New lead for /,
     sources: [`${C}/contacts/NewLeadDrawer.tsx`],
   },
+  // Admin v2 C11 (companies.e2e.ts): the Companies tab's head button, for crm.contacts holders
+  // (src/pages/admin/contacts/companies.astro).
+  {
+    id: 'companies-new',
+    screen: '/admin/contacts/companies',
+    who: full('crm.contacts'),
+    open: [{ click: { role: 'button', name: 'Add company', exact: true } }],
+    name: 'New company',
+    sources: [`${C}/contacts/CompanyDrawer.tsx`],
+  },
+  {
+    // Admin v2 C12: the page head's button, drawn for crm.contacts holders like Add contact. It
+    // opens on a read of the likely duplicates, which writes nothing (merge.e2e.ts merges).
+    id: 'contacts-merge',
+    screen: '/admin/contacts',
+    who: full('crm.contacts'),
+    open: [{ click: { role: 'button', name: 'Merge duplicates', exact: true } }],
+    name: 'Merge duplicates',
+    sources: [`${C}/contacts/MergeDuplicatesDialog.tsx`],
+  },
 
   // ---- Tasks (C8; tasks.e2e.ts) -----------------------------------------------------------
   {
     id: 'tasks-new',
     screen: '/admin/tasks',
-    // The screen is crm.tasks's (Admin until C10b); its New task button opens the drawer.
+    // The screen is crm.tasks's (Admin and, since C10b, Sales); its New task button opens it.
     who: full('crm.tasks'),
     open: [{ click: { role: 'button', name: 'New task' } }],
     name: 'New task',
@@ -585,6 +605,14 @@ export const DIALOGS_COVERED_ELSEWHERE: readonly CoveredElsewhere[] = [
     marker: "name: 'Erase everything about them'",
     roles: ['admin'],
     why: 'opening it asks the erasure preview, which spends a slot of its own hourly limit, and its spec erases a contact of its own; Admin alone holds crm.erase',
+  },
+  // Admin v2 C9b: the erasure's first step from CRM settings (find the person).
+  {
+    source: `${C}/crmSettings/EraseFinder.tsx`,
+    spec: 'tests/admin/crm-custom-fields.e2e.ts',
+    marker: `name: "Erase a person's data"`,
+    roles: ['admin'],
+    why: 'its pick opens the erase dialog, whose preview spends a slot of its own hourly limit; the spec finds a contact of its own with it open; Admin alone holds crm.erase',
   },
   {
     source: `${C}/maintenance/TurnOnDialog.tsx`,

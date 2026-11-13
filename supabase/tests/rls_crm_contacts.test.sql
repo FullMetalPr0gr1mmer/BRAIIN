@@ -1,12 +1,15 @@
 -- pgTAP: the contacts' authorization layer (0131, Admin v2 C5, crm.md §3 and §5.1). Run with
 -- `supabase test db`.
 --
--- crm.contacts is Admin's alone in C5 (Developer none, owner default O-7; Sales only from
--- C10b). Personas, each a token as PostgREST carries it: A admin, C content_creator, S seo,
--- D developer, L sales, O another tenant's admin, N anon; stale Admin tokens Ad (the profile
--- now says content_creator), Ao (switched off), Al (locked). Proven here:
---   1. reads: only a live Admin of the tenant reads contacts, channels (the safe columns,
---      never the value or its index) and events; nobody reads notes through the API;
+-- crm.contacts is Admin's in C5, and Sales' too since C10b (Developer none, owner default
+-- O-7; Sales' own reads, writes and stale tokens are proven in crm_sales_contacts.test.sql,
+-- here it reads as an Admin does). Personas, each a token as PostgREST carries it: A admin,
+-- C content_creator, S seo, D developer, L sales, O another tenant's admin, N anon; stale
+-- Admin tokens Ad (the profile now says content_creator), Ao (switched off), Al (locked).
+-- Proven here:
+--   1. reads: only a live Admin (or, since C10b, Sales) of the tenant reads contacts,
+--      channels (the safe columns, never the value or its index) and events; nobody reads
+--      notes through the API;
 --   2. writes: a live Admin changes a contact's details (the column grant; the version moves,
 --      the person and the time are the session's, the timeline names the fields); nobody
 --      else, stale tokens included, changes a row; nobody inserts or deletes a contact or
@@ -122,7 +125,7 @@ select is(c5_reads(), '0/0/0/42501', 'SEO reads no contact');
 select c5_as('D');
 select is(c5_reads(), '0/0/0/42501', 'a Developer reads no contact (owner default O-7)');
 select c5_as('L');
-select is(c5_reads(), '0/0/0/42501', 'Sales reads no contact (not until C10b)');
+select is(c5_reads(), '1/2/5/42501', 'Sales reads the contact, its channels and timeline as an Admin does (C10b), notes neither');
 select c5_as('O');
 select is(c5_reads(), '1/1/2/42501', 'another tenant''s Admin reads only its own tenant''s contact');
 select c5_as('Ad');
@@ -194,6 +197,7 @@ select is(
   'not even an Admin inserts or deletes a contact, or writes a channel, a note or an event, through the API');
 
 -- Everyone else changes nothing: no row matches (RLS), and the stale tokens fail the live check.
+-- (Sales does change one since C10b: crm_sales_contacts.test.sql.)
 create temp table c5_upd (who text, res text);
 grant insert, select on c5_upd to authenticated;
 select c5_as('C');
@@ -202,8 +206,6 @@ select c5_as('S');
 insert into c5_upd select 'S', c5_run($$ update public.crm_contacts set title = 'x' $$);
 select c5_as('D');
 insert into c5_upd select 'D', c5_run($$ update public.crm_contacts set title = 'x' $$);
-select c5_as('L');
-insert into c5_upd select 'L', c5_run($$ update public.crm_contacts set title = 'x' $$);
 select c5_as('O');
 insert into c5_upd select 'O', c5_run($$ update public.crm_contacts set title = 'x'
                                            where id = 'c5000000-0000-4000-8000-00000000c001' $$);
@@ -214,7 +216,7 @@ insert into c5_upd select 'Ao', c5_run($$ update public.crm_contacts set title =
 select c5_as('Al');
 insert into c5_upd select 'Al', c5_run($$ update public.crm_contacts set title = 'x' $$);
 select is((select string_agg(who || '=' || res, ' ' order by who) from c5_upd),
-  'Ad=ok:0 Al=ok:0 Ao=ok:0 C=ok:0 D=ok:0 L=ok:0 O=ok:0 S=ok:0',
+  'Ad=ok:0 Al=ok:0 Ao=ok:0 C=ok:0 D=ok:0 O=ok:0 S=ok:0',
   'no other principal, and no stale Admin token, changes a contact');
 reset role;
 set local role anon;

@@ -1,0 +1,75 @@
+/* Import contacts (Admin v2 C15, crm.md §12): the columns explained, the file, the progress and
+   the result. Linked through AdminLayout's `styles` (src/lib/admin/stylesheets.ts). Colours come
+   from admin.css's tokens only; a refused row is said in words, never by colour alone. No
+   colour literal here. */
+
+.imp {
+  display: grid;
+  gap: 16px;
+}
+
+.imp__cols {
+  margin-block: 12px 4px;
+}
+
+.imp__cols code,
+.imp__list code {
+  font-size: 12.5px;
+}
+
+.imp__h3 {
+  margin: 16px 0 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ad-ink);
+}
+
+.imp__list {
+  margin: 0 0 12px;
+  padding-inline-start: 20px;
+  display: grid;
+  gap: 4px;
+}
+
+.imp__found {
+  margin: 0 0 16px;
+  color: var(--ad-ink);
+}
+
+.imp__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.imp__progress {
+  display: grid;
+  gap: 6px;
+  margin-block-start: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.imp__progress progress {
+  inline-size: 100%;
+  block-size: 8px;
+  accent-color: var(--ad-primary);
+}
+
+.imp__progress p {
+  margin: 0;
+  color: var(--ad-dim);
+  font-size: 12.5px;
+}
+
+.imp__result {
+  margin-block-start: 16px;
+}
+
+.imp__result p {
+  margin: 0 0 8px;
+}
+
+.imp__num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}

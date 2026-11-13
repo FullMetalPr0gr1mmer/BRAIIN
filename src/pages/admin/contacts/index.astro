@@ -6,8 +6,10 @@ import Icon from '@/components/admin/ui/Icon.astro';
 import Refused from '@/components/admin/ui/Refused.astro';
 import { can } from '@/lib/authz/matrix';
 import { readContactPeople, readContactsListInitial } from '@/lib/crm/contactPage';
+import { readCustomFields } from '@/lib/crm/contactCustom';
 import { contactQueryOf, parseContactFilters } from '@/lib/crm/contactUrl';
 import { contactsSubline } from '@/lib/crm/contactView';
+import { readCompanyCount } from '@/lib/crm/companies';
 
 export const prerender = false;
 
@@ -17,8 +19,8 @@ const studioTz = await studioTimeZone(Astro.locals);
 // The People list (Admin v2 C7, crm.md §11 screen 5): the chips, the search, the filters, the
 // table and its bulk bar. The first view is rendered here, for the filters the address
 // carries (src/lib/crm/contactUrl.ts: never a search or a tag), so the page is complete
-// without JavaScript; the island takes over. `crm.contacts` (Admin; Sales from C10b): any other
-// role is refused here with a 403 and reads nothing, the U2 way (Refused.astro); RLS and the
+// without JavaScript; the island takes over. `crm.contacts` (Admin and, since C10b, Sales): any
+// other role is refused here with a 403 and reads nothing, the U2 way (Refused.astro); RLS and the
 // live check refuse them again in the database.
 
 const session = Astro.locals.session;
@@ -27,19 +29,41 @@ const allowed = session !== null && can(session.role, 'crm.contacts') === 'full'
 if (!allowed) Astro.response.status = 403;
 
 const filters = parseContactFilters(Astro.url.searchParams);
-const [people, initial] =
+// C9b: the custom fields CRM settings define, for the Add contact drawer (none when they
+// cannot be read: the form then offers the contact's own fields only).
+const [people, initial, customFields, companies] =
   allowed && session && sb
     ? await Promise.all([
         readContactPeople(sb, session),
         readContactsListInitial(sb, session, contactQueryOf(filters)),
+        readCustomFields(sb, session).catch(() => []),
+        // (Admin v2 C11) "· {n} companies" on the sub-line: one HEAD count.
+        readCompanyCount(sb, session),
       ])
-    : [[], null];
+    : [[], null, [], null];
 const subtitle = initial?.summary
-  ? contactsSubline(initial.summary)
+  ? contactsSubline(initial.summary, companies)
   : 'The people behind your inquiries, and the ones you add.';
 ---
 
 <AdminLayout title="Contacts" subtitle={subtitle} styles={['leads.css', 'contacts.css']}>
+  {/* Admin v2 C15: the CSV import, for crm.import holders (its page and route check again). */}
+  {
+    allowed && session && can(session.role, 'crm.import') === 'full' && (
+      <a slot="actions" class="btn" href="/admin/contacts/import">
+        <Icon name="upload" size={16} />
+        Import
+      </a>
+    )
+  }
+  {
+    allowed && (
+      <button slot="actions" type="button" data-contact-merge hidden>
+        <Icon name="users" size={16} />
+        Merge duplicates
+      </button>
+    )
+  }
   {
     allowed && (
       <button slot="actions" type="button" data-variant="primary" data-contact-add hidden>
@@ -60,6 +84,8 @@ const subtitle = initial?.summary
         people={people}
         me={session?.userId ?? ''}
         now={new Date().toISOString()}
+        customFields={customFields}
+        companies={companies}
       />
     )
   }

@@ -6,6 +6,7 @@ import EmptyState from '@/components/admin/ui/EmptyState.astro';
 import Icon from '@/components/admin/ui/Icon.astro';
 import Refused from '@/components/admin/ui/Refused.astro';
 import { can } from '@/lib/authz/matrix';
+import { receivesLeadPiiUnasked } from '@/lib/admin/leadFields';
 import { NotFoundError } from '@/lib/admin/errors';
 import { readStages, type StageView } from '@/lib/crm/leadPage';
 import {
@@ -46,6 +47,9 @@ const permissions = {
     allowed &&
     can(session.role, 'leads.manage') === 'full' &&
     can(session.role, 'leads.pii') === 'full',
+  // (C10b review, C10B-COR-3) The links route spends a reveal slot on a confirm for a role
+  // that cannot export (Sales); the button says so.
+  confirmIsReveal: allowed && !receivesLeadPiiUnasked(session.role),
 };
 
 let detail: ContactDetailInitial | null = null;
@@ -55,6 +59,8 @@ let people: ContactPerson[] = [];
 // the same directory read as `people` (src/lib/crm/people.ts), so no extra round trip.
 const canTasks = allowed && can(session.role, 'crm.tasks') === 'full';
 let tasks: { owners: { id: string; name: string }[] } | null = null;
+// (Admin v2 C16) The Files card, for crm.files holders only (its routes check again).
+const canFiles = allowed && can(session.role, 'crm.files') === 'full';
 let failed = false;
 let notFound = false;
 
@@ -129,6 +135,7 @@ const me = session
         me={me}
         now={new Date().toISOString()}
         tasks={tasks}
+        files={canFiles}
       />
     )
   }

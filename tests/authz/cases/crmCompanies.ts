@@ -1,0 +1,77 @@
+import { UUID, type Case } from '../harness';
+
+// Companies (Admin v2 C11, crm.md §9). `crm.contacts` covers "contacts & companies" (crm.md
+// §2.1): Admin's and, since C10b, Sales' (owner default O-7: Developer none), so the C10b + C11
+// integration (C-int) added 'sales' to every row but the domain's, as C10b did to crmContacts.ts.
+
+const BASE = `/api/admin/crm/companies/${UUID}`;
+
+export const cases: readonly Case[] = [
+  {
+    name: 'companies list (POST query)',
+    load: () => import('@/pages/api/admin/crm/companies/query'),
+    method: 'POST',
+    url: '/api/admin/crm/companies/query',
+    body: { q: 'acme', sort: 'name', limit: 25 },
+    allow: ['admin', 'sales'],
+    read: true,
+  },
+  {
+    name: 'company added',
+    load: () => import('@/pages/api/admin/crm/companies/index'),
+    method: 'POST',
+    url: '/api/admin/crm/companies',
+    body: { name: 'Acme Trading', website: 'https://acme.example', stage: 'client' },
+    allow: ['admin', 'sales'],
+  },
+  {
+    name: 'company read (the drawer)',
+    load: () => import('@/pages/api/admin/crm/companies/[id]'),
+    method: 'GET',
+    url: BASE,
+    allow: ['admin', 'sales'],
+    read: true,
+  },
+  {
+    name: 'company change (versioned PATCH)',
+    load: () => import('@/pages/api/admin/crm/companies/[id]'),
+    method: 'PATCH',
+    url: BASE,
+    body: { version: 1, city: 'Jeddah' },
+    allow: ['admin', 'sales'],
+  },
+  {
+    name: 'company removed',
+    load: () => import('@/pages/api/admin/crm/companies/[id]'),
+    method: 'DELETE',
+    url: BASE,
+    body: { version: 1 },
+    allow: ['admin', 'sales'],
+  },
+  {
+    // (C11 review, C11-SEC-1) crm.settings, Admin's: this row stays ['admin'] when C10b gives
+    // Sales crm.contacts.
+    name: "company's learnt domain forgotten",
+    load: () => import('@/pages/api/admin/crm/companies/[id]/domain'),
+    method: 'DELETE',
+    url: `${BASE}/domain`,
+    body: { version: 1 },
+    allow: ['admin'],
+  },
+  {
+    name: "contact's company linked",
+    load: () => import('@/pages/api/admin/crm/contacts/[id]/company'),
+    method: 'POST',
+    url: `/api/admin/crm/contacts/${UUID}/company`,
+    body: { action: 'link', version: 1, companyId: UUID },
+    allow: ['admin', 'sales'],
+  },
+  {
+    name: "contact's company made from its name",
+    load: () => import('@/pages/api/admin/crm/contacts/[id]/company'),
+    method: 'POST',
+    url: `/api/admin/crm/contacts/${UUID}/company`,
+    body: { action: 'create', version: 1 },
+    allow: ['admin', 'sales'],
+  },
+];

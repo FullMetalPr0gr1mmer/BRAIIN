@@ -28,6 +28,8 @@ export let observedEntityFilters: string[] = [];
 
 /** The principal the serviceClient stub should impersonate for live-rechecks. */
 let currentPrincipal: { role: Role; tenantId: string } = { role: 'admin', tenantId: '' };
+/** What a head count through the service-role client answers for the current case. */
+let currentServiceCount: number | undefined;
 
 interface StubOptions {
   row?: Record<string, unknown>;
@@ -156,6 +158,7 @@ export function serviceClientStub() {
       locked_until: null,
       tenant_id: currentPrincipal.tenantId,
     },
+    ...(currentServiceCount === undefined ? {} : { count: currentServiceCount }),
   });
 }
 
@@ -207,9 +210,10 @@ export function makeContext(
   body?: unknown,
   method = 'GET',
   params: Readonly<Record<string, string>> = {},
-  stub: Pick<Case, 'releases' | 'row' | 'rpcs'> = {},
+  stub: Pick<Case, 'releases' | 'row' | 'rpcs' | 'serviceCount'> = {},
 ) {
   observedTenantFilters = [];
+  currentServiceCount = stub.serviceCount;
   observedEntityFilters = [];
   const session = sessionFor(principal);
   currentPrincipal = {
@@ -273,6 +277,11 @@ export interface Case {
   row?: Record<string, unknown>;
   /** What named rpcs answer (`data`), when a case needs it (R10: the state at a version). */
   rpcs?: Readonly<Record<string, unknown>>;
+  /**
+   * What a count through the service-role client answers (default: its rows, one). The merge's
+   * file check (the owner's decision of 2026-11-13) reads 0 for a pair holding no file.
+   */
+  serviceCount?: number;
 }
 
 export const VALID_BILINGUAL = { en: 'Example', ar: 'مثال' };

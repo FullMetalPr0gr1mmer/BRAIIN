@@ -16,8 +16,11 @@ import { SKIP_REASON, STAFF_IDS, authFile, staffEnv } from './staff';
  *   a lead      the Tasks card on a lead's page adds a task about that lead;
  *   a contact   (C8b) the same card on a contact's page adds a task about that contact, and
  *               the contact's timeline says so;
- *   refusals    Content Creator, SEO, Developer and Sales get a 403 page (and API), and no
- *               Tasks link (crm.tasks is Admin's until C10b).
+ *   Sales       (Admin v2 C10b: crm.tasks) Tasks in its menu; a task of its own lands in My
+ *               tasks and is ticked off on the screen; a task for a Developer is refused
+ *               (the owner rule: a crm.tasks holder);
+ *   refusals    Content Creator, SEO and Developer get a 403 page (and API), and no Tasks
+ *               link (crm.tasks is Admin's and Sales').
  * Every task is named with this run's token and added through the real routes; nothing reads
  * or writes the database directly.
  */
@@ -320,7 +323,56 @@ test.describe('as admin', () => {
   });
 });
 
-for (const role of ['content_creator', 'seo', 'developer', 'sales'] as const) {
+// Admin v2 C10b: Sales holds crm.tasks.
+test.describe('as sales', () => {
+  test.use({ storageState: authFile('sales') });
+  test.describe.configure({ mode: 'serial' });
+
+  test('Tasks in the menu; a task of mine in My tasks, ticked off on the screen', async ({
+    page,
+  }) => {
+    await visit(page, '/admin/tasks?view=mine');
+    await expect(page.getByRole('heading', { level: 1, name: 'Tasks' })).toBeVisible();
+    await expect(page.locator('nav.admin-sidebar a[href="/admin/tasks"]')).toHaveCount(1);
+    const today = (await groups(page, 'view=mine')).today;
+    const task = await addTask(page, {
+      title: `E2E ${RUN} sales follow-up`,
+      type: 'call',
+      dueDate: shift(today, 2),
+      dueTime: '10:00',
+      ownerId: STAFF_IDS.sales,
+    });
+    await visit(page, '/admin/tasks?view=mine');
+    await expect(
+      page.locator('section[data-sec="upcoming"] li.task').filter({ hasText: task.title }),
+    ).toBeVisible();
+    await axe(page, '/admin/tasks as Sales');
+    await page.getByRole('checkbox', { name: task.title }).check();
+    await expect(page.getByRole('status').filter({ hasText: 'Task done.' })).toBeVisible();
+    await expect
+      .poll(async () => all(await groups(page, 'view=mine')).find((t) => t.id === task.id)?.done_at)
+      .toBeTruthy();
+  });
+
+  test('a task for a Developer is refused: an owner must hold crm.tasks', async ({ page }) => {
+    const today = (await groups(page, 'view=mine')).today;
+    const res = await page.request.post('/api/admin/crm/tasks', {
+      headers: { 'x-csrf-token': await csrf(page) },
+      data: {
+        title: `E2E ${RUN} for a developer`,
+        dueDate: shift(today, 2),
+        dueTime: '10:00',
+        ownerId: STAFF_IDS.developer,
+      },
+    });
+    expect(res.status()).toBe(422);
+    expect(all(await groups(page)).some((t) => t.title === `E2E ${RUN} for a developer`)).toBe(
+      false,
+    );
+  });
+});
+
+for (const role of ['content_creator', 'seo', 'developer'] as const) {
   test.describe(`as ${role}`, () => {
     test.use({ storageState: authFile(role) });
 

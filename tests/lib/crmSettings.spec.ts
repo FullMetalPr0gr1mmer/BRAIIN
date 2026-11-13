@@ -316,6 +316,13 @@ describe('saving the settings', () => {
     );
   });
 
+  it('a deadlock with a contact value write is a 409 too, never a 500 (C9B-COR-1)', async () => {
+    const { sb } = fakeDb({ error: { code: '40P01', message: 'deadlock detected' } });
+    await expect(
+      saveCrmSettings(sb, AUTH, { version: 3, customFields: [] }),
+    ).rejects.toBeInstanceOf(OptimisticLockError);
+  });
+
   it('a refused assignee is a 422 on its field, in plain words', async () => {
     const { sb } = fakeDb({
       error: {
@@ -407,7 +414,10 @@ describe('saving the pipeline', () => {
 });
 
 describe('what the screen reads', () => {
-  it('the settings, the stages with their counts, the people: four reads in the caller’s tenant', async () => {
+  // C9b: and the retention horizon the Data and privacy card states, through C10b's door
+  // (public.crm_contact_retention_months answers the caller's own tenant, so it takes no
+  // argument; the C9b + C10b integration, C-int).
+  it('the settings, the stages with their counts, the people, the horizon: five reads in the caller’s tenant', async () => {
     const { sb, calls } = fakeDb({ data: { version: 2, sla_hours: 24 } });
     const answer = await readCrmSettings(sb, AUTH);
     expect(calls.map((c) => c.table ?? c.rpc)).toEqual([
@@ -415,12 +425,15 @@ describe('what the screen reads', () => {
       'lead_stages',
       'lead_stage_counts',
       'crm_people',
+      'crm_contact_retention_months',
     ]);
     for (const call of calls.filter((c) => c.table)) {
       expect(call.eq).toContainEqual(['tenant_id', AUTH.tenantId]);
     }
-    for (const call of calls.filter((c) => c.rpc))
+    for (const call of calls.filter((c) => c.rpc && c.rpc !== 'crm_contact_retention_months'))
       expect(call.args).toEqual({ p_tenant: AUTH.tenantId });
+    // The horizon's door names no tenant: it answers the caller's own (C10b).
+    expect(calls.find((c) => c.rpc === 'crm_contact_retention_months')?.args).toBeUndefined();
     expect(answer.settings.version).toBe(2);
   });
 
@@ -543,6 +556,7 @@ describe('the screen’s own rules', () => {
         scoring: { returning: 3 },
         slaHours: 24,
         assignment: { rule: 'manual', pool: [], fixedTo: null },
+        customFields: [],
         updatedAt: null,
       }),
     ).toEqual({ ...Object.fromEntries(SCORE_SIGNALS.map((x) => [x, 0])), returning: 3 });

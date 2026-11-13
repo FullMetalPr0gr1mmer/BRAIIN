@@ -1,0 +1,256 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+// The six-slice CRM integration's migration (Admin v2 C-int, docs/admin-v2/as-built/
+// C-LAST-INTEGRATION.md): it restates C12's merge door and purge, each as C12 wrote it plus the
+// lines marked `-- C-int`, so no earlier slice's line is lost; pgTAP crm_last_integration proves
+// what the lines do.
+
+const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
+const read = (pattern: RegExp) =>
+  readFileSync(
+    join(MIGRATIONS, readdirSync(MIGRATIONS).find((f) => pattern.test(f)) ?? ''),
+    'utf8',
+  ).replace(/\r\n/g, '\n');
+const C12 = read(/_crm_merge\.sql$/);
+const C16 = read(/_crm_contact_files\.sql$/);
+const C10B = read(/_crm_sales_contacts\.sql$/);
+const C6 = read(/_crm_contacts_api\.sql$/);
+const C8 = read(/_crm_tasks\.sql$/);
+const CINT = read(/_crm_last_integration\.sql$/);
+const MARK = / {2}-- C-int$/;
+
+function fn(sql: string, name: string): string {
+  const start = sql.indexOf(`create or replace function ${name}(`);
+  expect(start, name).toBeGreaterThanOrEqual(0);
+  const stop = sql.indexOf('end $$;', start);
+  expect(stop, name).toBeGreaterThan(start);
+  return sql.slice(start, stop + 'end $$;'.length);
+}
+const unmarked = (body: string) =>
+  body
+    .split('\n')
+    .filter((line) => !MARK.test(line))
+    .join('\n');
+const marked = (body: string) =>
+  body
+    .split('\n')
+    .filter((line) => MARK.test(line))
+    .join('\n');
+
+describe('the integration migration (C-int)', () => {
+  it('restates the merge door as C12 wrote it plus the lines marked -- C-int', () => {
+    const after = fn(CINT, 'public.crm_merge_contacts');
+    expect(unmarked(after)).toBe(fn(C12, 'public.crm_merge_contacts'));
+    const lines = marked(after);
+    // C16: the add door's per-contact lock on the record going away; C11: the company kept or
+    // taken, none on the tombstone; C9b: only defined fields carried; C15 and C16: the follow.
+    expect(lines).toMatch(
+      /pg_advisory_xact_lock\(hashtextextended\('crm-files:' \|\| p_drop::text, 0\)\)/,
+    );
+    // CINT-W-1 / XS-1: the other's company only when the survivor names none or the same one.
+    expect(lines).toMatch(/company_id = case when k\.company_id is not null then k\.company_id/);
+    expect(lines).toMatch(/when k\.company_name is null/);
+    expect(lines).toMatch(/or app\.crm_name_key\(k\.company_name\) = \(select co\.name_key/);
+    expect(lines).not.toMatch(/coalesce\(k\.company_id, d\.company_id\)/);
+    expect(lines).toMatch(/^ +company_id = null,/m);
+    expect(lines).toMatch(/jsonb_array_elements\(s\.custom_fields\)[\s\S]*\|\| k\.custom;/);
+    expect(lines).toMatch(/perform app\.crm_tombstone_follow\(p_tenant, p_drop\);/);
+  });
+
+  it('takes the file lock before it locks a row, and follows only once the tombstone is made', () => {
+    const merge = fn(CINT, 'public.crm_merge_contacts');
+    const fileLock = merge.indexOf("'crm-files:' || p_drop::text");
+    expect(fileLock).toBeGreaterThan(merge.indexOf("'crm-email:'"));
+    expect(fileLock).toBeLessThan(merge.indexOf('for update'));
+    const follow = merge.indexOf('app.crm_tombstone_follow(p_tenant, p_drop)');
+    expect(follow).toBeGreaterThan(merge.indexOf('merged_into = p_keep, merged_at = now()'));
+    expect(follow).toBeLessThan(merge.indexOf('insert into public.audit_log'));
+  });
+
+  it('keeps the answer and the audit row free of a file count (crm.files is Admin’s; Sales merges)', () => {
+    const merge = fn(CINT, 'public.crm_merge_contacts');
+    const tail = merge.slice(merge.indexOf('insert into public.audit_log'));
+    expect(tail).not.toMatch(/files/);
+  });
+
+  it('restates the purge as C12 wrote it plus the lines marked -- C-int, before the tombstones go', () => {
+    const after = fn(CINT, 'app.purge_crm');
+    expect(unmarked(after)).toBe(fn(C12, 'app.purge_crm'));
+    const gone = after.indexOf(
+      'delete from public.crm_contacts c where c.tenant_id = t.id and c.merged_into is not null',
+    );
+    for (const move of [
+      'update public.crm_contact_files f set contact_id = c.merged_into',
+      'update public.crm_contact_imports i set contact_id = c.merged_into',
+    ]) {
+      expect(after.indexOf(move), move).toBeGreaterThan(0);
+      expect(after.indexOf(move), move).toBeLessThan(gone);
+    }
+  });
+
+  it('the purge follows set-based: never the raising follow, never a lock per tombstone (CINT-SEC-1)', () => {
+    const after = fn(CINT, 'app.purge_crm');
+    expect(after).not.toMatch(/crm_tombstone_follow/);
+    expect(after).not.toMatch(/pg_advisory/);
+    expect(after).not.toMatch(/raise /);
+  });
+
+  it('keeps every lawful-basis row a contact carries (CINT-SEC-2)', () => {
+    expect(CINT).toMatch(
+      /alter table public\.crm_contact_imports drop constraint crm_contact_imports_one;/,
+    );
+    expect(CINT).toMatch(
+      /create index crm_contact_imports_contact_idx on public\.crm_contact_imports \(tenant_id, contact_id\);/,
+    );
+  });
+
+  it('audits an auto-company a merge removed, in a row of its own after the merge row (CINT-W-4)', () => {
+    const merge = fn(CINT, 'public.crm_merge_contacts');
+    const mergeRow = merge.indexOf("'crm.contact.merge', 'contact'");
+    const companyRow = merge.indexOf("'crm.contact.merge.company_removed'");
+    expect(mergeRow).toBeGreaterThan(0);
+    expect(companyRow).toBeGreaterThan(mergeRow);
+    // The company is captured once the tombstone has let it go, and before the follow.
+    const captured = merge.indexOf('v_removed_company := d.company_id;');
+    expect(captured).toBeGreaterThan(merge.indexOf('merged_into = p_keep, merged_at = now()'));
+    expect(marked(merge)).toMatch(/'removed_company', v_removed_company/);
+  });
+
+  it('restates the file removal as C16 wrote it plus the lines marked -- C-int (CINT-W-3)', () => {
+    const after = fn(CINT, 'public.crm_file_remove');
+    expect(unmarked(after)).toBe(fn(C16, 'public.crm_file_remove'));
+    const lines = marked(after);
+    // Only when the named record's own row is gone, only its survivor's row, only that file.
+    expect(lines).toMatch(/if v_path is null then/);
+    expect(lines).toMatch(/f\.tenant_id = p_tenant and f\.id = p_file/);
+    expect(lines).toMatch(/c\.merged_into is not null/);
+    expect(CINT).toMatch(
+      /revoke all on function public\.crm_file_remove\(uuid, uuid, uuid, uuid\) from public, anon, authenticated, service_role;\ngrant execute on function public\.crm_file_remove\(uuid, uuid, uuid, uuid\) to service_role;/,
+    );
+  });
+
+  it('the follow is a pinned definer the service role alone runs, moving only off a tombstone', () => {
+    const follow = fn(CINT, 'app.crm_tombstone_follow');
+    expect(follow).toMatch(/security definer set search_path = ''/);
+    expect(follow).toMatch(/c\.merged_into is not null/);
+    expect(follow).toMatch(/errcode = 'P0002'/);
+    expect(CINT).toMatch(
+      /revoke all on function app\.crm_tombstone_follow\(uuid, uuid\) from public, anon, authenticated, service_role;\n[^\n]*\ngrant execute on function app\.crm_tombstone_follow\(uuid, uuid\) to service_role;/,
+    );
+    // Every basis row moves: the survivor keeps its own and gains the other's (CINT-SEC-2).
+    expect(follow).toMatch(
+      /update public\.crm_contact_imports i set contact_id = v_keep\n\s+where i\.tenant_id = p_tenant and i\.contact_id = p_tombstone;/,
+    );
+  });
+
+  // The C-int review (CINT2-SEC-1): the rule "Sales sees the main ones" holds only while every
+  // kind a contact holds has a main one.
+  it('restates the lead erasure as 0134 wrote it plus -- C-int lines that fill the main one after the take-back', () => {
+    const after = fn(CINT, 'public.crm_erase_lead');
+    expect(unmarked(after)).toBe(fn(C8, 'public.crm_erase_lead'));
+    expect(marked(after)).toMatch(/perform app\.crm_fill_primary\(p_tenant, v_contact\);/);
+    // After the channels are taken back, inside that branch (not for an orphan, already gone).
+    const fill = after.indexOf('perform app.crm_fill_primary(p_tenant, v_contact);');
+    expect(fill).toBeGreaterThan(after.indexOf('delete from public.crm_contact_channels ch'));
+    expect(fill).toBeGreaterThan(
+      after.indexOf("elsif v_contact is not null and v_link is distinct from 'phone' then"),
+    );
+    expect(fill).toBeLessThan(after.indexOf('return jsonb_build_object'));
+    expect(CINT).toMatch(
+      /revoke all on function public\.crm_erase_lead\(uuid, uuid, uuid\) from public, anon, authenticated, service_role;\ngrant execute on function public\.crm_erase_lead\(uuid, uuid, uuid\) to service_role;/,
+    );
+  });
+
+  it('restates the new-lead door as 0133 wrote it plus -- C-int lines: the main e-mail and phone only', () => {
+    const after = fn(CINT, 'public.crm_contact_new_lead');
+    expect(unmarked(after)).toBe(fn(C6, 'public.crm_contact_new_lead'));
+    expect(marked(after).match(/^ +and ch\.is_primary {2}-- C-int$/gm)).toHaveLength(2);
+    expect(CINT).toMatch(
+      /revoke all on function public\.crm_contact_new_lead\(uuid, uuid, jsonb, uuid\) from public, anon, authenticated, service_role;\ngrant execute on function public\.crm_contact_new_lead\(uuid, uuid, jsonb, uuid\) to service_role;/,
+    );
+  });
+
+  it('every door that deletes a channel of a contact it keeps fills the main one after it', () => {
+    // The editor, the merge and the lead erasure; the person's erasure and the purge take the
+    // whole contact. A new door that deletes channels fails here until it is named.
+    const migrations = readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    const latest = new Map<string, string>();
+    for (const file of migrations) {
+      const sql = readFileSync(join(MIGRATIONS, file), 'utf8').replace(/\r\n/g, '\n');
+      for (const m of sql.matchAll(/create or replace function ([\w.]+)\(/g)) {
+        // The function's body: its first $$-quoted string (bodies quote inner SQL as $q$).
+        const open = sql.indexOf('$$', m.index);
+        const close = sql.indexOf('$$', open + 2);
+        latest.set(m[1]!, sql.slice(m.index, close + 2));
+      }
+    }
+    const deleters = [...latest.entries()]
+      .filter(([, body]) => /delete from public\.crm_contact_channels\b/.test(body))
+      .map(([name]) => name)
+      .sort();
+    expect(deleters).toEqual([
+      'public.crm_edit_contact_channels',
+      'public.crm_erase_lead',
+      'public.crm_merge_contacts',
+    ]);
+    for (const name of deleters) {
+      const body = latest.get(name)!;
+      const lastDelete = body.lastIndexOf('delete from public.crm_contact_channels');
+      expect(body.indexOf('app.crm_fill_primary(', lastDelete), name).toBeGreaterThan(lastDelete);
+    }
+  });
+
+  // The owner's decisions of 2026-11-13 (C-LAST-INTEGRATION.md section 10).
+  it('a merge where either record holds a file needs an actor who may handle files, before anything moves', () => {
+    const merge = fn(CINT, 'public.crm_merge_contacts');
+    const lines = marked(merge);
+    expect(lines).toMatch(/if not app\.crm_files_actor_ok\(p_tenant, p_actor\)/);
+    expect(lines).toMatch(/f\.tenant_id = p_tenant and f\.contact_id in \(p_keep, p_drop\)/);
+    expect(lines).toMatch(/errcode = '42501'/);
+    expect(lines).toMatch(/holds files, so an Admin merges them/);
+    // With both rows locked and their versions checked, and before the ceiling, the survivor's
+    // details or any move.
+    const check = merge.indexOf('app.crm_files_actor_ok(p_tenant, p_actor)');
+    expect(check).toBeGreaterThan(merge.indexOf('for update'));
+    expect(check).toBeGreaterThan(merge.indexOf("errcode = '40001'"));
+    expect(check).toBeLessThan(merge.indexOf('crm_contact_channels_cap'));
+    expect(check).toBeLessThan(merge.indexOf('update public.crm_contacts c'));
+    expect(check).toBeLessThan(merge.indexOf('update public.crm_contact_channels'));
+  });
+
+  it("restates the channel editor as 0136 wrote it plus the lines marked -- C-int (the main one is an Admin's)", () => {
+    const after = fn(CINT, 'public.crm_edit_contact_channels');
+    expect(unmarked(after)).toBe(fn(C10B, 'public.crm_edit_contact_channels'));
+    const lines = marked(after);
+    expect(lines).toMatch(/if \(cardinality\(v_primary\) > 0/);
+    expect(lines).toMatch(/e -> 'is_primary' = 'true'::jsonb/);
+    expect(lines).toMatch(/and not app\.crm_eraser_ok\(p_tenant, p_actor\) then/);
+    // Before the contact is locked or anything is written.
+    expect(after.indexOf("e -> 'is_primary' = 'true'::jsonb")).toBeLessThan(
+      after.indexOf('for update'),
+    );
+    expect(CINT).toMatch(
+      /revoke all on function public\.crm_edit_contact_channels\(uuid, uuid, int, jsonb, uuid\[\], uuid\[\], uuid\)\n  from public, anon, authenticated, service_role;\ngrant execute on function public\.crm_edit_contact_channels\(uuid, uuid, int, jsonb, uuid\[\], uuid\[\], uuid\)\n  to service_role;/,
+    );
+  });
+
+  it('the reveal reads through a door that answers the primaries only to anyone but an eraser', () => {
+    const door = fn(CINT, 'public.crm_contact_reveal_channels');
+    expect(door).toMatch(/security invoker set search_path = ''/);
+    expect(door).toMatch(/app\.crm_contacts_actor_ok\(p_tenant, p_actor, false\)/);
+    expect(door).toMatch(/v_every := app\.crm_eraser_ok\(p_tenant, p_actor\);/);
+    expect(door).toMatch(/and \(v_every or ch\.is_primary\)/);
+    expect(door).toMatch(/c\.merged_into is null/);
+    expect(CINT).toMatch(
+      /revoke all on function public\.crm_contact_reveal_channels\(uuid, uuid, uuid\)\n  from public, anon, authenticated, service_role;\ngrant execute on function public\.crm_contact_reveal_channels\(uuid, uuid, uuid\) to service_role;/,
+    );
+    // The Worker's reveal reads ciphertext through it alone, never the table.
+    const reveal = readFileSync(join('src', 'lib', 'crm', 'contactReveal.ts'), 'utf8');
+    expect(reveal).toContain("rpc('crm_contact_reveal_channels'");
+    expect(reveal).not.toMatch(/from\('crm_contact_channels'\)/);
+  });
+});

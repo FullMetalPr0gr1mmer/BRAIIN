@@ -24,6 +24,8 @@ export const ADMIN_STYLESHEETS = [
   'header.css',
   'health.css',
   'help.css',
+  // Admin v2 C15: Import contacts (the columns, the progress, the result).
+  'import.css',
   'integrations.css',
   'kit.css',
   'leads.css',

@@ -33,7 +33,9 @@ const LABEL_TO_CAP: Record<string, Capability> = {
   'Leads / analytics / activity — export CSV': 'export.csv',
   'CRM — contacts (view, edit, notes; the people behind leads)': 'crm.contacts',
   'CRM — tasks (follow-ups for leads and contacts)': 'crm.tasks',
+  'CRM — contact files (add, download, remove)': 'crm.files',
   "Leads & contacts — erase a person's data (DSAR)": 'crm.erase',
+  'CRM — import contacts from a CSV file': 'crm.import',
   'CRM settings — pipeline stages, scoring, response time, assignment': 'crm.settings',
   'Job applications — view / manage status / notes / erase': 'applications.manage',
   'Job applications — contact details & CV download (PII)': 'applications.pii',
@@ -92,7 +94,7 @@ for (const file of ['CLAUDE.md', 'docs/architecture.md']) {
   describe(`ROLE_CAPS matches the matrix in ${file}`, () => {
     const doc = parseDocMatrix(file);
 
-    it('parses all 37 capabilities from the documented table', () => {
+    it('parses all 38 capabilities from the documented table', () => {
       expect(Object.keys(doc.admin).sort()).toEqual([...CAPABILITIES].sort());
     });
 
@@ -127,10 +129,18 @@ describe('the roles', () => {
 // ── Sales (Admin v2 C10a, owner decision A4) ────────────────────────────────────────────
 // Leads, one lead's PII at a time, and the website stats. Everything else is pinned off,
 // capability by capability, so a later edit that hands Sales one more fails here by name.
-describe('Sales holds leads and the stats, nothing else', () => {
-  const SALES_HOLDS: Capability[] = ['leads.manage', 'leads.pii', 'analytics.read'];
+// Admin v2 C10a gave Sales the leads and the stats; C10b the contacts and the tasks
+// (crm.md §2.1). Never the erasure, the CRM's settings or an export.
+describe('Sales holds leads, contacts, tasks and the stats, nothing else', () => {
+  const SALES_HOLDS: Capability[] = [
+    'leads.manage',
+    'leads.pii',
+    'crm.contacts',
+    'crm.tasks',
+    'analytics.read',
+  ];
 
-  it('holds exactly leads.manage, leads.pii and analytics.read, in full', () => {
+  it('holds exactly leads.manage, leads.pii, crm.contacts, crm.tasks and analytics.read, in full', () => {
     expect(CAPABILITIES.filter((cap) => ROLE_CAPS.sales[cap] !== 'none').sort()).toEqual(
       [...SALES_HOLDS].sort(),
     );
@@ -163,9 +173,9 @@ describe('Sales holds leads and the stats, nothing else', () => {
     // exports, backups and erasure: no bulk contact details; nor the CRM's settings
     'export.csv',
     'export.backup',
-    'crm.contacts',
-    'crm.tasks',
+    'crm.files',
     'crm.erase',
+    'crm.import',
     'crm.settings',
     // hiring, logs, the activity log, site health, search analytics, the stats' goals
     'applications.manage',
@@ -200,6 +210,26 @@ describe('Sales holds leads and the stats, nothing else', () => {
       // see whom they are about.
       if (ROLE_CAPS[role]['crm.tasks'] === 'full')
         expect(ROLE_CAPS[role]['crm.contacts'], `${role}: crm.tasks`).toBe('full');
+      // An import makes contacts (Admin v2 C15): whoever imports can see whom they added.
+      if (ROLE_CAPS[role]['crm.import'] === 'full')
+        expect(ROLE_CAPS[role]['crm.contacts'], `${role}: crm.import`).toBe('full');
+      // A file is kept with a contact (Admin v2 C16): whoever holds files sees whose they are.
+      if (ROLE_CAPS[role]['crm.files'] === 'full')
+        expect(ROLE_CAPS[role]['crm.contacts'], `${role}: crm.files`).toBe('full');
     }
+  });
+
+  it('Developer still holds no crm.* (owner default O-7), and only Admin erases', () => {
+    for (const cap of ['crm.contacts', 'crm.tasks', 'crm.erase', 'crm.settings'] as const)
+      expect(ROLE_CAPS.developer[cap], cap).toBe('none');
+    expect(ROLES.filter((role) => ROLE_CAPS[role]['crm.erase'] !== 'none')).toEqual(['admin']);
+    expect(ROLES.filter((role) => ROLE_CAPS[role]['crm.contacts'] !== 'none')).toEqual([
+      'admin',
+      'sales',
+    ]);
+    expect(ROLES.filter((role) => ROLE_CAPS[role]['crm.tasks'] !== 'none')).toEqual([
+      'admin',
+      'sales',
+    ]);
   });
 });

@@ -1,8 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import type { ContactChannelInput, ContactPatch } from '@schemas/crm';
-import type { AuthContext } from '@/lib/auth/types';
-import type { Capability } from '@/lib/authz/matrix';
+import type { AuthContext, Role } from '@/lib/auth/types';
+import { can, type Capability } from '@/lib/authz/matrix';
 import { AuthorizationError } from '@/lib/authz/errors';
 import { constraintOf, getRow, type ConstraintFields } from '@/lib/admin/crud';
 import { NotFoundError, OptimisticLockError, ValidationError } from '@/lib/admin/errors';
@@ -27,7 +27,9 @@ export function requireContactId(params: Record<string, string | undefined>): st
 /** A contact's own columns a staff token reads (never a channel: those are a separate table). */
 export const CONTACT_DETAIL_COLUMNS =
   'id,display_name,title,company_name,stage,source,owner_id,locale,city,country,tags,custom,' +
-  'is_starred,last_activity_at,created_at,updated_at,created_by,updated_by,version,merged_into';
+  'is_starred,last_activity_at,created_at,updated_at,created_by,updated_by,version,merged_into,' +
+  // (Admin v2 C11) The contact's company record; company_name is its name while linked.
+  'company_id';
 
 /** The safe fields of a People list row; anything else an RPC returned is dropped. */
 export const CONTACT_LIST_FIELDS = [
@@ -159,6 +161,13 @@ export const CONTACT_CONSTRAINTS: ConstraintFields = {
     field: 'custom',
     message: 'The custom fields hold too much. Shorten some of them.',
   },
+  // C9b: the database's check of each new or changed custom value against the definitions
+  // (app.tg_crm_contact_custom). The Worker checks first, so this is a field changed or removed
+  // in CRM settings between the read and the write.
+  crm_contacts_custom_fields: {
+    field: 'custom',
+    message: 'The custom fields changed in CRM settings meanwhile. Reload the page and try again.',
+  },
   crm_contacts_country_check: { field: 'country', message: 'Use a two-letter country code.' },
   // A rule of public.crm_edit_contact_channels (C6 review, C6-SEC-3), named in its message.
   crm_contact_channels_cap: {
@@ -188,6 +197,10 @@ export function contactError(
     case 'P0002':
       return new NotFoundError('contact');
     case '40001':
+    // A deadlock: a value written to a contact while an Admin's save removed a field that
+    // contact holds (the C9b value trigger reads the definitions FOR SHARE, C9B-COR-1).
+    // PostgreSQL aborted this side; the definitions changed meanwhile, so reload.
+    case '40P01':
       return new OptimisticLockError('crm_contacts');
     case '22023':
       return new ValidationError(`${what} was refused: check the values sent`);
@@ -274,17 +287,33 @@ export async function sealChannels(
   return sealed;
 }
 
-/** Channel presence for a contact's page: kind, primary, where from. Never a value. */
+/**
+ * Does this role see every e-mail and phone of a contact (and choose the main one, and remove
+ * one)? The holder of crm.erase: Admin. Sales sees the main e-mail and the main phone only
+ * (the owner's decision of 2026-11-13). The database's half is app.crm_eraser_ok.
+ */
+export function seesEveryContactChannel(role: Role): boolean {
+  return can(role, 'crm.erase') === 'full';
+}
+
+/**
+ * Channel presence for a contact's page: kind, primary, where from. Never a value. A role that
+ * does not see every channel (Sales) is listed the main e-mail and the main phone only, the
+ * ones its reveal answers (the owner's decision of 2026-11-13), so the page offers no reveal
+ * it cannot answer.
+ */
 export async function channelPresence(
   sb: SupabaseClient,
   auth: AuthContext,
   contactId: string,
 ): Promise<{ id: string; kind: string; is_primary: boolean; source: string }[]> {
-  const { data, error } = await sb
+  let query = sb
     .from('crm_contact_channels')
     .select('id,kind,is_primary,source')
     .eq('tenant_id', auth.tenantId)
-    .eq('contact_id', contactId)
+    .eq('contact_id', contactId);
+  if (!seesEveryContactChannel(auth.role)) query = query.eq('is_primary', true);
+  const { data, error } = await query
     .order('kind', { ascending: true })
     .order('created_at', { ascending: true });
   if (error) throw new Error(`contact channels: ${error.code ?? 'no code'}`);

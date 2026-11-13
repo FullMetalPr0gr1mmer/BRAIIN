@@ -23,6 +23,11 @@ import { stageLabel, stageToneOf, type ContactPerson } from '@/lib/crm/contactVi
 export interface ContactsPermissions {
   canErase: boolean;
   canAddLead: boolean;
+  /**
+   * A phone match's confirm spends a reveal slot for this role (it cannot export: Sales; C10b).
+   * The route decides; this only words the button.
+   */
+  confirmIsReveal: boolean;
 }
 
 export type { ContactPerson };

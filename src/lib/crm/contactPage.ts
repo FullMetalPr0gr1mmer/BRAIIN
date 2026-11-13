@@ -12,7 +12,7 @@ import {
   parseTimeline,
   type TimelinePage,
 } from './contacts';
-import { customFieldDefinitions } from './contactCustom';
+import { readCustomFields } from './contactCustom';
 import { crmPeople } from './people';
 import type { ContactLead, ContactPerson, ContactSummary } from './contactView';
 import { ROLE_CAPS } from '@/lib/authz/matrix';
@@ -26,11 +26,12 @@ import { isRole } from '@/lib/auth/types';
 // caller, for the caller's tenant, so RLS, the live check and the column grants decide again.
 //
 // Round trips on top of the layout's shell (P-15, the Workers Free plan):
-//   list     people, summary, page 1                                            = 3
+//   list     people, summary, page 1, the custom fields (C9b), the companies' count (C11) = 5
 //   contact  the row, then its channels (presence), its leads, its first timeline page,
-//            the lead stages, the people, the retention months, the view's audit row = 8
+//            the lead stages, the people, the retention months, the custom fields (C9b),
+//            the view's audit row                                                     = 9
 //            (C8b: for a crm.tasks holder the Tasks card's owners come from the same people
-//            read, src/lib/crm/people.ts, so the count stays 8; the card reads its tasks
+//            read, src/lib/crm/people.ts, so it costs nothing more; the card reads its tasks
 //            itself, after the page is up)
 // Never a channel's value or index, a note, a score reason or a decrypted value: those are
 // read by the island, through the audited routes, and only on request.
@@ -157,18 +158,17 @@ export interface ContactDetailInitial {
   retentionMonths: number | null;
 }
 
-/** How long a contact is kept after its last activity (site_settings.retention), or null. */
-async function readRetentionMonths(sb: SupabaseClient, auth: AuthContext): Promise<number | null> {
-  const { data, error } = await sb
-    .from('site_settings')
-    .select('retention')
-    .eq('tenant_id', auth.tenantId)
-    .maybeSingle<{ retention: unknown }>();
+/**
+ * How long a contact is kept after its last activity (site_settings.retention.leads_months,
+ * the database's own 24 when unset), or null when it cannot be read. Through
+ * public.crm_contact_retention_months (Admin v2 C10b), which answers any live crm.contacts
+ * holder for the caller's own tenant: the page read site_settings as the caller before, and
+ * only CMS staff read that table (app.is_staff()), so a Sales user lost the "kept until" line.
+ */
+export async function readRetentionMonths(sb: SupabaseClient): Promise<number | null> {
+  const { data, error } = await sb.rpc('crm_contact_retention_months');
   if (error) return null;
-  const months = (data?.retention as { leads_months?: unknown } | null | undefined)?.leads_months;
-  // The database's own default (app.lead_retention_months) when nothing is set.
-  if (months === undefined || months === null) return data ? 24 : null;
-  return typeof months === 'number' && Number.isInteger(months) && months > 0 ? months : null;
+  return typeof data === 'number' && Number.isInteger(data) && data > 0 ? data : null;
 }
 
 /**
@@ -184,7 +184,7 @@ export async function readContactDetail(
   id: string,
 ): Promise<ContactDetailInitial> {
   const row = await getContact(sb, auth, id);
-  const [channels, leadPage, timeline, retentionMonths] = await Promise.all([
+  const [channels, leadPage, timeline, retentionMonths, customFields] = await Promise.all([
     channelPresence(sb, auth, id),
     contactLeads(sb, auth, id),
     sb.rpc('crm_contact_timeline', {
@@ -192,7 +192,10 @@ export async function readContactDetail(
       p_contact: id,
       p_filter: { limit: 30 },
     }),
-    readRetentionMonths(sb, auth),
+    readRetentionMonths(sb),
+    // C9b: the fields Details draws (none when they cannot be read; a save is checked
+    // against the definitions the route reads itself).
+    readCustomFields(sb, auth).catch(() => []),
     writeAudit(sb, auth, {
       action: 'crm.contact.view',
       entityType: 'contact',
@@ -208,7 +211,7 @@ export async function readContactDetail(
     leads: leadPage.leads as unknown as ContactLead[],
     moreLeads: leadPage.more,
     timeline: parseTimeline(timeline.data),
-    customFields: customFieldDefinitions(),
+    customFields,
     retentionMonths,
   };
 }

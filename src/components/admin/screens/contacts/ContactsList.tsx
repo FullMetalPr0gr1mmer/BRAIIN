@@ -12,6 +12,7 @@ import {
   CONTACT_STAGES,
   type ContactBulk,
   type ContactStage,
+  type CustomFieldDefinition,
   type LeadAssignedFilter,
 } from '@schemas/crm';
 import {
@@ -48,6 +49,7 @@ import {
   type ContactSummary,
 } from '@/lib/crm/contactView';
 import type { AddContactDrawerProps } from './AddContactDrawer';
+import type { MergeDuplicatesDialogProps } from './MergeDuplicatesDialog';
 import {
   ContactSearch,
   ContactStageBadge,
@@ -75,7 +77,13 @@ export interface ContactsListProps {
   me: string;
   /** The server's clock when it rendered, so the first render's "3 h ago" matches. */
   now: string;
+  /** (C9b) The custom fields CRM settings define, for the Add contact drawer. */
+  customFields?: CustomFieldDefinition[];
+  /** (Admin v2 C11) How many companies the tenant holds, for the sub-line; null unread. */
+  companies?: number | null | undefined;
 }
+
+const NO_FIELDS: CustomFieldDefinition[] = [];
 
 /** What the bulk route answers. */
 interface BulkOutcome {
@@ -219,6 +227,8 @@ export default function ContactsList({
   people,
   me,
   now: renderedAt,
+  customFields = NO_FIELDS,
+  companies,
 }: ContactsListProps) {
   const { formatDateTime, relTime } = useClock();
   const tagId = useId();
@@ -248,9 +258,23 @@ export default function ContactsList({
 
   const addContact = useLazy<AddContactDrawerProps>(
     () => import('./AddContactDrawer'),
-    (open, close) => ({ open, onClose: close, people, me }),
+    (open, close) => ({ open, onClose: close, people, me, customFields }),
   );
   usePageButton('[data-contact-add]', true, addContact.open);
+  // (Admin v2 C12) Merge duplicates: a large modal, loaded on first use. A merge reads the list
+  // and its counts again (a record went, another changed).
+  const mergeDuplicates = useLazy<MergeDuplicatesDialogProps>(
+    () => import('./MergeDuplicatesDialog'),
+    (open, close) => ({
+      open,
+      onClose: close,
+      onMerged: () => {
+        setRelist((n) => n + 1);
+        setRecount((n) => n + 1);
+      },
+    }),
+  );
+  usePageButton('[data-contact-merge]', true, mergeDuplicates.open);
 
   // A confirmation the last page sent here (a contact erased): shown once, then taken out of
   // the address. First, before the address is rewritten from the filters.
@@ -325,7 +349,7 @@ export default function ContactsList({
 
   useEffect(() => {
     const line = document.querySelector('.admin-header .admin-sub');
-    if (line && summary) line.textContent = contactsSubline(summary);
+    if (line && summary) line.textContent = contactsSubline(summary, companies);
   }, [summary]);
 
   const versions = useMemo(
@@ -664,6 +688,7 @@ export default function ContactsList({
         }}
       />
       {addContact.element}
+      {mergeDuplicates.element}
     </>
   );
 }

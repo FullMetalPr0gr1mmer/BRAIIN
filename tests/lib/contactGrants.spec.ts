@@ -39,6 +39,9 @@ describe('contact ciphertext and notes', () => {
       'src/lib/crm/contactReveal.ts',
       // sealChannels: encrypts and indexes what a person typed (never decrypts).
       'src/lib/crm/contacts.ts',
+      // (Admin v2 C15) sealRows: encrypts and indexes an imported row's e-mail and phone
+      // (never decrypts), sent only to crm_import_rows.
+      'src/lib/crm/importRows.ts',
     ]);
   });
 
@@ -60,12 +63,19 @@ describe('the service role contact doors have named callers', () => {
   it.each([
     ['crm_create_contact', 'src/pages/api/admin/crm/contacts/index.ts'],
     ['crm_edit_contact_channels', 'src/pages/api/admin/crm/contacts/[id].ts'],
+    // The owner's decision of 2026-11-13 (C-int review, CINT2-TEST-1): the reveal's ciphertext,
+    // every channel for an Admin and the main ones for Sales, read by the reveal alone.
+    ['crm_contact_reveal_channels', 'src/lib/crm/contactReveal.ts'],
     ['crm_delete_contact_note', 'src/pages/api/admin/crm/contacts/[id]/notes/[noteId].ts'],
     ['crm_contact_link_lead', 'src/pages/api/admin/crm/contacts/[id]/links.ts'],
     // ingestContactLead, called by POST /api/admin/crm/contacts/[id]/leads.
     ['crm_contact_new_lead', 'src/lib/data/leads.ts'],
     ['crm_erase_preview', 'src/pages/api/admin/crm/contacts/[id]/erase-preview.ts'],
     ['crm_erase_person', 'src/pages/api/admin/crm/contacts/[id]/erase.ts'],
+    // Admin v2 C15: the import's doors. importPiece is called by the import route alone.
+    ['crm_import_open', 'src/pages/api/admin/crm/contacts/import/index.ts'],
+    ['crm_import_rows', 'src/lib/crm/importRows.ts'],
+    ['crm_import_finish', 'src/pages/api/admin/crm/contacts/import/index.ts'],
   ])('%s: %s only', (fn, file) => {
     expect(callers(fn)).toEqual([file]);
   });
@@ -78,6 +88,13 @@ describe('the service role contact doors have named callers', () => {
       'src/lib/crm/indexBackfill.ts',
       'src/lib/cron/jobs.ts',
       'src/pages/api/admin/crm/contacts/[id]/erase-preview.ts',
+    ]);
+  });
+
+  it('the import piece (it seals rows for crm_import_rows) is called by the import route alone', () => {
+    expect(named(/\bimportPiece\(/)).toEqual([
+      'src/lib/crm/importRows.ts',
+      'src/pages/api/admin/crm/contacts/import/index.ts',
     ]);
   });
 

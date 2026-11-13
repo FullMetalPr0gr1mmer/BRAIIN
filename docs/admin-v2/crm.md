@@ -55,12 +55,14 @@ Labels are the strings `matrix.spec` parses. Every other §5 row gets Sales = �
 | CRM — tasks | crm.tasks | ✅ | ❌ | ❌ | ❌ | ✅ | CRM-8 / CRM-10 |
 | CRM — settings (pipeline stages, scoring, custom fields, response time, assignment) | crm.settings | ✅ | ❌ | ❌ | ❌ | ❌ | CRM-9 |
 | Leads & contacts — erase a person's data (DSAR) | crm.erase | ✅ | ❌ | ❌ | ❌ | ❌ | CRM-3 |
+| CRM — contact files (add, download, remove) | crm.files | ✅ | ❌ | ❌ | ❌ | ❌ (C16-Q3) | C16 (as built, [as-built/C16.md](as-built/C16.md)) |
 
 The count goes from 32 to 36 capabilities.
 
 **Invariants,** unit-tested over every role in `ROLE_CAPS` and mirrored in pgTAP over the SQL helpers:
 - `crm.contacts ⇒ leads.manage ∧ leads.pii`
 - `crm.tasks ⇒ crm.contacts`
+- `crm.files ⇒ crm.contacts` (C16)
 - `crm.erase ⇒ crm.contacts ∧ leads.pii`
 - `export.csv ⇒ leads.pii`
 
@@ -107,7 +109,8 @@ Beyond the caps:
 | /crm/settings: pipeline stages, scoring, custom fields, response time / assignment | crm.settings |
 | Retention value | settings.general (single source `site_settings.retention`) |
 | Delete a person's data button | crm.erase |
-| Inbox, Campaigns, Automations, Templates, CRM reports, Export & audiences, Import CSV, consent toggles, Unsubscribe, Files, Segments | not built (LATER, §12) |
+| Contact Files card: list, Add a file, Download, Remove (C16) | crm.files |
+| Inbox, Campaigns, Automations, Templates, CRM reports, Export & audiences, Import CSV, consent toggles, Unsubscribe, Segments | not built (LATER, §12) |
 
 ## 3. SQL authorization layer (CRM-1, extended by CRM-10)
 
@@ -614,6 +617,16 @@ alter type public.app_role add value if not exists 'sales';
 
 **C10b, contacts for Sales: one reveal must stay one person (C6 review, C6-SEC-3).** Confirming a phone match copies that lead's e-mail and phone into the contact, and the contact reveal decrypts every channel of a contact for one slot of the `pii-reveal` limiter. While only Admin holds `crm.contacts` this adds nothing (Admin can export). Before C10b gives Sales `crm.contacts` ("no bulk PII"), keep these: a contact keeps at most ten e-mails and ten phones that a person adds or copies (`app.crm_channel_cap()`, 0133: a confirm into a full contact copies nothing and answers `full`, a channel edit past it is refused whole), so one reveal shows at most twenty values. C10b should also decide whether a Sales confirm spends a reveal slot or a limit of its own, and whether the reveal shows a Sales user only the primary of each kind. Register L-3 records it.
 
+**C10b as built ([C10B.md](as-built/C10B.md)).** A Sales confirm spends a slot of the reveal's own limiter (`pii-reveal`), not a limit of its own: the confirm brings that lead's details to the contact, which is what revealing the lead would cost, so what a confirm brings to a contact has cost the Sales user a slot. The rule is "a role that cannot export" (`receivesLeadPiiUnasked` false), so Admin's confirm is unchanged. The reveal shows a Sales user every channel, not only the primary of each kind: the channel editor (make primary, add) needs them (superseded 2026-11-13: a Sales reveal shows the main e-mail and phone only and the main one is an Admin's choice, see the owner's decisions below). Erasure and the CRM settings stay Admin's, and Developer still holds no `crm.*` (O-7).
+
+**C10b review.** Two claims above did not hold as first built, and the build was changed so that they do. (1) The ceiling covered only what staff add or copy: the arrival's own link (C5's `app.crm_link_lead_core`) added each e-mail-matched lead's phone with no ceiling, so one reveal could show any number of phones from many inquiries, none of which cost a slot. 0136 restates the link: an arrival adds its phone only while the contact keeps fewer than ten (the phone stays on its lead, as the staff link's `full`). Every door that adds a channel now keeps to `app.crm_channel_cap()`, so one reveal shows at most ten e-mails and ten phones of one contact. Values that arrived by themselves did not cost a slot, and the ceiling, not the limiter, bounds them. (2) Removing a channel deletes a person's details (one typed in has no copy on any lead), and C10b had opened it to Sales with no limit and a queued audit row. 0136 restates `crm_edit_contact_channels`: a removal needs `app.crm_eraser_ok` (crm.erase, Admin), and the PATCH route refuses it first. Sales adds and makes primary (superseded 2026-11-13: Sales adds, an Admin chooses the main one, see the owner's decisions below). Standing rule for every later slice: a door that brings another record's e-mails or phones into a contact (C12's merge first, then any other) claims a `pii-reveal` slot for the actor when `!receivesLeadPiiUnasked(role)`, after the live recheck and before anything is read, and keeps to the ceiling. C12's merge (built in parallel) moved the dropped contact's channels into the survivor under `crm-merge` alone as first built; C12's own review (C12-SEC-R2-1) has since added the claim on its branch (`merge.ts`: the live recheck, then the `pii-reveal` slot for a role that cannot export, then `crm-merge`, before anything is read) and a Sales merge test (a 429 leaves nothing moved, `crmMerge.spec`). The six-slice integration (C-int, [C-LAST-INTEGRATION.md](as-built/C-LAST-INTEGRATION.md)) checked that both hold with Sales holding `crm.contacts`, and Sales merges (CRM-12: Admin and Sales).
+
+**C12, a merge is a copy too (C12 review, C12-SEC-R2-1).** A merge moves the other record's e-mails and phones onto the one kept, and the next reveal of it decrypts both people's. So `POST /api/admin/crm/contacts/merge` spends one slot of the reveal's own limiter (`pii-reveal`, fail-closed, after the live recheck and before anything is read) for a role that may not take every lead's details at once (`receivesLeadPiiUnasked` false: Sales once C10b gives it `crm.contacts`), as the C10b link confirm does. The rule for any new path that moves or copies channels into a contact: every value a Sales reveal shows has cost it a slot. Admin spends none.
+
+**C-int, a merge carries what the later slices added ([C-LAST-INTEGRATION.md](as-built/C-LAST-INTEGRATION.md), 0141).** The dropped record's files (C16) and its import's lawful-basis rows (C15; the survivor keeps its own and gains the other's, so both bases stay: CINT-SEC-2) follow the survivor, the custom values fill the survivor's gaps only for fields that still exist (C9b), and the survivor keeps its company, its own free text included, and takes the other's only when it names none or the same one (C11, CINT-W-1; the tombstone keeps none, so an auto-company only it named goes, and the merge audits its id, CINT-W-4). Files stay `crm.files` (Admin) whoever merges: the answer and the audit row carry no file count, and Sales gets no files (C16-Q3). Since the owner's decisions below, a merge where either record holds a file is an Admin's.
+
+**The owner's decisions of 2026-11-13 (C-int, [C-LAST-INTEGRATION.md](as-built/C-LAST-INTEGRATION.md) section 10, 0141).** They answer C10b's first two questions and the integration's two file questions; C10b's third (a Sales confirm of a phone match costs a reveal slot) was not answered and stays as built. (1) **A Sales reveal shows the main e-mail and the main phone only**; an Admin's is unchanged. Who sees every channel is the holder of `crm.erase` (Admin), the person who also removes one: the reveal reads ciphertext through `public.crm_contact_reveal_channels` (the service role's door, the actor checked live, every channel only for `app.crm_eraser_ok`), and the Worker drops a non-primary row again (`seesEveryContactChannel`). The contact page and its GET and PATCH answers list Sales the primaries only, so the screen offers no reveal it cannot answer; the reveal still claims its `pii-reveal` slot and writes its audit row first (`scope: main`). The main one is what a Sales reveal shows, so choosing it (naming a primary, or adding one marked primary) is an Admin's in both layers (the PATCH route's 403, 0141's restated `crm_edit_contact_channels`). **Sales still adds** a detail: the screen checks neither duplicates nor the ceiling against its list (the door does both from blind indexes and counts), so adding needs no channel Sales cannot see; what Sales adds is kept and becomes the main one only when the contact had none of that kind, and the card says so. Every kind a contact holds keeps a main one: since the C-int review (CINT2-SEC-1) a lead's erasure that takes back the main copy makes the oldest left of that kind the main one, as the editor and the merge do, and a new lead for a contact copies the main e-mail and phone only. (2) **Removing a detail stays Admin's** (C10B-SEC-2), confirmed by pgTAP `crm_owner_decisions`. (3) **A merge where either record holds a file needs an Admin** (`crm.files`), in both layers and before any reveal slot is claimed or anything moves: the route counts the two records' files as the service role for a role without `crm.files`, after the merge limit and its own reads of both people (so each such question costs a merge slot and needs two people the caller can see; C-int review, CINT2-SEC-2), and answers a 403 naming `crm.files` ("ask an Admin"), and 0141's merge refuses it with both rows locked (`app.crm_files_actor_ok`). This tells a Sales user that the person has files: accepted. With such merges an Admin's, a survivor past 20 files after a merge is the Admin's call: allowed. Where else a Sales token could meet a non-primary channel, and why each stays: C-LAST-INTEGRATION.md section 10.
+
 ## 11. UI contract for the UI architect
 
 **General**
@@ -681,7 +694,7 @@ alter type public.app_role add value if not exists 'sales';
      - Leads (linked; New lead).
      - Score ("Rules live in CRM settings").
      - Data card: "Added {date} · last activity {ago} · kept until {date} unless there is new activity".
-   - **No** Consent card and **no** Files card (LATER).
+   - **No** Consent card (LATER). The Files card (crm.files) came with C16 ([as-built/C16.md](as-built/C16.md)).
 7. **Add contact drawer.** Name\*; Title; E-mail; Phone or WhatsApp; Company (typeahead, or free text); Stage (Lead); Owner (me); Language (English); City (no default — the mockup's hard-coded 'Jeddah' is dropped); Source (Manual); Tags. Validation: "Give them a name"; a duplicate e-mail shows "Someone with this e-mail already exists" with an Open link. **Consent toggles are not shown** (LATER).
 8. **Erase dialog** (Admin).
    - Contact picker (CRM lookup).
@@ -703,7 +716,7 @@ alter type public.app_role add value if not exists 'sales';
     - Contact stages: the four, read-only, with the mockup's descriptions.
     - Custom fields: up to 12 rows of key, label, type; a warning that renaming a key orphans stored values.
     - Response time and assignment: SLA hours; rule Manual, Round robin (pool) or Always to one person. The Notifications architect's "Assignment rule" and "Answer within" fields write here.
-    - Data & privacy: "Leads and contacts are kept {N} months after their last activity" (editable only by settings.general holders: 12, 18 or 24 months); "Erase a person's data" (crm.erase); the PDPL note "…Answer within 30 days."
+    - Data & privacy: "Leads are kept {N} months after they arrive, and contacts {N} months after their last activity" (C9b review: leads count from arrival, docs/retention.md) (editable only by settings.general holders: 12, 18 or 24 months); "Erase a person's data" (crm.erase); the PDPL note "…Answer within 30 days."
     - The Email sending, WhatsApp Business and Sending rules cards are **not shown** (LATER).
 
 **Sidebar badges** are server-rendered in AdminLayout on each Tier C render, gated by capability: Leads = initial-stage, non-spam count; Tasks = **my** overdue count. No polling.
@@ -724,14 +737,14 @@ alter type public.app_role add value if not exists 'sales';
   - Merge must keep both consent histories.
 - **Suppressions:** `crm_suppressions(kind, value_hmac, reason, at)` survives erasure (HMAC only) and is fed by unsubscribe, bounces, STOP and erasure-with-do-not-contact.
 - **Messaging settings:** `crm_messaging_settings` with its own capability (crm.messaging): sender name and address (defaulting to `site_profile.contact_email`), reply-to, signature {en, ar} with `{brand}`, WhatsApp number and display (defaulting to `site_profile`), business hours, away message {en, ar}, quiet hours, daily limit, unsubscribe footer {en, ar} (always on, locked). Provider secrets are Worker Secrets via astro:env only.
-- **Import CSV:** a capability `crm.import` (Admin) and `POST /api/admin/crm/contacts/import`.
+- **Import CSV:** a capability `crm.import` (Admin) and `POST /api/admin/crm/contacts/import`. *(Built by C15, held with C5 to C8: [as-built/C15.md](as-built/C15.md). The import is a batch of pieces of at most 50 rows, each parsed by the server, for the Free plan's CPU; a lawful basis per row; consent attestation per channel stays with the consent hooks above.)*
   - Server-side parse; at most 5000 rows and 2 MB; Zod per row; blind-index dedupe.
   - Per-channel consent attestation with evidence.
   - `claimPrivilegedOp` plus attempt and outcome audits with counts; `crm_import_batches`.
   - `source = 'import'` is already reserved.
 - **Export & audiences:** the export.csv lockdown extended to contacts and segments; hashing on the server for ad audiences; exports listed from `audit_log` rows.
 - **Reports:** `rollup_crm_daily` (leads per stage per day, won value, first response).
-- **Files:** a **private** bucket with byte sniffing and an audited download (the applications pattern). Never the public A5 media bucket.
+- **Files:** a **private** bucket with byte sniffing and an audited download (the applications pattern). Never the public A5 media bucket. Built in C16 (`crm.files`, `crm_contact_files`, the `crm-files` bucket; [as-built/C16.md](as-built/C16.md)).
 - **Future roles** (Marketer, Account manager): edit the per-capability helpers plus `ROLE_CAPS` and §5. Row-scoped Sales (only assigned leads) would be a policy change in `role_works_leads` callers.
 
 ## 13. Tests
@@ -1129,7 +1142,7 @@ Islands ContactsList, ContactDetail, AddContactDrawer and EraseDialog per UI con
 - Stage chips, filters and the Expiring-soon chip; the bulk bar has no export or delete.
 - Masked contact details with the audited reveal.
 - The timeline with the note composer ('Only your team sees notes.'); explicit Save on Details.
-- No Consent card, Files card, Import or Export.
+- No Consent card, Files card, Import or Export (the Files card came later, with C16).
 The sidebar Contacts item is gated on crm.contacts. Islands go into both size-limit lists.
 
 **Key files:**
@@ -1427,7 +1440,7 @@ After at least one release with no legacy writers, migration 0041 drops the sync
 - O9: Default assignment rule: Manual (recommended) or Round robin over a chosen pool once Sales users exist.
 - O10: Sidebar Tasks badge counts MY overdue tasks (recommended) rather than everyone's (mockup).
 - O11: Approve the seeded stages and tones: New/klein, Contacted/sky, Proposal sent/warn, Won/ok, Lost/gray. Also the tenant time zone Asia/Riyadh.
-- O12: Confirm the deferrals the client will notice: consent toggles and unsubscribe, Files, Import CSV, Export and Segments, Suggested reply and Send, Inbox. They need the LATER phase (channels, consent design, public opt-ins) to be honest under PDPL.
+- O12: Confirm the deferrals the client will notice: consent toggles and unsubscribe, Files (since built, in C16), Import CSV, Export and Segments, Suggested reply and Send, Inbox. They need the LATER phase (channels, consent design, public opt-ins) to be honest under PDPL.
 - O13: Invite the first Sales users after CRM-10 ships, with display names set so assignees are readable.
 
 ## Open questions
@@ -1457,7 +1470,7 @@ After at least one release with no legacy writers, migration 0041 drops the sync
 - Retention: 'Keep contacts for 2/3/5 years… flagged for review, not deleted silently' becomes one horizon of at most 24 months after the last activity, shown under 'Expiring soon' for 30 days, then deleted (PDPL; legal sign-off pending).
 - Consent toggles, 'Mark unsubscribed / Resubscribe', the Consent column and the Consent card are not built in the core. Consent belongs with the campaigns phase and the public form's versioned opt-ins; the existing checkbox is consent to reply, not marketing consent.
 - Lead detail 'Suggested reply', 'Send email' and the Inbox 'Send' are not built (no outbound channel). They become mailto and wa.me links after a reveal plus 'Log contact'.
-- Contact 'Files' card is not built. Files will later use a private bucket with audited downloads, never the public media bucket.
+- Contact 'Files' card: built in C16, after this list was written (a private bucket, uploads checked by their bytes, audited downloads, never the public media bucket; [as-built/C16.md](as-built/C16.md)).
 - Import CSV, Export, Segments, 'Add to campaign' and the campaign or segment links on Contacts are hidden (LATER phase).
 - Inbox, Campaigns, Automations, Templates, CRM reports, Export & audiences and the Get-connected banners are absent from the sidebar and from the CRM settings cards (Email sending, WhatsApp Business, Sending rules).
 - Tasks 'Send' becomes 'Open contact'. The due time is chosen (default 10:00) instead of fixed. All time arithmetic uses the tenant time zone (Asia/Riyadh) on the server, not the browser.

@@ -33,6 +33,7 @@ import {
   type ContactLead,
 } from '@/lib/crm/contactView';
 import ContactChannelsCard, { type RevealedValues } from './ContactChannelsCard';
+import ContactCompanyCard, { type CompanyChange } from './ContactCompanyCard';
 import ContactDetailsCard from './ContactDetailsCard';
 import ContactLeadsCard from './ContactLeadsCard';
 import ContactNotes from './ContactNotes';
@@ -40,6 +41,7 @@ import ContactTimeline, { type TimelineKind } from './ContactTimeline';
 import type { EraseContactDialogProps } from './EraseContactDialog';
 import type { NewLeadDrawerProps } from './NewLeadDrawer';
 import type { TasksCardProps } from '../tasks/TasksCard';
+import type { ContactFilesCardProps } from './ContactFilesCard';
 import type { TaskPerson } from '../tasks/shared';
 import { forgetOnLeave, useLazy, type ContactPerson, type ContactsPermissions } from './shared';
 
@@ -67,10 +69,17 @@ export interface ContactDetailProps extends ContactDetailInitial {
    * page is up, so the contact page's first load does not carry it.
    */
   tasks?: { owners: TaskPerson[] } | null | undefined;
+  /**
+   * (Admin v2 C16) For a crm.files holder: the Files card, drawn only then (a UX hint: the file
+   * routes refuse anyone else), loaded with import() once the page is up.
+   */
+  files?: boolean | undefined;
 }
 
 interface ContactAnswer {
   contact: ContactDetailRow;
+  /** (Admin v2 C11 review) The auto-company a company change removed, if any. */
+  removedCompany?: string | null;
   channels?: ChannelPresence[];
   leads?: ContactLead[];
   moreLeads?: boolean;
@@ -104,6 +113,7 @@ export default function ContactDetail(props: ContactDetailProps) {
   const [tagDraft, setTagDraft] = useState('');
   const [now, setNow] = useState(() => Date.parse(props.now));
   const [TasksCard, setTasksCard] = useState<ComponentType<TasksCardProps> | null>(null);
+  const [FilesCard, setFilesCard] = useState<ComponentType<ContactFilesCardProps> | null>(null);
   const [queue] = useState(() => new Serial(setBusy));
   const [timeline] = useState(() => new Latest());
   // The row as last drawn, for a queued write to read its version when it leaves.
@@ -219,15 +229,20 @@ export default function ContactDetail(props: ContactDetailProps) {
     body: Record<string, unknown>,
     versioned: boolean,
     after?: (answer: ContactAnswer) => void,
+    // (Admin v2 C11) A write to another of the contact's routes (its company), same rules.
+    send: (sent: Record<string, unknown>, signal: AbortSignal) => Promise<ContactAnswer> = (
+      sent,
+      signal,
+    ) =>
+      adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}`, {
+        method: 'PATCH',
+        body: sent,
+        signal,
+      }),
   ): Promise<boolean> {
     setMessage(null);
     return writeInTurn(queue, {
-      send: (signal) =>
-        adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}`, {
-          method: 'PATCH',
-          body: versioned ? { ...body, version: row.current.version } : body,
-          signal,
-        }),
+      send: (signal) => send(versioned ? { ...body, version: row.current.version } : body, signal),
       saved: (answer) => {
         show(answer.contact);
         if (answer.channels) setChannels(answer.channels);
@@ -284,6 +299,14 @@ export default function ContactDetail(props: ContactDetailProps) {
     if (!props.tasks) return;
     import('../tasks/TasksCard')
       .then((module) => setTasksCard(() => module.default))
+      .catch(() => undefined);
+  }, []);
+
+  // (Admin v2 C16) The Files card, for crm.files holders, loaded once the page is up.
+  useEffect(() => {
+    if (!props.files) return;
+    import('./ContactFilesCard')
+      .then((module) => setFilesCard(() => module.default))
       .catch(() => undefined);
   }, []);
 
@@ -455,6 +478,7 @@ export default function ContactDetail(props: ContactDetailProps) {
             revealed={revealed}
             onRevealed={setRevealed}
             busy={busy}
+            managesChannels={permissions.canErase}
             edit={editChannels}
           />
           <ContactDetailsCard
@@ -463,12 +487,34 @@ export default function ContactDetail(props: ContactDetailProps) {
             busy={busy}
             save={(patch: ContactPatch) => write(patch as Record<string, unknown>, true)}
           />
+          <ContactCompanyCard
+            contact={contact}
+            busy={busy}
+            change={async (change: CompanyChange) => {
+              let removed = false;
+              const saved = await write(
+                change as Record<string, unknown>,
+                true,
+                (answer) => {
+                  removed = typeof answer.removedCompany === 'string';
+                },
+                (sent, signal) =>
+                  adminFetch<ContactAnswer>(`/api/admin/crm/contacts/${props.contact.id}/company`, {
+                    method: 'POST',
+                    body: sent,
+                    signal,
+                  }),
+              );
+              return saved && removed ? 'removed' : saved;
+            }}
+          />
           <ContactLeadsCard
             leads={leads}
             more={moreLeads}
             stages={leadStages}
             contactId={contact.id}
             canAddLead={permissions.canAddLead}
+            confirmIsReveal={permissions.confirmIsReveal}
             hasChannel={channels.length > 0}
             onNewLead={newLead.open}
             onChecked={(said) => {
@@ -495,6 +541,17 @@ export default function ContactDetail(props: ContactDetailProps) {
               }}
             />
           )}
+          {props.files && FilesCard ? (
+            <FilesCard
+              contactId={contact.id}
+              people={peopleById}
+              onChanged={() => {
+                // A file added is the contact's activity (C16): "last activity" and "kept until"
+                // follow it.
+                void queue.run(() => readContact(true));
+              }}
+            />
+          ) : null}
           <section className="card" aria-labelledby={`${id}-score`}>
             <h2 id={`${id}-score`} className="card-title">
               Score
