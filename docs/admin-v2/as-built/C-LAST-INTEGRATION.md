@@ -112,25 +112,30 @@ door holds that lock while its key check waits on the contact row, so taking it 
 deadlock; taken first, an add in flight finishes and is moved, a later one finds the tombstone
 (P0002). The survivor may then hold more than 20 files; the add door refuses more until it is
 under the ceiling (the merge is not refused for files: a Sales merge must not learn whether a
-person has files). Tests: `crm_last_integration` #11, #12 (moved, paths kept), #18 (an add to
+person has files). Tests: `crm_last_integration` #19, #20 (moved, paths kept), #29 (an add to
 the tombstone is P0002); `crmLastIntegrationSql.spec` (the lock before `for update`, the follow
 after the tombstone, no file count in the answer or the audit row).
 
 ### (c) Company, custom values, import rows
 
-- **C12 x C11.** The survivor keeps its company and takes the other's when it has none
-  (`company_id = coalesce(k.company_id, d.company_id)`; C11's trigger then writes the company's
-  name); the tombstone keeps none (`company_id = null`), so C11's orphan trigger removes an
-  auto-company only the merged record named. Tests: #14 (taken), #15 (tombstone none), #20
-  (kept), #21 (Quill Works, the auto-company, gone; the person's companies stay).
+- **C12 x C11.** The survivor keeps its company, and takes the other's linked company only
+  when it names no company or its free text names that same company (by C5's name key; C11's
+  trigger then writes the company's name). Its own free text is never replaced (the review's
+  CINT-W-1 / XS-1, section 9: the first build took the other's link whenever the survivor had
+  none, and C11's trigger then overwrote the survivor's typed company). The tombstone keeps
+  none (`company_id = null`), so C11's orphan trigger removes an auto-company only the merged
+  record named, and the merge writes a second audit row, `crm.contact.merge.company_removed`,
+  naming its id (CINT-W-4 / XS-5). Tests: #25 (taken), #26 (tombstone none), #31 (kept), #32
+  (Quill Works, the auto-company, gone; the person's companies stay), #34 to #37.
 - **C12 x C9b.** Survivor wins per key, the other fills gaps, and only for a field CRM settings
   still defines (a planted value of a removed field is never carried: without the filter the
-  value trigger refuses the whole merge, 23514). Test: #13.
-- **C12 x C15.** The tombstone's lawful-basis row follows the survivor when the survivor has
-  none (`crm_contact_imports` is one row per contact), so an open import's dedupe still names
-  the row ("repeated in the file, of row 7"); when the survivor has its own, it keeps it and the
-  other's goes with the tombstone. Tests: #16, #17 (`crm_import_rows` answers
-  `[{"of": 7, "row": 40}]`), #22.
+  value trigger refuses the whole merge, 23514). Test: #24.
+- **C12 x C15.** The tombstone's lawful-basis rows follow the survivor, so an open import's
+  dedupe still names the row ("repeated in the file, of row 7"). Since the review (CINT-SEC-2 /
+  XS-2, section 9) the survivor keeps both records' rows: 0141 drops C15's one-row-per-contact
+  key (`crm_contact_imports_one`) and indexes the contact instead; the first build kept only the
+  survivor's own row and the nightly purge deleted the other's. Tests: #27, #28
+  (`crm_import_rows` answers `[{"of": 7, "row": 40}]`), #33, #42.
 
 ### (d) Erasure and retention across the slices
 
@@ -138,11 +143,13 @@ after the tombstone, no file count in the answer or the audit row).
 (C15) and the values (C9b) go with the contact by cascade, and C11's learnt domain goes with the
 last channel carrying it (C11-SEC-5). The Worker's erasure keeps C16's order (the door first,
 the objects after) and its preview counts what C16 counts (the person's and the tombstones'
-files; after (b) they are the survivor's). Test: #28 to #30 (a merged survivor erased: no file
+files; after (b) they are the survivor's). Test: #46 to #48 (a merged survivor erased: no file
 row, basis row or contact left; the company forgets the domain its moved e-mail carried).
-Retention: 0141 restates C12's `app.purge_crm` with three `-- C-int` lines: a file or a basis
-row that reached a tombstone follows it before the tombstone goes, as C12 already does for leads
-and tasks (#24 to #27). Companies follow C11's orphan trigger on the purge's deletes; import
+Retention: 0141 restates C12's `app.purge_crm` with `-- C-int` lines: a file or a basis row
+that reached a tombstone follows it before the tombstone goes, by two set-based updates, as C12
+already does for leads and tasks (#38 to #42). The first build called the follow per tombstone,
+which raised for a tombstone erased mid-run and held one advisory lock per tombstone to the end
+of the night's transaction (CINT-SEC-1 / XS-6, section 9; #43 to #45). Companies follow C11's orphan trigger on the purge's deletes; import
 batches are kept (C15: counts only, no purge yet), unchanged.
 
 ### (e) Sales and files (C16-Q3)
@@ -198,6 +205,12 @@ EXC-013 on this branch and on main; no pre-existing row was touched.
 
 ## 5. Owner questions
 
+- **CI gate B (`npm run size`) is expected red on this branch** until the owner decides the
+  450 KB tripwire (CINT-W-2): the PR must say so. Raise it with a CLAUDE.md §2 amendment, or
+  cut lazy-chunk weight? Never raised here.
+- **Moving files on a merge** (register L-7 note e, L-9): a Sales user can merge a record that
+  holds files without knowing it. Keep, or have such a merge need an Admin (which would tell a
+  Sales user the person has files)?
 - **Files past the ceiling after a merge:** a survivor may hold more than 20 files (no
   refusal, so a Sales merge reveals nothing about files). Acceptable, or refuse such a merge
   (it would tell a Sales user the person has files)?
@@ -212,14 +225,16 @@ EXC-013 on this branch and on main; no pre-existing row was touched.
 
 ## 6. Tests
 
-- pgTAP `supabase/tests/crm_last_integration.test.sql` (32): Sales across the slices (1 to 9),
-  the merge's carry (10 to 22), retention (23 to 27), erasure (28 to 30), the follow (31, 32).
+- pgTAP `supabase/tests/crm_last_integration.test.sql` (50 since the review; the numbers in
+  section 3 are the review's): Sales across the slices (1 to 17), the merge's carry (18 to 37),
+  retention (38 to 45), erasure (46 to 48), the follow (49, 50). The red runs below were made
+  on the first build's 32.
   Red: the suite against a `git archive` copy with 0141 removed aborts at the first merge
   (23514, the planted value); with 0141's lines taken out one group at a time
   (`scratchpad/cint_tools/mut0141.py`): the custom filter (the merge aborts, 23514), the company
   taken (#14), the tombstone's company cleared (#15, #21), the follow in the merge (#11, #12,
   #16, #17, #22), the follow in the purge (#26).
-- vitest `tests/lib/crmLastIntegrationSql.spec.ts` (5): the two restatements equal C12's copies
+- vitest `tests/lib/crmLastIntegrationSql.spec.ts` (5; 9 since the review): the two restatements equal C12's copies
   plus the marked lines; the lock order; no file count; the follow's shape. Red: without 0141
   the file is missing and every case fails.
 - The flipped suites and rows of section 2.
@@ -262,3 +277,43 @@ fail, with the company line taken out 1 fails; the copy with 0141 as built passe
 Sales' sidebar and screens change with C10b (Contacts and Tasks) and now with the Companies tab
 and the Merge duplicates button: re-make the Sales pictures with the hand-run "Admin visual
 baselines" workflow after the merge.
+
+## 9. The review (2026-11-13)
+
+Sixteen findings (security, correctness and cross-slice lenses), each checked against the code
+before it was touched; none was refuted by a skeptic, and none on re-check. Red/green: the new
+pgTAP and spec run against a `git archive` copy of the reviewed head (f410dd75) under
+`scratchpad/cint_fix_mut`, its `node_modules` junction removed before the copy was deleted.
+
+| Finding | Verdict | What changed | Guarded by (red on f410dd75) |
+|---|---|---|---|
+| CINT-SEC-1, XS-6 (the purge's follow can abort the night's run; a lock per tombstone) | Real (the raise and the unbounded locks both confirmed by reading; the race reproduced in PGlite by a test trigger that erases the other pair's survivor while the run moves the first file) | `app.purge_crm` moves files and basis rows with two set-based updates, as C12 moves leads and tasks; no follow, no lock, nothing that raises. The merge keeps the follow and its lock | pgTAP #43 to #45 (red: the run raised P0002, rolled back, `2 0 0`); spec "never the raising follow" |
+| CINT-SEC-2, XS-2 (a merge destroyed the dropped record's lawful-basis row; the register was not told) | Real | `crm_contact_imports` keeps every basis row: 0141 drops `crm_contact_imports_one`, adds `crm_contact_imports_contact_idx`; the follow moves every row. Register L-7 notes (e), (f), (g), with notes in L-8 and L-9: files move on a merge (Sales included, no file count), the bases kept and not linked to each value, the inquiry-plus-import case, the removed auto-company; questions for the lawyer | pgTAP #33, #42 (red: `b002:9` left on the tombstone, then deleted); spec "keeps every lawful-basis row"; postcondition |
+| CINT-SEC-3, XS-3 (no database-layer row for Sales' company writes or a stale Sales token) | Real (a test gap; the behaviour was right) | Sales rows in `crm_last_integration` section 1: update, contact link, unlink (naming the removed auto-company), create, delete, a direct insert naming another tenant's person (the owner rule's 23514, the same answer as an inactive colleague's), and demoted, switched-off and locked Sales tokens reading no company, dismissal or basis and refused by every door, the merge door included | pgTAP #10 to #17. Coverage, so green on f410dd75 too; proven to bite by mutation: Sales out of `app.role_crm_contacts` fails #10 to #14; without the live policies on companies and basis rows the demoted token reads 4 companies, changes Palm Studio and deletes 4 rows (#15) |
+| CINT-W-1, XS-1 (a merge replaced the survivor's own free-text company) | Real (the reviewer's PGlite probe reproduced it) | The merge takes the other's link only when the survivor names no company or names that same company (C5's name key) | pgTAP #34 to #36 (red: `Xenon Trading` over `Foo Typed Ltd`); spec |
+| CINT-W-2 (the admin bundle sum over the 450 KB tripwire) | Real, not fixed: an open owner question | Not raised, its glob unchanged; section 5 says the PR must state CI gate B is expected red | n/a |
+| CINT-W-3, XS-4 (a removal racing a merge left a row whose object was gone) | Real (a race: traced, and reproduced as its end state) | 0141 restates `public.crm_file_remove` (C16's copy plus `-- C-int` lines): when the named record's own row is gone, it removes that one file from the survivor of the record named, if the record is a merge tombstone. The route is unchanged | pgTAP #21 to #23 (red: P0002 and the row left); spec "restates the file removal" |
+| CINT-W-4, XS-5 (a merge that removed an auto-company left no audit of it) | Real | The merge captures the other's company after the tombstone lets it go and, when C11's orphan rule took it, writes a second audit row `crm.contact.merge.company_removed` (keep, drop, removed_company: ids only) in its own transaction, after the merge row (C12's audit line is kept byte for byte, so the restatement check still holds). `auditLabels.ts` has its words | pgTAP #37 (red: no row); spec; `auditLabels.spec` (red: the action had no words) |
+| CINT-W-5 (CLAUDE.md, README and architecture.md still said "Sales none unless C10b's design gives it") | Real | "Sales none: C16-Q3, decided at the C-int integration" in all three | docs only |
+
+Not changed, recorded: the import's dedupe (`crm_import_rows`) reads one basis row of the open
+batch for a contact; a merged record holding two rows of one batch answers either (both are
+true). The merge does not move more than the files a survivor can show (the 20-file ceiling
+stays the add door's).
+
+Gates, as run on the review's head:
+
+- `astro check`: 0 errors, 0 warnings (80 hints); `tsc --noEmit`: clean.
+- `prettier --check .`: clean.
+- vitest, the whole suite with `--testTimeout=60000`: 475 files passed, 1 skipped; 12 195
+  tests passed, 21 skipped; nothing to re-run. After this note: the 83 specs that read the
+  docs, with `crmLastIntegrationSql` and `auditLabels`: 4 793 passed.
+- `check-migrations.mjs origin/main`: ok (0131, 0133 to 0141 over 0130).
+- The PGlite replay of every migration with all 99 suites: 97 pass; `audit_chain` #12 and
+  `grants_app_schema` section 8 fail, as on main. `crm_last_integration` 50 of 50.
+- `npm run build` with the CI dummy environment: ok. `node scripts/admin-bundle.mjs`: the chunk
+  plan holds; the contacts screens 177.2 KB, AdminImportContacts 163.8 KB, AdminCrmSettings
+  235.3 KB, the heaviest screen 235.3 KB (every screen within 300 KB).
+- `npm run size`: the public routes 26.85 KB; the admin sum 485.55 KB, over the 450 KB
+  tripwire, unchanged by the review (CINT-W-2). Not raised, its glob unchanged.
+- `contrast-audit.mjs`: not run (no admin CSS changed).

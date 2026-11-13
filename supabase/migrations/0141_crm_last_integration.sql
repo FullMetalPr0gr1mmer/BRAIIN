@@ -10,31 +10,52 @@
 --
 -- WHAT IT DOES (each new line in a restated function is marked `-- C-int`; nothing else in
 -- it changes)
+--   0. (C-int review, CINT-SEC-2 / XS-2) crm_contact_imports holds every lawful-basis row a
+--      contact carries: C15's one-row-per-contact key goes (an index on the contact stays for
+--      the cascade and the lookups), so a merge of two imported records keeps BOTH bases, and
+--      an access request or a withdrawn consent can still find the basis each moved value
+--      came under. Before, the dropped record's row stayed on the tombstone and the nightly
+--      purge deleted it. The table is new with C15 (held, never in production): no row exists.
 --   1. app.crm_tombstone_follow(p_tenant, p_tombstone): a pinned definer. The files (C16) and
---      the import's lawful-basis row (C15) of a merge tombstone move to the record it was
+--      the import's lawful-basis rows (C15) of a merge tombstone move to the record it was
 --      merged into. The service role holds no UPDATE on either table (a file row and a basis
 --      row are immutable to every API role), so the move is this one narrow function, which
---      moves rows only off a record that IS a tombstone, and only to its own survivor. The
---      survivor keeps its own basis row when it has one (one row per contact, C15's key); the
---      other's then goes with the tombstone. Object paths keep the old contact's id: a path is
---      a name, never read back as a link (C16's departure 3).
+--      moves rows only off a record that IS a tombstone, and only to its own survivor. Object
+--      paths keep the old contact's id: a path is a name, never read back as a link (C16's
+--      departure 3). Only the merge calls it.
 --   2. public.crm_merge_contacts restated (the merge's copy plus `-- C-int` lines): C16's file
 --      lock on the record going away, taken before either row is locked; custom values merged
 --      survivor-first and only for a field CRM settings still defines (C9b); the survivor keeps
---      its company and takes the other's when it has none, and the tombstone keeps none, so an
---      auto-company it alone named goes by C11's orphan rule; then app.crm_tombstone_follow.
+--      its company and takes the other's only when it names none or names that same company
+--      (CINT-W-1 / XS-1: a survivor's own free-text company is never replaced), and the
+--      tombstone keeps none, so an auto-company it alone named goes by C11's orphan rule, and
+--      a second audit row, crm.contact.merge.company_removed, names its id (CINT-W-4 / XS-5,
+--      as C11-SEC-4 audits an unlink's); then app.crm_tombstone_follow.
 --      Who may merge is unchanged: a live crm.contacts holder (Admin, and Sales since C10b, as
 --      crm.md CRM-12 designs it); the Worker claims a Sales user's reveal slot first
 --      (C12-SEC-R2-1). The answer and the audit row keep their counts, with no count of files
 --      (crm.files is Admin's; a Sales merge must not learn whether a person has files).
 --   3. app.purge_crm restated (the merge's copy plus `-- C-int` lines): a file or a basis row
---      on a tombstone follows it before the tombstone goes, as C12 already moves leads and
---      tasks.
+--      on a tombstone follows it before the tombstone goes, by two set-based updates, as C12
+--      already moves leads and tasks (CINT-SEC-1 / XS-6: never the follow, which raises for a
+--      tombstone erased mid-run and takes a lock per tombstone, held to the end of the
+--      nightly run).
+--   4. public.crm_file_remove restated (C16's copy plus `-- C-int` lines): a removal named on
+--      a record that a merge has just emptied finds the file on the survivor (CINT-W-3 /
+--      XS-4: the route removes the object first, so a P0002 there left a row whose object
+--      was gone).
 --
 -- Production behaviour: none until the six slices and the Worker deploy. Nothing calls the
 -- merge before C12's route ships and no tombstone exists before the first merge, so the
 -- purge's new lines find nothing. Rule 5 holds trivially.
 -- ─────────────────────────────────────────────────────────────────────────────────────────
+
+-- ═══ 0. Every lawful-basis row a contact carries ══════════════════════════════════════════
+-- A busy table fails the push instead of queueing behind it (0041's reason).
+set local lock_timeout = '5s';
+alter table public.crm_contact_imports drop constraint crm_contact_imports_one;
+-- The contact's cascade and its lookups (the import's dedupe, the follow) keep an index.
+create index crm_contact_imports_contact_idx on public.crm_contact_imports (tenant_id, contact_id);
 
 -- ═══ 1. A tombstone's files and lawful basis follow its survivor ══════════════════════════
 create or replace function app.crm_tombstone_follow(p_tenant uuid, p_tombstone uuid) returns jsonb
@@ -54,10 +75,9 @@ begin
   update public.crm_contact_files f set contact_id = v_keep
    where f.tenant_id = p_tenant and f.contact_id = p_tombstone;
   get diagnostics v_files = row_count;
+  -- Every basis row: the survivor keeps its own and gains the other's (section 0).
   update public.crm_contact_imports i set contact_id = v_keep
-   where i.tenant_id = p_tenant and i.contact_id = p_tombstone
-     and not exists (select 1 from public.crm_contact_imports o
-                      where o.tenant_id = p_tenant and o.contact_id = v_keep);
+   where i.tenant_id = p_tenant and i.contact_id = p_tombstone;
   get diagnostics v_imports = row_count;
   return jsonb_build_object('files', v_files, 'imports', v_imports);
 end $$;
@@ -90,6 +110,7 @@ declare
   v_tasks int;
   v_events int;
   v_version int;
+  v_removed_company uuid;  -- C-int
 begin
   if p_tenant is null or p_keep is null or p_drop is null or p_keep_version is null
      or p_drop_version is null or p_actor is null then
@@ -199,8 +220,16 @@ begin
   update public.crm_contacts c
      set title = coalesce(k.title, d.title),
          company_name = coalesce(k.company_name, d.company_name),
-         -- (C12 x C11) The survivor keeps its company; it takes the other's when it has none.  -- C-int
-         company_id = coalesce(k.company_id, d.company_id),  -- C-int
+         -- (C12 x C11) The survivor keeps its company. It takes the other's linked one only  -- C-int
+         -- when it names no company, or its free text names that same company (CINT-W-1,  -- C-int
+         -- XS-1): a person's own text is never replaced by C11's trigger with another name.  -- C-int
+         company_id = case when k.company_id is not null then k.company_id  -- C-int
+                           when k.company_name is null  -- C-int
+                             or app.crm_name_key(k.company_name) = (select co.name_key  -- C-int
+                                                                       from public.crm_companies co  -- C-int
+                                                                      where co.tenant_id = p_tenant  -- C-int
+                                                                        and co.id = d.company_id)  -- C-int
+                           then d.company_id end,  -- C-int
          city = coalesce(k.city, d.city),
          country = coalesce(k.country, d.country),
          owner_id = v_owner,
@@ -324,7 +353,13 @@ begin
          merged_into = p_keep, merged_at = now()
    where c.tenant_id = p_tenant and c.id = p_drop;
   delete from public.crm_contact_events e where e.tenant_id = p_tenant and e.contact_id = p_drop;
-  -- (C12 x C16, C12 x C15) Its files and its import's lawful-basis row follow the survivor.  -- C-int
+  -- (C12 x C11, CINT-W-4 / XS-5) The company the other record named, when C11's orphan rule  -- C-int
+  -- took it with the tombstone's company just now (the survivor did not take it).  -- C-int
+  if d.company_id is not null and not exists (select 1 from public.crm_companies co  -- C-int
+                                               where co.tenant_id = p_tenant and co.id = d.company_id) then  -- C-int
+    v_removed_company := d.company_id;  -- C-int
+  end if;  -- C-int
+  -- (C12 x C16, C12 x C15) Its files and its import's lawful-basis rows follow the survivor.  -- C-int
   perform app.crm_tombstone_follow(p_tenant, p_drop);  -- C-int
 
   -- 10. The audit row, in this transaction (hash-chained by audit_log's own triggers).
@@ -334,6 +369,13 @@ begin
           jsonb_build_object('keep', p_keep, 'drop', p_drop, 'leads', v_leads,
                              'channels', v_channels, 'duplicates', v_duplicates,
                              'notes', v_note_count, 'tasks', v_tasks));
+  -- (CINT-W-4 / XS-5) As C11 audits an unlink that removes an auto-company (C11-SEC-4): its id  -- C-int
+  -- only, in this transaction, so a merge that removed one cannot leave without saying so.  -- C-int
+  if v_removed_company is not null then  -- C-int
+    insert into public.audit_log (tenant_id, actor_id, actor_role, action, entity_type, entity_id, detail)  -- C-int
+    values (p_tenant, p_actor, v_role, 'crm.contact.merge.company_removed', 'contact', p_keep::text,  -- C-int
+            jsonb_build_object('keep', p_keep, 'drop', p_drop, 'removed_company', v_removed_company));  -- C-int
+  end if;  -- C-int
 
   select c.version into v_version from public.crm_contacts c
    where c.tenant_id = p_tenant and c.id = p_keep;
@@ -362,10 +404,17 @@ begin
       from public.crm_contacts c  -- C12
      where c.tenant_id = t.id and c.merged_into is not null  -- C12
        and k.tenant_id = c.tenant_id and k.contact_id = c.id;  -- C12
-    -- (C12 x C16, C12 x C15) Files and import rows on a tombstone follow it too.  -- C-int
-    perform app.crm_tombstone_follow(c.tenant_id, c.id)  -- C-int
-       from public.crm_contacts c  -- C-int
-      where c.tenant_id = t.id and c.merged_into is not null;  -- C-int
+    -- (C12 x C16, C12 x C15) Files and basis rows on a tombstone follow it too, set-based as  -- C-int
+    -- the two above: no per-tombstone lock and nothing that raises for a tombstone an erasure  -- C-int
+    -- takes mid-run, so one record never stops the night's retention (CINT-SEC-1 / XS-6).  -- C-int
+    update public.crm_contact_files f set contact_id = c.merged_into  -- C-int
+      from public.crm_contacts c  -- C-int
+     where c.tenant_id = t.id and c.merged_into is not null  -- C-int
+       and f.tenant_id = c.tenant_id and f.contact_id = c.id;  -- C-int
+    update public.crm_contact_imports i set contact_id = c.merged_into  -- C-int
+      from public.crm_contacts c  -- C-int
+     where c.tenant_id = t.id and c.merged_into is not null  -- C-int
+       and i.tenant_id = c.tenant_id and i.contact_id = c.id;  -- C-int
     delete from public.crm_contacts c where c.tenant_id = t.id and c.merged_into is not null;  -- C12
     get diagnostics n = row_count;  -- C12
     removed := removed + n;  -- C12
@@ -386,7 +435,44 @@ begin
 end $$;
 revoke all on function app.purge_crm() from public, anon, authenticated, service_role;
 
--- ═══ 4. Postconditions ════════════════════════════════════════════════════════════════════
+-- ═══ 4. A file removal follows a merge (C16's copy plus the lines marked `-- C-int`) ══════
+-- The route reads the file's path on the record it was asked about, removes the object, then
+-- calls this door. A merge committed in between has moved the row to the survivor: the door
+-- then removes it there (only the survivor of the record named, and only that file), so no
+-- row is left naming an object that is gone (CINT-W-3 / XS-4).
+create or replace function public.crm_file_remove(p_tenant uuid, p_contact uuid, p_file uuid,
+                                                  p_actor uuid)
+  returns text
+  language plpgsql volatile security invoker set search_path = '' as $$
+declare
+  v_path text;
+begin
+  if p_tenant is null or p_contact is null or p_file is null or p_actor is null then
+    raise exception using errcode = '22023', message = 'crm_file_remove: a tenant, a contact, a file and an actor are required';
+  end if;
+  if not app.crm_files_actor_ok(p_tenant, p_actor) then
+    raise exception using errcode = '42501', message = 'crm_file_remove: this person may not remove files';
+  end if;
+  delete from public.crm_contact_files f
+   where f.tenant_id = p_tenant and f.contact_id = p_contact and f.id = p_file
+  returning f.object_path into v_path;
+  if v_path is null then  -- C-int
+    delete from public.crm_contact_files f  -- C-int
+     where f.tenant_id = p_tenant and f.id = p_file  -- C-int
+       and f.contact_id = (select c.merged_into from public.crm_contacts c  -- C-int
+                            where c.tenant_id = p_tenant and c.id = p_contact  -- C-int
+                              and c.merged_into is not null)  -- C-int
+    returning f.object_path into v_path;  -- C-int
+  end if;  -- C-int
+  if v_path is null then
+    raise exception using errcode = 'P0002', message = 'crm_file_remove: no such file';
+  end if;
+  return v_path;
+end $$;
+revoke all on function public.crm_file_remove(uuid, uuid, uuid, uuid) from public, anon, authenticated, service_role;
+grant execute on function public.crm_file_remove(uuid, uuid, uuid, uuid) to service_role;
+
+-- ═══ 5. Postconditions ════════════════════════════════════════════════════════════════════
 do $$
 declare
   v_fn text;
@@ -421,7 +507,8 @@ begin
   if not exists (select 1 from pg_proc where oid = v_fn::regprocedure
                   and prosrc like '%app.crm_tombstone_follow(p_tenant, p_drop)%'
                   and prosrc like '%''crm-files:'' || p_drop::text%'
-                  and prosrc like '%company_id = coalesce(k.company_id, d.company_id)%'
+                  and prosrc like '%when k.company_id is not null then k.company_id%'
+                  and prosrc like '%''crm.contact.merge.company_removed''%'
                   and prosrc like '%jsonb_array_elements(s.custom_fields)%') then
     raise exception 'C-int: the merge lacks a line of the integration';
   end if;
@@ -429,13 +516,34 @@ begin
   if not exists (select 1 from pg_proc f join pg_roles o on o.oid = f.proowner
                   where f.oid = 'app.purge_crm()'::regprocedure and f.prosecdef
                     and (o.rolbypassrls or o.rolsuper) and f.proconfig = array['search_path=""']
-                    and f.prosrc like '%app.crm_tombstone_follow(c.tenant_id, c.id)%') then
-    raise exception 'C-int: app.purge_crm must be a pinned definer that follows tombstones';
+                    and f.prosrc like '%update public.crm_contact_files f set contact_id = c.merged_into%'
+                    and f.prosrc like '%update public.crm_contact_imports i set contact_id = c.merged_into%'
+                    and f.prosrc not like '%crm_tombstone_follow%'
+                    and f.prosrc not like '%pg_advisory%') then
+    raise exception 'C-int: app.purge_crm must be a pinned definer that follows tombstones set-based';
   end if;
   if has_function_privilege('anon', 'app.purge_crm()', 'execute')
      or has_function_privilege('authenticated', 'app.purge_crm()', 'execute')
      or has_function_privilege('service_role', 'app.purge_crm()', 'execute') then
     raise exception 'C-int: no API role may execute app.purge_crm';
+  end if;
+  -- The file removal: still INVOKER, pinned, the service role's alone, and it follows a merge.
+  v_fn := 'public.crm_file_remove(uuid, uuid, uuid, uuid)';
+  if exists (select 1 from pg_proc where oid = v_fn::regprocedure and prosecdef)
+     or not exists (select 1 from pg_proc where oid = v_fn::regprocedure
+                     and proconfig = array['search_path=""'] and prosrc like '%c.merged_into is not null%')
+     or has_function_privilege('anon', v_fn, 'execute')
+     or has_function_privilege('authenticated', v_fn, 'execute')
+     or not has_function_privilege('service_role', v_fn, 'execute')
+     or exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                 where p.oid = v_fn::regprocedure and a.grantee = 0) then
+    raise exception 'C-int: % must stay SECURITY INVOKER, pinned, the service role''s alone, and follow a merge', v_fn;
+  end if;
+  -- Every basis row a contact carries: no one-per-contact key, an index on the contact.
+  if exists (select 1 from pg_constraint where conname = 'crm_contact_imports_one'
+                and conrelid = 'public.crm_contact_imports'::regclass)
+     or to_regclass('public.crm_contact_imports_contact_idx') is null then
+    raise exception 'C-int: crm_contact_imports must keep every basis row, indexed by contact';
   end if;
   -- The tables keep their grants: no API role updates a file row or a basis row.
   if has_any_column_privilege('service_role', 'public.crm_contact_files', 'update')

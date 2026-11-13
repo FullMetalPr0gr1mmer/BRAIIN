@@ -332,6 +332,13 @@ const EXACT: Readonly<Record<string, Label>> = {
   // Merging duplicates (Admin v2 C12): ids and counts only. The merge's row is written by the
   // database, in the merge's own transaction (0138).
   'crm.contact.merge': { kind: 'leads', verb: 'Merged another record into', noun: 'a contact' },
+  // The company that merge removed: an automatic one only the merged record named (C-int
+  // review, CINT-W-4). Its id only, in the merge's own transaction.
+  'crm.contact.merge.company_removed': {
+    kind: 'leads',
+    verb: 'Merged a record whose unused company was removed into',
+    noun: 'a contact',
+  },
   'crm.contact.duplicate_dismiss': {
     kind: 'leads',
     verb: 'Said two records are different people, starting with',
