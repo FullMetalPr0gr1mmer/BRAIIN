@@ -147,7 +147,9 @@ select is(
      from pg_attribute a
     where a.attrelid = 'public.crm_settings'::regclass and a.attnum > 0 and not a.attisdropped
       and has_column_privilege('authenticated', 'public.crm_settings', a.attname::text, 'update')),
-  array['assignment_fixed_to', 'assignment_pool', 'assignment_rule', 'scoring', 'sla_hours'],
+  -- C9b: custom_fields (the contact fields' definitions) joined the configuration.
+  array['assignment_fixed_to', 'assignment_pool', 'assignment_rule', 'custom_fields', 'scoring',
+        'sla_hours'],
   'staff UPDATE on crm_settings: the configuration, never the time zone, the cursor or the stamps');
 select is(
   (select array_agg(a.attname::text order by a.attname)

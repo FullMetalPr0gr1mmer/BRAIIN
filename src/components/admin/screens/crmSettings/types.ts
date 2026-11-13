@@ -18,7 +18,23 @@ export interface CrmSettingsRow {
   scoring: Record<string, number>;
   slaHours: number;
   assignment: { rule: string; pool: string[]; fixedTo: string | null };
+  /** (C9b) The custom contact fields, in order. */
+  customFields: CustomField[];
   updatedAt: string | null;
+}
+
+/** (C9b) A custom contact field as crm_settings.custom_fields holds it. */
+export interface CustomField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'date';
+}
+
+/** (C9b) What the Data and privacy card states, and what the viewer may do there (UX only). */
+export interface PrivacyRow {
+  retentionMonths: number | null;
+  canErase: boolean;
+  canEditRetention: boolean;
 }
 
 export interface Person {
@@ -31,6 +47,7 @@ export interface CrmSettingsAnswer {
   settings: CrmSettingsRow;
   stages: StageRow[];
   people: Person[];
+  privacy: PrivacyRow;
 }
 
 /** A stage while it is being edited: a new one has no id yet, a local key for React only. */

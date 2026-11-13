@@ -3,7 +3,9 @@ import type { AuthContext } from '@/lib/auth/types';
 import { constraintOf } from '@/lib/admin/crud';
 import { InUseError, OptimisticLockError, ValidationError } from '@/lib/admin/errors';
 import { AuthorizationError } from '@/lib/authz/errors';
-import type { CrmSettingsSave, LeadStagesSave } from '@schemas/crm';
+import type { CrmSettingsSave, CustomFieldDefinition, LeadStagesSave } from '@schemas/crm';
+import { parseCustomFields } from './contactCustom';
+import { readRetentionMonths } from './contactPage';
 
 // CRM settings for leads (Admin v2 C9a, crm.md CRM-9): what the screen reads and the two
 // writes, shared by the routes (src/pages/api/admin/crm/settings.ts, stages.ts). Every read
@@ -14,8 +16,9 @@ import type { CrmSettingsSave, LeadStagesSave } from '@schemas/crm';
 // (0102, src/lib/admin/studioTimeZone.ts), and `crm_settings.timezone`, deprecated there, is the
 // contract's to drop (C14b), so nothing here names it.
 
+// One literal (no `+`): supabase-js reads the column list's type from it.
 export const SETTINGS_COLUMNS =
-  'version,scoring,sla_hours,assignment_rule,assignment_pool,assignment_fixed_to,updated_at';
+  'version,scoring,sla_hours,assignment_rule,assignment_pool,assignment_fixed_to,custom_fields,updated_at';
 export const STAGE_COLUMNS = 'id,key,label,label_ar,tone,kind,is_initial,sort_order,version';
 
 export interface CrmSettingsView {
@@ -23,7 +26,22 @@ export interface CrmSettingsView {
   scoring: Record<string, number>;
   slaHours: number;
   assignment: { rule: string; pool: string[]; fixedTo: string | null };
+  /** (C9b) The custom contact fields, in the order the screens show them. */
+  customFields: CustomFieldDefinition[];
   updatedAt: string | null;
+}
+
+/** (C9b) What the Data & privacy card says: the horizon, and what the viewer may do there. */
+export interface CrmPrivacyView {
+  /**
+   * Months leads are kept after they arrive and contacts after their last activity (one
+   * setting, two clocks: docs/retention.md), or null if unread.
+   */
+  retentionMonths: number | null;
+  /** UX only: the erasure routes check `crm.erase` again. */
+  canErase: boolean;
+  /** UX only: General settings checks `settings.general` again. */
+  canEditRetention: boolean;
 }
 
 export interface StageView {
@@ -68,6 +86,7 @@ export function settingsView(row: Record<string, unknown>): CrmSettingsView {
       pool,
       fixedTo: typeof row['assignment_fixed_to'] === 'string' ? row['assignment_fixed_to'] : null,
     },
+    customFields: parseCustomFields(row['custom_fields']),
     updatedAt: typeof row['updated_at'] === 'string' ? row['updated_at'] : null,
   };
 }
@@ -92,12 +111,20 @@ export function stagesView(
   }));
 }
 
-/** Everything the screen draws: the settings, the pipeline with its counts, the people. */
+/**
+ * Everything the screen draws: the settings, the pipeline with its counts, the people, and
+ * (C9b) the retention horizon the Data & privacy card states.
+ */
 export async function readCrmSettings(
   sb: SupabaseClient,
   auth: AuthContext,
-): Promise<{ settings: CrmSettingsView; stages: StageView[]; people: PersonView[] }> {
-  const [settings, stages, counts, people] = await Promise.all([
+): Promise<{
+  settings: CrmSettingsView;
+  stages: StageView[];
+  people: PersonView[];
+  retentionMonths: number | null;
+}> {
+  const [settings, stages, counts, people, retentionMonths] = await Promise.all([
     sb.from('crm_settings').select(SETTINGS_COLUMNS).eq('tenant_id', auth.tenantId).maybeSingle(),
     sb
       .from('lead_stages')
@@ -106,6 +133,7 @@ export async function readCrmSettings(
       .order('sort_order', { ascending: true }),
     sb.rpc('lead_stage_counts', { p_tenant: auth.tenantId }),
     sb.rpc('crm_people', { p_tenant: auth.tenantId }),
+    readRetentionMonths(sb, auth),
   ]);
   if (settings.error) throw new Error(`crm_settings: ${settings.error.message}`);
   if (stages.error) throw new Error(`lead_stages: ${stages.error.message}`);
@@ -121,6 +149,7 @@ export async function readCrmSettings(
       display_name: typeof p['display_name'] === 'string' ? p['display_name'] : null,
       role: typeof p['role'] === 'string' ? p['role'] : null,
     })),
+    retentionMonths,
   };
 }
 
@@ -145,6 +174,10 @@ export function settingsPatch(input: CrmSettingsSave): {
     values['assignment_fixed_to'] = input.assignment.fixedTo;
     fields.push('assignment');
   }
+  if (input.customFields) {
+    values['custom_fields'] = input.customFields;
+    fields.push('custom_fields');
+  }
   return { values, fields };
 }
 
@@ -162,7 +195,34 @@ const ASSIGNMENT_CONSTRAINTS: Record<string, { field: string; detail: string }> 
     field: 'fixedTo',
     detail: 'Choose an active member who works leads.',
   },
+  // C9b: the custom fields' rules (the C9b migration).
+  crm_settings_custom_field_type: {
+    field: 'customFields',
+    detail: 'A saved field keeps its type. Remove it and add a new field instead.',
+  },
+  crm_settings_custom_fields_ok: {
+    field: 'customFields',
+    detail: 'Up to 12 fields, each with a label, a type and its own key.',
+  },
 };
+
+/**
+ * (C9b) What a definitions save changes, in counts: the audit row records these, never a
+ * label or a key. Removed fields take every contact's value in them with them.
+ */
+export function customFieldsChange(
+  before: readonly CustomFieldDefinition[],
+  after: readonly CustomFieldDefinition[],
+): { fields: number; added: number; removed: number; renamed: number } {
+  const old = new Map(before.map((f) => [f.key, f]));
+  const kept = new Set(after.map((f) => f.key));
+  return {
+    fields: after.length,
+    added: after.filter((f) => !old.has(f.key)).length,
+    removed: before.filter((f) => !kept.has(f.key)).length,
+    renamed: after.filter((f) => old.has(f.key) && old.get(f.key)!.label !== f.label).length,
+  };
+}
 
 /** One card's save, at the version the screen read: the new settings, or a mapped refusal. */
 export async function saveCrmSettings(
@@ -184,6 +244,10 @@ export async function saveCrmSettings(
       if (known) throw new ValidationError(known.detail, known.field);
       throw new ValidationError('Those settings are not allowed.');
     }
+    // A deadlock with a contact's value write (the C9b value trigger reads the definitions FOR
+    // SHARE; removing a field then waits on that contact, C9B-COR-1): PostgreSQL aborted this
+    // side, nothing was saved, so it is a 409 like a moved version.
+    if (error.code === '40P01') throw new OptimisticLockError('crm_settings');
     throw new Error(`crm_settings update: ${error.message}`);
   }
   // No row: the version moved on (someone else saved). A caller who may not write it was

@@ -6,7 +6,7 @@ import { claimPrivilegedOp, MANUAL_LEAD_LIMITS } from '@/lib/admin/rateLimit';
 import { serviceClient } from '@/lib/supabase/server';
 import { tenantCountry } from '@/lib/crm/leadQuery';
 import { contactError, sealChannels } from '@/lib/crm/contacts';
-import { customFieldDefinitions, validateCustomValues } from '@/lib/crm/contactCustom';
+import { mergeCustom, readCustomFields, validateCustomValues } from '@/lib/crm/contactCustom';
 
 // Adding a contact by hand (Admin v2 C6, crm.md §9): `crm.contacts`, then a live recheck,
 // because the contact is written as the service role (no staff token inserts contacts or
@@ -26,7 +26,12 @@ export const POST = defineAdminRoute({
   handler: async ({ auth, sb, input, audit }) => {
     await liveRecheck(auth);
     await claimPrivilegedOp(auth, 'crm-contact-add', MANUAL_LEAD_LIMITS);
-    const custom = validateCustomValues(customFieldDefinitions(), input.custom ?? {});
+    // Custom values against the tenant's fields (C9b), read only when some are sent.
+    const sent = input.custom ?? {};
+    const custom =
+      Object.keys(sent).length > 0
+        ? mergeCustom({}, validateCustomValues(await readCustomFields(sb, auth), sent))
+        : {};
     const channels = await sealChannels(
       LEAD_PII_ENC_KEY,
       auth.tenantId,

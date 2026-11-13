@@ -586,6 +586,14 @@ export const DIALOGS_COVERED_ELSEWHERE: readonly CoveredElsewhere[] = [
     roles: ['admin'],
     why: 'opening it asks the erasure preview, which spends a slot of its own hourly limit, and its spec erases a contact of its own; Admin alone holds crm.erase',
   },
+  // Admin v2 C9b: the erasure's first step from CRM settings (find the person).
+  {
+    source: `${C}/crmSettings/EraseFinder.tsx`,
+    spec: 'tests/admin/crm-custom-fields.e2e.ts',
+    marker: `name: "Erase a person's data"`,
+    roles: ['admin'],
+    why: 'its pick opens the erase dialog, whose preview spends a slot of its own hourly limit; the spec finds a contact of its own with it open; Admin alone holds crm.erase',
+  },
   {
     source: `${C}/maintenance/TurnOnDialog.tsx`,
     spec: 'tests/admin/maintenance.e2e.ts',

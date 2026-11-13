@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminFetch, describeError } from '@/lib/admin/client';
+import ContactStagesCard from './ContactStagesCard';
+import CustomFieldsCard from './CustomFieldsCard';
+import PrivacyCard from './PrivacyCard';
 import ResponseCard from './ResponseCard';
 import ScoringCard from './ScoringCard';
 import StagesCard from './StagesCard';
@@ -11,6 +14,9 @@ import type { CrmSettingsAnswer, CrmSettingsRow } from './types';
 // explicit Save"; P-5: the CRM never autosaves keystrokes): the pipeline stages, lead
 // scoring, and response time with assignment. The two settings cards share the row's version:
 // a save by one moves it for the other without touching the other's unsaved fields.
+// Admin v2 C9b adds the contacts' half: the contact stages (read-only), the custom fields (a
+// third card on the row's version) and Data and privacy (the retention horizon, and the
+// erasure of a person for `crm.erase` holders).
 
 const API = '/api/admin/crm/settings';
 
@@ -56,7 +62,11 @@ export default function CrmSettingsScreen() {
   const saved = (settings: CrmSettingsRow) => setVersion(settings.version);
   return (
     <div className="grid grid--2">
-      <StagesCard loaded={data.stages} onSaved={reloadStages} />
+      <div className="crm-set__col">
+        <StagesCard loaded={data.stages} onSaved={reloadStages} />
+        <ContactStagesCard />
+        <CustomFieldsCard settings={data.settings} version={version} onSaved={saved} />
+      </div>
       <div className="crm-set__col">
         <ScoringCard settings={data.settings} version={version} onSaved={saved} />
         <ResponseCard
@@ -65,6 +75,7 @@ export default function CrmSettingsScreen() {
           people={data.people}
           onSaved={saved}
         />
+        <PrivacyCard privacy={data.privacy} />
       </div>
     </div>
   );
