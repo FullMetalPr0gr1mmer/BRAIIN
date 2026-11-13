@@ -529,8 +529,6 @@ function client(owner: 'svc' | 'rls') {
         if (call.update) return settingsAnswer;
         return { data: { custom_fields: storedFields }, error: null };
       }
-      if (call.table === 'site_settings')
-        return { data: { retention: { leads_months: 18 } }, error: null };
       if (call.table === 'crm_contacts') {
         return {
           data: {
@@ -557,6 +555,8 @@ function client(owner: 'svc' | 'rls') {
     rpc: async (fn: string, args: unknown) => {
       calls.push({ owner, rpc: fn, args });
       if (fn === 'crm_create_contact') return { data: { id: CONTACT }, error: null };
+      // C10b's door for the horizon (the C9b + C10b integration: the privacy card reads it too).
+      if (fn === 'crm_contact_retention_months') return { data: 18, error: null };
       return { data: [], error: null };
     },
   };

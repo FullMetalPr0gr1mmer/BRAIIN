@@ -5,8 +5,9 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 /*
  * Merge duplicates, end to end (Admin v2 C12, crm.md §11 screen 9), on the real Worker and the
- * local stack, as the Admin (and, for the refusals, as Content Creator, SEO, Developer and
- * Sales, none of whom holds crm.contacts):
+ * local stack, as the Admin and as Sales (crm.contacts since C10b; its merge spends a reveal
+ * slot first, the C10b + C12 integration), and, for the refusals, as Content Creator, SEO and
+ * Developer, none of whom holds crm.contacts:
  *   the modal     "Merge duplicates" on the People list opens it; a pair says why in words and
  *                 never shows an e-mail address; axe with it open;
  *   not a dup     "Not a duplicate" takes the pair away, and the finder never offers it again;
@@ -16,6 +17,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *                 group's Cancel when it opens, the pair's "Merge into older" after Cancel,
  *                 the next pair's first action (or the empty state) when a pair leaves;
  *   a conflict    a merge at a version that moved on is a 409, and nothing is merged;
+ *   as sales      the finder offers a pair Sales added, and its merge through the route keeps
+ *                 the older record (the other is a 404), as the Admin's does;
  *   refusals      every other role gets a 403 from the three routes.
  * Every contact is added through the real routes and named with this run's token (each pair
  * shares a phone number of its own, so the finder offers it among the phone matches, the
@@ -196,7 +199,31 @@ test.describe('as admin', () => {
   });
 });
 
-for (const role of ['content_creator', 'seo', 'developer', 'sales'] as const) {
+// Sales holds crm.contacts since C10b, so it finds and merges duplicates too (the C10b + C12
+// integration, docs/admin-v2/as-built/C-LAST-INTEGRATION.md). The route claims a slot of the
+// reveal's own limiter first (crmMerge.spec proves the order and that a 429 moves nothing).
+test.describe('as sales', () => {
+  test.use({ storageState: authFile('sales') });
+
+  test('the finder offers a pair, and a merge through the route keeps the older record', async ({
+    page,
+  }) => {
+    const shared = phone();
+    const older = await addContact(page, 'sales-1', { phone: shared });
+    const newer = await addContact(page, 'sales-2', { phone: shared });
+    expect(offered(await pairs(page), older.id, newer.id)).toBe(true);
+    const res = await page.request.post('/api/admin/crm/contacts/merge', {
+      headers: { 'x-csrf-token': await csrf(page) },
+      data: { keepId: older.id, keepVersion: 1, dropId: newer.id, dropVersion: 1 },
+    });
+    expect(res.status()).toBe(200);
+    expect((await page.request.get(`/api/admin/crm/contacts/${newer.id}`)).status()).toBe(404);
+    expect((await page.request.get(`/api/admin/crm/contacts/${older.id}`)).status()).toBe(200);
+    expect(offered(await pairs(page), older.id, newer.id)).toBe(false);
+  });
+});
+
+for (const role of ['content_creator', 'seo', 'developer'] as const) {
   test.describe(`as ${role}`, () => {
     test.use({ storageState: authFile(role) });
 

@@ -5,8 +5,9 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
 
 /*
  * Companies, end to end (Admin v2 C11, crm.md §5.3 and §11 screens 5 and 6), on the real
- * Worker and the local stack, as the Admin (and, for the refusals, as Content Creator, SEO,
- * Developer and Sales, none of whom holds crm.contacts on this base):
+ * Worker and the local stack, as the Admin and as Sales (crm.contacts since C10b, the C10b + C11
+ * integration), and, for the refusals, as Content Creator, SEO and Developer, none of whom
+ * holds crm.contacts:
  *   the tab      People | Companies; add in the drawer (a website that is not https is said
  *                under the field); found by the search; opened by its id; a change saved, then
  *                a conflict from another tab refreshes the form; removed after a confirm;
@@ -18,6 +19,8 @@ import { SKIP_REASON, authFile, staffEnv } from './staff';
  *                person has edited the company (C11 review: an auto-company's domain collects
  *                no one); the drawer says a domain is held, and the Admin forgets it, after which
  *                that domain joins no one;
+ *   as sales     the tab opens, a company is added and found; forgetting a domain (crm.settings)
+ *                is refused;
  *   refusals     every other role gets a 403 page (and API) naming no company.
  * axe runs with the drawer open. Everything is named with this run's token and made through
  * the real routes; nothing reads or writes the database directly.
@@ -325,7 +328,30 @@ test.describe('as admin', () => {
   });
 });
 
-for (const role of ['content_creator', 'seo', 'developer', 'sales'] as const) {
+// Sales holds crm.contacts since C10b, so the Companies tab is its too (C11's departure
+// "Sales"; the C10b + C11 integration, docs/admin-v2/as-built/C-LAST-INTEGRATION.md).
+// Forgetting a learnt domain is crm.settings', which Sales does not hold.
+test.describe('as sales', () => {
+  test.use({ storageState: authFile('sales') });
+
+  test('the Companies tab opens, a company is added and found; forgetting a domain is refused', async ({
+    page,
+  }) => {
+    const res = await visit(page, '/admin/contacts/companies');
+    expect(res?.status()).toBe(200);
+    await expect(page.getByRole('heading', { level: 1, name: 'Companies' })).toBeVisible();
+    const company = await addCompany(page, `E2E ${RUN} sales co`);
+    expect((await findCompanies(page, `${RUN} sales co`)).map((c) => c.id)).toEqual([company.id]);
+    expect((await companyOf(page, company.id)).company.name).toBe(company.name);
+    const forget = await page.request.delete(`/api/admin/crm/companies/${company.id}/domain`, {
+      headers: { 'x-csrf-token': await csrf(page) },
+      data: { version: company.version },
+    });
+    expect(forget.status()).toBe(403);
+  });
+});
+
+for (const role of ['content_creator', 'seo', 'developer'] as const) {
   test.describe(`as ${role}`, () => {
     test.use({ storageState: authFile(role) });
 

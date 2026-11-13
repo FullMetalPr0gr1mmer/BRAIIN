@@ -1,8 +1,8 @@
 import { UUID, type Case } from '../harness';
 
 // Companies (Admin v2 C11, crm.md §9). `crm.contacts` covers "contacts & companies" (crm.md
-// §2.1): Admin's alone on this base (owner default O-7: Developer none). When C10b gives Sales
-// crm.contacts, its merge adds 'sales' to every row here, as it does to crmContacts.ts.
+// §2.1): Admin's and, since C10b, Sales' (owner default O-7: Developer none), so the C10b + C11
+// integration (C-int) added 'sales' to every row but the domain's, as C10b did to crmContacts.ts.
 
 const BASE = `/api/admin/crm/companies/${UUID}`;
 
@@ -13,7 +13,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: '/api/admin/crm/companies/query',
     body: { q: 'acme', sort: 'name', limit: 25 },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
     read: true,
   },
   {
@@ -22,14 +22,14 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: '/api/admin/crm/companies',
     body: { name: 'Acme Trading', website: 'https://acme.example', stage: 'client' },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'company read (the drawer)',
     load: () => import('@/pages/api/admin/crm/companies/[id]'),
     method: 'GET',
     url: BASE,
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
     read: true,
   },
   {
@@ -38,7 +38,7 @@ export const cases: readonly Case[] = [
     method: 'PATCH',
     url: BASE,
     body: { version: 1, city: 'Jeddah' },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: 'company removed',
@@ -46,7 +46,7 @@ export const cases: readonly Case[] = [
     method: 'DELETE',
     url: BASE,
     body: { version: 1 },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     // (C11 review, C11-SEC-1) crm.settings, Admin's: this row stays ['admin'] when C10b gives
@@ -64,7 +64,7 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: `/api/admin/crm/contacts/${UUID}/company`,
     body: { action: 'link', version: 1, companyId: UUID },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
   {
     name: "contact's company made from its name",
@@ -72,6 +72,6 @@ export const cases: readonly Case[] = [
     method: 'POST',
     url: `/api/admin/crm/contacts/${UUID}/company`,
     body: { action: 'create', version: 1 },
-    allow: ['admin'],
+    allow: ['admin', 'sales'],
   },
 ];

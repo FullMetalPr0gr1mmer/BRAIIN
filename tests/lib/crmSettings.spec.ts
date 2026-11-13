@@ -414,7 +414,9 @@ describe('saving the pipeline', () => {
 });
 
 describe('what the screen reads', () => {
-  // C9b: and the retention horizon the Data and privacy card states (site_settings).
+  // C9b: and the retention horizon the Data and privacy card states, through C10b's door
+  // (public.crm_contact_retention_months answers the caller's own tenant, so it takes no
+  // argument; the C9b + C10b integration, C-int).
   it('the settings, the stages with their counts, the people, the horizon: five reads in the caller’s tenant', async () => {
     const { sb, calls } = fakeDb({ data: { version: 2, sla_hours: 24 } });
     const answer = await readCrmSettings(sb, AUTH);
@@ -423,13 +425,15 @@ describe('what the screen reads', () => {
       'lead_stages',
       'lead_stage_counts',
       'crm_people',
-      'site_settings',
+      'crm_contact_retention_months',
     ]);
     for (const call of calls.filter((c) => c.table)) {
       expect(call.eq).toContainEqual(['tenant_id', AUTH.tenantId]);
     }
-    for (const call of calls.filter((c) => c.rpc))
+    for (const call of calls.filter((c) => c.rpc && c.rpc !== 'crm_contact_retention_months'))
       expect(call.args).toEqual({ p_tenant: AUTH.tenantId });
+    // The horizon's door names no tenant: it answers the caller's own (C10b).
+    expect(calls.find((c) => c.rpc === 'crm_contact_retention_months')?.args).toBeUndefined();
     expect(answer.settings.version).toBe(2);
   });
 
