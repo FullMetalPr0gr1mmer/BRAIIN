@@ -31,10 +31,12 @@
 --      tombstone keeps none, so an auto-company it alone named goes by C11's orphan rule, and
 --      a second audit row, crm.contact.merge.company_removed, names its id (CINT-W-4 / XS-5,
 --      as C11-SEC-4 audits an unlink's); then app.crm_tombstone_follow.
---      Who may merge is unchanged: a live crm.contacts holder (Admin, and Sales since C10b, as
---      crm.md CRM-12 designs it); the Worker claims a Sales user's reveal slot first
---      (C12-SEC-R2-1). The answer and the audit row keep their counts, with no count of files
---      (crm.files is Admin's; a Sales merge must not learn whether a person has files).
+--      Who may merge: a live crm.contacts holder (Admin, and Sales since C10b, as crm.md
+--      CRM-12 designs it); the Worker claims a Sales user's reveal slot first (C12-SEC-R2-1).
+--      Since the owner's decision of 2026-11-13 a pair where either record holds a file needs
+--      an actor who may handle files (crm.files, Admin; item 6), which tells a Sales user the
+--      person has files (accepted by the owner). The answer and the audit row keep their
+--      counts, with no count of files.
 --   3. app.purge_crm restated (the merge's copy plus `-- C-int` lines): a file or a basis row
 --      on a tombstone follows it before the tombstone goes, by two set-based updates, as C12
 --      already moves leads and tasks (CINT-SEC-1 / XS-6: never the follow, which raises for a
@@ -44,10 +46,21 @@
 --      a record that a merge has just emptied finds the file on the survivor (CINT-W-3 /
 --      XS-4: the route removes the object first, so a P0002 there left a row whose object
 --      was gone).
+--   5. (Owner decision 2026-11-13) public.crm_contact_reveal_channels(p_tenant, p_contact,
+--      p_actor): the reveal's ciphertext through a door, the service role's alone. The actor
+--      checked live; every channel for an actor who may erase (Admin), the main e-mail and
+--      the main phone only for anyone else (Sales). The Worker's reveal reads through it.
+--   6. (Owner decision 2026-11-13) public.crm_edit_contact_channels restated (0136's copy plus
+--      `-- C-int` lines): choosing the main e-mail or phone, by naming one or by adding one
+--      marked primary, needs an actor who may erase (Admin), as removing one already does.
+--      Sales still adds. And in item 2's merge (owner decision, same day): a merge where
+--      either record holds a file needs an actor who may handle files (crm.files, Admin),
+--      checked with both rows locked and before anything moves; 42501 otherwise.
 --
 -- Production behaviour: none until the six slices and the Worker deploy. Nothing calls the
 -- merge before C12's route ships and no tombstone exists before the first merge, so the
--- purge's new lines find nothing. Rule 5 holds trivially.
+-- purge's new lines find nothing. Items 5 and 6 have no deployed caller before C6's Worker
+-- and C10b ship (the channels table is new with C5, held). Rule 5 holds trivially.
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 
 -- ═══ 0. Every lawful-basis row a contact carries ══════════════════════════════════════════
@@ -156,6 +169,15 @@ begin
   if k.version <> p_keep_version or d.version <> p_drop_version then
     raise exception using errcode = '40001', message = 'crm_merge_contacts: a contact changed since it was read';
   end if;
+  -- (Owner decision 2026-11-13) A merge where either record holds a file needs someone who  -- C-int
+  -- may handle files (crm.files: an Admin). Checked with both rows locked, so a file being  -- C-int
+  -- added now (its key check waits on those locks) is counted, and before anything moves.  -- C-int
+  if not app.crm_files_actor_ok(p_tenant, p_actor)  -- C-int
+     and exists (select 1 from public.crm_contact_files f  -- C-int
+                  where f.tenant_id = p_tenant and f.contact_id in (p_keep, p_drop)) then  -- C-int
+    raise exception using errcode = '42501',  -- C-int
+      message = 'crm_merge_contacts: one of these records holds files, so an Admin merges them';  -- C-int
+  end if;  -- C-int
   -- An address added to either since the first step (rare): its lock too, now.
   for v_hmac in
     select distinct ch.value_hmac from public.crm_contact_channels ch
@@ -472,7 +494,159 @@ end $$;
 revoke all on function public.crm_file_remove(uuid, uuid, uuid, uuid) from public, anon, authenticated, service_role;
 grant execute on function public.crm_file_remove(uuid, uuid, uuid, uuid) to service_role;
 
--- ═══ 5. Postconditions ════════════════════════════════════════════════════════════════════
+-- ═══ 5. The reveal's ciphertext, decided by the database (owner decision 2026-11-13) ════════
+-- A Sales reveal shows the main e-mail and the main phone only; an Admin's shows every one. The
+-- Worker's reveal (src/lib/crm/contactReveal.ts) reads the ciphertext it decrypts through this
+-- door, never the table, so the database decides what a reveal can show whatever the Worker
+-- asks: the acting profile checked live (a crm.contacts holder of the tenant, active, not
+-- locked), a merge tombstone or another tenant's contact P0002, every channel for an actor who
+-- may erase (app.crm_eraser_ok: crm.erase, the same person who removes one and chooses the
+-- main one), the primaries only for anyone else. The service role's alone; it changes nothing.
+create or replace function public.crm_contact_reveal_channels(p_tenant uuid, p_contact uuid,
+                                                              p_actor uuid)
+  returns table (id uuid, kind text, is_primary boolean, source text, value_enc text)
+  language plpgsql stable security invoker set search_path = '' as $$
+declare
+  v_every boolean;
+begin
+  if p_tenant is null or p_contact is null or p_actor is null then
+    raise exception using errcode = '22023', message = 'crm_contact_reveal_channels: a tenant, a contact and an actor are required';
+  end if;
+  if not app.crm_contacts_actor_ok(p_tenant, p_actor, false) then
+    raise exception using errcode = '42501', message = 'crm_contact_reveal_channels: this person may not reveal contact details';
+  end if;
+  if not exists (select 1 from public.crm_contacts c
+                  where c.tenant_id = p_tenant and c.id = p_contact and c.merged_into is null) then
+    raise exception using errcode = 'P0002', message = 'crm_contact_reveal_channels: no such contact';
+  end if;
+  v_every := app.crm_eraser_ok(p_tenant, p_actor);
+  return query
+    select ch.id, ch.kind, ch.is_primary, ch.source, ch.value_enc
+      from public.crm_contact_channels ch
+     where ch.tenant_id = p_tenant and ch.contact_id = p_contact
+       and (v_every or ch.is_primary)
+     order by ch.kind, ch.is_primary desc, ch.created_at, ch.id;
+end $$;
+revoke all on function public.crm_contact_reveal_channels(uuid, uuid, uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.crm_contact_reveal_channels(uuid, uuid, uuid) to service_role;
+
+-- ═══ 6. Choosing the main e-mail or phone is Admin's (owner decision 2026-11-13) ═════════════
+-- C10b's public.crm_edit_contact_channels (0136, its latest definition), restated with the
+-- lines marked `-- C-int`: a change that names a primary, or adds a channel marked primary,
+-- needs an actor who may erase (Admin), or it is a 42501 and nothing is written. Removing was
+-- already Admin's (0136, C10B-SEC-2). Everything else as 0136 wrote it, grants included.
+create or replace function public.crm_edit_contact_channels(
+  p_tenant uuid, p_contact uuid, p_version int, p_add jsonb, p_remove uuid[], p_primary uuid[],
+  p_actor uuid)
+  returns jsonb
+  language plpgsql volatile security invoker set search_path = public, pg_temp as $$
+declare
+  v_add jsonb := coalesce(p_add, '[]'::jsonb);
+  v_remove uuid[] := coalesce(p_remove, '{}');
+  v_primary uuid[] := coalesce(p_primary, '{}');
+  v_version int;
+  v_holder uuid;
+  v_removed int := 0;
+  v_added int := 0;
+  r record;
+  v_id uuid;
+begin
+  if p_tenant is null or p_contact is null or p_version is null or p_actor is null then
+    raise exception using errcode = '22023', message = 'crm_edit_contact_channels: a tenant, a contact, a version and an actor are required';
+  end if;
+  if not app.crm_contacts_actor_ok(p_tenant, p_actor, false) then
+    raise exception using errcode = '42501', message = 'crm_edit_contact_channels: this person may not edit contacts';
+  end if;
+  if not app.crm_channels_ok(v_add) or cardinality(v_remove) > 10 or cardinality(v_primary) > 2
+     or array_position(v_remove, null) is not null or array_position(v_primary, null) is not null then
+    raise exception using errcode = '22023', message = 'crm_edit_contact_channels: a change has the wrong shape';
+  end if;
+  -- (C10b review, C10B-SEC-2) Removing an e-mail or phone deletes a person's details, and one
+  -- a person typed in has no copy anywhere else: erasure's (crm.erase, Admin), never a
+  -- crm.contacts holder's alone. Sales adds and makes primary; an Admin removes.
+  if cardinality(v_remove) > 0 and not app.crm_eraser_ok(p_tenant, p_actor) then
+    raise exception using errcode = '42501', message = 'crm_edit_contact_channels: this person may not remove an e-mail or phone';
+  end if;
+  -- (Owner decision 2026-11-13) Which e-mail or phone is the main one decides what a Sales  -- C-int
+  -- reveal shows (the main ones only), so choosing it is the eraser's too (crm.erase, Admin):  -- C-int
+  -- a channel named primary, or an added one marked primary, needs app.crm_eraser_ok. Sales  -- C-int
+  -- still adds (kept, and the main one only when the contact has none of that kind).  -- C-int
+  if (cardinality(v_primary) > 0  -- C-int
+      or exists (select 1 from jsonb_array_elements(v_add) e where e -> 'is_primary' = 'true'::jsonb))  -- C-int
+     and not app.crm_eraser_ok(p_tenant, p_actor) then  -- C-int
+    raise exception using errcode = '42501', message = 'crm_edit_contact_channels: this person may not choose the main e-mail or phone';  -- C-int
+  end if;  -- C-int
+  select c.version into v_version
+    from public.crm_contacts c
+   where c.tenant_id = p_tenant and c.id = p_contact and c.merged_into is null
+     for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'crm_edit_contact_channels: no such contact';
+  end if;
+  if v_version <> p_version then
+    raise exception using errcode = '40001', message = 'crm_edit_contact_channels: the contact changed since it was read';
+  end if;
+  if exists (select 1 from unnest(v_remove || v_primary) x
+              where not exists (select 1 from public.crm_contact_channels ch
+                                 where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.id = x)) then
+    raise exception using errcode = '22023', message = 'crm_edit_contact_channels: a channel is not this contact''s';
+  end if;
+  if exists (select 1 from unnest(v_primary) x where x = any (v_remove)) then
+    raise exception using errcode = '22023', message = 'crm_edit_contact_channels: a removed channel cannot be made primary';
+  end if;
+  v_holder := app.crm_email_holder(p_tenant, v_add, p_contact);
+  if v_holder is not null then
+    return jsonb_build_object('duplicate', v_holder);
+  end if;
+
+  for r in delete from public.crm_contact_channels ch
+            where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.id = any (v_remove)
+            returning ch.kind, ch.source loop
+    insert into public.crm_contact_events (tenant_id, contact_id, actor_id, kind, detail)
+    values (p_tenant, p_contact, p_actor, 'channel_removed',
+            jsonb_build_object('kind', r.kind, 'source', r.source));
+    v_removed := v_removed + 1;
+  end loop;
+
+  insert into public.crm_contact_channels (tenant_id, contact_id, kind, value_enc, value_hmac,
+                                           is_primary, source, created_by)
+  select p_tenant, p_contact, e ->> 'kind', e ->> 'value_enc', e ->> 'value_hmac', false, 'manual', p_actor
+    from jsonb_array_elements(v_add) e
+  on conflict do nothing;
+  get diagnostics v_added = row_count;
+  -- At most app.crm_channel_cap() of a kind this change adds to (C6 review, C6-SEC-3); the
+  -- whole change is refused, nothing half-saved. The message names the rule for the Worker's
+  -- map (src/lib/crm/contacts.ts CONTACT_CONSTRAINTS), as the owner rule's does.
+  if exists (select 1 from (select distinct e ->> 'kind' as kind from jsonb_array_elements(v_add) e) k
+              where (select count(*) from public.crm_contact_channels ch
+                      where ch.tenant_id = p_tenant and ch.contact_id = p_contact and ch.kind = k.kind)
+                    > app.crm_channel_cap()) then
+    raise exception using errcode = '23514',
+      message = 'a contact keeps at most ten e-mails and ten phones (constraint "crm_contact_channels_cap")';
+  end if;
+
+  -- Primary: the one named, per kind; a newly added channel marked primary too.
+  foreach v_id in array v_primary || array(
+      select ch.id from public.crm_contact_channels ch
+        join jsonb_array_elements(v_add) e
+          on e ->> 'kind' = ch.kind and e ->> 'value_hmac' = ch.value_hmac
+       where ch.tenant_id = p_tenant and ch.contact_id = p_contact
+         and coalesce((e ->> 'is_primary')::boolean, false)) loop
+    update public.crm_contact_channels ch set is_primary = false
+     where ch.contact_id = p_contact and ch.is_primary and ch.id <> v_id
+       and ch.kind = (select x.kind from public.crm_contact_channels x where x.id = v_id);
+    update public.crm_contact_channels ch set is_primary = true where ch.id = v_id;
+  end loop;
+  perform app.crm_fill_primary(p_tenant, p_contact);
+  return jsonb_build_object('added', v_added, 'removed', v_removed);
+end $$;
+revoke all on function public.crm_edit_contact_channels(uuid, uuid, int, jsonb, uuid[], uuid[], uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function public.crm_edit_contact_channels(uuid, uuid, int, jsonb, uuid[], uuid[], uuid)
+  to service_role;
+
+-- ═══ 7. Postconditions ════════════════════════════════════════════════════════════════════
 do $$
 declare
   v_fn text;
@@ -509,7 +683,8 @@ begin
                   and prosrc like '%''crm-files:'' || p_drop::text%'
                   and prosrc like '%when k.company_id is not null then k.company_id%'
                   and prosrc like '%''crm.contact.merge.company_removed''%'
-                  and prosrc like '%jsonb_array_elements(s.custom_fields)%') then
+                  and prosrc like '%jsonb_array_elements(s.custom_fields)%'
+                  and prosrc like '%if not app.crm_files_actor_ok(p_tenant, p_actor)%') then
     raise exception 'C-int: the merge lacks a line of the integration';
   end if;
   -- The purge: still a pinned definer no API role executes, and it follows tombstones.
@@ -538,6 +713,37 @@ begin
      or exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                  where p.oid = v_fn::regprocedure and a.grantee = 0) then
     raise exception 'C-int: % must stay SECURITY INVOKER, pinned, the service role''s alone, and follow a merge', v_fn;
+  end if;
+  -- The reveal's door (owner decision 2026-11-13): INVOKER, pinned to an empty search_path,
+  -- the service role's alone, every channel only for an eraser.
+  v_fn := 'public.crm_contact_reveal_channels(uuid, uuid, uuid)';
+  if exists (select 1 from pg_proc where oid = v_fn::regprocedure and prosecdef)
+     or not exists (select 1 from pg_proc where oid = v_fn::regprocedure
+                     and proconfig = array['search_path=""']
+                     and prosrc like '%app.crm_contacts_actor_ok(p_tenant, p_actor, false)%'
+                     and prosrc like '%(v_every or ch.is_primary)%')
+     or has_function_privilege('anon', v_fn, 'execute')
+     or has_function_privilege('authenticated', v_fn, 'execute')
+     or not has_function_privilege('service_role', v_fn, 'execute')
+     or exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                 where p.oid = v_fn::regprocedure and a.grantee = 0) then
+    raise exception 'C-int: % must be SECURITY INVOKER, pinned, the service role''s alone, primaries unless an eraser', v_fn;
+  end if;
+  -- The channel editor: still INVOKER as 0133 pinned it, the service role's alone, and both
+  -- the removal and the choice of the main one ask for an eraser.
+  v_fn := 'public.crm_edit_contact_channels(uuid, uuid, integer, jsonb, uuid[], uuid[], uuid)';
+  if exists (select 1 from pg_proc where oid = v_fn::regprocedure and prosecdef)
+     or not exists (select 1 from pg_proc where oid = v_fn::regprocedure
+                     and proconfig = array['search_path=public, pg_temp']
+                     and prosrc like '%if cardinality(v_remove) > 0 and not app.crm_eraser_ok(p_tenant, p_actor) then%'
+                     and prosrc like '%(cardinality(v_primary) > 0%'
+                     and prosrc like '%may not choose the main e-mail or phone%')
+     or has_function_privilege('anon', v_fn, 'execute')
+     or has_function_privilege('authenticated', v_fn, 'execute')
+     or not has_function_privilege('service_role', v_fn, 'execute')
+     or exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                 where p.oid = v_fn::regprocedure and a.grantee = 0) then
+    raise exception 'C-int: % must stay INVOKER, pinned, the service role''s alone, an eraser choosing the main one', v_fn;
   end if;
   -- Every basis row a contact carries: no one-per-contact key, an index on the contact.
   if exists (select 1 from pg_constraint where conname = 'crm_contact_imports_one'
