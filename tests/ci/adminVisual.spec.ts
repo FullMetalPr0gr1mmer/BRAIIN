@@ -17,8 +17,10 @@ import {
 /*
  * The admin visual baselines (Admin v2 Z1, ui.md AV-34) stay out of every required gate:
  *   - .github/workflows/admin-visual.yml runs only by hand, read-only, with a timeout, is never a
- *     required check nor a need of the deploy, and is the e2e job of perf-seo-a11y.yml step for
- *     step up to the preview; after it, only the admin-visual project runs, with ADMIN_VISUAL set;
+ *     required check nor a need of the deploy, and is the releases-off e2e job of
+ *     perf-seo-a11y.yml step for step up to the preview (since Admin v2 R14c the required e2e
+ *     job runs in release mode, and the committed baselines are of releases off); after it, only
+ *     the admin-visual project runs, with ADMIN_VISUAL set;
  *   - playwright.config.ts adds that project only while ADMIN_VISUAL is `update` or `compare`,
  *     after the sample rows, its baselines kept per platform; and the spec's file name is one the
  *     root testMatch (`**\/*.e2e.ts`) never collects, so the required job cannot run it.
@@ -55,7 +57,14 @@ const visual = load('admin-visual.yml');
 const gates = load('perf-seo-a11y.yml');
 const ci = load('ci.yml');
 const job = visual.jobs['admin-visual']!;
-const e2e = gates.jobs['e2e']!;
+/**
+ * The job the baselines are made beside: the releases-off e2e job (Admin v2 R14c). Before R14c
+ * it was the e2e job itself; R14c moved that one to release mode and kept this one as it was, so
+ * the committed baselines (#142, made releases off) still compare. Re-baselining in release mode
+ * is a separate, owner-approved step: set E2E_RELEASES in admin-visual.yml (its psql client and
+ * the switch then follow, playwright.config.ts) and commit the new pictures.
+ */
+const e2e = gates.jobs['e2e-releases-off']!;
 
 const actionOf = (uses: string | undefined) => (uses === undefined ? null : uses.split('@')[0]!);
 const acts = (step: Step) => ({
@@ -105,7 +114,7 @@ describe('.github/workflows/admin-visual.yml', () => {
     expect(text('admin-visual.yml')).not.toMatch(/github\.token|GITHUB_TOKEN/);
   });
 
-  it('is the e2e job step for step up to the preview, the same pins included', () => {
+  it('is the releases-off e2e job step for step up to the preview, the same pins included', () => {
     const steps = job.steps ?? [];
     const upTo = (list: Step[]) =>
       list.slice(0, list.findIndex((step) => step.name === 'Wait for preview') + 1);

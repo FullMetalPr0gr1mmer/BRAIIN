@@ -8,9 +8,11 @@ name: Admin visual baselines
 # BY HAND ONLY (Actions → Admin visual baselines → Run workflow, on the branch to baseline): it is
 # never started by a push or a pull request, no required check names it and the deploy does not
 # wait for it (tests/ci/adminVisual.spec.ts and workflows.spec.ts hold all three). Its stack is
-# the e2e job's (perf-seo-a11y.yml) step for step up to the preview; then only the admin-visual
-# project runs (playwright.config.ts adds it while ADMIN_VISUAL is set), right after the staff
-# sessions and the sample rows, so the pictures are of the seed and nothing else.
+# the releases-off e2e job's (perf-seo-a11y.yml `e2e-releases-off`) step for step up to the
+# preview: since Admin v2 R14c the required e2e job runs in release mode, and these baselines
+# are of releases off until the owner has them re-made in release mode. Then only the
+# admin-visual project runs (playwright.config.ts adds it while ADMIN_VISUAL is set), right
+# after the staff sessions and the sample rows, so the pictures are of the seed and nothing else.
 #
 #   update   make every baseline, then compare a second run against them (AV-34: "stable across
 #            two runs"), and upload them as the artifact `admin-visual-baselines`. The operator

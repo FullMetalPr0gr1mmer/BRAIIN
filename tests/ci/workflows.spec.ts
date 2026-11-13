@@ -7,8 +7,9 @@ import { describe, expect, it } from 'vitest';
  * §5a/§5b). ci.yml's `deploy` waits for EVERY gate, ships only main's head, runs the guard
  * before any dependency code, and keeps each secret in the one step that uses it; the gate
  * workflows it calls run only when called; and .github/branch-protection.json requires
- * exactly the checks the workflows produce — a renamed job would otherwise leave a required
- * context that never reports, and every PR would wait on it forever.
+ * exactly the checks the workflows produce, but for the named ones that are deliberately not
+ * required (since Admin v2 R14c, the releases-off e2e job) — a renamed job would otherwise leave
+ * a required context that never reports, and every PR would wait on it forever.
  *
  * Parsed with `yaml` (YAML 1.2, so `on:` stays a key and the anchors resolve as GitHub does).
  */
@@ -277,8 +278,10 @@ describe('the gate workflows ci.yml calls', () => {
   it('lets no step fail quietly except the design capture and its upload (not assertions)', () => {
     const tolerated = allSteps.filter(({ step }) => step['continue-on-error'] !== undefined);
     expect(tolerated.map(({ label }) => label)).toEqual([
-      './.github/workflows/perf-seo-a11y.yml e2e: Design capture (public + admin full-page screenshots for the mockup comparison, not assertions)',
-      './.github/workflows/perf-seo-a11y.yml e2e: Upload design capture',
+      // In the releases-off job since Admin v2 R14c: the required e2e job is the release-mode
+      // rehearsal's, step for step.
+      './.github/workflows/perf-seo-a11y.yml e2e-releases-off: Design capture (public + admin full-page screenshots for the mockup comparison, not assertions)',
+      './.github/workflows/perf-seo-a11y.yml e2e-releases-off: Upload design capture',
     ]);
     for (const { step } of tolerated) expect(step['continue-on-error']).toBe(true);
   });
@@ -320,18 +323,50 @@ describe('.github/branch-protection.json — the required checks', () => {
     allow_deletions: boolean;
   };
 
-  it('are exactly the checks a PR run produces (bar the owner-only guard preview)', () => {
-    const produced = Object.entries(jobs)
-      .filter(([id, job]) => !isPushOnly(job) && id !== 'deploy-guard-preview')
-      .flatMap(([id, job]) => {
-        const name = job.name ?? id;
-        if (job.uses === undefined) return [name];
-        return Object.entries(called[job.uses]!.jobs).map(
-          ([cid, cjob]) => `${name} / ${cjob.name ?? cid}`,
-        );
-      });
-    const required = protection.required_status_checks.checks.map((check) => check.context);
-    expect(required.sort()).toEqual(produced.sort());
+  /**
+   * Checks a PR run produces that are deliberately not required, each with its reason. Admin v2
+   * R14c: the releases-off e2e job (the owner's decision of 2026-11-13: the required e2e job is
+   * the release-mode run, and the releases-off run is kept beside it without being required).
+   * The owner-only guard preview is left out above: it reads production and runs only on the
+   * owner's PRs.
+   */
+  const NOT_REQUIRED = ['perf-seo-a11y / E2E with releases off'];
+
+  /** Main's required checks by name: nothing may rename or drop one (runbook §5b). */
+  const MAIN_REQUIRED = [
+    'migrations',
+    'build-test',
+    'supply-chain',
+    'deploy-preflight',
+    'db-tests / pgtap',
+    'perf-seo-a11y / E2E + axe + CSP + video bytes',
+    'perf-seo-a11y / Lighthouse budgets',
+  ];
+
+  const produced = Object.entries(jobs)
+    .filter(([id, job]) => !isPushOnly(job) && id !== 'deploy-guard-preview')
+    .flatMap(([id, job]) => {
+      const name = job.name ?? id;
+      if (job.uses === undefined) return [name];
+      return Object.entries(called[job.uses]!.jobs).map(
+        ([cid, cjob]) => `${name} / ${cjob.name ?? cid}`,
+      );
+    });
+  const required = protection.required_status_checks.checks.map((check) => check.context);
+
+  it('are exactly the checks a PR run produces (bar the owner-only guard preview and the named not-required ones)', () => {
+    expect([...required].sort()).toEqual(produced.filter((c) => !NOT_REQUIRED.includes(c)).sort());
+  });
+
+  it('are main’s seven, by name (R14c renames and drops none)', () => {
+    expect([...required].sort()).toEqual([...MAIN_REQUIRED].sort());
+  });
+
+  it('every check named as not required is produced, and is not required', () => {
+    for (const check of NOT_REQUIRED) {
+      expect(produced, check).toContain(check);
+      expect(required, check).not.toContain(check);
+    }
   });
 
   it('binds admins too: PRs only, no force-push or deletion, checks from Actions', () => {

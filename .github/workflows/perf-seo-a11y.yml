@@ -6,12 +6,12 @@ name: Perf / SEO / A11y / E2E
 #
 # CALLED BY ci.yml (job `perf-seo-a11y`) on every PR and every push to main — it has no
 # push/PR trigger of its own, so a commit gets one run ("CI"), and on main the deploy waits
-# for both jobs here. Until 2026-10-04 this was a separate workflow that finished ~25 min
+# for every job here. Until 2026-10-04 this was a separate workflow that finished ~25 min
 # after the Worker was already live, so a red e2e or Lighthouse result shipped anyway.
-# Both jobs are REQUIRED status checks on `main`, as "perf-seo-a11y / <job name>"
-# (.github/branch-protection.json): renaming a job means updating that file and
-# re-applying protection in the same PR (launch runbook §5b). `workflow_dispatch` keeps a
-# manual run. (Staged on `workflow_dispatch` until 2026-09-25, these suites had never gated
+# The release-mode e2e job and Lighthouse are REQUIRED status checks on `main`, as
+# "perf-seo-a11y / <job name>" (.github/branch-protection.json): renaming a job means
+# updating that file and re-applying protection in the same PR (launch runbook §5b). The
+# releases-off e2e job is not one. `workflow_dispatch` keeps a manual run, of both modes. (Staged on `workflow_dispatch` until 2026-09-25, these suites had never gated
 # a single PR: a staged gate is an untested gate.)
 #
 # WHY A LOCAL SUPABASE, NOT DUMMIES. The previous version built against
@@ -23,6 +23,13 @@ name: Perf / SEO / A11y / E2E
 # by scripts/local-preview-config.mjs to dist/server/.preview.env and handed to the Worker
 # with `wrangler dev --env-file` (it does not read the adapter's dist/server/.dev.vars, and
 # CI has no project .env). Only secrets with no local counterpart stay dummies.
+#
+# RELEASE MODE (Admin v2 R14c, the owner's go of 2026-11-13). The required e2e job runs every
+# spec with releases switched ON for the e2e tenant (E2E_RELEASES=on, as the hand-run "Releases
+# rehearsal" did before R14c retired it), so the check named "perf-seo-a11y / E2E + axe + CSP +
+# video bytes" proves the mode production runs once the owner switches it on (launch runbook
+# §6p). A second job, "E2E with releases off", runs the same suite with releases off and is not
+# a required check (tests/ci/releasesRehearsal.spec.ts and workflows.spec.ts hold both shapes).
 #
 # No `concurrency` here: ci.yml's run-level group already cancels a superseded PR run, and a
 # group inside the call could cancel or stall a gate the deploy waits for.
@@ -49,6 +56,117 @@ env:
 jobs:
   e2e:
     name: E2E + axe + CSP + video bytes
+    runs-on: ubuntu-latest
+    # 60, the rule's cap: the releases-off job's 55 (the suite took 23 minutes once U8's admin
+    # suites joined it, and the browser install may take up to 20 on a slow mirror) plus the
+    # drill's scheduled release, about five minutes. The release-mode suite has taken 28 to 35
+    # minutes (docs/admin-v2/as-built/R14C.md). Sharding the suite and caching the browser are
+    # the follow-ups.
+    timeout-minutes: 60
+    env:
+      # As above, but WITH storage-api: tests/e2e/apply-roundtrip.e2e.ts sends one real Join
+      # application, and its CV must reach the private `applications` bucket (migration
+      # 0029). imgproxy stays out — storage runs without image transformations.
+      SUPABASE_EXCLUDE: studio,imgproxy,edge-runtime,logflare,vector,realtime,postgres-meta
+      # Admin v2 U15: Google Analytics 4 switched on for THIS build only, so
+      # tests/admin/ga4.e2e.ts proves the loader against the real Worker (Google itself is
+      # route-intercepted, never reached). No id is saved outside that spec, so every other
+      # page is the one production serves. The Lighthouse job below and the deploy (ci.yml)
+      # build with it off, as production does until the owner signs off the notice that names
+      # Google (launch runbook §2e; tests/lib/ga4Switch.spec.ts holds all three).
+      GA4_NOTICE_READY: 'true'
+      # Admin v2 R14c: release mode. playwright.config.ts adds `releases-on`
+      # (tests/admin/releases.setup.ts runs `app.enable_releases` as the owner on this job's
+      # local database, after the sample rows) and `releases-mode` (the publish, scheduled
+      # release and rollback drill, tests/admin/releases-mode.e2e.ts), and every spec runs with
+      # releases on for the e2e tenant.
+      E2E_RELEASES: 'on'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        with:
+          # Pinned: `latest` asks the GitHub API for the newest release on every job, and a
+          # burst of parallel runs hits its rate limit ("Failed to resolve latest Supabase CLI
+          # release") and fails the gate for no code reason. Bump deliberately (supply chain).
+          version: 2.118.0
+      - run: npm ci
+      - name: Start Supabase (migrations + seed.sql)
+        run: supabase start -x "$SUPABASE_EXCLUDE"
+      - name: Export local Supabase into the build environment
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "PUBLIC_SUPABASE_URL=${API_URL}"
+            echo "PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY:-$PUBLISHABLE_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY:-$SECRET_KEY}"
+            echo "SUPABASE_DB_POOL_URL=${DB_URL}"
+          } >> "$GITHUB_ENV"
+      - run: npm run build
+      - name: Preview config (local KV simulation, no Cloudflare credentials)
+        run: node scripts/local-preview-config.mjs
+      # Authored redirects (Round 3): the admin's table reaches the edge as a KV snapshot,
+      # and redirects.e2e.ts tests what the edge DOES with one, not the admin journey that
+      # writes it, so the snapshot is seeded straight into the local KV the preview reads
+      # (the signed-in admin journeys are tests/admin, Admin v2 F0). Run from the
+      # repo root AFTER the preview config: wrangler follows the build's
+      # .wrangler/deploy/config.json redirect, so the key lands in the same .wrangler/state
+      # `wrangler dev` opens (`--config dist/server/wrangler.json` would persist under
+      # dist/server/.wrangler and the Worker would never see it — measured). `--preview`
+      # targets the namespace `wrangler dev` binds. The JSON must equal SEEDED_MAP in
+      # tests/e2e/redirects.e2e.ts.
+      - name: Seed the authored-redirects snapshot into local KV
+        run: >-
+          npx wrangler kv key put site:redirects
+          '{"/e2e-old":{"to":"/about","status":301},"/e2e-temp":{"to":"/contact?from=e2e","status":302},"/e2e-anchor":{"to":"/services#e2e","status":308},"/api/e2e-old":{"to":"/about","status":301}}'
+          --binding SESSION --local --preview
+      # 22-132 s normally. A stalled download once held this step for 94 min (2026-10-07, on
+      # the old pipeline, no job timeout), so it keeps a cap. 20, not 10: on 2026-10-22 the
+      # runner's apt mirror served --with-deps at 44 kB/s (25.9 MB in 9 min 45 s) and three runs
+      # in a row were cut off at 10 minutes with every test still to run.
+      - name: Install Playwright Chromium
+        timeout-minutes: 20
+        run: npx playwright install --with-deps chromium
+      - name: psql (the client the switch is sent with)
+        run: |
+          command -v psql >/dev/null 2>&1 ||
+            { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends postgresql-client; }
+          psql --version
+      # --test-scheduled, as the rehearsal ran it. The drill fires the minute cron through
+      # miniflare's own trigger, GET /cdn-cgi/local/scheduled (R14a): wrangler's /__scheduled is
+      # a middleware it bundles into the Worker, which the adapter's no_bundle build never gets.
+      - name: Start preview (wrangler dev)
+        run: npx wrangler dev --port 8788 --env-file dist/server/.preview.env --test-scheduled &
+      - name: Wait for preview
+        run: timeout 90 bash -c 'until curl -sf -o /dev/null http://localhost:8788; do sleep 2; done'
+      # Includes the signed-in admin sweep (tests/admin): the `admin-setup` project creates
+      # one staff account per role in THIS job's local Supabase (the hook in
+      # supabase/config.toml stamps their roles) and saves each role's session; the sweep
+      # then opens every screen each role's sidebar offers. Nothing is seeded for it. With
+      # releases on, every spec runs in release mode (tests/admin/releaseSteps.ts).
+      - name: Playwright (e2e, axe WCAG 2.2 AA, CSP, served HTML, video bytes, admin sweep)
+        run: npm run test:e2e
+      # The design capture (not an assertion) runs in the releases-off job below: this job is
+      # the release-mode rehearsal's step for step, the run that passed before R14c.
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop
+
+  # Releases OFF (Admin v2 R14c): main's e2e job as it was before R14c, step for step, the design
+  # capture and its upload included, with E2E_RELEASES unset. It proves the releases-off
+  # describes (RELEASES_OFF_ONLY) and every route's live path end to end, which is what
+  # production runs until the owner switches releases on (launch runbook §6p) and what the way
+  # back returns to, until the contract slice (R15) removes the live paths. NOT a required check
+  # (.github/branch-protection.json names only the release-mode job above); ci.yml's deploy
+  # still waits for it, as for every job here, through the `perf-seo-a11y` call. It runs on
+  # every call: the jobs start in parallel on their own runners and this one is the shorter
+  # (26 to 30 minutes against the release-mode run's 31 or more: docs/admin-v2/as-built/R14C.md),
+  # so it adds runner minutes but no wall-clock time to a PR.
+  e2e-releases-off:
+    name: E2E with releases off
     runs-on: ubuntu-latest
     # 55: the suite itself took 23 minutes once U8's admin suites joined it, and with the stack,
     # the build and the design capture the job passed 30 and was cancelled with every test
