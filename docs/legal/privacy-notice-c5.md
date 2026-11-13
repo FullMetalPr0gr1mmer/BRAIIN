@@ -18,8 +18,10 @@
   person confirms it (C6), that inquiry does not count as the record's activity and does not
   change the record (no stage, no owner). Staff can add a title, city, country, tags, an owner
   on the team, notes and (from C8) follow-up tasks. Users with the Admin role can see
-  contacts, and (from C10b) users with the Sales role too, one person's e-mails and phones at
-  a time through the logged reveal; Sales cannot export, erase, or remove an e-mail or phone.
+  contacts, and (from C10b) users with the Sales role too, one person's main e-mail and main
+  phone at a time through the logged reveal (Admin sees every e-mail and phone; owner's
+  decision of 2026-11-13); Sales cannot export, erase, choose the main detail or remove an
+  e-mail or phone, and merges a record holding files only through an Admin.
 - **Notes and tasks.** Staff notes about an inquiry or a person, and follow-up tasks (calls,
   e-mails, meetings) with due dates.
 - **Retention from last activity.** A contact record is deleted automatically when nothing has
