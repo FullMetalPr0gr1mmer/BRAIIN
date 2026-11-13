@@ -369,6 +369,32 @@ describe('.github/branch-protection.json — the required checks', () => {
     }
   });
 
+  it('a not-required check the deploy waits for is a merge rule in runbook §5b', () => {
+    // GitHub merges a PR with such a check red, but the deploy on main waits for it, so a red
+    // run would stall every deploy after that merge, a security fix included (R14c review,
+    // R14C-SEC-1). Until the owner makes it required, §5b's merge procedure requires it green
+    // on the tested head before any merge.
+    const runbook = readFileSync('docs/launch-runbook.md', 'utf8');
+    const s5b = runbook.slice(runbook.indexOf('## 5b. '), runbook.indexOf('## 6. Deploy'));
+    const needs = [deploy.needs ?? []].flat();
+    const start = s5b.indexOf('**Merge only with the releases-off job green as well**');
+    expect(start, 'the merge rule in §5b').toBeGreaterThan(-1);
+    const rule = s5b.slice(start, s5b.indexOf('**Break-glass**', start));
+    let waited = 0;
+    for (const check of NOT_REQUIRED) {
+      const [caller, jobName] = check.split(' / ') as [string, string];
+      const id = Object.keys(jobs).find((key) => (jobs[key]!.name ?? key) === caller);
+      if (id === undefined || !needs.includes(id)) continue;
+      waited += 1;
+      expect(rule, check).toContain(`\`${check}\``);
+      expect(rule, check).toContain(`gh pr checks <n> | grep -F '${jobName}'`);
+      expect(rule, check).toContain('It must read `pass`');
+      expect(rule, check).toMatch(/Before any\s+merge to `main`/);
+    }
+    // The releases-off job is one: the deploy needs the whole perf-seo-a11y call.
+    expect(waited).toBe(1);
+  });
+
   it('binds admins too: PRs only, no force-push or deletion, checks from Actions', () => {
     // Not strict since 2026-10-19 (owner decision): a PR need not be up to date with main to
     // merge. The deploy still waits for every gate on main's own commit, and the production

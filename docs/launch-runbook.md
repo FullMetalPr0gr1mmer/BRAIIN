@@ -671,8 +671,8 @@ owner's PRs. Nor is `perf-seo-a11y / E2E with releases off` (Admin v2 R14c, owne
 2026-11-13): since R14c the required `perf-seo-a11y / E2E + axe + CSP + video bytes` runs every
 spec with releases ON, and this second job runs the same suite with releases off. The deploy on
 `main` still waits for it, as for every job of the `perf-seo-a11y` call, so a red releases-off
-run holds the deploy even though it never blocked the merge: treat it as blocking, and fix it
-forward.
+run would hold the deploy, and every fix queued behind it, although it never blocked the merge.
+So it is a merge rule, not a check GitHub enforces: see "Merging and deploys" below.
 
 **Apply** (owner's `gh`, from a checkout of the PR that last changed the file, once its
 checks have reported — a required context that never reports blocks every PR):
@@ -709,6 +709,21 @@ The deploy follows ~30 min later, when `main`'s own run has every gate green. Wh
 merges land close together, the older run's `deploy` fails its freshness step ("main is at
 …") — benign: the newer run deploys both. To retry a deploy after a flaky Lighthouse or e2e
 result, re-run the failed jobs of the **newest** `main` run; an older run cannot deploy.
+
+**Merge only with the releases-off job green as well** (Admin v2 R14c). Branch protection does
+not wait for `perf-seo-a11y / E2E with releases off`, but the deploy does, so a PR merged with
+it red or still running can stall every deploy after it, a security fix included. Before any
+merge to `main`, read its row on the tested head:
+
+```bash
+gh pr checks <n> | grep -F 'E2E with releases off'
+```
+
+It must read `pass`. A red or pending run is fixed or waited for on the PR, never merged and
+fixed forward. Until the owner switches releases on (§6p), releases off is also the mode
+production runs, so this run is the only end-to-end proof of what visitors and editors get.
+Making it a required check instead (and applying the file as above) is the owner's call
+(`docs/admin-v2/as-built/R14C.md`, owner question 1); until then this rule holds for every merge.
 
 **Break-glass** — a fix must merge while a required check cannot go green for a reason
 outside the code (GitHub Actions down, a runner image regression): lift admin enforcement,

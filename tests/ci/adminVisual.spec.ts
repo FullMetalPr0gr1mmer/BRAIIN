@@ -147,6 +147,16 @@ describe('.github/workflows/admin-visual.yml', () => {
     expect(uploads[0]!.with?.['path']).toBe('tests/visual/admin-baselines/linux');
   });
 
+  it('is said to take the releases-off job’s env wherever a comment says whose (review R14C-CS-1)', () => {
+    // playwright.config.ts and the spec explain which mode the baselines picture; since R14c the
+    // workflow is held to `e2e-releases-off` (above), not to the required, release-mode job.
+    for (const file of ['playwright.config.ts', SPEC]) {
+      const src = readFileSync(file, 'utf8');
+      expect(src, file).toContain("releases-off e2e job's (`e2e-releases-off`");
+      expect(src, file).not.toMatch(/env is the e2e job's/);
+    }
+  });
+
   it('is never a need of the deploy, nor a required check, nor called by ci.yml', () => {
     for (const [id, gate] of Object.entries(ci.jobs)) {
       expect(gate.uses ?? '', id).not.toContain('admin-visual');
@@ -196,7 +206,7 @@ describe('playwright.config.ts and the admin-visual project', () => {
     }
   });
 
-  it('releases on as well (R14b; the workflow takes the e2e job’s env): after the switch, never beside it', async () => {
+  it('releases on as well (R14b; once admin-visual.yml sets E2E_RELEASES): after the switch, never beside it', async () => {
     for (const mode of ['update', 'compare']) {
       const { list } = await projects(mode, true);
       const names = list.map((p) => p.name);

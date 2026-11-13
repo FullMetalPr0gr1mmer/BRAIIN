@@ -81,9 +81,11 @@ const releaseProjects = RELEASES
 // `admin-visual`, takes tests/visual/admin.visual.ts's pictures right after the sample rows, before
 // any spec writes, against baselines under tests/visual/admin-baselines/<platform>/. The file
 // ends in `.ts`, so no other project collects it. Unset (the e2e jobs, every PR) the
-// projects are exactly what they were (tests/ci/adminVisual.spec.ts holds both shapes). With
-// E2E_RELEASES=on as well (the workflow's env is the e2e job's, so from R14c's flip) it waits for
-// the switch instead, so every picture is of release mode, never of a tenant switching on.
+// projects are exactly what they were (tests/ci/adminVisual.spec.ts holds both shapes). The
+// workflow's env is the releases-off e2e job's (`e2e-releases-off`, since R14c), so its pictures
+// are of releases off until the owner has them re-made in release mode (E2E_RELEASES set in
+// admin-visual.yml). With E2E_RELEASES=on it waits for the switch instead, so every picture is
+// of release mode, never of a tenant switching on.
 const ADMIN_VISUAL = ['update', 'compare'].includes(process.env['ADMIN_VISUAL'] ?? '');
 const adminVisualProjects = ADMIN_VISUAL
   ? [
