@@ -40,16 +40,18 @@ interface Readable {
 /**
  * The keys of the boxes holding something the browser could not read (a partly typed date):
  * such a box reports '' like an empty one, so it is asked, never its value. `find` is
- * `document.getElementById` in the screens.
+ * `document.getElementById` in the screens (an element that is not an input has no
+ * `validity`, so it reads as readable).
  */
 export function unreadableBoxes(
   fields: readonly CustomFieldDefinition[],
   idPrefix: string,
-  find: (id: string) => Readable | null,
+  find: (id: string) => object | null,
 ): Set<string> {
   const out = new Set<string>();
   for (const field of fields) {
-    if (find(`${idPrefix}-c-${field.key}`)?.validity?.badInput) out.add(field.key);
+    const box = find(`${idPrefix}-c-${field.key}`) as Readable | null;
+    if (box?.validity?.badInput) out.add(field.key);
   }
   return out;
 }
