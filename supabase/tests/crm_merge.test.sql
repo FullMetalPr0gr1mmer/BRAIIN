@@ -520,13 +520,16 @@ begin
   perform set_config('enable_seqscan', 'on', true);
   return v;
 end $f$;
+-- (C-int) With the six slices' suites run before this one in one database (the PGlite replay),
+-- the planner may read these few rows by an index-only scan of C5's unique channel index, which
+-- also leads with the tenant: either index is a tenant-first index read, never a whole-table scan.
 select ok(c12_plan($$ select x.contact_id, y.contact_id from public.crm_contact_channels x
                         join public.crm_contact_channels y
                           on y.tenant_id = x.tenant_id and y.kind = 'phone' and y.value_hmac = x.value_hmac
                          and y.contact_id > x.contact_id
                        where x.tenant_id = 'c1200000-0000-4000-8000-000000000001' and x.kind = 'phone' $$)
-          ~ 'crm_contact_channels_lookup_idx',
-  'the phone rule reads through the channels'' lookup index');
+          ~ '^(?!.*Seq Scan).*crm_contact_channels_(lookup_idx|once)',
+  'the phone rule reads through a tenant-first channels index (the lookup index, or C5''s unique one), never a whole-table scan');
 select ok(c12_plan($$ select c.id, c.name_key from public.crm_contacts c
                        where c.tenant_id = 'c1200000-0000-4000-8000-000000000001' and c.merged_into is null
                          and c.name_key <> '' $$)
