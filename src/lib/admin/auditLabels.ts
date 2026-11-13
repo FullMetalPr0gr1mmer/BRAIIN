@@ -339,6 +339,18 @@ const EXACT: Readonly<Record<string, Label>> = {
   },
   'crm.task.delete': { kind: 'leads', verb: 'Removed', noun: 'a task' },
   'crm.task.ics': { kind: 'leads', verb: 'Downloaded the calendar file of', noun: 'a task' },
+  // The CSV import (Admin v2 C15): the batch's id and counts, never a row.
+  'crm.import.attempt': { kind: 'leads', verb: 'Started importing', noun: 'contacts from a file' },
+  'crm.import.outcome': {
+    kind: 'leads',
+    verb: (detail) => {
+      const status = str(detail['status']);
+      if (status === 'done') return 'Imported';
+      if (status === 'stopped') return 'Stopped importing';
+      return 'Could not finish importing';
+    },
+    noun: 'contacts from a file',
+  },
   'export.csv.attempt': { kind: 'leads', verb: 'Started exporting', noun: 'the leads' },
   'export.csv.outcome': {
     kind: 'leads',

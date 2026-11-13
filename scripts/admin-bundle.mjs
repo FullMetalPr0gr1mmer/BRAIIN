@@ -120,6 +120,8 @@ const OFF_SCREEN_GROUPS = [
   'admin-release.',
   'admin-versions.',
   'admin-history.',
+  // Admin v2 C15: Import contacts.
+  'admin-import.',
 ];
 
 // A screen family's group and the chunks allowed to import it statically (check 6).
@@ -154,6 +156,8 @@ const FAMILY_GROUPS = [
   },
   // Admin v2 E4: the theme editor's own group, on its island only.
   { group: 'admin-theme.', importers: /^AdminTheme\./ },
+  // Admin v2 C15: Import contacts' own group, on its island only.
+  { group: 'admin-import.', importers: /^AdminImportContacts\./ },
 ];
 // What a family's group must never import statically: the field kit, and its own lazy part.
 const FAMILY_NEVER = {
@@ -205,6 +209,17 @@ const FAMILY_NEVER = {
     'admin-page-preview.',
     'admin-versions.',
     'admin-preview.',
+  ],
+  // C15: Import contacts loads neither the field kit nor any other screen family's code.
+  'admin-import.': [
+    'admin-fields.',
+    'admin-screens.',
+    'admin-leads.',
+    'admin-leads-lazy.',
+    'admin-contacts.',
+    'admin-contacts-lazy.',
+    'admin-tasks.',
+    'admin-tasks-lazy.',
   ],
 };
 // Groups reached only through import() (check 6). Admin v2 R13: the history drawer. Admin v2

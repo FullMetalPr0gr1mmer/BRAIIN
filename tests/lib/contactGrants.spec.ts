@@ -39,6 +39,9 @@ describe('contact ciphertext and notes', () => {
       'src/lib/crm/contactReveal.ts',
       // sealChannels: encrypts and indexes what a person typed (never decrypts).
       'src/lib/crm/contacts.ts',
+      // (Admin v2 C15) sealRows: encrypts and indexes an imported row's e-mail and phone
+      // (never decrypts), sent only to crm_import_rows.
+      'src/lib/crm/importRows.ts',
     ]);
   });
 
@@ -66,6 +69,10 @@ describe('the service role contact doors have named callers', () => {
     ['crm_contact_new_lead', 'src/lib/data/leads.ts'],
     ['crm_erase_preview', 'src/pages/api/admin/crm/contacts/[id]/erase-preview.ts'],
     ['crm_erase_person', 'src/pages/api/admin/crm/contacts/[id]/erase.ts'],
+    // Admin v2 C15: the import's doors. importPiece is called by the import route alone.
+    ['crm_import_open', 'src/pages/api/admin/crm/contacts/import/index.ts'],
+    ['crm_import_rows', 'src/lib/crm/importRows.ts'],
+    ['crm_import_finish', 'src/pages/api/admin/crm/contacts/import/index.ts'],
   ])('%s: %s only', (fn, file) => {
     expect(callers(fn)).toEqual([file]);
   });
@@ -78,6 +85,13 @@ describe('the service role contact doors have named callers', () => {
       'src/lib/crm/indexBackfill.ts',
       'src/lib/cron/jobs.ts',
       'src/pages/api/admin/crm/contacts/[id]/erase-preview.ts',
+    ]);
+  });
+
+  it('the import piece (it seals rows for crm_import_rows) is called by the import route alone', () => {
+    expect(named(/\bimportPiece\(/)).toEqual([
+      'src/lib/crm/importRows.ts',
+      'src/pages/api/admin/crm/contacts/import/index.ts',
     ]);
   });
 
