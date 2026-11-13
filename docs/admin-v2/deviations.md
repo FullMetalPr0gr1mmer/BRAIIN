@@ -443,8 +443,8 @@ owner, an expiry and a close condition (CLAUDE.md §11).
   - *Owner:* Kareem. *Expiry:* 2026-12-31. *Closes when* the owner accepts the read window
     (or a follow-up adds live reads where they matter); the writes closed with H16.
 
-- **Team members are guarded but not captured: an R14 blocker** (Admin v2 R5, 0066; owner
-  item **O-12**).
+- **Team members are guarded but not captured: an R14 blocker, accepted for the switch-on by
+  the owner on 2026-11-13** (Admin v2 R5, 0066; owner item **O-12**).
   - *The gap.* R5 puts the release guard on every registry table, `team_members` included, so
     once a tenant's releases are on a staff edit of a team member outside a release is
     refused (42501) like any other, and team-member changes go through a release (R4 applies
@@ -464,9 +464,15 @@ owner, an expiry and a close condition (CLAUDE.md §11).
   - *Owner:* Kareem (O-12). *Expiry:* R14's switch-on. *Closes when* O-12 is decided and
     R14's checklist records the outcome (pgTAP `snapshot_coverage.test.sql` names the
     exemption).
+  - *Accepted residual risk (2026-11-13, [R14c](as-built/R14C.md)).* The owner accepted this
+    gap for the switch-on: a release cannot restore a team member, and History says so ("History
+    isn’t kept for team members yet."). Launch runbook §6p, "Before the day" item 7, records it.
+    This is an accepted risk, not a resolution, and nothing about it is compliant with anything:
+    the legal review (O-12, R16's history redaction and retention) is left to the end, for the
+    client's Saudi-licensed lawyer (`docs/legal/review-register.md`, L-10). It stays in this register until O-12 is decided.
 
-- **A removed quote stays in the history: an R14 blocker** (Admin v2 R10, 0104; tied to R16,
-  history redaction, owner and legal).
+- **A removed quote stays in the history: an R14 blocker, accepted for the switch-on by the
+  owner on 2026-11-13** (Admin v2 R10, 0104; tied to R16, history redaction, owner and legal).
   - *The gap.* A quote is published only with the person's recorded consent (0028). When it is
     removed, because the person withdrew consent or for any other reason, the release ledger
     (`content_release_items`, R4) and the history (`content_versions`) keep its words, the
@@ -482,6 +488,14 @@ owner, an expiry and a close condition (CLAUDE.md §11).
     the staff-only copies until R16, and R14's runbook says so.
   - *Owner:* Kareem (R16). *Expiry:* R14's switch-on. *Closes when* R16 is decided and R14's
     checklist records the outcome.
+  - *Accepted residual risk (2026-11-13, [R14c](as-built/R14C.md)).* The owner accepted the
+    staff-only copies until R16 for the switch-on: a removed quote's words, the person's name and
+    role and its consent record stay in the release ledger and the history, and a version's
+    preview shows them to staff; no restore re-publishes it. Launch runbook §6p, "Before the
+    day" item 7, records it. This is an accepted risk, not a resolution, and nothing about it is
+    compliant with anything: whether and when the copies must be redacted (PDPL, a withdrawn
+    consent) is the legal review (O-12, R16), left to the end, for the client's Saudi-licensed
+    lawyer (`docs/legal/review-register.md`, L-10). It stays in this register until R16 is decided.
 
 ## The client's TDD, row by row
 
@@ -496,7 +510,7 @@ everything merged through E9, plus R14b (#135, 0128) and H16 (0129), merged into
 before it lands): where the row was built, by program slice (each slice's file is in README's
 "As built" index), or the deviation that stands and its reason, or what it waits on (an owner
 item, a legal gate, or a later phase under A1). Releases are built through R14b and stay off in
-production until R14c and the switch-on (a green rehearsal and owner item O-5; B1 resolved by R14e, B2 built in R14d), so a row built on releases
+production until the switch-on (owner item O-5, the go given 2026-11-13; R14c made release mode the required e2e job's), so a row built on releases
 records versions and stages saves only after it; until then every save is live. The open owner items and legal
 holds are listed once, in README's "Open owner items and legal holds".
 
