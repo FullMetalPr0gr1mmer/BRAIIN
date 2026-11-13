@@ -20,7 +20,17 @@ export const crm: NavArea = {
         { href: '/admin/leads/board', label: 'Pipeline', caps: ['leads.manage'] },
       ],
     },
-    { href: '/admin/contacts', label: 'Contacts', icon: 'users', caps: ['crm.contacts'] },
+    {
+      href: '/admin/contacts',
+      label: 'Contacts',
+      icon: 'users',
+      caps: ['crm.contacts'],
+      // Admin v2 C11: People | Companies (crm.md §11 screen 5). A contact's page lights People.
+      tabs: [
+        { href: '/admin/contacts', label: 'People', caps: ['crm.contacts'] },
+        { href: '/admin/contacts/companies', label: 'Companies', caps: ['crm.contacts'] },
+      ],
+    },
     // Admin v2 C8: the follow-ups, with my overdue count (owner item O-9).
     {
       href: '/admin/tasks',

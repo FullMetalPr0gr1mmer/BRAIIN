@@ -144,6 +144,9 @@ insert into public.crm_contact_notes (tenant_id, contact_id, body) values
 insert into public.crm_tasks (tenant_id, title, due_at, contact_id) values
   ('93000000-0000-0000-0000-000000000001', 'C8 task', now() + interval '1 day',
    '93000000-0000-0000-0000-00000000c5c1');
+-- A company (Admin v2 C11): crm.contacts' too, so compared the same way.
+insert into public.crm_companies (tenant_id, name) values
+  ('93000000-0000-0000-0000-000000000001', 'C11 company');
 insert into public.site_settings (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.site_integrations (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;
 insert into public.ai_config (tenant_id) values ('93000000-0000-0000-0000-000000000001') on conflict do nothing;

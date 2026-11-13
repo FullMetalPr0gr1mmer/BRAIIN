@@ -159,6 +159,14 @@ export const LOCKED_SCREENS: readonly LockedScreen[] = [
     cap: 'crm.contacts',
     render: 'server',
   },
+  // Admin v2 C11: the Companies tab renders its first view on the server and refuses itself;
+  // its data routes are POSTs (or need an id), so its twin is the contacts' counts GET.
+  {
+    href: '/admin/contacts/companies',
+    api: '/api/admin/crm/contacts/summary',
+    cap: 'crm.contacts',
+    render: 'server',
+  },
   { href: '/admin/audit', api: '/api/admin/audit', cap: 'audit.view', render: 'server' },
   {
     href: '/admin/site-health',

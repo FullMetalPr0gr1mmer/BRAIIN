@@ -78,6 +78,8 @@ export interface ContactsListProps {
   now: string;
   /** (C9b) The custom fields CRM settings define, for the Add contact drawer. */
   customFields?: CustomFieldDefinition[];
+  /** (Admin v2 C11) How many companies the tenant holds, for the sub-line; null unread. */
+  companies?: number | null | undefined;
 }
 
 const NO_FIELDS: CustomFieldDefinition[] = [];
@@ -225,6 +227,7 @@ export default function ContactsList({
   me,
   now: renderedAt,
   customFields = NO_FIELDS,
+  companies,
 }: ContactsListProps) {
   const { formatDateTime, relTime } = useClock();
   const tagId = useId();
@@ -331,7 +334,7 @@ export default function ContactsList({
 
   useEffect(() => {
     const line = document.querySelector('.admin-header .admin-sub');
-    if (line && summary) line.textContent = contactsSubline(summary);
+    if (line && summary) line.textContent = contactsSubline(summary, companies);
   }, [summary]);
 
   const versions = useMemo(

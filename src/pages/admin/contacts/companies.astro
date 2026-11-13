@@ -1,0 +1,75 @@
+---
+import AdminLayout from '@/layouts/AdminLayout.astro';
+import AdminContactCompanies from '@/components/admin/islands/AdminContactCompanies';
+import Icon from '@/components/admin/ui/Icon.astro';
+import Refused from '@/components/admin/ui/Refused.astro';
+import { can } from '@/lib/authz/matrix';
+import { readContactPeople } from '@/lib/crm/contactPage';
+import { readCompanyList, readCompanyOptions, type CompanyPage } from '@/lib/crm/companies';
+import { companiesWord } from '@/components/admin/screens/contacts/companyShared';
+
+export const prerender = false;
+
+// The Companies tab (Admin v2 C11, crm.md §11 screen 5: Contacts' People | Companies tabs):
+// the organisations behind the people. The first page is rendered here (sorted by name), so
+// the page is complete without JavaScript; the island searches, filters, pages and opens the
+// company drawer. `crm.contacts` (crm.md §2.1, "contacts & companies"; Admin, Sales from
+// C10b): any other role is refused here with a 403 and reads nothing (Refused.astro); RLS
+// and the live check refuse them again in the database. The address carries a company's id
+// only (`?company=<id>`, its drawer), never a name. Forgetting a company's learnt e-mail
+// domain is crm.settings' (Admin's, C11 review): the drawer offers it to those holders only,
+// and the route and the database refuse everyone else.
+//
+// Round trips on top of the layout's shell (P-15): the people, page 1, the sectors and the
+// clients = 4.
+
+const session = Astro.locals.session;
+const sb = Astro.locals.supabase;
+const allowed = session !== null && can(session.role, 'crm.contacts') === 'full';
+if (!allowed) Astro.response.status = 403;
+
+const asked = Astro.url.searchParams.get('company');
+const open =
+  asked && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(asked)
+    ? asked.toLowerCase()
+    : null;
+
+let initial: CompanyPage | null = null;
+let people: Awaited<ReturnType<typeof readContactPeople>> = [];
+let options: Awaited<ReturnType<typeof readCompanyOptions>> = { sectors: [], clients: [] };
+if (allowed && session && sb) {
+  [people, initial, options] = await Promise.all([
+    readContactPeople(sb, session),
+    readCompanyList(sb, session.tenantId, { sort: 'name', limit: 25 }).catch(() => null),
+    readCompanyOptions(sb, session),
+  ]);
+}
+const subtitle = initial
+  ? `${companiesWord(initial.total)}. The organisations behind your contacts.`
+  : 'The organisations behind your contacts.';
+---
+
+<AdminLayout title="Companies" subtitle={subtitle} styles={['leads.css', 'contacts.css']}>
+  {
+    allowed && (
+      <button slot="actions" type="button" data-variant="primary" data-company-add hidden>
+        <Icon name="plus" size={16} />
+        Add company
+      </button>
+    )
+  }
+  {
+    !allowed ? (
+      <Refused />
+    ) : (
+      <AdminContactCompanies
+        client:load
+        initial={initial}
+        choices={{ sectors: options.sectors, clients: options.clients, people }}
+        me={session?.userId ?? ''}
+        open={open}
+        canForgetDomain={session !== null && can(session.role, 'crm.settings') === 'full'}
+      />
+    )
+  }
+</AdminLayout>
